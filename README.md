@@ -144,16 +144,6 @@ Documentation is crucial, and we could use your help to make ours more comprehen
 
 Not a developer? No problem! You can still contribute by spreading the word. Share your experiences with Prowl on social media, blogs, or forums. Let the world know about the exciting things happening here.
 
-## How to Contribute
-
-1.  Fork the repository.
-2.  Create a new branch: `git checkout -b your-feature`.
-3.  Make your changes and commit them: `git commit -m 'Add some feature'`.
-4.  Push to the branch: `git push origin your-feature`.
-5.  Submit a pull request.
-
-For more details, check out our [contribution guidelines](https://chat.openai.com/c/link-to-contribution-guidelines).
-
 ## Contributor Recognition
 
 We're not just asking for contributors; we're asking for partners in this journey. Every small contribution is a step toward realizing Prowl.
