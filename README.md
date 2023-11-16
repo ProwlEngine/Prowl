@@ -14,23 +14,23 @@
     </li>
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
-    # <li><a href="#acknowledgments">Acknowledgments</a></li>
+    <li><a href="#acknowledgments">Acknowledgments</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#dependencies">Dependencies</a></li>
     <li><a href="#screenshots">Screenshots</a></li>
   </ol>
 
 # About The Project
-Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in .NET 8**, (which suprisingly has **no runtime fees** believe it or not!). It aims to provide a seamless transition for developers familiar with Unity by maintaining a similar API while also following KISS and staying as small and customizable as possible. This engine is intended to be customized to your needs, everything is written to be a "Minimal" Production-Ready Implementation. Ideally their will be plenty of Modules/Packages to expand on functionality for those who dont want (or unable) to expand the base engine.
+Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in .NET 8**, (which surprisingly has **no runtime fees** believe it or not!). It aims to provide a seamless transition for developers familiar with Unity by maintaining a similar API while also following KISS and staying as small and customizable as possible. This engine is intended to be customized to your needs, everything is written to be a "Minimal" Production-Ready Implementation. Ideally their will be plenty of Modules/Packages to expand on functionality for those who don't want (or are unable) to expand the base engine.
 
 ### [Join our Discord server!](https://discord.gg/BqnJ9Rn4sn)
 
-**Note:** The Engine is very young and far from production ready, being developed mainly by a single developer in his spare time. **And has only been tested and compiled for windows!**
+**Note:** The Engine is very young and far from production-ready, being developed mainly by a single developer in his spare time. **And has only been tested and compiled for Windows!**
 
 **Note:** Currently, the engine is using Raylib as a temporary base to speed up development, with plans to implement a custom-built API Agnostic backend later.
 
 ![Sponza and Flight Helmet screenshot](https://i.imgur.com/abJgJv7.png)
-<small>At the time of taking this screenshot, Materials could not be created nor modified in Editor so the PBR Textures are not correctly setup.</small>
+<small>At the time of taking this screenshot, Materials could not be created nor modified in Editor so the PBR Textures are not correctly set up.</small>
 
 # Features
 
@@ -41,10 +41,10 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - .NET 8
     - Dear ImGUI
     - Editor with support for Editor Scripts and Custom Editors
-    - Less then 5k of Executable Code for both the Editor and Engine combined!
+    - Less than 5k of Executable Code for both the Editor and Engine combined!
     - Unity-Like Coroutines
-    - Json Serialization via Newtonsoft.Json
-    - Play test directly in Editor
+    - JSON Serialization via Newtonsoft.Json
+    - Playtest directly in Editor
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 -   **Graphics Rendering:**
@@ -56,12 +56,12 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
         - Ambient Occclusion Map
         - Emission Map
     -  Deferred Renderer
-    -  Point, Spot and Directional Lights
+    -  Point, Spot, and Directional Lights
     -  Shadow Mapping with PCF Filtering (Pcss Soft Shadows half implemented)
     -  HDR with Aces Tonemapping
 
 -   **Asset Pipeline:**
-    -  A Powerful Asset Pipeline with a very similiar structure to unity
+    -  A Powerful Asset Pipeline with a very similar structure to unity
     - Meta Files & Reference by GUID
     - Import Caching
     - Support for Custom Importers
@@ -81,13 +81,13 @@ Getting Prowl up and running is super easy!
 
 1. Clone the repo
 2. Open `.sln` file with [Visual Studio Version 17.8.0+](visualstudio.microsoft.com/vs/preview/)
-3. Thats it! :D
+3. That's it! :D
 <p align="right">(<a href="#readme-top">back to top</a>)</p> 
 
 # Roadmap
 
 - [ ] Skinned Mesh Rendering & Animations
-- [ ] API Agnostic Backends to expand to support Vulkan, Metal, WebGPU and more
+- [ ] API Agnostic Backends to expand to support Vulkan, Metal, WebGPU, and more
 - [ ] Procedural Skybox
     - [ ] Volumetric Clouds
 - [ ] Package Manager (Packages partially implemented)
@@ -155,7 +155,7 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 
 # Acknowledgments
 
-- Hat tip to the creators of [Raylib](https://github.com/raysan5/raylib), It has shaved off hours of development time getting the engine to a useable state.
+- Hat tip to the creators of [Raylib](https://github.com/raysan5/raylib), It has shaved off hours of development time getting the engine to a usable state.
 - Some ideas/code have been taken from the amazing 2D Engine [Duality](https://github.com/AdamsLair/duality).
 - The great C++ [Arc Game Engine](https://github.com/MohitSethi99/ArcGameEngine), for some UI Inspiration
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
