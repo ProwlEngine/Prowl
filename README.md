@@ -56,7 +56,9 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     -  Deferred Renderer
     -  Point, Spot, and Directional Lights
     -  Shadow Mapping + Contact Hardening (Variable Penumbra)
-    -  HDR with Aces Fitted Tonemapping
+    -  Post Processing
+        - HDR with Aces Fitted Tonemapping
+        - Bokeh Depth of Field
 
 -   **Asset Pipeline:**
     - A Powerful Asset Pipeline with a very similar structure to unity
@@ -192,5 +194,6 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 # Screenshots
 ![Full Editor shot, Early in development, plenty of obvious bugs and issues :(](https://i.imgur.com/6Pbn7kU.png)
+![Bokeh Depth of Field](https://i.imgur.com/VYs44qq.png)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
