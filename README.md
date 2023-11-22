@@ -73,39 +73,53 @@ Getting Prowl up and running is super easy!
 
 ### Prerequisites
 
-* [Visual Studio Version 17.8.0+](visualstudio.microsoft.com/vs/preview/) - Required to support .NET 8
+* [Visual Studio Version 17.8.0+](https://visualstudio.microsoft.com/vs/preview/) - Required to support .NET 8
 * [.NET 8](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
 
 ### Installation
 
 1. Clone the repo
-2. Open `.sln` file with [Visual Studio Version 17.8.0+](visualstudio.microsoft.com/vs/preview/)
+2. Open `.sln` file with [Visual Studio Version 17.8.0+](https://visualstudio.microsoft.com/vs/preview/)
 3. That's it! :D
 <p align="right">(<a href="#readme-top">back to top</a>)</p> 
 
 # Roadmap
 
-- [ ] Skinned Mesh Rendering & Animations
+### Engine
 - [ ] API Agnostic Backends to expand to support Vulkan, Metal, WebGPU, and more
-- [ ] Procedural Skybox
-    - [ ] Volumetric Clouds
-- [ ] Package Manager (Packages partially implemented)
-- [ ] Rendering Improvements
-   - [ ] DOF, SSAO, SSR, TAA, Bloom, Screen-Space Decals, etc.
-   - [ ] Transparency
-   - [ ] Realtime GI
-   - [ ] Lightmaps and Light Probes
-   - [ ] Cascaded shadow mapping
-- [ ] BepuPhysics v2
-- [ ] Particle System
-- [ ] Navmesh and AI Agents
-- [ ] Terrain Engine
-- [ ] Material Node Editor
-- [ ] Visual Scripting
 - [ ] Cross Platform
-- [ ] Basic Networking Solution
+  - [x] Windows
+  - [ ] Linux
+  - [ ] MacOS
+  - [ ] Andriod
+  - [ ] iOS
+  - [ ] Web
 - [ ] VR Support
+- [ ] BepuPhysics v2
+- [ ] Navmesh and AI Agents
+- [ ] Networking Solution
+- [ ] 64-bit World Coordinates - [Issue for System.Numerics Double Support](https://github.com/dotnet/runtime/issues/24168)
+
+### Rendering
+- [ ] DOF, SSAO, SSR, TAA, Bloom, Screen-Space Decals, etc.
+- [ ] Transparency
+- [ ] Realtime GI
+- [ ] Lightmaps and Light Probes
+- [ ] Cascaded shadow mapping
+- [ ] Procedural Skybox
+   - [ ] Volumetric Clouds
+- [ ] Skinned Mesh Rendering & Animations
+- [ ] Particle System
+- [ ] Terrain Engine
+
+### Editor
+- [ ] Package Manager (Packages partially implemented)
+- [ ] Animation Tools
+- [ ] Live Collaborative Tools?
+- [ ] Visual Scripting
+- [ ] Material Node Editor
 - [ ] Basic 2D Support
+
 
 See the [open issues](https://github.com/michaelsakharov/prowl/issues) for a full list of proposed features (and known issues).
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
