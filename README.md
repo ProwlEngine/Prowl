@@ -44,7 +44,6 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - Unity-Like Coroutines
     - JSON Serialization via Newtonsoft.Json
     - Playtest directly in Editor
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 -   **Graphics Rendering:**
     -  PBR (Physically Based Rendering) using Cook-Torrance BRDF
@@ -185,7 +184,6 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 - [ImageMagick](http://www.imagemagick.org/) via [Magick.NET](https://github.com/dlemstra/Magick.NET)
 - [ImGUI](https://github.com/ocornut/imgui) via [ImGUI.NET](https://github.com/ImGuiNET/ImGui.NET)
 - [Newtonsoft](https://github.com/JamesNK/Newtonsoft.Json)
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ### Editor
 
