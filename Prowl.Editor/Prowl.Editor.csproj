@@ -112,9 +112,5 @@
 <!--          <ExcludeAssets>compile</ExcludeAssets>-->
       </ProjectReference>
     </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="EmbeddedResources\DefaultAssets\Includes\" />
-    </ItemGroup>
     
 </Project>
