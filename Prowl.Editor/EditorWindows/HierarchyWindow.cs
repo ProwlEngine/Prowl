@@ -298,10 +298,36 @@ public class HierarchyWindow : EditorWindow {
         ImGui.TableNextColumn();
         // Visibility Toggle
         {
-            ImGui.Text("    " + (entity.Enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash));
+			ImGui.Text("    " + (entity.Enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash));
 
             if (ImGui.IsItemHovered() && ImGui.IsMouseReleased(ImGuiMouseButton.Left))
+            {
                 entity.Enabled = !entity.Enabled;
+
+                if(entity.Parent != null)
+                {
+                    GameObject? entityParent = entity.Parent;
+
+                    while (entityParent != null)
+                    {
+                        entityParent.Enabled = entity.Enabled;
+						ImGui.Text("    " + (entityParent.Enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash));
+                        entityParent = entityParent.Parent;
+                    }
+                }
+
+                if (entity.Children.Count > 0)
+                {
+                    var entityChild = entity.Children;
+
+					while (entityChild.Count > 0)
+					{
+						entityChild[0].Enabled = entity.Enabled;
+						ImGui.Text("    " + (entityChild[0].Enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash));
+						entityChild = entityChild[0].Children;
+					}
+				}
+			}
         }
 
         ImGui.PopStyleColor(3);
