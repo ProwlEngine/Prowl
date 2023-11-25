@@ -60,30 +60,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             ImGui.SameLine();
 
             bool isEnabled = go.Enabled;
-
-			if (go.Parent != null)
-			{
-				GameObject? goParent = go.Parent;
-
-				while (goParent != null)
-				{
-					goParent.Enabled = go.Enabled;
-					goParent = goParent.Parent;
-				}
-			}
-
-			if (go.Children.Count > 0)
-			{
-				var goChild = go.Children;
-
-				while (goChild.Count > 0)
-				{
-					goChild[0].Enabled = go.Enabled;
-					goChild = goChild[0].Children;
-				}
-			}
-
-			ImGui.Checkbox("##GOActive", ref isEnabled);
+            ImGui.Checkbox("##GOActive", ref isEnabled);
             if (isEnabled != go.Enabled)
                 go.Enabled = isEnabled;
             GUIHelper.Tooltip("Is Enabled");
