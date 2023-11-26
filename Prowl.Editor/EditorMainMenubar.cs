@@ -30,13 +30,15 @@ public class EditorMainMenubar {
         ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(4, 4));
         if(ImGui.BeginMainMenuBar()) {
 
+            DrawPlayControls();
+
+            ImGui.SetCursorPosX(0);
             DrawMenuItems();
 
             if(ImGui.Button($"{FontAwesome6.ArrowsSpin}"))
                 EditorApplication.Instance.RegisterReloadOfExternalAssemblies();
             GUIHelper.Tooltip("Recompile Project Scripts.");
 
-            DrawPlayControls();
 
             ImGui.EndMainMenuBar();   
         }
@@ -50,7 +52,7 @@ public class EditorMainMenubar {
             float avail = ImGui.GetContentRegionAvail().X;
             float off = (avail - width) * alignment;
             if(off > 0.0f)
-                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + off);
+                ImGui.SetCursorPosX(off);
         }
         
         ImGuiStylePtr style = ImGui.GetStyle();
