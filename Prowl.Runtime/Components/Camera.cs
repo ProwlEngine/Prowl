@@ -23,6 +23,10 @@ public class Camera : MonoBehaviour
     public float NearClip = 0.01f;
     public float FarClip = 1000f;
 
+    public float Sharpness = 0.8f;
+    public float Contrast = 1.0f;
+    public float Saturation = 1.0f;
+
     public float RenderResolution = 1f;
 
     public enum ProjectionType { Perspective, Orthographic }
@@ -109,6 +113,9 @@ public class Camera : MonoBehaviour
         //CombineShader.mpb.Clear();
         CombineShader.SetTexture("gAlbedoAO", gBuffer.AlbedoAO);
         CombineShader.SetTexture("gLighting", gBuffer.Lighting);
+        CombineShader.SetFloat("Sharpness", Sharpness);
+        CombineShader.SetFloat("Contrast", Contrast);
+        CombineShader.SetFloat("Saturation", Saturation);
         CombineShader.EnableKeyword("ACESTONEMAP");
         CombineShader.EnableKeyword("GAMMACORRECTION");
         CombineShader.SetPass(0, true);

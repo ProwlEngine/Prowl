@@ -25,6 +25,9 @@ Pass 0
 		in vec4 fragColor;
 		
 		uniform vec2 Resolution;
+		uniform float Sharpness;
+		uniform float Contrast;
+		uniform float Saturation;
 
 		uniform sampler2D gAlbedoAO; // Diffuse
 		uniform sampler2D gLighting; // Lighting
@@ -85,6 +88,39 @@ Pass 0
 			
 			return center + (center - around) * sharpness;
 		}
+		
+		mat4 contrastMatrix()
+		{
+			float t = (1.0 - Contrast) / 2.0;
+		    
+		    return mat4(Contrast, 0, 0, 0,
+		                0, Contrast, 0, 0,
+		                0, 0, Contrast, 0,
+		                t, t, t, 1);
+		
+		}
+		
+		
+		mat4 saturationMatrix()
+		{
+		    vec3 luminance = vec3(0.3086, 0.6094, 0.0820);
+		    
+		    float oneMinusSat = 1.0 - Saturation;
+		    
+		    vec3 red = vec3(luminance.x * oneMinusSat);
+		    red+= vec3(Saturation, 0, 0);
+		    
+		    vec3 green = vec3(luminance.y * oneMinusSat);
+		    green += vec3(0, Saturation, 0);
+		    
+		    vec3 blue = vec3(luminance.z * oneMinusSat);
+		    blue += vec3(0, 0, Saturation);
+		    
+		    return mat4(red,     0,
+		                green,   0,
+		                blue,    0,
+		                0, 0, 0, 1);
+		}
 
 		void main()
 		{
@@ -106,7 +142,7 @@ Pass 0
 			color = pow(color, vec3(1.0/2.2));
 			#endif 
 
-			finalColor = vec4(color, 1.0);
+			finalColor = contrastMatrix() * saturationMatrix() * vec4(color, 1.0);
 		}
 	}
 }
