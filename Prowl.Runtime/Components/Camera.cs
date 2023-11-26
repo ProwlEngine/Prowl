@@ -23,7 +23,6 @@ public class Camera : MonoBehaviour
     public float NearClip = 0.01f;
     public float FarClip = 1000f;
 
-    public float Sharpness = 0.8f;
     public float Contrast = 1.1f;
     public float Saturation = 1.2f;
 
@@ -113,7 +112,6 @@ public class Camera : MonoBehaviour
         //CombineShader.mpb.Clear();
         CombineShader.SetTexture("gAlbedoAO", gBuffer.AlbedoAO);
         CombineShader.SetTexture("gLighting", gBuffer.Lighting);
-        CombineShader.SetFloat("Sharpness", Sharpness);
         CombineShader.SetFloat("Contrast", Math.Clamp(Contrast, 0, 2));
         CombineShader.SetFloat("Saturation", Math.Clamp(Saturation, 0, 2));
         CombineShader.EnableKeyword("ACESTONEMAP");

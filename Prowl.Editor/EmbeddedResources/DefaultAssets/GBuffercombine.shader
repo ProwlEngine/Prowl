@@ -72,23 +72,6 @@ Pass 0
 		    return color;
 		}
 		
-		vec3 Sharpen(sampler2D tex, vec2 uv)
-		{
-			vec2 step = 1.0 / Resolution;
-	
-			vec3 texA = texture(tex, uv + vec2(-step.x, -step.y) * 1.5).rgb;
-			vec3 texB = texture(tex, uv + vec2( step.x, -step.y) * 1.5).rgb;
-			vec3 texC = texture(tex, uv + vec2(-step.x,  step.y) * 1.5).rgb;
-			vec3 texD = texture(tex, uv + vec2( step.x,  step.y) * 1.5).rgb;
-   
-			vec3 around = 0.25 * (texA + texB + texC + texD);
-			vec3 center  = texture(tex, uv).rgb;
-			
-			float sharpness = 0.8;
-			
-			return center + (center - around) * sharpness;
-		}
-		
 		mat4 contrastMatrix()
 		{
 			float t = (1.0 - Contrast) / 2.0;
@@ -125,7 +108,7 @@ Pass 0
 		void main()
 		{
 			float AO = texture(gAlbedoAO, fragTexCoord).w;
-			vec3 diffuseColor = Sharpen(gAlbedoAO, fragTexCoord) * 0.01;
+			vec3 diffuseColor = texture(gAlbedoAO, fragTexCoord) * 0.01;
 			vec3 lightingColor = texture(gLighting, fragTexCoord).rgb;
 		
 			vec3 color = diffuseColor + (lightingColor * AO);
