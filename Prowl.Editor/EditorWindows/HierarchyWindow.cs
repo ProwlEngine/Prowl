@@ -34,6 +34,7 @@ public class HierarchyWindow : EditorWindow {
             | ImGuiTableFlags.ScrollY;
 
         float lineHeight = ImGui.GetTextLineHeight();
+        float contentWidth = ImGui.GetContentRegionAvail().X;
         Vector2 padding = ImGui.GetStyle().FramePadding;
 
         float filterCursorPosX = ImGui.GetCursorPosX();
@@ -51,7 +52,7 @@ public class HierarchyWindow : EditorWindow {
             ImGui.TextUnformatted(FontAwesome6.MagnifyingGlass + " Search...");
         }
 
-        if (ImGui.BeginTable("HierarchyTable", 3, tableFlags))
+        if (ImGui.BeginTable("HierarchyTable", 2, tableFlags))
         {
             if (ImGui.BeginPopupContextWindow("SceneHierarchyContextWindow", ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.NoOpenOverItems))
             {
@@ -59,14 +60,13 @@ public class HierarchyWindow : EditorWindow {
                 ImGui.EndPopup();
             }
 
-            ImGui.TableSetupColumn("  Label", ImGuiTableColumnFlags.NoHide | ImGuiTableColumnFlags.NoClip);
-            ImGui.TableSetupColumn("  Type", ImGuiTableColumnFlags.WidthFixed, lineHeight * 3.0f);
-            ImGui.TableSetupColumn("    " + FontAwesome6.Eye, ImGuiTableColumnFlags.WidthFixed, lineHeight * 2.0f);
+            ImGui.TableSetupColumn("  Label", ImGuiTableColumnFlags.NoHide | ImGuiTableColumnFlags.NoClip, contentWidth);
+            ImGui.TableSetupColumn(" " + FontAwesome6.Eye, ImGuiTableColumnFlags.WidthFixed, lineHeight * 1.25f);
 
             ImGui.TableSetupScrollFreeze(0, 1);
 
             ImGui.TableNextRow(ImGuiTableRowFlags.Headers, ImGui.GetFrameHeight());
-            for (int column = 0; column < 3; ++column)
+            for (int column = 0; column < 2; ++column)
             {
                 ImGui.TableSetColumnIndex(column);
                 string columnName = ImGui.TableGetColumnNameS(column);
@@ -144,12 +144,11 @@ public class HierarchyWindow : EditorWindow {
         }
     }
 
-    (Vector2, Vector2) DrawEntityNode(GameObject entity, uint depth, bool isPartOfPrefab)
+    void DrawEntityNode(GameObject entity, uint depth, bool isPartOfPrefab)
     {
-        if (entity == null)
-            return (Vector2.Zero, Vector2.Zero);
+        if (entity == null) return;
 
-        if (entity.hideFlags.HasFlag(HideFlags.Hide) || entity.hideFlags.HasFlag(HideFlags.HideAndDontSave)) return (Vector2.Zero, Vector2.Zero);
+        if (entity.hideFlags.HasFlag(HideFlags.Hide) || entity.hideFlags.HasFlag(HideFlags.HideAndDontSave)) return;
 
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
@@ -158,10 +157,9 @@ public class HierarchyWindow : EditorWindow {
 
         if (string.IsNullOrEmpty(_searchText) == false && tag.ToLower().Contains(_searchText.ToLower()) == false)
         {
-            //foreach (var child in entity.Children)
             for (int i = 0; i < entity.Children.Count; i++)
                 DrawEntityNode(entity.Children[i], depth, isPartOfPrefab);
-            return (Vector2.Zero, Vector2.Zero);
+            return;
         }
 
         ImGuiTreeNodeFlags flags = (Selection.Current == entity) ? ImGuiTreeNodeFlags.Selected : 0;
@@ -175,7 +173,6 @@ public class HierarchyWindow : EditorWindow {
         }
 
         var highlight = Selection.Current == entity;
-        //var highlight = false;
         if (highlight)
         {
             ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(ImGuiCol.HeaderActive));
@@ -184,20 +181,14 @@ public class HierarchyWindow : EditorWindow {
         }
         else if (entity.EnabledInHierarchy == false)
         {
-            //ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(ImGuiCol.TextDisabled));
             ImGui.PushStyleColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled));
         }
 
-        //if (!isPartOfPrefab)
-        //    isPartOfPrefab = entity.HasComponent<PrefabComponent>();
-        //var prefabColorApplied = isPartOfPrefab && entity != m_SelectedEntity;
-        //if (prefabColorApplied)
-        //    ImGui.PushStyleColor(ImGuiCol.Text, EditorTheme.HeaderSelectedColor);
         var opened = ImGui.TreeNodeEx(entity.Name + "##" + entity.GetHashCode(), flags);
 
         if (highlight)
             ImGui.PopStyleColor(2);
-        else if(entity.EnabledInHierarchy == false)
+        else if (entity.EnabledInHierarchy == false)
             ImGui.PopStyleColor(2);
 
         // Select
@@ -258,10 +249,10 @@ public class HierarchyWindow : EditorWindow {
                 {
                     // Recieve Prefab
                 }
-        
+
                 ImGui.EndDragDropTarget();
             }
-        
+
             if (ImGui.BeginDragDropSource())
             {
                 ImGui.TextUnformatted(tag);
@@ -285,21 +276,9 @@ public class HierarchyWindow : EditorWindow {
 
         ImGui.TableNextColumn();
 
-        ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0, 0, 0, 0));
-        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0, 0, 0, 0));
-        ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0, 0, 0, 0));
-
-        var buttonSizeX = ImGui.GetContentRegionAvail().X;
-        var frameHeight = ImGui.GetFrameHeight();
-        ImGui.Button(isPartOfPrefab ? "Prefab" : "Unique", new Vector2(buttonSizeX, frameHeight));
-        // Select
-        if (ImGui.IsItemDeactivated() && ImGui.IsItemHovered() && !ImGui.IsItemToggledOpen())
-            Selection.Select(entity);
-
-        ImGui.TableNextColumn();
         // Visibility Toggle
         {
-            ImGui.Text("    " + (entity.Enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash));
+            ImGui.Text(" " + (entity.Enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash));
 
             if (ImGui.IsItemHovered() && ImGui.IsMouseReleased(ImGuiMouseButton.Left))
                 entity.Enabled = !entity.Enabled;
@@ -311,37 +290,18 @@ public class HierarchyWindow : EditorWindow {
         //    ImGui.PopStyleColor();
 
         // Open
-        (Vector2, Vector2) nodeRect = (ImGui.GetItemRectMin(), ImGui.GetItemRectMax());
+        if (opened && !entityDeleted)
         {
-            if (opened && !entityDeleted)
-            {
-                var drawList = ImGui.GetWindowDrawList();
-
-                var verticalLineEnd = verticalLineStart;
-                const float lineThickness = 1.5f;
-
-                for(int i=0; i< entity.Children.Count; i++)
-                {
-                    float HorizontalTreeLineSize = entity.Children[i].Children.Count == 0 ? 18.0f : 9.0f; //chosen arbitrarily
-                    (Vector2, Vector2) childRect = DrawEntityNode(entity.Children[i], depth + 1, isPartOfPrefab);
-
-                    var midpoint = (childRect.Item1.Y + childRect.Item2.Y) / 2.0f;
-                    drawList.AddLine(new Vector2(verticalLineStart.X, midpoint), new Vector2(verticalLineStart.X + HorizontalTreeLineSize, midpoint), ImGui.GetColorU32(ImGuiCol.PlotLines), lineThickness);
-                    verticalLineEnd.Y = midpoint;
-                }
-
-                drawList.AddLine(verticalLineStart, verticalLineEnd, ImGui.GetColorU32(ImGuiCol.PlotLines), lineThickness);
-            }
+            for (int i = 0; i < entity.Children.Count; i++)
+                DrawEntityNode(entity.Children[i], depth + 1, isPartOfPrefab);
 
             if (opened && entity.Children.Count > 0)
                 ImGui.TreePop();
+
+            // PostProcess Actions
+            if (entityDeleted)
+                m_DeletedEntity = entity;
         }
-
-        // PostProcess Actions
-        if (entityDeleted)
-            m_DeletedEntity = entity;
-
-        return nodeRect;
     }
 
     void DrawContextMenu(GameObject context = null)
