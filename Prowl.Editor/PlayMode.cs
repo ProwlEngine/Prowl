@@ -54,7 +54,7 @@ public static class PlayMode {
         MonoBehaviour.PauseLogic = true;
 
         var s = JsonUtility.Deserialize<Scene>(PreviousScene);
-        GameObjectManager.LoadScene(s, false);
+        //GameObjectManager.LoadScene(s, false);
 
         // TODO: come up with a clean way to maintain the selected object
         Selection.Clear();
