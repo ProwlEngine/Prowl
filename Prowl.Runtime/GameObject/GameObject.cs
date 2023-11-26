@@ -1,8 +1,7 @@
-﻿using Prowl.Runtime.SceneManagement;
+﻿using Newtonsoft.Json;
+using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
-using Newtonsoft.Json;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -14,7 +13,6 @@ namespace Prowl.Runtime;
 public class GameObject : EngineObject
 {
     internal static event Action<GameObject>? Internal_Constructed;
-    public static void ForceInvokeConstructed(GameObject go) => Internal_Constructed?.Invoke(go);
     internal static event Action<GameObject>? Internal_DestroyCommitted;
     
     [SerializeField]
@@ -598,7 +596,7 @@ public class GameObject : EngineObject
     public static GameObject Instantiate(GameObject original, GameObject? parent, Vector3 position, Quaternion rotation) => Instantiate(original, position, rotation, parent);
     public static GameObject Instantiate(GameObject original, Vector3 position, Quaternion rotation, GameObject? parent) 
     {
-        GameObject clone = (GameObject)EngineObject.Instantiate(original);
+        GameObject clone = (GameObject)EngineObject.Instantiate(original, false);
         clone.position = position;
         clone.orientation = rotation;
         clone.SetParent(parent);

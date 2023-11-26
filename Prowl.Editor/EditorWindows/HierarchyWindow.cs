@@ -116,9 +116,15 @@ public class HierarchyWindow : EditorWindow {
                         if (!entityPayload.IsNull)
                             if (Selection.Dragging is Guid guidToAsset)
                             {
-                                GameObject go = GameObject.Instantiate(AssetDatabase.LoadAsset<GameObject>(guidToAsset));
-                                go.SetParent(null);
-                                Selection.Select(go);
+                                var original = AssetDatabase.LoadAsset<GameObject>(guidToAsset);
+                                GameObject clone = (GameObject)EngineObject.Instantiate(original, true);
+                                clone.Position = original.Position;
+                                clone.Orientation = original.Orientation;
+                                clone.SetParent(null);
+                                clone.Recalculate();
+                                //GameObject go = GameObject.Instantiate();
+                                //go.SetParent(null);
+                                Selection.Select(clone);
                             }
                     }
                     ImGui.EndDragDropTarget();
@@ -154,6 +160,7 @@ public class HierarchyWindow : EditorWindow {
         ImGui.TableNextColumn();
 
         var tag = entity.Name;
+        bool isPrefab = entity.AssetID != Guid.Empty;
 
         if (string.IsNullOrEmpty(_searchText) == false && tag.ToLower().Contains(_searchText.ToLower()) == false)
         {
@@ -183,6 +190,9 @@ public class HierarchyWindow : EditorWindow {
         {
             ImGui.PushStyleColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled));
         }
+
+        if(!highlight && isPrefab)
+            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new Vector4(0.3f, 0.0f, 0.3f, 1.0f)));
 
         var opened = ImGui.TreeNodeEx(entity.Name + "##" + entity.GetHashCode(), flags);
 
@@ -290,18 +300,18 @@ public class HierarchyWindow : EditorWindow {
         //    ImGui.PopStyleColor();
 
         // Open
-        if (opened && !entityDeleted)
+        if (opened)
         {
             for (int i = 0; i < entity.Children.Count; i++)
                 DrawEntityNode(entity.Children[i], depth + 1, isPartOfPrefab);
 
             if (opened && entity.Children.Count > 0)
                 ImGui.TreePop();
-
-            // PostProcess Actions
-            if (entityDeleted)
-                m_DeletedEntity = entity;
         }
+
+        // PostProcess Actions
+        if (entityDeleted)
+            m_DeletedEntity = entity;
     }
 
     void DrawContextMenu(GameObject context = null)

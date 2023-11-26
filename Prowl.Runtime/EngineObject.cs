@@ -83,7 +83,7 @@ namespace Prowl.Runtime
             }
         }
 
-        public static EngineObject Instantiate(EngineObject obj)
+        public static EngineObject Instantiate(EngineObject obj, bool keepAssetID = false)
         {
             if (obj.IsDestroyed) throw new Exception(obj.Name + " has been destroyed.");
             // Serialize and deserialize to get a new object
@@ -93,7 +93,7 @@ namespace Prowl.Runtime
             // Some objects might have a readonly name (like components) in that case it should remain the same, so if name is different set it
             newObj.Name = obj.Name;
             // Need to make sure to set GUID to empty so the engine knows this isn't the original Asset file
-            newObj.AssetID = Guid.Empty;
+            if(!keepAssetID) newObj.AssetID = Guid.Empty;
             return newObj;
         }
 
