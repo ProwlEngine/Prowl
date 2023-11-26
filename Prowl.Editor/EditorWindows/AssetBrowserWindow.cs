@@ -69,7 +69,7 @@ public class AssetBrowserWindow : EditorWindow {
 
         if (ImGui.BeginTable("MainViewTable", 2, tableFlags, availableRegion))
         {
-            ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 200);
+            ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 150f);
             ImGui.TableSetupColumn("", ImGuiTableColumnFlags.None);
 
             ImGui.TableNextRow();
