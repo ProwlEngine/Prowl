@@ -56,13 +56,14 @@ public class EditorWindow {
         else
             ImGui.SetNextWindowSize(new Vector2(Width, Height), ImGuiCond.FirstUseEver);
         // push id doesnt work with windows since it cant be handled with the id stack, c++ uses ## or ### to set an identifier
-        ImGui.Begin(Title + "##" + _id + Project.HasProject, ref isOpened, Flags);
-
+        ImGui.PushID(_id + (Project.HasProject ? 1000 : 0));
+        ImGui.Begin(Title, ref isOpened, Flags);
         DrawToolbar();
         
         Draw();
         ImGui.End();
-        
+        ImGui.PopID();
+
         PostWindowDraw();
 
         if (!isOpened)
