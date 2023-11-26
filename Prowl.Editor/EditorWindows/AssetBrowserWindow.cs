@@ -13,8 +13,6 @@ namespace Prowl.Editor.EditorWindows;
 
 public class AssetBrowserWindow : EditorWindow {
 
-    public static string CurrentActiveDirectory;
-
     public class AssetBrowserSettings : IProjectSetting
     {
         [Text("Settings for Asset Browser.")]
@@ -31,7 +29,9 @@ public class AssetBrowserWindow : EditorWindow {
         public bool m_AutoRecompileShaders = true;
     }
 
-    public AssetBrowserSettings Settings => Project.ProjectSettings.GetSetting<AssetBrowserSettings>();
+    public static AssetBrowserSettings Settings => Project.ProjectSettings.GetSetting<AssetBrowserSettings>();
+
+    public static string CurrentActiveDirectory;
 
     public string Selected { get; private set; } = string.Empty;
     private string _searchText = "";
