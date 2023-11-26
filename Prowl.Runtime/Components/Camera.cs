@@ -23,6 +23,9 @@ public class Camera : MonoBehaviour
     public float NearClip = 0.01f;
     public float FarClip = 1000f;
 
+    public float Contrast = 1.1f;
+    public float Saturation = 1.2f;
+
     public float RenderResolution = 1f;
 
     public enum ProjectionType { Perspective, Orthographic }
@@ -74,7 +77,7 @@ public class Camera : MonoBehaviour
 
     private void RenderAllOfOrder(RenderingOrder order)
     {
-        foreach (var go in SceneManager.AllGameObjects)
+        foreach (var go in GameObjectManager.AllGameObjects)
             if (go.EnabledInHierarchy)
                 foreach (var comp in go.GetComponents())
                     if (comp.Enabled && comp.RenderOrder == order)
@@ -109,6 +112,8 @@ public class Camera : MonoBehaviour
         //CombineShader.mpb.Clear();
         CombineShader.SetTexture("gAlbedoAO", gBuffer.AlbedoAO);
         CombineShader.SetTexture("gLighting", gBuffer.Lighting);
+        CombineShader.SetFloat("Contrast", Math.Clamp(Contrast, 0, 2));
+        CombineShader.SetFloat("Saturation", Math.Clamp(Saturation, 0, 2));
         CombineShader.EnableKeyword("ACESTONEMAP");
         CombineShader.EnableKeyword("GAMMACORRECTION");
         CombineShader.SetPass(0, true);

@@ -4,7 +4,7 @@ using Prowl.Runtime.Assets;
 using Prowl.Runtime.Components;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Utils;
-using ImGuiNET;
+using HexaEngine.ImGuiNET;
 using System;
 using System.Numerics;
 using System.Xml.Linq;

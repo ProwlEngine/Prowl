@@ -3,7 +3,7 @@ using Prowl.Runtime.Assets;
 using Prowl.Editor.Assets;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Icons;
-using ImGuiNET;
+using HexaEngine.ImGuiNET;
 using System.IO;
 using System.Reflection;
 
@@ -38,17 +38,6 @@ public class InspectorWindow : EditorWindow
         Selection.OnSelectionChanged -= Selection_OnSelectionChanged;
     }
 
-    bool isDisabled = false;
-    void Disable(bool cond)
-    {
-        if (cond)
-        {
-            if (isDisabled == false) ImGui.BeginDisabled();
-            else ImGui.EndDisabled();
-            isDisabled = !isDisabled;
-        }
-    }
-
     protected override void Draw()
     {
 
@@ -60,12 +49,19 @@ public class InspectorWindow : EditorWindow
             ImGui.EndMenuBar();
         }
 
-        if (Selected is null)
+        if (Selected is null) return;
+
+        // remove nulls or destroyed
+        while (_BackStack.Count > 0)
         {
-            return;
+            var peek = _BackStack.Peek();
+            if (peek == null || (peek is EngineObject eObj && eObj.IsDestroyed) || peek == Selected)
+                _BackStack.Pop();
+            else
+                break;
         }
 
-        Disable(_BackStack.Count == 0);
+        if (_BackStack.Count == 0) ImGui.BeginDisabled();
         {
             if (ImGui.Button(FontAwesome6.ArrowLeft))
             {
@@ -73,11 +69,21 @@ public class InspectorWindow : EditorWindow
                 Selected = _BackStack.Pop();
             }
         }
-        Disable(_BackStack.Count == 0);
+        if (_BackStack.Count == 0) ImGui.EndDisabled();
 
         ImGui.SameLine();
 
-        Disable(_ForwardStack.Count == 0);
+        // remove nulls or destroyed
+        while (_ForwardStack.Count > 0)
+        {
+            var peek = _ForwardStack.Peek();
+            if (peek == null || (peek is EngineObject eObj && eObj.IsDestroyed) || peek == Selected)
+                _ForwardStack.Pop();
+            else
+                break;
+        }
+
+        if (_ForwardStack.Count == 0) ImGui.BeginDisabled();
         {
             if (ImGui.Button(FontAwesome6.ArrowRight))
             {
@@ -85,7 +91,7 @@ public class InspectorWindow : EditorWindow
                 Selected = _ForwardStack.Pop();
             }
         }
-        Disable(_ForwardStack.Count == 0);
+        if (_ForwardStack.Count == 0) ImGui.EndDisabled();
 
         bool destroyCustomEditor = true;
 

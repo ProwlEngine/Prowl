@@ -26,7 +26,6 @@ public abstract class MonoBehaviour : EngineObject
 
     private Action onEnable;
     private Action onDisable;
-    private Action onLevelWasLoaded;
     private Action awake;
     private Action start;
     private Action fixedUpdate;
@@ -131,7 +130,6 @@ public abstract class MonoBehaviour : EngineObject
         {
             "OnEnable",
             "OnDisable",
-            "OnLevelWasLoaded",
             "Awake",
             "Start",
             "FixedUpdate",
@@ -152,15 +150,14 @@ public abstract class MonoBehaviour : EngineObject
 
         onEnable = (Action)retMethods[0];
         onDisable = (Action)retMethods[1];
-        onLevelWasLoaded = (Action)retMethods[2];
-        awake = (Action)retMethods[3];
-        start = (Action)retMethods[4];
-        fixedUpdate = (Action)retMethods[5];
-        update = (Action)retMethods[6];
-        lateUpdate = (Action)retMethods[7];
-        onDestroy = (Action)retMethods[8];
-        onRenderObject = (Action)retMethods[9];
-        OnRenderObjectDepth = (Action)retMethods[10];
+        awake = (Action)retMethods[2];
+        start = (Action)retMethods[3];
+        fixedUpdate = (Action)retMethods[4];
+        update = (Action)retMethods[5];
+        lateUpdate = (Action)retMethods[6];
+        onDestroy = (Action)retMethods[7];
+        onRenderObject = (Action)retMethods[8];
+        OnRenderObjectDepth = (Action)retMethods[9];
 
         executeAlways = this.GetType().GetCustomAttribute<ExecuteAlwaysAttribute>() != null;
 
@@ -178,10 +175,6 @@ public abstract class MonoBehaviour : EngineObject
     internal void Internal_OnDisabled()
     {
         if (!PauseLogic || executeAlways) onDisable?.Invoke();
-    }
-    internal void Internal_OnLevelWasLoaded()
-    {
-        if (!PauseLogic || executeAlways) onLevelWasLoaded?.Invoke();
     }
     internal void Internal_Start()
     {

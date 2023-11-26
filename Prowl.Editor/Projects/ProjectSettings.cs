@@ -1,5 +1,4 @@
-﻿using Newtonsoft.Json;
-using static Assimp.Metadata;
+﻿using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor
 {
@@ -40,7 +39,7 @@ namespace Prowl.Editor
             var convertedSettings = settings.ToDictionary(entry => entry.Key.FullName, entry => entry.Value );
 
             // Serialize settings to JSON
-            string json = JsonConvert.SerializeObject(convertedSettings, Formatting.Indented);
+            string json = JsonUtility.Serialize(convertedSettings);
 
             // Write JSON to file
             File.WriteAllText(path, json);
@@ -56,7 +55,7 @@ namespace Prowl.Editor
                 string json = File.ReadAllText(filePath);
 
                 // Deserialize JSON to settings
-                var loadedSettings = JsonConvert.DeserializeObject<Dictionary<string, IProjectSetting>>(json);
+                var loadedSettings = JsonUtility.Deserialize<Dictionary<string, IProjectSetting>>(json);
 
                 // Remove any settings whos type cannot be inferred with Type.GetType
                 var convertedSettings = loadedSettings.Where(x => Type.GetType(x.Key) != null).ToDictionary(x => Type.GetType(x.Key), x => x.Value);

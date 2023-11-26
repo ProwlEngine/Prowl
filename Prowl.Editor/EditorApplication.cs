@@ -5,7 +5,7 @@ using Prowl.Runtime.Utils;
 using Prowl.Editor.Assets;
 using Prowl.Editor.EditorWindows;
 using Prowl.Editor.PropertyDrawers;
-using ImGuiNET;
+using HexaEngine.ImGuiNET;
 using Raylib_cs;
 using System.Diagnostics;
 using System.Numerics;
@@ -18,6 +18,8 @@ public unsafe class EditorApplication : Application {
 
     public static Action OnDrawEditor;
     public static Action OnUpdateEditor;
+
+    static bool hasDockSetup = false;
 
     public bool IsReloadingExternalAssemblies { get; private set; }
     public void RegisterReloadOfExternalAssemblies() => IsReloadingExternalAssemblies = true;
@@ -57,18 +59,46 @@ public unsafe class EditorApplication : Application {
 
             if (Project.HasProject)
             {
-                SceneManager.Update();
+                GameObjectManager.Update();
 
                 float physicsTime = (float)physicsTimer.Elapsed.TotalSeconds;
                 if (physicsTime > Time.fixedDeltaTime)
                 {
-                    SceneManager.PhysicsUpdate();
+                    GameObjectManager.PhysicsUpdate();
                     physicsTimer.Restart();
                 }
             }
 
             controller.Update(updateTime);
-            ImGui.DockSpaceOverViewport(ImGui.GetMainViewport());
+            int dockspaceID = ImGui.DockSpaceOverViewport(ImGui.GetMainViewport());
+
+            if (hasDockSetup == false)
+            {
+                ImGui.DockBuilderRemoveNode(dockspaceID);
+                ImGui.DockBuilderAddNode(dockspaceID, ImGuiDockNodeFlags.None);
+                ImGui.DockBuilderSetNodeSize(dockspaceID, ImGui.GetMainViewport().Size);
+
+                int dock_id_main_right = 0;
+                int dock_id_main_left = 0;
+                ImGui.DockBuilderSplitNode(dockspaceID, ImGuiDir.Right, 0.2f, ref dock_id_main_right, ref dock_id_main_left);
+                int dock_id_main_right_top = 0;
+                int dock_id_main_right_bottom = 0;
+                ImGui.DockBuilderSplitNode(dock_id_main_right, ImGuiDir.Up, 0.35f, ref dock_id_main_right_top, ref dock_id_main_right_bottom);
+
+                ImGui.DockBuilderDockWindow("Hierarchy", dock_id_main_right_top);
+                ImGui.DockBuilderDockWindow("Inspector", dock_id_main_right_bottom);
+
+                int dock_id_main_left_top = 0;
+                int dock_id_main_left_bottom = 0;
+                ImGui.DockBuilderSplitNode(dock_id_main_left, ImGuiDir.Down, 0.3f, ref dock_id_main_left_bottom, ref dock_id_main_left_top);
+                ImGui.DockBuilderDockWindow("Viewport", dock_id_main_left_top);
+
+                ImGui.DockBuilderDockWindow("Asset Browser", dock_id_main_left_bottom);
+                ImGui.DockBuilderDockWindow("Console", dock_id_main_left_bottom);
+
+                ImGui.DockBuilderFinish(dockspaceID);
+                hasDockSetup = true;
+            }
 
             OnUpdateEditor?.Invoke();
 
@@ -78,7 +108,7 @@ public unsafe class EditorApplication : Application {
             OnDrawEditor?.Invoke();
             EditorGui.Update(); 
             if (Project.HasProject)
-                SceneManager.Draw();
+                GameObjectManager.Draw();
             controller.Draw();
 
             Raylib.EndDrawing();
@@ -98,10 +128,10 @@ public unsafe class EditorApplication : Application {
             if (Project.HasProject)
             {
                 // Serialize the Scene manually to save its state
-                var gos = SceneManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
+                var gos = GameObjectManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
                 var s = JsonUtility.Serialize(gos);
 
-                foreach (var go in SceneManager.AllGameObjects)
+                foreach (var go in GameObjectManager.AllGameObjects)
                     go.Destroy();
                 EngineObject.HandleDestroyed();
 
@@ -124,7 +154,7 @@ public unsafe class EditorApplication : Application {
                 _AssemblyManager.AddUnloadTask(() =>
                 {
                     //Hierarchy.SaveToAssetPath();
-                    SceneManager.Clear();
+                    GameObjectManager.Clear();
 
                     ClearTypeDescriptorCache();
                     //PhysicsEngine.World = null;

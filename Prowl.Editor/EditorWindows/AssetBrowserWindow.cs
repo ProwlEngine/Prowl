@@ -4,7 +4,7 @@ using Prowl.Runtime.Resources;
 using Prowl.Runtime.Utils;
 using Prowl.Editor.Assets;
 using Prowl.Icons;
-using ImGuiNET;
+using HexaEngine.ImGuiNET;
 using System.IO;
 using System.Numerics;
 using System.Reflection;
@@ -12,8 +12,6 @@ using System.Reflection;
 namespace Prowl.Editor.EditorWindows;
 
 public class AssetBrowserWindow : EditorWindow {
-
-    public static string CurrentActiveDirectory;
 
     public class AssetBrowserSettings : IProjectSetting
     {
@@ -31,7 +29,9 @@ public class AssetBrowserWindow : EditorWindow {
         public bool m_AutoRecompileShaders = true;
     }
 
-    public AssetBrowserSettings Settings => Project.ProjectSettings.GetSetting<AssetBrowserSettings>();
+    public static AssetBrowserSettings Settings => Project.ProjectSettings.GetSetting<AssetBrowserSettings>();
+
+    public static string CurrentActiveDirectory;
 
     public string Selected { get; private set; } = string.Empty;
     private string _searchText = "";
@@ -44,7 +44,7 @@ public class AssetBrowserWindow : EditorWindow {
     private List<DirectoryEntry> m_DirectoryEntries;
     private static float s_LastDomainReloadTime = 0.0f;
     private static FileSystemWatcher watcher;
-    private float ThumbnailSize => (1.0f + Settings.m_ThumbnailSize) * 80f;
+    private float ThumbnailSize => (1.0f + Settings.m_ThumbnailSize) * 65f;
 
     public AssetBrowserWindow()
     {
@@ -69,7 +69,7 @@ public class AssetBrowserWindow : EditorWindow {
 
         if (ImGui.BeginTable("MainViewTable", 2, tableFlags, availableRegion))
         {
-            ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 200);
+            ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 150f);
             ImGui.TableSetupColumn("", ImGuiTableColumnFlags.None);
 
             ImGui.TableNextRow();
@@ -251,7 +251,7 @@ public class AssetBrowserWindow : EditorWindow {
         ImGui.SetCursorPosX(cPX + xSize);
         ImGui.SetCursorPosY(cPY);
         if (ImGui.Button("   " + FontAwesome6.Gears + "   "))
-            new ProjectSettingsWindow(Settings);
+            _ = new ProjectSettingsWindow(Settings);
     }
 
     private void RenderSideView()
@@ -259,34 +259,25 @@ public class AssetBrowserWindow : EditorWindow {
         ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 0.0f);
         int count = 0;
         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
-        if (ImGui.TreeNodeEx("Database", flags))
+        var rootFolders = AssetDatabase.GetRootfolders();
+        RenderSideViewFolder(ref count, flags, rootFolders[1]); // Assets Folder
+        RenderSideViewFolder(ref count, flags, rootFolders[0]); // Defaults Folder
+        ImGui.PopStyleVar();
+    }
+
+    private void RenderSideViewFolder(ref int count, ImGuiTreeNodeFlags flags, DirectoryInfo root)
+    {
+        string displayName = $"{FontAwesome6.Folder} {Path.GetRelativePath(Project.ProjectDirectory, root.FullName)}";
+        bool opened = ImGui.TreeNodeEx(displayName, flags);
+
+        if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked())
+            UpdateDirectoryEntries(root.FullName);
+
+        if (opened)
         {
-            foreach(var root in AssetDatabase.GetRootfolders())
-            {
-                string relativePath = Path.GetRelativePath(Project.ProjectDirectory, root.FullName);
-                string displayName = $"{FontAwesome6.Folder} {relativePath}";
-                bool opened = ImGui.TreeNodeEx(displayName, flags);
-
-                if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked())
-                {
-                    UpdateDirectoryEntries(root.FullName);
-                }
-
-                if (opened)
-                    DrawDirectory(root.FullName, ref count, 1);
-
-                if (opened && root.GetDirectories().Length > 0)
-                    ImGui.TreePop();
-            }
-
-            //if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked())
-            //{
-            //    UpdateDirectoryEntries(Project.ProjectAssetDirectory);
-            //}
-            //DrawDirectory(Project.ProjectAssetDirectory, ref count);
+            DrawDirectory(root.FullName, ref count, 1);
             ImGui.TreePop();
         }
-        ImGui.PopStyleVar();
     }
 
     private (Vector2, Vector2) DrawDirectory(string directory, ref int count, int level = 0)
@@ -515,7 +506,10 @@ public class AssetBrowserWindow : EditorWindow {
         ImDrawListPtr drawList = ImGui.GetWindowDrawList();
 
         var ran = new System.Random(ext.ToLower().Trim().GetHashCode() + 5); // +1 cause i didnt like the colors it gave without it :P
-        ImGui.ColorConvertHSVtoRGB((float)ran.NextDouble(), 0.8f + (float)ran.NextDouble() * 0.2f, 0.8f + (float)ran.NextDouble() * 0.2f, out var r, out var g, out var b );
+        float r = 0;
+        float g = 0;
+        float b = 0;
+        ImGui.ColorConvertHSVtoRGB((float)ran.NextDouble(), 0.8f + (float)ran.NextDouble() * 0.2f, 0.8f + (float)ran.NextDouble() * 0.2f, ref r, ref g, ref b );
         var lineColor = ImGui.GetColorU32(new Vector4(r, g, b, 1.0f));
 
         var pos = ImGui.GetCursorScreenPos();
@@ -534,7 +528,10 @@ public class AssetBrowserWindow : EditorWindow {
                 Type type = ImporterAttribute.GetGeneralType(ext);
                 if (type != null)
                 {
-                    ImGui.SetDragDropPayload($"ASSETPAYLOAD_{type.Name}", IntPtr.Zero, 0);
+                    unsafe
+                    {
+                        ImGui.SetDragDropPayload($"ASSETPAYLOAD_{type.Name}", null, 0);
+                    }
                     Selection.SetDragging(AssetDatabase.GUIDFromAssetPath(Path.GetRelativePath(Project.ProjectDirectory, filePath)));
                     ImGui.TextUnformatted(type.Name + " " + Path.GetRelativePath(Project.ProjectAssetDirectory, filePath));
                     ImGui.EndDragDropSource();

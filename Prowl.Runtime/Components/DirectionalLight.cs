@@ -103,7 +103,7 @@ public class DirectionalLight : MonoBehaviour
             //Rlgl.rlEnableDepthMask();
             //Rlgl.rlEnableDepthTest();
             Rlgl.rlSetCullFace(0); // Cull the front faces for the shadow pass
-            foreach (var go in SceneManager.AllGameObjects)
+            foreach (var go in GameObjectManager.AllGameObjects)
                 if (go.EnabledInHierarchy)
                     foreach (var comp in go.GetComponents())
                         if (comp.Enabled && comp.RenderOrder == RenderingOrder.Opaque)

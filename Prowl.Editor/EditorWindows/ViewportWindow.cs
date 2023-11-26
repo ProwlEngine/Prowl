@@ -1,9 +1,9 @@
 using Prowl.Runtime;
 using Prowl.Runtime.Components;
-using Prowl.Runtime.ImGUI.ImGuizmo;
 using Prowl.Runtime.Resources;
 using Prowl.Icons;
-using ImGuiNET;
+using HexaEngine.ImGuiNET;
+using HexaEngine.ImGuizmoNET;
 using System.Numerics;
 using static System.Net.Mime.MediaTypeNames;
 using Prowl.Runtime.Components.ImageEffects;
@@ -35,14 +35,14 @@ public class ViewportWindow : EditorWindow
     Vector2 WindowCenter;
     bool DrawGrid = false;
 
-    private string[] operationNames = Enum.GetNames<OPERATION>();
-    private OPERATION[] operations = Enum.GetValues<OPERATION>();
+    private string[] operationNames = Enum.GetNames<ImGuizmoOperation>();
+    private ImGuizmoOperation[] operations = Enum.GetValues<ImGuizmoOperation>();
 
-    private string[] modeNames = Enum.GetNames<MODE>();
-    private MODE[] modes = Enum.GetValues<MODE>();
+    private string[] modeNames = Enum.GetNames<ImGuizmoMode>();
+    private ImGuizmoMode[] modes = Enum.GetValues<ImGuizmoMode>();
 
-    private OPERATION operation = OPERATION.Universal;
-    private MODE mode = MODE.Local;
+    private ImGuizmoOperation operation = ImGuizmoOperation.Universal;
+    private ImGuizmoMode mode = ImGuizmoMode.Local;
 
     public ViewportWindow()
     {
@@ -77,7 +77,7 @@ public class ViewportWindow : EditorWindow
         DrawViewport();
     }
 
-    OPERATION manipulateOp = OPERATION.Translate;
+    ImGuizmoOperation manipulateOp = ImGuizmoOperation.Translate;
 
     private void DrawViewport()
     {
@@ -115,7 +115,7 @@ public class ViewportWindow : EditorWindow
         if (Selection.Current != null && Selection.Current is GameObject go)
         {
             var goMatrix = go.Local;
-            if (ImGuizmo.Manipulate(ref view.M11, ref projectionM11.M11, manipulateOp, MODE.Local, ref goMatrix.M11))
+            if (ImGuizmo.Manipulate(ref view.M11, ref projectionM11.M11, manipulateOp, ImGuizmoMode.Local, ref goMatrix.M11))
             {
                 go.Local = goMatrix;
             }
@@ -130,13 +130,13 @@ public class ViewportWindow : EditorWindow
         // Draw Tooltip
         int X = 0;
         if (ImGui.Button($"{FontAwesome6.ArrowsUpDownLeftRight}"))
-            manipulateOp = OPERATION.Translate;
+            manipulateOp = ImGuizmoOperation.Translate;
         X += 23; ImGui.SameLine(X);
         if (ImGui.Button($"{FontAwesome6.ArrowsSpin}"))
-            manipulateOp = OPERATION.Rotate;
+            manipulateOp = ImGuizmoOperation.Rotate;
         X += 21; ImGui.SameLine(X);
         if (ImGui.Button($"{FontAwesome6.GroupArrowsRotate}"))
-            manipulateOp = OPERATION.Scale;
+            manipulateOp = ImGuizmoOperation.Scale;
         X += 23; ImGui.SameLine(X);
         ImGui.Text("FPS: " + (1.0f / (float)Time.deltaTimeF).ToString("0.00"));
         X += 58; ImGui.SameLine(X);
@@ -225,19 +225,19 @@ public class ViewportWindow : EditorWindow
             // If not looking around Viewport Keybinds are used instead
             if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_Q))
             {
-                manipulateOp = OPERATION.Translate;
+                manipulateOp = ImGuizmoOperation.Translate;
             }
             else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_W))
             {
-                manipulateOp = OPERATION.Rotate;
+                manipulateOp = ImGuizmoOperation.Rotate;
             }
             else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_E))
             {
-                manipulateOp = OPERATION.Scale;
+                manipulateOp = ImGuizmoOperation.Scale;
             }
             else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_R))
             {
-                manipulateOp = OPERATION.Universal;
+                manipulateOp = ImGuizmoOperation.Universal;
             }
         }
     }

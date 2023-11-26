@@ -1,12 +1,6 @@
-﻿using ImGuiNET;
-using Prowl.Editor.PropertyDrawers;
-using Prowl.Runtime;
-using Prowl.Runtime.Assets;
+﻿using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Utils;
-using System;
-using System.Numerics;
-using System.Reflection;
 
 namespace Prowl.Editor.Assets
 {

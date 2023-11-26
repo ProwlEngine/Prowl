@@ -37,19 +37,19 @@ namespace Prowl.Runtime.Utils
 
         public static SerializedAsset FromSerializedAsset(string path)
         {
-            bool prev = SceneManager.AllowGameObjectConstruction;
-            SceneManager.AllowGameObjectConstruction = false;
+            bool prev = GameObjectManager.AllowGameObjectConstruction;
+            GameObjectManager.AllowGameObjectConstruction = false;
             var obj = JsonUtility.DeserializeFromPath<SerializedAsset>(path);
-            SceneManager.AllowGameObjectConstruction = prev; // Restore state
+            GameObjectManager.AllowGameObjectConstruction = prev; // Restore state
             return obj;
         }
 
         public static SerializedAsset FromStream(StreamReader reader)
         {
-            bool prev = SceneManager.AllowGameObjectConstruction;
-            SceneManager.AllowGameObjectConstruction = false;
+            bool prev = GameObjectManager.AllowGameObjectConstruction;
+            GameObjectManager.AllowGameObjectConstruction = false;
             var obj = JsonUtility.Deserialize<SerializedAsset>(reader);
-            SceneManager.AllowGameObjectConstruction = prev; // Restore state
+            GameObjectManager.AllowGameObjectConstruction = prev; // Restore state
             return obj;
         }
 

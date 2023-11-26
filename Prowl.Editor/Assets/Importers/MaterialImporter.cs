@@ -1,4 +1,4 @@
-﻿using ImGuiNET;
+﻿using HexaEngine.ImGuiNET;
 using Newtonsoft.Json.Linq;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
@@ -137,7 +137,7 @@ namespace Prowl.Editor.Assets
                                     unsafe
                                     {
                                         ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload($"ASSETPAYLOAD_Texture2D");
-                                        if (entityPayload.NativePtr != null)
+                                        if (!entityPayload.IsNull)
                                             if (Selection.Dragging is Guid guidToAsset)
                                             {
                                                 tex.AssetID = guidToAsset;

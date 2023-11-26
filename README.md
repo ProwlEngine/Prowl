@@ -193,7 +193,8 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 # Screenshots
-![Full Editor shot, Early in development, plenty of obvious bugs and issues :(](https://i.imgur.com/6Pbn7kU.png)
 ![Bokeh Depth of Field](https://i.imgur.com/VYs44qq.png)
+![Image of Editor before v1](https://github.com/michaelsakharov/Prowl/assets/8621606/a8830bb7-7980-4101-8076-1a0b75854b87)
+
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

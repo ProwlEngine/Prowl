@@ -1,4 +1,4 @@
-﻿using ImGuiNET;
+﻿using HexaEngine.ImGuiNET;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -108,7 +108,7 @@ namespace Prowl.Runtime
             var style = ImGui.GetStyle();
             var storage = ImGui.GetStateStorage();
 
-            uint id = ImGui.GetID(label);
+            int id = ImGui.GetID(label);
             int opened = storage.GetInt(id, 0);
             float x = ImGui.GetCursorPosX();
             ImGui.BeginGroup();

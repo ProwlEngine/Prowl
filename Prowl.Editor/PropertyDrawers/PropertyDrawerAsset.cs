@@ -1,7 +1,7 @@
 ﻿using Prowl.Runtime;
 using Prowl.Runtime.Assets;
 using Prowl.Icons;
-using ImGuiNET;
+using HexaEngine.ImGuiNET;
 using System.Numerics;
 
 namespace Prowl.Editor.PropertyDrawers;
@@ -62,7 +62,7 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
             unsafe
             {
                 ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload($"ASSETPAYLOAD_{value.TypeName}");
-                if (entityPayload.NativePtr != null)
+                if (!entityPayload.IsNull)
                     if (Selection.Dragging is Guid guidToAsset)
                         value.AssetID = guidToAsset;
             }

@@ -3,7 +3,7 @@ using Prowl.Runtime.Utils;
 using Prowl.Editor.Assets;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Icons;
-using ImGuiNET;
+using HexaEngine.ImGuiNET;
 using System.Globalization;
 using System.Numerics;
 using System.Reflection;
