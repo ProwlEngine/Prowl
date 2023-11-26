@@ -44,7 +44,7 @@ public class AssetBrowserWindow : EditorWindow {
     private List<DirectoryEntry> m_DirectoryEntries;
     private static float s_LastDomainReloadTime = 0.0f;
     private static FileSystemWatcher watcher;
-    private float ThumbnailSize => (1.0f + Settings.m_ThumbnailSize) * 80f;
+    private float ThumbnailSize => (1.0f + Settings.m_ThumbnailSize) * 65f;
 
     public AssetBrowserWindow()
     {
