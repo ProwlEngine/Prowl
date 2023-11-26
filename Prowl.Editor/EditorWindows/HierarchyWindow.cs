@@ -3,7 +3,7 @@ using Prowl.Runtime.Assets;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
 using Prowl.Icons;
-using ImGuiNET;
+using HexaEngine.ImGuiNET;
 using Newtonsoft.Json;
 using System.Numerics;
 
@@ -69,7 +69,7 @@ public class HierarchyWindow : EditorWindow {
             for (int column = 0; column < 3; ++column)
             {
                 ImGui.TableSetColumnIndex(column);
-                string columnName = ImGui.TableGetColumnName(column);
+                string columnName = ImGui.TableGetColumnNameS(column);
                 ImGui.PushID(column);
                 ImGui.SetCursorPosY(ImGui.GetCursorPosY() + padding.Y);
                 ImGui.TableHeader(columnName);
@@ -97,11 +97,11 @@ public class HierarchyWindow : EditorWindow {
                 if (ImGui.BeginDragDropTarget())
                 {
                     ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload("GameObjectRef");
-                    if (entityPayload.NativePtr != null)
+                    if (!entityPayload.IsNull)
                     {
-                        var dataPtr = (int*)entityPayload.Data;
-                        int entityId = dataPtr[0];
-                        m_DraggedEntity = EngineObject.FindObjectByID<GameObject>(entityId);
+                        //var dataPtr = (int*)entityPayload.Data;
+                        //int entityId = dataPtr[0];
+                        m_DraggedEntity = EngineObject.FindObjectByID<GameObject>((int)Selection.Dragging);
                         m_DraggedEntityTarget = null;
                     }
 
@@ -113,7 +113,7 @@ public class HierarchyWindow : EditorWindow {
                     unsafe
                     {
                         ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload($"ASSETPAYLOAD_GameObject");
-                        if (entityPayload.NativePtr != null)
+                        if (!entityPayload.IsNull)
                             if (Selection.Dragging is Guid guidToAsset)
                             {
                                 GameObject go = GameObject.Instantiate(AssetDatabase.LoadAsset<GameObject>(guidToAsset));
@@ -247,11 +247,11 @@ public class HierarchyWindow : EditorWindow {
             if (ImGui.BeginDragDropTarget())
             {
                 ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload("GameObjectRef");
-                if (entityPayload.NativePtr != null)
+                if (!entityPayload.IsNull)
                 {
-                    var dataPtr = (int*)entityPayload.Data;
-                    int entityId = dataPtr[0];
-                    m_DraggedEntity = EngineObject.FindObjectByID<GameObject>(entityId);
+                    //var dataPtr = (int*)entityPayload.Data;
+                    //int entityId = dataPtr[0];
+                    m_DraggedEntity = EngineObject.FindObjectByID<GameObject>((int)Selection.Dragging);
                     m_DraggedEntityTarget = entity;
                 }
                 else
@@ -266,7 +266,8 @@ public class HierarchyWindow : EditorWindow {
             {
                 ImGui.TextUnformatted(tag);
                 int entityId = entity.InstanceID;
-                ImGui.SetDragDropPayload("GameObjectRef", (IntPtr)(&entityId), sizeof(int));
+                //ImGui.SetDragDropPayload("GameObjectRef", (IntPtr)(&entityId), sizeof(int));
+                Selection.SetDragging(entityId);
                 ImGui.EndDragDropSource();
             }
         }

@@ -1,6 +1,6 @@
 using Prowl.Runtime;
 using Prowl.Editor.EditorWindows;
-using ImGuiNET;
+using HexaEngine.ImGuiNET;
 using System.Numerics;
 
 namespace Prowl.Editor; 
@@ -39,7 +39,7 @@ public static class EditorGui {
     {
 
         // Fork of Rounded Visual Studio style from ImThemes
-        var style = ImGuiNET.ImGui.GetStyle();
+        var style = HexaEngine.ImGuiNET.ImGui.GetStyle();
 
         style.Alpha = 1.0f;
         style.DisabledAlpha = 0.5f;

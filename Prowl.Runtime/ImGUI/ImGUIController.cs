@@ -1,5 +1,6 @@
 ﻿using Prowl.Icons;
-using ImGuiNET;
+using HexaEngine.ImGuiNET;
+using HexaEngine.ImGuizmoNET;
 using Raylib_cs;
 using System;
 using System.IO;
@@ -14,7 +15,7 @@ namespace Prowl.Runtime.ImGUI
     /// </summary>
     public class ImGUIController : IDisposable
     {
-        IntPtr context;
+        ImGuiContextPtr context;
         Texture2D fontTexture;
         Vector2 scaleFactor = Vector2.One;
 
@@ -59,11 +60,11 @@ namespace Prowl.Runtime.ImGUI
             LoadFontTexture();
             SetupInput();
 
-            Prowl.Runtime.ImGUI.ImGuizmo.ImGuizmo.SetImGuiContext(context);
-            Prowl.Runtime.ImGUI.ImGuizmo.ImGuizmo.AllowAxisFlip(false);
+            ImGuizmo.SetImGuiContext(context);
+            ImGuizmo.AllowAxisFlip(false);
 
             ImGui.NewFrame();
-            Prowl.Runtime.ImGUI.ImGuizmo.ImGuizmo.BeginFrame();
+            ImGuizmo.BeginFrame();
         }
 
         unsafe void AddEmbeddedFont(string name, ushort min, ushort max, float fontSize = 17 * 2.0f / 3.0f)
@@ -77,13 +78,14 @@ namespace Prowl.Runtime.ImGUI
                         stream.CopyTo(fileStream);
                     try
                     {
-                        ImFontConfigPtr fontConfig = ImGuiNative.ImFontConfig_ImFontConfig();
+                        ImFontConfigPtr fontConfig = ImGui.ImFontConfig();
                         fontConfig.MergeMode = true;
                         fontConfig.PixelSnapH = true;
                         fontConfig.GlyphMinAdvanceX = fontSize;
-                        var rangeHandle = GCHandle.Alloc(new ushort[] { min, max, 0 }, GCHandleType.Pinned);
-                        ImGui.GetIO().Fonts.AddFontFromFileTTF(tempFilePath, fontSize, fontConfig, rangeHandle.AddrOfPinnedObject());
-                        rangeHandle.Free();
+                        //var rangeHandle = GCHandle.Alloc(new ushort[] { min, max, 0 }, GCHandleType.Pinned);
+                        char[] ranges = [(char)min, (char)max];
+                        ImGui.GetIO().Fonts.AddFontFromFileTTF(tempFilePath, fontSize, fontConfig, ref ranges[0]);
+                        //rangeHandle.Free();
                     }
                     finally
                     {
@@ -100,10 +102,10 @@ namespace Prowl.Runtime.ImGUI
         unsafe void LoadFontTexture()
         {
             ImGuiIOPtr io = ImGui.GetIO();
-
-            // Load as RGBA 32-bit (75% of the memory is wasted, but default font is so small) because it is more likely to be compatible with user's existing shaders.
-            // If your ImTextureId represent a higher-level concept than just a GL texture id, consider calling GetTexDataAsAlpha8() instead to save on GPU memory.
-            io.Fonts.GetTexDataAsRGBA32(out byte* pixels, out int width, out int height);
+            byte* pixels;
+            int width;
+            int height;
+            ImGui.GetTexDataAsRGBA32(io.Fonts, &pixels, &width, &height, null);
 
             // Upload texture to graphics system
             Image image = new Image
@@ -179,7 +181,7 @@ namespace Prowl.Runtime.ImGUI
             }
 
             ImGui.NewFrame();
-            Prowl.Runtime.ImGUI.ImGuizmo.ImGuizmo.BeginFrame();
+            ImGuizmo.BeginFrame();
         }
 
         /// <summary>
@@ -220,7 +222,7 @@ namespace Prowl.Runtime.ImGUI
             ImGuiIOPtr io = ImGui.GetIO();
 
             // Store button states
-            for (int i = 0; i < io.MouseDown.Count; i++)
+            for (int i = 0; i < io.MouseDown.Length; i++)
             {
                 io.MouseDown[i] = Raylib.IsMouseButtonDown((MouseButton)i);
             }
@@ -267,7 +269,7 @@ namespace Prowl.Runtime.ImGUI
         /// <summary>
         /// Gets the geometry as set up by ImGui and sends it to the graphics device
         /// </summary>
-        public void Draw()
+        public unsafe void Draw()
         {
             ImGui.Render();
             RenderCommandLists(ImGui.GetDrawData());
@@ -286,19 +288,19 @@ namespace Prowl.Runtime.ImGUI
             return color;
         }
 
-        void DrawTriangleVertex(ImDrawVertPtr idxVert)
+        void DrawTriangleVertex(ImDrawVert idxVert)
         {
-            Raylib_cs.Color c = GetColor(idxVert.col);
+            Raylib_cs.Color c = GetColor(idxVert.Col);
             Rlgl.rlColor4ub(c.r, c.g, c.b, c.a);
-            Rlgl.rlTexCoord2f(idxVert.uv.X, idxVert.uv.Y);
-            Rlgl.rlVertex2f(idxVert.pos.X, idxVert.pos.Y);
+            Rlgl.rlTexCoord2f(idxVert.Uv.X, idxVert.Uv.Y);
+            Rlgl.rlVertex2f(idxVert.Pos.X, idxVert.Pos.Y);
         }
 
         // Draw the imgui triangle data
-        void DrawTriangles(uint count, int idxOffset, int vtxOffset, ImVector<ushort> idxBuffer, ImPtrVector<ImDrawVertPtr> idxVert, IntPtr textureId)
+        unsafe void DrawTriangles(uint count, int idxOffset, int vtxOffset, ImVectorImDrawIdx idxBuffer, ImVectorImDrawVert idxVert, ImTextureID textureId)
         {
             ushort index = 0;
-            ImDrawVertPtr vertex;
+            ImDrawVert vertex;
 
             if (Rlgl.rlCheckRenderBatchLimit((int)count * 3))
             {
@@ -306,33 +308,33 @@ namespace Prowl.Runtime.ImGUI
             }
 
             Rlgl.rlBegin(DrawMode.TRIANGLES);
-            Rlgl.rlSetTexture((uint)textureId);
+            Rlgl.rlSetTexture((uint)textureId.Handle);
 
             for (int i = 0; i <= (count - 3); i += 3)
             {
-                index = idxBuffer[idxOffset + i];
-                vertex = idxVert[vtxOffset + index];
+                index = idxBuffer.Data[idxOffset + i];
+                vertex = idxVert.Data[vtxOffset + index];
                 DrawTriangleVertex(vertex);
 
-                index = idxBuffer[idxOffset + i + 1];
-                vertex = idxVert[vtxOffset + index];
+                index = idxBuffer.Data[idxOffset + i + 1];
+                vertex = idxVert.Data[vtxOffset + index];
                 DrawTriangleVertex(vertex);
 
-                index = idxBuffer[idxOffset + i + 2];
-                vertex = idxVert[vtxOffset + index];
+                index = idxBuffer.Data[idxOffset + i + 2];
+                vertex = idxVert.Data[vtxOffset + index];
                 DrawTriangleVertex(vertex);
             }
             Rlgl.rlEnd();
         }
 
-        void RenderCommandLists(ImDrawDataPtr data)
+        unsafe void RenderCommandLists(ImDrawData* data)
         {
             // Scale coordinates for retina displays (screen coordinates != framebuffer coordinates)
-            int fbWidth = (int)(data.DisplaySize.X * data.FramebufferScale.X);
-            int fbHeight = (int)(data.DisplaySize.Y * data.FramebufferScale.Y);
+            int fbWidth = (int)(data->DisplaySize.X * data->FramebufferScale.X);
+            int fbHeight = (int)(data->DisplaySize.Y * data->FramebufferScale.Y);
 
             // Avoid rendering if display is minimized or if the command list is empty
-            if (fbWidth <= 0 || fbHeight <= 0 || data.CmdListsCount == 0)
+            if (fbWidth <= 0 || fbHeight <= 0 || data->CmdListsCount == 0)
             {
                 return;
             }
@@ -341,30 +343,30 @@ namespace Prowl.Runtime.ImGUI
             Rlgl.rlDisableBackfaceCulling();
             Rlgl.rlEnableScissorTest();
 
-            data.ScaleClipRects(ImGui.GetIO().DisplayFramebufferScale);
+            data->ScaleClipRects(ImGui.GetIO().DisplayFramebufferScale);
 
-            for (int n = 0; n < data.CmdListsCount; n++)
+            for (int n = 0; n < data->CmdListsCount; n++)
             {
                 int idxOffset = 0;
-                ImDrawListPtr cmdList = data.CmdListsRange[n];
+                var cmdList = data->CmdLists.Data[n];
 
                 // Vertex buffer and index buffer generated by DearImGui
-                ImPtrVector<ImDrawVertPtr> vtxBuffer = cmdList.VtxBuffer;
-                ImVector<ushort> idxBuffer = cmdList.IdxBuffer;
+                var vtxBuffer = cmdList->VtxBuffer;
+                var idxBuffer = cmdList->IdxBuffer;
 
-                for (int cmdi = 0; cmdi < cmdList.CmdBuffer.Size; cmdi++)
+                for (int cmdi = 0; cmdi < cmdList->CmdBuffer.Size; cmdi++)
                 {
-                    ImDrawCmdPtr pcmd = cmdList.CmdBuffer[cmdi];
+                    var pcmd = cmdList->CmdBuffer.Data[cmdi];
 
                     // Scissor rect
-                    Vector2 pos = data.DisplayPos;
-                    int rectX = (int)((pcmd.ClipRect.X - pos.X) * data.FramebufferScale.X);
-                    int rectY = (int)((pcmd.ClipRect.Y - pos.Y) * data.FramebufferScale.Y);
-                    int rectW = (int)((pcmd.ClipRect.Z - rectX) * data.FramebufferScale.Y);
-                    int rectH = (int)((pcmd.ClipRect.W - rectY) * data.FramebufferScale.Y);
+                    Vector2 pos = data->DisplayPos;
+                    int rectX = (int)((pcmd.ClipRect.X - pos.X) * data->FramebufferScale.X);
+                    int rectY = (int)((pcmd.ClipRect.Y - pos.Y) * data->FramebufferScale.Y);
+                    int rectW = (int)((pcmd.ClipRect.Z - rectX) * data->FramebufferScale.Y);
+                    int rectH = (int)((pcmd.ClipRect.W - rectY) * data->FramebufferScale.Y);
                     Rlgl.rlScissor(rectX, Raylib.GetScreenHeight() - (rectY + rectH), rectW, rectH);
 
-                    if (pcmd.UserCallback != IntPtr.Zero)
+                    if (pcmd.UserCallback != null)
                     {
                         // pcmd.UserCallback(cmdList, pcmd);
                         idxOffset += (int)pcmd.ElemCount;

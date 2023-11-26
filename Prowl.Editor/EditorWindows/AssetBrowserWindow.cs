@@ -4,7 +4,7 @@ using Prowl.Runtime.Resources;
 using Prowl.Runtime.Utils;
 using Prowl.Editor.Assets;
 using Prowl.Icons;
-using ImGuiNET;
+using HexaEngine.ImGuiNET;
 using System.IO;
 using System.Numerics;
 using System.Reflection;
@@ -515,7 +515,10 @@ public class AssetBrowserWindow : EditorWindow {
         ImDrawListPtr drawList = ImGui.GetWindowDrawList();
 
         var ran = new System.Random(ext.ToLower().Trim().GetHashCode() + 5); // +1 cause i didnt like the colors it gave without it :P
-        ImGui.ColorConvertHSVtoRGB((float)ran.NextDouble(), 0.8f + (float)ran.NextDouble() * 0.2f, 0.8f + (float)ran.NextDouble() * 0.2f, out var r, out var g, out var b );
+        float r = 0;
+        float g = 0;
+        float b = 0;
+        ImGui.ColorConvertHSVtoRGB((float)ran.NextDouble(), 0.8f + (float)ran.NextDouble() * 0.2f, 0.8f + (float)ran.NextDouble() * 0.2f, ref r, ref g, ref b );
         var lineColor = ImGui.GetColorU32(new Vector4(r, g, b, 1.0f));
 
         var pos = ImGui.GetCursorScreenPos();
@@ -534,7 +537,10 @@ public class AssetBrowserWindow : EditorWindow {
                 Type type = ImporterAttribute.GetGeneralType(ext);
                 if (type != null)
                 {
-                    ImGui.SetDragDropPayload($"ASSETPAYLOAD_{type.Name}", IntPtr.Zero, 0);
+                    unsafe
+                    {
+                        ImGui.SetDragDropPayload($"ASSETPAYLOAD_{type.Name}", null, 0);
+                    }
                     Selection.SetDragging(AssetDatabase.GUIDFromAssetPath(Path.GetRelativePath(Project.ProjectDirectory, filePath)));
                     ImGui.TextUnformatted(type.Name + " " + Path.GetRelativePath(Project.ProjectAssetDirectory, filePath));
                     ImGui.EndDragDropSource();
