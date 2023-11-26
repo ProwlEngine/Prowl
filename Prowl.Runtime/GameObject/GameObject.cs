@@ -623,11 +623,14 @@ public class GameObject : EngineObject
     private void SetEnabled(bool state)
     {
         _enabled = state;
-        if (Parent != null && Parent.Enabled != state)
-                Parent.Enabled = state;
-                
+        
         if(Children.Count > 0)
-                Children[0].Enabled = state;
+        {
+            for(int i = 0; i < Children.Count; i++)
+            {
+				Children[i].Enabled = state;
+			}
+        } 
         
         HierarchyStateChanged();
 	}
