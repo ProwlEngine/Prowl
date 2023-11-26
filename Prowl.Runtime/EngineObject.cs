@@ -32,16 +32,16 @@ namespace Prowl.Runtime
 
         public EngineObject(string? name = "New Object")
         {
+            _instanceID = NextID++;
+            Name = "New" + GetType().Name;
+            allObjects.Add(this);
+            cachedObjectTypes.Add(GetType(), this);
             CreatedInstance();
             Name = name ?? Name;
         }
 
         public virtual void CreatedInstance()
         {
-            _instanceID = NextID++;
-            Name = "New" + GetType().Name;
-            allObjects.Add(this);
-            cachedObjectTypes.Add(GetType(), this);
         }
 
         public virtual void OnValidate() { }
