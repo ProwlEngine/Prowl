@@ -251,7 +251,7 @@ public class AssetBrowserWindow : EditorWindow {
         ImGui.SetCursorPosX(cPX + xSize);
         ImGui.SetCursorPosY(cPY);
         if (ImGui.Button("   " + FontAwesome6.Gears + "   "))
-            new ProjectSettingsWindow(Settings);
+            _ = new ProjectSettingsWindow(Settings);
     }
 
     private void RenderSideView()
@@ -259,34 +259,25 @@ public class AssetBrowserWindow : EditorWindow {
         ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 0.0f);
         int count = 0;
         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
-        if (ImGui.TreeNodeEx("Database", flags))
+        var rootFolders = AssetDatabase.GetRootfolders();
+        RenderSideViewFolder(ref count, flags, rootFolders[1]); // Assets Folder
+        RenderSideViewFolder(ref count, flags, rootFolders[0]); // Defaults Folder
+        ImGui.PopStyleVar();
+    }
+
+    private void RenderSideViewFolder(ref int count, ImGuiTreeNodeFlags flags, DirectoryInfo root)
+    {
+        string displayName = $"{FontAwesome6.Folder} {Path.GetRelativePath(Project.ProjectDirectory, root.FullName)}";
+        bool opened = ImGui.TreeNodeEx(displayName, flags);
+
+        if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked())
+            UpdateDirectoryEntries(root.FullName);
+
+        if (opened)
         {
-            foreach(var root in AssetDatabase.GetRootfolders())
-            {
-                string relativePath = Path.GetRelativePath(Project.ProjectDirectory, root.FullName);
-                string displayName = $"{FontAwesome6.Folder} {relativePath}";
-                bool opened = ImGui.TreeNodeEx(displayName, flags);
-
-                if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked())
-                {
-                    UpdateDirectoryEntries(root.FullName);
-                }
-
-                if (opened)
-                    DrawDirectory(root.FullName, ref count, 1);
-
-                if (opened && root.GetDirectories().Length > 0)
-                    ImGui.TreePop();
-            }
-
-            //if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked())
-            //{
-            //    UpdateDirectoryEntries(Project.ProjectAssetDirectory);
-            //}
-            //DrawDirectory(Project.ProjectAssetDirectory, ref count);
+            DrawDirectory(root.FullName, ref count, 1);
             ImGui.TreePop();
         }
-        ImGui.PopStyleVar();
     }
 
     private (Vector2, Vector2) DrawDirectory(string directory, ref int count, int level = 0)
