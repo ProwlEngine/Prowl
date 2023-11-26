@@ -45,7 +45,7 @@ public abstract class Application {
         controller = new ImGUIController();
         controller.Load(1280, 720);
 
-        SceneManager.Initialize();
+        GameObjectManager.Initialize();
 
         AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
 
@@ -94,19 +94,19 @@ public abstract class Application {
             float updateTime = (float)updateTimer.Elapsed.TotalSeconds;
             Time.Update(updateTime);
             updateTimer.Restart();
-            SceneManager.Update();
+            GameObjectManager.Update();
 
             float physicsTime = (float)physicsTimer.Elapsed.TotalSeconds;
             if (physicsTime > Time.fixedDeltaTime)
             {
-                SceneManager.PhysicsUpdate();
+                GameObjectManager.PhysicsUpdate();
                 physicsTimer.Restart();
             }
 
             Raylib.BeginDrawing();
             Raylib.ClearBackground(Raylib_cs.Color.DARKGRAY);
 
-            SceneManager.Draw();
+            GameObjectManager.Draw();
             controller.Draw();
 
             Raylib.EndDrawing();

@@ -648,7 +648,7 @@ public class GameObject : EngineObject
 
     public void DontDestroyOnLoad()
     {
-        SceneManager._dontDestroyOnLoad.Add(InstanceID);
+        GameObjectManager._dontDestroyOnLoad.Add(InstanceID);
     }
 
     /// <summary> Calls the method named methodName on every MonoBehaviour in this game object or any of its children. </summary>

@@ -59,12 +59,12 @@ public unsafe class EditorApplication : Application {
 
             if (Project.HasProject)
             {
-                SceneManager.Update();
+                GameObjectManager.Update();
 
                 float physicsTime = (float)physicsTimer.Elapsed.TotalSeconds;
                 if (physicsTime > Time.fixedDeltaTime)
                 {
-                    SceneManager.PhysicsUpdate();
+                    GameObjectManager.PhysicsUpdate();
                     physicsTimer.Restart();
                 }
             }
@@ -108,7 +108,7 @@ public unsafe class EditorApplication : Application {
             OnDrawEditor?.Invoke();
             EditorGui.Update(); 
             if (Project.HasProject)
-                SceneManager.Draw();
+                GameObjectManager.Draw();
             controller.Draw();
 
             Raylib.EndDrawing();
@@ -128,10 +128,10 @@ public unsafe class EditorApplication : Application {
             if (Project.HasProject)
             {
                 // Serialize the Scene manually to save its state
-                var gos = SceneManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
+                var gos = GameObjectManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
                 var s = JsonUtility.Serialize(gos);
 
-                foreach (var go in SceneManager.AllGameObjects)
+                foreach (var go in GameObjectManager.AllGameObjects)
                     go.Destroy();
                 EngineObject.HandleDestroyed();
 
@@ -154,7 +154,7 @@ public unsafe class EditorApplication : Application {
                 _AssemblyManager.AddUnloadTask(() =>
                 {
                     //Hierarchy.SaveToAssetPath();
-                    SceneManager.Clear();
+                    GameObjectManager.Clear();
 
                     ClearTypeDescriptorCache();
                     //PhysicsEngine.World = null;

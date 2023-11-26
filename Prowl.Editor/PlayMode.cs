@@ -17,7 +17,7 @@ public static class PlayMode {
         // Serialize the Scene manually to save its state
         var s = new Scene();
         // exclude objects with the DontSave hideFlag
-        s.GameObjects = SceneManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
+        s.GameObjects = GameObjectManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
         PreviousScene = JsonUtility.Serialize(s);
 
         Current = Mode.Playing;
@@ -54,7 +54,7 @@ public static class PlayMode {
         MonoBehaviour.PauseLogic = true;
 
         var s = JsonUtility.Deserialize<Scene>(PreviousScene);
-        SceneManager.LoadScene(s, false);
+        GameObjectManager.LoadScene(s, false);
 
         // TODO: come up with a clean way to maintain the selected object
         Selection.Clear();

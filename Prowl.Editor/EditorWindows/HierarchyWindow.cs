@@ -79,9 +79,9 @@ public class HierarchyWindow : EditorWindow {
             ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 0.0f); 
             ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(0f, 0f));
             //foreach (var go in Hierarchy.RegisteredGOs)
-            for (int i = 0; i < SceneManager.AllGameObjects.Count; i++)
+            for (int i = 0; i < GameObjectManager.AllGameObjects.Count; i++)
             {
-                var go = SceneManager.AllGameObjects[i];
+                var go = GameObjectManager.AllGameObjects[i];
                 if (go.Parent == null)
                     DrawEntityNode(go, 0, false);
             }

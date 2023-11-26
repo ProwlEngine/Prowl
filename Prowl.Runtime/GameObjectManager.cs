@@ -6,14 +6,12 @@ using System.Linq;
 
 namespace Prowl.Runtime.SceneManagement;
 
-public static class SceneManager
+public static class GameObjectManager
 {
     private static readonly List<GameObject> _gameObjects = new();
     internal static HashSet<int> _dontDestroyOnLoad = new();
 
     public static List<GameObject> AllGameObjects => _gameObjects;
-
-    public static string CurrentHierarchy = null;
 
     public static bool AllowGameObjectConstruction = true;
 
@@ -36,8 +34,13 @@ public static class SceneManager
             _gameObjects.Remove(go);
     }
 
-    public static void Clear() {
-        CurrentHierarchy = null;
+    public static void Clear()
+    {
+        foreach (var go in _gameObjects)
+            if (!_dontDestroyOnLoad.Contains(go.InstanceID))
+                go.Destroy();
+        EngineObject.HandleDestroyed();
+        _gameObjects.Clear();
     }
 
     public static void Update()
@@ -116,40 +119,11 @@ public static class SceneManager
     }
 
     public static void Draw() {
-        List<Camera>  Cameras = MonoBehaviour.FindObjectsOfType<Camera>().ToList();
+        var Cameras = MonoBehaviour.FindObjectsOfType<Camera>().ToList();
         Cameras.Sort((a, b) => a.RenderOrder.CompareTo(b.DrawOrder));
-        foreach (var cam in Cameras) cam.Render();
-    }
-
-    public static void LoadScene(string sceneName, bool additive = false)
-    {
-#warning TODO: Scenes are special assets that can be loaded via name, they should be stored and loaded in level files like unity in standalone, and we need a Build Pipeline to assign scenes
-
-        //LoadScene(Application.AssetProvider.LoadAsset<Scene>(sceneName), additive);
-    }
-
-    public static void LoadScene(Scene scene, bool additive = false)
-    {
-        if (additive) throw new NotImplementedException();
-        if (scene == null || scene.IsDestroyed) return;
-        if (!additive)
-        {
-            foreach (var go in _gameObjects)
-                if (!_dontDestroyOnLoad.Contains(go.InstanceID))
-                    go.Destroy();
-            EngineObject.HandleDestroyed();
-        }
-        var added = scene.Instantiate();
-        foreach (var go in added)
-            foreach (var comp in go.GetComponents<MonoBehaviour>())
-                try
-                {
-                    comp.Internal_OnLevelWasLoaded();
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError($"Error in {comp.GetType().Name}.OnLevelWasLoaded of {go.Name}: {e.Message} \n StackTrace: {e.StackTrace}");
-                }
+        foreach (var cam in Cameras) 
+            if(cam.EnabledInHierarchy)
+                cam.Render();
     }
     
 }

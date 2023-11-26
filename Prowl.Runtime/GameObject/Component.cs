@@ -26,7 +26,6 @@ public abstract class MonoBehaviour : EngineObject
 
     private Action onEnable;
     private Action onDisable;
-    private Action onLevelWasLoaded;
     private Action awake;
     private Action start;
     private Action fixedUpdate;
@@ -131,7 +130,6 @@ public abstract class MonoBehaviour : EngineObject
         {
             "OnEnable",
             "OnDisable",
-            "OnLevelWasLoaded",
             "Awake",
             "Start",
             "FixedUpdate",
@@ -152,7 +150,6 @@ public abstract class MonoBehaviour : EngineObject
 
         onEnable = (Action)retMethods[0];
         onDisable = (Action)retMethods[1];
-        onLevelWasLoaded = (Action)retMethods[2];
         awake = (Action)retMethods[3];
         start = (Action)retMethods[4];
         fixedUpdate = (Action)retMethods[5];
@@ -178,10 +175,6 @@ public abstract class MonoBehaviour : EngineObject
     internal void Internal_OnDisabled()
     {
         if (!PauseLogic || executeAlways) onDisable?.Invoke();
-    }
-    internal void Internal_OnLevelWasLoaded()
-    {
-        if (!PauseLogic || executeAlways) onLevelWasLoaded?.Invoke();
     }
     internal void Internal_Start()
     {
