@@ -8,7 +8,7 @@ namespace Prowl.Runtime.Components.ImageEffects
     [ExecuteAlways]
     public class DOFEffect : MonoBehaviour
     {
-        public float focusStrength = 40f;
+        public float focusStrength = 150f;
         public float quality = 0.05f;
         public int blurRadius = 10;
 
