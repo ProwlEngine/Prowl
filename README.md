@@ -103,7 +103,7 @@ Getting Prowl up and running is super easy!
 - [ ] 64-bit World Coordinates - [Issue for System.Numerics Double Support](https://github.com/dotnet/runtime/issues/24168)
 
 ### Rendering
-- [ ] DOF, SSAO, SSR, TAA, Bloom, Screen-Space Decals, etc.
+- [ ] SSAO, SSR, TAA, Bloom, Screen-Space Decals, etc.
 - [ ] Transparency
 - [ ] Realtime GI
 - [ ] Lightmaps and Light Probes
