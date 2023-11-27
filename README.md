@@ -195,6 +195,8 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 # Screenshots
 ![Bokeh Depth of Field](https://i.imgur.com/VYs44qq.png)
 ![Image of Editor before v1](https://github.com/michaelsakharov/Prowl/assets/8621606/a8830bb7-7980-4101-8076-1a0b75854b87)
+![Flight Model](https://github.com/michaelsakharov/Prowl/assets/8621606/7683759c-5e0c-4689-acba-c733b3a64b5c)
+
 
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
