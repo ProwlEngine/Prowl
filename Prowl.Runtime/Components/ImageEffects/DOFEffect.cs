@@ -1,5 +1,6 @@
 ﻿using Prowl.Runtime.Resources;
 using Raylib_cs;
+using System;
 
 namespace Prowl.Runtime.Components.ImageEffects
 {
@@ -8,6 +9,8 @@ namespace Prowl.Runtime.Components.ImageEffects
     public class DOFEffect : MonoBehaviour
     {
         public float focusStrength = 1000f;
+        public float quality = 0.05f;
+        public int blurRadius = 10;
 
         Camera _cam;
         Camera Cam 
@@ -55,7 +58,9 @@ namespace Prowl.Runtime.Components.ImageEffects
             Mat.SetTexture("gCombined", gBuffer.Combined);
             Mat.SetTexture("gDepth", gBuffer.Depth);
 
-            Mat.SetFloat("focusStrength", 20f);
+            Mat.SetFloat("u_Quality", Math.Clamp(quality, 0.0f, 0.9f));
+            Mat.SetFloat("u_BlurRadius", Math.Clamp(blurRadius, 2, 40));
+            Mat.SetFloat("u_FocusStrength", focusStrength);
 
             Rlgl.rlDisableDepthMask();
             Rlgl.rlDisableDepthTest();
