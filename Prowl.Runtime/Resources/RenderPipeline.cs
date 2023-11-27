@@ -6,7 +6,7 @@ namespace Prowl.Runtime.Resources
     [CreateAssetMenu("RenderPipeline")]
     public class RenderPipeline : ScriptableObject
     {
-        [Text("This Script is a text for ScriptableObjects")]
+        [Text("This Script is a test for ScriptableObjects")]
         [Tooltip("This field is clamped [0-10] in OnValidate")]
         public float testingFloat = 9f;
 
