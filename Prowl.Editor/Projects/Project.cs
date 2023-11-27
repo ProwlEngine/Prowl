@@ -17,6 +17,8 @@ public static class Project {
     public static string Name { get; private set; } = "";
     public static string ProjectDirectory => Path.Combine(Projects_Directory, Name);
     public static string ProjectAssetDirectory => Path.Combine(ProjectDirectory, @"Assets");
+    public static string ProjectDefaultsDirectory => Path.Combine(ProjectDirectory, @"Defaults");
+    public static string ProjectPackagesDirectory => Path.Combine(ProjectDirectory, @"Packages");
     public static string TempDirectory => Path.Combine(Project.ProjectDirectory, @"Temp");
 
     public static string Assembly_Proj => Path.Combine(ProjectDirectory, @"CSharp.csproj");
