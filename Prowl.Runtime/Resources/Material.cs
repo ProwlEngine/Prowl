@@ -1,11 +1,9 @@
-﻿using Prowl.Runtime.Components;
-using Prowl.Runtime.Utils;
+﻿using Prowl.Runtime.Utils;
 using Raylib_cs;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
 
 namespace Prowl.Runtime.Resources
@@ -85,24 +83,40 @@ namespace Prowl.Runtime.Resources
             return loc;
         }
 
+        private static void ApplyShaderValues<T>(MaterialPropertyBlock mpb, Raylib_cs.Shader shader, Dictionary<string, T> properties, Action<Raylib_cs.Shader, int, T> setValueAction)
+        {
+            foreach (var item in properties)
+            {
+                int loc = GetLoc(shader, item.Key, mpb);
+                if (loc != -1)
+                    setValueAction(shader, loc, item.Value);
+            }
+        }
+
         public static void Apply(MaterialPropertyBlock mpb, Raylib_cs.Shader shader)
         {
             Rlgl.rlEnableShader(shader.id); // Ensure the shader is enabled for this
 
-            foreach (var item in mpb.colors)
-                Raylib.SetShaderValue(shader, GetLoc(shader, item.Key, mpb), new Vector4(item.Value.r, item.Value.g, item.Value.b, item.Value.a), ShaderUniformDataType.SHADER_UNIFORM_VEC4);
-            foreach (var item in mpb.vectors2)
-                Raylib.SetShaderValue(shader, GetLoc(shader, item.Key, mpb), item.Value, ShaderUniformDataType.SHADER_UNIFORM_VEC2);
-            foreach (var item in mpb.vectors3)
-                Raylib.SetShaderValue(shader, GetLoc(shader, item.Key, mpb), item.Value, ShaderUniformDataType.SHADER_UNIFORM_VEC3);
-            foreach (var item in mpb.vectors4)
-                Raylib.SetShaderValue(shader, GetLoc(shader, item.Key, mpb), item.Value, ShaderUniformDataType.SHADER_UNIFORM_VEC4);
-            foreach (var item in mpb.floats)
-                Raylib.SetShaderValue(shader, GetLoc(shader, item.Key, mpb), item.Value, ShaderUniformDataType.SHADER_UNIFORM_FLOAT);
-            foreach (var item in mpb.ints)
-                Raylib.SetShaderValue(shader, GetLoc(shader, item.Key, mpb), item.Value, ShaderUniformDataType.SHADER_UNIFORM_INT);
-            foreach (var item in mpb.matrices)
-                Raylib.SetShaderValueMatrix(shader, GetLoc(shader, item.Key, mpb), item.Value);
+            ApplyShaderValues(mpb, shader, mpb.colors, (s, loc, val) =>
+                Raylib.SetShaderValue(s, loc, new Vector4(val.r, val.g, val.b, val.a), ShaderUniformDataType.SHADER_UNIFORM_VEC4));
+
+            ApplyShaderValues(mpb, shader, mpb.vectors2, (s, loc, val) =>
+                Raylib.SetShaderValue(s, loc, val, ShaderUniformDataType.SHADER_UNIFORM_VEC2));
+
+            ApplyShaderValues(mpb, shader, mpb.vectors3, (s, loc, val) =>
+                Raylib.SetShaderValue(s, loc, val, ShaderUniformDataType.SHADER_UNIFORM_VEC3));
+
+            ApplyShaderValues(mpb, shader, mpb.vectors4, (s, loc, val) =>
+                Raylib.SetShaderValue(s, loc, val, ShaderUniformDataType.SHADER_UNIFORM_VEC4));
+
+            ApplyShaderValues(mpb, shader, mpb.floats, (s, loc, val) =>
+                Raylib.SetShaderValue(s, loc, val, ShaderUniformDataType.SHADER_UNIFORM_FLOAT));
+
+            ApplyShaderValues(mpb, shader, mpb.ints, (s, loc, val) =>
+                Raylib.SetShaderValue(s, loc, val, ShaderUniformDataType.SHADER_UNIFORM_INT));
+
+            ApplyShaderValues(mpb, shader, mpb.matrices, Raylib.SetShaderValueMatrix);
+
             int texSlot = 0;
             var keysToUpdate = new List<(string, AssetRef<Texture2D>)>();
             foreach (var item in mpb.textures)
@@ -115,7 +129,9 @@ namespace Prowl.Runtime.Resources
                     // Get the memory address of the texture slot as void* using unsafe context
                     unsafe
                     {
-                        Rlgl.rlSetUniform(GetLoc(shader, item.Key, mpb), &texSlot, (int)ShaderUniformDataType.SHADER_UNIFORM_INT, 1);
+                        int loc = GetLoc(shader, item.Key, mpb);
+                        if (loc != -1)
+                            Rlgl.rlSetUniform(loc, &texSlot, (int)ShaderUniformDataType.SHADER_UNIFORM_INT, 1);
                     }
 
                     Rlgl.rlActiveTextureSlot(texSlot);
