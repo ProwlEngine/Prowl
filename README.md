@@ -44,6 +44,7 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - Unity-Like Coroutines
     - JSON Serialization via Newtonsoft.Json
     - Playtest directly in Editor
+    - ScriptableObjects
 
 -   **Graphics Rendering:**
     -  PBR (Physically Based Rendering) using Cook-Torrance BRDF
