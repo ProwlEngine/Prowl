@@ -72,7 +72,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 }
 
                 // Draw any Buttons
-                ImGUIButtonAttribute.DrawButtons(scriptObject);
+                changed |= ImGUIButtonAttribute.DrawButtons(scriptObject);
 
                 if (changed)
                 {
