@@ -28,6 +28,7 @@
       <None Remove="EmbeddedResources\DefaultAssets\DOF.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\GBuffercombine.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\GBuffercombine.shader.meta" />
+      <None Remove="EmbeddedResources\DefaultAssets\Gizmos.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\grid.png" />
       <None Remove="EmbeddedResources\DefaultAssets\Plane.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\Pointlight.shader" />
@@ -81,6 +82,9 @@
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       </EmbeddedResource>
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Depth.shader">
+        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      </EmbeddedResource>
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Gizmos.shader">
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       </EmbeddedResource>
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Standard.shader">
