@@ -49,7 +49,7 @@ namespace Prowl.Editor
                     {
                         file = new FileInfo(file.FullName.Replace(".scriptobj", "") + " New.scriptobj");
                     }
-                    File.WriteAllText(file.FullName, JsonUtility.Serialize(obj));
+                    File.WriteAllText(file.FullName, JsonUtility.Serialize(obj, obj.GetType()));
                 }
             }
         }
