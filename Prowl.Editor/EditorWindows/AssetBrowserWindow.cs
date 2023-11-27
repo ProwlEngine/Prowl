@@ -373,6 +373,7 @@ public class AssetBrowserWindow : EditorWindow {
                 if (ImGui.BeginPopupContextItem())
                 {
                     MenuItem.DrawMenuRoot("Create");
+                    CreateAssetMenuHandler.DrawMenuItems();
                     ImGui.Separator();
                     if (ImGui.MenuItem("Reimport"))
                         AssetDatabase.ReimportFolder(new(entryPath));
