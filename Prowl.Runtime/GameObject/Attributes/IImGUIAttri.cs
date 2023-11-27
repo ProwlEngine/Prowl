@@ -84,15 +84,19 @@ namespace Prowl.Runtime
     {
         internal string buttonText;
         public ImGUIButtonAttribute(string buttonText) { this.buttonText = buttonText; }
-        public static void DrawButtons(object target)
+        public static bool DrawButtons(object target)
         {
             foreach (MethodInfo method in target.GetType().GetMethods())
             {
                 var attribute = method.GetCustomAttribute<ImGUIButtonAttribute>();
                 if (attribute != null)
                     if (ImGui.Button(attribute.buttonText))
+                    {
                         method.Invoke(target, null);
+                        return true;
+                    }
             }
+            return false;
         }
     }
 
