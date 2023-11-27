@@ -95,7 +95,6 @@ public class Camera : MonoBehaviour
     {
         gBuffer.Begin();                            // Start
         RenderAllOfOrder(RenderingOrder.Opaque);    // Render
-        Prowl.Runtime.Draw.Render(this);                // Gizmos/Debug Draw
         gBuffer.End();                              // End
     }
 
@@ -174,6 +173,8 @@ public class Camera : MonoBehaviour
             DrawFullScreenTexture(gBuffer.Lighting);
         else if (debugDraw == DebugDraw.Velocity)
             DrawFullScreenTexture(gBuffer.Velocity);
+
+        Prowl.Runtime.Draw.Render(this);                // Gizmos/Debug Draw
 
         Target?.End();
 
