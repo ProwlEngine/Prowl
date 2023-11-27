@@ -623,15 +623,6 @@ public class GameObject : EngineObject
     private void SetEnabled(bool state)
     {
         _enabled = state;
-        
-        if(Children.Count > 0)
-        {
-            for(int i = 0; i < Children.Count; i++)
-            {
-				Children[i].Enabled = state;
-			}
-        } 
-        
         HierarchyStateChanged();
 	}
 
@@ -644,11 +635,14 @@ public class GameObject : EngineObject
             foreach (var component in GetComponents<MonoBehaviour>())
                 component.HierarchyStateChanged();
         }
-    }
+
+		foreach (var child in Children)
+			child.HierarchyStateChanged();
+	}
 
     private bool IsParentEnabled()
     {
-        return Parent == null || Parent.Enabled;
+        return Parent == null || Parent.EnabledInHierarchy;
     }
 
     public void DontDestroyOnLoad()
