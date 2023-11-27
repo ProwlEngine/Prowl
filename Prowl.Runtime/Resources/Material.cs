@@ -160,6 +160,8 @@ namespace Prowl.Runtime.Resources
         string keywords = "";
         internal static Raylib_cs.Shader? current;
 
+        public int PassCount => Shader.IsAvailable ? CompileKeywordVariant(keywords.Split(';')).Length : 0;
+
         public Material()
         {
 
