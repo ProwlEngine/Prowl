@@ -124,6 +124,8 @@ public static class GameObjectManager
         foreach (var cam in Cameras) 
             if(cam.EnabledInHierarchy)
                 cam.Render();
+
+        Prowl.Runtime.Draw.Clear();
     }
     
 }

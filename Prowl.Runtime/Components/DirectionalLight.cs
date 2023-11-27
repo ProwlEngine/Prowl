@@ -73,6 +73,8 @@ public class DirectionalLight : MonoBehaviour
 
             Graphics.Blit(lightMat);
         }
+
+        Prowl.Runtime.Draw.Line(GameObject.GlobalPosition, GameObject.GlobalPosition + GameObject.Forward, Color.yellow);
     }
 
     public void UpdateShadowmap()

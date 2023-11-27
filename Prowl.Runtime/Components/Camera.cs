@@ -95,6 +95,7 @@ public class Camera : MonoBehaviour
     {
         gBuffer.Begin();                            // Start
         RenderAllOfOrder(RenderingOrder.Opaque);    // Render
+        Prowl.Runtime.Draw.Render(this);                // Gizmos/Debug Draw
         gBuffer.End();                              // End
     }
 
