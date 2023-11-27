@@ -89,7 +89,7 @@ namespace Prowl.Runtime.Resources
                 // Enable vertex attributes: normals (shader-location = 2)
                 fixed (float* nptr = normals)
                     vboId[2] = Rlgl.rlLoadVertexBuffer(nptr, vertexCount*3*sizeof(float), dynamic);
-                Rlgl.rlSetVertexAttribute(2, 3, RL_FLOAT, 0, 0, null);
+                Rlgl.rlSetVertexAttribute(2, 3, RL_FLOAT, 1, 0, null);
                 Rlgl.rlEnableVertexAttribute(2);
             }
             else
@@ -107,7 +107,7 @@ namespace Prowl.Runtime.Resources
                 // Enable vertex attribute: color (shader-location = 3)
                 fixed (byte* cptr = colors)
                     vboId[3] = Rlgl.rlLoadVertexBuffer(cptr, vertexCount*4*sizeof(byte), dynamic);
-                Rlgl.rlSetVertexAttribute(3, 4, RL_UNSIGNED_BYTE, 1, 0, null);
+                Rlgl.rlSetVertexAttribute(3, 4, RL_UNSIGNED_BYTE, 0, 0, null);
                 Rlgl.rlEnableVertexAttribute(3);
             }
             else
