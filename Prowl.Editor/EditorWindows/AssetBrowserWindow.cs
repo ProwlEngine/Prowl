@@ -40,6 +40,7 @@ public class AssetBrowserWindow : EditorWindow {
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse;
 
     private string m_AssetsDirectory;
+    private string m_DefaultsDirectory;
     private string m_CurrentDirectory;
     private List<DirectoryEntry> m_DirectoryEntries;
     private static float s_LastDomainReloadTime = 0.0f;
@@ -126,6 +127,7 @@ public class AssetBrowserWindow : EditorWindow {
         m_DirectoryEntries = new List<DirectoryEntry>();
 
         m_AssetsDirectory = Project.ProjectAssetDirectory;
+        m_DefaultsDirectory = Project.ProjectDefaultsDirectory;
         m_CurrentDirectory = m_AssetsDirectory;
         CurrentActiveDirectory = m_CurrentDirectory;
 
@@ -228,6 +230,7 @@ public class AssetBrowserWindow : EditorWindow {
 
         // Up button
         bool disabledUpButton = m_CurrentDirectory == m_AssetsDirectory;
+        disabledUpButton |= m_CurrentDirectory == m_DefaultsDirectory;
         if (disabledUpButton) ImGui.BeginDisabled(true);
         if (ImGui.Button(FontAwesome6.ArrowUp))
             UpdateDirectoryEntries(Path.GetDirectoryName(m_CurrentDirectory));
