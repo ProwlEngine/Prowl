@@ -90,12 +90,12 @@ Getting Prowl up and running is super easy!
 ### Engine
 - [ ] API Agnostic Backends to expand to support Vulkan, Metal, WebGPU, and more
 - [ ] Cross Platform
-  - [x] Windows
-  - [ ] Linux
-  - [ ] MacOS
-  - [ ] Andriod
-  - [ ] iOS
-  - [ ] Web
+  - [x] Windows - Fully functional
+  - [ ] Linux - Compiles
+  - [ ] MacOS - Compiles
+  - [ ] Andriod - Unknown
+  - [ ] iOS - Unknown
+  - [ ] Web - Unknown
 - [ ] VR Support
 - [ ] BepuPhysics v2
 - [ ] Navmesh and AI Agents
