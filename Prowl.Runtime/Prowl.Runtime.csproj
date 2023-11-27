@@ -33,27 +33,10 @@
     </ItemGroup>
 
     <ItemGroup>
-      <EmbeddedResource Include="EmbeddedResources\AudioIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\Checkerboard.png" />
-      <EmbeddedResource Include="EmbeddedResources\CSharpIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\gbuffercombine.glsl" />
-      <EmbeddedResource Include="EmbeddedResources\directionallight.glsl" />
       <EmbeddedResource Include="EmbeddedResources\fa-solid-900.ttf" />
-      <EmbeddedResource Include="EmbeddedResources\FileIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\FolderIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\FolderOpenIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\GameObjectIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\HierarchyIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\invalid.glsl" />
-      <EmbeddedResource Include="EmbeddedResources\diffuse.glsl" />
       <EmbeddedResource Include="EmbeddedResources\fa-regular-400.ttf" />
       <EmbeddedResource Include="EmbeddedResources\fontawesome-webfont.ttf" />
       <EmbeddedResource Include="EmbeddedResources\font.ttf" />
-      <EmbeddedResource Include="EmbeddedResources\default.glsl" />
-      <EmbeddedResource Include="EmbeddedResources\ModelIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\pointlightshader.glsl" />
-      <EmbeddedResource Include="EmbeddedResources\ShaderIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\standard.glsl" />
     </ItemGroup>
     
     <ItemGroup>
