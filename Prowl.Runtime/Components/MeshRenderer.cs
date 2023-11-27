@@ -18,9 +18,12 @@ public class MeshRenderer : MonoBehaviour
     {
         if (Mesh.IsAvailable && Material.IsAvailable)
         {
-            Material.Res!.SetPass(0);
-            Graphics.DrawMeshNow(Mesh.Res!, GameObject.Global, Material.Res!, GameObject.GlobalPrevious);
-            Material.Res!.EndPass();
+            for (int i = 0; i < Material.Res!.PassCount; i++)
+            {
+                Material.Res!.SetPass(i);
+                Graphics.DrawMeshNow(Mesh.Res!, GameObject.Global, Material.Res!, GameObject.GlobalPrevious);
+                Material.Res!.EndPass();
+            }
         }
     }
 
