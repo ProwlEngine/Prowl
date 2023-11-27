@@ -131,7 +131,7 @@ namespace Prowl.Runtime.Utils
             ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
             ContractResolver = new ProwlContractResolver(),
             PreserveReferencesHandling = PreserveReferencesHandling.Objects,
-            TypeNameHandling = TypeNameHandling.Auto,
+            TypeNameHandling = TypeNameHandling.All,
             TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Simple,
         };
 
