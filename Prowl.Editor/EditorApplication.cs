@@ -165,6 +165,7 @@ public unsafe class EditorApplication : Application {
                 PropertyDrawer.GenerateLookUp();
                 CustomEditorAttribute.GenerateLookUp();
                 MenuItem.FindAllMenus();
+                CreateAssetMenu.FindAllMenus();
                 //AssetProvider.GenerateLookUp();
                 ImporterAttribute.GenerateLookUp();
                 _AssemblyManager.AddUnloadTask(() =>
@@ -174,6 +175,7 @@ public unsafe class EditorApplication : Application {
                     ImporterAttribute.ClearLookUp();
                     CustomEditorAttribute.ClearLookUp();
                     MenuItem.ClearMenus();
+                    CreateAssetMenu.ClearMenus();
                     //AssetProvider.ClearLookUp();
                     return true;
                 });
