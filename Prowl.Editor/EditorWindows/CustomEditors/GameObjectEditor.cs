@@ -84,10 +84,10 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             ImGui.SetNextItemWidth((ImGui.GetWindowWidth() / 2) - (50));
             ImGui.Combo("Layer", ref go.layerIndex, TagLayerManager.layers.ToArray(), TagLayerManager.layers.Count);
 
+            Space();
+
             if (ImGui.CollapsingHeader(FontAwesome6.LocationArrow + "  Transform", ImGuiTreeNodeFlags.DefaultOpen))
             {
-                ImGui.Spacing();
-                ImGui.Spacing();
                 PropertyDrawer.Draw(go, typeof(GameObject).GetProperty("Position")!);
                 PropertyDrawer.Draw(go, typeof(GameObject).GetProperty("Rotation")!);
                 PropertyDrawer.Draw(go, typeof(GameObject).GetProperty("Scale")!);
@@ -121,8 +121,6 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         ImGui.EndPopup();
                     }
 
-                    ImGui.Spacing();
-                    ImGui.Spacing();
                     if (compEditors.TryGetValue(comp.InstanceID, out var editor))
                     {
                         editor.OnInspectorGUI();
