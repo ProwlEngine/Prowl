@@ -3,9 +3,7 @@ using Prowl.Runtime.Resources;
 using Raylib_cs;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Material = Prowl.Runtime.Resources.Material;
 using Mesh = Prowl.Runtime.Resources.Mesh;
@@ -112,6 +110,19 @@ namespace Prowl.Runtime
             DrawMeshNowDirect(mesh);
         }
 
+        private static Dictionary<string, int> attribCache = new();
+
+        private unsafe static int GetAttribLocation(string attributeName)
+        {
+            var key = Material.current.Value.id + attributeName;
+            if (!attribCache.TryGetValue(key, out int location))
+            {
+                location = Rlgl.rlGetLocationAttrib(Material.current.Value.id, ToPtr(attributeName));
+                attribCache[key] = location;
+            }
+            return location;
+        }
+
         public static void DrawMeshNowDirect(Mesh mesh)
         {
             if (Camera.Current == null) throw new Exception("DrawMeshNow must be called during a rendering context like OnRenderObject()!");
@@ -125,18 +136,12 @@ namespace Prowl.Runtime
                 int RL_FLOAT = 0x1406;
                 int RL_UNSIGNED_BYTE = 0x1401;
 
-#warning TODO: Can make optomizations for the Standard Shader, like we already know the Attribute locations
-
-                // Try binding vertex array objects (VAO) or use VBOs if not possible
-                // WARNING: UploadMesh() enables all vertex attributes available in mesh and sets default attribute values
-                // for shader expected vertex attributes that are not provided by the mesh (i.e. colors)
-                // This could be a dangerous approach because different meshes with different shaders can enable/disable some attributes
-                int vertexLoc = Rlgl.rlGetLocationAttrib(Material.current.Value.id, ToPtr("vertexPosition"));
-                int texLoc = Rlgl.rlGetLocationAttrib(Material.current.Value.id, ToPtr("vertexTexCoord"));
-                int normalLoc = Rlgl.rlGetLocationAttrib(Material.current.Value.id, ToPtr("vertexNormal"));
-                int colorLoc = Rlgl.rlGetLocationAttrib(Material.current.Value.id, ToPtr("vertexColor"));
-                int tangentLoc = Rlgl.rlGetLocationAttrib(Material.current.Value.id, ToPtr("vertexTangent"));
-                int tex2Loc = Rlgl.rlGetLocationAttrib(Material.current.Value.id, ToPtr("vertexTexCoord2"));
+                int vertexLoc = GetAttribLocation("vertexPosition");
+                int texLoc = GetAttribLocation("vertexTexCoord");
+                int normalLoc = GetAttribLocation("vertexNormal");
+                int colorLoc = GetAttribLocation("vertexColor");
+                int tangentLoc = GetAttribLocation("vertexTangent");
+                int tex2Loc = GetAttribLocation("vertexTexCoord2");
                 DisposeText();
                 if (!Rlgl.rlEnableVertexArray(mesh.vaoId))
                 {
