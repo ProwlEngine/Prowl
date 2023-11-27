@@ -68,6 +68,11 @@ namespace Prowl.Runtime.Resources
             vectors3.Clear();
             vectors4.Clear();
             colors.Clear();
+            ClearCache();
+        }
+
+        public void ClearCache()
+        {
             cachedUniformLocs.Clear();
         }
 
@@ -179,6 +184,7 @@ namespace Prowl.Runtime.Resources
             if (string.IsNullOrWhiteSpace(key)) return;
             if (keywords.Contains(key)) return;
             keywords += key + ";";
+            PropertyBlock.ClearCache();
         }
 
         public void DisableKeyword(string keyword)
@@ -187,6 +193,7 @@ namespace Prowl.Runtime.Resources
             if (string.IsNullOrWhiteSpace(key)) return;
             if (!keywords.Contains(key)) return;
             keywords = keywords.Replace(key + ";", "");
+            PropertyBlock.ClearCache();
         }
 
         public bool IsKeywordEnabled(string keyword) => keywords.Contains(keyword.ToUpper().Replace(" ", "").Replace(";", ""));
@@ -223,6 +230,8 @@ namespace Prowl.Runtime.Resources
 
             string key = Shader.AssetID.ToString() + "-" + keywords + "-" + Resources.Shader.globalKeywords;
             if (passVariants.TryGetValue(key, out var s)) return s;
+
+            PropertyBlock.ClearCache();
 
             // Add each global togather making sure to not add duplicates
             string[] globals = Resources.Shader.globalKeywords.Split(';');
