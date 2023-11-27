@@ -99,7 +99,7 @@ public abstract class MonoBehaviour : EngineObject
 
     internal void HierarchyStateChanged()
     {
-        bool newState = _enabled && _go.Enabled;
+        bool newState = _enabled && _go.EnabledInHierarchy;
         _hasBeenEnabled |= newState;
         if (newState != _enabledInHierarchy)
         {
