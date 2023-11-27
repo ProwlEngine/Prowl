@@ -32,6 +32,8 @@ public static class GameObjectManager
     {
         lock (_gameObjects)
             _gameObjects.Remove(go);
+
+        go.Parent?.Children.Remove(go);
     }
 
     public static void Clear()
