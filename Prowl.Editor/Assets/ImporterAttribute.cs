@@ -117,6 +117,10 @@ namespace Prowl.Editor.Assets
         {
             if (typeToEditor.TryGetValue(type, out var editorType))
                 return editorType;
+            // If no direct custom editor, look for a base class custom editor
+            foreach (var pair in typeToEditor)
+                if (pair.Key.IsAssignableFrom(type))
+                    return pair.Value;
             return null;
         }
     }
