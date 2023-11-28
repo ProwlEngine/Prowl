@@ -94,6 +94,9 @@ public class EditorMainMenubar {
     }
     
     private static void DrawMenuItems() {
+    private static void DrawMenuItems()
+    {
+        ImGui.SetCursorPosX(2);
         if (ImGui.BeginMenu("File"))
         {
             if (ImGui.MenuItem("Open Project")) { new ProjectsWindow(); }
