@@ -60,32 +60,32 @@ public class EditorMainMenubar {
         
         switch(PlayMode.Current) {
             case PlayMode.Mode.Editing:
-                width += ImGui.CalcTextSize("Play").X;
+                width += ImGui.CalcTextSize(" " + FontAwesome6.Play).X;
                 AlignForWidth(width);
-                
-                if(ImGui.Button("Play"))
+
+                if (ImGui.Button(" " + FontAwesome6.Play))
                     PlayMode.Start();
                 return;
             case PlayMode.Mode.Playing:
-                width += ImGui.CalcTextSize("Pause").X;
+                width += ImGui.CalcTextSize(" " + FontAwesome6.Pause).X;
                 width += style.ItemSpacing.X;
-                width += ImGui.CalcTextSize("Stop").X;
+                width += ImGui.CalcTextSize(" " + FontAwesome6.Stop).X;
                 AlignForWidth(width);
                 
-                if(ImGui.Button("Pause"))
+                if(ImGui.Button(" " + FontAwesome6.Pause))
                     PlayMode.Pause();
-                if(ImGui.Button("Stop"))
+                if(ImGui.Button(" " + FontAwesome6.Stop))
                     PlayMode.Stop();
                 return;
             case PlayMode.Mode.Paused:
-                width += ImGui.CalcTextSize("Resume").X;
+                width += ImGui.CalcTextSize(" " + FontAwesome6.Play).X;
                 width += style.ItemSpacing.X;
-                width += ImGui.CalcTextSize("Stop").X;
+                width += ImGui.CalcTextSize(" " + FontAwesome6.Stop).X;
                 AlignForWidth(width);
                 
-                if(ImGui.Button("Resume"))
+                if(ImGui.Button(" " + FontAwesome6.Play))
                     PlayMode.Resume();
-                if(ImGui.Button("Stop"))
+                if(ImGui.Button(" " + FontAwesome6.Stop))
                     PlayMode.Stop();
                 return;
             default:
