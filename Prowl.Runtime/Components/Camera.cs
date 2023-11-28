@@ -57,17 +57,18 @@ public class Camera : MonoBehaviour
 
     private void CheckGBuffer()
     {
-        //RenderResolution = 4f;
+        RenderResolution = Math.Clamp(RenderResolution, 0.1f, 4.0f);
+
         Vector2 size = GetRenderTargetSize() * RenderResolution;
         if (gBuffer == null)
         {
-            gBuffer = new GBuffer((int)size.X, (int)size.Y);
+            gBuffer = new GBuffer((int)size.X, (int)size.Y, RenderResolution);
             Resize?.Invoke(gBuffer.Width, gBuffer.Height);
         }
         else if (gBuffer.Width != (int)size.X || gBuffer.Height != (int)size.Y)
         {
             gBuffer.UnloadGBuffer();
-            gBuffer = new GBuffer((int)size.X, (int)size.Y);
+            gBuffer = new GBuffer((int)size.X, (int)size.Y, RenderResolution);
             Resize?.Invoke(gBuffer.Width, gBuffer.Height);
         }
     }
@@ -83,8 +84,8 @@ public class Camera : MonoBehaviour
 
     public void DrawFullScreenTexture(Raylib_cs.Texture2D texture)
     {
-        //var s = GetRenderTargetSize() * 2f;
-        var s = GetRenderTargetSize();
+        var s = GetRenderTargetSize() * 1.0f;
+        //var s = GetRenderTargetSize();
         Raylib.DrawTexturePro(texture, new Rectangle(0, 0, texture.width, -texture.height), new Rectangle(0, 0, s.X, s.Y), Vector2.Zero, 0.0f, Color.white);
     }
 

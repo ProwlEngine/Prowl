@@ -26,7 +26,7 @@ public class GBuffer
 
     public bool IsRendering;
 
-    public GBuffer(int width, int height)
+    public GBuffer(int width, int height, float finalScale = 1f)
     {
 #warning TODO: Dont always use 32bits, optomize this and use only whats absolutely needed, some precision loss is ok as long as it doesnt hurt visuals much, normals for example could probably be 16
 #warning TODO: Switch to a singular 16bit "Material" buffer, AO, Rough, Metal, the final channel would be 16 bools, Lit, Fog, etc
@@ -46,7 +46,7 @@ public class GBuffer
 
         formats = new PixelFormat[1];
         formats[0] = PixelFormat.PIXELFORMAT_UNCOMPRESSED_R32G32B32; // Combined
-        combinedBuffer = new RenderTexture(width, height, 1, false, formats);
+        combinedBuffer = new RenderTexture((int)(width / finalScale), (int)(height / finalScale), 1, false, formats);
     }
 
     public bool IsReady()

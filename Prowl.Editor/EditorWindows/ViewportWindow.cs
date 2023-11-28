@@ -17,14 +17,16 @@ public class ViewportWindow : EditorWindow
     {
         [Text("Settings for all Viewports.")]
         [Space]
-        [Seperator]
+        [Text("Controls:")]
         public float LookSensitivity = 1f;
-        [Seperator]
         public float PanSensitivity = 1f;
+        [Space]
+        [Text("Rendering Settings:")]
         [Seperator]
         public float NearClip = 0.02f;
-        [Seperator]
         public float FarClip = 10000f;
+        [Space]
+        public float RenderResolution = 1f;
     }
 
     public ViewportSettings Settings => Project.ProjectSettings.GetSetting<ViewportSettings>();
@@ -95,6 +97,7 @@ public class ViewportWindow : EditorWindow
         // Manually Render to the RenderTexture
         Cam.NearClip = Settings.NearClip;
         Cam.FarClip = Settings.FarClip;
+        Cam.RenderResolution = Settings.RenderResolution;
 
         ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].id, ImGui.GetContentRegionAvail(), new Vector2(0, 1), new Vector2(1, 0));
         ImGuizmo.SetDrawlist();
