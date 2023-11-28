@@ -100,8 +100,19 @@ public class HierarchyWindow : EditorWindow {
                 if (DragnDrop.ReceiveAsset<GameObject>(out var original))
                 {
                     GameObject clone = (GameObject)EngineObject.Instantiate(original.Res!, true);
+                    clone.Scale = original.Res!.Scale;
                     clone.Position = original.Res!.Position;
                     clone.Orientation = original.Res!.Orientation;
+                    clone.Rotation = original.Res!.Rotation;
+
+                    foreach (var child in clone.Children)
+                    {
+                        child.Scale = original.Res!.Scale;
+                        child.Orientation = original.Res!.Orientation;
+                        child.Position = original.Res!.Position;
+                        child.Rotation = original.Res!.Rotation;
+                    }
+
                     clone.SetParent(null);
                     clone.Recalculate();
                     Selection.Select(clone);
@@ -211,9 +222,20 @@ public class HierarchyWindow : EditorWindow {
         if (DragnDrop.ReceiveAsset<GameObject>(out var original))
         {
             GameObject clone = (GameObject)EngineObject.Instantiate(original.Res!, true);
-            clone.Position = original.Res!.Position;
-            clone.Orientation = original.Res!.Orientation;
-            clone.SetParent(entity);
+			clone.Scale = original.Res!.Scale;
+			clone.Position = original.Res!.Position;
+			clone.Orientation = original.Res!.Orientation;
+			clone.Rotation = original.Res!.Rotation;
+
+			foreach (var child in clone.Children)
+			{
+				child.Scale = original.Res!.Scale;
+				child.Orientation = original.Res!.Orientation;
+				child.Position = original.Res!.Position;
+				child.Rotation = original.Res!.Rotation;
+			}
+
+			clone.SetParent(entity);
             clone.Recalculate();
             Selection.Select(clone);
         }
