@@ -93,7 +93,6 @@ public class EditorMainMenubar {
         }
     }
     
-    private static void DrawMenuItems() {
     private static void DrawMenuItems()
     {
         ImGui.SetCursorPosX(2);
