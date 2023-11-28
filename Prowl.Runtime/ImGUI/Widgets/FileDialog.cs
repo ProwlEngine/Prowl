@@ -386,15 +386,14 @@ namespace Prowl.Runtime
 
                 // Draw filename
                 int fileNameBufferSize = 200;
-                string fileNameBuffer = string.Empty;
 
-                string fileNameStr = dialogInfo.fileName;
+                string fileNameStr = dialogInfo.fileName ?? string.Empty;
                 int fileNameSize = fileNameStr.Length;
 
                 if (fileNameSize >= fileNameBufferSize)
                     fileNameSize = fileNameBufferSize - 1;
 
-                fileNameBuffer = fileNameStr.Substring(0, fileNameSize);
+                var fileNameBuffer = fileNameStr.Substring(0, fileNameSize);
 
                 contentRegionWidth = ImGui.GetWindowContentRegionMax().X - ImGui.GetWindowContentRegionMin().X;
 
