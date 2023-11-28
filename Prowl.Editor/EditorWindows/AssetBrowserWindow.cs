@@ -286,19 +286,13 @@ public class AssetBrowserWindow : EditorWindow {
         }
     }
 
-    private (Vector2, Vector2) DrawDirectory(string directory, ref int count, int level = 0)
+    private void DrawDirectory(string directory, ref int count, int level = 0)
     {
-
         DirectoryInfo[] subDirectories = new DirectoryInfo(directory).GetDirectories();
 
-        uint lineColor = ImGui.GetColorU32(new Vector4(0.5f, 0.5f, 0.5f, 1.0f));
         ImDrawListPtr drawList = ImGui.GetWindowDrawList();
-        (Vector2, Vector2) myRect = (Vector2.Zero, Vector2.Zero);
         foreach (DirectoryInfo subDirectory in subDirectories)
         {
-            //Path.GetFileName(directory).Contains(str, StringComparison.CurrentCultureIgnoreCase) ||
-            //Directory.GetFiles(directory).Any(f => Path.GetFileName(f).Contains(str, StringComparison.CurrentCultureIgnoreCase)) ||
-            //Directory.GetDirectories(directory).Any(d => Path.GetFileName(d).Contains(str, StringComparison.CurrentCultureIgnoreCase));
             if (string.IsNullOrEmpty(_searchText) == false)
                 if(Path.GetFileName(subDirectory.FullName).Contains(_searchText, StringComparison.CurrentCultureIgnoreCase) == false)
                     continue;
@@ -314,10 +308,8 @@ public class AssetBrowserWindow : EditorWindow {
             string displayName = $"{FontAwesome6.Folder} {relativePath}";
             bool opened = ImGui.TreeNodeEx(displayName, flags);
 
-            myRect = (ImGui.GetItemRectMin(), ImGui.GetItemRectMax());
-
             if (count++ % 2 == 0)
-                drawList.AddRectFilled(myRect.Item1, myRect.Item2, ImGui.GetColorU32(new Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
+                drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
 
             if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked())
             {
@@ -326,29 +318,11 @@ public class AssetBrowserWindow : EditorWindow {
             }
 
             if (opened)
-            {
-                // Draw vertical lines
-                float horizontalTreeLineSize = 4.0f; // chosen arbitrarily
-                Vector2 verticalLineStart = ImGui.GetCursorScreenPos() + new Vector2(horizontalTreeLineSize, -13);
-                Vector2 verticalLineEnd = verticalLineStart;
-
-                // Draws the child Directories and returns the Rect for the Last Entry
-                var rect = DrawDirectory(subDirectory.FullName, ref count, level + 1);
-
-                if (rect.Item1 != Vector2.Zero)
-                {
-                    float midpoint = (rect.Item1.Y + rect.Item2.Y) * 0.5f;
-                    drawList.AddLine(new(verticalLineStart.X, midpoint), new(verticalLineStart.X + horizontalTreeLineSize + 1, midpoint), lineColor);
-                    verticalLineEnd.Y = midpoint;
-                }
-
-                drawList.AddLine(verticalLineStart, verticalLineEnd, lineColor);
-            }
+                DrawDirectory(subDirectory.FullName, ref count, level + 1);
 
             if (opened && subDirectory.GetDirectories().Length > 0)
                 ImGui.TreePop();
         }
-        return myRect;
     }
 
     private void RenderBody()
