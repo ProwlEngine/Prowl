@@ -31,6 +31,8 @@ namespace Prowl.Editor.Assets
         public bool InvertNormals = false;
         public bool GlobalScale = false;
 
+        public float UnitScale = 1.0f;
+
         void Failed(string reason)
         {
             ImGuiNotify.InsertNotification("Failed to Import Model.", new(0.8f, 0.1f, 0.1f, 1f), reason);
@@ -258,6 +260,7 @@ namespace Prowl.Editor.Assets
                         }
 
                     GameObject rootNode = NodeToGameObject(scene.RootNode, meshMats);
+                    rootNode.Scale = Vector3.One * UnitScale;
                     ctx.SetMainObject(rootNode);
 
                     ImGuiNotify.InsertNotification("Model Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);
@@ -362,6 +365,7 @@ namespace Prowl.Editor.Assets
             ImGui.Checkbox("Weld Vertices", ref importer.WeldVertices);
             ImGui.Checkbox("Invert Normals", ref importer.InvertNormals);
             ImGui.Checkbox("GlobalScale", ref importer.GlobalScale);
+            ImGui.DragFloat("UnitScale", ref importer.UnitScale, 0.01f, 0.01f, 1000f);
 
 #warning TODO: Support for Exporting sub assets
 #warning TODO: Support for editing Model specific data like Animation data
