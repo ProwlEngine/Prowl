@@ -73,8 +73,6 @@ public class GameObject : EngineObject
     [JsonIgnore]
     internal GameObject? parent;
 
-    public event EventHandler? TransformUpdated;
-
     [SerializeField]
     public List<GameObject> Children = new List<GameObject>();
 
@@ -253,15 +251,13 @@ public class GameObject : EngineObject
 
         parent = newParent;
         newParent?.Children.Add(this);
-        if (newParent != null)
-            newParent.TransformUpdated += (s, e) => Recalculate();
 
         Recalculate();
         HierarchyStateChanged();
     }
 
     /// <summary>Recalculates all values of the <see cref="Transform"/>.</summary>
-    public void Recalculate(bool invokeTransformChange = true)
+    public void Recalculate()
     {
         globalPrevious = global;
         viewPrevious = view;
@@ -290,8 +286,8 @@ public class GameObject : EngineObject
         view = Matrix4x4.CreateLookAtLeftHanded(globalPosition, forward + globalPosition, up);
         Matrix4x4.Invert(view, out viewInv);
 
-        if(invokeTransformChange)
-            TransformUpdated?.Invoke(this, EventArgs.Empty);
+        foreach (var child in Children)
+            child.Recalculate();
     }
 
     /// <summary>
@@ -675,10 +671,7 @@ public class GameObject : EngineObject
     internal void OnDeserializedMethod(StreamingContext context)
     {
         foreach (var child in Children)
-        {
-            TransformUpdated += (s, e) => child.Recalculate();
             child.parent = this;
-        }
 
         // Update Component Cache
         _componentCache = new MultiValueDictionary<Type, MonoBehaviour>();
@@ -764,7 +757,6 @@ public class GameObject : EngineObject
             foreach (var storedchild in children)
             {
                 var child = storedchild.Instantiate();
-                gameObject.TransformUpdated += (s, e) => child.Recalculate();
                 child.parent = gameObject;
             }
 
