@@ -88,11 +88,8 @@ public class AssetBrowserWindow : EditorWindow {
             ImGui.BeginChild("Body");
 
             if (Project.HasProject)
-            {
-                float bottom = ImGui.GetScrollY() + ImGui.GetContentRegionAvail().Y - 23;
                 RenderBody();
-                RenderFooter(bottom);
-            }
+
             ImGui.EndChild();
 
             //if (ImGui.BeginPopupContextItem())
@@ -177,54 +174,37 @@ public class AssetBrowserWindow : EditorWindow {
         watcher.EnableRaisingEvents = true;
     }
 
-    private void RenderFooter(float bottom)
-    {
-        if (Project.HasProject)
-        {
-            // Get Bottom of child window
-            ImGui.SetCursorPosY(bottom - 5);
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 5);
-            float y = ImGui.GetCursorPosY();
-            float x = ImGui.GetCursorPosX();
-            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.0f, 0.0f, 0.0f, 0.0f));
-            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.5f, 0.5f, 0.5f, 0.25f));
-            ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.5f, 0.5f, 0.5f, 0.25f));
-
-            string assetPath = Path.GetRelativePath(Project.ProjectDirectory, m_CurrentDirectory);
-            string current = "";
-            var paths = assetPath.Split(Path.DirectorySeparatorChar);
-            for (int i = 0; i < paths.Length; i++)
-            {
-                ImGui.SetCursorPosY(y);
-                ImGui.SetCursorPosX(x);
-
-                if (i == 0) ImGui.BeginDisabled();
-                ImGui.SetCursorPosY(y + 5);
-                ImGui.Text(paths[i]);
-                x += ImGui.GetItemRectSize().X + 1;
-                if (i == 0) ImGui.EndDisabled();
-                current = Path.Combine(current, paths[i]);
-                if (i != paths.Length - 1)
-                {
-                    ImGui.SetCursorPosY(y + 4);
-                    ImGui.SetCursorPosX(x);
-                    ImGui.Text(@"\");
-                    x += ImGui.GetItemRectSize().X + 1;
-                }
-            }
-
-            ImGui.PopStyleColor(3);
-        }
-    }
-
     private void RenderHeader()
     {
         float windowWidth = ImGui.GetWindowWidth();
         float windowPad = ImGui.GetStyle().WindowPadding.X;
 
+        const int searchBarSize = 125;
+        const int sizeSliderSize = 75;
+        const int padding = 5;
+        const int rightOffset = 43;
+
         if (ImGui.Button("   " + FontAwesome6.FileImport + "   "))
         {
-#warning TODO: Import Asset
+            var dialog = new ImFileDialogInfo()
+            {
+                title = "Import File",
+                directoryPath = new DirectoryInfo(m_CurrentDirectory),
+                OnComplete = (path) =>
+                {
+                    string relativePath = Path.GetRelativePath(CurrentActiveDirectory, path);
+                    string assetPath = Path.Combine(CurrentActiveDirectory, relativePath);
+                    if (File.Exists(assetPath))
+                    {
+                        Debug.Log($"Asset already exists: {assetPath}");
+                        return;
+                    }
+                    var file = new FileInfo(path);
+                    file.CopyTo(assetPath);
+                    AssetDatabase.Refresh(new FileInfo(assetPath));
+                },
+            };
+            ImGuiFileDialog.FileDialog(dialog);
         }
 
         ImGui.SameLine();
@@ -232,6 +212,7 @@ public class AssetBrowserWindow : EditorWindow {
         // Up button
         bool disabledUpButton = m_CurrentDirectory == m_AssetsDirectory;
         disabledUpButton |= m_CurrentDirectory == m_DefaultsDirectory;
+
         if (disabledUpButton) ImGui.BeginDisabled(true);
         if (ImGui.Button(FontAwesome6.ArrowUp))
             UpdateDirectoryEntries(Path.GetDirectoryName(m_CurrentDirectory));
@@ -241,8 +222,7 @@ public class AssetBrowserWindow : EditorWindow {
 
         float cPX = ImGui.GetCursorPosX();
         float cPY = ImGui.GetCursorPosY();
-        float xSize = windowWidth - cPX - 50;
-        ImGui.SetNextItemWidth(xSize - windowPad);
+        ImGui.SetNextItemWidth(searchBarSize);
         if (ImGui.InputText("##searchBox", ref _searchText, 0x100)) Refresh();
 
         if (string.IsNullOrEmpty(_searchText))
@@ -252,8 +232,21 @@ public class AssetBrowserWindow : EditorWindow {
             ImGui.TextUnformatted(FontAwesome6.MagnifyingGlass + " Search...");
         }
 
-        ImGui.SetCursorPosX(cPX + xSize);
+        if (Project.HasProject == false) return;
+
         ImGui.SetCursorPosY(cPY);
+        ImGui.SetCursorPosX(cPX + searchBarSize + padding);
+        string assetPath = Path.GetRelativePath(Project.ProjectDirectory, m_CurrentDirectory);
+        ImGui.Text(assetPath);
+
+        ImGui.SetCursorPosY(cPY);
+        ImGui.SetCursorPosX(windowWidth - rightOffset - sizeSliderSize - padding);
+        ImGui.SetNextItemWidth(sizeSliderSize);
+        ImGui.SliderFloat("##ThumbnailSizeSlider", ref Settings.m_ThumbnailSize, -0.2f, 1.0f);
+
+        ImGui.SetCursorPosY(cPY);
+        ImGui.SetCursorPosX(windowWidth - rightOffset);
+
         if (ImGui.Button("   " + FontAwesome6.Gears + "   "))
             _ = new ProjectSettingsWindow(Settings);
     }
