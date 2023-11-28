@@ -79,10 +79,11 @@ namespace Prowl.Runtime.Resources
         private static int GetLoc(Raylib_cs.Shader shader, string name, MaterialPropertyBlock mpb)
         {
             int loc;
-            if (!mpb.cachedUniformLocs.TryGetValue(name, out loc))
+            string key = shader.id + "_" + name;
+            if (!mpb.cachedUniformLocs.TryGetValue(key, out loc))
             {
                 loc = Raylib.GetShaderLocation(shader, name);
-                mpb.cachedUniformLocs[name] = loc;
+                mpb.cachedUniformLocs[key] = loc;
             }
             //if (loc == -1) Debug.LogWarning("Shader does not have a uniform named " + name);
             return loc;
@@ -156,11 +157,11 @@ namespace Prowl.Runtime.Resources
         public MaterialPropertyBlock PropertyBlock;
 
         // Key is Shader.GUID + "-" + keywords + "-" + Shader.globalKeywords
-        static Dictionary<string, Raylib_cs.Shader[]> passVariants = new();
+        static Dictionary<string, (Raylib_cs.Shader[], Raylib_cs.Shader)> passVariants = new();
         string keywords = "";
         internal static Raylib_cs.Shader? current;
 
-        public int PassCount => Shader.IsAvailable ? CompileKeywordVariant(keywords.Split(';')).Length : 0;
+        public int PassCount => Shader.IsAvailable ? CompileKeywordVariant(keywords.Split(';')).Item1.Length : 0;
 
         public Material()
         {
@@ -208,13 +209,28 @@ namespace Prowl.Runtime.Resources
             var shader = CompileKeywordVariant(keywords.Split(';'));
 
             // Make sure we have a valid pass
-            if (pass < 0 || pass >= shader.Length) return;
+            if (pass < 0 || pass >= shader.Item1.Length) return;
 
             // Set the shader
-            current = shader[pass];
-            Raylib.BeginShaderMode(shader[pass]);
+            current = shader.Item1[pass];
+            Raylib.BeginShaderMode(shader.Item1[pass]);
 
             if(apply)
+                MaterialPropertyBlock.Apply(PropertyBlock, current.Value);
+        }
+
+        public void SetShadowPass(bool apply = false)
+        {
+            if (Shader.IsAvailable == false) return;
+            if (current != null) throw new Exception("Pass already set");
+            // Make sure we have a shader
+            var shader = CompileKeywordVariant(keywords.Split(';'));
+
+            // Set the shader
+            current = shader.Item2;
+            Raylib.BeginShaderMode(shader.Item2);
+
+            if (apply)
                 MaterialPropertyBlock.Apply(PropertyBlock, current.Value);
         }
 
@@ -225,7 +241,7 @@ namespace Prowl.Runtime.Resources
             current = null;
         }
 
-        Raylib_cs.Shader[] CompileKeywordVariant(string[] allKeywords)
+        (Raylib_cs.Shader[], Raylib_cs.Shader) CompileKeywordVariant(string[] allKeywords)
         {
             if (Shader.IsAvailable == false) throw new Exception("Cannot compile without a valid shader assigned");
             passVariants ??= new();
@@ -247,7 +263,7 @@ namespace Prowl.Runtime.Resources
             allKeywords = allKeywords.Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
 
             // Compile Each Pass
-            Raylib_cs.Shader[] compiledPasses = Shader.Res!.Compile(allKeywords);
+            (Raylib_cs.Shader[], Raylib_cs.Shader) compiledPasses = Shader.Res!.Compile(allKeywords);
             
             passVariants[key] = compiledPasses;
             return compiledPasses;

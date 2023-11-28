@@ -152,3 +152,38 @@ Pass 0
 		}
 	}
 }
+
+			
+ShadowPass 0
+{
+	Vertex
+	{
+		layout (location = 0) in vec3 vertexPosition;
+		layout (location = 1) in vec2 vertexTexCoord;
+		
+		out vec2 TexCoords;
+
+		uniform mat4 mvp;
+		void main()
+		{
+		    gl_Position =  mvp * vec4(vertexPosition, 1.0);
+		    TexCoords = vertexTexCoord;
+		}
+	}
+
+	Fragment
+	{
+		layout (location = 0) out float fragmentdepth;
+		
+		uniform sampler2D _MainTex; // diffuse
+
+		in vec2 TexCoords;
+
+		void main()
+		{
+			if(texture(_MainTex, TexCoords).a < 0.5) discard;
+
+			//fragmentdepth = gl_FragCoord.z;
+		}
+	}
+}

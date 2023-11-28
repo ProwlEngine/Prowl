@@ -34,8 +34,6 @@ namespace Prowl.Editor.Assets
                 // Sort passes to be in order
                 parsedShader.Passes = parsedShader.Passes.OrderBy(p => p.Order).ToArray();
 
-#warning TODO: Surface Shaders, If surf shader defined then we auto generate most of the shader and use the Surface function for shading
-
                 // Handle Includes
                 // Each include is a seperate shader file, specifically filename.include
                 // They contain a chunk of code that is inserted into the start of the Shared section of each pass
@@ -81,11 +79,17 @@ namespace Prowl.Editor.Assets
                     shader.Passes.Add(new ShaderPass
                     {
                         RenderMode = parsedPass.RenderMode,
-                        Fallback = parsedPass.Fallback,
                         Vertex = parsedPass.Vertex,
                         Fragment = parsedPass.Fragment,
                     });
                 }
+
+                if (parsedShader.ShadowPass != null)
+                    shader.ShadowPass = new ShaderShadowPass
+                    {
+                        Vertex = parsedShader.ShadowPass.Vertex,
+                        Fragment = parsedShader.ShadowPass.Fragment,
+                    };
 
                 ctx.SetMainObject(shader);
 
@@ -107,7 +111,8 @@ namespace Prowl.Editor.Assets
                 Name = ParseShaderName(input),
                 Properties = ParseProperties(input),
                 Includes = ParseIncludes(input),
-                Passes = ParsePasses(input).ToArray()
+                Passes = ParsePasses(input).ToArray(),
+                ShadowPass = ParseShadowPass(input)
             };
 
             return shader;
@@ -187,18 +192,33 @@ namespace Prowl.Editor.Assets
                 {
                     Order = int.Parse(passMatch.Groups[1].Value),
                     RenderMode = ParseBlockContent(passContent, "RenderMode"),
-                    Fallback = ParseBlockContent(passContent, "Fallback"),
                     //Includes = ParsePassIncludes(passContent),
                     Shared = ParseBlockContent(passContent, "Shared"),
                     Vertex = ParseBlockContent(passContent, "Vertex"),
                     Fragment = ParseBlockContent(passContent, "Fragment"),
-                    //Surface = ParseBlockContent(passContent, "Surface")
                 };
 
                 passesList.Add(shaderPass);
             }
 
             return passesList;
+        }
+
+        private static ParsedShaderShadowPass ParseShadowPass(string input)
+        {
+            var passMatches = Regex.Matches(input, @"ShadowPass (\d+)\s+({(?:[^{}]|(?<o>{)|(?<-o>}))+(?(o)(?!))})");
+            foreach (Match passMatch in passMatches)
+            {
+                var passContent = passMatch.Groups[2].Value;
+                var shaderPass = new ParsedShaderShadowPass
+                {
+                    Vertex = ParseBlockContent(passContent, "Vertex"),
+                    Fragment = ParseBlockContent(passContent, "Fragment"),
+                };
+                return shaderPass; // Just return the first one, any other ones are ignored
+            }
+
+            return null; // No shadow pass
         }
 
         //private static List<string> ParsePassIncludes(string passContent)
@@ -243,19 +263,24 @@ namespace Prowl.Editor.Assets
             public List<Property> Properties;
             public List<string> Includes;
             public ParsedShaderPass[] Passes;
+            public ParsedShaderShadowPass ShadowPass;
         }
 
         public class ParsedShaderPass
         {
             public string RenderMode; // Defaults to Opaque
-            public string Fallback;
             //public List<string> Includes = new();
             public string Shared;
             public string Vertex;
             public string Fragment;
-            //public string Surface;
 
             public int Order;
+        }
+
+        public class ParsedShaderShadowPass
+        {
+            public string Vertex;
+            public string Fragment;
         }
 
     }

@@ -30,6 +30,7 @@
       <None Remove="EmbeddedResources\DefaultAssets\GBuffercombine.shader.meta" />
       <None Remove="EmbeddedResources\DefaultAssets\Gizmos.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\grid.png" />
+      <None Remove="EmbeddedResources\DefaultAssets\Invalid.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Plane.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\Pointlight.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Pointlight.shader.meta" />
@@ -85,6 +86,9 @@
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       </EmbeddedResource>
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Gizmos.shader">
+        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      </EmbeddedResource>
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Invalid.shader">
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       </EmbeddedResource>
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Standard.shader">

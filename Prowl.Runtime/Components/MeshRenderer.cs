@@ -37,10 +37,10 @@ public class MeshRenderer : MonoBehaviour
             mvp = Matrix4x4.Multiply(mvp, this.GameObject.Global);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthProjection);
-            Graphics.DepthMat.SetMatrix("mvp",Matrix4x4.Transpose(mvp));
-            Graphics.DepthMat.SetPass(0, true);
+            Material.Res!.SetMatrix("mvp",Matrix4x4.Transpose(mvp));
+            Material.Res!.SetShadowPass(true);
             Graphics.DrawMeshNowDirect(Mesh.Res!);
-            Graphics.DepthMat.EndPass();
+            Material.Res!.EndPass();
         }
     }
 }
