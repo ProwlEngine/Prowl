@@ -419,6 +419,7 @@ public class AssetBrowserWindow : EditorWindow {
         ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 0.0f);
 
         ImGui.Selectable("##" + directoryPath, isSelected, ImGuiSelectableFlags.AllowOverlap, new Vector2(thumbnailSize, thumbnailSize));
+        ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
         if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(0))
         {
             m_SelectedFilePath = isSelected ? null : directoryPath;
@@ -469,6 +470,7 @@ public class AssetBrowserWindow : EditorWindow {
             m_SelectedFilePath = isSelected ? null : filePath;
             Selection.Select(filePath);
         }
+        ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
 
         ImGui.PopStyleVar(2);
 
