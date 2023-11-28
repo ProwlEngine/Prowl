@@ -1,6 +1,7 @@
 ﻿using HexaEngine.ImGuiNET;
 using System;
 using System.IO;
+using System.Numerics;
 
 namespace Prowl.Runtime.ImGUI.Widgets
 {
@@ -16,6 +17,7 @@ namespace Prowl.Runtime.ImGUI.Widgets
             droppedAsset = null;
             if (ImGui.BeginDragDropTarget())
             {
+                ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.25f, 0.25f, 0.25f, 0.25f)));
                 ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload(AssetPayload + typeof(T).Name);
                 if (!entityPayload.IsNull)
                 {
@@ -34,6 +36,7 @@ namespace Prowl.Runtime.ImGUI.Widgets
             droppedAsset = Guid.Empty;
             if (ImGui.BeginDragDropTarget())
             {
+                ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.25f, 0.25f, 0.25f, 0.25f)));
                 ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload(AssetPayload + typeName);
                 if (!entityPayload.IsNull)
                 {
@@ -52,6 +55,7 @@ namespace Prowl.Runtime.ImGUI.Widgets
             droppedObject = null;
             if (ImGui.BeginDragDropTarget())
             {
+                ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.25f, 0.25f, 0.25f, 0.25f)));
                 ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload(ReferencePayload + typeof(T).Name);
                 if (!entityPayload.IsNull)
                 {

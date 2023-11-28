@@ -201,12 +201,13 @@ public class HierarchyWindow : EditorWindow {
         }
 
         // Drag Drop
+        // GameObject from Hierarchy
         if (DragnDrop.ReceiveReference<GameObject>(out var go))
         {
             go.SetParent(entity);
             Selection.Select(go);
         }
-
+        // GameObject from Assets - Prefab
         if (DragnDrop.ReceiveAsset<GameObject>(out var original))
         {
             GameObject clone = (GameObject)EngineObject.Instantiate(original.Res!, true);
@@ -216,7 +217,7 @@ public class HierarchyWindow : EditorWindow {
             clone.Recalculate();
             Selection.Select(clone);
         }
-
+        // Offer GameObject up from Hierarchy for Drag And Drop
         DragnDrop.OfferReference(entity);
 
 
