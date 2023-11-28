@@ -271,8 +271,10 @@ public class AssetBrowserWindow : EditorWindow {
 
     private void RenderSideViewFolder(ref int count, ImGuiTreeNodeFlags flags, DirectoryInfo root)
     {
+        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.8f, 0f, 0.321f, 1f));
         string displayName = $"{FontAwesome6.Folder} {Path.GetRelativePath(Project.ProjectDirectory, root.FullName)}";
         bool opened = ImGui.TreeNodeEx(displayName, flags);
+        ImGui.PopStyleColor();
 
         if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked())
             UpdateDirectoryEntries(root.FullName);
