@@ -97,6 +97,7 @@ public class ViewportWindow : EditorWindow
         // Manually Render to the RenderTexture
         Cam.NearClip = Settings.NearClip;
         Cam.FarClip = Settings.FarClip;
+        Settings.RenderResolution = Math.Clamp(Settings.RenderResolution, 0.1f, 8.0f);
         Cam.RenderResolution = Settings.RenderResolution;
 
         ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].id, ImGui.GetContentRegionAvail(), new Vector2(0, 1), new Vector2(1, 0));

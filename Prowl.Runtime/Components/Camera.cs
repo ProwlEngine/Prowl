@@ -57,7 +57,7 @@ public class Camera : MonoBehaviour
 
     private void CheckGBuffer()
     {
-        RenderResolution = Math.Clamp(RenderResolution, 0.1f, 4.0f);
+        RenderResolution = Math.Clamp(RenderResolution, 0.1f, 8.0f);
 
         Vector2 size = GetRenderTargetSize() * RenderResolution;
         if (gBuffer == null)
