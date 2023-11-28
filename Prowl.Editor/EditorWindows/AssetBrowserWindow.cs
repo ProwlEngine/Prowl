@@ -560,27 +560,43 @@ public class AssetBrowserWindow : EditorWindow {
     }
 
     private Dictionary<string, Texture2D> cachedThumbnails = new();
+    private static (long, bool) lastGenerated = (-1, false);
     private Texture2D GetThumbnail(string path)
     {
         string ext = Path.GetExtension(path);
         string fileName = "FileIcon.png";
 
+        if (lastGenerated.Item1 != Time.frameCount || !lastGenerated.Item2)
+        {
+            if (TextureImporter.Supported.Contains(ext, StringComparer.OrdinalIgnoreCase))
+            {
+                string? relativeAssetPath = AssetDatabase.GetRelativePath(path);
 
-        if (TextureImporter.Supported.Contains(ext, StringComparer.OrdinalIgnoreCase))
-        {
-            string? relativeAssetPath = AssetDatabase.GetRelativePath(path);
-            if(relativeAssetPath != null) // if its null fallback to the default FileIcon
-                return Application.AssetProvider.LoadAsset<Texture2D>(relativeAssetPath);
+                if (cachedThumbnails.TryGetValue(path, out Texture2D? value))
+                    return value;
+
+#warning TODO: if the texture at path changes this needs to somehow know and update
+
+                if (relativeAssetPath != null) // if its null fallback to the default FileIcon
+                {
+                    lastGenerated = (Time.frameCount, true);
+                    var tex = Application.AssetProvider.LoadAsset<Texture2D>(relativeAssetPath);
+                    cachedThumbnails[path] = tex;
+                    return tex;
+                }
+            }
+            else if (ImporterAttribute.SupportsExtension(ext))
+            {
+                fileName = ImporterAttribute.GetIconForExtension(ext);
+            }
+            else if (ext.Equals(".cs", StringComparison.OrdinalIgnoreCase)) // Special case, is a c# script
+                fileName = "CSharpIcon.png";
+
         }
-        else if (ImporterAttribute.SupportsExtension(ext))
-        {
-            fileName = ImporterAttribute.GetIconForExtension(ext);
-        }
-        else if(ext.Equals(".cs", StringComparison.OrdinalIgnoreCase)) // Special case, is a c# script
-            fileName = "CSharpIcon.png";
 
         if (!cachedThumbnails.ContainsKey(fileName))
         {
+            lastGenerated = (Time.frameCount, true);
             using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources." + fileName))
             {
                 cachedThumbnails[fileName] = new Texture2D(stream);
