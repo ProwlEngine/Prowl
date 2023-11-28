@@ -16,7 +16,7 @@ public class DirectionalLight : MonoBehaviour
     public override RenderingOrder RenderOrder => RenderingOrder.Lighting;
 
     public Color color = Color.white;
-    public float intensity = 1f;
+    public float intensity = 32f;
     public float qualitySamples = 16;
     public float blockerSamples = 16;
     public float shadowDistance = 50f;
