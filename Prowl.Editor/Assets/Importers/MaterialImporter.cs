@@ -3,6 +3,7 @@ using Newtonsoft.Json.Linq;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
+using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Utils;
 using System.Numerics;
@@ -132,19 +133,10 @@ namespace Prowl.Editor.Assets
                                 }
 
                                 // DragDrop code
-                                if (ImGui.BeginDragDropTarget())
+                                if(DragnDrop.ReceiveAsset<Texture2D>(out var droppedTex))
                                 {
-                                    unsafe
-                                    {
-                                        ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload($"ASSETPAYLOAD_Texture2D");
-                                        if (!entityPayload.IsNull)
-                                            if (Selection.Dragging is Guid guidToAsset)
-                                            {
-                                                tex.AssetID = guidToAsset;
-                                                changed = true;
-                                            }
-                                    }
-                                    ImGui.EndDragDropTarget();
+                                    tex.AssetID = droppedTex.AssetID;
+                                    changed = true;
                                 }
 
                                 ImGui.PopID();

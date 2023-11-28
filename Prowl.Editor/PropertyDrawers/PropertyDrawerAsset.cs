@@ -3,6 +3,7 @@ using Prowl.Runtime.Assets;
 using Prowl.Icons;
 using HexaEngine.ImGuiNET;
 using System.Numerics;
+using Prowl.Runtime.ImGUI.Widgets;
 
 namespace Prowl.Editor.PropertyDrawers;
 
@@ -57,17 +58,8 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         }
 
         // DragDrop code
-        if (ImGui.BeginDragDropTarget())
-        {
-            unsafe
-            {
-                ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload($"ASSETPAYLOAD_{value.TypeName}");
-                if (!entityPayload.IsNull)
-                    if (Selection.Dragging is Guid guidToAsset)
-                        value.AssetID = guidToAsset;
-            }
-            ImGui.EndDragDropTarget();
-        }
+        if(DragnDrop.ReceiveAsset(out Guid assetGuid, value.TypeName))
+            value.AssetID = assetGuid;
 
         // Add a button for clearing the Asset
         if (ImGui.IsKeyPressed(ImGuiKey.Delete) && ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows))

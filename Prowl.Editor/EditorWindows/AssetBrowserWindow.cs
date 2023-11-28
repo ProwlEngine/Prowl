@@ -8,6 +8,7 @@ using HexaEngine.ImGuiNET;
 using System.IO;
 using System.Numerics;
 using System.Reflection;
+using Prowl.Runtime.ImGUI.Widgets;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -527,19 +528,12 @@ public class AssetBrowserWindow : EditorWindow {
         // Drag and Drop Payload
         if (ImporterAttribute.SupportsExtension(ext))
         {
-            if (ImGui.BeginDragDropSource(ImGuiDragDropFlags.None))
+            Type type = ImporterAttribute.GetGeneralType(ext);
+            if (type != null)
             {
-                Type type = ImporterAttribute.GetGeneralType(ext);
-                if (type != null)
-                {
-                    unsafe
-                    {
-                        ImGui.SetDragDropPayload($"ASSETPAYLOAD_{type.Name}", null, 0);
-                    }
-                    Selection.SetDragging(AssetDatabase.GUIDFromAssetPath(Path.GetRelativePath(Project.ProjectDirectory, filePath)));
-                    ImGui.TextUnformatted(type.Name + " " + Path.GetRelativePath(Project.ProjectAssetDirectory, filePath));
-                    ImGui.EndDragDropSource();
-                }
+
+                var guid = AssetDatabase.GUIDFromAssetPath(Path.GetRelativePath(Project.ProjectDirectory, filePath));
+                DragnDrop.OfferAsset(guid, type.Name);
             }
         }
     }

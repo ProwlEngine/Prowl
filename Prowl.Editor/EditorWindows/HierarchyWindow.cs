@@ -6,6 +6,7 @@ using Prowl.Icons;
 using HexaEngine.ImGuiNET;
 using Newtonsoft.Json;
 using System.Numerics;
+using Prowl.Runtime.ImGUI.Widgets;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -20,11 +21,7 @@ public class HierarchyWindow : EditorWindow {
     }
     
     private string _searchText = "";
-    private GameObject m_DeletedEntity = null;
     private GameObject m_RenamingEntity = null;
-
-    private GameObject m_DraggedEntity = null;
-    private GameObject m_DraggedEntityTarget = null;
 
     protected override void Draw()
     {
@@ -94,59 +91,25 @@ public class HierarchyWindow : EditorWindow {
 
             unsafe
             {
-                if (ImGui.BeginDragDropTarget())
+                if (DragnDrop.ReceiveReference<GameObject>(out var go))
                 {
-                    ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload("GameObjectRef");
-                    if (!entityPayload.IsNull)
-                    {
-                        //var dataPtr = (int*)entityPayload.Data;
-                        //int entityId = dataPtr[0];
-                        m_DraggedEntity = EngineObject.FindObjectByID<GameObject>((int)Selection.Dragging);
-                        m_DraggedEntityTarget = null;
-                    }
-
-                    ImGui.EndDragDropTarget();
+                    go.SetParent(null);
+                    Selection.Select(go);
                 }
 
-                if (ImGui.BeginDragDropTarget())
+                if (DragnDrop.ReceiveAsset<GameObject>(out var original))
                 {
-                    unsafe
-                    {
-                        ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload($"ASSETPAYLOAD_GameObject");
-                        if (!entityPayload.IsNull)
-                            if (Selection.Dragging is Guid guidToAsset)
-                            {
-                                var original = AssetDatabase.LoadAsset<GameObject>(guidToAsset);
-                                GameObject clone = (GameObject)EngineObject.Instantiate(original, true);
-                                clone.Position = original.Position;
-                                clone.Orientation = original.Orientation;
-                                clone.SetParent(null);
-                                clone.Recalculate();
-                                //GameObject go = GameObject.Instantiate();
-                                //go.SetParent(null);
-                                Selection.Select(clone);
-                            }
-                    }
-                    ImGui.EndDragDropTarget();
+                    GameObject clone = (GameObject)EngineObject.Instantiate(original.Res!, true);
+                    clone.Position = original.Res!.Position;
+                    clone.Orientation = original.Res!.Orientation;
+                    clone.SetParent(null);
+                    clone.Recalculate();
+                    Selection.Select(clone);
                 }
             }
 
             if (ImGui.IsItemClicked())
                 Selection.Clear();
-        }
-
-        //if (m_DraggedEntity != null && m_DraggedEntityTarget != null)
-        if (m_DraggedEntity != null)
-        {
-            m_DraggedEntity.SetParent(m_DraggedEntityTarget);
-            m_DraggedEntity = null;
-            m_DraggedEntityTarget = null;
-        }
-
-        if (m_DeletedEntity != null)
-        {
-            m_DeletedEntity.DestroyImmediate();
-            m_DeletedEntity = null;
         }
     }
 
@@ -212,7 +175,6 @@ public class HierarchyWindow : EditorWindow {
                 m_RenamingEntity = entity;
         }
 
-        bool entityDeleted = false;
         if (ImGui.BeginPopupContextItem())
         {
             if (Selection.Current != entity)
@@ -229,7 +191,7 @@ public class HierarchyWindow : EditorWindow {
                 Selection.Select(deserialized);
             }
             if (ImGui.MenuItem("Delete", "Del"))
-                entityDeleted = true;
+                entity.Destroy();
 
             ImGui.Separator();
 
@@ -238,40 +200,25 @@ public class HierarchyWindow : EditorWindow {
             ImGui.EndPopup();
         }
 
-        var verticalLineStart = ImGui.GetCursorScreenPos();
-        verticalLineStart.X -= 0.5f;
-        verticalLineStart.Y -= ImGui.GetFrameHeight() * 0.5f;
-
         // Drag Drop
-        unsafe
+        if (DragnDrop.ReceiveReference<GameObject>(out var go))
         {
-            if (ImGui.BeginDragDropTarget())
-            {
-                ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload("GameObjectRef");
-                if (!entityPayload.IsNull)
-                {
-                    //var dataPtr = (int*)entityPayload.Data;
-                    //int entityId = dataPtr[0];
-                    m_DraggedEntity = EngineObject.FindObjectByID<GameObject>((int)Selection.Dragging);
-                    m_DraggedEntityTarget = entity;
-                }
-                else
-                {
-                    // Recieve Prefab
-                }
-
-                ImGui.EndDragDropTarget();
-            }
-
-            if (ImGui.BeginDragDropSource())
-            {
-                ImGui.TextUnformatted(tag);
-                int entityId = entity.InstanceID;
-                //ImGui.SetDragDropPayload("GameObjectRef", (IntPtr)(&entityId), sizeof(int));
-                Selection.SetDragging(entityId);
-                ImGui.EndDragDropSource();
-            }
+            go.SetParent(entity);
+            Selection.Select(go);
         }
+
+        if (DragnDrop.ReceiveAsset<GameObject>(out var original))
+        {
+            GameObject clone = (GameObject)EngineObject.Instantiate(original.Res!, true);
+            clone.Position = original.Res!.Position;
+            clone.Orientation = original.Res!.Orientation;
+            clone.SetParent(entity);
+            clone.Recalculate();
+            Selection.Select(clone);
+        }
+
+        DragnDrop.OfferReference(entity);
+
 
         if (entity == m_RenamingEntity)
         {
@@ -308,10 +255,6 @@ public class HierarchyWindow : EditorWindow {
             if (opened && entity.Children.Count > 0)
                 ImGui.TreePop();
         }
-
-        // PostProcess Actions
-        if (entityDeleted)
-            m_DeletedEntity = entity;
     }
 
     void DrawContextMenu(GameObject context = null)
