@@ -601,8 +601,10 @@ public class GameObject : EngineObject
 
     public override void OnDispose()
     {
-        foreach (var child in Children) 
-            child.Dispose();
+        // Internal_DestroyCommitted removes the child from the parent
+        // Hense why we do a while loop on the first element instead of a foreach/for
+        while(Children.Count > 0)
+            Children[0].Dispose();
 
         foreach (var component in _components)
         {
