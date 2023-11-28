@@ -1,7 +1,6 @@
 ﻿using Raylib_cs;
 using System;
 using System.Collections.Generic;
-using System.Xml;
 
 namespace Prowl.Runtime.Resources
 {

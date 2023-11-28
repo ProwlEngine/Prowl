@@ -1,9 +1,9 @@
-using Prowl.Runtime;
-using Prowl.Editor.EditorWindows;
 using HexaEngine.ImGuiNET;
+using Prowl.Editor.EditorWindows;
+using Prowl.Runtime;
 using System.Numerics;
 
-namespace Prowl.Editor; 
+namespace Prowl.Editor;
 
 public static class EditorGui {
 

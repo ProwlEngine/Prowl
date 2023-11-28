@@ -1,12 +1,10 @@
+using HexaEngine.ImGuiNET;
+using Prowl.Icons;
 using Prowl.Runtime;
-using Prowl.Runtime.Assets;
+using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
-using Prowl.Icons;
-using HexaEngine.ImGuiNET;
-using Newtonsoft.Json;
 using System.Numerics;
-using Prowl.Runtime.ImGUI.Widgets;
 
 namespace Prowl.Editor.EditorWindows;
 

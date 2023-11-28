@@ -1,11 +1,9 @@
-﻿using Raylib_cs;
+﻿using Prowl.Icons;
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.SceneManagement;
+using Raylib_cs;
 using System.Numerics;
 using Shader = Prowl.Runtime.Resources.Shader;
-using Prowl.Icons;
-using System;
-using Prowl.Runtime.SceneManagement;
-using System.Data;
 
 namespace Prowl.Runtime.Components;
 

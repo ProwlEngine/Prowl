@@ -1,5 +1,4 @@
 ﻿using HexaEngine.ImGuiNET;
-using Newtonsoft.Json.Linq;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
@@ -7,7 +6,6 @@ using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Utils;
 using System.Numerics;
-using System.Xml.Linq;
 
 namespace Prowl.Editor.Assets
 {
