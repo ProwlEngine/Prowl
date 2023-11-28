@@ -29,6 +29,7 @@ namespace Prowl.Editor.Assets
         public bool FlipWindingOrder = false;
         public bool WeldVertices = false;
         public bool InvertNormals = false;
+        public bool GlobalScale = false;
 
         void Failed(string reason)
         {
@@ -58,6 +59,7 @@ namespace Prowl.Editor.Assets
                     if (OptimizeMeshes) steps |= PostProcessSteps.OptimizeMeshes;
                     if (FlipWindingOrder) steps |= PostProcessSteps.FlipWindingOrder;
                     if (WeldVertices) steps |= PostProcessSteps.JoinIdenticalVertices;
+                    if (GlobalScale) steps |= PostProcessSteps.GlobalScale;
                     var scene = importer.ImportFile(assetPath.FullName, steps);
                     if (scene == null) Failed("Assimp returned null object.");
 
@@ -359,6 +361,7 @@ namespace Prowl.Editor.Assets
             ImGui.Checkbox("Flip Winding Order", ref importer.FlipWindingOrder);
             ImGui.Checkbox("Weld Vertices", ref importer.WeldVertices);
             ImGui.Checkbox("Invert Normals", ref importer.InvertNormals);
+            ImGui.Checkbox("GlobalScale", ref importer.GlobalScale);
 
 #warning TODO: Support for Exporting sub assets
 #warning TODO: Support for editing Model specific data like Animation data
