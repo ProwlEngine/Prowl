@@ -388,7 +388,7 @@ public class AssetBrowserWindow : EditorWindow {
 
             ImGui.PopID();
 
-            const float padding = 15;
+            const float padding = 8;
             int rowCount = Math.Max((int)(contentWidth / (ThumbnailSize + padding)), 1);
             float itemSize = ((ThumbnailSize) + padding);
             curPos.X = ((i + 1) % rowCount) * itemSize;
