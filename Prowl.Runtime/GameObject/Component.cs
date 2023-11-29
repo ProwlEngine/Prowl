@@ -24,16 +24,16 @@ public abstract class MonoBehaviour : EngineObject
     private Dictionary<string, Coroutine> _coroutines = new();
     private Dictionary<string, Coroutine> _endOfFrameCoroutines = new();
 
-    private Action onEnable;
-    private Action onDisable;
-    private Action awake;
-    private Action start;
-    private Action fixedUpdate;
-    private Action update;
-    private Action lateUpdate;
-    private Action onDestroy;
-    private Action onRenderObject;
-    private Action OnRenderObjectDepth;
+    private MethodInfo onEnable;
+    private MethodInfo onDisable;
+    private MethodInfo awake;
+    private MethodInfo start;
+    private MethodInfo fixedUpdate;
+    private MethodInfo update;
+    private MethodInfo lateUpdate;
+    private MethodInfo onDestroy;
+    private MethodInfo onRenderObject;
+    private MethodInfo onRenderObjectDepth;
 
     public bool HasStarted { get; set; } = false;
 
@@ -140,61 +140,61 @@ public abstract class MonoBehaviour : EngineObject
             "OnRenderObjectDepth",
         };
 
-        MethodInfo[] methods = GetType().GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
-        object[] retMethods = new object[methodNames.Count];
-        foreach (var method in methods)
+        MethodInfo[] retMethods = new MethodInfo[methodNames.Count];
+        foreach (var method in GetType().GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy))
         {
             var ind = methodNames.IndexOf(method.Name);
-            if (ind != -1) retMethods[ind] = Delegate.CreateDelegate(typeof(Action), this, method, false);
+            if (ind != -1) retMethods[ind] = method;
         }
 
-        onEnable = (Action)retMethods[0];
-        onDisable = (Action)retMethods[1];
-        awake = (Action)retMethods[2];
-        start = (Action)retMethods[3];
-        fixedUpdate = (Action)retMethods[4];
-        update = (Action)retMethods[5];
-        lateUpdate = (Action)retMethods[6];
-        onDestroy = (Action)retMethods[7];
-        onRenderObject = (Action)retMethods[8];
-        OnRenderObjectDepth = (Action)retMethods[9];
+        onEnable = retMethods[0];
+        onDisable = retMethods[1];
+        awake = retMethods[2];
+        start = retMethods[3];
+        fixedUpdate = retMethods[4];
+        update = retMethods[5];
+        lateUpdate = retMethods[6];
+        onDestroy = retMethods[7];
+        onRenderObject = retMethods[8];
+        onRenderObjectDepth = retMethods[9];
 
         executeAlways = this.GetType().GetCustomAttribute<ExecuteAlwaysAttribute>() != null;
 
         if (!PauseLogic || executeAlways)
         {
-            awake?.Invoke();
-            onEnable?.Invoke();
+            awake?.Invoke(this, []);
+            onEnable?.Invoke(this, []);
         }
     }
 
     internal void Internal_OnEnabled()
     {
-        if (!PauseLogic || executeAlways) onEnable?.Invoke();
+        if (!PauseLogic || executeAlways) onEnable?.Invoke(this, []);
     }
     internal void Internal_OnDisabled()
     {
-        if (!PauseLogic || executeAlways) onDisable?.Invoke();
+        if (!PauseLogic || executeAlways) onDisable?.Invoke(this, []);
     }
     internal void Internal_Start()
     {
-        if (!PauseLogic || executeAlways) start?.Invoke();
+        if (!PauseLogic || executeAlways) start?.Invoke(this, []);
     }
     internal void Internal_FixedUpdate()
     {
-        if (!PauseLogic || executeAlways) fixedUpdate?.Invoke();
+        if (!PauseLogic || executeAlways) fixedUpdate?.Invoke(this, []);
     }
     internal void Internal_Update()
     {
-        if (!PauseLogic || executeAlways) update?.Invoke();
+        if (!PauseLogic || executeAlways) update?.Invoke(this, []);
     }
     internal void Internal_LateUpdate()
     {
-        if (!PauseLogic || executeAlways) lateUpdate?.Invoke();
+        if (!PauseLogic || executeAlways) lateUpdate?.Invoke(this, []);
     }
     internal void Internal_OnDestroy()
     {
-        if (!PauseLogic || executeAlways) onDestroy?.Invoke();
+        if (!PauseLogic || executeAlways) onDestroy?.Invoke(this, []);
+    }
     }
 
     public Coroutine StartCoroutine(string methodName)
@@ -325,10 +325,10 @@ public abstract class MonoBehaviour : EngineObject
     }
 
     // Rendering always occurs
-    internal void Internal_OnRenderObject() => onRenderObject?.Invoke();
+    internal void Internal_OnRenderObject() => onRenderObject?.Invoke(this, []);
 
     // Rendering always occurs
-    internal void Internal_OnRenderObjectDepth() => OnRenderObjectDepth?.Invoke();
+    internal void Internal_OnRenderObjectDepth() => onRenderObjectDepth?.Invoke(this, []);
 
     /// <summary> Calls the method named methodName on every MonoBehaviour in this game object or any of its children. </summary>
     public void BroadcastMessage(string methodName, params object[] objs) => GameObject.BroadcastMessage(methodName, objs);
