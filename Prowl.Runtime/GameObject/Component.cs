@@ -34,6 +34,8 @@ public abstract class MonoBehaviour : EngineObject
     private MethodInfo onDestroy;
     private MethodInfo onRenderObject;
     private MethodInfo onRenderObjectDepth;
+    private MethodInfo drawGizmos;
+    private MethodInfo drawGizmosSelected;
 
     public bool HasStarted { get; set; } = false;
 
@@ -138,6 +140,8 @@ public abstract class MonoBehaviour : EngineObject
             "OnDestroy",
             "OnRenderObject",
             "OnRenderObjectDepth",
+            "DrawGizmos",
+            "DrawGizmosSelected",
         };
 
         MethodInfo[] retMethods = new MethodInfo[methodNames.Count];
@@ -157,6 +161,8 @@ public abstract class MonoBehaviour : EngineObject
         onDestroy = retMethods[7];
         onRenderObject = retMethods[8];
         onRenderObjectDepth = retMethods[9];
+        drawGizmos = retMethods[10];
+        drawGizmosSelected = retMethods[10];
 
         executeAlways = this.GetType().GetCustomAttribute<ExecuteAlwaysAttribute>() != null;
 
@@ -195,6 +201,13 @@ public abstract class MonoBehaviour : EngineObject
     {
         if (!PauseLogic || executeAlways) onDestroy?.Invoke(this, []);
     }
+    internal void Internal_DrawGizmos(System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection)
+    {
+        drawGizmos?.Invoke(this, [ view, projection ]);
+    }
+    internal void Internal_DrawGizmosSelected(System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection)
+    {
+        drawGizmosSelected?.Invoke(this, [ view, projection ]);
     }
 
     public Coroutine StartCoroutine(string methodName)

@@ -5,6 +5,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.Components;
 using Prowl.Runtime.Components.ImageEffects;
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.SceneManagement;
 using System.Diagnostics;
 using System.Numerics;
 using static System.Net.Mime.MediaTypeNames;
@@ -38,22 +39,13 @@ public class ViewportWindow : EditorWindow
     Vector2 WindowCenter;
     bool DrawGrid = false;
 
-    private string[] operationNames = Enum.GetNames<ImGuizmoOperation>();
-    private ImGuizmoOperation[] operations = Enum.GetValues<ImGuizmoOperation>();
-
-    private string[] modeNames = Enum.GetNames<ImGuizmoMode>();
-    private ImGuizmoMode[] modes = Enum.GetValues<ImGuizmoMode>();
-
-    private ImGuizmoOperation operation = ImGuizmoOperation.Universal;
-    private ImGuizmoMode mode = ImGuizmoMode.Local;
-
     public ViewportWindow()
     {
         Title = "Viewport";
 
         var CamObject = GameObject.CreateSilently();
         CamObject.Name = "Editor-Camera";
-        CamObject.hideFlags = HideFlags.HideAndDontSave;
+        CamObject.hideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
         CamObject.Position = new Vector3(0, 5, -10);
         Cam = CamObject.AddComponent<Camera>();
         var dof = CamObject.AddComponent<DOFEffect>();
@@ -80,9 +72,6 @@ public class ViewportWindow : EditorWindow
         DrawViewport();
     }
 
-    ImGuizmoOperation manipulateOp = ImGuizmoOperation.Translate;
-
-    
     private void DrawViewport()
     {
         if (!Project.HasProject) return;
@@ -108,6 +97,15 @@ public class ViewportWindow : EditorWindow
         ImGuizmo.SetOrthographic(false);
         ImGuizmo.SetRect(ImGui.GetWindowPos().X, ImGui.GetWindowPos().Y, windowSize.X, windowSize.Y);
 
+        var view = Cam.GameObject.View;
+        var projection = Cam.GetProjectionMatrix(windowSize.X, windowSize.Y);
+
+        if (DrawGrid)
+        {
+            Matrix4x4 matrix = Matrix4x4.Identity;
+            ImGuizmo.DrawGrid(ref view.M11, ref projection.M11, ref matrix.M11, 10);
+        }
+
         Matrix4x4 mvp = Cam.GameObject.View;
         mvp *= Cam.GetProjectionMatrix(windowSize.X, windowSize.Y);
         var drawList = ImGui.GetWindowDrawList();
@@ -115,50 +113,32 @@ public class ViewportWindow : EditorWindow
 
         Prowl.Runtime.Gizmos.Clear();
 
-        var view = Cam.GameObject.View;
-        var projectionM11 = Cam.GetProjectionMatrix(windowSize.X, windowSize.Y);
-
-        if (DrawGrid)
-        {
-            Matrix4x4 matrix = Matrix4x4.Identity;
-            ImGuizmo.DrawGrid(ref view.M11, ref projectionM11.M11, ref matrix.M11, 10);
-        }
-
-
-        if (Selection.Current != null && Selection.Current is GameObject go)
-        {
-            var goMatrix = go.Local;
-            if (ImGuizmo.Manipulate(ref view.M11, ref projectionM11.M11, manipulateOp, ImGuizmoMode.Local, ref goMatrix.M11))
-            {
-                go.Local = goMatrix;
-            }
-        }
+        foreach (var activeGO in GameObjectManager.AllGameObjects)
+            if (activeGO.EnabledInHierarchy)
+                activeGO.DrawGizmos(view, projection, Selection.Current == activeGO);
 
         // Set Cursor Pos back to the start so that the Gizmos exist relative to the Viewport
         ImGui.SetCursorPos(cursorStart + new Vector2(2));
 
-        // TODO: Custom Gizmos, Allow for custom Gizmos to be drawn by components hooking into the RenderCustomGizmos action
-        // This event could also be used to draw UI elements in the viewport
-
-        // Draw Tooltip
         int X = 0;
         if (ImGui.Button($"{FontAwesome6.ArrowsUpDownLeftRight}"))
-            manipulateOp = ImGuizmoOperation.Translate;
+            GameObjectManager.GizmosOperation = ImGuizmoOperation.Translate;
         X += 23; ImGui.SameLine(X);
         if (ImGui.Button($"{FontAwesome6.ArrowsSpin}"))
-            manipulateOp = ImGuizmoOperation.Rotate;
+            GameObjectManager.GizmosOperation = ImGuizmoOperation.Rotate;
         X += 21; ImGui.SameLine(X);
         if (ImGui.Button($"{FontAwesome6.GroupArrowsRotate}"))
-            manipulateOp = ImGuizmoOperation.Scale;
+            GameObjectManager.GizmosOperation = ImGuizmoOperation.Scale;
         X += 23; ImGui.SameLine(X);
         ImGui.Text("FPS: " + (1.0f / (float)Time.deltaTimeF).ToString("0.00"));
         X += 58; ImGui.SameLine(X);
 
-        ImGui.SetNextItemWidth(85);
-        int modeIndex = Array.IndexOf(modes, mode);
-        if (ImGui.Combo("##Mode", ref modeIndex, modeNames, modeNames.Length))
-            mode = modes[modeIndex];
-        X += 88; ImGui.SameLine(X);
+        if (GameObjectManager.GizmosSpace == ImGuizmoMode.World && ImGui.Button($"{FontAwesome6.Globe}"))
+            GameObjectManager.GizmosSpace = ImGuizmoMode.Local;
+        else if (GameObjectManager.GizmosSpace == ImGuizmoMode.Local && ImGui.Button($"{FontAwesome6.Cube}"))
+            GameObjectManager.GizmosSpace = ImGuizmoMode.World;
+        GUIHelper.Tooltip(GameObjectManager.GizmosSpace.ToString());
+        X += 23; ImGui.SameLine(X);
 
         ImGui.SetNextItemWidth(85);
         // Dropdown to pick Camera DebugDraw mode
@@ -238,19 +218,19 @@ public class ViewportWindow : EditorWindow
             // If not looking around Viewport Keybinds are used instead
             if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_Q))
             {
-                manipulateOp = ImGuizmoOperation.Translate;
+                GameObjectManager.GizmosOperation = ImGuizmoOperation.Translate;
             }
             else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_W))
             {
-                manipulateOp = ImGuizmoOperation.Rotate;
+                GameObjectManager.GizmosOperation = ImGuizmoOperation.Rotate;
             }
             else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_E))
             {
-                manipulateOp = ImGuizmoOperation.Scale;
+                GameObjectManager.GizmosOperation = ImGuizmoOperation.Scale;
             }
             else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_R))
             {
-                manipulateOp = ImGuizmoOperation.Universal;
+                GameObjectManager.GizmosOperation = ImGuizmoOperation.Universal;
             }
         }
     }

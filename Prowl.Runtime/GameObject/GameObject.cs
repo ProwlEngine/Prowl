@@ -1,8 +1,10 @@
-﻿using Newtonsoft.Json;
+﻿using HexaEngine.ImGuizmoNET;
+using Newtonsoft.Json;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.Design;
 using System.Linq;
 using System.Numerics;
 using System.Reflection;
@@ -585,6 +587,24 @@ public class GameObject : EngineObject
         }
         dependentType = null;
         return false;
+    }
+
+    public void DrawGizmos(Matrix4x4 view, Matrix4x4 projection, bool isSelected)
+    {
+        if (hideFlags.HasFlag(HideFlags.NoGizmos)) return;
+
+        if (isSelected)
+        {
+            var goMatrix = Local;
+            if (ImGuizmo.Manipulate(ref view.M11, ref projection.M11, GameObjectManager.GizmosOperation, ImGuizmoMode.Local, ref goMatrix.M11))
+                Local = goMatrix;
+        }
+
+        foreach (var component in _components)
+        {
+            component.Internal_DrawGizmos(view, projection);
+            if(isSelected) component.Internal_DrawGizmosSelected(view, projection);
+        }
     }
 
     public static GameObject Instantiate(GameObject original) => Instantiate(original, original.position, original.orientation, null);

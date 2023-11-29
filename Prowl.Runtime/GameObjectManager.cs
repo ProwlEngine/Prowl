@@ -1,3 +1,4 @@
+using HexaEngine.ImGuizmoNET;
 using Prowl.Runtime.Components;
 using System;
 using System.Collections.Generic;
@@ -13,6 +14,11 @@ public static class GameObjectManager
     public static List<GameObject> AllGameObjects => _gameObjects;
 
     public static bool AllowGameObjectConstruction = true;
+
+    // Not a fan of these being here, their for the Editor but since they are used in Runtime and Runtime doesnt reference the Editor
+    // It needs to be here :( need a better solution
+    public static ImGuizmoOperation GizmosOperation = ImGuizmoOperation.Translate;
+    public static ImGuizmoMode GizmosSpace = ImGuizmoMode.Local;
 
     public static void Initialize()
     {
