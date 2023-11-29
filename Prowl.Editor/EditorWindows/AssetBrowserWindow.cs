@@ -508,6 +508,8 @@ public class AssetBrowserWindow : EditorWindow {
 
         ImGui.EndGroup();
 
+        GUIHelper.Tooltip(Path.GetFileName(filePath));
+
         // Drag and Drop Payload
         if (ImporterAttribute.SupportsExtension(ext))
         {
