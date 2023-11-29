@@ -9,7 +9,9 @@ namespace Prowl.Editor.Assets
     public class ShaderImporter : ScriptedImporter
     {
         public static readonly string[] Supported = { ".shader" };
-        
+
+        private static FileInfo currentAssetPath;
+
 #warning TODO: get Uniforms via regex as well, So we know what unifoms the shader has and can skip SetUniforms if they dont have it
 
         public override void Import(SerializedAsset ctx, FileInfo assetPath)
@@ -23,6 +25,8 @@ namespace Prowl.Editor.Assets
 
             try
             {
+                currentAssetPath = assetPath;
+
                 string shaderScript = File.ReadAllText(assetPath.FullName);
 
                 // Strip out comments and Multi-like Comments
@@ -33,38 +37,6 @@ namespace Prowl.Editor.Assets
 
                 // Sort passes to be in order
                 parsedShader.Passes = parsedShader.Passes.OrderBy(p => p.Order).ToArray();
-
-                // Handle Includes
-                // Each include is a seperate shader file, specifically filename.include
-                // They contain a chunk of code that is inserted into the start of the Shared section of each pass
-                // Start with the Main Includes, these are included into all Passes
-                foreach (var include in parsedShader.Includes)
-                {
-                    // Find the file relative to the current shader
-                    var includePath = Path.Combine(assetPath.Directory.FullName, include);
-                    if (!File.Exists(includePath))
-                    {
-                        ImGuiNotify.InsertNotification("Failed to Import Shader.", new(0.8f, 0.1f, 0.1f, 1f), "Include not found: " + include);
-                        return;
-                    }
-
-                    // Read the include file
-                    var includeScript = File.ReadAllText(includePath);
-
-                    // Strip out comments and Multi-like Comments
-                    includeScript = ClearAllComments(includeScript);
-
-                    // Add the include to each pass
-                    foreach (var pass in parsedShader.Passes)
-                        pass.Shared = includeScript + Environment.NewLine + pass.Shared;
-                }
-
-                // Now we need to insert the Shared section into the Vertex and Fragment sections
-                foreach (var pass in parsedShader.Passes)
-                {
-                    pass.Vertex = pass.Shared + Environment.NewLine + pass.Vertex;
-                    pass.Fragment = pass.Shared + Environment.NewLine + pass.Fragment;
-                }
 
                 // Now we have a Vertex and Fragment shader will all Includes, and Shared code inserted
                 // Now we turn the ParsedShader into a Shader
@@ -110,7 +82,6 @@ namespace Prowl.Editor.Assets
             {
                 Name = ParseShaderName(input),
                 Properties = ParseProperties(input),
-                Includes = ParseIncludes(input),
                 Passes = ParsePasses(input).ToArray(),
                 ShadowPass = ParseShadowPass(input)
             };
@@ -163,21 +134,7 @@ namespace Prowl.Editor.Assets
             }
         }
 
-        private static List<string> ParseIncludes(string input)
-        {
-            // Extract global section without passes
-            var globalSection = Regex.Replace(input, @"Pass \d+\s+{(?:[^{}]|(?<o>{)|(?<-o>}))+(?(o)(?!))}", "");
-
-            var includes = new List<string>();
-
-            var matches = Regex.Matches(globalSection, @"Include\s+""([^""]+)""");
-            foreach (Match match in matches)
-            {
-                includes.Add(match.Groups[1].Value);
-            }
-
-            return includes;
-        }
+        private static readonly Regex _preprocessorIncludeRegex = new Regex(@"^\s*#include\s*[""<](.+?)["">]\s*$", RegexOptions.Multiline);
 
         private static List<ParsedShaderPass> ParsePasses(string input)
         {
@@ -192,16 +149,36 @@ namespace Prowl.Editor.Assets
                 {
                     Order = int.Parse(passMatch.Groups[1].Value),
                     RenderMode = ParseBlockContent(passContent, "RenderMode"),
-                    //Includes = ParsePassIncludes(passContent),
-                    Shared = ParseBlockContent(passContent, "Shared"),
                     Vertex = ParseBlockContent(passContent, "Vertex"),
                     Fragment = ParseBlockContent(passContent, "Fragment"),
                 };
+
+                shaderPass.Vertex = _preprocessorIncludeRegex.Replace(shaderPass.Vertex, ImportReplacer);
+                shaderPass.Fragment = _preprocessorIncludeRegex.Replace(shaderPass.Fragment, ImportReplacer);
 
                 passesList.Add(shaderPass);
             }
 
             return passesList;
+        }
+
+        private static string ImportReplacer(Match match)
+        {
+            var relativePath = match.Groups[1].Value + ".glsl";
+
+            var combined = Path.Combine(currentAssetPath.Directory!.FullName, relativePath);
+            string absolutePath = Path.GetFullPath(combined);
+            if (!File.Exists(absolutePath))
+            {
+                ImGuiNotify.InsertNotification("Failed to Import Shader.", new(0.8f, 0.1f, 0.1f, 1f), "Include not found: " + absolutePath);
+                return "";
+            }
+
+            // Recursively handle Imports
+            var includeScript = _preprocessorIncludeRegex.Replace(File.ReadAllText(absolutePath), ImportReplacer);
+            // Strip out comments and Multi-like Comments
+            includeScript = ClearAllComments(includeScript);
+            return includeScript;
         }
 
         private static ParsedShaderShadowPass ParseShadowPass(string input)
@@ -261,7 +238,6 @@ namespace Prowl.Editor.Assets
         {
             public string Name;
             public List<Property> Properties;
-            public List<string> Includes;
             public ParsedShaderPass[] Passes;
             public ParsedShaderShadowPass ShadowPass;
         }
@@ -269,8 +245,6 @@ namespace Prowl.Editor.Assets
         public class ParsedShaderPass
         {
             public string RenderMode; // Defaults to Opaque
-            //public List<string> Includes = new();
-            public string Shared;
             public string Vertex;
             public string Fragment;
 
