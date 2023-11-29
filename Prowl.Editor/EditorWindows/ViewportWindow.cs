@@ -6,7 +6,6 @@ using Prowl.Runtime.Components;
 using Prowl.Runtime.Components.ImageEffects;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.SceneManagement;
-using System.Diagnostics;
 using System.Numerics;
 using static System.Net.Mime.MediaTypeNames;
 
@@ -78,7 +77,7 @@ public class ViewportWindow : EditorWindow
 
         IsFocused = ImGui.IsWindowFocused();
 
-        var cursorStart = ImGui.GetCursorPos();
+        var cStart = ImGui.GetCursorPos();
         var windowSize = ImGui.GetWindowSize();
         if (windowSize.X != RenderTarget.Width || windowSize.Y != RenderTarget.Height)
             RefreshRenderTexture((int)windowSize.X, (int)windowSize.Y);
@@ -117,32 +116,28 @@ public class ViewportWindow : EditorWindow
             if (activeGO.EnabledInHierarchy)
                 activeGO.DrawGizmos(view, projection, Selection.Current == activeGO);
 
-        // Set Cursor Pos back to the start so that the Gizmos exist relative to the Viewport
-        ImGui.SetCursorPos(cursorStart + new Vector2(2));
+        ImGui.SetCursorPos(cStart + new Vector2(5, 5));
+        if (ImGui.Button($"{FontAwesome6.ArrowsUpDownLeftRight}")) GameObjectManager.GizmosOperation = ImGuizmoOperation.Translate;
+        GUIHelper.Tooltip("Translate");
+        ImGui.SetCursorPos(cStart + new Vector2(5 + (22), 5));
+        if (ImGui.Button($"{FontAwesome6.ArrowsSpin}")) GameObjectManager.GizmosOperation = ImGuizmoOperation.Rotate;
+        GUIHelper.Tooltip("Rotate");
+        ImGui.SetCursorPos(cStart + new Vector2(5 + (44), 5));
+        if (ImGui.Button($"{FontAwesome6.GroupArrowsRotate}")) GameObjectManager.GizmosOperation = ImGuizmoOperation.Scale;
+        GUIHelper.Tooltip("Scale");
 
-        int X = 0;
-        if (ImGui.Button($"{FontAwesome6.ArrowsUpDownLeftRight}"))
-            GameObjectManager.GizmosOperation = ImGuizmoOperation.Translate;
-        X += 23; ImGui.SameLine(X);
-        if (ImGui.Button($"{FontAwesome6.ArrowsSpin}"))
-            GameObjectManager.GizmosOperation = ImGuizmoOperation.Rotate;
-        X += 21; ImGui.SameLine(X);
-        if (ImGui.Button($"{FontAwesome6.GroupArrowsRotate}"))
-            GameObjectManager.GizmosOperation = ImGuizmoOperation.Scale;
-        X += 23; ImGui.SameLine(X);
-        ImGui.Text("FPS: " + (1.0f / (float)Time.deltaTimeF).ToString("0.00"));
-        X += 58; ImGui.SameLine(X);
+        ImGui.SetCursorPos(cStart + new Vector2(5 + (72), 5));
 
         if (GameObjectManager.GizmosSpace == ImGuizmoMode.World && ImGui.Button($"{FontAwesome6.Globe}"))
             GameObjectManager.GizmosSpace = ImGuizmoMode.Local;
         else if (GameObjectManager.GizmosSpace == ImGuizmoMode.Local && ImGui.Button($"{FontAwesome6.Cube}"))
             GameObjectManager.GizmosSpace = ImGuizmoMode.World;
         GUIHelper.Tooltip(GameObjectManager.GizmosSpace.ToString());
-        X += 23; ImGui.SameLine(X);
 
-        ImGui.SetNextItemWidth(85);
+        ImGui.SetCursorPos(cStart + new Vector2(5 + (100), 5));
+        ImGui.SetNextItemWidth(20);
         // Dropdown to pick Camera DebugDraw mode
-        if (ImGui.BeginCombo($"##DebugDraw", $"{FontAwesome6.Eye + Cam.debugDraw.ToString()}"))
+        if (ImGui.BeginCombo($"##DebugDraw", $"{FontAwesome6.Eye}", ImGuiComboFlags.NoArrowButton))
         {
             if (ImGui.Selectable($"Off", Cam.debugDraw == Camera.DebugDraw.Off))
                 Cam.debugDraw = Camera.DebugDraw.Off;
@@ -158,15 +153,29 @@ public class ViewportWindow : EditorWindow
                 Cam.debugDraw = Camera.DebugDraw.Velocity;
             ImGui.EndCombo();
         }
-        X += 88; ImGui.SameLine(X);
+        GUIHelper.Tooltip("Debug Visualization: " + Cam.debugDraw.ToString());
+
+        ImGui.SetCursorPos(cStart + new Vector2(5 + (123), 5));
         if (ImGui.Button($"{FontAwesome6.TableCells}"))
             DrawGrid = !DrawGrid;
+        GUIHelper.Tooltip("Show Grid: " + DrawGrid.ToString());
 
+        ImGui.SetCursorPos(cStart + new Vector2(5 + (151), 5));
+        if (ImGui.Button($"{FontAwesome6.Camera}"))
+            Selection.Select(Cam.GameObject);
+        GUIHelper.Tooltip("Viewport Camera Settings");
+
+        ImGui.SetCursorPos(cStart + new Vector2(5, 22));
+        ImGui.Text("FPS: " + (1.0f / (float)Time.deltaTimeF).ToString("0.00"));
 
         // Show ViewManipulation at the end
-        view = Matrix4x4.Transpose(view);
-        ImGuizmo.ViewManipulate(ref view.M11, 10, new Vector2(ImGui.GetWindowPos().X + windowSize.X - 75, ImGui.GetWindowPos().Y + 15), new Vector2(75, 75), 0x10101010);
-        // TODO: Allow Setting the View Matrix
+        view *= Matrix4x4.CreateScale(1, -1, 1);
+        ImGuizmo.ViewManipulate(ref view, 10, new Vector2(ImGui.GetWindowPos().X + windowSize.X - 75, ImGui.GetWindowPos().Y + 15), new Vector2(75, 75), 0x10101010);
+        //view *= Matrix4x4.CreateScale(1, -1, 1); // invert back
+        //var newPosition = view.Translation;
+        //var newRotation = Quaternion.CreateFromRotationMatrix(viewYInverted);
+        //Cam.GameObject.GlobalPosition = newPosition;
+        //Cam.GameObject.GlobalOrientation = newRotation;
     }
 
     protected override void Update()
