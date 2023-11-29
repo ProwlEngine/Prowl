@@ -64,6 +64,16 @@ public class SpotLight : MonoBehaviour
             Graphics.DrawMeshNow(mesh, mat, lightMat);
             lightMat.EndPass();
             //Camera.Current.Start3D();
+
+
+            var r = Matrix4x4.CreateFromQuaternion(GameObject.GlobalOrientation);
+            var t = Matrix4x4.CreateTranslation(GameObject.GlobalPosition);
+            Gizmos.Matrix = r * t;
+            Gizmos.Spotlight(distance, (1.0f - angle) * 5f, Color.yellow, 2f);
+            var b = Color.blue;
+            b.a = 0.4f;
+            Gizmos.Spotlight(distance, (1.0f - falloff) * 5f, b, 2f);
+            Gizmos.Matrix = Matrix4x4.Identity;
         }
     }
 }
