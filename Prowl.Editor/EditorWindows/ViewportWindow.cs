@@ -5,6 +5,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.Components;
 using Prowl.Runtime.Components.ImageEffects;
 using Prowl.Runtime.Resources;
+using System.Diagnostics;
 using System.Numerics;
 using static System.Net.Mime.MediaTypeNames;
 
@@ -81,6 +82,7 @@ public class ViewportWindow : EditorWindow
 
     ImGuizmoOperation manipulateOp = ImGuizmoOperation.Translate;
 
+    
     private void DrawViewport()
     {
         if (!Project.HasProject) return;
@@ -105,6 +107,13 @@ public class ViewportWindow : EditorWindow
         ImGuizmo.Enable(true);
         ImGuizmo.SetOrthographic(false);
         ImGuizmo.SetRect(ImGui.GetWindowPos().X, ImGui.GetWindowPos().Y, windowSize.X, windowSize.Y);
+
+        Matrix4x4 mvp = Cam.GameObject.View;
+        mvp *= Cam.GetProjectionMatrix(windowSize.X, windowSize.Y);
+        var drawList = ImGui.GetWindowDrawList();
+        Runtime.Gizmos.Render(drawList, mvp);
+
+        Prowl.Runtime.Gizmos.Clear();
 
         var view = Cam.GameObject.View;
         var projectionM11 = Cam.GetProjectionMatrix(windowSize.X, windowSize.Y);

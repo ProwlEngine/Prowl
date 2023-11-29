@@ -172,8 +172,6 @@ public class Camera : MonoBehaviour
         else if (debugDraw == DebugDraw.Velocity)
             DrawFullScreenTexture(gBuffer.Velocity);
 
-        Prowl.Runtime.Draw.Render(this);                // Gizmos/Debug Draw
-
         Target?.End();
 
         Current = null;
