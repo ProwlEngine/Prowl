@@ -75,183 +75,112 @@ namespace Prowl.Runtime
         public abstract void Render(ImDrawListPtr drawList, Matrix4x4 mvp, Matrix4x4 worldMatrix);
     }
 
-    public class LineGizmo : Gizmo
+    public class LineGizmo(Vector3 start, Vector3 end, float thickness, Vector4 color) : Gizmo
     {
-        public Vector3 Start;
-        public Vector3 End;
-        public float Thickness;
-        public Vector4 Color;
-
-        public LineGizmo(Vector3 start, Vector3 end, float thickness, Vector4 color)
-        {
-            Start = start;
-            End = end;
-            Thickness = thickness;
-            Color = color;
-        }
-
         public override void Render(ImDrawListPtr drawList, Matrix4x4 mvp, Matrix4x4 m)
         {
             base.matrix = m;
             base.mvp = mvp;
-            drawList.AddLine(Pos(Start), Pos(End), ImGui.GetColorU32(Color), Thickness);
+            drawList.AddLine(Pos(start), Pos(end), ImGui.GetColorU32(color), thickness);
         }
     }
 
-    public class CircleGizmo : Gizmo
+    public class CircleGizmo(Vector3 center, float radius, Vector4 color, float thickness = 1f) : Gizmo
     {
-        public Vector3 Center;
-        public float Radius;
-        public Vector4 Color;
-        public float Thickness;
-
-        public CircleGizmo(Vector3 center, float radiusInPixels, Vector4 color, float thickness = 1f)
-        {
-            Center = center;
-            Radius = radiusInPixels;
-            Color = color;
-            Thickness = thickness;
-        }
-
         public override void Render(ImDrawListPtr drawList, Matrix4x4 mvp, Matrix4x4 m)
         {
             base.matrix = m;
             base.mvp = mvp;
-            drawList.AddCircle(Pos(Center), Radius, ImGui.GetColorU32(Color), Thickness); 
+            drawList.AddCircle(Pos(center), radius, ImGui.GetColorU32(color), thickness); 
         }
     }
 
-    public class CircleFilledGizmo(Vector3 center, float radiusInPixels, Vector4 color) : Gizmo
+    public class CircleFilledGizmo(Vector3 center, float radius, Vector4 color) : Gizmo
     {
-        public Vector3 Center = center;
-        public float Radius = radiusInPixels;
-        public Vector4 Color = color;
-
         public override void Render(ImDrawListPtr drawList, Matrix4x4 mvp, Matrix4x4 m)
         {
             base.matrix = m;
             base.mvp = mvp;
-            drawList.AddCircleFilled(Pos(Center), Radius, ImGui.GetColorU32(Color));
+            drawList.AddCircleFilled(Pos(center), radius, ImGui.GetColorU32(color));
         }
     }
 
     public class TextGizmo(Vector3 position, string text, Vector4 color) : Gizmo
     {
-        public Vector3 Position = position;
-        public string Text = text;
-        public Vector4 Color = color;
-
         public override void Render(ImDrawListPtr drawList, Matrix4x4 mvp, Matrix4x4 m)
         {
             base.matrix = m;
             base.mvp = mvp;
-            drawList.AddText(Pos(Position), ImGui.GetColorU32(Color), Text);
+            drawList.AddText(Pos(position), ImGui.GetColorU32(color), text);
         }
     }
 
     public class TriangleGizmo(Vector3 pointA, Vector3 pointB, Vector3 pointC, Vector4 color, float thickness = 1f) : Gizmo
     {
-        public Vector3 PointA = pointA;
-        public Vector3 PointB = pointB;
-        public Vector3 PointC = pointC;
-        public Vector4 Color = color;
-        public float Thickness = thickness;
-
         public override void Render(ImDrawListPtr drawList, Matrix4x4 mvp, Matrix4x4 m)
         {
             base.matrix = m;
             base.mvp = mvp;
-            drawList.AddTriangle(Pos(PointA), Pos(PointB), Pos(PointC), ImGui.GetColorU32(Color), Thickness);
+            drawList.AddTriangle(Pos(pointA), Pos(pointB), Pos(pointC), ImGui.GetColorU32(color), thickness);
         }
     }
 
     public class TriangleFilledGizmo(Vector3 pointA, Vector3 pointB, Vector3 pointC, Vector4 color) : Gizmo
     {
-        public Vector3 PointA = pointA;
-        public Vector3 PointB = pointB;
-        public Vector3 PointC = pointC;
-        public Vector4 Color = color;
-
         public override void Render(ImDrawListPtr drawList, Matrix4x4 mvp, Matrix4x4 m)
         {
             base.matrix = m;
             base.mvp = mvp;
-            drawList.AddTriangleFilled(Pos(PointA), Pos(PointB), Pos(PointC), ImGui.GetColorU32(Color));
+            drawList.AddTriangleFilled(Pos(pointA), Pos(pointB), Pos(pointC), ImGui.GetColorU32(color));
         }
     }
 
     public class QuadGizmo(Vector3 pointA, Vector3 pointB, Vector3 pointC, Vector3 pointD, Vector4 color, float thickness = 1f) : Gizmo
     {
-        public Vector3 PointA = pointA;
-        public Vector3 PointB = pointB;
-        public Vector3 PointC = pointC;
-        public Vector3 PointD = pointD;
-        public Vector4 Color = color;
-        public float Thickness = thickness;
-
         public override void Render(ImDrawListPtr drawList, Matrix4x4 mvp, Matrix4x4 m)
         {
             base.matrix = m;
             base.mvp = mvp;
-            drawList.AddQuad(Pos(PointA), Pos(PointB), Pos(PointC), Pos(PointD), ImGui.GetColorU32(Color), Thickness);
+            drawList.AddQuad(Pos(pointA), Pos(pointB), Pos(pointC), Pos(pointD), ImGui.GetColorU32(color), thickness);
         }
     }
 
     public class QuadFilledGizmo(Vector3 pointA, Vector3 pointB, Vector3 pointC, Vector3 pointD, Vector4 color) : Gizmo
     {
-        public Vector3 PointA = pointA;
-        public Vector3 PointB = pointB;
-        public Vector3 PointC = pointC;
-        public Vector3 PointD = pointD;
-        public Vector4 Color = color;
-
         public override void Render(ImDrawListPtr drawList, Matrix4x4 mvp, Matrix4x4 m)
         {
             base.matrix = m;
             base.mvp = mvp;
-            drawList.AddQuadFilled(Pos(PointA), Pos(PointB), Pos(PointC), Pos(PointD), ImGui.GetColorU32(Color));
+            drawList.AddQuadFilled(Pos(pointA), Pos(pointB), Pos(pointC), Pos(pointD), ImGui.GetColorU32(color));
         }
     }
 
     public class PolygonGizmo(Vector3[] points, Vector4 color, bool closed = false, float thickness = 1f) : Gizmo
     {
-        public Vector3[] Points = points;
-        public Vector4 Color = color;
-        public bool Closed = closed;
-        public float Thickness = thickness;
-
         public override void Render(ImDrawListPtr drawList, Matrix4x4 mvp, Matrix4x4 m)
         {
             base.matrix = m;
             base.mvp = mvp;
-            var points = new Vector2[Points.Length];
-            for (int i = 0; i < Points.Length; i++)
-                points[i] = Pos(Points[i]);
-            drawList.AddPolyline(ref points[0], Points.Length, ImGui.GetColorU32(Color), Closed ? ImDrawFlags.Closed : ImDrawFlags.None, Thickness);
+            var p = new Vector2[points.Length];
+            for (int i = 0; i < points.Length; i++)
+                p[i] = Pos(points[i]);
+            drawList.AddPolyline(ref p[0], p.Length, ImGui.GetColorU32(color), closed ? ImDrawFlags.Closed : ImDrawFlags.None, thickness);
         }
     }
 
     public class ImageGizmo(Vector3 position, Vector2 size, Texture2D texture, Vector4 color) : Gizmo
     {
-        public Vector3 Position = position;
-        public Vector2 Size = size;
-        public Texture2D Texture = texture;
-        public Vector4 Color = color;
-
         public override void Render(ImDrawListPtr drawList, Matrix4x4 mvp, Matrix4x4 m)
         {
             base.matrix = m;
             base.mvp = mvp;
-            drawList.AddImage(new ImTextureID((nint)Texture.InternalTexture.id), Pos(Position), Pos(Position + new Vector3(Size.X, Size.Y, 0f)), Vector2.Zero, Vector2.One, ImGui.GetColorU32(Color));
+            drawList.AddImage(new ImTextureID((nint)texture.InternalTexture.id), Pos(position), Pos(position + new Vector3(size.X, size.Y, 0f)), Vector2.Zero, Vector2.One, ImGui.GetColorU32(color));
         }
     }
 
 
     public class Circle3DGizmo(Vector4 color, float thickness = 1f) : Gizmo
     {
-        public Vector4 Color = color;
-        public float Thickness = thickness;
-
         public override void Render(ImDrawListPtr drawList, Matrix4x4 mvp, Matrix4x4 m)
         {
             base.matrix = m;
@@ -267,16 +196,13 @@ namespace Prowl.Runtime
                 Vector3 point1 = new Vector3(MathF.Cos(angle), MathF.Sin(angle), 0f);
                 Vector3 point2 = new Vector3(MathF.Cos(angle2), MathF.Sin(angle2), 0f);
 
-                drawList.AddLine(Pos(point1), Pos(point2), ImGui.GetColorU32(Color), 1.0f);
+                drawList.AddLine(Pos(point1), Pos(point2), ImGui.GetColorU32(color), thickness);
             }
         }
     }
 
     public class DirectionalLightGizmo(Vector4 color, float thickness = 1f) : Gizmo
     {
-        public Vector4 Color = color;
-        public float Thickness = thickness;
-
         public override void Render(ImDrawListPtr drawList, Matrix4x4 mvp, Matrix4x4 m)
         {
             base.matrix = m;
@@ -292,38 +218,30 @@ namespace Prowl.Runtime
                 Vector3 point1 = new Vector3(MathF.Cos(angle), MathF.Sin(angle), 0f);
                 Vector3 point2 = new Vector3(MathF.Cos(angle2), MathF.Sin(angle2), 0f);
 
-                drawList.AddLine(Pos(point1), Pos(point1 + Vector3.UnitZ), ImGui.GetColorU32(Color), 1.0f);
-                drawList.AddLine(Pos(point1), Pos(point2), ImGui.GetColorU32(Color), 1.0f);
+                drawList.AddLine(Pos(point1), Pos(point1 + Vector3.UnitZ), ImGui.GetColorU32(color), thickness);
+                drawList.AddLine(Pos(point1), Pos(point2), ImGui.GetColorU32(color), thickness);
             }
         }
     }
 
     public class SphereGizmo(Vector4 color, float thickness = 1f) : Gizmo
     {
-        public Vector4 Color = color;
-        public float Thickness = thickness;
-
         public override void Render(ImDrawListPtr drawList, Matrix4x4 mvp, Matrix4x4 m)
         {
             base.matrix = m;
             base.mvp = mvp;
 
             // Use 3 Circle3D gizmo's
-            new Circle3DGizmo(Color, Thickness).Render(drawList, mvp, m);
+            new Circle3DGizmo(color, thickness).Render(drawList, mvp, m);
             m = Matrix4x4.CreateRotationX(MathF.PI / 2f) * m;
-            new Circle3DGizmo(Color, Thickness).Render(drawList, mvp, m);
+            new Circle3DGizmo(color, thickness).Render(drawList, mvp, m);
             m = Matrix4x4.CreateRotationY(MathF.PI / 2f) * m;
-            new Circle3DGizmo(Color, Thickness).Render(drawList, mvp, m);
+            new Circle3DGizmo(color, thickness).Render(drawList, mvp, m);
         }
     }
 
     public class SpotlightGizmo(float distance, float angle, Vector4 color, float thickness = 1f) : Gizmo
     {
-        public float Distance = distance;
-        public float Angle = angle;
-        public Vector4 Color = color;
-        public float Thickness = thickness;
-
         public override void Render(ImDrawListPtr drawList, Matrix4x4 mvp, Matrix4x4 m)
         {
             base.matrix = m;
@@ -331,24 +249,24 @@ namespace Prowl.Runtime
 
             // Calculate the cone vertices
             //Vector3 coneTip = Vector3.UnitZ * Distance;
-            Vector3 coneBaseLeft = Vector3.Transform(Vector3.UnitZ * distance, Matrix4x4.CreateRotationY(-(Angle / 2)));
-            Vector3 coneBaseRight = Vector3.Transform(Vector3.UnitZ * distance, Matrix4x4.CreateRotationY((Angle / 2)));
-            Vector3 coneBaseTop = Vector3.Transform(Vector3.UnitZ * distance, Matrix4x4.CreateRotationX(-(Angle / 2)));
-            Vector3 coneBaseBottom = Vector3.Transform(Vector3.UnitZ * distance, Matrix4x4.CreateRotationX((Angle / 2)));
-            float coneBaseRadius = MathF.Tan(Angle / 2) * Distance;
-            float coneBaseDistance = MathF.Sqrt((coneBaseRadius * coneBaseRadius) + (Distance * Distance));
+            Vector3 coneBaseLeft = Vector3.Transform(Vector3.UnitZ * distance, Matrix4x4.CreateRotationY(-(angle / 2)));
+            Vector3 coneBaseRight = Vector3.Transform(Vector3.UnitZ * distance, Matrix4x4.CreateRotationY((angle / 2)));
+            Vector3 coneBaseTop = Vector3.Transform(Vector3.UnitZ * distance, Matrix4x4.CreateRotationX(-(angle / 2)));
+            Vector3 coneBaseBottom = Vector3.Transform(Vector3.UnitZ * distance, Matrix4x4.CreateRotationX((angle / 2)));
+            float coneBaseRadius = MathF.Tan(angle / 2) * distance;
+            float coneBaseDistance = MathF.Sqrt((coneBaseRadius * coneBaseRadius) + (distance * distance));
 
             // Draw cone lines
-            //drawList.AddLine(Pos(Vector3.Zero), Pos(coneTip), ImGui.GetColorU32(Color), 1.0f);
-            drawList.AddLine(Pos(Vector3.Zero), Pos(coneBaseLeft), ImGui.GetColorU32(Color), 1.0f);
-            drawList.AddLine(Pos(Vector3.Zero), Pos(coneBaseRight), ImGui.GetColorU32(Color), 1.0f);
-            drawList.AddLine(Pos(Vector3.Zero), Pos(coneBaseTop), ImGui.GetColorU32(Color), 1.0f);
-            drawList.AddLine(Pos(Vector3.Zero), Pos(coneBaseBottom), ImGui.GetColorU32(Color), 1.0f);
+            //drawList.AddLine(Pos(Vector3.Zero), Pos(coneTip), ImGui.GetColorU32(Color), thickness);
+            drawList.AddLine(Pos(Vector3.Zero), Pos(coneBaseLeft), ImGui.GetColorU32(color), thickness);
+            drawList.AddLine(Pos(Vector3.Zero), Pos(coneBaseRight), ImGui.GetColorU32(color), thickness);
+            drawList.AddLine(Pos(Vector3.Zero), Pos(coneBaseTop), ImGui.GetColorU32(color), thickness);
+            drawList.AddLine(Pos(Vector3.Zero), Pos(coneBaseBottom), ImGui.GetColorU32(color), thickness);
 
             // Use 3 Circle3D gizmo's
             m = Matrix4x4.CreateTranslation(Vector3.UnitZ * coneBaseDistance) * m;
             m = Matrix4x4.CreateScale(coneBaseRadius) * m;
-            new Circle3DGizmo(Color, Thickness).Render(drawList, mvp, m);
+            new Circle3DGizmo(color, thickness).Render(drawList, mvp, m);
         }
     }
 
