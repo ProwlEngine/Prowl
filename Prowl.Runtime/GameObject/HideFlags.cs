@@ -13,6 +13,7 @@ namespace Prowl.Runtime
         Hide = 1 << 0,
         NotEditable = 1 << 1,
         DontSave = 1 << 2,
-        HideAndDontSave = 1 << 3
+        HideAndDontSave = 1 << 3,
+        NoGizmos = 1 << 4
     }
 }
