@@ -57,5 +57,11 @@ public class PointLight : MonoBehaviour
             lightMat.EndPass();
             //Camera.Current.Start3D();
         }
+
+        var s = Matrix4x4.CreateScale(radius);
+        var t = Matrix4x4.CreateTranslation(GameObject.GlobalPosition);
+        Gizmos.Matrix = s * t;
+        Gizmos.Sphere(Color.yellow, 2f);
+        Gizmos.Matrix = Matrix4x4.Identity;
     }
 }
