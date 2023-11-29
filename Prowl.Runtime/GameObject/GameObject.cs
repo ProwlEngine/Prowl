@@ -595,9 +595,18 @@ public class GameObject : EngineObject
 
         if (isSelected)
         {
-            var goMatrix = Local;
-            if (ImGuizmo.Manipulate(ref view.M11, ref projection.M11, GameObjectManager.GizmosOperation, ImGuizmoMode.Local, ref goMatrix.M11))
-                Local = goMatrix;
+            if (GameObjectManager.GizmosSpace == ImGuizmoMode.Local)
+            {
+                var goMatrix = Local;
+                if (ImGuizmo.Manipulate(ref view.M11, ref projection.M11, GameObjectManager.GizmosOperation, ImGuizmoMode.Local, ref goMatrix.M11))
+                    Local = goMatrix;
+            }
+            else
+            {
+                var goMatrix = Global;
+                if (ImGuizmo.Manipulate(ref view.M11, ref projection.M11, GameObjectManager.GizmosOperation, ImGuizmoMode.World, ref goMatrix.M11))
+                    global = goMatrix;
+            }
         }
 
         foreach (var component in _components)
