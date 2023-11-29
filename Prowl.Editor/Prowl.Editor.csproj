@@ -44,6 +44,7 @@
       <None Remove="EmbeddedResources\GameObjectIcon.png" />
       <None Remove="EmbeddedResources\HierarchyIcon.png" />
       <None Remove="EmbeddedResources\ModelIcon.png" />
+      <None Remove="EmbeddedResources\NewScript.txt" />
       <None Remove="EmbeddedResources\ShaderIcon.png" />
       <None Remove="font.ttf" />
     </ItemGroup>
@@ -100,6 +101,7 @@
       <EmbeddedResource Include="EmbeddedResources\GameObjectIcon.png" />
       <EmbeddedResource Include="EmbeddedResources\HierarchyIcon.png" />
       <EmbeddedResource Include="EmbeddedResources\ModelIcon.png" />
+      <EmbeddedResource Include="EmbeddedResources\NewScript.txt" />
       <EmbeddedResource Include="EmbeddedResources\ShaderIcon.png" />
     </ItemGroup>
 

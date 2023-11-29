@@ -1,0 +1,14 @@
+﻿using Prowl.Runtime;
+
+public class NewScript : MonoBehaviour
+{
+	public void Start()
+	{
+		Debug.Log("Start");
+	}
+
+	public void Update()
+	{
+		Debug.Log("Update");
+	}
+}
