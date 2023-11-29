@@ -5,8 +5,10 @@ using Prowl.Runtime;
 using Prowl.Runtime.Assets;
 using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.Resources;
+using System.Diagnostics;
 using System.Numerics;
 using System.Reflection;
+using Debug = Prowl.Runtime.Debug;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -352,7 +354,13 @@ public class AssetBrowserWindow : EditorWindow {
                     if (ImGui.MenuItem("Refresh All"))
                         AssetDatabase.RefreshAll();
                     ImGui.Separator();
-                    ImGui.MenuItem("Show In Explorer");
+                    if(ImGui.MenuItem("Show In Explorer"))
+                    {
+                        using Process fileopener = new Process();
+                        fileopener.StartInfo.FileName = "explorer";
+                        fileopener.StartInfo.Arguments = "\"" + new DirectoryInfo(entryPath).Parent!.FullName + "\"";
+                        fileopener.Start();
+                    }
 
 
                     ImGui.EndPopup();
@@ -370,7 +378,13 @@ public class AssetBrowserWindow : EditorWindow {
                     if (ImGui.MenuItem("Reimport All"))
                         AssetDatabase.ReimportAll();
                     ImGui.Separator();
-                    ImGui.MenuItem("Show In Explorer");
+                    if(ImGui.MenuItem("Show In Explorer"))
+                    {
+                        using Process fileopener = new Process();
+                        fileopener.StartInfo.FileName = "explorer";
+                        fileopener.StartInfo.Arguments = "\"" + new FileInfo(entryPath).Directory!.FullName + "\"";
+                        fileopener.Start();
+                    }
 
 
                     ImGui.EndPopup();
