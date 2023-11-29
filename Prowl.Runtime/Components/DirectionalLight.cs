@@ -72,7 +72,12 @@ public class DirectionalLight : MonoBehaviour
             Graphics.Blit(lightMat);
         }
 
-        Prowl.Runtime.Draw.Line(GameObject.GlobalPosition, GameObject.GlobalPosition + GameObject.Forward, Color.yellow);
+        var s = Matrix4x4.CreateScale(0.5f);
+        var r = Matrix4x4.CreateFromQuaternion(GameObject.GlobalOrientation);
+        var t = Matrix4x4.CreateTranslation(GameObject.GlobalPosition);
+        Gizmos.Matrix = s * r * t;
+        Gizmos.DirectionalLight(Color.yellow, 2f);
+        Gizmos.Matrix = Matrix4x4.Identity;
     }
 
     public void UpdateShadowmap()
