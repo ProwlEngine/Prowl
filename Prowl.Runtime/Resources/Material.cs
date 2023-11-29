@@ -158,10 +158,10 @@ namespace Prowl.Runtime.Resources
 
         // Key is Shader.GUID + "-" + keywords + "-" + Shader.globalKeywords
         static Dictionary<string, (Raylib_cs.Shader[], Raylib_cs.Shader)> passVariants = new();
-        string keywords = "";
+        HashSet<string> keywords = new();
         internal static Raylib_cs.Shader? current;
 
-        public int PassCount => Shader.IsAvailable ? CompileKeywordVariant(keywords.Split(';')).Item1.Length : 0;
+        public int PassCount => Shader.IsAvailable ? CompileKeywordVariant(keywords.ToArray()).Item1.Length : 0;
 
         public Material()
         {
@@ -178,7 +178,7 @@ namespace Prowl.Runtime.Resources
         [OnDeserialized]
         public void OnDeserialized(StreamingContext context)
         {
-            if(Shader.IsAvailable) CompileKeywordVariant(keywords.Split(';'));
+            if(Shader.IsAvailable) CompileKeywordVariant(keywords.ToArray());
         }
 
         public void EnableKeyword(string keyword)
@@ -186,7 +186,7 @@ namespace Prowl.Runtime.Resources
             string? key = keyword?.ToUpper().Replace(" ", "").Replace(";", "");
             if (string.IsNullOrWhiteSpace(key)) return;
             if (keywords.Contains(key)) return;
-            keywords += key + ";";
+            keywords.Add(key);
             PropertyBlock.ClearCache();
         }
 
@@ -195,7 +195,7 @@ namespace Prowl.Runtime.Resources
             string? key = keyword?.ToUpper().Replace(" ", "").Replace(";", "");
             if (string.IsNullOrWhiteSpace(key)) return;
             if (!keywords.Contains(key)) return;
-            keywords = keywords.Replace(key + ";", "");
+            keywords.Remove(key);
             PropertyBlock.ClearCache();
         }
 
@@ -206,7 +206,7 @@ namespace Prowl.Runtime.Resources
             if (Shader.IsAvailable == false) return;
             if (current != null) throw new Exception("Pass already set");
             // Make sure we have a shader
-            var shader = CompileKeywordVariant(keywords.Split(';'));
+            var shader = CompileKeywordVariant(keywords.ToArray());
 
             // Make sure we have a valid pass
             if (pass < 0 || pass >= shader.Item1.Length) return;
@@ -224,7 +224,7 @@ namespace Prowl.Runtime.Resources
             if (Shader.IsAvailable == false) return;
             if (current != null) throw new Exception("Pass already set");
             // Make sure we have a shader
-            var shader = CompileKeywordVariant(keywords.Split(';'));
+            var shader = CompileKeywordVariant(keywords.ToArray());
 
             // Set the shader
             current = shader.Item2;
@@ -246,13 +246,14 @@ namespace Prowl.Runtime.Resources
             if (Shader.IsAvailable == false) throw new Exception("Cannot compile without a valid shader assigned");
             passVariants ??= new();
 
+            string keywords = string.Join("-", allKeywords);
             string key = Shader.AssetID.ToString() + "-" + keywords + "-" + Resources.Shader.globalKeywords;
             if (passVariants.TryGetValue(key, out var s)) return s;
 
             PropertyBlock.ClearCache();
 
             // Add each global togather making sure to not add duplicates
-            string[] globals = Resources.Shader.globalKeywords.Split(';');
+            string[] globals = Resources.Shader.globalKeywords.ToArray();
             for (int i = 0; i < globals.Length; i++)
             {
                 if (string.IsNullOrWhiteSpace(globals[i])) continue;

@@ -31,20 +31,20 @@ namespace Prowl.Runtime.Resources
             public string Fragment;
         }
 
-        internal static string globalKeywords = "";
+        internal static HashSet<string> globalKeywords = new();
 
         public static void EnableKeyword(string keyword)
         {
             keyword = keyword.ToLower().Replace(" ", "").Replace(";", "");
             if (globalKeywords.Contains(keyword)) return;
-            globalKeywords += keyword + ";";
+            globalKeywords.Add(keyword);
         }
 
         public static void DisableKeyword(string keyword)
         {
             keyword = keyword.ToUpper().Replace(" ", "").Replace(";", "");
             if (!globalKeywords.Contains(keyword)) return;
-            globalKeywords = globalKeywords.Replace(keyword + ";", "");
+            globalKeywords.Remove(keyword);
         }
 
         public static bool IsKeywordEnabled(string keyword) => globalKeywords.Contains(keyword.ToLower().Replace(" ", "").Replace(";", ""));
