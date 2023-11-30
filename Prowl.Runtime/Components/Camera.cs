@@ -127,19 +127,19 @@ public class Camera : MonoBehaviour
 
     public void Render(int width, int height)
     {
-        if (width == -1 || height == -1)
+        if (Target.IsAvailable)
         {
-            if (Target.IsAvailable)
-            {
-                width = Target.Res!.Width;
-                height = Target.Res!.Height;
-            }
-            else
-            {
-                width = Rlgl.rlGetFramebufferWidth();
-                height = Rlgl.rlGetFramebufferHeight();
-            }
+            width = Target.Res!.Width;
+            height = Target.Res!.Height;
         }
+        else if (width == -1 || height == -1)
+        {
+            width = Rlgl.rlGetFramebufferWidth();
+            height = Rlgl.rlGetFramebufferHeight();
+        }
+
+        width = (int)(width * RenderResolution);
+        height = (int)(height * RenderResolution);
 
         Rlgl.rlSetBlendMode(BlendMode.BLEND_ADD_COLORS);
         Current = this;
