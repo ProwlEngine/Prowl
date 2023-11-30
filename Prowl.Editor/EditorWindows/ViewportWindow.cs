@@ -7,7 +7,6 @@ using Prowl.Runtime.Components.ImageEffects;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.SceneManagement;
 using System.Numerics;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -70,6 +69,7 @@ public class ViewportWindow : EditorWindow
         // Manually Render to the RenderTexture
         Cam.NearClip = Settings.NearClip;
         Cam.FarClip = Settings.FarClip;
+        Cam.Render((int)windowSize.X, (int)windowSize.Y);
         Settings.RenderResolution = Math.Clamp(Settings.RenderResolution, 0.1f, 8.0f);
         Cam.RenderResolution = Settings.RenderResolution;
 

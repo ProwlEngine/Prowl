@@ -111,8 +111,9 @@ public unsafe class EditorApplication : Application {
 
             OnDrawEditor?.Invoke();
             EditorGui.Update(); 
-            if (Project.HasProject)
-                GameObjectManager.Draw();
+            // Editor doesnt draw the normal way, Rendering is done entirely manually
+            //if (Project.HasProject)
+            //    GameObjectManager.Draw();
             controller.Draw();
 
             Raylib.EndDrawing();

@@ -31,6 +31,7 @@ namespace Prowl.Runtime
             Rlgl.rlEnableTexture(texture.id);
         }
 
+        public static Vector2 Resolution;
         public static Matrix4x4 MatView;
         public static Matrix4x4 MatViewTransposed;
         public static Matrix4x4 MatViewInverse;
@@ -70,7 +71,7 @@ namespace Prowl.Runtime
 
             oldTransform ??= transform;
 
-            material.SetVector("Resolution", new Vector2(Rlgl.rlGetFramebufferWidth(), Rlgl.rlGetFramebufferHeight()));
+            material.SetVector("Resolution", Graphics.Resolution);
             //material.SetFloat("Time", (float)Time.time);
             //material.SetFloat("DeltaTime", Time.deltaTimeF);
             //material.SetInt("RandomSeed", Random.Shared.Next());

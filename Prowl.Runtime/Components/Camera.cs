@@ -32,7 +32,7 @@ public class Camera : MonoBehaviour
     public event Action<GBuffer> PostProcessStagePostCombine;
     public event Action<int, int> Resize;
 
-    public RenderTexture Target;
+    public AssetRef<RenderTexture> Target;
 
     public GBuffer gBuffer { get; private set; }
     Resources.Material CombineShader;
@@ -51,7 +51,7 @@ public class Camera : MonoBehaviour
 
     private Vector2 GetRenderTargetSize()
     {
-        if (Target != null) return new Vector2(Target.Width, Target.Height);
+        if (Target.IsAvailable) return new Vector2(Target.Res!.Width, Target.Res!.Height);
         return new Vector2(Raylib.GetScreenWidth(), Raylib.GetScreenHeight());
     }
 
@@ -122,14 +122,32 @@ public class Camera : MonoBehaviour
         gBuffer.EndCombine();
     }
 
-    public void Render()
+    Matrix4x4? oldView = null;
+    Matrix4x4? oldProjection = null;
+
+    public void Render(int width, int height)
     {
+        if (width == -1 || height == -1)
+        {
+            if (Target.IsAvailable)
+            {
+                width = Target.Res!.Width;
+                height = Target.Res!.Height;
+            }
+            else
+            {
+                width = Rlgl.rlGetFramebufferWidth();
+                height = Rlgl.rlGetFramebufferHeight();
+            }
+        }
+
         Rlgl.rlSetBlendMode(BlendMode.BLEND_ADD_COLORS);
         Current = this;
-        Graphics.OldMatView = Graphics.MatView;
-        Graphics.OldMatProjection = Graphics.MatProjection;
+        Graphics.Resolution = new Vector2(width, height);
         Graphics.MatView = Camera.Current.GameObject.View;
-        Graphics.MatProjection = Camera.Current.GetProjectionMatrix(Rlgl.rlGetFramebufferWidth(), Rlgl.rlGetFramebufferHeight());
+        Graphics.MatProjection = Camera.Current.GetProjectionMatrix(width, height);
+        Graphics.OldMatView = oldView ?? Graphics.MatView;
+        Graphics.OldMatProjection = oldProjection ?? Graphics.MatProjection;
 
         Graphics.OldMatViewTransposed = Matrix4x4.Transpose(Graphics.OldMatView);
         Graphics.OldMatProjectionTransposed = Matrix4x4.Transpose(Graphics.OldMatProjection);
@@ -142,6 +160,7 @@ public class Camera : MonoBehaviour
 
         OpaquePass();
 
+#warning TODO: Smarter Shadowmap Updating, updating every frame for every camera is stupid
         Graphics.UpdateAllShadowmaps();
 
         LightingPass();
@@ -154,7 +173,7 @@ public class Camera : MonoBehaviour
         PostProcessStagePostCombine?.Invoke(gBuffer);
 
         // Draw to Screen
-        Target?.Begin();
+        Target.Res?.Begin();
         if (DoClear) Raylib.ClearBackground(ClearColor);
 
         if(debugDraw == DebugDraw.Off)
@@ -172,10 +191,13 @@ public class Camera : MonoBehaviour
         else if (debugDraw == DebugDraw.Velocity)
             DrawFullScreenTexture(gBuffer.Velocity);
 
-        Target?.End();
+        Target.Res?.End();
 
         Current = null;
         Rlgl.rlSetBlendMode(BlendMode.BLEND_ALPHA);
+
+        oldView = Graphics.MatView;
+        oldProjection = Graphics.MatProjection;
     }
 
 }

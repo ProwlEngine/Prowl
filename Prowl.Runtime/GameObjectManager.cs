@@ -130,7 +130,7 @@ public static class GameObjectManager
         Cameras.Sort((a, b) => a.RenderOrder.CompareTo(b.DrawOrder));
         foreach (var cam in Cameras) 
             if(cam.EnabledInHierarchy)
-                cam.Render();
+                cam.Render(-1, -1);
     }
     
 }

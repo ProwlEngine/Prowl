@@ -238,7 +238,8 @@ public class AssetBrowserWindow : EditorWindow {
             var lineColor = AssetsWindow.GetFileColor(file.Extension.ToLower().Trim());
             var pos = ImGui.GetCursorScreenPos();
             drawList.AddLine(new(0, pos.Y), new(pos.X + thumbnailSize, pos.Y + 1f), lineColor, 3f);
-            ImGui.TextUnformatted(Settings.m_HideExtensions ? Path.GetFileNameWithoutExtension(entry.FullName) : Path.GetFileName(entry.FullName));
+            ImGui.TextUnformatted(Settings.m_HideExtensions ? Path.GetFileNameWithoutExtension(entry.FullName) : Path.GetFileName(entry.FullName));        
+            
         }
         else
             ImGui.TextUnformatted(entry.Name);
