@@ -19,6 +19,7 @@ public static class EditorGui {
         new EditorMainMenubar();
         new HierarchyWindow();
         new ViewportWindow();
+        new GameWindow();
         new InspectorWindow();
         new ConsoleWindow();
         new AssetBrowserWindow();
