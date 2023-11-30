@@ -112,6 +112,8 @@ namespace Prowl.Runtime.Assets
 
             static void OnChangedOrRenamed(object sender, FileSystemEventArgs e)
             {
+                if (!File.Exists(e.FullPath)) return;
+
                 string ext = Path.GetExtension(e.FullPath);
                 if (!ext.Equals(".meta", StringComparison.OrdinalIgnoreCase))
                 {
