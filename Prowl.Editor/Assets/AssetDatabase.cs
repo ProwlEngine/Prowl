@@ -70,6 +70,14 @@ namespace Prowl.Runtime.Assets
             }
         }
 
+        public class AssetDatabaseSettings : IProjectSetting
+        {
+            [Tooltip("Auto recompile all scripts when a change is detected.")]
+            public bool m_AutoRecompile = true;
+        }
+
+        public static AssetDatabaseSettings Settings => Project.ProjectSettings.GetSetting<AssetDatabaseSettings>();
+
         static readonly List<DirectoryInfo> rootFolders = new();
         static readonly List<FileSystemWatcher> rootWatchers = new();
 
@@ -117,6 +125,12 @@ namespace Prowl.Runtime.Assets
                 string ext = Path.GetExtension(e.FullPath);
                 if (!ext.Equals(".meta", StringComparison.OrdinalIgnoreCase))
                 {
+                    if (ext.Equals(".cs", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (Settings.m_AutoRecompile)
+                            EditorApplication.Instance.RegisterReloadOfExternalAssemblies();
+                    }
+
                     if ((File.GetAttributes(e.FullPath) & FileAttributes.Directory) == FileAttributes.Directory)
                         Refresh(new DirectoryInfo(e.FullPath));
                     else
@@ -217,7 +231,7 @@ namespace Prowl.Runtime.Assets
         /// <param name="relativeAssetPath"></param>
         public static void OpenAsset(string relativeAssetPath)
         {
-            using Process fileopener = new Process();
+            using Process fileopener = new();
 
             FileInfo info = RelativeToFile(relativeAssetPath);
 

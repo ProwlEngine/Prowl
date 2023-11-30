@@ -37,7 +37,7 @@ public class AssetsWindow : EditorWindow {
             {
                 _found.AddRange(AssetDatabase.GetRootfolders()[1].EnumerateFiles("*", SearchOption.AllDirectories));
                 _found.AddRange(AssetDatabase.GetRootfolders()[0].EnumerateFiles("*", SearchOption.AllDirectories));
-                // Remove Meta's
+                // Remove Meta's & only keep the ones with SearchText inside them
                 _found.RemoveAll(f => f.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase) || !f.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
             }
         }
@@ -91,6 +91,7 @@ public class AssetsWindow : EditorWindow {
         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(250f / 255f, 210f / 255f, 100f / 255f, 1f));
         bool opened = ImGui.TreeNodeEx($"{FontAwesome6.FolderTree} {root.Name}", rootFlags);
         ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(1f, 1f, 1f, 0.2f)));
+        FileRightClick(null);
         ImGui.PopStyleColor();
 
         if (opened)
@@ -150,9 +151,40 @@ public class AssetsWindow : EditorWindow {
         }
     }
 
-    public static void FileRightClick(FileSystemInfo fileInfo)
+    public static void FileRightClick(FileSystemInfo? fileInfo)
     {
-        if (fileInfo is FileInfo file)
+        // Lets fallback to whatever is Selected if fileInfo is null
+        if (fileInfo == null && Selection.Current is string path)
+        {
+            if (File.Exists(path))
+                fileInfo = new FileInfo(path);
+            else if (Directory.Exists(path))
+                fileInfo = new DirectoryInfo(path);
+        }
+
+        // If still null then show a simplified context menu
+        if(fileInfo == null)
+        {
+            if (ImGui.BeginPopupContextItem())
+            {
+                CreateMenu.Directory = null;
+                MenuItem.DrawMenuRoot("Create");
+                if (ImGui.MenuItem("Show In Explorer"))
+                {
+                    using Process fileopener = new Process();
+                    fileopener.StartInfo.FileName = "explorer";
+                    fileopener.StartInfo.Arguments = "\"" + Project.ProjectAssetDirectory + "\"";
+                    fileopener.Start();
+                }
+                ImGui.Separator();
+                if (ImGui.MenuItem("Reimport All"))
+                    AssetDatabase.ReimportAll();
+
+                ImGui.EndPopup();
+            }
+            return;
+        }
+        else if (fileInfo is FileInfo file)
         {
             if (ImGui.BeginPopupContextItem())
             {
@@ -160,7 +192,8 @@ public class AssetsWindow : EditorWindow {
                 if (ImGui.MenuItem("Reimport"))
                     AssetDatabase.Reimport(relativeAssetPath);
                 ImGui.Separator();
-                ImGui.MenuItem("Create");
+                CreateMenu.Directory = file.Directory;
+                MenuItem.DrawMenuRoot("Create");
                 if (ImGui.MenuItem("Show In Explorer"))
                 {
                     using Process fileopener = new Process();
@@ -186,7 +219,8 @@ public class AssetsWindow : EditorWindow {
                 if (ImGui.MenuItem("Reimport"))
                     AssetDatabase.ReimportFolder(directory);
                 ImGui.Separator();
-                ImGui.MenuItem("Create");
+                CreateMenu.Directory = directory;
+                MenuItem.DrawMenuRoot("Create");
                 if (ImGui.MenuItem("Show In Explorer"))
                 {
                     using Process fileopener = new Process();
