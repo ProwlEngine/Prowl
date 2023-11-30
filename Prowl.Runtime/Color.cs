@@ -74,6 +74,14 @@ namespace Prowl.Runtime
             this.a = 1f;
         }
 
+        public Color(byte r, byte g, byte b)
+        {
+            this.r = r / 255f;
+            this.g = g / 255f;
+            this.b = b / 255f;
+            this.a = 1f;
+        }
+
         public static Color Lerp(Color a, Color b, float t)
         {
             t = MathF.Min(MathF.Max(t, 0f), 1f);
