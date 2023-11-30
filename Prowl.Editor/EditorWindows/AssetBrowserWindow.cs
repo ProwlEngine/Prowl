@@ -30,6 +30,7 @@ public class AssetBrowserWindow : EditorWindow {
     public static AssetBrowserSettings Settings => Project.ProjectSettings.GetSetting<AssetBrowserSettings>();
 
     public DirectoryInfo CurDirectory;
+    public bool Locked = false;
 
     private string _searchText = "";
     private readonly List<FileSystemInfo> _found = [];
@@ -78,6 +79,7 @@ public class AssetBrowserWindow : EditorWindow {
 
     private void SelectionChanged(object from, object to)
     {
+        if (Locked) return;
         if (to is not string str) return;
         if (Directory.Exists(str)) CurDirectory = new DirectoryInfo(str);
         else if (File.Exists(str)) CurDirectory = new FileInfo(str).Directory;
@@ -135,13 +137,17 @@ public class AssetBrowserWindow : EditorWindow {
         ImGui.Text(assetPath);
 
         ImGui.SetCursorPosY(cPY);
+        ImGui.SetCursorPosX(windowWidth - rightOffset - sizeSliderSize - padding - 24);
+        if (ImGui.Button(Locked ? FontAwesome6.Lock : FontAwesome6.LockOpen))
+            Locked = !Locked;
+
+        ImGui.SetCursorPosY(cPY);
         ImGui.SetCursorPosX(windowWidth - rightOffset - sizeSliderSize - padding);
         ImGui.SetNextItemWidth(sizeSliderSize);
         ImGui.SliderFloat("##ThumbnailSizeSlider", ref Settings.m_ThumbnailSize, -0.2f, 1.0f);
 
         ImGui.SetCursorPosY(cPY);
         ImGui.SetCursorPosX(windowWidth - rightOffset);
-
         if (ImGui.Button("   " + FontAwesome6.Gears + "   "))
             _ = new ProjectSettingsWindow(Settings);
     }
