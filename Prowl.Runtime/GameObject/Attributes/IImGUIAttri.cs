@@ -1,5 +1,6 @@
 ﻿using HexaEngine.ImGuiNET;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 
 namespace Prowl.Runtime
@@ -43,6 +44,16 @@ namespace Prowl.Runtime
     {
         public void Draw() => ImGui.BeginDisabled();
         public void End() => ImGui.EndDisabled();
+    }
+
+    [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
+    public class HeaderAttribute(string name) : Attribute, IImGUIAttri
+    {
+        public void Draw()
+        {
+            ImGui.CollapsingHeader(name, ImGuiTreeNodeFlags.Leaf);
+        }
+        public void End() { }
     }
 
     [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
