@@ -54,9 +54,12 @@ public class GameWindow : EditorWindow
         else
         {
             // We got a camera to visualize
-            mainCam.Target = RenderTarget;
-            mainCam.Render((int)windowSize.X, (int)windowSize.Y);
-            mainCam.Target = null;
+            if (Time.frameCount % 8 == 0)
+            {
+                mainCam.Target = RenderTarget;
+                mainCam.Render((int)windowSize.X, (int)windowSize.Y);
+                mainCam.Target = null;
+            }
 
             ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].id, ImGui.GetContentRegionAvail(), new Vector2(0, 1), new Vector2(1, 0));
 
