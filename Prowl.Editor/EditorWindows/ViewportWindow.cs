@@ -166,7 +166,7 @@ public class ViewportWindow : EditorWindow
         GUIHelper.Tooltip("Viewport Camera Settings");
 
         ImGui.SetCursorPos(cStart + new Vector2(5, 22));
-        ImGui.Text("FPS: " + (1.0f / (float)Time.deltaTimeF).ToString("0.00"));
+        ImGui.Text("FPS: " + Raylib_cs.Raylib.GetFPS());
 
         // Show ViewManipulation at the end
         view *= Matrix4x4.CreateScale(1, -1, 1);
