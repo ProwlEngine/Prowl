@@ -179,7 +179,6 @@ public unsafe class EditorApplication : Application {
                     ImporterAttribute.ClearLookUp();
                     CustomEditorAttribute.ClearLookUp();
                     MenuItem.ClearMenus();
-                    CreateAssetMenuHandler.ClearMenus();
                     //AssetProvider.ClearLookUp();
                     return true;
                 });
