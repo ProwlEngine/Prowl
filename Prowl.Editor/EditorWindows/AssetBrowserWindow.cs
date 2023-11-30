@@ -80,9 +80,8 @@ public class AssetBrowserWindow : EditorWindow {
     private void SelectionChanged(object from, object to)
     {
         if (Locked) return;
-        if (to is not string str) return;
-        if (Directory.Exists(str)) CurDirectory = new DirectoryInfo(str);
-        else if (File.Exists(str)) CurDirectory = new FileInfo(str).Directory;
+        if (to is DirectoryInfo directory) CurDirectory = directory;
+        else if (to is FileInfo file) CurDirectory = file.Directory;
     }
 
     private void RenderHeader()
@@ -219,7 +218,7 @@ public class AssetBrowserWindow : EditorWindow {
     {
         if (!entry.Exists) return;
 
-        bool isSelected = entry.FullName == Selection.Current as string;
+        bool isSelected = AssetsWindow.IsSelected(entry);
         float thumbnailSize = Math.Min(ThumbnailSize, ImGui.GetContentRegionAvail().X);
         ImGui.BeginGroup();
 
@@ -233,7 +232,7 @@ public class AssetBrowserWindow : EditorWindow {
             if (entry is FileInfo)
             {
                 if (ImGui.IsMouseClicked(0))
-                    Selection.Select(entry.FullName);
+                    Selection.Select(entry);
             }
             else
             {
@@ -242,7 +241,7 @@ public class AssetBrowserWindow : EditorWindow {
                 if (ImGui.IsMouseClicked(0))
                 {
                     var old = CurDirectory;
-                    Selection.Select(entry.FullName);
+                    Selection.Select(entry);
                     CurDirectory = old;
                 }
                 if (ImGui.IsMouseDoubleClicked(0))

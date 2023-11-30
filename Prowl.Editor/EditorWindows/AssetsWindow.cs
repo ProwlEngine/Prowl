@@ -4,6 +4,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.Assets;
 using System.Diagnostics;
 using System.Numerics;
+using static Assimp.Metadata;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -58,14 +59,14 @@ public class AssetsWindow : EditorWindow {
             foreach (var file in _found)
             {
                 ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
-                if (Selection.Current is string && file.FullName == Selection.Current as string) flags |= ImGuiTreeNodeFlags.Selected;
+                if (AssetsWindow.IsSelected(file)) flags |= ImGuiTreeNodeFlags.Selected;
 
                 string ext = file.Extension.ToLower().Trim();
 
                 var curPos = ImGui.GetCursorPos();
                 bool opened = ImGui.TreeNodeEx($"      {Path.GetFileNameWithoutExtension(file.Name)}", flags);
                 if (count++ % 2 == 0) drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
-                if (ImGui.IsItemClicked()) Selection.Select(file.FullName);
+                if (ImGui.IsItemClicked()) Selection.Select(file);
                 GUIHelper.Tooltip(file.Name);
                 ImGui.PushStyleColor(ImGuiCol.Text, GetFileColor(ext));
                 // Display icon behind text
@@ -91,7 +92,7 @@ public class AssetsWindow : EditorWindow {
         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(250f / 255f, 210f / 255f, 100f / 255f, 1f));
         bool opened = ImGui.TreeNodeEx($"{FontAwesome6.FolderTree} {root.Name}", rootFlags);
         ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(1f, 1f, 1f, 0.2f)));
-        if (ImGui.IsItemClicked()) Selection.Select(root.FullName);
+        if (ImGui.IsItemClicked()) Selection.Select(root);
         FileRightClick(null);
         ImGui.PopStyleColor();
 
@@ -112,10 +113,10 @@ public class AssetsWindow : EditorWindow {
             bool isLeaf = subDirectory.GetFiles().Length == 0 && subDirectory.GetDirectories().Length == 0;
             if (isLeaf) flags |= ImGuiTreeNodeFlags.Leaf;
 
-            if (Selection.Current is string && subDirectory.FullName == Selection.Current as string) flags |= ImGuiTreeNodeFlags.Selected;
+            if (AssetsWindow.IsSelected(subDirectory)) flags |= ImGuiTreeNodeFlags.Selected;
 
             bool opened = ImGui.TreeNodeEx($"{(isLeaf ? FontAwesome6.FolderOpen : FontAwesome6.Folder)} {subDirectory.Name}", flags);
-            if (ImGui.IsItemClicked()) Selection.Select(subDirectory.FullName);
+            if (ImGui.IsItemClicked()) Selection.Select(subDirectory);
             FileRightClick(subDirectory);
             GUIHelper.Tooltip(subDirectory.Name);
 
@@ -132,7 +133,7 @@ public class AssetsWindow : EditorWindow {
         foreach (FileInfo file in directory.EnumerateFiles())
         {
             ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
-            if (Selection.Current is string && file.FullName == Selection.Current as string) flags |= ImGuiTreeNodeFlags.Selected;
+            if (AssetsWindow.IsSelected(file)) flags |= ImGuiTreeNodeFlags.Selected;
 
             string ext = file.Extension.ToLower().Trim();
             if (ext.Equals(".meta", StringComparison.OrdinalIgnoreCase)) continue;
@@ -140,7 +141,7 @@ public class AssetsWindow : EditorWindow {
             var curPos = ImGui.GetCursorPos();
             bool opened = ImGui.TreeNodeEx($"      {Path.GetFileNameWithoutExtension(file.Name)}", flags);
             if (count++ % 2 == 0) drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
-            if (ImGui.IsItemClicked()) Selection.Select(file.FullName);
+            if (ImGui.IsItemClicked()) Selection.Select(file);
             FileRightClick(file);
             GUIHelper.Tooltip(file.Name);
             ImGui.PushStyleColor(ImGuiCol.Text, GetFileColor(ext));
@@ -155,12 +156,12 @@ public class AssetsWindow : EditorWindow {
     public static void FileRightClick(FileSystemInfo? fileInfo)
     {
         // Lets fallback to whatever is Selected if fileInfo is null
-        if (fileInfo == null && Selection.Current is string path)
+        if (fileInfo == null && Selection.Current is FileSystemInfo entry)
         {
-            if (File.Exists(path))
-                fileInfo = new FileInfo(path);
-            else if (Directory.Exists(path))
-                fileInfo = new DirectoryInfo(path);
+            if (entry is FileInfo file)
+                fileInfo = file;
+            else if (entry is DirectoryInfo directory)
+                fileInfo = directory;
         }
 
         // If still null then show a simplified context menu
@@ -333,6 +334,12 @@ public class AssetsWindow : EditorWindow {
             default:
                 return FontAwesome6.File;
         }
+    }
+
+    public static bool IsSelected(FileSystemInfo entry)
+    {
+        if (Selection.Current  is not FileSystemInfo selected) return false;
+        return entry.FullName.Equals(selected.FullName, StringComparison.OrdinalIgnoreCase);
     }
 
 }
