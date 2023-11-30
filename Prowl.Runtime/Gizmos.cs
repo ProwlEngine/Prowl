@@ -215,8 +215,8 @@ namespace Prowl.Runtime
                 float angle = (float)i / numSegments * 2f * MathF.PI;
                 float angle2 = (float)(i + 1) / numSegments * 2f * MathF.PI;
 
-                Vector3 point1 = new Vector3(MathF.Cos(angle), MathF.Sin(angle), 0f);
-                Vector3 point2 = new Vector3(MathF.Cos(angle2), MathF.Sin(angle2), 0f);
+                Vector3 point1 = 0.5f * new Vector3(MathF.Cos(angle), MathF.Sin(angle), 0f);
+                Vector3 point2 = 0.5f * new Vector3(MathF.Cos(angle2), MathF.Sin(angle2), 0f);
 
                 drawList.AddLine(Pos(point1), Pos(point1 + Vector3.UnitZ), ImGui.GetColorU32(color), thickness);
                 drawList.AddLine(Pos(point1), Pos(point2), ImGui.GetColorU32(color), thickness);
