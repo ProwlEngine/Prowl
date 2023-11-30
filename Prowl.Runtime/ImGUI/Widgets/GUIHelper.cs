@@ -133,5 +133,10 @@ namespace Prowl.Runtime
                 ImGui.TreePush(label);
             return opened != 0;
         }
+
+        public static void ItemRect(float r, float g, float b, float a)
+        {
+            ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(r, g, b, a)));
+        }
     }
 }
