@@ -1,24 +1,20 @@
 ﻿using HexaEngine.ImGuiNET;
+using Newtonsoft.Json.Linq;
 using Prowl.Editor.EditorWindows;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Utils;
+using System;
 using System.Reflection;
+using static Prowl.Editor.MenuItem;
 
 namespace Prowl.Editor
 {
     public static class CreateAssetMenuHandler
     {
-        public static Dictionary<string, Type> assets = new();
-
-        public static void ClearMenus()
-        {
-            assets.Clear();
-        }
-
-        // Returns the Method and Name for this item
         public static void FindAllMenus()
         {
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            List<(string, Type)> values = new();
             foreach (var assembly in assemblies)
             {
                 Type[] types = null;
@@ -30,29 +26,52 @@ namespace Prowl.Editor
                         {
                             var attribute = type.GetCustomAttribute<CreateAssetMenu>();
                             if (attribute != null)
-                                assets.Add(attribute.Name, type);
+                                values.Add(("Create/" + attribute.Name, type));
                         }
                 }
                 catch { }
             }
-        }
 
-        public static void DrawMenuItems()
-        {
-            foreach (var asset in assets)
+            // values is now a list of all methods with the Menu Paths
+            // We need to sort them into possibly multiple trees
+            Dictionary<string, MenuPath> trees = new();
+            foreach (var value in values)
             {
-                if (ImGui.MenuItem(asset.Key))
+                var path = value.Item1.Split('/');
+                // Root node
+                MenuPath node = new MenuPath(path[0], null);
+                if (trees.ContainsKey(path[0]))
+                    node = trees[path[0]]; // We already have this root, lets start there instead of a new root
+                else
+                    trees.Add(path[0], node); // This root doesnt exist yet, create it
+                // Add the rest of the path
+                for (int i = 1; i < path.Length; i++)
                 {
-                    var obj = Activator.CreateInstance(asset.Value);
-                    FileInfo file = new FileInfo(AssetBrowserWindow.CurrentActiveDirectory + $"/New {asset.Key}.scriptobj");
-                    while (file.Exists)
+                    var child = node.Children.FirstOrDefault(x => x.Path == path[i]);
+                    if (child == null)
                     {
-                        file = new FileInfo(file.FullName.Replace(".scriptobj", "") + " New.scriptobj");
+                        // Only place the Method at the leaf node
+                        child = new MenuPath(path[i], i == path.Length - 1 ? () => { CreateAsset(value.Item2); } : null);
+                        node.Children.Add(child);
                     }
-                    File.WriteAllText(file.FullName, JsonUtility.Serialize(obj, obj.GetType()));
+                    node = child;
                 }
             }
+
+            // Done
+            Menus = trees;
         }
 
+        public static void CreateAsset(Type type)
+        {
+            CreateMenu.Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+            var obj = Activator.CreateInstance(type);
+            FileInfo file = new FileInfo(CreateMenu.Directory + $"/New {type.Name}.scriptobj");
+            while (file.Exists)
+            {
+                file = new FileInfo(file.FullName.Replace(".scriptobj", "") + " New.scriptobj");
+            }
+            File.WriteAllText(file.FullName, JsonUtility.Serialize(obj, obj.GetType()));
+        }
     }
 }

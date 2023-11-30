@@ -130,6 +130,7 @@ public class EditorMainMenubar {
             ImGui.EndMenu();
         }
 
+        CreateMenu.Directory = null;
         MenuItem.DrawMenuRoot("Create");
 
         if (ImGui.BeginMenu("Window")) {

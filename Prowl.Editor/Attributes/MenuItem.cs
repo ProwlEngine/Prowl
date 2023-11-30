@@ -20,7 +20,7 @@ namespace Prowl.Editor
     internal class MenuItem : Attribute
     {
         public string Path { get; }
-        public MenuItem(string path, bool isPopup = false)
+        public MenuItem(string path)
         {
             Path = path;
         }
@@ -28,9 +28,9 @@ namespace Prowl.Editor
         public class MenuPath
         {
             public string Path { get; }
-            public MethodInfo Method { get; }
+            public Action? Method { get; }
             public List<MenuPath> Children { get; set; } = new();
-            public MenuPath(string path, MethodInfo method)
+            public MenuPath(string path, Action? method)
             {
                 Path = path;
                 Method = method;
@@ -61,7 +61,7 @@ namespace Prowl.Editor
                             {
                                 var attribute = method.GetCustomAttribute<MenuItem>();
                                 if (attribute != null)
-                                    values.Add(new MenuPath(attribute.Path, method));
+                                    values.Add(new MenuPath(attribute.Path, () => method.Invoke(null, null)));
                             }
                 }
                 catch { }
@@ -134,7 +134,7 @@ namespace Prowl.Editor
             if (menu.Children.Count == 0)
             {
                 if (ImGui.MenuItem(menu.Path))
-                    menu.Method.Invoke(null, null);
+                    menu.Method?.Invoke();
             }
             else
             {
