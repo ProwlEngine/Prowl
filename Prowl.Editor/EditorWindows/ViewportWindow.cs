@@ -13,24 +13,7 @@ namespace Prowl.Editor.EditorWindows;
 
 public class ViewportWindow : EditorWindow
 {
-
-    public class ViewportSettings : IProjectSetting
-    {
-        [Text("Settings for all Viewports.")]
-        [Space]
-        [Text("Controls:")]
-        public float LookSensitivity = 1f;
-        public float PanSensitivity = 1f;
-        [Space]
-        [Text("Rendering Settings:")]
-        [Seperator]
-        public float NearClip = 0.02f;
-        public float FarClip = 10000f;
-        [Space]
-        public float RenderResolution = 1f;
-    }
-
-    public ViewportSettings Settings => Project.ProjectSettings.GetSetting<ViewportSettings>();
+    public EditorSettings Settings => Project.ProjectSettings.GetSetting<EditorSettings>();
 
     Camera Cam;
     RenderTexture RenderTarget;

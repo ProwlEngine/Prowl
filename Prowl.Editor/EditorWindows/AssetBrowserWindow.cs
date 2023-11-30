@@ -11,23 +11,8 @@ namespace Prowl.Editor.EditorWindows;
 
 public class AssetBrowserWindow : EditorWindow {
 
-    public class AssetBrowserSettings : IProjectSetting
-    {
-        [Text("Settings for Asset Browser.")]
-        public bool m_HideExtensions = false;
-        public float m_ThumbnailSize = 0.0f;
 
-        [Space]
-        [Seperator]
-        [Space]
-        [Text("Settings for Asset Engine.")]
-        [Tooltip("Auto recompile all scripts when a change is detected.")]
-        public bool m_AutoRecompile = true;
-        [Tooltip("Auto recompile all shaders when a change is detected.")]
-        public bool m_AutoRecompileShaders = true;
-    }
-
-    public static AssetBrowserSettings Settings => Project.ProjectSettings.GetSetting<AssetBrowserSettings>();
+    public static EditorSettings Settings => Project.ProjectSettings.GetSetting<EditorSettings>();
 
     public DirectoryInfo CurDirectory;
     public bool Locked = false;
@@ -165,53 +150,34 @@ public class AssetBrowserWindow : EditorWindow {
         {
             // Show only Filters elements
             foreach(var entry in _found)
-            {
-                ImGui.PushID(i);
-                ImGui.SetCursorPos(curPos);
-                ImGui.BeginChild("ClipBox", new Vector2(ThumbnailSize, ThumbnailSize), false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
-                RenderFileSystemEntry(entry);
-                ImGui.EndChild();
-                AssetsWindow.FileRightClick(entry);
-                ImGui.PopID();
-
-                curPos.X = 5 + ((i + 1) % rowCount) * itemSize;
-                curPos.Y = 5 + ((i + 1) / rowCount) * itemSize;
-                i++;
-            }
+                RenderEntry(rowCount, itemSize, ref curPos, ref i, entry);
         }
         else
         {
             foreach (var folder in CurDirectory.EnumerateDirectories())
-            {
-                ImGui.PushID(i);
-                ImGui.SetCursorPos(curPos);
-                ImGui.BeginChild("ClipBox", new Vector2(ThumbnailSize, ThumbnailSize), false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
-                RenderFileSystemEntry(folder);
-                ImGui.EndChild();
-                AssetsWindow.FileRightClick(folder);
-                ImGui.PopID();
+                RenderEntry(rowCount, itemSize, ref curPos, ref i, folder);
 
-                curPos.X = 5 + ((i + 1) % rowCount) * itemSize;
-                curPos.Y = 5 + ((i + 1) / rowCount) * itemSize;
-                i++;
-            }
             foreach (var file in CurDirectory.EnumerateFiles())
             {
                 if (file.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase)) continue;
-
-                ImGui.PushID(i);
-                ImGui.SetCursorPos(curPos);
-                ImGui.BeginChild("ClipBox", new Vector2(ThumbnailSize, ThumbnailSize), false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
-                RenderFileSystemEntry(file);
-                ImGui.EndChild();
-                AssetsWindow.FileRightClick(file);
-                ImGui.PopID();
-
-                curPos.X = 5 + ((i + 1) % rowCount) * itemSize;
-                curPos.Y = 5 + ((i + 1) / rowCount) * itemSize;
-                i++;
+                RenderEntry(rowCount, itemSize, ref curPos, ref i, file);
             }
         }
+    }
+
+    private void RenderEntry(int rowCount, float itemSize, ref Vector2 curPos, ref int i, FileSystemInfo entry)
+    {
+        ImGui.PushID(i);
+        ImGui.SetCursorPos(curPos);
+        ImGui.BeginChild("ClipBox", new Vector2(ThumbnailSize, ThumbnailSize), false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        RenderFileSystemEntry(entry);
+        ImGui.EndChild();
+        AssetsWindow.FileRightClick(entry);
+        ImGui.PopID();
+
+        curPos.X = 5 + ((i + 1) % rowCount) * itemSize;
+        curPos.Y = 5 + ((i + 1) / rowCount) * itemSize;
+        i++;
     }
 
     private void RenderFileSystemEntry(FileSystemInfo entry)

@@ -14,6 +14,8 @@ namespace Prowl.Editor.EditorWindows;
 /// </summary>
 public class AssetsWindow : EditorWindow {
 
+    public static EditorSettings Settings => Project.ProjectSettings.GetSetting<EditorSettings>();
+
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse;
 
     private string _searchText = "";
@@ -139,7 +141,8 @@ public class AssetsWindow : EditorWindow {
             if (ext.Equals(".meta", StringComparison.OrdinalIgnoreCase)) continue;
 
             var curPos = ImGui.GetCursorPos();
-            bool opened = ImGui.TreeNodeEx($"      {Path.GetFileNameWithoutExtension(file.Name)}", flags);
+            var name = (Settings.m_HideExtensions ? Path.GetFileNameWithoutExtension(file.Name) : file.Name);
+            bool opened = ImGui.TreeNodeEx($"      {name}", flags);
             if (count++ % 2 == 0) drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
             if (ImGui.IsItemClicked()) Selection.Select(file);
             FileRightClick(file);
