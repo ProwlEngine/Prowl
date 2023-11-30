@@ -91,6 +91,7 @@ public class AssetsWindow : EditorWindow {
         ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(250f / 255f, 210f / 255f, 100f / 255f, 1f));
         bool opened = ImGui.TreeNodeEx($"{FontAwesome6.FolderTree} {root.Name}", rootFlags);
         ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(1f, 1f, 1f, 0.2f)));
+        if (ImGui.IsItemClicked()) Selection.Select(root.FullName);
         FileRightClick(null);
         ImGui.PopStyleColor();
 
