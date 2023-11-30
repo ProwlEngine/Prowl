@@ -114,6 +114,7 @@ public class AssetsWindow : EditorWindow {
 
             bool opened = ImGui.TreeNodeEx($"{(isLeaf ? FontAwesome6.FolderOpen : FontAwesome6.Folder)} {subDirectory.Name}", flags);
             if (ImGui.IsItemClicked()) Selection.Select(subDirectory.FullName);
+            FileRightClick(subDirectory);
             GUIHelper.Tooltip(subDirectory.Name);
 
             if (count++ % 2 == 0) drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
