@@ -18,10 +18,8 @@ namespace Prowl.Runtime
     }
 
     [AttributeUsage(AttributeTargets.Field, AllowMultiple = true)]
-    public class TextAttribute : Attribute, IImGUIAttri
+    public class TextAttribute(string text) : Attribute, IImGUIAttri
     {
-        string text;
-        public TextAttribute(string text) { this.text = text; }
         public void Draw() => ImGui.Text(text);
         public void End() { }
     }
@@ -48,17 +46,13 @@ namespace Prowl.Runtime
     }
 
     [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
-    public class StartGroupAttribute : Attribute, IImGUIAttri
+    public class StartGroupAttribute(string name, float height = 100f, float headerSize = 1f, bool collapsable = true) : Attribute, IImGUIAttri
     {
-        string name;
-        float height;
-        float headerSize;
-        public StartGroupAttribute(string name, float height = 100f, float headerSize = 1f) { this.name = name; this.height = height; this.headerSize = headerSize; }
         public void Draw()
         {
             GUIHelper.TextCenter(name, headerSize);
             ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 2);
-            ImGui.BeginChild(name, new System.Numerics.Vector2(-1, height), true, ImGuiWindowFlags.NoCollapse);
+            ImGui.BeginChild(name, new System.Numerics.Vector2(-1, height), true, collapsable ? ImGuiWindowFlags.None : ImGuiWindowFlags.NoCollapse);
         }
         public void End() { }
     }
@@ -71,19 +65,17 @@ namespace Prowl.Runtime
     }
 
     [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
-    public class TooltipAttribute : Attribute, IImGUIAttri
+    public class TooltipAttribute(string tooltip) : Attribute, IImGUIAttri
     {
-        string tooltip;
-        public TooltipAttribute(string tooltip) { this.tooltip = tooltip; }
         public void Draw() { }
         public void End() => GUIHelper.Tooltip(tooltip);
     }
 
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
-    public class ImGUIButtonAttribute : Attribute
+    public class ImGUIButtonAttribute(string buttonText) : Attribute
     {
-        internal string buttonText;
-        public ImGUIButtonAttribute(string buttonText) { this.buttonText = buttonText; }
+        internal string buttonText = buttonText;
+
         public static bool DrawButtons(object target)
         {
             foreach (MethodInfo method in target.GetType().GetMethods())
