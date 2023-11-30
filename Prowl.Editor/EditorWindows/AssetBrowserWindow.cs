@@ -3,6 +3,7 @@ using Prowl.Editor.Assets;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
+using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.Resources;
 using System.Numerics;
 using System.Reflection;
@@ -199,6 +200,17 @@ public class AssetBrowserWindow : EditorWindow {
             {
                 if (ImGui.IsMouseClicked(0))
                     Selection.Select(entry);
+
+                // Drag and Drop Payload
+                if (ImporterAttribute.SupportsExtension(entry.Extension))
+                {
+                    Type type = ImporterAttribute.GetGeneralType(entry.Extension);
+                    if (type != null)
+                    {
+                        var guid = AssetDatabase.GUIDFromAssetPath(Path.GetRelativePath(Project.ProjectDirectory, entry.FullName));
+                        DragnDrop.OfferAsset(guid, type.Name);
+                    }
+                }
             }
             else
             {
