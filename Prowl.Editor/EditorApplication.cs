@@ -93,8 +93,12 @@ public unsafe class EditorApplication : Application {
                 ImGui.DockBuilderSplitNode(dock_id_main_left, ImGuiDir.Down, 0.3f, ref dock_id_main_left_bottom, ref dock_id_main_left_top);
                 ImGui.DockBuilderDockWindow("Viewport", dock_id_main_left_top);
 
-                ImGui.DockBuilderDockWindow("Asset Browser", dock_id_main_left_bottom);
-                ImGui.DockBuilderDockWindow("Console", dock_id_main_left_bottom);
+                int dock_id_main_left_bottom_left = 0;
+                int dock_id_main_left_bottom_right = 0;
+                ImGui.DockBuilderSplitNode(dock_id_main_left_bottom, ImGuiDir.Left, 0.25f, ref dock_id_main_left_bottom_left, ref dock_id_main_left_bottom_right);
+                ImGui.DockBuilderDockWindow("Asset Browser", dock_id_main_left_bottom_right);
+                ImGui.DockBuilderDockWindow("Console", dock_id_main_left_bottom_right);
+                ImGui.DockBuilderDockWindow("Assets", dock_id_main_left_bottom_left);
 
                 ImGui.DockBuilderFinish(dockspaceID);
                 hasDockSetup = true;

@@ -22,6 +22,7 @@ public static class EditorGui {
         new InspectorWindow();
         new ConsoleWindow();
         new AssetBrowserWindow();
+        new AssetsWindow();
         //Program.EditorLayer.OnDraw += RenderDemoWindow;
 
         SetTheme();
