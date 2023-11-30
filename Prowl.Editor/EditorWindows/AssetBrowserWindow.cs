@@ -64,60 +64,16 @@ public class AssetBrowserWindow : EditorWindow {
     {
         s_LastDomainReloadTime += Time.deltaTimeF;
 
-        const ImGuiTableFlags tableFlags = ImGuiTableFlags.Resizable | ImGuiTableFlags.ContextMenuInBody | ImGuiTableFlags.Resizable;
-
         if (Project.HasProject == false) ImGui.BeginDisabled(true);
-        Vector2 availableRegion = ImGui.GetContentRegionAvail();
 
-        if (ImGui.BeginTable("MainViewTable", 2, tableFlags, availableRegion))
-        {
-            ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 150f);
-            ImGui.TableSetupColumn("", ImGuiTableColumnFlags.None);
+        RenderHeader();
 
-            ImGui.TableNextRow();
-            ImGui.TableSetColumnIndex(0);
+        ImGui.BeginChild("Body");
+        if (Project.HasProject) RenderBody();
+        ImGui.EndChild();
 
-            ImGui.BeginChild("Tree");
-            if (Project.HasProject) RenderSideView();
-            ImGui.EndChild();
-
-            ImGui.TableSetColumnIndex(1);
-
-            RenderHeader();
-
-            ImGui.BeginChild("Body");
-
-            if (Project.HasProject)
-                RenderBody();
-
-            ImGui.EndChild();
-
-            //if (ImGui.BeginPopupContextItem())
-            //{
-            //    if (ImGui.MenuItem("Refresh Database"))
-            //        AssetDatabase.RefreshAll();
-            //    ImGui.Separator();
-            //
-            //
-            //    ImGui.EndPopup();
-            //}
-
-            ImGui.EndTable();
-        }
         if (Project.HasProject == false) ImGui.EndDisabled();
 
-        if (ImGui.IsMouseDown(ImGuiMouseButton.Left) && ImGui.IsWindowHovered()) {
-            Selection.Clear();
-        }
-
-        if (ImGui.IsKeyPressed(ImGuiKey.Delete) && ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows))
-        {
-            if (Selection.Current is string && Directory.Exists(Selection.Current as string))
-            {
-                Directory.Delete(Selection.Current as string, true);
-                Selection.Clear();
-            }
-        }
     }
 
     public void Invalidate()
@@ -184,31 +140,6 @@ public class AssetBrowserWindow : EditorWindow {
         const int padding = 5;
         const int rightOffset = 43;
 
-        if (ImGui.Button("   " + FontAwesome6.FileImport + "   "))
-        {
-            var dialog = new ImFileDialogInfo()
-            {
-                title = "Import File",
-                directoryPath = new DirectoryInfo(m_CurrentDirectory),
-                OnComplete = (path) =>
-                {
-                    string relativePath = Path.GetRelativePath(CurrentActiveDirectory, path);
-                    string assetPath = Path.Combine(CurrentActiveDirectory, relativePath);
-                    if (File.Exists(assetPath))
-                    {
-                        Debug.Log($"Asset already exists: {assetPath}");
-                        return;
-                    }
-                    var file = new FileInfo(path);
-                    file.CopyTo(assetPath);
-                    AssetDatabase.Refresh(new FileInfo(assetPath));
-                },
-            };
-            ImGuiFileDialog.FileDialog(dialog);
-        }
-
-        ImGui.SameLine();
-
         // Up button
         bool disabledUpButton = m_CurrentDirectory == m_AssetsDirectory;
         disabledUpButton |= m_CurrentDirectory == m_DefaultsDirectory;
@@ -249,73 +180,6 @@ public class AssetBrowserWindow : EditorWindow {
 
         if (ImGui.Button("   " + FontAwesome6.Gears + "   "))
             _ = new ProjectSettingsWindow(Settings);
-    }
-
-    private void RenderSideView()
-    {
-        ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 0.0f);
-        int count = 0;
-        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
-        var rootFolders = AssetDatabase.GetRootfolders();
-        RenderSideViewFolder(ref count, flags, rootFolders[1]); // Assets Folder
-        RenderSideViewFolder(ref count, flags, rootFolders[0]); // Defaults Folder
-        ImGui.PopStyleVar();
-    }
-
-    private void RenderSideViewFolder(ref int count, ImGuiTreeNodeFlags flags, DirectoryInfo root)
-    {
-        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.8f, 0f, 0.321f, 1f));
-        string displayName = $"{FontAwesome6.Folder} {Path.GetRelativePath(Project.ProjectDirectory, root.FullName)}";
-        bool opened = ImGui.TreeNodeEx(displayName, flags);
-        ImGui.PopStyleColor();
-
-        if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked())
-            UpdateDirectoryEntries(root.FullName);
-
-        if (opened)
-        {
-            DrawDirectory(root.FullName, ref count, 1);
-            ImGui.TreePop();
-        }
-    }
-
-    private void DrawDirectory(string directory, ref int count, int level = 0)
-    {
-        DirectoryInfo[] subDirectories = new DirectoryInfo(directory).GetDirectories();
-
-        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
-        foreach (DirectoryInfo subDirectory in subDirectories)
-        {
-            if (string.IsNullOrEmpty(_searchText) == false)
-                if(Path.GetFileName(subDirectory.FullName).Contains(_searchText, StringComparison.CurrentCultureIgnoreCase) == false)
-                    continue;
-
-            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
-
-            if (subDirectory.GetDirectories().Length == 0)
-                flags |= ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.NoTreePushOnOpen;
-
-            if (Selection.Current is string && subDirectory.FullName == Selection.Current as string) flags |= ImGuiTreeNodeFlags.Selected;
-
-            string relativePath = Path.GetRelativePath(directory, subDirectory.FullName);
-            string displayName = $"{FontAwesome6.Folder} {relativePath}";
-            bool opened = ImGui.TreeNodeEx(displayName, flags);
-
-            if (count++ % 2 == 0)
-                drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
-
-            if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked())
-            {
-                Selection.Select(subDirectory.FullName, false);
-                UpdateDirectoryEntries(subDirectory.FullName);
-            }
-
-            if (opened)
-                DrawDirectory(subDirectory.FullName, ref count, level + 1);
-
-            if (opened && subDirectory.GetDirectories().Length > 0)
-                ImGui.TreePop();
-        }
     }
 
     private void RenderBody()
@@ -493,12 +357,7 @@ public class AssetBrowserWindow : EditorWindow {
 
         ImDrawListPtr drawList = ImGui.GetWindowDrawList();
 
-        var ran = new System.Random(ext.ToLower().Trim().GetHashCode() + 5); // +1 cause i didnt like the colors it gave without it :P
-        float r = 0;
-        float g = 0;
-        float b = 0;
-        ImGui.ColorConvertHSVtoRGB((float)ran.NextDouble(), 0.8f + (float)ran.NextDouble() * 0.2f, 0.8f + (float)ran.NextDouble() * 0.2f, ref r, ref g, ref b );
-        var lineColor = ImGui.GetColorU32(new Vector4(r, g, b, 1.0f));
+        var lineColor = AssetsWindow.GetFileColor(ext.ToLower().Trim());
 
         var pos = ImGui.GetCursorScreenPos();
         drawList.AddLine(new(0, pos.Y), new(pos.X + thumbnailSize, pos.Y + 1f), lineColor, 3f);
