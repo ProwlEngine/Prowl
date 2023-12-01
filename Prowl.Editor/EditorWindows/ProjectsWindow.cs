@@ -19,7 +19,7 @@ public class ProjectsWindow : EditorWindow
     protected override int Height { get; } = 512;
     protected override bool BackgroundFade { get; } = true;
 
-    public ProjectsWindow()
+    public ProjectsWindow() : base()
     {
         Title = "Projects";
         Refresh();

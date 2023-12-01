@@ -21,7 +21,7 @@ public class AssetsWindow : EditorWindow {
     private string _searchText = "";
     private readonly List<FileInfo> _found = [];
 
-    public AssetsWindow()
+    public AssetsWindow() : base()
     {
         Title = "Assets";
     }

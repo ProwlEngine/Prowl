@@ -12,7 +12,7 @@ public class GameWindow : EditorWindow
 
     RenderTexture RenderTarget;
 
-    public GameWindow()
+    public GameWindow() : base()
     {
         Title = "Game";
         RefreshRenderTexture(Width, Height);

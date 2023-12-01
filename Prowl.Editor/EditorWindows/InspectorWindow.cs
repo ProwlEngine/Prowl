@@ -20,7 +20,7 @@ public class InspectorWindow : EditorWindow
 
     (object, ScriptedEditor)? customEditor;
 
-    public InspectorWindow() 
+    public InspectorWindow() : base()
     {
         Title = "Inspector";
         Selection.OnSelectionChanged += Selection_OnSelectionChanged;

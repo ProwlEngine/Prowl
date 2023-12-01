@@ -20,7 +20,7 @@ public class ViewportWindow : EditorWindow
     Vector2 WindowCenter;
     bool DrawGrid = false;
 
-    public ViewportWindow()
+    public ViewportWindow() : base()
     {
         Title = "Viewport";
 

@@ -15,7 +15,7 @@ public class ProjectSettingsWindow : EditorWindow {
 
     private Type? currentType;
 
-    public ProjectSettingsWindow() { Title = "Project Settings"; }
+    public ProjectSettingsWindow() : base() { Title = "Project Settings"; }
 
     public ProjectSettingsWindow(IProjectSetting settingToOpen) : base() { currentType = settingToOpen.GetType(); }
 

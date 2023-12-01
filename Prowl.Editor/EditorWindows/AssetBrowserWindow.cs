@@ -28,7 +28,7 @@ public class AssetBrowserWindow : EditorWindow {
     private float ThumbnailSize => (1.0f + Settings.m_ThumbnailSize) * 65f;
 
 
-    public AssetBrowserWindow()
+    public AssetBrowserWindow() : base()
     {
         Title = "Asset Browser";
         Project.OnProjectChanged += Invalidate;

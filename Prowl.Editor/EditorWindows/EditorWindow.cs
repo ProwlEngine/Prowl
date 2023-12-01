@@ -7,6 +7,8 @@ public class EditorWindow {
 
     protected string Title = "Title";
     private readonly int _id;
+    private static readonly Dictionary<Type, int> _WindowCounter = [];
+    private readonly int _windowCount = 0;
 
     protected virtual ImGuiWindowFlags Flags { get; } = ImGuiWindowFlags.NoCollapse;
     protected virtual bool Center { get; } = false;
@@ -17,10 +19,21 @@ public class EditorWindow {
 
     protected bool isOpened = true;
 
-    public EditorWindow() {
+    public EditorWindow() : base()
+    {
         EditorApplication.OnDrawEditor += DrawWindow;
         EditorApplication.OnUpdateEditor += UpdateWindow;
         _id = GetHashCode();
+
+        var t = this.GetType();
+        _windowCount = 0;
+        if (_WindowCounter.ContainsKey(t))
+        {
+            _WindowCounter[t] = _WindowCounter[t] + 1;
+            _windowCount = _WindowCounter[t];
+        }
+        else
+            _WindowCounter.Add(t, 0);
     }
     
     private void DrawWindow() {
@@ -57,7 +70,13 @@ public class EditorWindow {
             ImGui.SetNextWindowSize(new Vector2(Width, Height), ImGuiCond.FirstUseEver);
         // push id doesnt work with windows since it cant be handled with the id stack, c++ uses ## or ### to set an identifier
         ImGui.PushID(_id + (Project.HasProject ? 1000 : 0));
-        ImGui.Begin(Title, ref isOpened, Flags);
+
+        // Adding a ID to the title after the first iteration is required for Multi-Windows, the first cant have one for Docking
+        if (_windowCount != 0)
+            ImGui.Begin(Title + " " + _windowCount, ref isOpened, Flags);
+        else
+            ImGui.Begin(Title, ref isOpened, Flags);
+
         DrawToolbar();
         
         Draw();

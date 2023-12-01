@@ -16,8 +16,8 @@ public unsafe class EditorApplication : Application {
 
     public static new EditorApplication Instance { get; private set; }
 
-    public static Action OnDrawEditor;
-    public static Action OnUpdateEditor;
+    public static event Action? OnDrawEditor;
+    public static event Action? OnUpdateEditor;
 
     static bool hasDockSetup = false;
 

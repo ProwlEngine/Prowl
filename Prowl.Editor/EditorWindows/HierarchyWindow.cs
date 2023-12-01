@@ -14,7 +14,8 @@ public class HierarchyWindow : EditorWindow {
 
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse;
 
-    public HierarchyWindow() {
+    public HierarchyWindow() : base()
+    {
         Title = "Hierarchy";
     }
     

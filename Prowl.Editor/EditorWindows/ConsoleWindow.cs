@@ -16,9 +16,8 @@ public class ConsoleWindow : EditorWindow {
     private bool _showSuccessLogMessages = true;
     private bool _showWarningLogMessages = true;
     private bool _showErrorLogMessages = true;
-    
-    
-    public ConsoleWindow() {
+
+    public ConsoleWindow() : base() {
         Title = "Console";
         _logMessages = new List<LogMessage>();
         Debug.OnLog += OnLog;
