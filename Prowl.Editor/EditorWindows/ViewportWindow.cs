@@ -31,6 +31,7 @@ public class ViewportWindow : EditorWindow
         CamObject.hideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
         CamObject.Position = new Vector3(0, 5, -10);
         Cam = CamObject.AddComponent<Camera>();
+        LastFocusedCamera = Cam;
         var dof = CamObject.AddComponent<DOFEffect>();
         dof.OnEnable();
 
