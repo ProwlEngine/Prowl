@@ -245,6 +245,7 @@ public class HierarchyWindow : EditorWindow {
         }
 
         ImGui.Separator();
+        MenuItem.DrawMenuRoot("Template");
     }
 
     void DrawGameObjectContextMenu(GameObject entity)
