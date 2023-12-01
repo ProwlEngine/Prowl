@@ -164,13 +164,10 @@ public class HierarchyWindow : EditorWindow {
             ImGui.PopStyleColor(2);
 
         // Select
-        if (!ImGui.IsItemToggledOpen() &&
-            (ImGui.IsItemClicked(ImGuiMouseButton.Left) ||
-             ImGui.IsItemClicked(ImGuiMouseButton.Middle) ||
-             ImGui.IsItemClicked(ImGuiMouseButton.Right)))
+        if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked(0))
         {
             Selection.Select(entity);
-            if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+            if (ImGui.IsMouseDoubleClicked(0))
                 m_RenamingEntity = entity;
         }
 
