@@ -115,53 +115,44 @@ public class HierarchyWindow : EditorWindow {
     void DrawEntityNode(GameObject entity, uint depth, bool isPartOfPrefab)
     {
         if (entity == null) return;
-
         if (entity.hideFlags.HasFlag(HideFlags.Hide) || entity.hideFlags.HasFlag(HideFlags.HideAndDontSave)) return;
 
-        ImGui.TableNextRow();
-        ImGui.TableNextColumn();
-
-        var tag = entity.Name;
-        bool isPrefab = entity.AssetID != Guid.Empty;
-
-        if (string.IsNullOrEmpty(_searchText) == false && tag.ToLower().Contains(_searchText.ToLower()) == false)
+        if (!string.IsNullOrEmpty(_searchText) && !entity.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
         {
             for (int i = 0; i < entity.Children.Count; i++)
                 DrawEntityNode(entity.Children[i], depth, isPartOfPrefab);
             return;
         }
 
-        ImGuiTreeNodeFlags flags = (Selection.Current == entity) ? ImGuiTreeNodeFlags.Selected : 0;
-        flags |= ImGuiTreeNodeFlags.OpenOnArrow;
-        flags |= ImGuiTreeNodeFlags.SpanFullWidth;
-        flags |= ImGuiTreeNodeFlags.FramePadding;
+        ImGui.TableNextRow();
+        ImGui.TableNextColumn();
 
-        if (entity.Children.Count == 0)
-        {
-            flags |= ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.NoTreePushOnOpen;
-        }
+        bool isPrefab = entity.AssetID != Guid.Empty;
+        bool isSelected = Selection.Current == entity;
 
-        var highlight = Selection.Current == entity;
-        if (highlight)
+        ImGuiTreeNodeFlags flags = CalculateFlags(entity, isSelected);
+
+        int colPushCount = 0;
+        if (isSelected)
         {
             ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(ImGuiCol.HeaderActive));
             ImGui.PushStyleColor(ImGuiCol.Header, ImGui.GetColorU32(ImGuiCol.HeaderActive));
             ImGui.PushStyleColor(ImGuiCol.HeaderHovered, ImGui.GetColorU32(ImGuiCol.HeaderActive));
+            colPushCount += 2;
         }
-        else if (entity.EnabledInHierarchy == false)
+        else if (isPrefab)
+            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new Vector4(0.3f, 0.0f, 0.3f, 1.0f)));
+        else if (isPartOfPrefab)
+            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new Vector4(0.3f, 0.0f, 0.3f, 0.5f)));
+
+        if (entity.EnabledInHierarchy == false)
         {
             ImGui.PushStyleColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled));
+            colPushCount += 1;
         }
 
-        if(!highlight && isPrefab)
-            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new Vector4(0.3f, 0.0f, 0.3f, 1.0f)));
-
         var opened = ImGui.TreeNodeEx(entity.Name + "##" + entity.InstanceID, flags);
-
-        if (highlight)
-            ImGui.PopStyleColor(2);
-        else if (entity.EnabledInHierarchy == false)
-            ImGui.PopStyleColor(2);
+        ImGui.PopStyleColor(colPushCount);
 
         // Select
         if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked(0))
@@ -174,6 +165,44 @@ public class HierarchyWindow : EditorWindow {
         DrawGameObjectContextMenu(entity);
 
         // Drag Drop
+        HandleDragnDrop(entity);
+
+        if (entity == m_RenamingEntity)
+        {
+            ImGui.SetKeyboardFocusHere();
+            string name = entity.Name;
+            ImGui.InputText("##Tag", ref name, 0x100);
+            if (ImGui.IsItemDeactivated())
+            {
+                m_RenamingEntity = null;
+                entity.Name = name;
+            }
+        }
+
+        ImGui.TableNextColumn();
+
+        DrawVisibilityToggle(entity);
+
+        // Open
+        if (opened)
+        {
+            for (int i = 0; i < entity.Children.Count; i++)
+                DrawEntityNode(entity.Children[i], depth + 1, isPartOfPrefab || isPrefab);
+
+            if (opened && entity.Children.Count > 0)
+                ImGui.TreePop();
+        }
+    }
+
+    private static ImGuiTreeNodeFlags CalculateFlags(GameObject entity, bool isSelected)
+    {
+        return (isSelected ? ImGuiTreeNodeFlags.Selected : ImGuiTreeNodeFlags.None)
+            | ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding
+            | (entity.Children.Count == 0 ? ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.NoTreePushOnOpen : 0);
+    }
+
+    private static void HandleDragnDrop(GameObject entity)
+    {
         // GameObject from Hierarchy
         if (DragnDrop.ReceiveReference<GameObject>(out var go))
         {
@@ -192,66 +221,30 @@ public class HierarchyWindow : EditorWindow {
         }
         // Offer GameObject up from Hierarchy for Drag And Drop
         DragnDrop.OfferReference(entity);
+    }
 
-
-        if (entity == m_RenamingEntity)
-        {
-            ImGui.SetKeyboardFocusHere();
-            ImGui.InputText("##Tag", ref tag, 0x100);
-            if (ImGui.IsItemDeactivated())
-            {
-                m_RenamingEntity = null;
-                entity.Name = tag;
-            }
-        }
-
-        ImGui.TableNextColumn();
-
-        // Visibility Toggle
-        {
-            ImGui.Text(" " + (entity.Enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash));
-
-            if (ImGui.IsItemHovered() && ImGui.IsMouseReleased(ImGuiMouseButton.Left))
-                entity.Enabled = !entity.Enabled;
-        }
-
-        ImGui.PopStyleColor(3);
-
-        //if (prefabColorApplied)
-        //    ImGui.PopStyleColor();
-
-        // Open
-        if (opened)
-        {
-            for (int i = 0; i < entity.Children.Count; i++)
-                DrawEntityNode(entity.Children[i], depth + 1, isPartOfPrefab);
-
-            if (opened && entity.Children.Count > 0)
-                ImGui.TreePop();
-        }
+    private static void DrawVisibilityToggle(GameObject entity)
+    {
+        ImGui.Text(" " + (entity.Enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash));
+        if (ImGui.IsItemHovered() && ImGui.IsMouseReleased(ImGuiMouseButton.Left))
+            entity.Enabled = !entity.Enabled;
     }
 
     void DrawContextMenu(GameObject context = null)
     {
-        bool hasContext = context != null;
-
-        GameObject toSelect = null;
-
         if (ImGui.MenuItem("New Gameobject"))
         {
-            toSelect = new GameObject("New Gameobject");
-            if (hasContext)
-                toSelect.SetParent(context);
-            toSelect.Position = Vector3.Zero;
-            toSelect.Orientation = Quaternion.Identity;
-            toSelect.Scale = Vector3.One;
+            GameObject go = new GameObject("New Gameobject");
+            if (context != null)
+                go.SetParent(context);
+            go.Position = Vector3.Zero;
+            go.Orientation = Quaternion.Identity;
+            go.Scale = Vector3.One;
+            Selection.Select(go);
             ImGui.CloseCurrentPopup();
         }
 
-        if (toSelect != null)
-        {
-            Selection.Select(toSelect);
-        }
+        ImGui.Separator();
     }
 
     void DrawGameObjectContextMenu(GameObject entity)
