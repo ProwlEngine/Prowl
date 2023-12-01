@@ -156,7 +156,7 @@ public class HierarchyWindow : EditorWindow {
         if(!highlight && isPrefab)
             ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new Vector4(0.3f, 0.0f, 0.3f, 1.0f)));
 
-        var opened = ImGui.TreeNodeEx(entity.Name + "##" + entity.GetHashCode(), flags);
+        var opened = ImGui.TreeNodeEx(entity.Name + "##" + entity.InstanceID, flags);
 
         if (highlight)
             ImGui.PopStyleColor(2);
