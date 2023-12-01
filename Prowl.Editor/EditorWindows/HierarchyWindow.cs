@@ -28,13 +28,15 @@ public class HierarchyWindow : EditorWindow {
 
         float lineHeight = ImGui.GetTextLineHeight();
         float contentWidth = ImGui.GetContentRegionAvail().X;
+        const float addButtonSize = 48f;
         Vector2 padding = ImGui.GetStyle().FramePadding;
 
         float filterCursorPosX = ImGui.GetCursorPosX();
-        GUIHelper.Search("##searchBox", ref _searchText, contentWidth);
+        GUIHelper.Search("##searchBox", ref _searchText, contentWidth - addButtonSize - 7);
 
         ImGui.SameLine();
 
+        ImGui.SetCursorPosX(contentWidth - addButtonSize);
         if (ImGui.Button("  " + FontAwesome6.Plus + " Add  "))
             ImGui.OpenPopup("SceneHierarchyContextWindow");
 
