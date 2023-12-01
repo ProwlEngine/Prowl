@@ -1,6 +1,7 @@
 ﻿using Prowl.Icons;
 using HexaEngine.ImGuiNET;
 using System.Numerics;
+using Prowl.Runtime;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -9,7 +10,6 @@ public class ProjectsWindow : EditorWindow
     public static bool WindowDrawnThisFrame = false;
 
     public string SelectedProject = "";
-    public List<string> Projects = new();
     private string _searchText = "";
     private string createName = "";
 
@@ -22,21 +22,6 @@ public class ProjectsWindow : EditorWindow
     public ProjectsWindow() : base()
     {
         Title = "Projects";
-        Refresh();
-    }
-
-    private void Refresh()
-    {
-        // Make sure project directory exists
-        Directory.CreateDirectory(Project.Projects_Directory);
-
-        Projects.Clear();
-        foreach (var project in Directory.GetDirectories(Project.Projects_Directory))
-            Projects.Add(Path.GetFileName(project));
-
-        Projects.Sort((x, y) => DateTime.Compare(
-            Directory.GetLastWriteTime(Project.GetPath(y)),
-            Directory.GetLastWriteTime(Project.GetPath(x))));
     }
 
     protected override void Draw()
@@ -45,42 +30,32 @@ public class ProjectsWindow : EditorWindow
 
         ImGui.BeginChild("projectChild");
 
-        ImGui.AlignTextToFramePadding();
-        ImGui.Text($"Search:");
-        ImGui.SameLine();
-        ImGui.PushItemWidth(ImGui.GetColumnWidth());
-        if (ImGui.InputText("##searchBox", ref _searchText, 0x100))
-            Refresh();
+        GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X);
 
-        ImGui.PopItemWidth();
         ImGui.PushStyleColor(ImGuiCol.ChildBg, ImGui.GetStyle().Colors[(int)ImGuiCol.FrameBg]);
         ImGui.BeginChild("projectList", new Vector2(ImGui.GetWindowWidth(), ImGui.GetWindowHeight() - 75));
 
-        foreach (var dir in Projects)
-            DisplayProject(dir);
+        var folders = new DirectoryInfo(Project.Projects_Directory).EnumerateDirectories();
+        // sort by modified date
+        folders = folders.OrderByDescending((x) => x.LastWriteTimeUtc);
+        foreach (var projectFolder in folders)
+            if (string.IsNullOrEmpty(_searchText) || projectFolder.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+                DisplayProject(projectFolder.Name);
 
         ImGui.EndChild();
 
-        //if (ImGui.Button($"{FontAwesome6.File} New Project", new Vector2(ImGui.GetWindowWidth() / (Project.HasProject ? 2 : 1), 43)))
-        //    ImGui.OpenPopup("CreateNewProject");
-
-        //if (ImGui.BeginPopup("CreateNewProject"))
+        ImGui.InputText("Project Name", ref createName, 0x100);
+        ImGui.SameLine();
+        if (ImGui.Button("Create"))
         {
-            ImGui.InputText("Project Name", ref createName, 0x100);
-            ImGui.SameLine();
-            if (ImGui.Button("Create"))
-            {
-                Project.CreateNew(createName);
-                ImGui.CloseCurrentPopup();
-                Refresh();
-            }
-            ImGui.EndPopup();
+            Project.CreateNew(createName);
+            ImGui.CloseCurrentPopup();
         }
+        ImGui.EndPopup();
 
         if (Project.HasProject)
         {
-            ImGui.SameLine();
-            if (ImGui.Button($"{FontAwesome6.Xmark} Cancel", new Vector2(ImGui.GetWindowWidth()/2, 43)))
+            if (ImGui.Button($"{FontAwesome6.Xmark} Cancel", new Vector2(ImGui.GetWindowWidth() / 2, 43)))
                 isOpened = false;
         }
 
