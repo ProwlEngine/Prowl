@@ -133,12 +133,8 @@ public unsafe class EditorApplication : Application {
             if (Project.HasProject)
             {
                 // Serialize the Scene manually to save its state
-                var gos = GameObjectManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
-                var s = JsonUtility.Serialize(gos);
-
-                foreach (var go in GameObjectManager.AllGameObjects)
-                    go.Destroy();
-                EngineObject.HandleDestroyed();
+                //var gos = GameObjectManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
+                //var s = JsonUtility.Serialize(gos);
 
                 // Unload External Assemblies
                 _AssemblyManager.Unload();
@@ -158,8 +154,17 @@ public unsafe class EditorApplication : Application {
 
                 _AssemblyManager.AddUnloadTask(() =>
                 {
-                    //Hierarchy.SaveToAssetPath();
+                    foreach (var go in GameObjectManager.AllGameObjects)
+                        go.Destroy();
+                    EngineObject.HandleDestroyed();
+
                     GameObjectManager.Clear();
+                    Selection.Clear();
+
+                    PropertyDrawer.ClearLookUp();
+                    ImporterAttribute.ClearLookUp();
+                    CustomEditorAttribute.ClearLookUp();
+                    MenuItem.ClearMenus();
 
                     ClearTypeDescriptorCache();
                     //PhysicsEngine.World = null;
@@ -168,24 +173,13 @@ public unsafe class EditorApplication : Application {
 
                 // Update Property Drawers - Editor project can add them so this goes after
                 PropertyDrawer.GenerateLookUp();
+                ImporterAttribute.GenerateLookUp();
                 CustomEditorAttribute.GenerateLookUp();
                 MenuItem.FindAllMenus();
-                CreateAssetMenuHandler.FindAllMenus();
-                //AssetProvider.GenerateLookUp();
-                ImporterAttribute.GenerateLookUp();
-                _AssemblyManager.AddUnloadTask(() =>
-                {
-                    Selection.Clear();
-                    PropertyDrawer.ClearLookUp();
-                    ImporterAttribute.ClearLookUp();
-                    CustomEditorAttribute.ClearLookUp();
-                    MenuItem.ClearMenus();
-                    //AssetProvider.ClearLookUp();
-                    return true;
-                });
+                CreateAssetMenuHandler.FindAllMenus(); // Injects into Menuitem so doesnt need to Unload
 
                 // Just deserializing should be enough
-                JsonUtility.Deserialize<GameObject[]?>(s);
+                //JsonUtility.Deserialize<GameObject[]?>(s);
 
                 ImGuiNotify.InsertNotification(new ImGuiToast()
                 {
