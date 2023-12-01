@@ -43,7 +43,14 @@ namespace Prowl.Runtime
         public static void Render(ImDrawListPtr drawList, Matrix4x4 mvp)
         {
             foreach (var gizmo in gizmos)
-                gizmo.Item1.Render(drawList, mvp, gizmo.Item2);
+                try
+                {
+                    gizmo.Item1.Render(drawList, mvp, gizmo.Item2);
+                }
+                catch
+                {
+                    // Nothing, errors are normal here
+                }
         }
 
         public static void Clear()
@@ -60,6 +67,12 @@ namespace Prowl.Runtime
         {
             Vector3 transformedPos = Vector3.Transform(worldPos, matrix);
             Vector4 trans = Vector4.Transform(new Vector4(transformedPos.X, transformedPos.Y, transformedPos.Z, 1.0f), mvp);
+            //Debug.Log(trans.Z.ToString());
+            if(trans.Z < 0)
+            {
+#warning Nothing we can do here is there? ImGUI has no way to handle lines behind the camera that i can find.
+                throw new Exception("Line Behind Camera, This is intended and should be caught");
+            }
             trans *= 0.5f / trans.W;
             trans += new Vector4(0.5f, 0.5f, 0f, 0f);
             trans.Y = 1f - trans.Y;
