@@ -1,4 +1,5 @@
 ﻿using HexaEngine.ImGuiNET;
+using Prowl.Icons;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -137,6 +138,21 @@ namespace Prowl.Runtime
         public static void ItemRect(float r, float g, float b, float a)
         {
             ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(r, g, b, a)));
+        }
+
+        public static bool Search(string v, ref string searchText, float x)
+        {
+            float cPX = ImGui.GetCursorPosX();
+            ImGui.SetNextItemWidth(x);
+            bool changed = ImGui.InputText(v, ref searchText, 0x100);
+            bool isSearching = !string.IsNullOrEmpty(searchText);
+            if (!isSearching)
+            {
+                ImGui.SameLine();
+                ImGui.SetCursorPosX(cPX + ImGui.GetFontSize() * 0.5f);
+                ImGui.TextUnformatted(FontAwesome6.MagnifyingGlass + " Search...");
+            }
+            return changed;
         }
     }
 }

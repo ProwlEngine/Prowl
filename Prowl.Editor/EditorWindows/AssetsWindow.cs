@@ -30,10 +30,8 @@ public class AssetsWindow : EditorWindow {
     {
         if (Project.HasProject == false) return;
 
-        float windowSizeX = ImGui.GetContentRegionAvail().X;
         float cPX = ImGui.GetCursorPosX();
-        ImGui.SetNextItemWidth(windowSizeX);
-        if (ImGui.InputText("##searchBox", ref _searchText, 0x100))
+        if (GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X))
         {
             _found.Clear();
             if (!string.IsNullOrEmpty(_searchText))
@@ -45,17 +43,9 @@ public class AssetsWindow : EditorWindow {
             }
         }
 
-        bool isSearching = !string.IsNullOrEmpty(_searchText);
-        if (!isSearching)
-        {
-            ImGui.SameLine();
-            ImGui.SetCursorPosX(cPX + ImGui.GetFontSize() * 0.5f);
-            ImGui.TextUnformatted(FontAwesome6.MagnifyingGlass + " Search...");
-        }
-
         ImGui.BeginChild("Tree");
         int count = 0;
-        if (isSearching)
+        if (!string.IsNullOrEmpty(_searchText))
         {
             ImDrawListPtr drawList = ImGui.GetWindowDrawList();
             foreach (var file in _found)

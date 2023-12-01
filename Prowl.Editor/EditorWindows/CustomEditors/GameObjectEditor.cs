@@ -207,13 +207,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             if (ImGui.BeginPopup("AddComponentContextMenu"))
             {
                 float cursorPosX = ImGui.GetCursorPosX();
-                ImGui.InputText("##searchBox", ref _searchText, 0x100);
-                if (string.IsNullOrEmpty(_searchText))
-                {
-                    ImGui.SameLine();
-                    ImGui.SetCursorPosX(cursorPosX + ImGui.GetFontSize() * 0.5f);
-                    ImGui.TextUnformatted(FontAwesome6.MagnifyingGlass + " Search...");
-                }
+                if (GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X))
+                    ImGui.InputText("##searchBox", ref _searchText, 0x100);
 
                 if (rootMenuItem == null)
                     rootMenuItem = GetAddComponentMenuItems();

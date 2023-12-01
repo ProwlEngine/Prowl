@@ -24,17 +24,14 @@ public class HierarchyWindow : EditorWindow {
 
     protected override void Draw()
     {
-        ImGuiTableFlags tableFlags = ImGuiTableFlags.RowBg
-            | ImGuiTableFlags.ContextMenuInBody
-            | ImGuiTableFlags.BordersInner
-            | ImGuiTableFlags.ScrollY;
+        ImGuiTableFlags tableFlags = ImGuiTableFlags.RowBg | ImGuiTableFlags.ContextMenuInBody | ImGuiTableFlags.BordersInner | ImGuiTableFlags.ScrollY;
 
         float lineHeight = ImGui.GetTextLineHeight();
         float contentWidth = ImGui.GetContentRegionAvail().X;
         Vector2 padding = ImGui.GetStyle().FramePadding;
 
         float filterCursorPosX = ImGui.GetCursorPosX();
-        ImGui.InputText("##searchBox", ref _searchText, 0x100);
+        GUIHelper.Search("##searchBox", ref _searchText, contentWidth);
 
         ImGui.SameLine();
 
@@ -74,7 +71,6 @@ public class HierarchyWindow : EditorWindow {
 
             ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 0.0f); 
             ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(0f, 0f));
-            //foreach (var go in Hierarchy.RegisteredGOs)
             for (int i = 0; i < GameObjectManager.AllGameObjects.Count; i++)
             {
                 var go = GameObjectManager.AllGameObjects[i];
@@ -82,9 +78,6 @@ public class HierarchyWindow : EditorWindow {
                     DrawEntityNode(go, 0, false);
             }
             ImGui.PopStyleVar(2);
-
-            //if (ImGui.BeginPopupContextWindow("SceneHierarchyContextWindow", ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.NoOpenOverItems))
-            //    DrawContextMenu();
 
             ImGui.EndTable();
 

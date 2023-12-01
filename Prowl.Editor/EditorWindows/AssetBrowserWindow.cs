@@ -94,8 +94,7 @@ public class AssetBrowserWindow : EditorWindow {
 
         float cPX = ImGui.GetCursorPosX();
         float cPY = ImGui.GetCursorPosY();
-        ImGui.SetNextItemWidth(searchBarSize);
-        if (ImGui.InputText("##searchBox", ref _searchText, 0x100))
+        if (GUIHelper.Search("##searchBox", ref _searchText, searchBarSize))
         {
             _found.Clear();
             if (!string.IsNullOrEmpty(_searchText))
@@ -105,13 +104,6 @@ public class AssetBrowserWindow : EditorWindow {
                 // Remove Meta's & only keep the ones with SearchText inside them
                 _found.RemoveAll(f => f.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase) || !f.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
             }
-        }
-
-        if (string.IsNullOrEmpty(_searchText))
-        {
-            ImGui.SameLine();
-            ImGui.SetCursorPosX(cPX + ImGui.GetFontSize() * 0.5f);
-            ImGui.TextUnformatted(FontAwesome6.MagnifyingGlass + " Search...");
         }
 
         if (Project.HasProject == false) return;
