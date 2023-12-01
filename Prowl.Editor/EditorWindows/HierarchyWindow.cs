@@ -171,30 +171,7 @@ public class HierarchyWindow : EditorWindow {
                 m_RenamingEntity = entity;
         }
 
-        if (ImGui.BeginPopupContextItem())
-        {
-            if (Selection.Current != entity)
-                Selection.Select(entity);
-
-            if (ImGui.MenuItem("Rename", "F2"))
-                m_RenamingEntity = entity;
-            if (ImGui.MenuItem("Duplicate", "Ctrl+D"))
-            {
-                // Duplicating, Easiest way to duplicate is to Serialize then Deserialize and add the new object to the hierarchy
-                var prefab = JsonUtility.Serialize(entity);
-                GameObject deserialized = JsonUtility.Deserialize<GameObject>(prefab);
-                deserialized.SetParent(entity.Parent);
-                Selection.Select(deserialized);
-            }
-            if (ImGui.MenuItem("Delete", "Del"))
-                entity.Destroy();
-
-            ImGui.Separator();
-
-            DrawContextMenu(entity);
-
-            ImGui.EndPopup();
-        }
+        DrawGameObjectContextMenu(entity);
 
         // Drag Drop
         // GameObject from Hierarchy
@@ -274,6 +251,34 @@ public class HierarchyWindow : EditorWindow {
         if (toSelect != null)
         {
             Selection.Select(toSelect);
+        }
+    }
+
+    void DrawGameObjectContextMenu(GameObject entity)
+    {
+        if (ImGui.BeginPopupContextItem())
+        {
+            if (Selection.Current != entity)
+                Selection.Select(entity);
+
+            if (ImGui.MenuItem("Rename", "F2"))
+                m_RenamingEntity = entity;
+            if (ImGui.MenuItem("Duplicate", "Ctrl+D"))
+            {
+                // Duplicating, Easiest way to duplicate is to Serialize then Deserialize and add the new object to the hierarchy
+                var prefab = JsonUtility.Serialize(entity);
+                GameObject deserialized = JsonUtility.Deserialize<GameObject>(prefab);
+                deserialized.SetParent(entity.Parent);
+                Selection.Select(deserialized);
+            }
+            if (ImGui.MenuItem("Delete", "Del"))
+                entity.Destroy();
+
+            ImGui.Separator();
+
+            DrawContextMenu(entity);
+
+            ImGui.EndPopup();
         }
     }
 }
