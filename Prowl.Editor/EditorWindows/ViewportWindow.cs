@@ -14,6 +14,8 @@ public class ViewportWindow : EditorWindow
 {
     public EditorSettings Settings => Project.ProjectSettings.GetSetting<EditorSettings>();
 
+    public static Camera LastFocusedCamera;
+
     Camera Cam;
     RenderTexture RenderTarget;
     bool IsFocused = false;
@@ -164,6 +166,8 @@ public class ViewportWindow : EditorWindow
     protected override void Update()
     {
         if (!IsFocused) return;
+
+        LastFocusedCamera = Cam;
 
         if (Input.IsMouseButtonDown(Raylib_cs.MouseButton.MOUSE_RIGHT_BUTTON))
         {
