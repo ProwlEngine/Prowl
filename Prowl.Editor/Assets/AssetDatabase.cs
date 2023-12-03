@@ -1,8 +1,11 @@
 ﻿using Newtonsoft.Json;
 using Prowl.Editor;
 using Prowl.Editor.Assets;
+using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Utils;
 using System.Diagnostics;
+using System.IO;
 
 namespace Prowl.Runtime.Assets
 {
@@ -623,7 +626,7 @@ namespace Prowl.Runtime.Assets
 
     public class MetaFile
     {
-        [JsonIgnore] public FileInfo AssetPath { get; set; }
+        public FileInfo AssetPath { get; set; }
         public Guid guid; 
         public DateTime lastModified;
         public ScriptedImporter importer;
@@ -651,7 +654,10 @@ namespace Prowl.Runtime.Assets
         {
             file ??= new FileInfo(AssetPath.FullName + ".meta");
             AssetDatabase.StartEditingAsset();
-            File.WriteAllText(file.FullName, JsonUtility.Serialize(this));
+            CompoundTag tag = (CompoundTag)TagSerializer.Serialize(this);
+            using var stream = file.OpenWrite();
+            using var binaryWriter = new BinaryWriter(stream);
+            BinaryTagConverter.WriteTo(tag, binaryWriter);
             AssetDatabase.StopEditingAsset();
         }
 
@@ -661,7 +667,10 @@ namespace Prowl.Runtime.Assets
         public static MetaFile? Load(FileInfo file)
         {
             if (!file.Exists) throw new FileNotFoundException("Meta file does not exist.", file.FullName);
-            var meta = JsonUtility.DeserializeFromPath<MetaFile>(file.FullName);
+            using var stream = file.OpenRead();
+            using var reader = new BinaryReader(stream);
+            var tag = BinaryTagConverter.ReadFrom(reader);
+            var meta = TagSerializer.Deserialize<MetaFile>(tag);
             meta!.AssetPath = new FileInfo(Path.ChangeExtension(file.FullName, null));
             return meta;
         }

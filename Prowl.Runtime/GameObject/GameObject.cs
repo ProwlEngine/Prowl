@@ -1,10 +1,9 @@
 ﻿using HexaEngine.ImGuizmoNET;
-using Newtonsoft.Json;
 using Prowl.Runtime.SceneManagement;
+using Prowl.Runtime.Serialization;
 using Prowl.Runtime.Utils;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.Design;
 using System.Linq;
 using System.Numerics;
 using System.Reflection;
@@ -12,19 +11,16 @@ using System.Runtime.Serialization;
 
 namespace Prowl.Runtime;
 
-public class GameObject : EngineObject
+public class GameObject : EngineObject, ISerializable
 {
     internal static event Action<GameObject>? Internal_Constructed;
     internal static event Action<GameObject>? Internal_DestroyCommitted;
     
-    [SerializeField]
     private List<MonoBehaviour> _components = new();
 
     private MultiValueDictionary<Type, MonoBehaviour> _componentCache = new();
 
-    [SerializeField]
     private bool _enabled = true;
-    [SerializeField]
     private bool _enabledInHierarchy = true;
      
     public bool Enabled
@@ -35,12 +31,9 @@ public class GameObject : EngineObject
 
     public bool EnabledInHierarchy => _enabledInHierarchy;
 
-    [SerializeField]
     public int tagIndex;
-    [SerializeField]
     public int layerIndex;
 
-    [SerializeField]
     public HideFlags hideFlags = HideFlags.None;
 
     public string tag
@@ -58,9 +51,9 @@ public class GameObject : EngineObject
     #region Transform
 
 
-    [SerializeField] protected Vector3 position;
-    [SerializeField] protected Vector3 rotation;
-    [SerializeField] protected Vector3 scale = Vector3.One;
+    protected Vector3 position;
+    protected Vector3 rotation;
+    protected Vector3 scale = Vector3.One;
     protected Vector3 globalPosition;
     protected Vector3 velocity, oldpos;
     protected Vector3 globalScale;
@@ -72,13 +65,10 @@ public class GameObject : EngineObject
 
     // We dont serialize parent, since if we want to serialize X object who is a child to Y object, we dont want to serialize Y object as well.
     // The parent is reconstructed when the object is deserialized for all children.
-    [JsonIgnore]
     internal GameObject? parent;
 
-    [SerializeField]
     public List<GameObject> Children = new List<GameObject>();
 
-    [JsonIgnore]
     public GameObject? Parent => parent;
 
     /// <summary>Gets or sets the local position.</summary>
@@ -708,92 +698,82 @@ public class GameObject : EngineObject
         _componentCache = new MultiValueDictionary<Type, MonoBehaviour>();
         foreach (var component in _components)
         {
-            component.AttachToGameObject(this, true);
+            component.AttachToGameObject(this);
             _componentCache.Add(component.GetType(), component);
         }
 
         Recalculate();
     }
 
-    public class Stored
+    public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
     {
-        public List<MonoBehaviour> components = new();
+        CompoundTag compoundTag = new CompoundTag(tagName);
+        compoundTag.Add(new StringTag("Name", Name));
 
-        public string name = "GameObject";
+        compoundTag.Add(new ByteTag("Enabled", (byte)(_enabled ? 1 : 0)));
+        compoundTag.Add(new ByteTag("EnabledInHierarchy", (byte)(_enabledInHierarchy ? 1 : 0)));
 
-        public bool enabled = true;
-        public bool enabledInHierarchy = true;
+        compoundTag.Add(new IntTag("TagIndex", tagIndex));
+        compoundTag.Add(new IntTag("LayerIndex", layerIndex));
 
-        public int tagIndex;
-        public int layerIndex;
+        compoundTag.Add(new IntTag("HideFlags", (int)hideFlags));
 
-        public HideFlags hideFlags = HideFlags.None;
+        compoundTag.Add(new FloatTag("PosX", position.X));
+        compoundTag.Add(new FloatTag("PosY", position.Y));
+        compoundTag.Add(new FloatTag("PosZ", position.Z));
 
-        public Vector3 position;
-        public Vector3 rotation;
-        public Vector3 scale = Vector3.One;
+        compoundTag.Add(new FloatTag("RotX", rotation.X));
+        compoundTag.Add(new FloatTag("RotY", rotation.Y));
+        compoundTag.Add(new FloatTag("RotZ", rotation.Z));
 
-        public List<Stored> children = new List<Stored>();
+        compoundTag.Add(new FloatTag("ScalX", scale.X));
+        compoundTag.Add(new FloatTag("ScalY", scale.Y));
+        compoundTag.Add(new FloatTag("ScalZ", scale.Z));
 
-        public Stored()
+        ListTag components = new ListTag("Components", TagType.Compound);
+        foreach (var comp in _components)
+            components.Add(TagSerializer.SerializeObject(comp, "", ctx));
+        compoundTag.Add(components);
+
+        ListTag children = new ListTag("Children", TagType.Compound);
+        foreach (var child in Children)
+            children.Add(TagSerializer.SerializeObject(child, "", ctx));
+        compoundTag.Add(children);
+
+        return compoundTag;
+    }
+
+    public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
+    {
+        Name = value["Name"].StringValue;
+        _enabled = value["Enabled"].ByteValue == 1;
+        _enabledInHierarchy = value["EnabledInHierarchy"].ByteValue == 1;
+        tagIndex = value["TagIndex"].IntValue;
+        layerIndex = value["LayerIndex"].IntValue;
+        hideFlags = (HideFlags)value["HideFlags"].IntValue;
+        position = new Vector3(value["PosX"].FloatValue, value["PosY"].FloatValue, value["PosZ"].FloatValue);
+        rotation = new Vector3(value["RotX"].FloatValue, value["RotY"].FloatValue, value["RotZ"].FloatValue);
+        scale = new Vector3(value["ScalX"].FloatValue, value["ScalY"].FloatValue, value["ScalZ"].FloatValue);
+
+        ListTag comps = (ListTag)value["Components"];
+        _components = new();
+        foreach (CompoundTag compTag in comps.Tags)
         {
+            MonoBehaviour component = (MonoBehaviour)TagSerializer.DeserializeObject(compTag, ctx);
+            component.AttachToGameObject(this);
+            _components.Add(component);
+            _componentCache.Add(component.GetType(), component);
         }
 
-        public Stored(GameObject go)
+        ListTag children = (ListTag)value["Children"];
+        Children = new();
+        foreach (CompoundTag childTag in children.Tags)
         {
-            foreach (var component in go.GetComponents())
-                components.Add(component);
-
-            name = go.Name;
-
-            enabled = go.Enabled;
-            enabledInHierarchy = go.EnabledInHierarchy;
-
-            tagIndex = go.tagIndex;
-            layerIndex = go.layerIndex;
-
-            hideFlags = go.hideFlags;
-
-            position = go.Position;
-            rotation = go.Rotation;
-            scale = go.Scale;
-
-            foreach (var child in go.Children)
-                children.Add(new(child));
+            GameObject child = (GameObject)TagSerializer.DeserializeObject(childTag, ctx);
+            child.parent = this;
+            Children.Add(child);
         }
 
-        public GameObject Instantiate()
-        {
-            GameObject gameObject = new(name)
-            {
-                _enabled = enabled,
-                _enabledInHierarchy = enabledInHierarchy,
-                tagIndex = tagIndex,
-                layerIndex = layerIndex,
-                hideFlags = hideFlags,
-                position = position,
-                rotation = rotation,
-                scale = scale,
-                _components = components,
-                _componentCache = [],
-            };
-
-            // Update Component Cache
-            foreach (var component in components)
-            {
-                component.AttachToGameObject(gameObject, true);
-                gameObject._componentCache.Add(component.GetType(), component);
-            }
-
-            foreach (var storedchild in children)
-            {
-                var child = storedchild.Instantiate();
-                child.parent = gameObject;
-            }
-
-            gameObject.Recalculate();
-
-            return gameObject;
-        }
+        Recalculate();
     }
 }

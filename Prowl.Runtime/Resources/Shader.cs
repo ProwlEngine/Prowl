@@ -1,6 +1,8 @@
-﻿using Raylib_cs;
+﻿using Prowl.Runtime.Serialization;
+using Raylib_cs;
 using System;
 using System.Collections.Generic;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace Prowl.Runtime.Resources
 {
@@ -8,7 +10,7 @@ namespace Prowl.Runtime.Resources
     /// The Shader class itself doesnt do much, It stores the properties of the shader and the shader code and Keywords.
     /// This is used in conjunction with the Material class to create shader variants with the correct keywords and to render things
     /// </summary>
-    public sealed class Shader : EngineObject
+    public sealed class Shader : EngineObject, ISerializable
     {
         public class Property
         {
@@ -124,5 +126,68 @@ namespace Prowl.Runtime.Resources
             return Application.AssetProvider.LoadAsset<Shader>(path);
         }
 
+        public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
+        {
+            CompoundTag compoundTag = new CompoundTag(tagName);
+            ListTag propertiesTag = new ListTag("Properties", TagType.Compound);
+            foreach (var property in Properties)
+            {
+                CompoundTag propertyTag = new CompoundTag("");
+                propertyTag.Add(new StringTag("Name", property.Name));
+                propertyTag.Add(new StringTag("DisplayName", property.DisplayName));
+                propertyTag.Add(new ByteTag("Type", (byte)property.Type));
+                propertiesTag.Add(propertyTag);
+            }
+            compoundTag.Add(propertiesTag);
+            ListTag passesTag = new ListTag("Passes", TagType.Compound);
+            foreach (var pass in Passes)
+            {
+                CompoundTag passTag = new CompoundTag("");
+                passTag.Add(new StringTag("RenderMode", pass.RenderMode));
+                passTag.Add(new StringTag("Vertex", pass.Vertex));
+                passTag.Add(new StringTag("Fragment", pass.Fragment));
+                passesTag.Add(passTag);
+            }
+            compoundTag.Add(passesTag);
+            if (ShadowPass != null)
+            {
+                CompoundTag shadowPassTag = new CompoundTag("ShadowPass");
+                shadowPassTag.Add(new StringTag("Vertex", ShadowPass.Vertex));
+                shadowPassTag.Add(new StringTag("Fragment", ShadowPass.Fragment));
+                compoundTag.Add(shadowPassTag);
+            }
+            return compoundTag;
+        }
+
+        public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
+        {
+            Properties.Clear();
+            var propertiesTag = value.Get<ListTag>("Properties");
+            foreach (CompoundTag propertyTag in propertiesTag.Tags)
+            {
+                Property property = new Property();
+                property.Name = propertyTag.Get<StringTag>("Name").StringValue;
+                property.DisplayName = propertyTag.Get<StringTag>("DisplayName").StringValue;
+                property.Type = (Property.PropertyType)propertyTag.Get<ByteTag>("Type").ByteValue;
+                Properties.Add(property);
+            }
+            Passes.Clear();
+            var passesTag = value.Get<ListTag>("Passes");
+            foreach (CompoundTag passTag in passesTag.Tags)
+            {
+                ShaderPass pass = new ShaderPass();
+                pass.RenderMode = passTag.Get<StringTag>("RenderMode").StringValue;
+                pass.Vertex = passTag.Get<StringTag>("Vertex").StringValue;
+                pass.Fragment = passTag.Get<StringTag>("Fragment").StringValue;
+                Passes.Add(pass);
+            }
+            if (value.TryGet<CompoundTag>("ShadowPass", out var shadowPassTag))
+            {
+                ShaderShadowPass shadowPass = new ShaderShadowPass();
+                shadowPass.Vertex = shadowPassTag.Get<StringTag>("Vertex").StringValue;
+                shadowPass.Fragment = shadowPassTag.Get<StringTag>("Fragment").StringValue;
+                ShadowPass = shadowPass;
+            }
+        }
     }
 }

@@ -1,6 +1,8 @@
 ﻿using Prowl.Runtime;
 using Prowl.Runtime.Components;
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Utils;
 using System.Numerics;
 using System.Reflection;
@@ -22,7 +24,7 @@ namespace Prowl.Editor.EditorWindows
             {
                 file = new FileInfo(file.FullName.Replace(".mat", "") + " new.mat");
             }
-            File.WriteAllText(file.FullName, JsonUtility.Serialize(mat));
+            BinaryTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), file);
         }
 
         [MenuItem("Create/Script")]

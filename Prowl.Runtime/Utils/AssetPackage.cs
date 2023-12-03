@@ -55,7 +55,7 @@ namespace Prowl.Runtime.Utils
             using (var writer = new StreamWriter(entryStream))
             {
                 writer.WriteLine(guid.ToString());
-                asset.SaveToStream(writer);
+                asset.SaveToStream(entryStream);
             }
 
             // Update mappings
@@ -231,7 +231,7 @@ namespace Prowl.Runtime.Utils
                 using var entryStream = entry.Open();
                 using var reader = new StreamReader(entryStream);
                 reader.ReadLine(); // Skip guid
-                asset = SerializedAsset.FromStream(reader);
+                asset = SerializedAsset.FromStream(entryStream);
                 return true;
             }
             asset = null;
@@ -246,7 +246,7 @@ namespace Prowl.Runtime.Utils
                 using var entryStream = entry.Open();
                 using var reader = new StreamReader(entryStream);
                 reader.ReadLine(); // Skip guid
-                asset = SerializedAsset.FromStream(reader);
+                asset = SerializedAsset.FromStream(entryStream);
                 return true;
             }
             asset = null;

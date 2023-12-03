@@ -4,6 +4,8 @@ using Prowl.Runtime;
 using Prowl.Runtime.Assets;
 using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Utils;
 using System.Numerics;
 
@@ -20,13 +22,13 @@ namespace Prowl.Editor.Assets
                 Material mat;
                 try
                 {
-                    mat = JsonUtility.Deserialize<Material>(File.ReadAllText(assetPath.FullName));
+                    mat = TagSerializer.Deserialize<Material>(BinaryTagConverter.ReadFromFile(assetPath));
                 }
                 catch
                 {
                     // something went wrong, lets just create a new material and save it
                     mat = new Material();
-                    File.WriteAllText(assetPath.FullName, JsonUtility.Serialize(mat));
+                    BinaryTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), assetPath);
                 }
 
                 ctx.SetMainObject(mat);
@@ -49,7 +51,7 @@ namespace Prowl.Editor.Assets
 
             try
             {
-                Material mat = JsonUtility.Deserialize<Material>(File.ReadAllText((target as MetaFile).AssetPath.FullName));
+                Material mat = TagSerializer.Deserialize<Material>(BinaryTagConverter.ReadFromFile((target as MetaFile).AssetPath));
 
                 PropertyDrawer.Draw(mat, typeof(Material).GetField("Shader")!);
                 bool changed = false;
@@ -152,7 +154,7 @@ namespace Prowl.Editor.Assets
 
                 if (changed)
                 {
-                    File.WriteAllText((target as MetaFile).AssetPath.FullName, JsonUtility.Serialize(mat));
+                    BinaryTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), (target as MetaFile).AssetPath);
                     AssetDatabase.Reimport(AssetDatabase.FileToRelative((target as MetaFile).AssetPath));
                 }
             }

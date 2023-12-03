@@ -7,6 +7,9 @@ using System.Reflection;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.Assets;
 using System;
+using Newtonsoft.Json.Converters;
+using Prowl.Runtime.Serializer;
+using Prowl.Runtime.Serialization;
 
 namespace Prowl.Editor.EditorWindows.CustomEditors
 {
@@ -21,7 +24,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             try
             {
                 bool changed = false;
-                ScriptableObject scriptObject = JsonUtility.Deserialize<ScriptableObject>(File.ReadAllText((target as MetaFile).AssetPath.FullName));
+
+                ScriptableObject scriptObject = TagSerializer.Deserialize<ScriptableObject>(BinaryTagConverter.ReadFromFile((target as MetaFile).AssetPath));
 
                 FieldInfo[] fields = scriptObject.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
@@ -77,7 +81,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 if (changed)
                 {
                     scriptObject.OnValidate();
-                    File.WriteAllText((target as MetaFile).AssetPath.FullName, JsonUtility.Serialize(scriptObject));
+                    BinaryTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(scriptObject), (target as MetaFile).AssetPath);
                     AssetDatabase.Reimport(AssetDatabase.FileToRelative((target as MetaFile).AssetPath));
                 }
             }

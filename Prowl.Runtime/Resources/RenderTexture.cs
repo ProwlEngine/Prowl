@@ -1,11 +1,11 @@
-﻿using Prowl.Runtime.Utils;
+﻿using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Utils;
 using Raylib_cs;
 using System;
-using System.Runtime.Serialization;
 
 namespace Prowl.Runtime.Resources
 {
-    public sealed class RenderTexture : EngineObject
+    public sealed class RenderTexture : EngineObject, ISerializable
     {
         public uint fboId { get; private set; }
         public Raylib_cs.Texture2D[] InternalTextures { get; private set; }
@@ -13,11 +13,8 @@ namespace Prowl.Runtime.Resources
 
         public int Width;
         public int Height;
-        [SerializeField]
         private int numTextures;
-        [SerializeField]
         private bool hasDepthAttachment;
-        [SerializeField]
         private PixelFormat[] textureFormats;
 
         public RenderTexture() : base("RenderTexture") 
@@ -140,9 +137,31 @@ namespace Prowl.Runtime.Resources
             Rlgl.rlUnloadFramebuffer(fboId);
         }
 
-        [OnDeserialized]
-        public void Deserialized(StreamingContext context)
+        public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
         {
+            CompoundTag compoundTag = new CompoundTag(tagName);
+            compoundTag.Add(new IntTag("Width", Width));
+            compoundTag.Add(new IntTag("Height", Height));
+            compoundTag.Add(new IntTag("NumTextures", numTextures));
+            compoundTag.Add(new ByteTag("HasDepthAttachment", (byte)(hasDepthAttachment ? 1 : 0)));
+            ListTag textureFormatsTag = new ListTag("TextureFormats", TagType.Byte);
+            foreach (var format in textureFormats)
+                textureFormatsTag.Add(new ByteTag("", (byte)format));
+            compoundTag.Add(textureFormatsTag);
+            return compoundTag;
+        }
+
+        public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
+        {
+            Width = value["Width"].IntValue;
+            Height = value["Height"].IntValue;
+            numTextures = value["NumTextures"].IntValue;
+            hasDepthAttachment = value["HasDepthAttachment"].ByteValue == 1;
+            textureFormats = new PixelFormat[numTextures];
+            var textureFormatsTag = value.Get<ListTag>("TextureFormats");
+            for (int i = 0; i < numTextures; i++)
+                textureFormats[i] = (PixelFormat)textureFormatsTag[i].ByteValue;
+
             var param = new[] { typeof(int), typeof(int), typeof(int), typeof(bool), typeof(PixelFormat[]) };
             var values = new object[] { Width, Height, numTextures, hasDepthAttachment, textureFormats };
             typeof(RenderTexture).GetConstructor(param).Invoke(this, values);

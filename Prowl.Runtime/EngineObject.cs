@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Prowl.Runtime.Serialization;
 
 namespace Prowl.Runtime
 {
@@ -19,13 +20,13 @@ namespace Prowl.Runtime
         public int InstanceID => _instanceID;
 
         // Asset path if we have one
-        [JsonProperty("AssetID"), HideInInspector]
+        [HideInInspector]
         public Guid AssetID = Guid.Empty;
 
-        [JsonProperty("Name"), HideInInspector]
+        [HideInInspector]
         public string Name;
         
-        [JsonIgnore, HideInInspector] 
+        [HideInInspector, SerializeIgnore] 
         public bool IsDestroyed = false;
 
         public EngineObject() : this(null) { }
@@ -87,9 +88,9 @@ namespace Prowl.Runtime
         {
             if (obj.IsDestroyed) throw new Exception(obj.Name + " has been destroyed.");
             // Serialize and deserialize to get a new object
-            var serialized = JsonUtility.Serialize(obj);
+            var serialized = TagSerializer.Serialize(obj);
             // dont need to assign ID or add it to objects list the constructor will do that automatically
-            var newObj = JsonUtility.Deserialize(serialized, obj.GetType()) as EngineObject;
+            var newObj = TagSerializer.Deserialize<EngineObject>(serialized);
             // Some objects might have a readonly name (like components) in that case it should remain the same, so if name is different set it
             newObj.Name = obj.Name;
             // Need to make sure to set GUID to empty so the engine knows this isn't the original Asset file

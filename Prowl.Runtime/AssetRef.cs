@@ -1,5 +1,5 @@
-﻿using Prowl.Runtime.Utils;
-using Newtonsoft.Json;
+﻿using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Utils;
 using System;
 
 namespace Prowl.Runtime
@@ -8,12 +8,9 @@ namespace Prowl.Runtime
     // Taken and modified from Duality's ContentRef.cs
     // https://github.com/AdamsLair/duality/blob/master/Source/Core/Duality/ContentRef.cs
 
-    public struct AssetRef<T> : IAssetRef where T : EngineObject
+    public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     {
-        //[JsonIgnore]
-        [SerializeField]
         private T? instance;
-        [SerializeField]
         private Guid assetID = Guid.Empty;
 
         /// <summary>
@@ -270,5 +267,21 @@ namespace Prowl.Runtime
             return !(first == second);
         }
 
+
+        public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
+        {
+            CompoundTag compoundTag = new CompoundTag(tagName);
+            compoundTag.Add(new StringTag("AssetID", assetID.ToString()));
+            if (IsRuntimeResource)
+                compoundTag.Add(TagSerializer.SerializeObject(instance, "Instance", ctx));
+            return compoundTag;
+        }
+
+        public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
+        {
+            assetID = Guid.Parse(value["AssetID"].StringValue);
+            if (value.TryGet("Instance", out CompoundTag tag))
+                instance = TagSerializer.DeserializeObject<T?>(tag, ctx);
+        }
     }
 }

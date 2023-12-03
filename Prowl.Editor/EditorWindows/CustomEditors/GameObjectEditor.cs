@@ -8,6 +8,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Reflection;
 using Prowl.Runtime.Assets;
+using Prowl.Runtime.Serialization;
 
 namespace Prowl.Editor.EditorWindows.CustomEditors
 {
@@ -114,8 +115,9 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     {
                         if (ImGui.MenuItem("Duplicate"))
                         {
-                            var copy = JsonUtility.Deserialize(JsonUtility.Serialize(comp), comp.GetType());
-                            go.AddComponentDirectly(copy as MonoBehaviour);
+                            var serialized = TagSerializer.Serialize(comp);
+                            var copy = TagSerializer.Deserialize<MonoBehaviour>(serialized);
+                            go.AddComponentDirectly(copy);
                         }
                         if (ImGui.MenuItem("Delete")) go.RemoveComponent(comp);
                         ImGui.EndPopup();

@@ -2,6 +2,8 @@
 using Newtonsoft.Json.Linq;
 using Prowl.Editor.EditorWindows;
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Utils;
 using System;
 using System.Reflection;
@@ -80,7 +82,7 @@ namespace Prowl.Editor
             {
                 file = new FileInfo(file.FullName.Replace(".scriptobj", "") + " New.scriptobj");
             }
-            File.WriteAllText(file.FullName, JsonUtility.Serialize(obj, obj.GetType()));
+            BinaryTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(obj), file);
         }
     }
 }

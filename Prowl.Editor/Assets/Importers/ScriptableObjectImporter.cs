@@ -1,5 +1,7 @@
 ﻿using Prowl.Runtime;
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Assets
@@ -12,7 +14,8 @@ namespace Prowl.Editor.Assets
             try
             {
                 // Load the Texture into a TextureData Object and serialize to Asset Folder
-                var scriptable = JsonUtility.Deserialize<ScriptableObject>(File.ReadAllText(assetPath.FullName));
+                //var scriptable = JsonUtility.Deserialize<ScriptableObject>(File.ReadAllText(assetPath.FullName));
+                var scriptable = TagSerializer.Deserialize<ScriptableObject>(BinaryTagConverter.ReadFromFile(assetPath));
                 ctx.SetMainObject(scriptable);
 
                 ImGuiNotify.InsertNotification("ScriptableObject Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);

@@ -9,6 +9,9 @@ using HexaEngine.ImGuiNET;
 using Raylib_cs;
 using System.Diagnostics;
 using System.Numerics;
+using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Components.ImageEffects;
+using Prowl.Runtime.Components;
 
 namespace Prowl.Editor;
 

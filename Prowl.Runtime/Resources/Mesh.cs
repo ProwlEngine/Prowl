@@ -1,10 +1,12 @@
-﻿using Raylib_cs;
+﻿using Prowl.Runtime.Serialization;
+using Raylib_cs;
 using System;
-using System.Numerics;
+using System.IO;
+using System.Runtime.InteropServices;
 
 namespace Prowl.Runtime.Resources
 {
-    public sealed class Mesh : EngineObject
+    public sealed class Mesh : EngineObject, ISerializable
     {
         public int vertexCount => vertices.Length / 3;
         public int triangleCount => triangles.Length / 3;
@@ -305,5 +307,76 @@ namespace Prowl.Runtime.Resources
 
         #endregion
 
+        public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
+        {
+            CompoundTag compoundTag = new CompoundTag(tagName);
+            // Serialize to byte[]
+            using (MemoryStream memoryStream = new MemoryStream())
+            using (BinaryWriter writer = new BinaryWriter(memoryStream))
+            {
+                SerializeArray(writer, vertices);
+                SerializeArray(writer, texcoords);
+                SerializeArray(writer, texcoords2);
+                SerializeArray(writer, normals);
+                SerializeArray(writer, tangents);
+                SerializeArray(writer, colors);
+                SerializeArray(writer, triangles);
+                SerializeArray(writer, boneIds);
+                SerializeArray(writer, boneWeights);
+
+                compoundTag.Add(new ByteArrayTag("Data", memoryStream.ToArray()));
+            }
+            return compoundTag;
+        }
+
+        public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
+        {
+            using (MemoryStream memoryStream = new MemoryStream(value["Data"].ByteArrayValue))
+            using (BinaryReader reader = new BinaryReader(memoryStream))
+            {
+                vertices = DeserializeArray<float>(reader);
+                texcoords = DeserializeArray<float>(reader);
+                texcoords2 = DeserializeArray<float>(reader);
+                normals = DeserializeArray<float>(reader);
+                tangents = DeserializeArray<float>(reader);
+                colors = DeserializeArray<byte>(reader);
+                triangles = DeserializeArray<ushort>(reader);
+                boneIds = DeserializeArray<byte>(reader);
+                boneWeights = DeserializeArray<float>(reader);
+            }
+        }
+
+        // Helper method to serialize an array
+        private static void SerializeArray<T>(BinaryWriter writer, T[] array) where T : struct
+        {
+            if(array == null)
+            {
+                writer.Write(false);
+                return;
+            }    
+            writer.Write(true);
+            int length = array.Length;
+            writer.Write(length);
+            int elementSize = Marshal.SizeOf<T>();
+            byte[] bytes = new byte[length * elementSize];
+            Buffer.BlockCopy(array, 0, bytes, 0, bytes.Length);
+            writer.Write(bytes);
+        }
+
+        // Helper method to deserialize an array
+        private static T[] DeserializeArray<T>(BinaryReader reader) where T : struct
+        {
+            bool isNotNull = reader.ReadBoolean();
+            if (!isNotNull) return null;
+            int length = reader.ReadInt32();
+            int elementSize = Marshal.SizeOf<T>();
+
+            byte[] bytes = reader.ReadBytes(length * elementSize);
+            T[] array = new T[length];
+
+            Buffer.BlockCopy(bytes, 0, array, 0, bytes.Length);
+
+            return array;
+        }
     }
 }

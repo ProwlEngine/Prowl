@@ -9,6 +9,7 @@ using System.Numerics;
 using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
+using Prowl.Runtime.Serialization;
 
 namespace Prowl.Runtime.Resources
 {
@@ -17,7 +18,7 @@ namespace Prowl.Runtime.Resources
     // TODO: SetPixel/s, GetPixel/s
     // TODO: Default White, Block & Transparent textures all 1x1 pixels
 
-    public sealed class Texture2D : EngineObject
+    public sealed class Texture2D : EngineObject, ISerializable
     {
         internal Raylib_cs.Texture2D InternalTexture;
 
@@ -26,16 +27,8 @@ namespace Prowl.Runtime.Resources
         public uint Handle => InternalTexture.id;
         public int MipMaps => InternalTexture.mipmaps;
         public PixelFormat Format => InternalTexture.format;
-        public TextureWrap Wrap => jsonWrap;
-        public TextureFilter Filter => jsonFilter;
-
-        [SerializeField] private TextureWrap jsonWrap;
-        [SerializeField] private TextureFilter jsonFilter;
-        [SerializeField] private int jsonWidth;
-        [SerializeField] private int jsonHeight;
-        [SerializeField] private int jsonMipMaps;
-        [SerializeField] private PixelFormat jsonFormat;
-        [SerializeField] private byte[] jsonData;
+        public TextureWrap Wrap { get; private set; }
+        public TextureFilter Filter { get; private set; }
 
         /// <summary>
         /// This constructor is used for Serializer and is not intended for use.
@@ -172,12 +165,12 @@ namespace Prowl.Runtime.Resources
 
         public void SetFilter(TextureFilter filter)
         {
-            jsonFilter = filter;
+            Filter = filter;
             Raylib.SetTextureFilter(InternalTexture, filter);
         }
         public void SetWrap(TextureWrap wrap)
         {
-            jsonWrap = wrap;
+            Wrap = wrap;
             Raylib.SetTextureWrap(InternalTexture, wrap);
         }
         public void GenerateMipMaps() => Raylib.GenTextureMipmaps(ref InternalTexture);
@@ -185,50 +178,53 @@ namespace Prowl.Runtime.Resources
         /// <summary>sCall only if this texture is Generated From Code, If its Content or Asset based then only call this if you know what you are doing </summary>
         public void Unload() => Raylib.UnloadTexture(InternalTexture);
 
-        [OnSerializing]
-        public void Serialize(StreamingContext context)
+        public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
         {
-            jsonWidth = Width;
-            jsonHeight = Height;
-            jsonMipMaps = MipMaps;
-            jsonFormat = Format;
-
+            CompoundTag compoundTag = new CompoundTag(tagName);
+            compoundTag.Add(new IntTag("Width", Width));
+            compoundTag.Add(new IntTag("Height", Height));
+            compoundTag.Add(new IntTag("MipMaps", MipMaps));
+            compoundTag.Add(new ByteTag("Format", (byte)Format));
+            compoundTag.Add(new ByteTag("Filter", (byte)Filter));
+            compoundTag.Add(new ByteTag("Wrap", (byte)Wrap));
             Image image = Raylib.LoadImageFromTexture(InternalTexture);
             unsafe
             {
-                int size = Raylib.GetPixelDataSize(jsonWidth, jsonHeight, jsonFormat);
-
+                int size = Raylib.GetPixelDataSize(Width, Height, Format);
                 byte[] byteArray = new byte[size];
                 Marshal.Copy((IntPtr)image.data, byteArray, 0, byteArray.Length);
-                jsonData = byteArray;
+                compoundTag.Add(new ByteArrayTag("Data", byteArray));
             }
+            return compoundTag;
         }
 
-        [OnDeserialized]
-        public void Deserialize(StreamingContext context)
+        public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
         {
             unsafe
             {
-                fixed (void* ptr = jsonData)
+                byte[] data = value.Get<ByteArrayTag>("Data").Value;
+                fixed (void* ptr = data)
                 {
+                    int mipMaps = value["MipMaps"].IntValue;
                     Image image = new()
                     {
-                        width = jsonWidth,
-                        height = jsonHeight,
+                        width = value["Width"].IntValue,
+                        height = value["Height"].IntValue,
                         mipmaps = 1,
-                        format = jsonFormat,
+                        format = (PixelFormat)value["Format"].ByteValue,
                         data = ptr
                     };
                     InternalTexture = Raylib.LoadTextureFromImage(image);
 
-                    if (jsonMipMaps > 1)
+                    if (mipMaps > 1)
                         Raylib.GenTextureMipmaps(ref InternalTexture);
 
-                    Raylib.SetTextureFilter(InternalTexture, jsonFilter);
-                    Raylib.SetTextureWrap(InternalTexture, jsonWrap);
+                    Filter = (TextureFilter)value["Filter"].ByteValue;
+                    Raylib.SetTextureFilter(InternalTexture, Filter);
+                    Wrap = (TextureWrap)value["Wrap"].ByteValue;
+                    Raylib.SetTextureWrap(InternalTexture, Wrap);
                 }
             }
         }
-
     }
 }

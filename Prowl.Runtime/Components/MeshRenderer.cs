@@ -1,4 +1,6 @@
 ﻿using Prowl.Icons;
+using Prowl.Runtime.Resources;
+using Prowl.Runtime.Serialization;
 using System.Numerics;
 using Material = Prowl.Runtime.Resources.Material;
 using Mesh = Prowl.Runtime.Resources.Mesh;
@@ -6,7 +8,7 @@ using Mesh = Prowl.Runtime.Resources.Mesh;
 namespace Prowl.Runtime.Components;
 
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Shapes}  Mesh Renderer")]
-public class MeshRenderer : MonoBehaviour
+public class MeshRenderer : MonoBehaviour, ISerializable
 {
     public override RenderingOrder RenderOrder => RenderingOrder.Opaque;
 
@@ -42,5 +44,19 @@ public class MeshRenderer : MonoBehaviour
             Graphics.DrawMeshNowDirect(Mesh.Res!);
             Material.Res!.EndPass();
         }
+    }
+
+    public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
+    {
+        CompoundTag compoundTag = new CompoundTag(tagName);
+        compoundTag.Add(TagSerializer.SerializeObject(Mesh, "Mesh", ctx));
+        compoundTag.Add(TagSerializer.SerializeObject(Material, "Material", ctx));
+        return compoundTag;
+    }
+
+    public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
+    {
+        Mesh = TagSerializer.DeserializeObject<AssetRef<Mesh>>((CompoundTag)value["Mesh"], ctx);
+        Material = TagSerializer.DeserializeObject<AssetRef<Material>>((CompoundTag)value["Material"], ctx);
     }
 }

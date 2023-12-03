@@ -1,4 +1,5 @@
-﻿using Prowl.Runtime.Utils;
+﻿using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Utils;
 using System;
 
 namespace Prowl.Runtime.Resources

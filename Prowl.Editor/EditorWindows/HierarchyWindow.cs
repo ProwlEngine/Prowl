@@ -3,6 +3,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.SceneManagement;
+using Prowl.Runtime.Serialization;
 using Prowl.Runtime.Utils;
 using System.Numerics;
 
@@ -254,9 +255,9 @@ public class HierarchyWindow : EditorWindow {
                 m_RenamingEntity = entity;
             if (ImGui.MenuItem("Duplicate", "Ctrl+D"))
             {
-                // Duplicating, Easiest way to duplicate is to Serialize then Deserialize and add the new object to the hierarchy
-                var prefab = JsonUtility.Serialize(entity);
-                GameObject deserialized = JsonUtility.Deserialize<GameObject>(prefab);
+                // Duplicating, Easiest way to duplicate is to Serialize then Deserialize
+                var serialized = TagSerializer.Serialize(entity);
+                var deserialized = TagSerializer.Deserialize<GameObject>(serialized);
                 deserialized.SetParent(entity.Parent);
                 Selection.Select(deserialized);
             }

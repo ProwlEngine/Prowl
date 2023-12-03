@@ -1,5 +1,4 @@
-﻿using Prowl.Runtime.Utils;
-using Newtonsoft.Json;
+﻿using Prowl.Runtime.Serialization;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -11,9 +10,9 @@ public abstract class MonoBehaviour : EngineObject
 {
     public static bool PauseLogic = false;
 
-    [SerializeField]
+    [SerializeAs("Enabled")]
     private bool _enabled = true;
-    [SerializeField]
+    [SerializeAs("EnabledInHierarchy")]
     private bool _enabledInHierarchy = true;
 
     private bool _hasBeenEnabled = false;
@@ -43,10 +42,8 @@ public abstract class MonoBehaviour : EngineObject
     public virtual RenderingOrder RenderOrder => RenderingOrder.None;
 
 
-    [JsonIgnore]
     private GameObject _go;
 
-    [JsonIgnore]
     public GameObject GameObject => _go;
 
     private bool executeAlways = false;
@@ -93,7 +90,7 @@ public abstract class MonoBehaviour : EngineObject
     public IEnumerable<T> GetComponentsInChildren<T>() where T : MonoBehaviour => GameObject.GetComponentsInChildren<T>();
     #endregion
 
-    internal void AttachToGameObject(GameObject go, bool update = true)
+    internal void AttachToGameObject(GameObject go)
     {
         _go = go;
         HierarchyStateChanged();
