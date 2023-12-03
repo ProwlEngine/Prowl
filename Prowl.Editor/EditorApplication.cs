@@ -91,6 +91,7 @@ public unsafe class EditorApplication : Application {
                 int dock_id_main_left_top = 0;
                 int dock_id_main_left_bottom = 0;
                 ImGui.DockBuilderSplitNode(dock_id_main_left, ImGuiDir.Down, 0.3f, ref dock_id_main_left_bottom, ref dock_id_main_left_top);
+                ImGui.DockBuilderDockWindow("Game", dock_id_main_left_top);
                 ImGui.DockBuilderDockWindow("Viewport", dock_id_main_left_top);
 
                 int dock_id_main_left_bottom_left = 0;
