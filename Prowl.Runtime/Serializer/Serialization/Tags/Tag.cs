@@ -19,17 +19,18 @@ namespace Prowl.Runtime.Serialization
         Compound = 10,
     }
 
-    [JsonDerivedType(typeof(NullTag))]
-    [JsonDerivedType(typeof(ByteTag))]
-    [JsonDerivedType(typeof(ShortTag))]
-    [JsonDerivedType(typeof(IntTag))]
-    [JsonDerivedType(typeof(LongTag))]
-    [JsonDerivedType(typeof(FloatTag))]
-    [JsonDerivedType(typeof(DoubleTag))]
-    [JsonDerivedType(typeof(StringTag))]
-    [JsonDerivedType(typeof(ByteArrayTag))]
-    [JsonDerivedType(typeof(ListTag))]
-    [JsonDerivedType(typeof(CompoundTag))]
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
+    [JsonDerivedType(typeof(NullTag), "N")]
+    [JsonDerivedType(typeof(ByteTag), "B")]
+    [JsonDerivedType(typeof(ShortTag), "S")]
+    [JsonDerivedType(typeof(IntTag), "I")]
+    [JsonDerivedType(typeof(LongTag), "L")]
+    [JsonDerivedType(typeof(FloatTag), "F")]
+    [JsonDerivedType(typeof(DoubleTag), "D")]
+    [JsonDerivedType(typeof(StringTag), "STR")]
+    [JsonDerivedType(typeof(ByteArrayTag), "BARR")]
+    [JsonDerivedType(typeof(ListTag), "LIST")]
+    [JsonDerivedType(typeof(CompoundTag), "COMPOUND")]
     public abstract class Tag
     {
         public Tag() { }
