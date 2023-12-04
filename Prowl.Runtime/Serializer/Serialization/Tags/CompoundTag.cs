@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Xml.Linq;
@@ -93,6 +95,52 @@ namespace Prowl.Runtime.Serialization
                 throw new ArgumentNullException("name");
             return Tags.Remove(name);
         }
+
+        #region Querying
+
+        public bool TryFind<T>(string path, [MaybeNullWhen(false)] out T tag) where T : Tag
+        {
+            tag = Find<T>(path);
+            return tag != null;
+        }
+
+        public bool TryFind(string path, [MaybeNullWhen(false)] out Tag tag)
+        {
+            tag = Find(path);
+            return tag != null;
+        }
+
+        public T? Find<T>(string path) where T : Tag
+        {
+            var result = Find(path);
+            if (result is T tagFound)
+                return tagFound;
+
+            return null;
+        }
+
+        public Tag? Find(string path)
+        {
+            CompoundTag currentTag = this;
+            while (true)
+            {
+                var i = path.IndexOf('/');
+                var name = i < 0 ? path : path[..i];
+                if (!currentTag.TryGet(name, out Tag tag))
+                    return null;
+
+                if (i < 0)
+                    return tag;
+
+                if (tag is not CompoundTag c)
+                    return null;
+
+                currentTag = c;
+                path = path[(i + 1)..];
+            }
+        }
+
+        #endregion
 
         public override TagType GetTagType() => TagType.Compound;
 
