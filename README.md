@@ -177,6 +177,10 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 - Some ideas/code have been taken from the amazing 2D Engine [Duality](https://github.com/AdamsLair/duality).
 - The great C++ [Arc Game Engine](https://github.com/MohitSethi99/ArcGameEngine), for some UI Inspiration
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+## Contributors
+- [Michael (AKA Wulferis)](https://twitter.com/Wulferis)
+- [Josh Davis](https://github.com/10xJosh)
  
 # License
 
