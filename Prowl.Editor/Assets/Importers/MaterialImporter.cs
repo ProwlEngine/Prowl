@@ -126,7 +126,7 @@ namespace Prowl.Editor.Assets
                                 {
                                     path = AssetDatabase.GUIDToAssetPath(tex.AssetID);
                                     if (ImGui.Selectable($"{property.DisplayName}: {path}", false))
-                                        Selection.Select(this, false);
+                                        Selection.Select(this);
                                 }
 
                                 // DragDrop code

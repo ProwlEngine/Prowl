@@ -54,7 +54,7 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         {
             path = AssetDatabase.GUIDToAssetPath(value.AssetID);
             if (ImGui.Selectable($"{Name}: {path}", false))
-                Selection.Select(this, false);
+                Selection.Select(this);
         }
 
         // DragDrop code
