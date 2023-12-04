@@ -1,11 +1,8 @@
+using HexaEngine.ImGuiNET;
+using Prowl.Editor.Assets;
+using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
-using Prowl.Editor.Assets;
-using Prowl.Editor.PropertyDrawers;
-using Prowl.Icons;
-using HexaEngine.ImGuiNET;
-using System.IO;
-using System.Reflection;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -13,10 +10,10 @@ public class InspectorWindow : EditorWindow
 {
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoCollapse;
 
-    private Stack<object> _BackStack = new();
-    private Stack<object> _ForwardStack = new();
+    private Stack<WeakReference> _BackStack = new();
+    private Stack<WeakReference> _ForwardStack = new();
 
-    private object Selected;
+    private WeakReference? Selected;
 
     (object, ScriptedEditor)? customEditor;
 
@@ -30,7 +27,7 @@ public class InspectorWindow : EditorWindow
     {
         _ForwardStack.Clear();
         _BackStack.Push(Selected);
-        Selected = n;
+        Selected = new WeakReference(n);
     }
 
     ~InspectorWindow()
@@ -43,19 +40,21 @@ public class InspectorWindow : EditorWindow
 
         if (ImGui.BeginMenuBar())
         {
-            if (Selected == null)               ImGui.Text("No object selected");
-            else if (Selected is EngineObject)  ImGui.Text((Selection.Current as EngineObject)?.Name);
-            else                                ImGui.Text(Selected.GetType().ToString());
+            if (Selected == null) ImGui.Text("No object selected");
+            if (Selected.IsAlive == false) ImGui.Text("Object Destroyed");
+            else if (Selected.Target is EngineObject eo) ImGui.Text(eo.Name);
+            else ImGui.Text(Selected.Target.GetType().ToString());
             ImGui.EndMenuBar();
         }
 
-        if (Selected is null) return;
+        if (Selected == null) return;
+        if (Selected.IsAlive == false) return;
 
         // remove nulls or destroyed
         while (_BackStack.Count > 0)
         {
             var peek = _BackStack.Peek();
-            if (peek == null || (peek is EngineObject eObj && eObj.IsDestroyed) || peek == Selected)
+            if (peek == null || !peek.IsAlive || (peek.Target is EngineObject eObj && eObj.IsDestroyed) || ReferenceEquals(peek, Selected.Target))
                 _BackStack.Pop();
             else
                 break;
@@ -77,7 +76,7 @@ public class InspectorWindow : EditorWindow
         while (_ForwardStack.Count > 0)
         {
             var peek = _ForwardStack.Peek();
-            if (peek == null || (peek is EngineObject eObj && eObj.IsDestroyed) || peek == Selected)
+            if (peek == null || !peek.IsAlive || (peek.Target is EngineObject eObj && eObj.IsDestroyed) || ReferenceEquals(peek, Selected.Target))
                 _ForwardStack.Pop();
             else
                 break;
@@ -95,7 +94,7 @@ public class InspectorWindow : EditorWindow
 
         bool destroyCustomEditor = true;
 
-        if (Selected is EngineObject engineObj)
+        if (Selected.Target is EngineObject engineObj)
         {
             if (customEditor == null)
             {
@@ -104,7 +103,7 @@ public class InspectorWindow : EditorWindow
                 if (editorType != null)
                 {
                     customEditor = (engineObj, (ScriptedEditor)Activator.CreateInstance(editorType));
-                    customEditor.Value.Item2.target = engineObj;
+                    customEditor.Value.Item2.target = Selected;
                     customEditor.Value.Item2.OnEnable();
                     destroyCustomEditor = false;
                 }
@@ -116,7 +115,7 @@ public class InspectorWindow : EditorWindow
                 destroyCustomEditor = false;
             }
         }
-        else if(Selected is FileInfo path)
+        else if(Selected.Target is FileInfo path)
         {
             if (customEditor == null) 
             {
