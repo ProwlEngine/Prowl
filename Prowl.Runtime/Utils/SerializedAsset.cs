@@ -1,19 +1,15 @@
 ﻿using Prowl.Runtime.SceneManagement;
-using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.IO;
 using Prowl.Runtime.Serialization;
 using Prowl.Runtime.Serializer;
+using System;
+using System.Collections.Generic;
+using System.IO;
 
 namespace Prowl.Runtime.Utils
 {
     public class SerializedAsset
     {
-        [JsonProperty(Order = -1)]
         public EngineObject? Main;
-        [JsonProperty(Order = 1)]
         public List<EngineObject> SubAssets = new();
 
         public bool HasMain => Main != null;

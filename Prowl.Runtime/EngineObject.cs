@@ -1,9 +1,7 @@
-﻿using Prowl.Runtime.Utils;
-using Newtonsoft.Json;
+﻿using Prowl.Runtime.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Prowl.Runtime.Serialization;
 
 namespace Prowl.Runtime
 {
