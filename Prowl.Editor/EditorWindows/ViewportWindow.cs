@@ -206,7 +206,7 @@ public class ViewportWindow : EditorWindow
         {
             var mouseDelta = Input.MouseDelta;
             var pos = Cam.GameObject.Position;
-            pos += Cam.GameObject.Right * mouseDelta.X * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
+            pos -= Cam.GameObject.Right * mouseDelta.X * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
             pos += Cam.GameObject.Up * mouseDelta.Y * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
             Cam.GameObject.Position = pos;
         }
