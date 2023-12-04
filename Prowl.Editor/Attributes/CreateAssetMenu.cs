@@ -80,6 +80,8 @@ namespace Prowl.Editor
                 file = new FileInfo(file.FullName.Replace(".scriptobj", "") + " New.scriptobj");
             }
             StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(obj), file);
+
+            Selection.Select(file);
         }
     }
 }

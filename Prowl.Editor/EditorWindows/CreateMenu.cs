@@ -25,6 +25,8 @@ namespace Prowl.Editor.EditorWindows
                 file = new FileInfo(file.FullName.Replace(".mat", "") + " new.mat");
             }
             StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), file);
+
+            Selection.Select(file);
         }
 
         [MenuItem("Create/Script")]
@@ -39,6 +41,8 @@ namespace Prowl.Editor.EditorWindows
             using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
             using StreamReader reader = new StreamReader(stream);
             File.WriteAllText(file.FullName, reader.ReadToEnd());
+
+            Selection.Select(file);
         }
 
         #endregion
