@@ -45,9 +45,12 @@ namespace Prowl.Runtime
 
         public virtual void OnValidate() { }
 
-        public static T? FindObjectOfType<T>() where T : EngineObject => cachedObjectTypes[typeof(T)].FirstOrDefault() as T;
-        public static T[] FindObjectsOfType<T>() where T : EngineObject => cachedObjectTypes[typeof(T)].Cast<T>().ToArray();
-        public static T? FindObjectByID<T>(int id) where T : EngineObject => cachedObjectTypes[typeof(T)].FirstOrDefault(o => o.InstanceID == id && o is T) as T;
+        public static T? FindObjectOfType<T>() where T : EngineObject =>
+            cachedObjectTypes.TryGetValue(typeof(T), out var cams) ? cams.FirstOrDefault() as T : null;
+        public static T[] FindObjectsOfType<T>() where T : EngineObject => 
+            cachedObjectTypes.TryGetValue(typeof(T), out var cams) ? cams.Cast<T>().ToArray() : [];
+        public static T? FindObjectByID<T>(int id) where T : EngineObject => 
+            cachedObjectTypes.TryGetValue(typeof(T), out var cams) ? cams.FirstOrDefault(o => o.InstanceID == id && o is T) as T : null;
 
         public static void Foreach<T>(Action<T> action) where T : EngineObject
         {
