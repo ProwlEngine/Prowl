@@ -7,6 +7,7 @@ using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.Resources;
 using System.Numerics;
 using System.Reflection;
+using static Assimp.Metadata;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -56,6 +57,7 @@ public class AssetBrowserWindow : EditorWindow {
         ImGui.BeginChild("Body");
         RenderBody();
         ImGui.EndChild();
+        AssetsWindow.FileRightClick(null);
     }
 
     public void Invalidate()
