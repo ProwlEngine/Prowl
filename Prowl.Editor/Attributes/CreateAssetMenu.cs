@@ -82,7 +82,7 @@ namespace Prowl.Editor
             {
                 file = new FileInfo(file.FullName.Replace(".scriptobj", "") + " New.scriptobj");
             }
-            BinaryTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(obj), file);
+            StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(obj), file);
         }
     }
 }

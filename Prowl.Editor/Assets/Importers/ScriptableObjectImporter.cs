@@ -15,7 +15,7 @@ namespace Prowl.Editor.Assets
             {
                 // Load the Texture into a TextureData Object and serialize to Asset Folder
                 //var scriptable = JsonUtility.Deserialize<ScriptableObject>(File.ReadAllText(assetPath.FullName));
-                var scriptable = TagSerializer.Deserialize<ScriptableObject>(BinaryTagConverter.ReadFromFile(assetPath));
+                var scriptable = TagSerializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile(assetPath));
                 ctx.SetMainObject(scriptable);
 
                 ImGuiNotify.InsertNotification("ScriptableObject Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);

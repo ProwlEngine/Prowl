@@ -24,7 +24,7 @@ namespace Prowl.Editor.EditorWindows
             {
                 file = new FileInfo(file.FullName.Replace(".mat", "") + " new.mat");
             }
-            BinaryTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), file);
+            StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), file);
         }
 
         [MenuItem("Create/Script")]

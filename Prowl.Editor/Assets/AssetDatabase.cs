@@ -306,8 +306,9 @@ namespace Prowl.Runtime.Assets
             {
                 meta.importer.Import(ctx, assetFile);
             }
-            catch
+            catch (Exception e)
             {
+                ImGuiNotify.InsertNotification("Failed to Import Material.", new Color(0.8f, 0.1f, 0.1f, 1), "Reason: " + e.Message);
                 return false; // Import failed
             }
             if (!ctx.HasMain)
@@ -655,9 +656,7 @@ namespace Prowl.Runtime.Assets
             file ??= new FileInfo(AssetPath.FullName + ".meta");
             AssetDatabase.StartEditingAsset();
             CompoundTag tag = (CompoundTag)TagSerializer.Serialize(this);
-            using var stream = file.OpenWrite();
-            using var writer = new StreamWriter(stream);
-            StringTagConverter.WriteTo(tag, writer);
+            StringTagConverter.WriteToFile(tag, file);
             AssetDatabase.StopEditingAsset();
         }
 
@@ -667,9 +666,7 @@ namespace Prowl.Runtime.Assets
         public static MetaFile? Load(FileInfo file)
         {
             if (!file.Exists) throw new FileNotFoundException("Meta file does not exist.", file.FullName);
-            using var stream = file.OpenRead();
-            using var reader = new StreamReader(stream);
-            var tag = StringTagConverter.ReadFrom(reader);
+            var tag = StringTagConverter.ReadFromFile(file);
             var meta = TagSerializer.Deserialize<MetaFile>(tag);
             meta!.AssetPath = new FileInfo(Path.ChangeExtension(file.FullName, null));
             return meta;

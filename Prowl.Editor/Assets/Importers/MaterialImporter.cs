@@ -16,29 +16,25 @@ namespace Prowl.Editor.Assets
     {
         public override void Import(SerializedAsset ctx, FileInfo assetPath)
         {
+            // Load the Texture into a TextureData Object and serialize to Asset Folder
+            Material? mat;
             try
             {
-                // Load the Texture into a TextureData Object and serialize to Asset Folder
-                Material mat;
-                try
-                {
-                    mat = TagSerializer.Deserialize<Material>(BinaryTagConverter.ReadFromFile(assetPath));
-                }
-                catch
-                {
-                    // something went wrong, lets just create a new material and save it
-                    mat = new Material();
-                    BinaryTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), assetPath);
-                }
-
-                ctx.SetMainObject(mat);
-
-                ImGuiNotify.InsertNotification("Material Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);
+                string json = File.ReadAllText(assetPath.FullName);
+                var tag = StringTagConverter.Read(json);
+                mat = TagSerializer.Deserialize<Material>(tag);
             }
-            catch (Exception e)
+            catch
             {
-                ImGuiNotify.InsertNotification("Failed to Import Material.", new(0.8f, 0.1f, 0.1f, 1), "Reason: " + e.Message);
+                // something went wrong, lets just create a new material and save it
+                mat = new Material();
+                string json = StringTagConverter.Write((CompoundTag)TagSerializer.Serialize(mat));
+                File.WriteAllText(json, assetPath.FullName);
             }
+
+            ctx.SetMainObject(mat);
+
+            ImGuiNotify.InsertNotification("Material Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);
         }
     }
 
@@ -51,7 +47,8 @@ namespace Prowl.Editor.Assets
 
             try
             {
-                Material mat = TagSerializer.Deserialize<Material>(BinaryTagConverter.ReadFromFile((target as MetaFile).AssetPath));
+                var tag = StringTagConverter.ReadFromFile((target as MetaFile).AssetPath);
+                Material mat = TagSerializer.Deserialize<Material>(tag);
 
                 PropertyDrawer.Draw(mat, typeof(Material).GetField("Shader")!);
                 bool changed = false;
@@ -154,7 +151,7 @@ namespace Prowl.Editor.Assets
 
                 if (changed)
                 {
-                    BinaryTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), (target as MetaFile).AssetPath);
+                    StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), (target as MetaFile).AssetPath);
                     AssetDatabase.Reimport(AssetDatabase.FileToRelative((target as MetaFile).AssetPath));
                 }
             }

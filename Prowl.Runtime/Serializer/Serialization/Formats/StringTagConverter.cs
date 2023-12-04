@@ -6,18 +6,26 @@ namespace Prowl.Runtime.Serializer
 {
     public static class StringTagConverter
     {
-        public static void WriteTo(CompoundTag tag, TextWriter writer)
+        public static void WriteToFile(CompoundTag tag, FileInfo file)
         {
-            var options = new JsonSerializerOptions
-            {
-                WriteIndented = true
-            };
-            writer.Write(JsonSerializer.Serialize(tag, options));
+            string json = Write(tag);
+            File.WriteAllText(file.FullName, json);
         }
 
-        public static CompoundTag ReadFrom(TextReader reader)
+        public static string Write(CompoundTag tag)
         {
-            return JsonSerializer.Deserialize<CompoundTag>(reader.ReadToEnd());
+            return JsonSerializer.Serialize(tag, new JsonSerializerOptions { WriteIndented = true });
+        }
+
+        public static CompoundTag ReadFromFile(FileInfo file)
+        {
+            string json = File.ReadAllText(file.FullName);
+            return Read(json);
+        }
+
+        public static CompoundTag Read(string json)
+        {
+            return JsonSerializer.Deserialize<CompoundTag>(json);
         }
 
     }

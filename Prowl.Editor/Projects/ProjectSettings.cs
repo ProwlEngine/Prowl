@@ -42,7 +42,7 @@ namespace Prowl.Editor
             var convertedSettings = settings.ToDictionary(entry => entry.Key.FullName!, entry => entry.Value!);
 
             // Serialize settings to File
-            BinaryTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(convertedSettings), new FileInfo(path));
+            StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(convertedSettings), new FileInfo(path));
         }
 
         public static ProjectSettings Load()
@@ -52,7 +52,7 @@ namespace Prowl.Editor
             if (File.Exists(filePath))
             {
                 // Deserialize JSON to settings
-                var loadedSettings = TagSerializer.Deserialize<Dictionary<string, IProjectSetting>>(BinaryTagConverter.ReadFromFile(new FileInfo(filePath)));
+                var loadedSettings = TagSerializer.Deserialize<Dictionary<string, IProjectSetting>>(StringTagConverter.ReadFromFile(new FileInfo(filePath)));
 
                 // Remove any settings whos type cannot be inferred with Type.GetType
                 var convertedSettings = loadedSettings.Where(x => Type.GetType(x.Key) != null).ToDictionary(x => Type.GetType(x.Key), x => x.Value);
