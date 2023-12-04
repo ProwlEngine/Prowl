@@ -47,8 +47,9 @@ namespace Prowl.Runtime.Resources
         {
             using var magic = new MagickImage(path);
             magic.Format = MagickFormat.Png;
-            magic.Flip();
+            //magic.Flip();
             var image = Raylib.LoadImageFromMemory(".png", magic.ToByteArray());
+            Raylib.ImageFlipVertical(ref image); // Havent Benchmarked it but i think this is a lil faster then MagickImage.Flip()
             InternalTexture = Raylib.LoadTextureFromImage(image);
             if (Handle == 0) throw new Exception($"Failed to load texture from path: {path}");
             Raylib.UnloadImage(image);
@@ -58,8 +59,9 @@ namespace Prowl.Runtime.Resources
         {
             using var magic = new MagickImage(stream);
             magic.Format = MagickFormat.Png;
-            magic.Flip();
+            //magic.Flip();
             var image = Raylib.LoadImageFromMemory(".png", magic.ToByteArray());
+            Raylib.ImageFlipVertical(ref image); // Havent Benchmarked it but i think this is a lil faster then MagickImage.Flip()
             InternalTexture = Raylib.LoadTextureFromImage(image);
             if (Handle == 0) throw new Exception($"Failed to load texture from stream");
             Raylib.UnloadImage(image);
