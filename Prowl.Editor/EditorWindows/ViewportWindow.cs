@@ -7,6 +7,7 @@ using Prowl.Runtime.Components.ImageEffects;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.SceneManagement;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -155,13 +156,14 @@ public class ViewportWindow : EditorWindow
         ImGui.Text("FPS: " + Raylib_cs.Raylib.GetFPS());
 
         // Show ViewManipulation at the end
-        view *= Matrix4x4.CreateScale(1, -1, 1);
-        ImGuizmo.ViewManipulate(ref view, 10, new Vector2(ImGui.GetWindowPos().X + windowSize.X - 75, ImGui.GetWindowPos().Y + 15), new Vector2(75, 75), 0x10101010);
-        //view *= Matrix4x4.CreateScale(1, -1, 1); // invert back
-        //var newPosition = view.Translation;
-        //var newRotation = Quaternion.CreateFromRotationMatrix(viewYInverted);
-        //Cam.GameObject.GlobalPosition = newPosition;
-        //Cam.GameObject.GlobalOrientation = newRotation;
+        //view *= Matrix4x4.CreateScale(1, -1, 1);
+        unsafe
+        {
+            ImGuizmo.ViewManipulate(ref view, 2, new Vector2(ImGui.GetWindowPos().X + windowSize.X - 75, ImGui.GetWindowPos().Y + 15), new Vector2(75, 75), 0x10101010);
+            //view *= Matrix4x4.CreateScale(1, -1, 1); // invert back
+            Matrix4x4.Invert(view, out var iview);
+            Cam.GameObject.Local = iview;
+        }
     }
 
     protected override void Update()
