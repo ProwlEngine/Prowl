@@ -8,10 +8,9 @@ namespace Prowl.Runtime.Serialization
 	{
 		public short Value { get; set; }
 
-        public ShortTag() { Name = ""; }
-        public ShortTag(string tagName = "", short value = 0)
+        public ShortTag() {}
+        public ShortTag(short value = 0)
 		{
-			Name = tagName;
 			Value = value;
         }
 
@@ -19,13 +18,12 @@ namespace Prowl.Runtime.Serialization
 
         public override TagType GetTagType() => TagType.Short;
 
-        public override Tag Clone() => new ShortTag(Name, Value);
+        public override Tag Clone() => new ShortTag(Value);
 
         public override string ToString()
 		{
             StringBuilder sb = new();
 			sb.Append("ShortTAG");
-			if (Name.Length > 0) sb.AppendFormat("(\"{0}\")", Name);
 			sb.AppendFormat(": {0}", Value);
 			return sb.ToString();
 		}

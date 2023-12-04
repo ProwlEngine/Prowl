@@ -1,5 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -22,12 +21,11 @@ namespace Prowl.Runtime.Serialization
             set { Tags[tagIdx] = value; }
         }
 
-        public ListTag() : this("", new Tag[] { }, TagType.Null) { Name = ""; }
-        public ListTag(string tagName, IEnumerable<Tag> tags) : this(tagName, tags, tags.First().GetTagType()) { }
-        public ListTag(string tagName = "", TagType listType = TagType.Null) : this(tagName, new Tag[] { }, listType) { }
-        public ListTag(string tagName, IEnumerable<Tag> tags, TagType listType)
+        public ListTag() : this(new Tag[] { }, TagType.Null) { }
+        public ListTag(IEnumerable<Tag> tags) : this(tags, tags.First().GetTagType()) { }
+        public ListTag(TagType listType = TagType.Null) : this(new Tag[] { }, listType) { }
+        public ListTag(IEnumerable<Tag> tags, TagType listType)
         {
-            Name = tagName;
             Tags = new List<Tag>();
             ListType = listType;
 
@@ -55,14 +53,13 @@ namespace Prowl.Runtime.Serialization
         {
             var tags = new List<Tag>();
             foreach (var tag in Tags) tags.Add(tag.Clone());
-            return new ListTag(Name, tags, ListType);
+            return new ListTag(tags, ListType);
         }
 
         public override string ToString()
         {
             var sb = new StringBuilder();
             sb.Append("ListTAG");
-            if (Name.Length > 0) sb.AppendFormat("(\"{0}\")", Name);
             sb.AppendFormat(": {0} entries\n", Tags.Count);
 
             sb.Append("{\n");

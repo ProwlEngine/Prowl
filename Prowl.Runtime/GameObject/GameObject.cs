@@ -706,40 +706,40 @@ public class GameObject : EngineObject, ISerializable
         Recalculate();
     }
 
-    public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
+    public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
     {
-        CompoundTag compoundTag = new CompoundTag(tagName);
-        compoundTag.Add(new StringTag("Name", Name));
+        CompoundTag compoundTag = new CompoundTag();
+        compoundTag.Add("Name", new StringTag(Name));
 
-        compoundTag.Add(new ByteTag("Enabled", (byte)(_enabled ? 1 : 0)));
-        compoundTag.Add(new ByteTag("EnabledInHierarchy", (byte)(_enabledInHierarchy ? 1 : 0)));
+        compoundTag.Add("Enabled", new ByteTag((byte)(_enabled ? 1 : 0)));
+        compoundTag.Add("EnabledInHierarchy", new ByteTag((byte)(_enabledInHierarchy ? 1 : 0)));
 
-        compoundTag.Add(new IntTag("TagIndex", tagIndex));
-        compoundTag.Add(new IntTag("LayerIndex", layerIndex));
+        compoundTag.Add("TagIndex", new IntTag(tagIndex));
+        compoundTag.Add("LayerIndex", new IntTag(layerIndex));
 
-        compoundTag.Add(new IntTag("HideFlags", (int)hideFlags));
+        compoundTag.Add("HideFlags", new IntTag((int)hideFlags));
 
-        compoundTag.Add(new FloatTag("PosX", position.X));
-        compoundTag.Add(new FloatTag("PosY", position.Y));
-        compoundTag.Add(new FloatTag("PosZ", position.Z));
+        compoundTag.Add("PosX", new FloatTag(position.X));
+        compoundTag.Add("PosY", new FloatTag(position.Y));
+        compoundTag.Add("PosZ", new FloatTag(position.Z));
 
-        compoundTag.Add(new FloatTag("RotX", rotation.X));
-        compoundTag.Add(new FloatTag("RotY", rotation.Y));
-        compoundTag.Add(new FloatTag("RotZ", rotation.Z));
+        compoundTag.Add("RotX", new FloatTag(rotation.X));
+        compoundTag.Add("RotY", new FloatTag(rotation.Y));
+        compoundTag.Add("RotZ", new FloatTag(rotation.Z));
 
-        compoundTag.Add(new FloatTag("ScalX", scale.X));
-        compoundTag.Add(new FloatTag("ScalY", scale.Y));
-        compoundTag.Add(new FloatTag("ScalZ", scale.Z));
+        compoundTag.Add("ScalX", new FloatTag(scale.X));
+        compoundTag.Add("ScalY", new FloatTag(scale.Y));
+        compoundTag.Add("ScalZ", new FloatTag(scale.Z));
 
-        ListTag components = new ListTag("Components", TagType.Compound);
+        ListTag components = new ListTag(TagType.Compound);
         foreach (var comp in _components)
-            components.Add(TagSerializer.Serialize(comp, "", ctx));
-        compoundTag.Add(components);
+            components.Add(TagSerializer.Serialize(comp, ctx));
+        compoundTag.Add("Components", components);
 
-        ListTag children = new ListTag("Children", TagType.Compound);
+        ListTag children = new ListTag(TagType.Compound);
         foreach (var child in Children)
-            children.Add(TagSerializer.Serialize(child, "", ctx));
-        compoundTag.Add(children);
+            children.Add(TagSerializer.Serialize(child, ctx));
+        compoundTag.Add("Children", children);
 
         return compoundTag;
     }

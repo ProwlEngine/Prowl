@@ -178,22 +178,22 @@ namespace Prowl.Runtime.Resources
         /// <summary>sCall only if this texture is Generated From Code, If its Content or Asset based then only call this if you know what you are doing </summary>
         public void Unload() => Raylib.UnloadTexture(InternalTexture);
 
-        public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
+        public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
         {
-            CompoundTag compoundTag = new CompoundTag(tagName);
-            compoundTag.Add(new IntTag("Width", Width));
-            compoundTag.Add(new IntTag("Height", Height));
-            compoundTag.Add(new IntTag("MipMaps", MipMaps));
-            compoundTag.Add(new ByteTag("Format", (byte)Format));
-            compoundTag.Add(new ByteTag("Filter", (byte)Filter));
-            compoundTag.Add(new ByteTag("Wrap", (byte)Wrap));
+            CompoundTag compoundTag = new CompoundTag();
+            compoundTag.Add("Width", new IntTag(Width));
+            compoundTag.Add("Height", new IntTag(Height));
+            compoundTag.Add("MipMaps", new IntTag(MipMaps));
+            compoundTag.Add("Format", new ByteTag((byte)Format));
+            compoundTag.Add("Filter", new ByteTag((byte)Filter));
+            compoundTag.Add("Wrap", new ByteTag((byte)Wrap));
             Image image = Raylib.LoadImageFromTexture(InternalTexture);
             unsafe
             {
                 int size = Raylib.GetPixelDataSize(Width, Height, Format);
                 byte[] byteArray = new byte[size];
                 Marshal.Copy((IntPtr)image.data, byteArray, 0, byteArray.Length);
-                compoundTag.Add(new ByteArrayTag("Data", byteArray));
+                compoundTag.Add("Data", new ByteArrayTag(byteArray));
             }
             return compoundTag;
         }

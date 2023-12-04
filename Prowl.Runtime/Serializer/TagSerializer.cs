@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
 
 namespace Prowl.Runtime.Serialization
 {
@@ -35,54 +36,53 @@ namespace Prowl.Runtime.Serialization
 
         #region Serialize
 
-        public static Tag Serialize(object? value, string tagName = "") => Serialize(value, tagName, new());
-        public static Tag Serialize(object? value, string tagName, SerializationContext ctx)
+        public static Tag Serialize(object? value) => Serialize(value, new());
+        public static Tag Serialize(object? value, SerializationContext ctx)
         {
             if (value == null)
-                return new NullTag(tagName);
+                return new NullTag();
 
             if (value is Tag t)
             {
                 var clone = t.Clone();
-                clone.Name = tagName;
                 return clone;
             }
 
             var type = value.GetType();
             if (IsPrimitive(type))
-                return PrimitiveToTag(tagName, value);
+                return PrimitiveToTag(value);
 
             if (type.IsArray && value is Array array)
-                return ArrayToListTag(tagName, array, ctx);
+                return ArrayToListTag(array, ctx);
 
             if (value is IDictionary dict)
-                return DictionaryToTag(tagName, dict, ctx);
+                return DictionaryToTag(dict, ctx);
 
-            return SerializeObject(value, tagName, ctx);
+            return SerializeObject(value, ctx);
         }
 
-        private static Tag PrimitiveToTag(string tagName, object p)
+        private static Tag PrimitiveToTag(object p)
         {
-            if (p is byte b)             return new ByteTag(tagName, b);
-            else if (p is sbyte sb)      return new ByteTag(tagName, (byte)sb);
-            else if (p is byte[] bArr)   return new ByteArrayTag(tagName, bArr);
-            else if (p is bool bo)       return new ByteTag(tagName, (byte)(bo ? 1 : 0));
-            else if (p is float f)       return new FloatTag(tagName, f);
-            else if (p is double d)      return new DoubleTag(tagName, d);
-            else if (p is int i)         return new IntTag(tagName, i);
-            else if (p is uint ui)       return new IntTag(tagName, (int)ui);
-            else if (p is long l)        return new LongTag(tagName, l);
-            else if (p is ulong ul)      return new LongTag(tagName, (long)ul);
-            else if (p is short s)       return new ShortTag(tagName, s);
-            else if (p is ushort us)     return new ShortTag(tagName, (short)us);
-            else if (p is string str)    return new StringTag(tagName, str);
-            else if (p is DateTime date) return new LongTag(tagName, date.ToBinary());
-            else if (p is Guid g)        return new StringTag(tagName, g.ToString());
-            else if (p.GetType().IsEnum) return new IntTag(tagName, (int)p); // Serialize enums as integers
+            if (p is byte b)             return new ByteTag(b);
+            else if (p is sbyte sb)      return new ByteTag((byte)sb);
+            else if (p is byte[] bArr)   return new ByteArrayTag(bArr);
+            else if (p is bool bo)       return new ByteTag((byte)(bo ? 1 : 0));
+            else if (p is float f)       return new FloatTag(f);
+            else if (p is double d)      return new DoubleTag(d);
+            else if (p is int i)         return new IntTag(i);
+            else if (p is uint ui)       return new IntTag((int)ui);
+            else if (p is long l)        return new LongTag(l);
+            else if (p is ulong ul)      return new LongTag((long)ul);
+            else if (p is short s)       return new ShortTag(s);
+            else if (p is ushort us)     return new ShortTag((short)us);
+            else if (p is string str)    return new StringTag(str);
+            else if (p is DateTime date) return new LongTag(date.ToBinary());
+            else if (p is Guid g)        return new StringTag(g.ToString());
+            else if (p.GetType().IsEnum) return new IntTag((int)p); // Serialize enums as integers
             else throw new NotSupportedException("The type '" + p.GetType() + "' is not a supported primitive.");
         }
 
-        private static ListTag ArrayToListTag(string tagName, Array array, SerializationContext ctx)
+        private static ListTag ArrayToListTag(Array array, SerializationContext ctx)
         {
             var elementType = array.GetType().GetElementType();
             var listType = TagType.Compound;
@@ -106,31 +106,30 @@ namespace Prowl.Runtime.Serialization
                 listType = TagType.ByteArray;
             List<Tag> tags = new();
             for (int i = 0; i < array.Length; i++)
-                tags.Add(Serialize(array.GetValue(i), "", ctx));
-            return new ListTag(tagName, tags, listType);
+                tags.Add(Serialize(array.GetValue(i), ctx));
+            return new ListTag(tags, listType);
         }
 
-        private static CompoundTag DictionaryToTag(string tagName, IDictionary dict, SerializationContext ctx)
+        private static CompoundTag DictionaryToTag(IDictionary dict, SerializationContext ctx)
         {
-            CompoundTag tag = new(tagName);
+            CompoundTag tag = new();
             foreach (DictionaryEntry kvp in dict)
             {
                 if (kvp.Key is string str)
-                    tag.Add(Serialize(kvp.Value, str, ctx));
+                    tag.Add(str, Serialize(kvp.Value, ctx));
                 else
                     throw new InvalidCastException("Dictionary keys must be strings!");
             }
             return tag;
         }
 
-        private static Tag SerializeObject(object? value, string tagName, SerializationContext ctx)
+        private static Tag SerializeObject(object? value, SerializationContext ctx)
         {
-            if (value == null) return new NullTag(tagName); // ID defaults to 0 which is null or an Empty Compound
+            if (value == null) return new NullTag(); // ID defaults to 0 which is null or an Empty Compound
 
             var type = value.GetType();
 
-            var nameAttribute = Attribute.GetCustomAttribute(type, typeof(SerializeAsAttribute)) as SerializeAsAttribute;
-            var compound = new CompoundTag(nameAttribute?.Name ?? tagName);
+            var compound = new CompoundTag();
 
             if (ctx.objectToId.TryGetValue(value, out int id))
             {
@@ -149,7 +148,7 @@ namespace Prowl.Runtime.Serialization
             if (value is ISerializable serializable)
             {
                 // Manual Serialization
-                compound = serializable.Serialize(tagName, ctx);
+                compound = serializable.Serialize(ctx);
             }
             else
             {
@@ -166,13 +165,12 @@ namespace Prowl.Runtime.Serialization
                     if (propValue == null)
                     {
                         if (Attribute.GetCustomAttribute(field, typeof(IgnoreOnNullAttribute)) != null) continue;
-                        compound.Add(new NullTag(name));
+                        compound.Add(name, new NullTag());
                     }
                     else
                     {
-                        Tag tag = Serialize(propValue, name, ctx);
-                        if (string.IsNullOrEmpty(tag.Name)) throw new NullReferenceException("Data Tag Name is missing! Cannot finish Serialization!");
-                        compound.Add(tag);
+                        Tag tag = Serialize(propValue, ctx);
+                        compound.Add(name, tag);
                     }
                 }
             }
@@ -258,12 +256,8 @@ namespace Prowl.Runtime.Serialization
                     // tag is dictionary
                     var dict = (IDictionary)Activator.CreateInstance(targetType);
                     var valueType = targetType.GetGenericArguments()[1];
-                    foreach (var tag in compound.AllTags)
-                    {
-                        var key = tag.Name;
-                        var val = Deserialize(tag, valueType, ctx);
-                        dict.Add(key, val);
-                    }
+                    foreach (var tag in compound.Tags)
+                        dict.Add(tag.Key, Deserialize(tag.Value, valueType, ctx));
                     return dict;
                 }
 

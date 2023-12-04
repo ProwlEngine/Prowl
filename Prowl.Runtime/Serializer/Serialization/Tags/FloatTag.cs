@@ -8,10 +8,9 @@ namespace Prowl.Runtime.Serialization
 	{
 		public float Value { get; set; }
 
-        public FloatTag() { Name = ""; }
-        public FloatTag(string tagName = "", float value = 0f)
+        public FloatTag() {}
+        public FloatTag(float value = 0f)
 		{
-			Name = tagName;
 			Value = value;
         }
 
@@ -19,13 +18,12 @@ namespace Prowl.Runtime.Serialization
 
         public override TagType GetTagType() => TagType.Float;
 
-        public override Tag Clone() => new FloatTag(Name, Value);
+        public override Tag Clone() => new FloatTag(Value);
 
         public override string ToString()
 		{
 			var sb = new StringBuilder();
 			sb.Append("FloatTAG");
-			if (Name.Length > 0) sb.AppendFormat("(\"{0}\")", Name);
 			sb.AppendFormat(": {0}", Value);
 			return sb.ToString();
 		}

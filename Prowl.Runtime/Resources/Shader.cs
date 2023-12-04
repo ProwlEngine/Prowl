@@ -126,35 +126,35 @@ namespace Prowl.Runtime.Resources
             return Application.AssetProvider.LoadAsset<Shader>(path);
         }
 
-        public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
+        public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
         {
-            CompoundTag compoundTag = new CompoundTag(tagName);
-            ListTag propertiesTag = new ListTag("Properties", TagType.Compound);
+            CompoundTag compoundTag = new CompoundTag();
+            ListTag propertiesTag = new ListTag(TagType.Compound);
             foreach (var property in Properties)
             {
-                CompoundTag propertyTag = new CompoundTag("");
-                propertyTag.Add(new StringTag("Name", property.Name));
-                propertyTag.Add(new StringTag("DisplayName", property.DisplayName));
-                propertyTag.Add(new ByteTag("Type", (byte)property.Type));
+                CompoundTag propertyTag = new CompoundTag();
+                propertyTag.Add("Name", new StringTag(property.Name));
+                propertyTag.Add("DisplayName", new StringTag(property.DisplayName));
+                propertyTag.Add("Type", new ByteTag((byte)property.Type));
                 propertiesTag.Add(propertyTag);
             }
-            compoundTag.Add(propertiesTag);
-            ListTag passesTag = new ListTag("Passes", TagType.Compound);
+            compoundTag.Add("Properties", propertiesTag);
+            ListTag passesTag = new ListTag(TagType.Compound);
             foreach (var pass in Passes)
             {
-                CompoundTag passTag = new CompoundTag("");
-                passTag.Add(new StringTag("RenderMode", pass.RenderMode));
-                passTag.Add(new StringTag("Vertex", pass.Vertex));
-                passTag.Add(new StringTag("Fragment", pass.Fragment));
+                CompoundTag passTag = new CompoundTag();
+                passTag.Add("RenderMode", new StringTag(pass.RenderMode));
+                passTag.Add("Vertex", new StringTag(pass.Vertex));
+                passTag.Add("Fragment", new StringTag(pass.Fragment));
                 passesTag.Add(passTag);
             }
-            compoundTag.Add(passesTag);
+            compoundTag.Add("Passes", passesTag);
             if (ShadowPass != null)
             {
-                CompoundTag shadowPassTag = new CompoundTag("ShadowPass");
-                shadowPassTag.Add(new StringTag("Vertex", ShadowPass.Vertex));
-                shadowPassTag.Add(new StringTag("Fragment", ShadowPass.Fragment));
-                compoundTag.Add(shadowPassTag);
+                CompoundTag shadowPassTag = new CompoundTag();
+                shadowPassTag.Add("Vertex", new StringTag(ShadowPass.Vertex));
+                shadowPassTag.Add("Fragment", new StringTag(ShadowPass.Fragment));
+                compoundTag.Add("ShadowPass", shadowPassTag);
             }
             return compoundTag;
         }

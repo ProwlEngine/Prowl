@@ -8,10 +8,9 @@ namespace Prowl.Runtime.Serialization
 	{
 		public long Value { get; set; }
 
-        public LongTag() { Name = ""; }
-        public LongTag(string tagName = "", long value = 0)
+        public LongTag() {}
+        public LongTag(long value = 0)
 		{
-			Name = tagName;
 			Value = value;
         }
 
@@ -19,13 +18,12 @@ namespace Prowl.Runtime.Serialization
 
         public override TagType GetTagType() => TagType.Long;
 
-        public override Tag Clone() => new LongTag(Name, Value);
+        public override Tag Clone() => new LongTag(Value);
 
         public override string ToString()
 		{
 			var sb = new StringBuilder();
 			sb.Append("LongTAG");
-			if (Name.Length > 0) sb.AppendFormat("(\"{0}\")", Name);
 			sb.AppendFormat(": {0}", Value);
 			return sb.ToString();
 		}

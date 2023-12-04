@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Xml.Linq;
 
 namespace Prowl.Runtime.Serialization
 {
@@ -20,8 +21,6 @@ namespace Prowl.Runtime.Serialization
                     throw new ArgumentNullException("tagName");
                 else if (value == null)
                     throw new ArgumentNullException("value");
-                else if (value.Name != tagName)
-                    throw new ArgumentException("Given tag name must match tag's actual name.");
                 Tags[tagName] = value;
             }
         }
@@ -34,17 +33,15 @@ namespace Prowl.Runtime.Serialization
         [JsonIgnore]
         public IEnumerable<Tag> AllTags => Tags.Values;
 
-        public CompoundTag() : this("") {}
-        public CompoundTag(string tagName = "") : this(tagName, new Tag[]{}) { }
-		public CompoundTag(string tagName, IEnumerable<Tag> tags)
+        public CompoundTag() : this(new (string, Tag)[]{}) { }
+		public CompoundTag(IEnumerable<(string, Tag)> tags)
 		{
-			Name = tagName;
 			Tags = new();
             SerializedType = "";
 			SerializedID = 0;
 
 			foreach (var tag in tags)
-				Tags[tag.Name] = tag;
+				Tags[tag.Item1] = tag.Item2;
 		}
 
 		public Tag Get(string tagName) => Get<Tag>(tagName);
@@ -81,28 +78,13 @@ namespace Prowl.Runtime.Serialization
                 throw new ArgumentNullException("tagName");
             return Tags.ContainsKey(tagName);
         }
-        public void Add(Tag newTag)
+        public void Add(string name, Tag newTag)
         {
             if (newTag == null)
                 throw new ArgumentNullException("newTag");
             else if (newTag == this)
                 throw new ArgumentException("Cannot add tag to self");
-            else if (newTag.Name == null)
-                throw new ArgumentException("Only named tags are allowed in compound tags.");
-            Tags.Add(newTag.Name, newTag);
-        }
-
-        public bool Remove(Tag tag)
-        {
-            if (tag == null)
-                throw new ArgumentNullException("tag");
-            if (tag.Name == null)
-                throw new ArgumentException("Trying to remove an unnamed tag.");
-            Tag maybeItem;
-            if (Tags.TryGetValue(tag.Name, out maybeItem))
-                if (maybeItem == tag && Tags.Remove(tag.Name))
-                    return true;
-            return false;
+            Tags.Add(name, newTag);
         }
 
         public bool Remove(string name)
@@ -116,16 +98,15 @@ namespace Prowl.Runtime.Serialization
 
         public override Tag Clone()
         {
-            var tags = new List<Tag>();
-            foreach (var tag in AllTags) tags.Add(tag.Clone());
-            return new CompoundTag(Name, tags);
+            var tags = new List<(string, Tag)>();
+            foreach (var tag in Tags) tags.Add((tag.Key, tag.Value.Clone()));
+            return new CompoundTag(tags);
         }
 
         public override string ToString()
 		{
 			var sb = new StringBuilder();
 			sb.Append("CompoundTAG");
-			if (Name.Length > 0) sb.AppendFormat("(\"{0}\")", Name);
 			sb.AppendFormat(": {0} entries\n", Tags.Count);
 
 			sb.Append("{\n");

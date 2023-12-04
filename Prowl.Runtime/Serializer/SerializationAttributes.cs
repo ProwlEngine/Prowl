@@ -10,14 +10,14 @@ namespace Prowl.Runtime.Serialization
     {
     }
 
-    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Class, AllowMultiple = false)]
+    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false)]
     public class SerializeAsAttribute : Attribute
     {
         public string Name { get; set; }
         public SerializeAsAttribute(string name) => Name = name;
     }
 
-    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Class, AllowMultiple = true)]
+    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = true)]
     public class FormerlySerializedAsAttribute : Attribute
     {
         public string Name { get; set; }

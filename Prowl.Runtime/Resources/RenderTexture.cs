@@ -137,17 +137,17 @@ namespace Prowl.Runtime.Resources
             Rlgl.rlUnloadFramebuffer(fboId);
         }
 
-        public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
+        public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
         {
-            CompoundTag compoundTag = new CompoundTag(tagName);
-            compoundTag.Add(new IntTag("Width", Width));
-            compoundTag.Add(new IntTag("Height", Height));
-            compoundTag.Add(new IntTag("NumTextures", numTextures));
-            compoundTag.Add(new ByteTag("HasDepthAttachment", (byte)(hasDepthAttachment ? 1 : 0)));
-            ListTag textureFormatsTag = new ListTag("TextureFormats", TagType.Byte);
+            CompoundTag compoundTag = new CompoundTag();
+            compoundTag.Add("Width", new IntTag(Width));
+            compoundTag.Add("Height", new IntTag(Height));
+            compoundTag.Add("NumTextures", new IntTag(numTextures));
+            compoundTag.Add("HasDepthAttachment", new ByteTag((byte)(hasDepthAttachment ? 1 : 0)));
+            ListTag textureFormatsTag = new ListTag(TagType.Byte);
             foreach (var format in textureFormats)
-                textureFormatsTag.Add(new ByteTag("", (byte)format));
-            compoundTag.Add(textureFormatsTag);
+                textureFormatsTag.Add(new ByteTag((byte)format));
+            compoundTag.Add("TextureFormats", textureFormatsTag);
             return compoundTag;
         }
 

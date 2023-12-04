@@ -8,10 +8,9 @@ namespace Prowl.Runtime.Serialization
 	{
 		public int Value { get; set; }
 
-        public IntTag() { Name = ""; }
-        public IntTag(string name = "", int value = 0)
+        public IntTag() { }
+        public IntTag(int value = 0)
 		{
-			Name = name;
 			Value = value;
         }
 
@@ -19,13 +18,12 @@ namespace Prowl.Runtime.Serialization
 
         public override TagType GetTagType() => TagType.Int;
 
-        public override Tag Clone() => new IntTag(Name, Value);
+        public override Tag Clone() => new IntTag(Value);
 
         public override string ToString()
 		{
 			var sb = new StringBuilder();
 			sb.Append("IntTAG");
-			if (Name.Length > 0) sb.AppendFormat("(\"{0}\")", Name);
 			sb.AppendFormat(": {0}", Value);
 			return sb.ToString();
 		}

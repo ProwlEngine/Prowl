@@ -32,9 +32,7 @@ namespace Prowl.Runtime.Serialization
     [JsonDerivedType(typeof(CompoundTag))]
     public abstract class Tag
     {
-        public string Name { get; set; }
-
-        public Tag() => Name = "";
+        public Tag() { }
 
         public abstract TagType GetTagType();
         public abstract Tag Clone();

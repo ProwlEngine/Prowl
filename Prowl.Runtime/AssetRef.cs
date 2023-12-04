@@ -268,12 +268,12 @@ namespace Prowl.Runtime
         }
 
 
-        public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
+        public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
         {
-            CompoundTag compoundTag = new CompoundTag(tagName);
-            compoundTag.Add(new StringTag("AssetID", assetID.ToString()));
+            CompoundTag compoundTag = new CompoundTag();
+            compoundTag.Add("AssetID", new StringTag(assetID.ToString()));
             if (IsRuntimeResource)
-                compoundTag.Add(TagSerializer.Serialize(instance, "Instance", ctx));
+                compoundTag.Add("Instance", TagSerializer.Serialize(instance, ctx));
             return compoundTag;
         }
 

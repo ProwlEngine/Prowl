@@ -307,9 +307,9 @@ namespace Prowl.Runtime.Resources
 
         #endregion
 
-        public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
+        public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
         {
-            CompoundTag compoundTag = new CompoundTag(tagName);
+            CompoundTag compoundTag = new CompoundTag();
             // Serialize to byte[]
             using (MemoryStream memoryStream = new MemoryStream())
             using (BinaryWriter writer = new BinaryWriter(memoryStream))
@@ -324,7 +324,7 @@ namespace Prowl.Runtime.Resources
                 SerializeArray(writer, boneIds);
                 SerializeArray(writer, boneWeights);
 
-                compoundTag.Add(new ByteArrayTag("Data", memoryStream.ToArray()));
+                compoundTag.Add("Data", new ByteArrayTag(memoryStream.ToArray()));
             }
             return compoundTag;
         }
