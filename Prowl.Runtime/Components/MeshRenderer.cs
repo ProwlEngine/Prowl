@@ -1,5 +1,4 @@
 ﻿using Prowl.Icons;
-using Prowl.Runtime.Resources;
 using Prowl.Runtime.Serialization;
 using System.Numerics;
 using Material = Prowl.Runtime.Resources.Material;

@@ -7,28 +7,40 @@ namespace Prowl.Runtime.Serialization
     public enum TagType
     {
         Null = 0,
-        Byte = 1,
-        Short = 2,
-        Int = 3,
-        Long = 4,
-        Float = 5,
-        Double = 6,
-        String = 7,
-        ByteArray = 8,
-        List = 9,
-        Compound = 10,
+        Byte,
+        sByte,
+        Short,
+        Int,
+        Long,
+        UShort,
+        UInt,
+        ULong,
+        Float,
+        Double,
+        Decimal,
+        String,
+        ByteArray,
+        Bool,
+        List,
+        Compound,
     }
 
     [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-    [JsonDerivedType(typeof(NullTag), "N")]
+    [JsonDerivedType(typeof(NullTag), "NULL")]
     [JsonDerivedType(typeof(ByteTag), "B")]
+    [JsonDerivedType(typeof(sByteTag), "sB")]
     [JsonDerivedType(typeof(ShortTag), "S")]
     [JsonDerivedType(typeof(IntTag), "I")]
     [JsonDerivedType(typeof(LongTag), "L")]
+    [JsonDerivedType(typeof(UShortTag), "uS")]
+    [JsonDerivedType(typeof(UIntTag), "uI")]
+    [JsonDerivedType(typeof(ULongTag), "uL")]
     [JsonDerivedType(typeof(FloatTag), "F")]
     [JsonDerivedType(typeof(DoubleTag), "D")]
+    [JsonDerivedType(typeof(DecimalTag), "DEC")]
     [JsonDerivedType(typeof(StringTag), "STR")]
     [JsonDerivedType(typeof(ByteArrayTag), "BARR")]
+    [JsonDerivedType(typeof(BoolTag), "BOOL")]
     [JsonDerivedType(typeof(ListTag), "LIST")]
     [JsonDerivedType(typeof(CompoundTag), "COMPOUND")]
     public abstract class Tag
@@ -67,6 +79,7 @@ namespace Prowl.Runtime.Serialization
             {
                 return GetTagType() switch
                 {
+                    TagType.Bool => Convert.ToBoolean(((BoolTag)this).Value),
                     TagType.Byte => Convert.ToBoolean(((ByteTag)this).Value),
                     TagType.Short => Convert.ToBoolean(((ShortTag)this).Value),
                     TagType.Int => Convert.ToBoolean(((IntTag)this).Value),
@@ -91,6 +104,19 @@ namespace Prowl.Runtime.Serialization
             }
         }
 
+        /// <summary> Returns the value of this tag, cast as a sbyte.
+        /// Only supported by sByteTag tags. </summary>
+        /// <exception cref="InvalidCastException"> When used on a tag other than sByteTag. </exception>
+        [JsonIgnore]
+        public sbyte sByteValue
+        {
+            get
+            {
+                if (GetTagType() == TagType.sByte) return ((sByteTag)this).Value;
+                else throw new InvalidCastException("Cannot get sByteValue from " + ToString());
+            }
+        }
+
 
         /// <summary> Returns the value of this tag, cast as a short (16-bit signed integer).
         /// Only supported by ByteTag and ShortTag. </summary>
@@ -103,6 +129,7 @@ namespace Prowl.Runtime.Serialization
                 return GetTagType() switch
                 {
                     TagType.Byte => ((ByteTag)this).Value,
+                    TagType.sByte => ((sByteTag)this).Value,
                     TagType.Short => ((ShortTag)this).Value,
                     _ => throw new InvalidCastException("Cannot get ShortValue from " + ToString())
                 };
@@ -121,6 +148,7 @@ namespace Prowl.Runtime.Serialization
                 return GetTagType() switch
                 {
                     TagType.Byte => ((ByteTag)this).Value,
+                    TagType.sByte => ((sByteTag)this).Value,
                     TagType.Short => ((ShortTag)this).Value,
                     TagType.Int => ((IntTag)this).Value,
                     _ => throw new InvalidCastException("Cannot get IntValue from " + ToString())
@@ -140,10 +168,68 @@ namespace Prowl.Runtime.Serialization
                 return GetTagType() switch
                 {
                     TagType.Byte => ((ByteTag)this).Value,
+                    TagType.sByte => ((sByteTag)this).Value,
                     TagType.Short => ((ShortTag)this).Value,
                     TagType.Int => ((IntTag)this).Value,
                     TagType.Long => ((LongTag)this).Value,
                     _ => throw new InvalidCastException("Cannot get LongValue from " + ToString())
+                };
+            }
+        }
+
+
+        /// <summary> Returns the value of this tag, cast as a ushort (16-bit unsigned integer).
+        /// Only supported by ByteTag and UShortTag. </summary>
+        /// <exception cref="InvalidCastException"> When used on an unsupported tag. </exception>
+        [JsonIgnore]
+        public ushort UShortValue
+        {
+            get
+            {
+                return GetTagType() switch
+                {
+                    TagType.Byte => ((ByteTag)this).Value,
+                    TagType.UShort => ((UShortTag)this).Value,
+                    _ => throw new InvalidCastException("Cannot get UShortValue from " + ToString())
+                };
+            }
+        }
+
+
+        /// <summary> Returns the value of this tag, cast as an uint (32-bit unsigned integer).
+        /// Only supported by ByteTag, UShortTag, and UIntTag. </summary>
+        /// <exception cref="InvalidCastException"> When used on an unsupported tag. </exception>
+        [JsonIgnore]
+        public uint UIntValue
+        {
+            get
+            {
+                return GetTagType() switch
+                {
+                    TagType.Byte => ((ByteTag)this).Value,
+                    TagType.UShort => ((UShortTag)this).Value,
+                    TagType.UInt => ((UIntTag)this).Value,
+                    _ => throw new InvalidCastException("Cannot get UIntValue from " + ToString())
+                };
+            }
+        }
+
+
+        /// <summary> Returns the value of this tag, cast as a ulong (64-bit unsigned integer).
+        /// Only supported by ByteTag, UShortTag, UIntTag, and ULongTag. </summary>
+        /// <exception cref="InvalidCastException"> When used on an unsupported tag. </exception>
+        [JsonIgnore]
+        public ulong ULongValue
+        {
+            get
+            {
+                return GetTagType() switch
+                {
+                    TagType.Byte => ((ByteTag)this).Value,
+                    TagType.UShort => ((UShortTag)this).Value,
+                    TagType.UInt => ((UIntTag)this).Value,
+                    TagType.ULong => ((ULongTag)this).Value,
+                    _ => throw new InvalidCastException("Cannot get ULongValue from " + ToString())
                 };
             }
         }
@@ -188,6 +274,23 @@ namespace Prowl.Runtime.Serialization
                     TagType.Float => ((FloatTag)this).Value,
                     TagType.Double => ((DoubleTag)this).Value,
                     _ => throw new InvalidCastException("Cannot get DoubleValue from " + ToString())
+                };
+            }
+        }
+
+
+        /// <summary> Returns the value of this tag, cast as a decimal.
+        /// Only supported by DecimalTag. </summary>
+        /// <exception cref="InvalidCastException"> When used on an unsupported tag. </exception>
+        [JsonIgnore]
+        public decimal DecimalValue
+        {
+            get
+            {
+                return GetTagType() switch
+                {
+                    TagType.Decimal => ((DecimalTag)this).Value,
+                    _ => throw new InvalidCastException("Cannot get DecimalTag from " + ToString())
                 };
             }
         }
