@@ -116,15 +116,15 @@ public class InspectorWindow : EditorWindow
                 destroyCustomEditor = false;
             }
         }
-        else if(Selected is string path)
+        else if(Selected is FileInfo path)
         {
             if (customEditor == null) 
             {
-                string? relativeAssetPath = AssetDatabase.GetRelativePath(Selected.ToString());
+                string? relativeAssetPath = AssetDatabase.GetRelativePath(path.FullName);
                 if (relativeAssetPath != null)
                 {
                     // The selected object is a path in our asset database, load its meta data and display a custom editor for the Importer if ones found
-                    var id = AssetDatabase.GUIDFromAssetPath(new FileInfo(Selected.ToString()));
+                    var id = AssetDatabase.GUIDFromAssetPath(path);
                     if (id != Guid.Empty)
                     {
                         var meta = AssetDatabase.LoadMeta(relativeAssetPath);
@@ -140,22 +140,22 @@ public class InspectorWindow : EditorWindow
                             }
                             else
                             {
-                                ImGui.Text("No Editor Found: " + Selected.ToString());
+                                ImGui.Text("No Editor Found: " + path.FullName);
                             }
                         }
                         else
                         {
-                            ImGui.Text("No Meta File: " + Selected.ToString());
+                            ImGui.Text("No Meta File: " + path.FullName);
                         }
                     }
                     else
                     {
-                        ImGui.Text("File in Assets folder: " + Selected.ToString());
+                        ImGui.Text("File in Assets folder: " + path.FullName);
                     }
                 }
                 else
                 {
-                    ImGui.Text("String: " + Selected.ToString());
+                    ImGui.Text("FileInfo: " + path.FullName);
                 }
             }
             else if (customEditor.Value.Item1.Equals(path))
