@@ -4,6 +4,7 @@ using Prowl.Runtime.Serialization;
 using Prowl.Runtime.Utils;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Numerics;
 using System.Reflection;
@@ -732,12 +733,12 @@ public class GameObject : EngineObject, ISerializable
 
         ListTag components = new ListTag("Components", TagType.Compound);
         foreach (var comp in _components)
-            components.Add(TagSerializer.SerializeObject(comp, "", ctx));
+            components.Add(TagSerializer.Serialize(comp, "", ctx));
         compoundTag.Add(components);
 
         ListTag children = new ListTag("Children", TagType.Compound);
         foreach (var child in Children)
-            children.Add(TagSerializer.SerializeObject(child, "", ctx));
+            children.Add(TagSerializer.Serialize(child, "", ctx));
         compoundTag.Add(children);
 
         return compoundTag;
@@ -759,7 +760,8 @@ public class GameObject : EngineObject, ISerializable
         _components = new();
         foreach (CompoundTag compTag in comps.Tags)
         {
-            MonoBehaviour component = (MonoBehaviour)TagSerializer.DeserializeObject(compTag, ctx);
+            MonoBehaviour? component = TagSerializer.Deserialize<MonoBehaviour>(compTag, ctx);
+            if (component == null) continue;
             component.AttachToGameObject(this);
             _components.Add(component);
             _componentCache.Add(component.GetType(), component);
@@ -769,7 +771,8 @@ public class GameObject : EngineObject, ISerializable
         Children = new();
         foreach (CompoundTag childTag in children.Tags)
         {
-            GameObject child = (GameObject)TagSerializer.DeserializeObject(childTag, ctx);
+            GameObject? child = TagSerializer.Deserialize<GameObject>(childTag, ctx);
+            if (child == null) continue;
             child.parent = this;
             Children.Add(child);
         }

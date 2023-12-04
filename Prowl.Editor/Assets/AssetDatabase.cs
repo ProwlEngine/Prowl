@@ -656,8 +656,8 @@ namespace Prowl.Runtime.Assets
             AssetDatabase.StartEditingAsset();
             CompoundTag tag = (CompoundTag)TagSerializer.Serialize(this);
             using var stream = file.OpenWrite();
-            using var binaryWriter = new BinaryWriter(stream);
-            BinaryTagConverter.WriteTo(tag, binaryWriter);
+            using var writer = new StreamWriter(stream);
+            StringTagConverter.WriteTo(tag, writer);
             AssetDatabase.StopEditingAsset();
         }
 
@@ -668,8 +668,8 @@ namespace Prowl.Runtime.Assets
         {
             if (!file.Exists) throw new FileNotFoundException("Meta file does not exist.", file.FullName);
             using var stream = file.OpenRead();
-            using var reader = new BinaryReader(stream);
-            var tag = BinaryTagConverter.ReadFrom(reader);
+            using var reader = new StreamReader(stream);
+            var tag = StringTagConverter.ReadFrom(reader);
             var meta = TagSerializer.Deserialize<MetaFile>(tag);
             meta!.AssetPath = new FileInfo(Path.ChangeExtension(file.FullName, null));
             return meta;

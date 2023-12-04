@@ -1,6 +1,6 @@
-﻿using System.Globalization;
-using System;
-using System.IO;
+﻿using System;
+using System.Globalization;
+using System.Text.Json.Serialization;
 
 namespace Prowl.Runtime.Serialization
 {
@@ -19,11 +19,22 @@ namespace Prowl.Runtime.Serialization
         Compound = 10,
     }
 
+    [JsonDerivedType(typeof(NullTag))]
+    [JsonDerivedType(typeof(ByteTag))]
+    [JsonDerivedType(typeof(ShortTag))]
+    [JsonDerivedType(typeof(IntTag))]
+    [JsonDerivedType(typeof(LongTag))]
+    [JsonDerivedType(typeof(FloatTag))]
+    [JsonDerivedType(typeof(DoubleTag))]
+    [JsonDerivedType(typeof(StringTag))]
+    [JsonDerivedType(typeof(ByteArrayTag))]
+    [JsonDerivedType(typeof(ListTag))]
+    [JsonDerivedType(typeof(CompoundTag))]
     public abstract class Tag
     {
         public string Name { get; set; }
 
-        protected Tag() => Name = "";
+        public Tag() => Name = "";
 
         public abstract TagType GetTagType();
         public abstract Tag Clone();
@@ -32,6 +43,7 @@ namespace Prowl.Runtime.Serialization
 
         /// <summary> Returns true if tags of this type have a value attached.
         /// All tags except Compound, List, and End have values. </summary>
+        [JsonIgnore]
         public bool HasValue
         {
             get
@@ -49,6 +61,7 @@ namespace Prowl.Runtime.Serialization
         /// <summary> Returns the value of this tag, cast as a bool.
         /// Only supported by ByteTag, ShortTag, IntTag, LongTag, StringTag tags. </summary>
         /// <exception cref="InvalidCastException"> When used on a tag other than ByteTag. </exception>
+        [JsonIgnore]
         public bool BoolValue
         {
             get
@@ -69,6 +82,7 @@ namespace Prowl.Runtime.Serialization
         /// <summary> Returns the value of this tag, cast as a byte.
         /// Only supported by ByteTag tags. </summary>
         /// <exception cref="InvalidCastException"> When used on a tag other than ByteTag. </exception>
+        [JsonIgnore]
         public byte ByteValue
         {
             get
@@ -82,6 +96,7 @@ namespace Prowl.Runtime.Serialization
         /// <summary> Returns the value of this tag, cast as a short (16-bit signed integer).
         /// Only supported by ByteTag and ShortTag. </summary>
         /// <exception cref="InvalidCastException"> When used on an unsupported tag. </exception>
+        [JsonIgnore]
         public short ShortValue
         {
             get
@@ -99,6 +114,7 @@ namespace Prowl.Runtime.Serialization
         /// <summary> Returns the value of this tag, cast as an int (32-bit signed integer).
         /// Only supported by ByteTag, ShortTag, and IntTag. </summary>
         /// <exception cref="InvalidCastException"> When used on an unsupported tag. </exception>
+        [JsonIgnore]
         public int IntValue
         {
             get
@@ -117,6 +133,7 @@ namespace Prowl.Runtime.Serialization
         /// <summary> Returns the value of this tag, cast as a long (64-bit signed integer).
         /// Only supported by ByteTag, ShortTag, IntTag, and LongTag. </summary>
         /// <exception cref="InvalidCastException"> When used on an unsupported tag. </exception>
+        [JsonIgnore]
         public long LongValue
         {
             get
@@ -136,6 +153,7 @@ namespace Prowl.Runtime.Serialization
         /// <summary> Returns the value of this tag, cast as a long (64-bit signed integer).
         /// Only supported by FloatTag and, with loss of precision, by DoubleTag, ByteTag, ShortTag, IntTag, and LongTag. </summary>
         /// <exception cref="InvalidCastException"> When used on an unsupported tag. </exception>
+        [JsonIgnore]
         public float FloatValue
         {
             get
@@ -157,6 +175,7 @@ namespace Prowl.Runtime.Serialization
         /// <summary> Returns the value of this tag, cast as a long (64-bit signed integer).
         /// Only supported by FloatTag, DoubleTag, and, with loss of precision, by ByteTag, ShortTag, IntTag, and LongTag. </summary>
         /// <exception cref="InvalidCastException"> When used on an unsupported tag. </exception>
+        [JsonIgnore]
         public double DoubleValue
         {
             get
@@ -178,6 +197,7 @@ namespace Prowl.Runtime.Serialization
         /// Returns exact value for StringTag, and stringified (using InvariantCulture) value for ByteTag, DoubleTag, FloatTag, IntTag, LongTag, and ShortTag.
         /// Not supported by CompoundTag, ListTag, ByteArrayTag, FloatArrayTag, or IntArrayTag. </summary>
         /// <exception cref="InvalidCastException"> When used on an unsupported tag. </exception>
+        [JsonIgnore]
         public string StringValue
         {
             get
@@ -196,6 +216,7 @@ namespace Prowl.Runtime.Serialization
             }
         }
 
+        [JsonIgnore]
         public byte[] ByteArrayValue
         {
             get

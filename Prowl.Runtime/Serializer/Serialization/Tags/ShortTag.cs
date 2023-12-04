@@ -8,7 +8,8 @@ namespace Prowl.Runtime.Serialization
 	{
 		public short Value { get; set; }
 
-		public ShortTag(string tagName = "", short value = 0)
+        public ShortTag() { Name = ""; }
+        public ShortTag(string tagName = "", short value = 0)
 		{
 			Name = tagName;
 			Value = value;

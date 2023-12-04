@@ -30,13 +30,35 @@ namespace Prowl.Runtime.Serialization
 
         private class NullKey { }
 
+        private static bool IsPrimitive(Type t) => t.IsPrimitive || t.IsAssignableTo(typeof(string)) || t.IsAssignableTo(typeof(Guid)) || t.IsAssignableTo(typeof(DateTime)) || t.IsEnum || t.IsAssignableTo(typeof(byte[]));
 
-        public static Tag Serialize(object? value, string tagName = "") => Internal_Serialize(value, tagName, new());
 
-        private static bool IsPrimitive(object value)
+        #region Serialize
+
+        public static Tag Serialize(object? value, string tagName = "") => Serialize(value, tagName, new());
+        public static Tag Serialize(object? value, string tagName, SerializationContext ctx)
         {
-            Type t = value.GetType();
-            return t.IsPrimitive || value is string || value is Guid || t.IsEnum;
+            if (value == null)
+                return new NullTag(tagName);
+
+            if (value is Tag t)
+            {
+                var clone = t.Clone();
+                clone.Name = tagName;
+                return clone;
+            }
+
+            var type = value.GetType();
+            if (IsPrimitive(type))
+                return PrimitiveToTag(tagName, value);
+
+            if (type.IsArray && value is Array array)
+                return ArrayToListTag(tagName, array, ctx);
+
+            if (value is IDictionary dict)
+                return DictionaryToTag(tagName, dict, ctx);
+
+            return SerializeObject(value, tagName, ctx);
         }
 
         private static Tag PrimitiveToTag(string tagName, object p)
@@ -54,17 +76,17 @@ namespace Prowl.Runtime.Serialization
             else if (p is short s)       return new ShortTag(tagName, s);
             else if (p is ushort us)     return new ShortTag(tagName, (short)us);
             else if (p is string str)    return new StringTag(tagName, str);
+            else if (p is DateTime date) return new LongTag(tagName, date.ToBinary());
             else if (p is Guid g)        return new StringTag(tagName, g.ToString());
             else if (p.GetType().IsEnum) return new IntTag(tagName, (int)p); // Serialize enums as integers
             else throw new NotSupportedException("The type '" + p.GetType() + "' is not a supported primitive.");
         }
 
-        private static ListTag ArrayToListTag(string tagName, object p, SerializationContext ctx)
+        private static ListTag ArrayToListTag(string tagName, Array array, SerializationContext ctx)
         {
-            var elementType = p.GetType().GetElementType();
-            var array = p as Array;
+            var elementType = array.GetType().GetElementType();
             var listType = TagType.Compound;
-            if (elementType == typeof(byte) || elementType == typeof(sbyte))
+            if (elementType == typeof(byte))
                 listType = TagType.Byte;
             else if (elementType == typeof(bool))
                 listType = TagType.Byte;
@@ -72,63 +94,36 @@ namespace Prowl.Runtime.Serialization
                 listType = TagType.Double;
             else if (elementType == typeof(float))
                 listType = TagType.Float;
-            else if (elementType == typeof(int) || elementType == typeof(uint))
+            else if (elementType == typeof(int))
                 listType = TagType.Int;
-            else if (elementType == typeof(long) || elementType == typeof(ulong))
+            else if (elementType == typeof(long))
                 listType = TagType.Long;
-            else if (elementType == typeof(short) || elementType == typeof(ushort))
+            else if (elementType == typeof(short))
                 listType = TagType.Short;
-            else if (elementType == typeof(string) || elementType == typeof(Guid))
+            else if (elementType == typeof(string))
                 listType = TagType.String;
             else if (elementType == typeof(byte[]))
                 listType = TagType.ByteArray;
             List<Tag> tags = new();
             for (int i = 0; i < array.Length; i++)
-                tags.Add(Internal_Serialize(array.GetValue(i), "", ctx));
+                tags.Add(Serialize(array.GetValue(i), "", ctx));
             return new ListTag(tagName, tags, listType);
         }
 
-        private static CompoundTag DictionaryToTag(string tagName, object p, SerializationContext ctx)
+        private static CompoundTag DictionaryToTag(string tagName, IDictionary dict, SerializationContext ctx)
         {
-            CompoundTag tag = new(tagName)
-            {
-                SerializedID = -1, // Mark as a dictionary
-                SerializedType = p.GetType().FullName!
-            };
-            foreach (DictionaryEntry kvp in (IDictionary)p)
+            CompoundTag tag = new(tagName);
+            foreach (DictionaryEntry kvp in dict)
             {
                 if (kvp.Key is string str)
-                    tag.Add(Internal_Serialize(kvp.Value, str, ctx));
+                    tag.Add(Serialize(kvp.Value, str, ctx));
                 else
                     throw new InvalidCastException("Dictionary keys must be strings!");
             }
             return tag;
         }
 
-        private static Tag Internal_Serialize(object? value, string tagName, SerializationContext ctx)
-        {
-            if (value == null) return new NullTag(tagName);
-
-            if (value is Tag t)
-            {
-                var clone = t.Clone();
-                clone.Name = tagName;
-                return clone;
-            }
-
-            if (IsPrimitive(value)) 
-                return PrimitiveToTag(tagName, value);
-
-            if (value.GetType().IsArray)
-                return ArrayToListTag(tagName, value, ctx);
-
-            if (value is IDictionary)
-                return DictionaryToTag(tagName, value, ctx);
-
-            return SerializeObject(value, tagName, ctx);
-        }
-
-        public static Tag SerializeObject(object? value, string tagName, SerializationContext ctx)
+        private static Tag SerializeObject(object? value, string tagName, SerializationContext ctx)
         {
             if (value == null) return new NullTag(tagName); // ID defaults to 0 which is null or an Empty Compound
 
@@ -164,8 +159,8 @@ namespace Prowl.Runtime.Serialization
 
                 foreach (var field in properties)
                 {
-                    var attribute = field.GetCustomAttribute<SerializeAsAttribute>();
-                    string name = attribute != null ? attribute.Name : field.Name;
+                    var nameAs = field.GetCustomAttribute<SerializeAsAttribute>();
+                    string name = nameAs != null ? nameAs.Name : field.Name;
 
                     var propValue = field.GetValue(value);
                     if (propValue == null)
@@ -175,7 +170,7 @@ namespace Prowl.Runtime.Serialization
                     }
                     else
                     {
-                        Tag tag = Internal_Serialize(propValue, name, ctx);
+                        Tag tag = Serialize(propValue, name, ctx);
                         if (string.IsNullOrEmpty(tag.Name)) throw new NullReferenceException("Data Tag Name is missing! Cannot finish Serialization!");
                         compound.Add(tag);
                     }
@@ -183,7 +178,7 @@ namespace Prowl.Runtime.Serialization
             }
 
             compound.SerializedID = id;
-            compound.SerializedType = type.FullName;
+            compound.SerializedType = type.AssemblyQualifiedName;
 
             if (value is ISerializeCallbacks callback2)
                 callback2.PostSerialize();
@@ -191,87 +186,104 @@ namespace Prowl.Runtime.Serialization
             return compound;
         }
 
-        public static T Deserialize<T>(Tag value) => (T)Deserialize(typeof(T), value);
+        #endregion
 
-        public static object Deserialize(Type type, Tag value)
-            => Internal_Deserialize(type, value, new SerializationContext());
+        #region Deserialize
 
-        private static object Internal_Deserialize(Type targetType, Tag value, SerializationContext ctx)
+        public static T? Deserialize<T>(Tag value) => (T?)Deserialize(value, typeof(T));
+
+        public static object? Deserialize(Tag value, Type type) => Deserialize(value, type, new SerializationContext());
+
+        public static T? Deserialize<T>(Tag value, SerializationContext ctx) => (T?)Deserialize(value, typeof(T), ctx);
+        public static object? Deserialize(Tag value, Type targetType, SerializationContext ctx)
         {
-            if (targetType.IsAssignableTo(typeof(System.Collections.IDictionary)) && value is CompoundTag dictTag)
+            if (value is NullTag) return null;
+
+            if (IsPrimitive(targetType))
             {
-                // tag is dictionary
-                var dict = (System.Collections.IDictionary)Activator.CreateInstance(targetType);
-                var valueType = targetType.GetGenericArguments()[1];
-                foreach (var tag in dictTag.AllTags)
+                if (value is ByteTag b) return b.Value;
+                else if (value is DoubleTag dou) return dou.Value;
+                else if (value is FloatTag flo) return flo.Value;
+                else if (value is IntTag i)
                 {
-                    var key = tag.Name;
-                    var val = Internal_Deserialize(valueType, tag, ctx);
-                    dict.Add(key, val);
+                    if (targetType.IsEnum)
+                        return Enum.ToObject(targetType, i.Value);
+                    return i.Value;
                 }
-                return dict;
+                else if (value is LongTag lo)
+                {
+                    if (targetType == typeof(DateTime))
+                        return DateTime.FromBinary(lo.Value);
+                    return lo.Value;
+                }
+                else if (value is ShortTag sh) return sh.Value;
+                else if (value is StringTag str)
+                {
+                    if (targetType == typeof(Guid))
+                        return Guid.Parse(str.Value);
+                    return str.Value;
+                }
+                else if (value is ByteArrayTag barr) return barr.Value;
+                else throw new NotSupportedException("The Tag type '" + value.GetType() + "' is not supported.");
             }
-            else if (targetType.IsEnum && value is IntTag intTag)
-            {
-                return Enum.ToObject(targetType, intTag.Value); // Deserialize integers as enums
-            }
-            else if (targetType == typeof(Guid) && value is StringTag strGuid)
-            {
-                return Guid.Parse(strGuid.Value);
-            }
-            else if (value is ByteTag b) return b.Value;
-            else if (value is DoubleTag dou) return dou.Value;
-            else if (value is FloatTag flo) return flo.Value;
-            else if (value is IntTag i) return i.Value;
-            else if (value is LongTag lo) return lo.Value;
-            else if (value is ShortTag sh) return sh.Value;
-            else if (value is StringTag str) return str.Value;
-            else if (value is ByteArrayTag barr) return barr.Value;
-            else if (value is ListTag list)
+
+            if (value is ListTag list)
             {
                 Type type;
                 if (list.ListType == TagType.Byte) type = typeof(byte);
-                else if (list.ListType == TagType.Compound)
-                {
-                    if (targetType.IsArray) type = targetType.GetElementType();
-                    else type = typeof(object);
-                }
                 else if (list.ListType == TagType.Double) type = typeof(double);
                 else if (list.ListType == TagType.Float) type = typeof(float);
                 else if (list.ListType == TagType.Int) type = typeof(int);
                 else if (list.ListType == TagType.Long) type = typeof(long);
                 else if (list.ListType == TagType.Short) type = typeof(short);
                 else if (list.ListType == TagType.String) type = typeof(string);
+                else if (list.ListType == TagType.ByteArray) type = typeof(byte[]);
+                else if (list.ListType == TagType.Compound)
+                {
+                    if (targetType.IsArray) type = targetType.GetElementType();
+                    else type = typeof(object); // !!!! The Compounds store what type they are! We should use that to deserialize them!
+                }
                 else throw new NotSupportedException("The Tag List type '" + list.ListType + "' is not supported.");
 
                 var array = Array.CreateInstance(type, list.Count);
                 for (int idx = 0; idx < array.Length; idx++)
-                    array.SetValue(Internal_Deserialize(type, list[idx], ctx), idx);
+                    array.SetValue(Deserialize(list[idx], type, ctx), idx);
                 return array;
             }
-            else if (value is CompoundTag compound)
+
+            if (value is CompoundTag compound)
             {
+                if (targetType.IsAssignableTo(typeof(IDictionary)))
+                {
+                    // tag is dictionary
+                    var dict = (IDictionary)Activator.CreateInstance(targetType);
+                    var valueType = targetType.GetGenericArguments()[1];
+                    foreach (var tag in compound.AllTags)
+                    {
+                        var key = tag.Name;
+                        var val = Deserialize(tag, valueType, ctx);
+                        dict.Add(key, val);
+                    }
+                    return dict;
+                }
+
                 return DeserializeObject(compound, ctx);
             }
 
             throw new NotSupportedException("The node type '" + value.GetType() + "' is not supported.");
         }
 
-        public static T DeserializeObject<T>(CompoundTag compound, SerializationContext ctx)
-            => (T)DeserializeObject(compound, ctx);
-
-        public static object DeserializeObject(CompoundTag compound, SerializationContext ctx)
+        private static object? DeserializeObject(CompoundTag compound, SerializationContext ctx)
         {
-            if (compound.SerializedID == 0)
-                return null;
-
-            if (compound.SerializedID > 0 && ctx.idToObject.TryGetValue(compound.SerializedID, out object existingObj))
+            if (ctx.idToObject.TryGetValue(compound.SerializedID, out object? existingObj))
                 return existingObj;
 
             if (string.IsNullOrWhiteSpace(compound.SerializedType))
                 return null;
 
             Type oType = Type.GetType(compound.SerializedType);
+            if (oType == null)
+                throw new Exception("Cannot deserialize type '" + compound.SerializedType + "', It does not exist.");
 
             object resultObject = CreateInstance(oType);
 
@@ -284,7 +296,6 @@ namespace Prowl.Runtime.Serialization
             }
             else
             {
-
                 FieldInfo[] fields = GetAllFields(oType).ToArray();
 
                 var properties = fields.Where(field => (field.IsPublic || field.GetCustomAttribute<SerializeAsAttribute>() != null) && field.GetCustomAttribute<SerializeIgnoreAttribute>() == null);
@@ -314,22 +325,7 @@ namespace Prowl.Runtime.Serialization
                             continue;
                     }
 
-                    object data = null;
-
-                    if (node is CompoundTag compoundNode)
-                    {
-                        if (ctx.idToObject.TryGetValue(compoundNode.SerializedID, out object existingObj2))
-                            data = existingObj2;
-                        if (typeof(ISerializable).IsAssignableFrom(field.FieldType))
-                        {
-                            data = CreateInstance(field.FieldType);
-                            ctx.idToObject[compoundNode.SerializedID] = data;
-                            ((ISerializable)data).Deserialize(compoundNode, ctx);
-                        }
-                    }
-
-                    if(data == null) // If we didn't deserialize it as an ISerializable, deserialize it normally
-                        data = Internal_Deserialize(field.FieldType, node, ctx);
+                    object data = Deserialize(node, field.FieldType, ctx);
 
                     // Some manual casting for edge cases
                     if (data is byte @byte)
@@ -368,5 +364,7 @@ namespace Prowl.Runtime.Serialization
 
             return t.GetFields(flags).Concat(GetAllFields(t.BaseType));
         }
+
+        #endregion
     }
 }

@@ -1,14 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.Json.Serialization;
 
 namespace Prowl.Runtime.Serialization
 {
     public class CompoundTag : Tag
     {
-        protected Dictionary<string, Tag> Tags { get; set; }
-		public string SerializedType = "";
-		public int SerializedID = 0;
+        public Dictionary<string, Tag> Tags { get; set; }
+		public string SerializedType { get; set; } = "";
+		public int SerializedID { get; set; } = 0;
 
 		public Tag this[string tagName]
 		{
@@ -27,10 +28,13 @@ namespace Prowl.Runtime.Serialization
 
 
         /// <summary> Gets a collection containing all tag names in this CompoundTag. </summary>
+        [JsonIgnore]
         public IEnumerable<string> Names => Tags.Keys;
         /// <summary> Gets a collection containing all tags in this CompoundTag. </summary>
+        [JsonIgnore]
         public IEnumerable<Tag> AllTags => Tags.Values;
 
+        public CompoundTag() : this("") {}
         public CompoundTag(string tagName = "") : this(tagName, new Tag[]{}) { }
 		public CompoundTag(string tagName, IEnumerable<Tag> tags)
 		{

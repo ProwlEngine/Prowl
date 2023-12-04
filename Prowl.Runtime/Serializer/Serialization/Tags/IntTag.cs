@@ -8,7 +8,8 @@ namespace Prowl.Runtime.Serialization
 	{
 		public int Value { get; set; }
 
-		public IntTag(string name = "", int value = 0)
+        public IntTag() { Name = ""; }
+        public IntTag(string name = "", int value = 0)
 		{
 			Name = name;
 			Value = value;

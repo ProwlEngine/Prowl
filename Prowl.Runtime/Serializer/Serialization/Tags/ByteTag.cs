@@ -7,6 +7,7 @@ namespace Prowl.Runtime.Serialization
 	{
 		public byte Value { get; set; }
 
+		public ByteTag() { Name = ""; }
 		public ByteTag(string name = "", byte value = 0x00)
 		{
 			Name = name;

@@ -49,14 +49,14 @@ public class MeshRenderer : MonoBehaviour, ISerializable
     public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
     {
         CompoundTag compoundTag = new CompoundTag(tagName);
-        compoundTag.Add(TagSerializer.SerializeObject(Mesh, "Mesh", ctx));
-        compoundTag.Add(TagSerializer.SerializeObject(Material, "Material", ctx));
+        compoundTag.Add(TagSerializer.Serialize(Mesh, "Mesh", ctx));
+        compoundTag.Add(TagSerializer.Serialize(Material, "Material", ctx));
         return compoundTag;
     }
 
     public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
     {
-        Mesh = TagSerializer.DeserializeObject<AssetRef<Mesh>>((CompoundTag)value["Mesh"], ctx);
-        Material = TagSerializer.DeserializeObject<AssetRef<Material>>((CompoundTag)value["Material"], ctx);
+        Mesh = TagSerializer.Deserialize<AssetRef<Mesh>>(value["Mesh"], ctx);
+        Material = TagSerializer.Deserialize<AssetRef<Material>>(value["Material"], ctx);
     }
 }

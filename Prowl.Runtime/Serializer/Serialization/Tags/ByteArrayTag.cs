@@ -12,7 +12,7 @@ namespace Prowl.Runtime.Serialization
 			set { Value[index] = value; }
 		}
 
-		public ByteArrayTag(string tagName = "") : this(tagName, new byte[] { }){ }
+		public ByteArrayTag() : this("", new byte[] { }){ }
 		public ByteArrayTag(string tagName, byte[] value)
 		{
 			Name = tagName;

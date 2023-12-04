@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 
 namespace Prowl.Runtime.Serialization
 {
@@ -12,6 +13,7 @@ namespace Prowl.Runtime.Serialization
         public TagType Type { get; protected set; }
         public TagType ListType { get; protected set; }
 
+        [JsonIgnore]
         public int Count => Tags.Count;
 
         public Tag this[int tagIdx]
@@ -19,7 +21,8 @@ namespace Prowl.Runtime.Serialization
             get { return Get<Tag>(tagIdx); }
             set { Tags[tagIdx] = value; }
         }
-        
+
+        public ListTag() : this("", new Tag[] { }, TagType.Null) { Name = ""; }
         public ListTag(string tagName, IEnumerable<Tag> tags) : this(tagName, tags, tags.First().GetTagType()) { }
         public ListTag(string tagName = "", TagType listType = TagType.Null) : this(tagName, new Tag[] { }, listType) { }
         public ListTag(string tagName, IEnumerable<Tag> tags, TagType listType)

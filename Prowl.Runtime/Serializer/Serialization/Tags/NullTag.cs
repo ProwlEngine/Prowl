@@ -5,6 +5,7 @@ namespace Prowl.Runtime.Serialization
 {
     public class NullTag : Tag
     {
+        public NullTag() { Name = ""; }
         public NullTag(string tagName = "") => Name = tagName;
 
         public override TagType GetTagType() => TagType.Null;

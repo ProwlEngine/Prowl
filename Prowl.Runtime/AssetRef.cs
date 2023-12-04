@@ -273,7 +273,7 @@ namespace Prowl.Runtime
             CompoundTag compoundTag = new CompoundTag(tagName);
             compoundTag.Add(new StringTag("AssetID", assetID.ToString()));
             if (IsRuntimeResource)
-                compoundTag.Add(TagSerializer.SerializeObject(instance, "Instance", ctx));
+                compoundTag.Add(TagSerializer.Serialize(instance, "Instance", ctx));
             return compoundTag;
         }
 
@@ -281,7 +281,7 @@ namespace Prowl.Runtime
         {
             assetID = Guid.Parse(value["AssetID"].StringValue);
             if (value.TryGet("Instance", out CompoundTag tag))
-                instance = TagSerializer.DeserializeObject<T?>(tag, ctx);
+                instance = TagSerializer.Deserialize<T?>(tag, ctx);
         }
     }
 }

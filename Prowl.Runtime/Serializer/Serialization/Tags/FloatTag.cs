@@ -8,7 +8,8 @@ namespace Prowl.Runtime.Serialization
 	{
 		public float Value { get; set; }
 
-		public FloatTag(string tagName = "", float value = 0f)
+        public FloatTag() { Name = ""; }
+        public FloatTag(string tagName = "", float value = 0f)
 		{
 			Name = tagName;
 			Value = value;

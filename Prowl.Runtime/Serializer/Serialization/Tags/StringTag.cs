@@ -1,5 +1,4 @@
-﻿using System.IO;
-using System.Text;
+﻿using System.Text;
 
 namespace Prowl.Runtime.Serialization
 {
@@ -7,6 +6,7 @@ namespace Prowl.Runtime.Serialization
     {
         public string Value { get; set; }
 
+        public StringTag() { Name = ""; }
         public StringTag(string tagName = "", string value = "")
         {
             Name = tagName;

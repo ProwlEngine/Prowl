@@ -148,35 +148,9 @@ namespace Prowl.Runtime.Resources
             foreach (var item in keysToUpdate)
                 mpb.textures[item.Item1] = item.Item2;
         }
-
-        //public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
-        //{
-        //    //CompoundTag compoundTag = new CompoundTag(tagName);
-        //    //compoundTag.Add(TagSerializer.SerializeObject(colors, "Color", ctx));
-        //    //compoundTag.Add(TagSerializer.SerializeObject(vectors2, "Vector2", ctx));
-        //    //compoundTag.Add(TagSerializer.SerializeObject(vectors3, "Vector3", ctx));
-        //    //compoundTag.Add(TagSerializer.SerializeObject(vectors4, "Vector4", ctx));
-        //    //compoundTag.Add(TagSerializer.SerializeObject(floats, "Floats", ctx));
-        //    //compoundTag.Add(TagSerializer.SerializeObject(ints, "Ints", ctx));
-        //    //compoundTag.Add(TagSerializer.SerializeObject(matrices, "Matrices", ctx));
-        //    //compoundTag.Add(TagSerializer.SerializeObject(textures, "Textures", ctx));
-        //    //return compoundTag;
-        //}
-        //
-        //public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
-        //{
-        //    //colors = TagSerializer.DeserializeObject<Dictionary<string, Color>>((CompoundTag)value["Color"], ctx);
-        //    //vectors2 = TagSerializer.DeserializeObject<Dictionary<string, Vector2>>((CompoundTag)value["Vector2"], ctx);
-        //    //vectors3 = TagSerializer.DeserializeObject<Dictionary<string, Vector3>>((CompoundTag)value["Vector3"], ctx);
-        //    //vectors4 = TagSerializer.DeserializeObject<Dictionary<string, Vector4>>((CompoundTag)value["Vector4"], ctx);
-        //    //floats = TagSerializer.DeserializeObject<Dictionary<string, float>>((CompoundTag)value["Floats"], ctx);
-        //    //ints = TagSerializer.DeserializeObject<Dictionary<string, int>>((CompoundTag)value["Ints"], ctx);
-        //    //matrices = TagSerializer.DeserializeObject<Dictionary<string, Matrix4x4>>((CompoundTag)value["Matrices"], ctx);
-        //    //textures = TagSerializer.DeserializeObject<Dictionary<string, AssetRef<Texture2D>>>((CompoundTag)value["Textures"], ctx);
-        //}
     }
 
-    public sealed class Material : EngineObject, ISerializable
+    public sealed class Material : EngineObject
     {
         public AssetRef<Shader> Shader;
         public MaterialPropertyBlock PropertyBlock;
@@ -300,19 +274,19 @@ namespace Prowl.Runtime.Resources
         public void SetTexture(string name, AssetRef<Texture2D> value) => PropertyBlock.SetTexture(name, value);
         public void SetTexture(string name, Raylib_cs.Texture2D value) => PropertyBlock.SetTexture(name, new Texture2D(value));
 
-        public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
-        {
-            CompoundTag compoundTag = new CompoundTag(tagName);
-            compoundTag.Add(TagSerializer.SerializeObject(Shader, "Shader", ctx));
-            compoundTag.Add(TagSerializer.SerializeObject(PropertyBlock, "PropertyBlock", ctx));
-            return compoundTag;
-        }
-
-        public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
-        {
-            Shader = TagSerializer.DeserializeObject<AssetRef<Shader>>((CompoundTag)value["Shader"], ctx);
-            PropertyBlock = TagSerializer.DeserializeObject<MaterialPropertyBlock>((CompoundTag)value["PropertyBlock"], ctx);
-        }
+        //public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
+        //{
+        //    CompoundTag compoundTag = new CompoundTag(tagName);
+        //    compoundTag.Add(TagSerializer.Serialize(Shader, "Shader", ctx));
+        //    compoundTag.Add(TagSerializer.Serialize(PropertyBlock, "PropertyBlock", ctx));
+        //    return compoundTag;
+        //}
+        //
+        //public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
+        //{
+        //    Shader = TagSerializer.Deserialize<AssetRef<Shader>>(value["Shader"], ctx);
+        //    PropertyBlock = TagSerializer.Deserialize<MaterialPropertyBlock>(value["PropertyBlock"], ctx);
+        //}
     }
 
 }
