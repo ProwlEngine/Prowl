@@ -585,6 +585,39 @@ namespace Prowl.Runtime.Assets
             StopEditingAsset();
         }
 
+        // https://stackoverflow.com/questions/5617320/given-full-path-check-if-path-is-subdirectory-of-some-other-path-or-otherwise
+        public static bool FileIsInProject(FileInfo file)
+        {
+            string normalizedPath = Path.GetFullPath(file.FullName.Replace('/', '\\').WithEnding("\\"));
+            string normalizedBaseDirPath = Path.GetFullPath(Project.ProjectAssetDirectory.Replace('/', '\\').WithEnding("\\"));
+            return normalizedPath.StartsWith(normalizedBaseDirPath, StringComparison.OrdinalIgnoreCase);
+        }
+
+        static string WithEnding([CanBeNull] this string str, string ending)
+        {
+            if (str == null) return ending;
+            string result = str;
+
+            // Right() is 1-indexed, so include these cases
+            // * Append no characters
+            // * Append up to N characters, where N is ending length
+            for (int i = 0; i <= ending.Length; i++)
+            {
+                string tmp = result + ending.Right(i);
+                if (tmp.EndsWith(ending))
+                    return tmp;
+            }
+
+            return result;
+        }
+
+        static string Right([NotNull] this string value, int length)
+        {
+            if (value == null) throw new ArgumentNullException("value");
+            if (length < 0) throw new ArgumentOutOfRangeException("length", length, "Length is less than zero");
+            return (length < value.Length) ? value.Substring(value.Length - length) : value;
+        }
+
         // Construct a path relative to root folder but including its name, so like "Assets/Textures/Texture1.png"
         public static string GetAssetRelativePath(DirectoryInfo directory, FileInfo fullAssetPath)
         {
