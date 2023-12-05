@@ -1,11 +1,11 @@
 ﻿using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace Prowl.Runtime.Serialization
+namespace Prowl.Runtime.Serializer
 {
     public class ListTag : Tag
     {
-        public List<Tag> Tags { get; protected set; }
+        public List<Tag> Tags { get; set; }
 
         [JsonIgnore]
         public int Count => Tags.Count;
