@@ -264,6 +264,7 @@ namespace Prowl.Runtime.Serialization
                     var array = Array.CreateInstance(type, list.Count);
                     for (int idx = 0; idx < array.Length; idx++)
                         array.SetValue(Deserialize(list[idx], type, ctx), idx);
+                    return array;
                 }
                 else if (targetType is IEnumerable enumarable)
                 {
