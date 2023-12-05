@@ -1,4 +1,5 @@
 ﻿using HexaEngine.ImGuizmoNET;
+using Prowl.Runtime.Components;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Serialization;
 using System;
@@ -729,12 +730,12 @@ public class GameObject : EngineObject, ISerializable
         compoundTag.Add("ScalY", new FloatTag(scale.Y));
         compoundTag.Add("ScalZ", new FloatTag(scale.Z));
 
-        ListTag components = new ListTag(TagType.Compound);
+        ListTag components = new ListTag();
         foreach (var comp in _components)
             components.Add(TagSerializer.Serialize(comp, ctx));
         compoundTag.Add("Components", components);
 
-        ListTag children = new ListTag(TagType.Compound);
+        ListTag children = new ListTag();
         foreach (var child in Children)
             children.Add(TagSerializer.Serialize(child, ctx));
         compoundTag.Add("Children", children);

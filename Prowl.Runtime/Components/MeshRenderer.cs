@@ -22,7 +22,15 @@ public class MeshRenderer : MonoBehaviour, ISerializable
             for (int i = 0; i < Material.Res!.PassCount; i++)
             {
                 Material.Res!.SetPass(i);
-                Graphics.DrawMeshNow(Mesh.Res!, GameObject.Global, Material.Res!, GameObject.GlobalPrevious);
+
+                Matrix4x4 matrix = GameObject.Global;
+                if (Camera.Current.LargeWorldCamera)
+                {
+                    // Draw relative to camera as camera will be at 0,0,0
+                    matrix = Matrix4x4.Multiply(matrix, Matrix4x4.CreateTranslation(-Camera.Current.GameObject.GlobalPosition));
+                }
+
+                Graphics.DrawMeshNow(Mesh.Res!, matrix, Material.Res!, GameObject.GlobalPrevious);
                 Material.Res!.EndPass();
             }
         }

@@ -25,6 +25,8 @@ public class Camera : MonoBehaviour
 
     public float RenderResolution = 1f;
 
+    public bool LargeWorldCamera = false;
+
     public enum ProjectionType { Perspective, Orthographic }
     public ProjectionType projectionType = ProjectionType.Perspective;
 
@@ -145,6 +147,11 @@ public class Camera : MonoBehaviour
         Current = this;
         Graphics.Resolution = new Vector2(width, height);
         Graphics.MatView = Camera.Current.GameObject.View;
+        if(LargeWorldCamera) 
+        {
+            // Camera view should be at 0 0 0
+            Graphics.MatView.Translation = Vector3.Zero;
+        }
         Graphics.MatProjection = Camera.Current.GetProjectionMatrix(width, height);
         Graphics.OldMatView = oldView ?? Graphics.MatView;
         Graphics.OldMatProjection = oldProjection ?? Graphics.MatProjection;

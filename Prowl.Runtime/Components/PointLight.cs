@@ -52,7 +52,15 @@ public class PointLight : MonoBehaviour
             //Raylib.DrawRectangle(0, 0, 9999, 9999, Color.white);
             // set matrix scale to radius
             var mat = Matrix4x4.CreateScale(radius);
-            mat.Translation = this.GameObject.GlobalPosition;
+            if (Camera.Current.LargeWorldCamera)
+            {
+                // Draw relative to camera as camera will be at 0,0,0
+                mat.Translation = this.GameObject.GlobalPosition - Camera.Current.GameObject.GlobalPosition;
+            }
+            else
+            {
+                mat.Translation = this.GameObject.GlobalPosition;
+            }
             Graphics.DrawMeshNow(mesh, mat, lightMat);
             lightMat.EndPass();
             //Camera.Current.Start3D();
