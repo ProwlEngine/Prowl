@@ -191,8 +191,16 @@ public class AssetBrowserWindow : EditorWindow {
         {
             if (entry is FileInfo)
             {
+                string relativeAssetPath = Path.GetRelativePath(Project.ProjectDirectory, entry.FullName);
+
+                bool isAsset = AssetDatabase.Contains(relativeAssetPath);
+
                 if (ImGui.IsMouseClicked(0))
                     Selection.Select(entry);
+                if (isAsset && ImGui.IsMouseDoubleClicked(0))
+                {
+                        AssetDatabase.OpenAsset(relativeAssetPath);
+                }
 
                 // Drag and Drop Payload
                 if (ImporterAttribute.SupportsExtension(entry.Extension))
