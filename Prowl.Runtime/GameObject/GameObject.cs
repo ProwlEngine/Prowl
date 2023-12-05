@@ -781,9 +781,9 @@ public class GameObject : EngineObject, ISerializable
         hideFlags = (HideFlags)value["HideFlags"].IntValue;
         if(value.TryGet("AssetID", out StringTag guid))
             AssetID = Guid.Parse(guid.Value);
-        position = new Vector3(value["PosX"].FloatValue, value["PosY"].FloatValue, value["PosZ"].FloatValue);
-        rotation = new Vector3(value["RotX"].FloatValue, value["RotY"].FloatValue, value["RotZ"].FloatValue);
-        scale = new Vector3(value["ScalX"].FloatValue, value["ScalY"].FloatValue, value["ScalZ"].FloatValue);
+        position = new Vector3(value["PosX"].DoubleValue, value["PosY"].DoubleValue, value["PosZ"].DoubleValue);
+        rotation = new Vector3(value["RotX"].DoubleValue, value["RotY"].DoubleValue, value["RotZ"].DoubleValue);
+        scale = new Vector3(value["ScalX"].DoubleValue, value["ScalY"].DoubleValue, value["ScalZ"].DoubleValue);
 
         ListTag comps = (ListTag)value["Components"];
         _components = new();
