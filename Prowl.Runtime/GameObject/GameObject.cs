@@ -571,17 +571,33 @@ public class GameObject : EngineObject, ISerializable
 
         if (isSelected)
         {
+            System.Numerics.Matrix4x4 goMatrix;
+
             if (GameObjectManager.GizmosSpace == ImGuizmoMode.Local)
             {
-                var goMatrix = Local;
-                if (ImGuizmo.Manipulate(ref view.M11, ref projection.M11, GameObjectManager.GizmosOperation, ImGuizmoMode.Local, ref goMatrix.M11))
-                    Local = goMatrix;
+                goMatrix = Local.ToFloat();
             }
             else
             {
-                var goMatrix = Global;
-                if (ImGuizmo.Manipulate(ref view.M11, ref projection.M11, GameObjectManager.GizmosOperation, ImGuizmoMode.World, ref goMatrix.M11))
-                    global = goMatrix;
+                goMatrix = Global.ToFloat();
+            }
+
+            // Perform ImGuizmo manipulation
+            if (ImGuizmo.Manipulate(ref view, ref projection, GameObjectManager.GizmosOperation, GameObjectManager.GizmosSpace, ref goMatrix))
+            {
+                if (GameObjectManager.GizmosSpace == ImGuizmoMode.Local)
+                {
+                    Local = goMatrix.ToDouble();
+                }
+                else
+                {
+                    global = goMatrix.ToDouble();
+                    Matrix4x4.Decompose(global, out globalScale, out globalOrientation, out globalPosition);
+                    scale = globalScale;
+                    orientation = globalOrientation;
+                    position = globalPosition;
+                    Recalculate();
+                }
             }
         }
 
