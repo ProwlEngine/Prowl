@@ -750,9 +750,10 @@ public class GameObject : EngineObject, ISerializable
         compoundTag.Add("PosY", new DoubleTag(position.Y));
         compoundTag.Add("PosZ", new DoubleTag(position.Z));
 
-        compoundTag.Add("RotX", new DoubleTag(rotation.X));
-        compoundTag.Add("RotY", new DoubleTag(rotation.Y));
-        compoundTag.Add("RotZ", new DoubleTag(rotation.Z));
+        compoundTag.Add("RotX", new DoubleTag(orientation.X));
+        compoundTag.Add("RotY", new DoubleTag(orientation.Y));
+        compoundTag.Add("RotZ", new DoubleTag(orientation.Z));
+        compoundTag.Add("RotW", new DoubleTag(orientation.W));
 
         compoundTag.Add("ScalX", new DoubleTag(scale.X));
         compoundTag.Add("ScalY", new DoubleTag(scale.Y));
@@ -782,7 +783,7 @@ public class GameObject : EngineObject, ISerializable
         if(value.TryGet("AssetID", out StringTag guid))
             AssetID = Guid.Parse(guid.Value);
         position = new Vector3(value["PosX"].DoubleValue, value["PosY"].DoubleValue, value["PosZ"].DoubleValue);
-        rotation = new Vector3(value["RotX"].DoubleValue, value["RotY"].DoubleValue, value["RotZ"].DoubleValue);
+        orientation = new Quaternion(value["RotX"].DoubleValue, value["RotY"].DoubleValue, value["RotZ"].DoubleValue, value["RotW"].DoubleValue);
         scale = new Vector3(value["ScalX"].DoubleValue, value["ScalY"].DoubleValue, value["ScalZ"].DoubleValue);
 
         ListTag comps = (ListTag)value["Components"];
