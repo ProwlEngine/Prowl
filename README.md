@@ -46,6 +46,8 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - ScriptableObjects
     - Projects & Project Settings
     - Unity-Like Serializer with Text & Binary support
+    - Full 64-bit using Doubles
+    - Large World Coordinates Support - Camera Relative Rendering
 
 -   **Graphics Rendering:**
     -  PBR (Physically Based Rendering) using Cook-Torrance BRDF
@@ -103,7 +105,6 @@ Getting Prowl up and running is super easy!
 - [ ] BepuPhysics v2
 - [ ] Navmesh and AI Agents
 - [ ] Networking Solution
-- [ ] 64-bit World Coordinates - [Issue for System.Numerics Double Support](https://github.com/dotnet/runtime/issues/24168)
 
 ### Rendering
 - [ ] SSAO, SSR, TAA, Bloom, Screen-Space Decals, etc.
