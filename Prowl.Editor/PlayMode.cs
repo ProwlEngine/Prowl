@@ -1,4 +1,6 @@
 using Prowl.Runtime;
+using Prowl.Runtime.SceneManagement;
+using Prowl.Runtime.Serialization;
 
 namespace Prowl.Editor;
 
@@ -6,18 +8,17 @@ public static class PlayMode {
     public enum Mode { Editing, Playing, Paused, }
 
     public static Mode Current { get; private set; }
-    private static string PreviousScene;
+    private static Tag PreviousScene;
 
     public static void Start() {
 
         // Serialize the Scene manually to save its state
-        //var s = new Scene();
         // exclude objects with the DontSave hideFlag
-        //s.GameObjects = GameObjectManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
-        //PreviousScene = JsonUtility.Serialize(s);
+        GameObject[] GameObjects = GameObjectManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
+        PreviousScene = TagSerializer.Serialize(GameObjects);
 
-        //Current = Mode.Playing;
-        //MonoBehaviour.PauseLogic = false;
+        Current = Mode.Playing;
+        MonoBehaviour.PauseLogic = false;
 
         ImGuiNotify.InsertNotification(new ImGuiToast()
         {
@@ -26,8 +27,8 @@ public static class PlayMode {
     }
     
     public static void Pause() {
-        //Current = Mode.Paused;
-        //MonoBehaviour.PauseLogic = true;
+        Current = Mode.Paused;
+        MonoBehaviour.PauseLogic = true;
 
         ImGuiNotify.InsertNotification(new ImGuiToast()
         {
@@ -36,8 +37,8 @@ public static class PlayMode {
     }
     
     public static void Resume() {
-        //Current = Mode.Playing;
-        //MonoBehaviour.PauseLogic = false;
+        Current = Mode.Playing;
+        MonoBehaviour.PauseLogic = false;
 
         ImGuiNotify.InsertNotification(new ImGuiToast()
         {
@@ -46,14 +47,16 @@ public static class PlayMode {
     }
     
     public static void Stop() {
-        //Current = Mode.Editing;
-        //MonoBehaviour.PauseLogic = true;
-        //
+        Current = Mode.Editing;
+        MonoBehaviour.PauseLogic = true;
+
         //var s = JsonUtility.Deserialize<Scene>(PreviousScene);
         ////GameObjectManager.LoadScene(s, false);
-        //
-        //// TODO: come up with a clean way to maintain the selected object
-        //Selection.Clear();
+        GameObjectManager.Clear();
+        var deserialized = TagSerializer.Deserialize<GameObject[]>(PreviousScene);
+        
+        // TODO: come up with a clean way to maintain the selected object
+        Selection.Clear();
 
         ImGuiNotify.InsertNotification(new ImGuiToast()
         {
