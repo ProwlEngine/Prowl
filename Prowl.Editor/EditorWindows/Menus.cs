@@ -1,14 +1,17 @@
 ﻿using Prowl.Runtime;
+using Prowl.Runtime.Assets;
 using Prowl.Runtime.Components;
 using Prowl.Runtime.Resources;
-using Prowl.Runtime.Serialization;
+using Prowl.Runtime.SceneManagement;
+using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Utils;
+using System.IO;
 using System.Reflection;
 
 namespace Prowl.Editor.EditorWindows
 {
-    public static class CreateMenu
+    public static class MainMenuItems
     {
         #region Assets
         public static DirectoryInfo? Directory { get; set; }
@@ -42,6 +45,72 @@ namespace Prowl.Editor.EditorWindows
             File.WriteAllText(file.FullName, reader.ReadToEnd());
 
             Selection.Select(file);
+        }
+
+        #endregion
+
+        #region Scenes
+
+        [MenuItem("Scene/New")]
+        public static void NewScene()
+        {
+            Selection.Clear();
+            SceneManager.Clear();
+            SceneManager.InstantiateNewScene();
+        }
+
+        [MenuItem("Scene/Save")]
+        public static void SaveScene()
+        {
+            Scene scene = SceneManager.MainScene;
+            if(scene.AssetID == Guid.Empty || !AssetDatabase.Contains(scene.AssetID))
+            {
+                SaveSceneAs();
+                return;
+            }
+
+            var relativeAssetPath = AssetDatabase.GUIDToAssetPath(scene.AssetID);
+            AssetDatabase.Remove(relativeAssetPath);
+            var file = AssetDatabase.RelativeToFile(relativeAssetPath);
+
+            var allGameObjects = SceneManager.AllGameObjects.ToArray();
+            scene.GameObjects = (ListTag)TagSerializer.Serialize(allGameObjects);
+            StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(scene), file);
+            Selection.Select(file);
+        }
+
+        [MenuItem("Scene/Save As")]
+        public static void SaveSceneAs()
+        {
+            ImFileDialogInfo imFileDialogInfo = new ImFileDialogInfo()
+            {
+                title = "Save Scene As",
+                fileName = "New Scene.scene",
+                directoryPath = new DirectoryInfo(Project.ProjectAssetDirectory),
+                type = ImGuiFileDialogType.SaveFile,
+                OnComplete = (path) =>
+                {
+                    // Make sure path is relative to ProjectAssetDirectory
+                    var file = new FileInfo(path);
+                    if (!AssetDatabase.FileIsInProject(file))
+                        return;
+
+                    if (File.Exists(path))
+                        AssetDatabase.Remove(AssetDatabase.FileToRelative(file));
+
+                    // If no extension (or wrong extension) add .scene
+                    if (!file.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase))
+                        file = new FileInfo(file.FullName + ".scene");
+
+                    var allGameObjects = SceneManager.AllGameObjects.ToArray();
+                    Scene scene = new Scene();
+                    scene.GameObjects = (ListTag)TagSerializer.Serialize(allGameObjects);
+                    var tag = (CompoundTag)TagSerializer.Serialize(scene);
+                    StringTagConverter.WriteToFile(tag, file);
+                    Selection.Select(file);
+                }   
+            };
+            ImGuiFileDialog.FileDialog(imFileDialogInfo);
         }
 
         #endregion

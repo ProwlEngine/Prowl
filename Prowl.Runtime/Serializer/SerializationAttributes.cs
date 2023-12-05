@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Prowl.Runtime.Serialization
+namespace Prowl.Runtime.Serializer
 {
     [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, Inherited = false, AllowMultiple = false)]
     public sealed class IgnoreOnNullAttribute : Attribute { }

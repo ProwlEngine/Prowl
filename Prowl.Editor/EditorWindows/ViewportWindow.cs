@@ -100,28 +100,28 @@ public class ViewportWindow : EditorWindow
         Prowl.Runtime.Gizmos.Clear();
 
         view.Translation = new System.Numerics.Vector3(0, 0, 0);
-        foreach (var activeGO in GameObjectManager.AllGameObjects)
+        foreach (var activeGO in SceneManager.AllGameObjects)
             if (activeGO.EnabledInHierarchy)
                 activeGO.DrawGizmos(view, projection, Selection.Current == activeGO);
         Camera.Current = null;
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 5));
-        if (ImGui.Button($"{FontAwesome6.ArrowsUpDownLeftRight}")) GameObjectManager.GizmosOperation = ImGuizmoOperation.Translate;
+        if (ImGui.Button($"{FontAwesome6.ArrowsUpDownLeftRight}")) SceneManager.GizmosOperation = ImGuizmoOperation.Translate;
         GUIHelper.Tooltip("Translate");
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (22), 5));
-        if (ImGui.Button($"{FontAwesome6.ArrowsSpin}")) GameObjectManager.GizmosOperation = ImGuizmoOperation.Rotate;
+        if (ImGui.Button($"{FontAwesome6.ArrowsSpin}")) SceneManager.GizmosOperation = ImGuizmoOperation.Rotate;
         GUIHelper.Tooltip("Rotate");
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (44), 5));
-        if (ImGui.Button($"{FontAwesome6.GroupArrowsRotate}")) GameObjectManager.GizmosOperation = ImGuizmoOperation.Scale;
+        if (ImGui.Button($"{FontAwesome6.GroupArrowsRotate}")) SceneManager.GizmosOperation = ImGuizmoOperation.Scale;
         GUIHelper.Tooltip("Scale");
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (72), 5));
 
-        if (GameObjectManager.GizmosSpace == ImGuizmoMode.World && ImGui.Button($"{FontAwesome6.Globe}"))
-            GameObjectManager.GizmosSpace = ImGuizmoMode.Local;
-        else if (GameObjectManager.GizmosSpace == ImGuizmoMode.Local && ImGui.Button($"{FontAwesome6.Cube}"))
-            GameObjectManager.GizmosSpace = ImGuizmoMode.World;
-        GUIHelper.Tooltip(GameObjectManager.GizmosSpace.ToString());
+        if (SceneManager.GizmosSpace == ImGuizmoMode.World && ImGui.Button($"{FontAwesome6.Globe}"))
+            SceneManager.GizmosSpace = ImGuizmoMode.Local;
+        else if (SceneManager.GizmosSpace == ImGuizmoMode.Local && ImGui.Button($"{FontAwesome6.Cube}"))
+            SceneManager.GizmosSpace = ImGuizmoMode.World;
+        GUIHelper.Tooltip(SceneManager.GizmosSpace.ToString());
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (100), 5));
         ImGui.SetNextItemWidth(20);
@@ -219,19 +219,19 @@ public class ViewportWindow : EditorWindow
             // If not looking around Viewport Keybinds are used instead
             if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_Q))
             {
-                GameObjectManager.GizmosOperation = ImGuizmoOperation.Translate;
+                SceneManager.GizmosOperation = ImGuizmoOperation.Translate;
             }
             else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_W))
             {
-                GameObjectManager.GizmosOperation = ImGuizmoOperation.Rotate;
+                SceneManager.GizmosOperation = ImGuizmoOperation.Rotate;
             }
             else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_E))
             {
-                GameObjectManager.GizmosOperation = ImGuizmoOperation.Scale;
+                SceneManager.GizmosOperation = ImGuizmoOperation.Scale;
             }
             else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_R))
             {
-                GameObjectManager.GizmosOperation = ImGuizmoOperation.Universal;
+                SceneManager.GizmosOperation = ImGuizmoOperation.Universal;
             }
         }
     }

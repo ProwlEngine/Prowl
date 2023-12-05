@@ -1,4 +1,4 @@
-﻿namespace Prowl.Runtime.Serialization
+﻿namespace Prowl.Runtime.Serializer
 {
     public class FloatTag : Tag
 	{

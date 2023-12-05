@@ -1,5 +1,5 @@
-﻿using Prowl.Runtime.Serialization;
-using static Prowl.Runtime.Serialization.TagSerializer;
+﻿using Prowl.Runtime.Serializer;
+using static Prowl.Runtime.Serializer.TagSerializer;
 
 namespace Prowl.Runtime
 {

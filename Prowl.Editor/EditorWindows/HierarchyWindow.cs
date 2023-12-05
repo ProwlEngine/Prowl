@@ -3,7 +3,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.SceneManagement;
-using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Utils;
 using System.Numerics;
 
@@ -74,9 +74,9 @@ public class HierarchyWindow : EditorWindow {
 
             ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 0.0f); 
             ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new System.Numerics.Vector2(0f, 0f));
-            for (int i = 0; i < GameObjectManager.AllGameObjects.Count; i++)
+            for (int i = 0; i < SceneManager.AllGameObjects.Count; i++)
             {
-                var go = GameObjectManager.AllGameObjects[i];
+                var go = SceneManager.AllGameObjects[i];
                 if (go.Parent == null)
                     DrawEntityNode(go, 0, false);
             }

@@ -1,4 +1,4 @@
-﻿using Prowl.Runtime.Serialization;
+﻿using Prowl.Runtime.Serializer;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -30,6 +30,7 @@ public abstract class MonoBehaviour : EngineObject
     private MethodInfo fixedUpdate;
     private MethodInfo update;
     private MethodInfo lateUpdate;
+    private MethodInfo onSceneLoaded;
     private MethodInfo onDestroy;
     private MethodInfo onRenderObject;
     private MethodInfo onRenderObjectDepth;
@@ -139,6 +140,7 @@ public abstract class MonoBehaviour : EngineObject
             "OnRenderObjectDepth",
             "DrawGizmos",
             "DrawGizmosSelected",
+            "OnSceneLoaded",
         };
 
         MethodInfo[] retMethods = new MethodInfo[methodNames.Count];
@@ -160,6 +162,7 @@ public abstract class MonoBehaviour : EngineObject
         onRenderObjectDepth = retMethods[9];
         drawGizmos = retMethods[10];
         drawGizmosSelected = retMethods[10];
+        onSceneLoaded = retMethods[11];
 
         executeAlways = this.GetType().GetCustomAttribute<ExecuteAlwaysAttribute>() != null;
 
@@ -193,6 +196,10 @@ public abstract class MonoBehaviour : EngineObject
     internal void Internal_LateUpdate()
     {
         if (!PauseLogic || executeAlways) lateUpdate?.Invoke(this, []);
+    }
+    internal void Internal_OnSceneLoaded()
+    {
+        if (!PauseLogic || executeAlways) onSceneLoaded?.Invoke(this, []);
     }
     internal void Internal_OnDestroy()
     {
@@ -345,6 +352,7 @@ public abstract class MonoBehaviour : EngineObject
 
     /// <summary> Calls the method named methodName on every MonoBehaviour in this game object. </summary>
     public void SendMessage(string methodName, params object[] objs) => GameObject.SendMessage(methodName, objs);
+
 
     #endregion
 }

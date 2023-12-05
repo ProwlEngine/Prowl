@@ -1,5 +1,5 @@
 ﻿using Prowl.Runtime.SceneManagement;
-using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Serializer;
 using System;
 using System.Collections.Generic;
@@ -44,10 +44,10 @@ namespace Prowl.Runtime.Utils
             using BinaryReader reader = new(stream);
             var tag = BinaryTagConverter.ReadFrom(reader);
 
-            bool prev = GameObjectManager.AllowGameObjectConstruction;
-            GameObjectManager.AllowGameObjectConstruction = false;
+            bool prev = SceneManager.AllowGameObjectConstruction;
+            SceneManager.AllowGameObjectConstruction = false;
             var obj = TagSerializer.Deserialize<SerializedAsset>(tag);
-            GameObjectManager.AllowGameObjectConstruction = prev; // Restore state
+            SceneManager.AllowGameObjectConstruction = prev; // Restore state
             return obj;
         }
 
@@ -56,10 +56,10 @@ namespace Prowl.Runtime.Utils
             using BinaryReader reader = new(stream);
             var tag = BinaryTagConverter.ReadFrom(reader);
 
-            bool prev = GameObjectManager.AllowGameObjectConstruction;
-            GameObjectManager.AllowGameObjectConstruction = false;
+            bool prev = SceneManager.AllowGameObjectConstruction;
+            SceneManager.AllowGameObjectConstruction = false;
             var obj = TagSerializer.Deserialize<SerializedAsset>(tag);
-            GameObjectManager.AllowGameObjectConstruction = prev; // Restore state
+            SceneManager.AllowGameObjectConstruction = prev; // Restore state
             return obj;
         }
 

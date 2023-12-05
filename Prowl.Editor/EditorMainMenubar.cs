@@ -99,38 +99,19 @@ public class EditorMainMenubar {
         if (ImGui.BeginMenu("File"))
         {
             if (ImGui.MenuItem("Open Project")) { new ProjectsWindow(); }
+            ImGui.Separator();
+            MenuItem.DrawMenuRoot("Scene");
+            ImGui.Separator();
             if (ImGui.MenuItem("Preferences")) { }
             if (ImGui.MenuItem("Project Settings")) { new ProjectSettingsWindow(); }
+            ImGui.Separator();
             if (ImGui.MenuItem("Quit")) EditorApplication.Instance.Terminate();
             ImGui.EndMenu();
         }
-        
-        if(ImGui.BeginMenu("Project"))
-        {
-            //if (ImGui.MenuItem("New Scene")) Hierarchy.Clear();
-            //if (ImGui.MenuItem("Save Scene"))
-            //{
-            //    if (Hierarchy.CurrentHierarchy != null)
-            //    {
-            //        Hierarchy.CurrentlyLoadedNodesAssetPath = Hierarchy.CurrentHierarchy;
-            //        //Hierarchy.SaveToAssetPath();
-            //    }
-            //    else
-            //    {
-            //        ImGuiFileDialog.FileDialog(new ImFileDialogInfo()
-            //        {
-            //            type = ImGuiFileDialogType.SaveFile,
-            //            title = "Save Scene",
-            //            fileName = "New Hierarchy.hierarchy",
-            //            OnComplete = (path) => { File.WriteAllText(path, Hierarchy.SaveToString()); },
-            //            directoryPath = new DirectoryInfo(Project.ProjectAssetDirectory)
-            //        });
-            //    }
-            //}
-            ImGui.EndMenu();
-        }
 
-        CreateMenu.Directory = null;
+        MenuItem.DrawMenuRoot("Scene");
+
+        MainMenuItems.Directory = null;
         MenuItem.DrawMenuRoot("Create");
 
         if (ImGui.BeginMenu("Window")) {

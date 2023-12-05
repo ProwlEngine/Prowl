@@ -9,7 +9,7 @@ using System.Numerics;
 using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
-using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Serializer;
 
 namespace Prowl.Runtime.Resources
 {

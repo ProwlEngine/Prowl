@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Xml.Linq;
 
-namespace Prowl.Runtime.Serialization
+namespace Prowl.Runtime.Serializer
 {
     public class CompoundTag : Tag
     {
@@ -148,7 +148,6 @@ namespace Prowl.Runtime.Serialization
         {
             var tags = new List<(string, Tag)>();
             foreach (var tag in Tags) tags.Add((tag.Key, tag.Value.Clone()));
-            return new CompoundTag(tags);
             return new CompoundTag(tags) { SerializedID = SerializedID, SerializedType = SerializedType };
         }
 

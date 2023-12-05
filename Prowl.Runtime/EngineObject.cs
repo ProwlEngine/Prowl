@@ -1,4 +1,4 @@
-﻿using Prowl.Runtime.Serialization;
+﻿using Prowl.Runtime.Serializer;
 using System;
 using System.Collections.Generic;
 using System.Linq;

@@ -8,7 +8,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Reflection;
 using Prowl.Runtime.Assets;
-using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Serializer;
 
 namespace Prowl.Editor.EditorWindows.CustomEditors
 {

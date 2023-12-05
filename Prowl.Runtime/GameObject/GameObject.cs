@@ -1,7 +1,7 @@
 ﻿using HexaEngine.ImGuizmoNET;
 using Prowl.Runtime.Components;
 using Prowl.Runtime.SceneManagement;
-using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Serializer;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -594,7 +594,7 @@ public class GameObject : EngineObject, ISerializable
         {
             System.Numerics.Matrix4x4 goMatrix;
 
-            if (GameObjectManager.GizmosSpace == ImGuizmoMode.Local)
+            if (SceneManager.GizmosSpace == ImGuizmoMode.Local)
                 goMatrix = Local.ToFloat();
             else
                 goMatrix = Global.ToFloat();
@@ -603,12 +603,12 @@ public class GameObject : EngineObject, ISerializable
             goMatrix.Translation -= Camera.Current.GameObject.GlobalPosition.ToFloat();
 
             // Perform ImGuizmo manipulation
-            if (ImGuizmo.Manipulate(ref view, ref projection, GameObjectManager.GizmosOperation, GameObjectManager.GizmosSpace, ref goMatrix))
+            if (ImGuizmo.Manipulate(ref view, ref projection, SceneManager.GizmosOperation, SceneManager.GizmosSpace, ref goMatrix))
             {
                 // Convert back to world space
                 //goMatrix *= System.Numerics.Matrix4x4.CreateTranslation(Camera.Current.GameObject.GlobalPosition.ToFloat());
                 goMatrix.Translation += Camera.Current.GameObject.GlobalPosition.ToFloat();
-                if (GameObjectManager.GizmosSpace == ImGuizmoMode.Local)
+                if (SceneManager.GizmosSpace == ImGuizmoMode.Local)
                 {
                     Local = goMatrix.ToDouble();
                 }
@@ -689,7 +689,7 @@ public class GameObject : EngineObject, ISerializable
 
     public void DontDestroyOnLoad()
     {
-        GameObjectManager._dontDestroyOnLoad.Add(InstanceID);
+        SceneManager._dontDestroyOnLoad.Add(InstanceID);
     }
 
     /// <summary> Calls the method named methodName on every MonoBehaviour in this game object or any of its children. </summary>

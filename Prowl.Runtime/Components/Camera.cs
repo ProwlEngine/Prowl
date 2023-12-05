@@ -74,7 +74,7 @@ public class Camera : MonoBehaviour
 
     private void RenderAllOfOrder(RenderingOrder order)
     {
-        foreach (var go in GameObjectManager.AllGameObjects)
+        foreach (var go in SceneManager.AllGameObjects)
             if (go.EnabledInHierarchy)
                 foreach (var comp in go.GetComponents())
                     if (comp.Enabled && comp.RenderOrder == order)

@@ -162,7 +162,7 @@ public class AssetsWindow : EditorWindow {
         {
             if (ImGui.BeginPopupContextItem())
             {
-                CreateMenu.Directory = null;
+                MainMenuItems.Directory = null;
                 MenuItem.DrawMenuRoot("Create");
                 if (ImGui.MenuItem("Show In Explorer"))
                 {
@@ -187,7 +187,7 @@ public class AssetsWindow : EditorWindow {
                 if (ImGui.MenuItem("Reimport"))
                     AssetDatabase.Reimport(relativeAssetPath);
                 ImGui.Separator();
-                CreateMenu.Directory = file.Directory;
+                MainMenuItems.Directory = file.Directory;
                 MenuItem.DrawMenuRoot("Create");
                 if (ImGui.MenuItem("Show In Explorer"))
                 {
@@ -214,7 +214,7 @@ public class AssetsWindow : EditorWindow {
                 if (ImGui.MenuItem("Reimport"))
                     AssetDatabase.ReimportFolder(directory);
                 ImGui.Separator();
-                CreateMenu.Directory = directory;
+                MainMenuItems.Directory = directory;
                 MenuItem.DrawMenuRoot("Create");
                 if (ImGui.MenuItem("Show In Explorer"))
                 {

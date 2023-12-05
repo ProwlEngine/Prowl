@@ -1,6 +1,6 @@
 using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
-using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Serializer;
 
 namespace Prowl.Editor;
 
@@ -14,7 +14,7 @@ public static class PlayMode {
 
         // Serialize the Scene manually to save its state
         // exclude objects with the DontSave hideFlag
-        GameObject[] GameObjects = GameObjectManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
+        GameObject[] GameObjects = SceneManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
         PreviousScene = TagSerializer.Serialize(GameObjects);
 
         Current = Mode.Playing;
@@ -52,7 +52,7 @@ public static class PlayMode {
 
         //var s = JsonUtility.Deserialize<Scene>(PreviousScene);
         ////GameObjectManager.LoadScene(s, false);
-        GameObjectManager.Clear();
+        SceneManager.Clear();
         var deserialized = TagSerializer.Deserialize<GameObject[]>(PreviousScene);
         
         // TODO: come up with a clean way to maintain the selected object

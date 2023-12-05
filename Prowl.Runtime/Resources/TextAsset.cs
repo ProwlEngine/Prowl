@@ -1,6 +1,4 @@
-﻿using Prowl.Runtime.Serialization;
-
-namespace Prowl.Runtime.Resources
+﻿namespace Prowl.Runtime.Resources
 {
     public sealed class TextAsset : EngineObject
     {

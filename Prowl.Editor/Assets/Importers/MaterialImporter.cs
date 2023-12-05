@@ -4,7 +4,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.Assets;
 using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.Resources;
-using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Utils;
 using System.Numerics;

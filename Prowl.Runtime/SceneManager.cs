@@ -1,15 +1,18 @@
 using HexaEngine.ImGuizmoNET;
 using Prowl.Runtime.Components;
+using Prowl.Runtime.Resources;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace Prowl.Runtime.SceneManagement;
 
-public static class GameObjectManager
+public static class SceneManager
 {
     private static readonly List<GameObject> _gameObjects = new();
     internal static HashSet<int> _dontDestroyOnLoad = new();
+
+    public static Scene MainScene { get; private set; } = new();
 
     public static List<GameObject> AllGameObjects => _gameObjects;
 
@@ -24,6 +27,19 @@ public static class GameObjectManager
     {
         GameObject.Internal_Constructed += OnGameObjectConstructed;
         GameObject.Internal_DestroyCommitted += OnGameObjectDestroyCommitted;
+        InstantiateNewScene();
+    }
+
+    public static void InstantiateNewScene()
+    {
+        var go = new GameObject("Directional Light");
+        go.Rotation = new System.Numerics.Vector3(45, 70, 0);
+        go.AddComponent<DirectionalLight>();
+
+        var cam = new GameObject("Main Camera");
+        cam.tag = "Main Camera";
+        cam.Position = new(0, 0, -10);
+        cam.AddComponent<Camera>();
     }
 
     private static void OnGameObjectConstructed(GameObject go)
@@ -48,6 +64,7 @@ public static class GameObjectManager
                 go.Destroy();
         EngineObject.HandleDestroyed();
         _gameObjects.Clear();
+        MainScene = new();
     }
 
     public static void Update()
@@ -132,6 +149,27 @@ public static class GameObjectManager
             if(cam.EnabledInHierarchy)
                 cam.Render(-1, -1);
     }
-    
+
+    public static void LoadScene(Scene scene)
+    {
+        Clear();
+        MainScene = scene;
+        MainScene.InstantiateScene();
+        foreach (var go in _gameObjects)
+            foreach (var comp in go.GetComponents<MonoBehaviour>())
+                comp.Internal_OnSceneLoaded();
+    }
+
+    public static void LoadScene(AssetRef<Scene> scene)
+    {
+        if(scene.IsAvailable == false) throw new Exception("Scene is not available.");
+        Clear();
+        MainScene = scene.Res;
+        MainScene.InstantiateScene();
+        foreach (var go in _gameObjects)
+            foreach (var comp in go.GetComponents<MonoBehaviour>())
+                comp.Internal_OnSceneLoaded();
+    }
+
 }
 

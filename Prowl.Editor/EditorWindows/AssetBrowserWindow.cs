@@ -5,6 +5,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.Assets;
 using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.Resources;
+using Prowl.Runtime.SceneManagement;
 using System.Numerics;
 using System.Reflection;
 using static Assimp.Metadata;
@@ -199,7 +200,15 @@ public class AssetBrowserWindow : EditorWindow {
                     Selection.Select(entry);
                 if (isAsset && ImGui.IsMouseDoubleClicked(0))
                 {
+                    if (entry.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var guid = AssetDatabase.GUIDFromAssetPath(relativeAssetPath);
+                        SceneManager.LoadScene(new AssetRef<Scene>(guid));
+                    }
+                    else
+                    {
                         AssetDatabase.OpenAsset(relativeAssetPath);
+                    }
                 }
 
                 // Drag and Drop Payload

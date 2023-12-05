@@ -8,7 +8,7 @@ using Prowl.Editor.PropertyDrawers;
 using HexaEngine.ImGuiNET;
 using Raylib_cs;
 using System.Diagnostics;
-using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Components.ImageEffects;
 using Prowl.Runtime.Components;
 
@@ -63,12 +63,12 @@ public unsafe class EditorApplication : Application {
             {
                 //var setting = Project.ProjectSettings.GetSetting<ApplicationSettings>();
 
-                GameObjectManager.Update();
+                SceneManager.Update();
 
                 float physicsTime = (float)physicsTimer.Elapsed.TotalSeconds;
                 if (physicsTime > Time.fixedDeltaTime)
                 {
-                    GameObjectManager.PhysicsUpdate();
+                    SceneManager.PhysicsUpdate();
                     physicsTimer.Restart();
                 }
             }
@@ -159,11 +159,11 @@ public unsafe class EditorApplication : Application {
 
                 _AssemblyManager.AddUnloadTask(() =>
                 {
-                    foreach (var go in GameObjectManager.AllGameObjects)
+                    foreach (var go in SceneManager.AllGameObjects)
                         go.Destroy();
                     EngineObject.HandleDestroyed();
 
-                    GameObjectManager.Clear();
+                    SceneManager.Clear();
                     Selection.Clear();
 
                     PropertyDrawer.ClearLookUp();

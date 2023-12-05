@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-namespace Prowl.Runtime.Serialization
+namespace Prowl.Runtime.Serializer
 {
     public static class TagSerializer
     {

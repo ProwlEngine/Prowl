@@ -1,6 +1,6 @@
 ﻿using Prowl.Editor.EditorWindows;
 using Prowl.Runtime.Resources;
-using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Utils;
 using System.Reflection;
@@ -72,9 +72,9 @@ namespace Prowl.Editor
 
         public static void CreateAsset(Type type)
         {
-            CreateMenu.Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+            MainMenuItems.Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
             var obj = Activator.CreateInstance(type);
-            FileInfo file = new FileInfo(CreateMenu.Directory + $"/New {type.Name}.scriptobj");
+            FileInfo file = new FileInfo(MainMenuItems.Directory + $"/New {type.Name}.scriptobj");
             while (file.Exists)
             {
                 file = new FileInfo(file.FullName.Replace(".scriptobj", "") + " New.scriptobj");

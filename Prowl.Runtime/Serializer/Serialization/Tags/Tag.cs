@@ -2,7 +2,7 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
 
-namespace Prowl.Runtime.Serialization
+namespace Prowl.Runtime.Serializer
 {
     public enum TagType
     {

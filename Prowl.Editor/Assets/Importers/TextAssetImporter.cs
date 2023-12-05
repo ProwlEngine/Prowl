@@ -1,6 +1,6 @@
 ﻿using Prowl.Runtime;
 using Prowl.Runtime.Resources;
-using Prowl.Runtime.Serialization;
+using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Assets

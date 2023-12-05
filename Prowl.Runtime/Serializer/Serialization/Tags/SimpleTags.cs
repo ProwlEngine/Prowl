@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace Prowl.Runtime.Serialization
+namespace Prowl.Runtime.Serializer
 {
     public class NullTag : Tag
     {
