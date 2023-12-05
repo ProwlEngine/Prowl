@@ -743,6 +743,9 @@ public class GameObject : EngineObject, ISerializable
 
         compoundTag.Add("HideFlags", new IntTag((int)hideFlags));
 
+        if(AssetID != Guid.Empty)
+            compoundTag.Add("AssetID", new StringTag(AssetID.ToString()));
+
         compoundTag.Add("PosX", new DoubleTag(position.X));
         compoundTag.Add("PosY", new DoubleTag(position.Y));
         compoundTag.Add("PosZ", new DoubleTag(position.Z));
@@ -776,6 +779,8 @@ public class GameObject : EngineObject, ISerializable
         tagIndex = value["TagIndex"].IntValue;
         layerIndex = value["LayerIndex"].IntValue;
         hideFlags = (HideFlags)value["HideFlags"].IntValue;
+        if(value.TryGet("AssetID", out StringTag guid))
+            AssetID = Guid.Parse(guid.Value);
         position = new Vector3(value["PosX"].FloatValue, value["PosY"].FloatValue, value["PosZ"].FloatValue);
         rotation = new Vector3(value["RotX"].FloatValue, value["RotY"].FloatValue, value["RotZ"].FloatValue);
         scale = new Vector3(value["ScalX"].FloatValue, value["ScalY"].FloatValue, value["ScalZ"].FloatValue);
