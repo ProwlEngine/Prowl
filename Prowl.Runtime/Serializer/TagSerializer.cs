@@ -198,6 +198,8 @@ namespace Prowl.Runtime.Serialization
         {
             if (value is NullTag) return null;
 
+            if (value.GetType().IsAssignableTo(targetType)) return value;
+
             if (IsPrimitive(targetType))
             {
                 if (value is ByteTag b) return b.Value;
