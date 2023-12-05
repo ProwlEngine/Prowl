@@ -1,6 +1,7 @@
 using HexaEngine.ImGuiNET;
 using Prowl.Icons;
 using Prowl.Runtime;
+using Prowl.Runtime.Components;
 using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Serializer;
@@ -261,10 +262,22 @@ public class HierarchyWindow : EditorWindow {
                 deserialized.SetParent(entity.Parent);
                 Selection.Select(deserialized);
             }
-            if (ImGui.MenuItem("Delete", "Del"))
-                entity.Destroy();
+            if (ImGui.MenuItem("Align With View")) 
+            { 
+                Camera cam = ViewportWindow.LastFocusedCamera;
+                entity.GlobalPosition = cam.GameObject.GlobalPosition;
+                entity.GlobalOrientation = cam.GameObject.GlobalOrientation;
+            }
+            if (ImGui.MenuItem("Align View With"))
+            {
+                Camera cam = ViewportWindow.LastFocusedCamera;
+                cam.GameObject.GlobalPosition = entity.GlobalPosition;
+                cam.GameObject.GlobalOrientation = entity.GlobalOrientation;
+            }
 
             ImGui.Separator();
+            if (ImGui.MenuItem("Delete", "Del"))
+                entity.Destroy();
 
             DrawContextMenu(entity);
 
