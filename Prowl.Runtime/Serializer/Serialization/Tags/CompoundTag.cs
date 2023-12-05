@@ -149,6 +149,7 @@ namespace Prowl.Runtime.Serialization
             var tags = new List<(string, Tag)>();
             foreach (var tag in Tags) tags.Add((tag.Key, tag.Value.Clone()));
             return new CompoundTag(tags);
+            return new CompoundTag(tags) { SerializedID = SerializedID, SerializedType = SerializedType };
         }
 
         public override string ToString()
