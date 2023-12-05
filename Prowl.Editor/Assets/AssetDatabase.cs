@@ -50,6 +50,9 @@ namespace Prowl.Runtime.Assets
                 pathToGuid.Clear();
             }
 
+            /// <summary>Checks if the given relativeAssetPath exists in the collection.</summary>
+            public static bool Contains(string relativeAssetPath) => pathToGuid.ContainsKey(relativeAssetPath);
+
             /// <summary>Checks if the given GUID exists in the collection.</summary>
             public static bool Contains(Guid guid) => guidToPath.ContainsKey(guid);
 
@@ -145,6 +148,7 @@ namespace Prowl.Runtime.Assets
             rootWatchers.Add(watcher);
         }
 
+        public static bool Contains(string relativeAssetPath) => GuidPathHolder.Contains(NormalizeString(relativeAssetPath));
         public static bool Contains(Guid guid) => guid != Guid.Empty && GuidPathHolder.Contains(guid);
 
         public static Guid GUIDFromAssetPath(string relativeAssetPath) =>
