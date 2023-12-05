@@ -61,7 +61,6 @@ public class GameObject : EngineObject, ISerializable
     protected Vector3 forward, backward, left, right, up, down;
     protected Matrix4x4 globalPrevious, global, globalInverse;
     protected Matrix4x4 local, localInverse;
-    protected Matrix4x4 viewPrevious, view, viewInv;
 
     // We dont serialize parent, since if we want to serialize X object who is a child to Y object, we dont want to serialize Y object as well.
     // The parent is reconstructed when the object is deserialized for all children.
@@ -187,15 +186,6 @@ public class GameObject : EngineObject, ISerializable
     /// <summary>The local inverse transformation matrix</summary>
      public Matrix4x4 LocalInverse => localInverse;
 
-    /// <summary>The view matrix in world space of the last frame</summary>
-     public Matrix4x4 ViewPrevious => viewPrevious;
-
-    /// <summary>The view matrix in world space</summary>
-     public Matrix4x4 View => view;
-
-    /// <summary>The inverse view matrix in world space</summary>
-     public Matrix4x4 ViewInv => viewInv;
-
     /// <summary>The velocity of the object only useful for 3d sound.</summary>
      public Vector3 Velocity => velocity;
 
@@ -252,7 +242,6 @@ public class GameObject : EngineObject, ISerializable
     public void Recalculate()
     {
         globalPrevious = global;
-        viewPrevious = view;
 
         var s = Matrix4x4.CreateScale(scale);
         var r = Matrix4x4.CreateFromQuaternion(orientation);
@@ -274,9 +263,6 @@ public class GameObject : EngineObject, ISerializable
         left = Vector3.Transform(-Vector3.UnitX, globalOrientation);
         up = Vector3.Transform(Vector3.UnitY, globalOrientation);
         down = Vector3.Transform(-Vector3.UnitY, globalOrientation);
-
-        view = Matrix4x4.CreateLookAtLeftHanded(globalPosition, forward + globalPosition, up);
-        Matrix4x4.Invert(view, out viewInv);
 
         foreach (var child in Children)
             child.Recalculate();

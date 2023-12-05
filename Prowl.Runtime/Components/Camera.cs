@@ -127,6 +127,9 @@ public class Camera : MonoBehaviour
     Matrix4x4? oldView = null;
     Matrix4x4? oldProjection = null;
 
+    private Vector3 ViewPosition => LargeWorldCamera ? Vector3.Zero : GameObject.GlobalPosition;
+    public Matrix4x4 View => Matrix4x4.CreateLookAtLeftHanded(ViewPosition, GameObject.Forward + ViewPosition, GameObject.Up);
+
     public void Render(int width, int height)
     {
         if (Target.IsAvailable)
@@ -146,12 +149,7 @@ public class Camera : MonoBehaviour
         Rlgl.rlSetBlendMode(BlendMode.BLEND_ADD_COLORS);
         Current = this;
         Graphics.Resolution = new Vector2(width, height);
-        Graphics.MatView = Camera.Current.GameObject.View;
-        if(LargeWorldCamera) 
-        {
-            // Camera view should be at 0 0 0
-            Graphics.MatView.Translation = Vector3.Zero;
-        }
+        Graphics.MatView = View;
         Graphics.MatProjection = Camera.Current.GetProjectionMatrix(width, height);
         Graphics.OldMatView = oldView ?? Graphics.MatView;
         Graphics.OldMatProjection = oldProjection ?? Graphics.MatProjection;
