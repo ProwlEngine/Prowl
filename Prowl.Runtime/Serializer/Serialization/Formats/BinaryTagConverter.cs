@@ -61,7 +61,6 @@ namespace Prowl.Runtime.Serializer
             else if (type == TagType.List)
             {
                 var listTag = (ListTag)tag;
-                writer.Write((byte)listTag.ListType);
                 writer.Write(listTag.Count);
                 foreach (var subTag in listTag.Tags)
                     WriteTag(subTag, writer); // Lists dont care about names, so dont need to write Tag Names inside a List
