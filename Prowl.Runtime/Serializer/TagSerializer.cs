@@ -101,33 +101,13 @@ namespace Prowl.Runtime.Serialization
 
         }
 
-        private static TagType TypeToTagType(Type type)
-        {
-            if (type == typeof(byte))         return TagType.Byte;
-            else if (type == typeof(sbyte))   return TagType.sByte;
-            else if (type == typeof(short))   return TagType.Short;
-            else if (type == typeof(int))     return TagType.Int;
-            else if (type == typeof(long))    return TagType.Long;
-            else if (type == typeof(ushort))  return TagType.UShort;
-            else if (type == typeof(uint))    return TagType.UInt;
-            else if (type == typeof(ulong))   return TagType.ULong;
-            else if (type == typeof(float))   return TagType.Float;
-            else if (type == typeof(double))  return TagType.Double;
-            else if (type == typeof(decimal)) return TagType.Decimal;
-            else if (type == typeof(string))  return TagType.String;
-            else if (type == typeof(byte[]))  return TagType.ByteArray;
-            else if (type == typeof(bool))    return TagType.Bool;
-            return TagType.Compound;
-        }
-
         private static ListTag ArrayToListTag(Array array, SerializationContext ctx)
         {
             var elementType = array.GetType().GetElementType()!;
-            var listType = TypeToTagType(elementType);
             List<Tag> tags = [];
             for (int i = 0; i < array.Length; i++)
                 tags.Add(Serialize(array.GetValue(i), ctx));
-            return new ListTag(tags, listType);
+            return new ListTag(tags);
         }
 
         private static CompoundTag? DictionaryToTag(object obj, SerializationContext ctx)
