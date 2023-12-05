@@ -115,8 +115,7 @@ namespace Prowl.Runtime.Serializer
             else if (type == TagType.Bool) return new BoolTag(reader.ReadBoolean());
             else if (type == TagType.List)
             {
-                var listType = (TagType)reader.ReadByte();
-                var listTag = new ListTag(listType);
+                var listTag = new ListTag();
                 var tagCount = reader.ReadInt32();
                 for (int i = 0; i < tagCount; i++)
                     listTag.Add(ReadTag(reader));

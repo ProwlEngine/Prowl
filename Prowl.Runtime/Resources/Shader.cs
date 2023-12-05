@@ -129,7 +129,7 @@ namespace Prowl.Runtime.Resources
         public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
         {
             CompoundTag compoundTag = new CompoundTag();
-            ListTag propertiesTag = new ListTag(TagType.Compound);
+            ListTag propertiesTag = new ListTag();
             foreach (var property in Properties)
             {
                 CompoundTag propertyTag = new CompoundTag();
@@ -139,7 +139,7 @@ namespace Prowl.Runtime.Resources
                 propertiesTag.Add(propertyTag);
             }
             compoundTag.Add("Properties", propertiesTag);
-            ListTag passesTag = new ListTag(TagType.Compound);
+            ListTag passesTag = new ListTag();
             foreach (var pass in Passes)
             {
                 CompoundTag passTag = new CompoundTag();

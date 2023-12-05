@@ -144,7 +144,7 @@ namespace Prowl.Runtime.Resources
             compoundTag.Add("Height", new IntTag(Height));
             compoundTag.Add("NumTextures", new IntTag(numTextures));
             compoundTag.Add("HasDepthAttachment", new ByteTag((byte)(hasDepthAttachment ? 1 : 0)));
-            ListTag textureFormatsTag = new ListTag(TagType.Byte);
+            ListTag textureFormatsTag = new ListTag();
             foreach (var format in textureFormats)
                 textureFormatsTag.Add(new ByteTag((byte)format));
             compoundTag.Add("TextureFormats", textureFormatsTag);

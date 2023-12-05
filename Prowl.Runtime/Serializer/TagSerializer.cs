@@ -98,7 +98,6 @@ namespace Prowl.Runtime.Serialization
             else if (tagType == TagType.ByteArray) return typeof(byte[]);
             else if (tagType == TagType.Bool)      return typeof(bool);
             return typeof(object);
-
         }
 
         private static ListTag ArrayToListTag(Array array, SerializationContext ctx)
