@@ -54,7 +54,7 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         {
             path = AssetDatabase.GUIDToAssetPath(value.AssetID);
             if (ImGui.Selectable($"{Name}: {path}", false))
-                Selection.Select(this);
+                Selection.Select(this, false);
         }
 
         // DragDrop code
@@ -64,10 +64,10 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         // Add a button for clearing the Asset
         if (ImGui.IsKeyPressed(ImGuiKey.Delete) && ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows))
         {
-            if (Selection.Current is PropertyDrawerAsset drawer && drawer == this)
+            if (Selection.IsSelected(this))
             {
                 value = null;
-                Selection.Clear(false);
+                Selection.Clear();
             }
         }
 

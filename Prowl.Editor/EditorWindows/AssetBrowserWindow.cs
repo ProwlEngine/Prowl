@@ -33,14 +33,14 @@ public class AssetBrowserWindow : EditorWindow {
     {
         Title = "Asset Browser";
         Project.OnProjectChanged += Invalidate;
-        Selection.OnSelectionChanged += SelectionChanged;
+        Selection.OnSelectObject += SelectionChanged;
         Invalidate();
     }
 
     ~AssetBrowserWindow()
     {
         Project.OnProjectChanged -= Invalidate;
-        Selection.OnSelectionChanged -= SelectionChanged;
+        Selection.OnSelectObject -= SelectionChanged;
     }
 
     protected override void Draw()
@@ -65,7 +65,7 @@ public class AssetBrowserWindow : EditorWindow {
         CurDirectory = new DirectoryInfo(Project.ProjectAssetDirectory);
     }
 
-    private void SelectionChanged(object from, object to)
+    private void SelectionChanged(object to)
     {
         if (Locked) return;
         if (to is DirectoryInfo directory) CurDirectory = directory;
@@ -197,7 +197,7 @@ public class AssetBrowserWindow : EditorWindow {
                 bool isAsset = AssetDatabase.Contains(relativeAssetPath);
 
                 if (ImGui.IsMouseClicked(0))
-                    Selection.Select(entry);
+                    Selection.Select(entry, true);
                 if (isAsset && ImGui.IsMouseDoubleClicked(0))
                 {
                     if (entry.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase))
@@ -229,7 +229,7 @@ public class AssetBrowserWindow : EditorWindow {
                 if (ImGui.IsMouseClicked(0))
                 {
                     var old = CurDirectory;
-                    Selection.Select(entry);
+                    Selection.Select(entry, true);
                     CurDirectory = old;
                 }
                 if (ImGui.IsMouseDoubleClicked(0))

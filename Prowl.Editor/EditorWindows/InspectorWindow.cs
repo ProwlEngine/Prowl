@@ -13,26 +13,27 @@ public class InspectorWindow : EditorWindow
     private Stack<WeakReference> _BackStack = new();
     private Stack<WeakReference> _ForwardStack = new();
 
-    private WeakReference? Selected;
+    private WeakReference? Selected = null;
 
     (object, ScriptedEditor)? customEditor;
 
     public InspectorWindow() : base()
     {
         Title = "Inspector";
-        Selection.OnSelectionChanged += Selection_OnSelectionChanged;
+        Selection.OnSelectObject += Selection_OnSelectObject;
     }
 
-    private void Selection_OnSelectionChanged(object o, object n)
+    private void Selection_OnSelectObject(object n)
     {
         _ForwardStack.Clear();
-        _BackStack.Push(Selected);
+        if(Selected != null)
+            _BackStack.Push(Selected);
         Selected = new WeakReference(n);
     }
 
     ~InspectorWindow()
     {
-        Selection.OnSelectionChanged -= Selection_OnSelectionChanged;
+        Selection.OnSelectObject -= Selection_OnSelectObject;
     }
 
     protected override void Draw()

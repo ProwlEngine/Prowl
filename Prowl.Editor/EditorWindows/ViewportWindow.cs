@@ -102,7 +102,7 @@ public class ViewportWindow : EditorWindow
         view.Translation = new System.Numerics.Vector3(0, 0, 0);
         foreach (var activeGO in SceneManager.AllGameObjects)
             if (activeGO.EnabledInHierarchy)
-                activeGO.DrawGizmos(view, projection, Selection.Current == activeGO);
+                activeGO.DrawGizmos(view, projection, Selection.IsSelected(activeGO));
         Camera.Current = null;
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 5));
@@ -151,7 +151,7 @@ public class ViewportWindow : EditorWindow
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (151), 5));
         if (ImGui.Button($"{FontAwesome6.Camera}"))
-            Selection.Select(Cam.GameObject);
+            Selection.Select(Cam.GameObject, false);
         GUIHelper.Tooltip("Viewport Camera Settings");
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 22));

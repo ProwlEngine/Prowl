@@ -23,6 +23,7 @@ public class HierarchyWindow : EditorWindow {
     
     private string _searchText = "";
     private GameObject m_RenamingEntity = null;
+    private bool clicked = false;
 
     protected override void Draw()
     {
@@ -48,7 +49,7 @@ public class HierarchyWindow : EditorWindow {
             ImGui.SetCursorPosX(filterCursorPosX + ImGui.GetFontSize() * 0.5f);
             ImGui.TextUnformatted(FontAwesome6.MagnifyingGlass + " Search...");
         }
-
+        clicked = false;
         if (ImGui.BeginTable("HierarchyTable", 2, tableFlags))
         {
             if (ImGui.BeginPopupContextWindow("SceneHierarchyContextWindow", ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.NoOpenOverItems))
@@ -85,6 +86,9 @@ public class HierarchyWindow : EditorWindow {
 
             ImGui.EndTable();
 
+            if (!clicked && ImGui.IsItemClicked(0))
+                Selection.Clear();
+
             unsafe
             {
                 if (DragnDrop.ReceiveReference<GameObject>(out var go))
@@ -104,8 +108,6 @@ public class HierarchyWindow : EditorWindow {
                 }
             }
 
-            if (ImGui.IsItemClicked())
-                Selection.Clear();
         }
     }
 
@@ -125,7 +127,7 @@ public class HierarchyWindow : EditorWindow {
         ImGui.TableNextColumn();
 
         bool isPrefab = entity.AssetID != Guid.Empty;
-        bool isSelected = Selection.Current == entity;
+        bool isSelected = Selection.IsSelected(entity);
 
         ImGuiTreeNodeFlags flags = CalculateFlags(entity, isSelected);
 
@@ -154,7 +156,8 @@ public class HierarchyWindow : EditorWindow {
         // Select
         if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked(0))
         {
-            Selection.Select(entity);
+            clicked = true;
+            Selection.Select(entity, true);
             if (ImGui.IsMouseDoubleClicked(0))
                 m_RenamingEntity = entity;
         }
@@ -249,8 +252,8 @@ public class HierarchyWindow : EditorWindow {
     {
         if (ImGui.BeginPopupContextItem())
         {
-            if (Selection.Current != entity)
-                Selection.Select(entity);
+            if (!Selection.IsSelected(entity))
+                Selection.Select(entity, true);
 
             if (ImGui.MenuItem("Rename", "F2"))
                 m_RenamingEntity = entity;

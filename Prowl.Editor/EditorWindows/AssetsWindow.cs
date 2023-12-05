@@ -3,6 +3,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
 using System.Diagnostics;
+using System.IO;
 using System.Numerics;
 using static Assimp.Metadata;
 
@@ -58,7 +59,7 @@ public class AssetsWindow : EditorWindow {
                 var curPos = ImGui.GetCursorPos();
                 bool opened = ImGui.TreeNodeEx($"      {Path.GetFileNameWithoutExtension(file.Name)}", flags);
                 if (count++ % 2 == 0) drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
-                if (ImGui.IsItemClicked()) Selection.Select(file);
+                if (ImGui.IsItemClicked()) Selection.Select(file, true);
                 GUIHelper.Tooltip(file.Name);
                 ImGui.PushStyleColor(ImGuiCol.Text, GetFileColor(ext));
                 // Display icon behind text
@@ -84,7 +85,7 @@ public class AssetsWindow : EditorWindow {
         ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(250f / 255f, 210f / 255f, 100f / 255f, 1f));
         bool opened = ImGui.TreeNodeEx($"{FontAwesome6.FolderTree} {root.Name}", rootFlags);
         ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(1f, 1f, 1f, 0.2f)));
-        if (ImGui.IsItemClicked()) Selection.Select(root);
+        if (ImGui.IsItemClicked()) Selection.Select(root, true);
         FileRightClick(null);
         ImGui.PopStyleColor();
 
@@ -108,7 +109,7 @@ public class AssetsWindow : EditorWindow {
             if (AssetsWindow.IsSelected(subDirectory)) flags |= ImGuiTreeNodeFlags.Selected;
 
             bool opened = ImGui.TreeNodeEx($"{(isLeaf ? FontAwesome6.FolderOpen : FontAwesome6.Folder)} {subDirectory.Name}", flags);
-            if (ImGui.IsItemClicked()) Selection.Select(subDirectory);
+            if (ImGui.IsItemClicked()) Selection.Select(subDirectory, true);
             FileRightClick(subDirectory);
             GUIHelper.Tooltip(subDirectory.Name);
 
@@ -134,7 +135,7 @@ public class AssetsWindow : EditorWindow {
             var name = (Settings.m_HideExtensions ? Path.GetFileNameWithoutExtension(file.Name) : file.Name);
             bool opened = ImGui.TreeNodeEx($"      {name}", flags);
             if (count++ % 2 == 0) drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
-            if (ImGui.IsItemClicked()) Selection.Select(file);
+            if (ImGui.IsItemClicked()) Selection.Select(file, true);
             FileRightClick(file);
             GUIHelper.Tooltip(file.Name);
             ImGui.PushStyleColor(ImGuiCol.Text, GetFileColor(ext));
@@ -149,13 +150,8 @@ public class AssetsWindow : EditorWindow {
     public static void FileRightClick(FileSystemInfo? fileInfo)
     {
         // Lets fallback to whatever is Selected if fileInfo is null
-        if (fileInfo == null && Selection.Current is FileSystemInfo entry)
-        {
-            if (entry is FileInfo file)
-                fileInfo = file;
-            else if (entry is DirectoryInfo directory)
-                fileInfo = directory;
-        }
+        if (fileInfo == null && Selection.Count > 0 && Selection.CurrentType.IsAssignableTo(typeof(FileSystemInfo)))
+            fileInfo = Selection.Get(0) as FileSystemInfo;
 
         // If still null then show a simplified context menu
         if(fileInfo == null)
@@ -331,8 +327,17 @@ public class AssetsWindow : EditorWindow {
 
     public static bool IsSelected(FileSystemInfo entry)
     {
-        if (Selection.Current  is not FileSystemInfo selected) return false;
-        return entry.FullName.Equals(selected.FullName, StringComparison.OrdinalIgnoreCase);
+        if (Selection.Count > 0 && Selection.CurrentType.IsAssignableTo(typeof(FileSystemInfo)))
+        {
+            int count = Selection.Count;
+            for (int i = 0; i < count; i++)
+            {
+                var obj = Selection.Get(i);
+                if (obj is FileSystemInfo file && file.FullName.Equals(entry.FullName, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+        return false;
     }
 
 }
