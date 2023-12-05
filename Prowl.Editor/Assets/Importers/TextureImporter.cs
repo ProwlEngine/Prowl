@@ -23,24 +23,17 @@ namespace Prowl.Editor.Assets
                 return;
             }
 
-            try
-            {
-                // Load the Texture into a TextureData Object and serialize to Asset Folder
-                Texture2D texture = new Texture2D(assetPath.FullName);
-                if (generateMipmaps)
-                    texture.GenerateMipMaps();
+            // Load the Texture into a TextureData Object and serialize to Asset Folder
+            Texture2D texture = new Texture2D(assetPath.FullName);
+            if (generateMipmaps)
+                texture.GenerateMipMaps();
 
-                texture.SetFilter(textureFilter);
-                texture.SetWrap(textureWrap);
+            texture.SetFilter(textureFilter);
+            texture.SetWrap(textureWrap);
 
-                ctx.SetMainObject(texture);
+            ctx.SetMainObject(texture);
 
-                ImGuiNotify.InsertNotification("Texture Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);
-            }
-            catch (Exception e)
-            {
-                ImGuiNotify.InsertNotification("Failed to Import Texture.", new(0.8f, 0.1f, 0.1f, 1), "Reason: " + e.Message);
-            }
+            ImGuiNotify.InsertNotification("Texture Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);
         }
     }
 

@@ -23,55 +23,48 @@ namespace Prowl.Editor.Assets
                 return;
             }
 
-            try
+            currentAssetPath = assetPath;
+
+            string shaderScript = File.ReadAllText(assetPath.FullName);
+
+            // Strip out comments and Multi-like Comments
+            shaderScript = ClearAllComments(shaderScript);
+
+            // Parse the shader
+            var parsedShader = ParseShader(shaderScript);
+
+            // Sort passes to be in order
+            parsedShader.Passes = parsedShader.Passes.OrderBy(p => p.Order).ToArray();
+
+            // Now we have a Vertex and Fragment shader will all Includes, and Shared code inserted
+            // Now we turn the ParsedShader into a Shader
+            Runtime.Resources.Shader shader = new();
+            shader.Name = parsedShader.Name;
+            shader.Properties = parsedShader.Properties;
+            shader.Passes = new();
+
+            for (int i = 0; i < parsedShader.Passes.Length; i++)
             {
-                currentAssetPath = assetPath;
-
-                string shaderScript = File.ReadAllText(assetPath.FullName);
-
-                // Strip out comments and Multi-like Comments
-                shaderScript = ClearAllComments(shaderScript);
-
-                // Parse the shader
-                var parsedShader = ParseShader(shaderScript);
-
-                // Sort passes to be in order
-                parsedShader.Passes = parsedShader.Passes.OrderBy(p => p.Order).ToArray();
-
-                // Now we have a Vertex and Fragment shader will all Includes, and Shared code inserted
-                // Now we turn the ParsedShader into a Shader
-                Runtime.Resources.Shader shader = new();
-                shader.Name = parsedShader.Name;
-                shader.Properties = parsedShader.Properties;
-                shader.Passes = new();
-
-                for (int i = 0; i < parsedShader.Passes.Length; i++)
+                var parsedPass = parsedShader.Passes[i];
+                shader.Passes.Add(new ShaderPass
                 {
-                    var parsedPass = parsedShader.Passes[i];
-                    shader.Passes.Add(new ShaderPass
-                    {
-                        RenderMode = parsedPass.RenderMode,
-                        Vertex = parsedPass.Vertex,
-                        Fragment = parsedPass.Fragment,
-                    });
-                }
-
-                if (parsedShader.ShadowPass != null)
-                    shader.ShadowPass = new ShaderShadowPass
-                    {
-                        Vertex = parsedShader.ShadowPass.Vertex,
-                        Fragment = parsedShader.ShadowPass.Fragment,
-                    };
-
-                ctx.SetMainObject(shader);
-
-
-                ImGuiNotify.InsertNotification("Shader Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);
+                    RenderMode = parsedPass.RenderMode,
+                    Vertex = parsedPass.Vertex,
+                    Fragment = parsedPass.Fragment,
+                });
             }
-            catch (Exception e)
-            {
-                ImGuiNotify.InsertNotification("Failed to Import Shader.", new(0.8f, 0.1f, 0.1f, 1), "Reason: " + e.Message);
-            }
+
+            if (parsedShader.ShadowPass != null)
+                shader.ShadowPass = new ShaderShadowPass
+                {
+                    Vertex = parsedShader.ShadowPass.Vertex,
+                    Fragment = parsedShader.ShadowPass.Fragment,
+                };
+
+            ctx.SetMainObject(shader);
+
+
+            ImGuiNotify.InsertNotification("Shader Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);
         }
 
 #warning TODO: Replace regex with a proper parser, this works just fine for now though so Low Priority

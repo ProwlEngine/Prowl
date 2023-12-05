@@ -11,19 +11,12 @@ namespace Prowl.Editor.Assets
     {
         public override void Import(SerializedAsset ctx, FileInfo assetPath)
         {
-            try
-            {
-                // Load the Texture into a TextureData Object and serialize to Asset Folder
-                //var scriptable = JsonUtility.Deserialize<ScriptableObject>(File.ReadAllText(assetPath.FullName));
-                var scriptable = TagSerializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile(assetPath));
-                ctx.SetMainObject(scriptable);
+            // Load the Texture into a TextureData Object and serialize to Asset Folder
+            //var scriptable = JsonUtility.Deserialize<ScriptableObject>(File.ReadAllText(assetPath.FullName));
+            var scriptable = TagSerializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile(assetPath));
+            ctx.SetMainObject(scriptable);
 
-                ImGuiNotify.InsertNotification("ScriptableObject Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);
-            }
-            catch (Exception e)
-            {
-                ImGuiNotify.InsertNotification("Failed to Import ScriptableObject.", new(0.8f, 0.1f, 0.1f, 1), "Reason: " + e.Message);
-            }
+            ImGuiNotify.InsertNotification("ScriptableObject Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);
         }
     }
 
