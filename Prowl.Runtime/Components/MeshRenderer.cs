@@ -20,6 +20,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable
         {
             for (int i = 0; i < Material.Res!.PassCount; i++)
             {
+                Material.Res!.SetColor("_MainColor", mainColor);
                 Material.Res!.SetPass(i);
 
 #warning TODO: Previous matrix needs to support LargeWorldCamera
@@ -49,6 +50,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable
         CompoundTag compoundTag = new CompoundTag();
         compoundTag.Add("Mesh", TagSerializer.Serialize(Mesh, ctx));
         compoundTag.Add("Material", TagSerializer.Serialize(Material, ctx));
+        compoundTag.Add("mainColor", TagSerializer.Serialize(mainColor, ctx));
         return compoundTag;
     }
 
@@ -56,5 +58,6 @@ public class MeshRenderer : MonoBehaviour, ISerializable
     {
         Mesh = TagSerializer.Deserialize<AssetRef<Mesh>>(value["Mesh"], ctx);
         Material = TagSerializer.Deserialize<AssetRef<Material>>(value["Material"], ctx);
+        mainColor = TagSerializer.Deserialize<Color>(value["mainColor"], ctx);
     }
 }
