@@ -22,7 +22,7 @@ public class ProjectSettingsWindow : EditorWindow {
     protected override void Draw()
     {
         const ImGuiTableFlags tableFlags = ImGuiTableFlags.Resizable | ImGuiTableFlags.ContextMenuInBody | ImGuiTableFlags.Resizable;
-        Vector2 availableRegion = ImGui.GetContentRegionAvail();
+        System.Numerics.Vector2 availableRegion = ImGui.GetContentRegionAvail();
         if (ImGui.BeginTable("MainViewTable", 2, tableFlags, availableRegion))
         {
             ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 200);

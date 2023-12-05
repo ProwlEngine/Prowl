@@ -1,8 +1,4 @@
-﻿using Prowl.Runtime.Resources;
-using Prowl.Icons;
-using Raylib_cs;
-using System;
-using System.Numerics;
+﻿using Prowl.Icons;
 using Material = Prowl.Runtime.Resources.Material;
 using Mesh = Prowl.Runtime.Resources.Mesh;
 using Shader = Prowl.Runtime.Resources.Shader;
@@ -41,7 +37,7 @@ public class PointLight : MonoBehaviour
                 lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
             }
 
-            lightMat.SetVector("LightPosition", Vector3.Transform(this.GameObject.GlobalPosition, Graphics.MatView));
+            lightMat.SetVector("LightPosition", Vector3.Transform(this.GameObject.GlobalPosition - Camera.Current.GameObject.GlobalPosition, Graphics.MatView));
             lightMat.SetColor("LightColor", color);
             lightMat.SetFloat("LightRadius", radius);
             lightMat.SetFloat("LightIntensity", intensity);
@@ -51,16 +47,7 @@ public class PointLight : MonoBehaviour
             //Camera.Current.DrawFullScreenTexture(Camera.Current.gBuffer.depth);
             //Raylib.DrawRectangle(0, 0, 9999, 9999, Color.white);
             // set matrix scale to radius
-            var mat = Matrix4x4.CreateScale(radius);
-            if (Camera.Current.LargeWorldCamera)
-            {
-                // Draw relative to camera as camera will be at 0,0,0
-                mat.Translation = this.GameObject.GlobalPosition - Camera.Current.GameObject.GlobalPosition;
-            }
-            else
-            {
-                mat.Translation = this.GameObject.GlobalPosition;
-            }
+            var mat = Matrix4x4.CreateScale(radius) * GameObject.GlobalCamRelative;
             Graphics.DrawMeshNow(mesh, mat, lightMat);
             lightMat.EndPass();
             //Camera.Current.Start3D();

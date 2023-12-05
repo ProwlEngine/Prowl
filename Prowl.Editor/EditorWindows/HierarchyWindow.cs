@@ -30,7 +30,7 @@ public class HierarchyWindow : EditorWindow {
         float lineHeight = ImGui.GetTextLineHeight();
         float contentWidth = ImGui.GetContentRegionAvail().X;
         const float addButtonSize = 48f;
-        Vector2 padding = ImGui.GetStyle().FramePadding;
+        System.Numerics.Vector2 padding = ImGui.GetStyle().FramePadding;
 
         float filterCursorPosX = ImGui.GetCursorPosX();
         GUIHelper.Search("##searchBox", ref _searchText, contentWidth - addButtonSize - 7);
@@ -73,7 +73,7 @@ public class HierarchyWindow : EditorWindow {
             }
 
             ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 0.0f); 
-            ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(0f, 0f));
+            ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new System.Numerics.Vector2(0f, 0f));
             for (int i = 0; i < GameObjectManager.AllGameObjects.Count; i++)
             {
                 var go = GameObjectManager.AllGameObjects[i];
@@ -137,9 +137,9 @@ public class HierarchyWindow : EditorWindow {
             colPushCount += 2;
         }
         else if (isPrefab)
-            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new Vector4(0.3f, 0.0f, 0.3f, 1.0f)));
+            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new System.Numerics.Vector4(0.3f, 0.0f, 0.3f, 1.0f)));
         else if (isPartOfPrefab)
-            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new Vector4(0.3f, 0.0f, 0.3f, 0.5f)));
+            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new System.Numerics.Vector4(0.3f, 0.0f, 0.3f, 0.5f)));
 
         if (entity.EnabledInHierarchy == false)
         {
@@ -233,9 +233,9 @@ public class HierarchyWindow : EditorWindow {
             GameObject go = new GameObject("New Gameobject");
             if (context != null)
                 go.SetParent(context);
-            go.Position = Vector3.Zero;
-            go.Orientation = Quaternion.Identity;
-            go.Scale = Vector3.One;
+            go.Position = System.Numerics.Vector3.Zero;
+            go.Orientation = Prowl.Runtime.Quaternion.Identity;
+            go.Scale = System.Numerics.Vector3.One;
             Selection.Select(go);
             ImGui.CloseCurrentPopup();
         }

@@ -29,7 +29,6 @@ SOFTWARE.
 #endregion License
 
 using System;
-using System.Numerics;
 
 namespace Prowl.Runtime
 {
@@ -75,11 +74,11 @@ namespace Prowl.Runtime
         }
 
         // adapted from http://www.scratchapixel.com/lessons/3d-basic-lessons/lesson-7-intersecting-simple-shapes/ray-box-intersection/
-        public float? Intersects(Bounds box)
+        public double? Intersects(Bounds box)
         {
-            const float Epsilon = 1e-6f;
+            const double Epsilon = 1e-6;
 
-            float? tMin = null, tMax = null;
+            double? tMin = null, tMax = null;
 
             if (Math.Abs(Direction.X) < Epsilon)
             {
@@ -159,22 +158,22 @@ namespace Prowl.Runtime
         }
 
 
-        public void Intersects(ref Bounds box, out float? result)
+        public void Intersects(ref Bounds box, out double? result)
         {
             result = Intersects(box);
         }
 
-        public float? Intersects(Plane plane)
+        public double? Intersects(Plane plane)
         {
-            float? result;
+            double? result;
             Intersects(ref plane, out result);
             return result;
         }
 
-        public void Intersects(ref Plane plane, out float? result)
+        public void Intersects(ref Plane plane, out double? result)
         {
             var den = Vector3.Dot(Direction, plane.Normal);
-            if (Math.Abs(den) < 0.00001f)
+            if (Math.Abs(den) < 0.00001)
             {
                 result = null;
                 return;
@@ -182,15 +181,15 @@ namespace Prowl.Runtime
 
             result = (-plane.D - Vector3.Dot(plane.Normal, Position)) / den;
 
-            if (result < 0.0f)
+            if (result < 0.0)
             {
-                if (result < -0.00001f)
+                if (result < -0.00001)
                 {
                     result = null;
                     return;
                 }
 
-                result = 0.0f;
+                result = 0.0;
             }
         }
 

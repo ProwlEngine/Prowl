@@ -30,11 +30,8 @@ SOFTWARE.
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Numerics;
 using System.Runtime.Serialization;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace Prowl.Runtime
 {
@@ -384,12 +381,12 @@ namespace Prowl.Runtime
             result = PlaneIntersectionType.Intersecting;
         }
 
-        public Nullable<float> Intersects(Ray ray)
+        public Nullable<double> Intersects(Ray ray)
         {
             return ray.Intersects(this);
         }
 
-        public void Intersects(ref Ray ray, out Nullable<float> result)
+        public void Intersects(ref Ray ray, out Nullable<double> result)
         {
             result = Intersects(ray);
         }
@@ -742,7 +739,7 @@ namespace Prowl.Runtime
 
             cross = Vector3.Cross(b.Normal, c.Normal);
 
-            float f = Vector3.Dot(a.Normal, cross);
+            double f = Vector3.Dot(a.Normal, cross);
             f *= -1.0f;
 
             cross = Vector3.Cross(b.Normal, c.Normal );
@@ -766,7 +763,7 @@ namespace Prowl.Runtime
 
         private void NormalizePlane(ref Plane p)
         {
-            float factor = 1f / p.Normal.Length();
+            double factor = 1 / p.Normal.Length();
             p.Normal.X *= factor;
             p.Normal.Y *= factor;
             p.Normal.Z *= factor;

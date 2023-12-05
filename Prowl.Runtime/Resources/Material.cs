@@ -75,9 +75,9 @@ namespace Prowl.Runtime.Resources
             cachedUniformLocs.Clear();
         }
 
-        private static int GetLoc(Raylib_cs.Shader shader, string name, MaterialPropertyBlock mpb)
+        private static bool TryGetLoc(Raylib_cs.Shader shader, string name, MaterialPropertyBlock mpb, out int loc)
         {
-            int loc;
+            loc = -1;
             string key = shader.id + "_" + name;
             if (!mpb.cachedUniformLocs.TryGetValue(key, out loc))
             {
@@ -85,42 +85,37 @@ namespace Prowl.Runtime.Resources
                 mpb.cachedUniformLocs[key] = loc;
             }
             //if (loc == -1) Debug.LogWarning("Shader does not have a uniform named " + name);
-            return loc;
-        }
-
-        private static void ApplyShaderValues<T>(MaterialPropertyBlock mpb, Raylib_cs.Shader shader, Dictionary<string, T> properties, Action<Raylib_cs.Shader, int, T> setValueAction)
-        {
-            foreach (var item in properties)
-            {
-                int loc = GetLoc(shader, item.Key, mpb);
-                if (loc != -1)
-                    setValueAction(shader, loc, item.Value);
-            }
+            return loc != -1;
         }
 
         public static void Apply(MaterialPropertyBlock mpb, Raylib_cs.Shader shader)
         {
             Rlgl.rlEnableShader(shader.id); // Ensure the shader is enabled for this
 
-            ApplyShaderValues(mpb, shader, mpb.colors, (s, loc, val) =>
-                Raylib.SetShaderValue(s, loc, new Vector4(val.r, val.g, val.b, val.a), ShaderUniformDataType.SHADER_UNIFORM_VEC4));
+            foreach (var item in mpb.floats)
+                if (TryGetLoc(shader, item.Key, mpb, out var loc))
+                    Raylib.SetShaderValue(shader, loc, item.Value, ShaderUniformDataType.SHADER_UNIFORM_FLOAT);
 
-            ApplyShaderValues(mpb, shader, mpb.vectors2, (s, loc, val) =>
-                Raylib.SetShaderValue(s, loc, val, ShaderUniformDataType.SHADER_UNIFORM_VEC2));
+            foreach (var item in mpb.ints)
+                if (TryGetLoc(shader, item.Key, mpb, out var loc))
+                    Raylib.SetShaderValue(shader, loc, item.Value, ShaderUniformDataType.SHADER_UNIFORM_INT);
 
-            ApplyShaderValues(mpb, shader, mpb.vectors3, (s, loc, val) =>
-                Raylib.SetShaderValue(s, loc, val, ShaderUniformDataType.SHADER_UNIFORM_VEC3));
+            foreach (var item in mpb.vectors2)
+                if (TryGetLoc(shader, item.Key, mpb, out var loc))
+                    Raylib.SetShaderValue(shader, loc, item.Value.ToFloat(), ShaderUniformDataType.SHADER_UNIFORM_VEC2);
+            foreach (var item in mpb.vectors3)
+                if (TryGetLoc(shader, item.Key, mpb, out var loc))
+                    Raylib.SetShaderValue(shader, loc, item.Value.ToFloat(), ShaderUniformDataType.SHADER_UNIFORM_VEC3);
+            foreach (var item in mpb.vectors4)
+                if (TryGetLoc(shader, item.Key, mpb, out var loc))
+                    Raylib.SetShaderValue(shader, loc, item.Value.ToFloat(), ShaderUniformDataType.SHADER_UNIFORM_VEC4);
+            foreach (var item in mpb.colors)
+                if (TryGetLoc(shader, item.Key, mpb, out var loc))
+                    Raylib.SetShaderValue(shader, loc, new System.Numerics.Vector4(item.Value.r, item.Value.g, item.Value.b, item.Value.a), ShaderUniformDataType.SHADER_UNIFORM_VEC4);
 
-            ApplyShaderValues(mpb, shader, mpb.vectors4, (s, loc, val) =>
-                Raylib.SetShaderValue(s, loc, val, ShaderUniformDataType.SHADER_UNIFORM_VEC4));
-
-            ApplyShaderValues(mpb, shader, mpb.floats, (s, loc, val) =>
-                Raylib.SetShaderValue(s, loc, val, ShaderUniformDataType.SHADER_UNIFORM_FLOAT));
-
-            ApplyShaderValues(mpb, shader, mpb.ints, (s, loc, val) =>
-                Raylib.SetShaderValue(s, loc, val, ShaderUniformDataType.SHADER_UNIFORM_INT));
-
-            ApplyShaderValues(mpb, shader, mpb.matrices, Raylib.SetShaderValueMatrix);
+            foreach (var item in mpb.matrices)
+                if (TryGetLoc(shader, item.Key, mpb, out var loc))
+                    Raylib.SetShaderValueMatrix(shader, loc, item.Value.ToFloat());
 
             int texSlot = 0;
             var keysToUpdate = new List<(string, AssetRef<Texture2D>)>();
@@ -134,8 +129,7 @@ namespace Prowl.Runtime.Resources
                     // Get the memory address of the texture slot as void* using unsafe context
                     unsafe
                     {
-                        int loc = GetLoc(shader, item.Key, mpb);
-                        if (loc != -1)
+                        if (TryGetLoc(shader, item.Key, mpb, out var loc))
                             Rlgl.rlSetUniform(loc, &texSlot, (int)ShaderUniformDataType.SHADER_UNIFORM_INT, 1);
                     }
 

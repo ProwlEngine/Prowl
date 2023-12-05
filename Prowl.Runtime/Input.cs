@@ -19,13 +19,13 @@ public static class Input
     public static bool IsMouseButtonDown(MouseButton button) => Raylib.IsMouseButtonDown(button);
     public static bool IsMouseButtonReleased(MouseButton button) => Raylib.IsMouseButtonReleased(button);
     public static bool IsMouseButtonUp(MouseButton button) => Raylib.IsMouseButtonUp(button);
-    public static Vector2 MousePosition => Raylib.GetMousePosition();
-    public static Vector2 MouseDelta => Raylib.GetMouseDelta();
+    public static Vector2 MousePosition => Raylib.GetMousePosition().ToDouble();
+    public static Vector2 MouseDelta => Raylib.GetMouseDelta().ToDouble();
     public static float MouseWheel() => Raylib.GetMouseWheelMove();
     public static void SetMouseCursor(MouseCursor cursor) => Raylib.SetMouseCursor(cursor);
     public static void SetMousePosition(Vector2 pos) => Raylib.SetMousePosition((int)pos.X, (int)pos.Y);
     public static void SetMouseOffset(Vector2 offset) => Raylib.SetMouseOffset((int)offset.X, (int)offset.Y);
-    public static void SetMouseScale(Vector2 scale) => Raylib.SetMouseScale(scale.X, scale.Y);
+    public static void SetMouseScale(Vector2 scale) => Raylib.SetMouseScale((float)scale.X, (float)scale.Y);
 
     // GAMEPAD
     public static bool IsGamepadAvailable(int gamepad) => Raylib.IsGamepadAvailable(gamepad);

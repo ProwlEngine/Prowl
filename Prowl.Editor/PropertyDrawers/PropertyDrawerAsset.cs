@@ -35,7 +35,7 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         if (value.IsExplicitNull)
         {
             path = "(Null)";
-            drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.9f, 0.1f, 0.1f, 0.3f)));
+            drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.9f, 0.1f, 0.1f, 0.3f)));
             if (ImGui.Selectable($"{Name}: {path}", false))
             {
 #warning TODO: Show a popup with a list of all assets of the type - property.Type.Name
@@ -44,7 +44,7 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         else if (value.IsRuntimeResource)
         {
             path = "(Runtime)" + value.Name;
-            drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.1f, 0.1f, 0.9f, 0.3f)));
+            drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.1f, 0.1f, 0.9f, 0.3f)));
             if (ImGui.Selectable($"{Name}: {path}", false))
             {
 #warning TODO: Show a popup with a list of all assets of the type - property.Type.Name

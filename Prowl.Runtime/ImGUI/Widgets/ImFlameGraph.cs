@@ -38,15 +38,15 @@ namespace Prowl.Runtime.ImGUI.Widgets
                 }
 
                 float blockHeight = ImGui.GetTextLineHeight() + (style.FramePadding.Y * 2);
-                Vector2 labelSize = ImGui.CalcTextSize(label);
+                System.Numerics.Vector2 labelSize = ImGui.CalcTextSize(label);
                 if (graphSize.X == 0.0f)
                     graphSize.X = ImGui.CalcItemWidth();
                 if (graphSize.Y == 0.0f)
                     graphSize.Y = labelSize.Y + (style.FramePadding.Y * 3) + blockHeight * (maxDepth + 1);
 
-                ImRect frameBB = new ImRect() { Min = window.DC.CursorPos, Max = window.DC.CursorPos + graphSize };
+                ImRect frameBB = new ImRect() { Min = window.DC.CursorPos, Max = window.DC.CursorPos + graphSize.ToFloat() };
                 ImRect innerBB = new ImRect() { Min = frameBB.Min + style.FramePadding, Max = frameBB.Max - style.FramePadding };
-                ImRect totalBB = new ImRect() { Min = frameBB.Min, Max = frameBB.Max + new Vector2(labelSize.X > 0.0f ? style.ItemInnerSpacing.X + labelSize.X : 0.0f, 0) };
+                ImRect totalBB = new ImRect() { Min = frameBB.Min, Max = frameBB.Max + new System.Numerics.Vector2(labelSize.X > 0.0f ? style.ItemInnerSpacing.X + labelSize.X : 0.0f, 0) };
                 ImGui.ItemSizeRect(totalBB, style.FramePadding.Y);
                 if (!ImGui.ItemAdd(totalBB, 0, ref frameBB, ImGuiItemFlags.None))
                     return;
@@ -112,8 +112,8 @@ namespace Prowl.Runtime.ImGUI.Widgets
                         float width = innerBB.Max.X - innerBB.Min.X;
                         float height = blockHeight * (maxDepth - depth + 1) - style.FramePadding.Y;
 
-                        Vector2 pos0 = innerBB.Min + new Vector2(startX * width, height);
-                        Vector2 pos1 = innerBB.Min + new Vector2(endX * width, height + blockHeight);
+                        Vector2 pos0 = innerBB.Min + new System.Numerics.Vector2(startX * width, height);
+                        Vector2 pos1 = innerBB.Min + new System.Numerics.Vector2(endX * width, height + blockHeight);
 
                         bool vHovered = false;
                         if (ImGui.IsMouseHoveringRect(pos0, pos1))

@@ -2,7 +2,6 @@
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.SceneManagement;
 using Raylib_cs;
-using System.Numerics;
 using Shader = Prowl.Runtime.Resources.Shader;
 
 namespace Prowl.Runtime.Components;
@@ -57,7 +56,7 @@ public class DirectionalLight : MonoBehaviour
             lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
 
             lightMat.SetTexture("shadowMap", shadowMap.InternalDepth);
-            lightMat.SetMatrix("matCamViewInverse", Matrix4x4.Transpose(Camera.Current.GameObject.ViewInv));
+            lightMat.SetMatrix("matCamViewInverse", Graphics.MatViewInverseTransposed);
             lightMat.SetMatrix("matShadowView", Matrix4x4.Transpose(Graphics.MatDepthView));
             lightMat.SetMatrix("matShadowSpace", Matrix4x4.Transpose(depthMVP));
 
@@ -91,8 +90,7 @@ public class DirectionalLight : MonoBehaviour
             //Graphics.MatDepthProjection = Matrix4x4.CreateOrthographicOffCenter(-25, 25, -25, 25, 1, 256);
             Graphics.MatDepthProjection = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, 0, 100);
 
-            var pos = Camera.Current.GameObject.GlobalPosition - (GameObject.Forward * 50);
-            Graphics.MatDepthView = Matrix4x4.CreateLookAtLeftHanded(pos, pos - GameObject.Forward, GameObject.Up);
+            Graphics.MatDepthView = Matrix4x4.CreateLookToLeftHanded(-GameObject.Forward * 50, -GameObject.Forward, GameObject.Up);
 
             depthMVP = Matrix4x4.Identity;
             depthMVP = Matrix4x4.Multiply(depthMVP, Graphics.MatDepthView);

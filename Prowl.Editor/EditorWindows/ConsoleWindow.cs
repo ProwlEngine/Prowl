@@ -68,11 +68,11 @@ public class ConsoleWindow : EditorWindow {
             ImGui.TextColored(ToColor(LogSeverity), Message);
         }
         
-        private static Vector4 ToColor(LogSeverity logSeverity) => logSeverity switch {
-            LogSeverity.Normal => new Vector4(1, 1, 1, 1),
-            LogSeverity.Success => new Vector4(0, 1, 0, 1),
-            LogSeverity.Warning => new Vector4(1, 1, 0, 1),
-            LogSeverity.Error => new Vector4(1, 0, 0, 1),
+        private static System.Numerics.Vector4 ToColor(LogSeverity logSeverity) => logSeverity switch {
+            LogSeverity.Normal => new System.Numerics.Vector4(1, 1, 1, 1),
+            LogSeverity.Success => new System.Numerics.Vector4(0, 1, 0, 1),
+            LogSeverity.Warning => new System.Numerics.Vector4(1, 1, 0, 1),
+            LogSeverity.Error => new System.Numerics.Vector4(1, 0, 0, 1),
             _ => throw new NotImplementedException("log level not implemented")
         };
         

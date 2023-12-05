@@ -1,5 +1,4 @@
 using System;
-using System.Numerics;
 using System.Runtime.CompilerServices;
 
 #pragma warning disable CA1062 // Validate arguments of public methods
@@ -12,43 +11,72 @@ namespace Prowl.Runtime
     public static class MathUtilities
     {
         /// <summary>The value of PI divided by 2.</summary>
-        public const float PiOver2 = 1.5707963267948966192313216916398f;
+        public const double PiOver2 = 1.5707963267948966192313216916398;
 
         /// <summary>The value of PI divided by 4.</summary>
-        public const float PiOver4 = 0.78539816339744830961566084581988f;
+        public const double PiOver4 = 0.78539816339744830961566084581988;
 
         /// <summary>The value of PI multiplied by 3 and divided by 2.</summary>
-        public const float ThreePiOver2 = 4.7123889803846898576939650749193f;
+        public const double ThreePiOver2 = 4.7123889803846898576939650749193;
 
         /// <summary>The value of PI multiplied by 2.</summary>
-        public const float TwoPI = 6.283185307179586476925286766559f;
+        public const double TwoPI = 6.283185307179586476925286766559;
 
         public const double DegToRadFactor = Math.PI / 180;
         public const double RadToDefFactor = 180 / Math.PI;
 
-        public static float UnwindDegrees(float angle)
+        public static double UnwindDegrees(double angle)
         {
-            while (angle > 180.0f)
-                angle -= 360.0f;
-            while (angle < -180.0f)
-                angle += 360.0f;
+            while (angle > 180.0)
+                angle -= 360.0;
+            while (angle < -180.0)
+                angle += 360.0;
             return angle;
         }
 
-        public static float ArcTanAngle(float X, float Y)
+        public static double ArcTanAngle(double X, double Y)
         {
             if (X == 0)
             {
                 if (Y == 1) return PiOver2;
                 else return -PiOver2;
             }
-            else if (X > 0) return (float)Math.Atan(Y / X);
+            else if (X > 0) return (double)Math.Atan(Y / X);
             else if (X < 0)
             {
-                if (Y > 0) return (float)Math.Atan(Y / X) + (float)Math.PI;
-                else return (float)Math.Atan(Y / X) - (float)Math.PI;
+                if (Y > 0) return (double)Math.Atan(Y / X) + (double)Math.PI;
+                else return (double)Math.Atan(Y / X) - (double)Math.PI;
             }
             else return 0;
+        }
+
+        public static Vector2 ToDouble(this System.Numerics.Vector2 v) => new Vector2(v.X, v.Y);
+        public static Vector3 ToDouble(this System.Numerics.Vector3 v) => new Vector3(v.X, v.Y, v.Z);
+        public static Vector4 ToDouble(this System.Numerics.Vector4 v) => new Vector4(v.X, v.Y, v.Z, v.W);
+
+        public static Matrix4x4 ToDouble(this System.Numerics.Matrix4x4 m)
+        {
+            Matrix4x4 result;
+            result.M11 = (double)m.M11;
+            result.M12 = (double)m.M12;
+            result.M13 = (double)m.M13;
+            result.M14 = (double)m.M14;
+
+            result.M21 = (double)m.M21;
+            result.M22 = (double)m.M22;
+            result.M23 = (double)m.M23;
+            result.M24 = (double)m.M24;
+
+            result.M31 = (double)m.M31;
+            result.M32 = (double)m.M32;
+            result.M33 = (double)m.M33;
+            result.M34 = (double)m.M34;
+
+            result.M41 = (double)m.M41;
+            result.M42 = (double)m.M42;
+            result.M43 = (double)m.M43;
+            result.M44 = (double)m.M44;
+            return result;
         }
 
         //returns Euler angles that point from one point to another
@@ -56,7 +84,7 @@ namespace Prowl.Runtime
         {
             Vector3 angle = new Vector3();
             Vector3 v3 = Vector3.Normalize(location - from);
-            angle.X = (float)Math.Asin(v3.Y);
+            angle.X = (double)Math.Asin(v3.Y);
             angle.Y = ArcTanAngle(-v3.Z, -v3.X);
             return angle;
         }
@@ -67,7 +95,7 @@ namespace Prowl.Runtime
         /// <param name="min">The initial value in the interpolation.</param>
         /// <param name="max">The final value in the interpolation.</param>
         /// <param name="amount">The amount of interpolation, measured between 0 and 1.</param>
-        public static float Lerp(float min, float max, float amount)
+        public static double Lerp(double min, double max, double amount)
         {
             return min + (max - min) * amount;
         }
@@ -79,10 +107,10 @@ namespace Prowl.Runtime
         /// <param name="max">The final value in the interpolation.</param>
         /// <param name="amount">The amount of interpolation, measured between 0 and 1.</param>
         /// <remarks>
-        /// In comparison to <see cref="Lerp(float, float, float)"/>, this function is more
+        /// In comparison to <see cref="Lerp(double, double, double)"/>, this function is more
         /// precise when working with big values.
         /// </remarks>
-        public static float LerpPrecise(float min, float max, float amount)
+        public static double LerpPrecise(double min, double max, double amount)
         {
             return (1 - amount) * min + max * amount;
         }
@@ -93,7 +121,7 @@ namespace Prowl.Runtime
         /// <param name="min">The initial value in the interpolation.</param>
         /// <param name="max">The final value in the interpolation.</param>
         /// <param name="amount">The amount of interpolation, measured between 0 and 1.</param>
-        public static float SmoothStep(float min, float max, float amount)
+        public static double SmoothStep(double min, double max, double amount)
         {
             // Lerp using the polynomial: 3xx - 2xxx
             return Lerp(min, max, (3 - 2 * amount) * amount * amount);
@@ -106,10 +134,10 @@ namespace Prowl.Runtime
         /// <param name="max">The final value in the interpolation.</param>
         /// <param name="amount">The amount of interpolation, measured between 0 and 1.</param>
         /// <remarks>
-        /// In comparison to <see cref="SmoothStep(float, float, float)"/>, this function is more
+        /// In comparison to <see cref="SmoothStep(double, double, double)"/>, this function is more
         /// precise when working with big values.
         /// </remarks>
-        public static float SmoothStepPrecise(float min, float max, float amount)
+        public static double SmoothStepPrecise(double min, double max, double amount)
         {
             return LerpPrecise(min, max, (3 - 2 * amount) * amount * amount);
         }
@@ -120,7 +148,7 @@ namespace Prowl.Runtime
         /// <param name="min">The initial value in the interpolation.</param>
         /// <param name="max">The final value in the interpolation.</param>
         /// <param name="amount">The amount of interpolation, measured between 0 and 1.</param>
-        public static float SmootherStep(float min, float max, float amount)
+        public static double SmootherStep(double min, double max, double amount)
         {
             // Lerp using the polynomial: 6(x^5) - 15(x^4) + 10(x^3)
             return Lerp(min, max, (6 * amount * amount - 15 * amount + 10) * amount * amount * amount);
@@ -133,10 +161,10 @@ namespace Prowl.Runtime
         /// <param name="max">The final value in the interpolation.</param>
         /// <param name="amount">The amount of interpolation, measured between 0 and 1.</param>
         /// <remarks>
-        /// In comparison to <see cref="SmootherStep(float, float, float)"/>, this function is more
+        /// In comparison to <see cref="SmootherStep(double, double, double)"/>, this function is more
         /// precise when working with big values.
         /// </remarks>
-        public static float SmootherStepPrecise(float min, float max, float amount)
+        public static double SmootherStepPrecise(double min, double max, double amount)
         {
             // Lerp using the polynomial: 6(x^5) - 15(x^4) + 10(x^3)
             return LerpPrecise(min, max, (6 * amount * amount - 15 * amount + 10) * amount * amount * amount);
@@ -186,8 +214,8 @@ namespace Prowl.Runtime
         /// <param name="random">The <see cref="Random"/> to use for randomizing.</param>
         public static Vector2 RandomDirection2(this Random random)
         {
-            float angle = (float)(random.NextDouble() * 6.283185307179586476925286766559);
-            return new Vector2(MathF.Cos(angle), MathF.Sin(angle));
+            double angle = (double)(random.NextDouble() * 6.283185307179586476925286766559);
+            return new Vector2(Math.Cos(angle), Math.Sin(angle));
         }
 
         /// <summary>
@@ -195,7 +223,7 @@ namespace Prowl.Runtime
         /// </summary>
         /// <param name="random">The <see cref="Random"/> to use for randomizing.</param>
         /// <param name="length">The desired length of the direction vector.</param>
-        public static Vector2 RandomDirection2(this Random random, float length)
+        public static Vector2 RandomDirection2(this Random random, double length)
         {
             return random.RandomDirection2() * length;
         }
@@ -206,10 +234,10 @@ namespace Prowl.Runtime
         /// <param name="random">The <see cref="Random"/> to use for randomizing.</param>
         public static Vector3 RandomDirection3(this Random random)
         {
-            float a = (float)(random.NextDouble() * 6.283185307179586476925286766559);
-            float b = (float)(random.NextDouble() * Math.PI);
-            float sinB = MathF.Sin(b);
-            return new Vector3(sinB * MathF.Cos(a), sinB * MathF.Sin(a), MathF.Cos(b));
+            double a = (double)(random.NextDouble() * 6.283185307179586476925286766559);
+            double b = (double)(random.NextDouble() * Math.PI);
+            double sinB = System.Math.Sin(b);
+            return new Vector3(sinB * System.Math.Cos(a), sinB * System.Math.Sin(a), System.Math.Cos(b));
         }
 
         /// <summary>
@@ -217,43 +245,43 @@ namespace Prowl.Runtime
         /// </summary>
         /// <param name="random">The <see cref="Random"/> to use for randomizing.</param>
         /// <param name="length">The desired length of the direction vector.</param>
-        public static Vector3 RandomDirection3(this Random random, float length)
+        public static Vector3 RandomDirection3(this Random random, double length)
         {
             return random.RandomDirection3() * length;
         }
 
         /// <summary>
-        /// Returns a random floating-point number in the range [0.0, 1.0).
+        /// Returns a random doubleing-point number in the range [0.0, 1.0).
         /// </summary>
         /// <param name="random">The <see cref="Random"/> to use for randomizing.</param>
-        public static float NextFloat(this Random random)
+        public static double NextFloat(this Random random)
         {
-            return (float)random.NextDouble();
+            return (double)random.NextDouble();
         }
 
         /// <summary>
-        /// Returns a random floating-point number in the range [0.0, max) (or (max, 0.0] if negative).
+        /// Returns a random doubleing-point number in the range [0.0, max) (or (max, 0.0] if negative).
         /// </summary>
         /// <param name="random">The <see cref="Random"/> to use for randomizing.</param>
         /// <param name="max">The exclusive maximum value of the random number to be generated.</param>
-        public static float NextFloat(this Random random, float max)
+        public static double NextFloat(this Random random, double max)
         {
-            return (float)random.NextDouble() * max;
+            return (double)random.NextDouble() * max;
         }
 
         /// <summary>
-        /// Returns a random floating-point number in the range [min, max) (or (max, min] if min>max)
+        /// Returns a random doubleing-point number in the range [min, max) (or (max, min] if min>max)
         /// </summary>
         /// <param name="random">The <see cref="Random"/> to use for randomizing.</param>
         /// <param name="min">The inclusive minimum value of the random number to be generated.</param>
         /// <param name="max">The exclusive maximum value of the random number to be generated.</param>
-        public static float NextFloat(this Random random, float min, float max)
+        public static double NextFloat(this Random random, double min, double max)
         {
-            return (float)random.NextDouble() * (max - min) + min;
+            return (double)random.NextDouble() * (max - min) + min;
         }
 
         /// <summary>
-        /// Returns a random floating-point number in the range [0.0, max) (or (max, 0.0] if negative).
+        /// Returns a random doubleing-point number in the range [0.0, max) (or (max, 0.0] if negative).
         /// </summary>
         /// <param name="random">The <see cref="Random"/> to use for randomizing.</param>
         /// <param name="max">The exclusive maximum value of the random number to be generated.</param>
@@ -263,7 +291,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Returns a random floating-point number in the range [min, max) (or (max, min] if min>max)
+        /// Returns a random doubleing-point number in the range [min, max) (or (max, min] if min>max)
         /// </summary>
         /// <param name="random">The <see cref="Random"/> to use for randomizing.</param>
         /// <param name="min">The inclusive minimum value of the random number to be generated.</param>
@@ -314,17 +342,17 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int ComputeMipLevels(int width, int height)
         {
-            return (int)MathF.Log2(MathF.Max(width, height));
+            return (int)System.Math.Log2(System.Math.Max(width, height));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static int Round(this float x)
+        public static int Round(this double x)
         {
-            return (int)MathF.Floor(x);
+            return (int)System.Math.Floor(x);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Matrix4x4 RotationYawPitchRoll(float yaw, float pitch, float roll)
+        public static Matrix4x4 RotationYawPitchRoll(double yaw, double pitch, double roll)
         {
             Quaternion quaternion = Quaternion.CreateFromYawPitchRoll(yaw, pitch, roll);
             return RotationQuaternion(quaternion);
@@ -337,13 +365,13 @@ namespace Prowl.Runtime
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Matrix4x4 CreateTransform(Vector3 pos, Vector3 rotation, float scale)
+        public static Matrix4x4 CreateTransform(Vector3 pos, Vector3 rotation, double scale)
         {
             return Matrix4x4.CreateTranslation(pos) * Matrix4x4.CreateFromYawPitchRoll(rotation.X, rotation.Y, rotation.Z) * Matrix4x4.CreateScale(scale);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Matrix4x4 CreateTransform(Vector3 pos, float scale)
+        public static Matrix4x4 CreateTransform(Vector3 pos, double scale)
         {
             return Matrix4x4.CreateTranslation(pos) * Matrix4x4.CreateScale(scale);
         }
@@ -357,15 +385,15 @@ namespace Prowl.Runtime
         /// <summary>Creates a new quaternion from the given yaw, pitch, and roll.</summary>
         /// <param name="yaw">The yaw angle, in radians, around the Y axis.</param>
         /// <returns>The resulting quaternion.</returns>
-        public static Quaternion CreateFromYaw(float yaw)
+        public static Quaternion CreateFromYaw(double yaw)
         {
             //  Roll first, about axis the object is facing, then
             //  pitch upward, then yaw to face into the new heading
-            float sy, cy;
+            double sy, cy;
 
-            float halfYaw = yaw * 0.5f;
-            sy = MathF.Sin(halfYaw);
-            cy = MathF.Cos(halfYaw);
+            double halfYaw = yaw * 0.5;
+            sy = System.Math.Sin(halfYaw);
+            cy = System.Math.Cos(halfYaw);
 
             Quaternion result;
 
@@ -378,63 +406,63 @@ namespace Prowl.Runtime
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector3 Transform(Vector3 value, float yaw)
+        public static Vector3 Transform(Vector3 value, double yaw)
         {
-            float sy, cy;
+            double sy, cy;
 
-            float halfYaw = yaw * 0.5f;
-            sy = MathF.Sin(halfYaw);
-            cy = MathF.Cos(halfYaw);
+            double halfYaw = yaw * 0.5;
+            sy = System.Math.Sin(halfYaw);
+            cy = System.Math.Cos(halfYaw);
 
-            float y2 = sy + sy;
+            double y2 = sy + sy;
 
-            float wy2 = cy * y2;
-            float yy2 = sy * y2;
+            double wy2 = cy * y2;
+            double yy2 = sy * y2;
 
             return new Vector3(
-                value.X * (1.0f - yy2) + value.Z * wy2,
+                value.X * (1.0 - yy2) + value.Z * wy2,
                 value.Y,
-                value.X * wy2 + value.Z * (1.0f - yy2)
+                value.X * wy2 + value.Z * (1.0 - yy2)
             );
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 TransformOnlyYaw(this Vector3 value, Quaternion r)
         {
-            float yaw = MathF.Atan2(2.0f * (r.Y * r.W + r.X * r.Z), 1.0f - 2.0f * (r.X * r.X + r.Y * r.Y));
+            double yaw = System.Math.Atan2(2.0f * (r.Y * r.W + r.X * r.Z), 1.0 - 2.0 * (r.X * r.X + r.Y * r.Y));
 
-            float halfYaw = yaw * 0.5f;
-            float sy = MathF.Sin(halfYaw);
-            float cy = MathF.Cos(halfYaw);
+            double halfYaw = yaw * 0.5;
+            double sy = System.Math.Sin(halfYaw);
+            double cy = System.Math.Cos(halfYaw);
 
-            float y2 = sy + sy;
+            double y2 = sy + sy;
 
-            float wy2 = cy * y2;
-            float yy2 = sy * y2;
+            double wy2 = cy * y2;
+            double yy2 = sy * y2;
 
-            return new Vector3(value.X * (1.0f - yy2) + value.Z * wy2, value.Y, value.X * wy2 + value.Z * (1.0f - yy2));
+            return new Vector3(value.X * (1.0 - yy2) + value.Z * wy2, value.Y, value.X * wy2 + value.Z * (1.0 - yy2));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void GetYawPitchRoll(this Quaternion r, out float yaw, out float pitch, out float roll)
+        public static void GetYawPitchRoll(this Quaternion r, out double yaw, out double pitch, out double roll)
         {
-            yaw = MathF.Atan2(2.0f * (r.Y * r.W + r.X * r.Z), 1.0f - 2.0f * (r.X * r.X + r.Y * r.Y));
-            pitch = MathF.Asin(2.0f * (r.X * r.W - r.Y * r.Z));
-            roll = MathF.Atan2(2.0f * (r.X * r.Y + r.Z * r.W), 1.0f - 2.0f * (r.X * r.X + r.Z * r.Z));
+            yaw = System.Math.Atan2(2.0 * (r.Y * r.W + r.X * r.Z), 1.0 - 2.0 * (r.X * r.X + r.Y * r.Y));
+            pitch = System.Math.Asin(2.0 * (r.X * r.W - r.Y * r.Z));
+            roll = System.Math.Atan2(2.0 * (r.X * r.Y + r.Z * r.W), 1.0 - 2.0 * (r.X * r.X + r.Z * r.Z));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void GetYaw(this Quaternion r, out float yaw)
+        public static void GetYaw(this Quaternion r, out double yaw)
         {
-            yaw = MathF.Atan2(2.0f * (r.Y * r.W + r.X * r.Z), 1.0f - 2.0f * (r.X * r.X + r.Y * r.Y));
+            yaw = System.Math.Atan2(2.0 * (r.Y * r.W + r.X * r.Z), 1.0 - 2.0 * (r.X * r.X + r.Y * r.Y));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 GetRotation(this Quaternion r)
         {
-            float yaw = MathF.Atan2(2.0f * (r.Y * r.W + r.X * r.Z), 1.0f - 2.0f * (r.X * r.X + r.Y * r.Y));
-            float pitch = MathF.Asin(2.0f * (r.X * r.W - r.Y * r.Z));
-            float roll = MathF.Atan2(2.0f * (r.X * r.Y + r.Z * r.W), 1.0f - 2.0f * (r.X * r.X + r.Z * r.Z));
+            double yaw = System.Math.Atan2(2.0 * (r.Y * r.W + r.X * r.Z), 1.0 - 2.0 * (r.X * r.X + r.Y * r.Y));
+            double pitch = System.Math.Asin(2.0 * (r.X * r.W - r.Y * r.Z));
+            double roll = System.Math.Atan2(2.0 * (r.X * r.Y + r.Z * r.W), 1.0 - 2.0 * (r.X * r.X + r.Z * r.Z));
             return new Vector3(yaw, pitch, roll);
         }
 
@@ -462,14 +490,27 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 ToDeg(this Vector3 v)
         {
-            return new Vector3((float)(v.X * RadToDefFactor), (float)(v.Y * RadToDefFactor), (float)(v.Z * RadToDefFactor));
+            return new Vector3((double)(v.X * RadToDefFactor), (double)(v.Y * RadToDefFactor), (double)(v.Z * RadToDefFactor));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 ToRad(this Vector3 v)
         {
-            return new Vector3((float)(v.X * DegToRadFactor), (float)(v.Y * DegToRadFactor), (float)(v.Z * DegToRadFactor));
+            return new Vector3((double)(v.X * DegToRadFactor), (double)(v.Y * DegToRadFactor), (double)(v.Z * DegToRadFactor));
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static double ToDeg(this double v)
+        {
+            return (double)(v * RadToDefFactor);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static double ToRad(this double v)
+        {
+            return (double)(v * DegToRadFactor);
+        }
+
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static float ToDeg(this float v)
@@ -482,7 +523,6 @@ namespace Prowl.Runtime
         {
             return (float)(v * DegToRadFactor);
         }
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Quaternion GetQuaternion(this Vector3 vector)
         {
@@ -492,35 +532,35 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Matrix4x4 RotationQuaternion(Quaternion rotation)
         {
-            float xx = rotation.X * rotation.X;
-            float yy = rotation.Y * rotation.Y;
-            float zz = rotation.Z * rotation.Z;
-            float xy = rotation.X * rotation.Y;
-            float zw = rotation.Z * rotation.W;
-            float zx = rotation.Z * rotation.X;
-            float yw = rotation.Y * rotation.W;
-            float yz = rotation.Y * rotation.Z;
-            float xw = rotation.X * rotation.W;
+            double xx = rotation.X * rotation.X;
+            double yy = rotation.Y * rotation.Y;
+            double zz = rotation.Z * rotation.Z;
+            double xy = rotation.X * rotation.Y;
+            double zw = rotation.Z * rotation.W;
+            double zx = rotation.Z * rotation.X;
+            double yw = rotation.Y * rotation.W;
+            double yz = rotation.Y * rotation.Z;
+            double xw = rotation.X * rotation.W;
 
             Matrix4x4 result = Matrix4x4.Identity;
-            result.M11 = 1.0f - 2.0f * (yy + zz);
-            result.M12 = 2.0f * (xy + zw);
-            result.M13 = 2.0f * (zx - yw);
-            result.M21 = 2.0f * (xy - zw);
-            result.M22 = 1.0f - 2.0f * (zz + xx);
-            result.M23 = 2.0f * (yz + xw);
-            result.M31 = 2.0f * (zx + yw);
-            result.M32 = 2.0f * (yz - xw);
-            result.M33 = 1.0f - 2.0f * (yy + xx);
+            result.M11 = 1.0 - 2.0 * (yy + zz);
+            result.M12 = 2.0 * (xy + zw);
+            result.M13 = 2.0 * (zx - yw);
+            result.M21 = 2.0 * (xy - zw);
+            result.M22 = 1.0 - 2.0 * (zz + xx);
+            result.M23 = 2.0 * (yz + xw);
+            result.M31 = 2.0 * (zx + yw);
+            result.M32 = 2.0 * (yz - xw);
+            result.M33 = 1.0 - 2.0 * (yy + xx);
             return result;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 NormalizeEulerAngleDegrees(this Vector3 angle)
         {
-            float normalizedX = angle.X % 360;
-            float normalizedY = angle.Y % 360;
-            float normalizedZ = angle.Z % 360;
+            double normalizedX = angle.X % 360;
+            double normalizedY = angle.Y % 360;
+            double normalizedZ = angle.Z % 360;
             if (normalizedX < 0)
             {
                 normalizedX += 360;
@@ -542,8 +582,8 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector2 NormalizeEulerAngleDegrees(this Vector2 angle)
         {
-            float normalizedX = angle.X % 360;
-            float normalizedY = angle.Y % 360;
+            double normalizedX = angle.X % 360;
+            double normalizedY = angle.Y % 360;
             if (normalizedX < 0)
             {
                 normalizedX += 360;
@@ -572,20 +612,20 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LockQuaternionAxis(Quaternion r, Quaternion q, Vector3 mask)
         {
-            float x = MathF.Atan2(2.0f * (r.Y * r.W + r.X * r.Z), 1.0f - 2.0f * (r.X * r.X + r.Y * r.Y)) * mask.X;
-            float y = MathF.Asin(2.0f * (r.X * r.W - r.Y * r.Z)) * mask.Y;
-            float z = MathF.Atan2(2.0f * (r.X * r.Y + r.Z * r.W), 1.0f - 2.0f * (r.X * r.X + r.Z * r.Z)) * mask.Z;
+            double x = System.Math.Atan2(2.0 * (r.Y * r.W + r.X * r.Z), 1.0 - 2.0 * (r.X * r.X + r.Y * r.Y)) * mask.X;
+            double y = System.Math.Asin(2.0 * (r.X * r.W - r.Y * r.Z)) * mask.Y;
+            double z = System.Math.Atan2(2.0 * (r.X * r.Y + r.Z * r.W), 1.0 - 2.0 * (r.X * r.X + r.Z * r.Z)) * mask.Z;
 
-            float xHalf = x * 0.5f;
-            float yHalf = y * 0.5f;
-            float zHalf = z * 0.5f;
+            double xHalf = x * 0.5;
+            double yHalf = y * 0.5;
+            double zHalf = z * 0.5;
 
-            float cx = MathF.Cos(xHalf);
-            float cy = MathF.Cos(yHalf);
-            float cz = MathF.Cos(zHalf);
-            float sx = MathF.Sin(xHalf);
-            float sy = MathF.Sin(yHalf);
-            float sz = MathF.Sin(zHalf);
+            double cx = System.Math.Cos(xHalf);
+            double cy = System.Math.Cos(yHalf);
+            double cz = System.Math.Cos(zHalf);
+            double sx = System.Math.Sin(xHalf);
+            double sy = System.Math.Sin(yHalf);
+            double sz = System.Math.Sin(zHalf);
 
             q.W = (cz * cx * cy) + (sz * sx * sy);
             q.X = (cz * sx * cy) - (sz * cx * sy);

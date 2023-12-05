@@ -8,7 +8,6 @@ using Prowl.Editor.PropertyDrawers;
 using HexaEngine.ImGuiNET;
 using Raylib_cs;
 using System.Diagnostics;
-using System.Numerics;
 using Prowl.Runtime.Serialization;
 using Prowl.Runtime.Components.ImageEffects;
 using Prowl.Runtime.Components;
@@ -62,6 +61,8 @@ public unsafe class EditorApplication : Application {
 
             if (Project.HasProject)
             {
+                //var setting = Project.ProjectSettings.GetSetting<ApplicationSettings>();
+
                 GameObjectManager.Update();
 
                 float physicsTime = (float)physicsTimer.Elapsed.TotalSeconds;

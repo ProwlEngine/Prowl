@@ -5,7 +5,6 @@ using Prowl.Runtime.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
 using System.Reflection;
 using System.Runtime.Serialization;
 
@@ -180,8 +179,30 @@ public class GameObject : EngineObject, ISerializable
     /// <summary>The inverse global transformation matrix</summary>
      public Matrix4x4 GlobalInverse => globalInverse;
 
+     /// <summary>Returns a matrix relative/local to the currently rendering camera, Will throw an error if used outside rendering method</summary>
+     public Matrix4x4 GlobalCamRelative
+     {
+         get
+         {
+             Matrix4x4 matrix = Global;
+             matrix.Translation -= Camera.Current.GameObject.GlobalPosition;
+             return matrix;
+         }
+     }
+
+     /// <summary>Returns a matrix relative/local to the currently rendering camera, Will throw an error if used outside rendering method</summary>
+     public Matrix4x4 GlobalCamPreviousRelative
+     {
+         get
+         {
+             Matrix4x4 matrix = Global;
+             matrix.Translation -= Camera.Current.GameObject.GlobalPrevious.Translation;
+             return matrix;
+         }
+     }
+
     /// <summary>The local transformation matrix</summary>
-     public Matrix4x4 Local { get => local; set => SetMatrix(value); }
+    public Matrix4x4 Local { get => local; set => SetMatrix(value); }
 
     /// <summary>The local inverse transformation matrix</summary>
      public Matrix4x4 LocalInverse => localInverse;
@@ -565,7 +586,7 @@ public class GameObject : EngineObject, ISerializable
         return false;
     }
 
-    public void DrawGizmos(Matrix4x4 view, Matrix4x4 projection, bool isSelected)
+    public void DrawGizmos(System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection, bool isSelected)
     {
         if (hideFlags.HasFlag(HideFlags.NoGizmos)) return;
 
@@ -574,17 +595,19 @@ public class GameObject : EngineObject, ISerializable
             System.Numerics.Matrix4x4 goMatrix;
 
             if (GameObjectManager.GizmosSpace == ImGuizmoMode.Local)
-            {
                 goMatrix = Local.ToFloat();
-            }
             else
-            {
                 goMatrix = Global.ToFloat();
-            }
+            // Convert position to be relative to Camera
+            //goMatrix *= System.Numerics.Matrix4x4.CreateTranslation(-Camera.Current.GameObject.GlobalPosition.ToFloat());
+            goMatrix.Translation -= Camera.Current.GameObject.GlobalPosition.ToFloat();
 
             // Perform ImGuizmo manipulation
             if (ImGuizmo.Manipulate(ref view, ref projection, GameObjectManager.GizmosOperation, GameObjectManager.GizmosSpace, ref goMatrix))
             {
+                // Convert back to world space
+                //goMatrix *= System.Numerics.Matrix4x4.CreateTranslation(Camera.Current.GameObject.GlobalPosition.ToFloat());
+                goMatrix.Translation += Camera.Current.GameObject.GlobalPosition.ToFloat();
                 if (GameObjectManager.GizmosSpace == ImGuizmoMode.Local)
                 {
                     Local = goMatrix.ToDouble();
@@ -720,17 +743,17 @@ public class GameObject : EngineObject, ISerializable
 
         compoundTag.Add("HideFlags", new IntTag((int)hideFlags));
 
-        compoundTag.Add("PosX", new FloatTag(position.X));
-        compoundTag.Add("PosY", new FloatTag(position.Y));
-        compoundTag.Add("PosZ", new FloatTag(position.Z));
+        compoundTag.Add("PosX", new DoubleTag(position.X));
+        compoundTag.Add("PosY", new DoubleTag(position.Y));
+        compoundTag.Add("PosZ", new DoubleTag(position.Z));
 
-        compoundTag.Add("RotX", new FloatTag(rotation.X));
-        compoundTag.Add("RotY", new FloatTag(rotation.Y));
-        compoundTag.Add("RotZ", new FloatTag(rotation.Z));
+        compoundTag.Add("RotX", new DoubleTag(rotation.X));
+        compoundTag.Add("RotY", new DoubleTag(rotation.Y));
+        compoundTag.Add("RotZ", new DoubleTag(rotation.Z));
 
-        compoundTag.Add("ScalX", new FloatTag(scale.X));
-        compoundTag.Add("ScalY", new FloatTag(scale.Y));
-        compoundTag.Add("ScalZ", new FloatTag(scale.Z));
+        compoundTag.Add("ScalX", new DoubleTag(scale.X));
+        compoundTag.Add("ScalY", new DoubleTag(scale.Y));
+        compoundTag.Add("ScalZ", new DoubleTag(scale.Z));
 
         ListTag components = new ListTag();
         foreach (var comp in _components)

@@ -57,12 +57,12 @@ public class AssetsWindow : EditorWindow {
 
                 var curPos = ImGui.GetCursorPos();
                 bool opened = ImGui.TreeNodeEx($"      {Path.GetFileNameWithoutExtension(file.Name)}", flags);
-                if (count++ % 2 == 0) drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
+                if (count++ % 2 == 0) drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
                 if (ImGui.IsItemClicked()) Selection.Select(file);
                 GUIHelper.Tooltip(file.Name);
                 ImGui.PushStyleColor(ImGuiCol.Text, GetFileColor(ext));
                 // Display icon behind text
-                ImGui.SetCursorPos(new Vector2(curPos.X + 26, curPos.Y));
+                ImGui.SetCursorPos(new System.Numerics.Vector2(curPos.X + 26, curPos.Y));
                 ImGui.TextUnformatted(GetIcon(ext));
                 ImGui.PopStyleColor();
                 if (opened) ImGui.TreePop();
@@ -81,9 +81,9 @@ public class AssetsWindow : EditorWindow {
         ImGuiTreeNodeFlags rootFlags = ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
         if(defaultOpen) rootFlags |= ImGuiTreeNodeFlags.DefaultOpen;
 
-        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(250f / 255f, 210f / 255f, 100f / 255f, 1f));
+        ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(250f / 255f, 210f / 255f, 100f / 255f, 1f));
         bool opened = ImGui.TreeNodeEx($"{FontAwesome6.FolderTree} {root.Name}", rootFlags);
-        ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(1f, 1f, 1f, 0.2f)));
+        ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(1f, 1f, 1f, 0.2f)));
         if (ImGui.IsItemClicked()) Selection.Select(root);
         FileRightClick(null);
         ImGui.PopStyleColor();
@@ -112,7 +112,7 @@ public class AssetsWindow : EditorWindow {
             FileRightClick(subDirectory);
             GUIHelper.Tooltip(subDirectory.Name);
 
-            if (count++ % 2 == 0) drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
+            if (count++ % 2 == 0) drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
 
             if (opened)
             {
@@ -133,13 +133,13 @@ public class AssetsWindow : EditorWindow {
             var curPos = ImGui.GetCursorPos();
             var name = (Settings.m_HideExtensions ? Path.GetFileNameWithoutExtension(file.Name) : file.Name);
             bool opened = ImGui.TreeNodeEx($"      {name}", flags);
-            if (count++ % 2 == 0) drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
+            if (count++ % 2 == 0) drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 0.1f)));
             if (ImGui.IsItemClicked()) Selection.Select(file);
             FileRightClick(file);
             GUIHelper.Tooltip(file.Name);
             ImGui.PushStyleColor(ImGuiCol.Text, GetFileColor(ext));
             // Display icon behind text
-            ImGui.SetCursorPos(new Vector2(curPos.X + 26, curPos.Y));
+            ImGui.SetCursorPos(new System.Numerics.Vector2(curPos.X + 26, curPos.Y));
             ImGui.TextUnformatted(GetIcon(ext));
             ImGui.PopStyleColor();
             if (opened) ImGui.TreePop();

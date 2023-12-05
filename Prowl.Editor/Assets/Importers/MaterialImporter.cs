@@ -71,17 +71,17 @@ namespace Prowl.Editor.Assets
                                 if (changed) mat.PropertyBlock.SetInt(property.Name, i);
                                 break;
                             case Shader.Property.PropertyType.VEC2:
-                                Vector2 v2 = mat.PropertyBlock.GetVector2(property.Name);
+                                var v2 = mat.PropertyBlock.GetVector2(property.Name).ToFloat();
                                 changed |= ImGui.DragFloat2(property.DisplayName, ref v2, 0.01f);
                                 if (changed) mat.PropertyBlock.SetVector(property.Name, v2);
                                 break;
                             case Shader.Property.PropertyType.VEC3:
-                                Vector3 v3 = mat.PropertyBlock.GetVector3(property.Name);
+                                var v3 = mat.PropertyBlock.GetVector3(property.Name).ToFloat();
                                 changed |= ImGui.DragFloat3(property.DisplayName, ref v3, 0.01f);
                                 if (changed) mat.PropertyBlock.SetVector(property.Name, v3);
                                 break;
                             case Shader.Property.PropertyType.VEC4:
-                                Vector4 v4 = mat.PropertyBlock.GetVector4(property.Name);
+                                var v4 = mat.PropertyBlock.GetVector4(property.Name).ToFloat();
                                 changed |= ImGui.DragFloat4(property.DisplayName, ref v4, 0.01f);
                                 if (changed) mat.PropertyBlock.SetVector(property.Name, v4);
                                 break;
@@ -107,7 +107,7 @@ namespace Prowl.Editor.Assets
                                 if (tex.IsExplicitNull)
                                 {
                                     path = "(Null)";
-                                    drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.9f, 0.1f, 0.1f, 0.3f)));
+                                    drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.9f, 0.1f, 0.1f, 0.3f)));
                                     if (ImGui.Selectable($"{property.DisplayName}: {path}", false))
                                     {
 #warning TODO: Show a popup with a list of all assets of the type - property.Type.Name
@@ -116,7 +116,7 @@ namespace Prowl.Editor.Assets
                                 else if (tex.IsRuntimeResource)
                                 {
                                     path = "(Runtime)" + tex.Name;
-                                    drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.1f, 0.1f, 0.9f, 0.3f)));
+                                    drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.1f, 0.1f, 0.9f, 0.3f)));
                                     if (ImGui.Selectable($"{property.DisplayName}: {path}", false))
                                     {
 #warning TODO: Show a popup with a list of all assets of the type - property.Type.Name

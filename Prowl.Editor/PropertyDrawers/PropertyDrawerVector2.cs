@@ -1,8 +1,9 @@
 using HexaEngine.ImGuiNET;
+using Prowl.Runtime;
 
 namespace Prowl.Editor.PropertyDrawers;
 
-public class PropertyDrawerVector2 : PropertyDrawer<System.Numerics.Vector2> {
+public class PropertyDrawerSystemVector2 : PropertyDrawer<System.Numerics.Vector2> {
     
     protected override void DrawProperty(ref System.Numerics.Vector2 v2, Property property) {
         ImGui.Columns(2);
@@ -20,6 +21,31 @@ public class PropertyDrawerVector2 : PropertyDrawer<System.Numerics.Vector2> {
         ImGui.SameLine();
         ImGui.DragFloat("##Y", ref v2.Y);
         
+        ImGui.PopID();
+        ImGui.PopItemWidth();
+        ImGui.Columns(1);
+    }
+    
+}
+
+public class PropertyDrawerVector2 : PropertyDrawer<Vector2> {
+    
+    protected override void DrawProperty(ref Vector2 v2, Property property) {
+        ImGui.Columns(2);
+        ImGui.Text(property.Name);
+        ImGui.SetColumnWidth(0, 70);
+        ImGui.NextColumn();
+        
+        ImGui.PushItemWidth(ImGui.GetContentRegionAvail().X / 2 - 20);
+        ImGui.PushID(property.Name);
+        ImGui.Text("X");
+        ImGui.SameLine();
+        GUIHelper.DragDouble("##X", ref v2.X, 0.01f);
+        ImGui.SameLine();
+        ImGui.Text("Y");
+        ImGui.SameLine();
+        GUIHelper.DragDouble("##Y", ref v2.Y, 0.01f);
+
         ImGui.PopID();
         ImGui.PopItemWidth();
         ImGui.Columns(1);

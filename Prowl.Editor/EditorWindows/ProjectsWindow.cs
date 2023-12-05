@@ -33,7 +33,7 @@ public class ProjectsWindow : EditorWindow
         GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X);
 
         ImGui.PushStyleColor(ImGuiCol.ChildBg, ImGui.GetStyle().Colors[(int)ImGuiCol.FrameBg]);
-        ImGui.BeginChild("projectList", new Vector2(ImGui.GetWindowWidth(), ImGui.GetWindowHeight() - 75));
+        ImGui.BeginChild("projectList", new System.Numerics.Vector2(ImGui.GetWindowWidth(), ImGui.GetWindowHeight() - 75));
 
         Directory.CreateDirectory(Project.Projects_Directory); // Ensure the Project directory exists
 
@@ -57,7 +57,7 @@ public class ProjectsWindow : EditorWindow
 
         if (Project.HasProject)
         {
-            if (ImGui.Button($"{FontAwesome6.Xmark} Cancel", new Vector2(ImGui.GetWindowWidth() / 2, 43)))
+            if (ImGui.Button($"{FontAwesome6.Xmark} Cancel", new System.Numerics.Vector2(ImGui.GetWindowWidth() / 2, 43)))
                 isOpened = false;
         }
 
@@ -69,7 +69,7 @@ public class ProjectsWindow : EditorWindow
     {
         var item_size = 200;
         var pos = ImGui.GetCursorPos();
-        if (ImGui.Selectable($"##{name}", SelectedProject == name, ImGuiSelectableFlags.None, new Vector2(ImGui.GetWindowWidth(), 14)))
+        if (ImGui.Selectable($"##{name}", SelectedProject == name, ImGuiSelectableFlags.None, new System.Numerics.Vector2(ImGui.GetWindowWidth(), 14)))
             SelectedProject = name;
 
         if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(0))
@@ -82,13 +82,13 @@ public class ProjectsWindow : EditorWindow
         ImGui.SetCursorPos(pos);
 
         //Project name
-        ImGui.SetCursorPos(new Vector2(pos.X + 5, pos.Y));
+        ImGui.SetCursorPos(new System.Numerics.Vector2(pos.X + 5, pos.Y));
         ImGui.Text(name);
 
         ImGui.SameLine();
 
-        ImGui.SetCursorPos(new Vector2(pos.X + item_size + 5, pos.Y));
-        ImGui.TextColored(new Vector4(0.5f, 0.5f, 0.5f, 1.0f), $"{FontAwesome6.Calendar} Modified: {Directory.GetLastWriteTime(Project.GetPath(name))}");
+        ImGui.SetCursorPos(new System.Numerics.Vector2(pos.X + item_size + 5, pos.Y));
+        ImGui.TextColored(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 1.0f), $"{FontAwesome6.Calendar} Modified: {Directory.GetLastWriteTime(Project.GetPath(name))}");
 
         ImGui.SetCursorPos(endpos);
     }

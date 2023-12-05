@@ -95,8 +95,10 @@ namespace Prowl.Runtime
         public static bool operator ==(Color lhs, Color rhs) => lhs == rhs;
 
         public static implicit operator Vector4(Color c) => new Vector4(c.r, c.g, c.b, c.a);
+        public static implicit operator System.Numerics.Vector4(Color c) => new System.Numerics.Vector4(c.r, c.g, c.b, c.a);
 
-        public static implicit operator Color(Vector4 v) => new Color(v.X, v.Y, v.Z, v.W);
+        public static implicit operator Color(Vector4 v) => new Color((float)v.X, (float)v.Y, (float)v.Z, (float)v.W);
+        public static implicit operator Color(System.Numerics.Vector4 v) => new Color(v.X, v.Y, v.Z, v.W);
 
         public static implicit operator Raylib_cs.Color(Color c) => new Raylib_cs.Color((byte)(c.r*255f), (byte)(c.g * 255f), (byte)(c.b * 255f), (byte)(c.a * 255f));
         public static implicit operator Color(Raylib_cs.Color c) => new Color(c.r/255f, c.g / 255f, c.b / 255f, c.a / 255f);

@@ -24,7 +24,6 @@ public abstract class Application {
     protected double physicsTimer = 0;
 
     protected ImGUIController controller;
-
     public virtual void Initialize()
     {
         Debug.Log("Initializing...");

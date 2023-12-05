@@ -6,7 +6,6 @@ using Prowl.Runtime.Resources;
 using Prowl.Runtime.Utils;
 using HexaEngine.ImGuiNET;
 using System;
-using System.Numerics;
 using System.Xml.Linq;
 using Material = Prowl.Runtime.Resources.Material;
 using Mesh = Prowl.Runtime.Resources.Mesh;
@@ -318,7 +317,7 @@ namespace Prowl.Editor.Assets
 
             uOb.Scale = new Vector3(aScale.X, aScale.Y, aScale.Z);
             uOb.Position = new Vector3(aTranslation.X, aTranslation.Y, aTranslation.Z);
-            uOb.Orientation = new System.Numerics.Quaternion(aQuat.X, aQuat.Y, aQuat.Z, aQuat.W);
+            uOb.Orientation = new Prowl.Runtime.Quaternion(aQuat.X, aQuat.Y, aQuat.Z, aQuat.W);
 
             if (node.HasChildren) foreach (var cn in node.Children) NodeToGameObject(cn, meshMats).SetParent(uOb);
 

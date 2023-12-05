@@ -3,7 +3,6 @@ using Prowl.Runtime.Resources;
 using Prowl.Runtime.SceneManagement;
 using Raylib_cs;
 using System;
-using System.Numerics;
 using Shader = Prowl.Runtime.Resources.Shader;
 
 namespace Prowl.Runtime.Components;
@@ -25,8 +24,6 @@ public class Camera : MonoBehaviour
 
     public float RenderResolution = 1f;
 
-    public bool LargeWorldCamera = false;
-
     public enum ProjectionType { Perspective, Orthographic }
     public ProjectionType projectionType = ProjectionType.Perspective;
 
@@ -45,9 +42,9 @@ public class Camera : MonoBehaviour
     public Matrix4x4 GetProjectionMatrix(float width, float height)
     {
         if (projectionType == ProjectionType.Orthographic)
-            return Matrix4x4.CreateOrthographicLeftHanded(width, height, NearClip, FarClip);
+            return System.Numerics.Matrix4x4.CreateOrthographicLeftHanded(width, height, NearClip, FarClip).ToDouble();
         else
-            return Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(FieldOfView.ToRad(), width / height, NearClip, FarClip);
+            return System.Numerics.Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(FieldOfView.ToRad(), width / height, NearClip, FarClip).ToDouble();
     }
 
 
@@ -88,7 +85,7 @@ public class Camera : MonoBehaviour
     {
         var s = GetRenderTargetSize() * 1.0f;
         //var s = GetRenderTargetSize();
-        Raylib.DrawTexturePro(texture, new Rectangle(0, 0, texture.width, -texture.height), new Rectangle(0, 0, s.X, s.Y), Vector2.Zero, 0.0f, Color.white);
+        Raylib.DrawTexturePro(texture, new Rectangle(0, 0, texture.width, -texture.height), new Rectangle(0, 0, (float)s.X, (float)s.Y), System.Numerics.Vector2.Zero, 0.0f, Color.white);
     }
 
     private void OpaquePass()
@@ -127,8 +124,7 @@ public class Camera : MonoBehaviour
     Matrix4x4? oldView = null;
     Matrix4x4? oldProjection = null;
 
-    private Vector3 ViewPosition => LargeWorldCamera ? Vector3.Zero : GameObject.GlobalPosition;
-    public Matrix4x4 View => Matrix4x4.CreateLookAtLeftHanded(ViewPosition, GameObject.Forward + ViewPosition, GameObject.Up);
+    public Matrix4x4 View => Matrix4x4.CreateLookToLeftHanded(Vector3.Zero, GameObject.Forward, GameObject.Up);
 
     public void Render(int width, int height)
     {

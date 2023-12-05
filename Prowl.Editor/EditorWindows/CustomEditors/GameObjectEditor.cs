@@ -300,8 +300,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
             // GetItemRectMin is going to include the padding
             // as well; so, remove it
-            var panelMin = new Vector2(boundsX.start, ImGui.GetItemRectMin().Y - padding.Y);
-            var panelMax = new Vector2(boundsX.end, ImGui.GetItemRectMax().Y + padding.Y);
+            var panelMin = new System.Numerics.Vector2(boundsX.start, ImGui.GetItemRectMin().Y - padding.Y);
+            var panelMax = new System.Numerics.Vector2(boundsX.end, ImGui.GetItemRectMax().Y + padding.Y);
 
             // Draw rectangle below
             ImGui.GetWindowDrawList().ChannelsSetCurrent(0);

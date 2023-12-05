@@ -27,7 +27,7 @@ public class EditorMainMenubar {
     }
     
     private void Draw() {
-        ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(4, 4));
+        ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new System.Numerics.Vector2(4, 4));
         if(ImGui.BeginMainMenuBar()) {
 
             DrawPlayControls();

@@ -1,6 +1,5 @@
 ﻿using Prowl.Icons;
 using Prowl.Runtime.Serialization;
-using System.Numerics;
 using Material = Prowl.Runtime.Resources.Material;
 using Mesh = Prowl.Runtime.Resources.Mesh;
 
@@ -23,14 +22,8 @@ public class MeshRenderer : MonoBehaviour, ISerializable
             {
                 Material.Res!.SetPass(i);
 
-                Matrix4x4 matrix = GameObject.Global;
-                if (Camera.Current.LargeWorldCamera)
-                {
-                    // Draw relative to camera as camera will be at 0,0,0
-                    matrix = Matrix4x4.Multiply(matrix, Matrix4x4.CreateTranslation(-Camera.Current.GameObject.GlobalPosition));
-                }
-
-                Graphics.DrawMeshNow(Mesh.Res!, matrix, Material.Res!, GameObject.GlobalPrevious);
+#warning TODO: Previous matrix needs to support LargeWorldCamera
+                Graphics.DrawMeshNow(Mesh.Res!, GameObject.GlobalCamRelative, Material.Res!, GameObject.GlobalCamPreviousRelative);
                 Material.Res!.EndPass();
             }
         }
@@ -40,10 +33,8 @@ public class MeshRenderer : MonoBehaviour, ISerializable
     {
         if (Mesh.IsAvailable)
         {
-            // MatDepth should never be null here
-            //var mvp = Matrix4x4.Multiply(Matrix4x4.Multiply(Graphics.MatDepthProjection, Graphics.MatDepthView), this.GameObject.Global);
             var mvp = Matrix4x4.Identity;
-            mvp = Matrix4x4.Multiply(mvp, this.GameObject.Global);
+            mvp = Matrix4x4.Multiply(mvp, GameObject.GlobalCamRelative);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthProjection);
             Material.Res!.SetMatrix("mvp",Matrix4x4.Transpose(mvp));

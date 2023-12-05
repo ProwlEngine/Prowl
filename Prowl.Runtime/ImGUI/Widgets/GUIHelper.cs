@@ -154,5 +154,14 @@ namespace Prowl.Runtime
             }
             return changed;
         }
+
+        public static void DragDouble(string v1, ref double value, float v2)
+        {
+            unsafe
+            {
+                fixed (double* v = &value)
+                    ImGui.DragScalar(v1, ImGuiDataType.Double, v, v2);
+            }
+        }
     }
 }

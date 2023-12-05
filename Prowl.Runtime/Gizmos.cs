@@ -174,7 +174,7 @@ namespace Prowl.Runtime
         {
             base.matrix = m;
             base.mvp = mvp;
-            var p = new Vector2[points.Length];
+            var p = new System.Numerics.Vector2[points.Length];
             for (int i = 0; i < points.Length; i++)
                 p[i] = Pos(points[i]);
             drawList.AddPolyline(ref p[0], p.Length, ImGui.GetColorU32(color), closed ? ImDrawFlags.Closed : ImDrawFlags.None, thickness);

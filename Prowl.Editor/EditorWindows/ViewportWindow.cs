@@ -6,7 +6,6 @@ using Prowl.Runtime.Components;
 using Prowl.Runtime.Components.ImageEffects;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.SceneManagement;
-using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace Prowl.Editor.EditorWindows;
@@ -68,7 +67,7 @@ public class ViewportWindow : EditorWindow
         if (windowSize.X != RenderTarget.Width || windowSize.Y != RenderTarget.Height)
             RefreshRenderTexture((int)windowSize.X, (int)windowSize.Y);
 
-        WindowCenter = ImGui.GetWindowPos() + new Vector2(windowSize.X / 2, windowSize.Y / 2);
+        WindowCenter = ImGui.GetWindowPos() + new System.Numerics.Vector2(windowSize.X / 2, windowSize.Y / 2);
 
         // Manually Render to the RenderTexture
         Cam.NearClip = Settings.NearClip;
@@ -83,37 +82,40 @@ public class ViewportWindow : EditorWindow
         ImGuizmo.SetOrthographic(false);
         ImGuizmo.SetRect(ImGui.GetWindowPos().X, ImGui.GetWindowPos().Y, windowSize.X, windowSize.Y);
 
-        var view = Cam.GameObject.View;
-        var projection = Cam.GetProjectionMatrix(windowSize.X, windowSize.Y);
+        var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Position, Cam.GameObject.Forward, Cam.GameObject.Up).ToFloat();
+        var projection = Cam.GetProjectionMatrix(windowSize.X, windowSize.Y).ToFloat();
 
         if (DrawGrid)
         {
-            Matrix4x4 matrix = Matrix4x4.Identity;
+            System.Numerics.Matrix4x4 matrix = System.Numerics.Matrix4x4.Identity;
             ImGuizmo.DrawGrid(ref view.M11, ref projection.M11, ref matrix.M11, 10);
         }
 
-        Matrix4x4 mvp = Cam.GameObject.View;
+        Camera.Current = Cam;
+        var mvp = view.ToDouble();
         mvp *= Cam.GetProjectionMatrix(windowSize.X, windowSize.Y);
         var drawList = ImGui.GetWindowDrawList();
         Runtime.Gizmos.Render(drawList, mvp);
 
         Prowl.Runtime.Gizmos.Clear();
 
+        view.Translation = new System.Numerics.Vector3(0, 0, 0);
         foreach (var activeGO in GameObjectManager.AllGameObjects)
             if (activeGO.EnabledInHierarchy)
                 activeGO.DrawGizmos(view, projection, Selection.Current == activeGO);
+        Camera.Current = null;
 
-        ImGui.SetCursorPos(cStart + new Vector2(5, 5));
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 5));
         if (ImGui.Button($"{FontAwesome6.ArrowsUpDownLeftRight}")) GameObjectManager.GizmosOperation = ImGuizmoOperation.Translate;
         GUIHelper.Tooltip("Translate");
-        ImGui.SetCursorPos(cStart + new Vector2(5 + (22), 5));
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (22), 5));
         if (ImGui.Button($"{FontAwesome6.ArrowsSpin}")) GameObjectManager.GizmosOperation = ImGuizmoOperation.Rotate;
         GUIHelper.Tooltip("Rotate");
-        ImGui.SetCursorPos(cStart + new Vector2(5 + (44), 5));
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (44), 5));
         if (ImGui.Button($"{FontAwesome6.GroupArrowsRotate}")) GameObjectManager.GizmosOperation = ImGuizmoOperation.Scale;
         GUIHelper.Tooltip("Scale");
 
-        ImGui.SetCursorPos(cStart + new Vector2(5 + (72), 5));
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (72), 5));
 
         if (GameObjectManager.GizmosSpace == ImGuizmoMode.World && ImGui.Button($"{FontAwesome6.Globe}"))
             GameObjectManager.GizmosSpace = ImGuizmoMode.Local;
@@ -121,7 +123,7 @@ public class ViewportWindow : EditorWindow
             GameObjectManager.GizmosSpace = ImGuizmoMode.World;
         GUIHelper.Tooltip(GameObjectManager.GizmosSpace.ToString());
 
-        ImGui.SetCursorPos(cStart + new Vector2(5 + (100), 5));
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (100), 5));
         ImGui.SetNextItemWidth(20);
         // Dropdown to pick Camera DebugDraw mode
         if (ImGui.BeginCombo($"##DebugDraw", $"{FontAwesome6.Eye}", ImGuiComboFlags.NoArrowButton))
@@ -142,17 +144,17 @@ public class ViewportWindow : EditorWindow
         }
         GUIHelper.Tooltip("Debug Visualization: " + Cam.debugDraw.ToString());
 
-        ImGui.SetCursorPos(cStart + new Vector2(5 + (123), 5));
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (123), 5));
         if (ImGui.Button($"{FontAwesome6.TableCells}"))
             DrawGrid = !DrawGrid;
         GUIHelper.Tooltip("Show Grid: " + DrawGrid.ToString());
 
-        ImGui.SetCursorPos(cStart + new Vector2(5 + (151), 5));
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (151), 5));
         if (ImGui.Button($"{FontAwesome6.Camera}"))
             Selection.Select(Cam.GameObject);
         GUIHelper.Tooltip("Viewport Camera Settings");
 
-        ImGui.SetCursorPos(cStart + new Vector2(5, 22));
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 22));
         ImGui.Text("FPS: " + Raylib_cs.Raylib.GetFPS());
 
         // Show ViewManipulation at the end
@@ -161,8 +163,8 @@ public class ViewportWindow : EditorWindow
         {
             ImGuizmo.ViewManipulate(ref view, 2, new Vector2(ImGui.GetWindowPos().X + windowSize.X - 75, ImGui.GetWindowPos().Y + 15), new Vector2(75, 75), 0x10101010);
             //view *= Matrix4x4.CreateScale(1, -1, 1); // invert back
-            Matrix4x4.Invert(view, out var iview);
-            Cam.GameObject.Local = iview;
+            Matrix4x4.Invert(view.ToDouble(), out var iview);
+            //Cam.GameObject.Local = iview;
         }
     }
 

@@ -93,7 +93,6 @@ Pass 0
 		in vec4 PosProjOld;
 
 		uniform mat4 matView;
-		uniform vec3 Camera_WorldPosition;
 		uniform float emissionIntensity = 1.0;
 		
 		uniform sampler2D _MainTex; // diffuse

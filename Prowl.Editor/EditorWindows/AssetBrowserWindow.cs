@@ -13,7 +13,6 @@ namespace Prowl.Editor.EditorWindows;
 
 public class AssetBrowserWindow : EditorWindow {
 
-
     public static EditorSettings Settings => Project.ProjectSettings.GetSetting<EditorSettings>();
 
     public DirectoryInfo CurDirectory;
@@ -139,7 +138,7 @@ public class AssetBrowserWindow : EditorWindow {
         int rowCount = Math.Max((int)(contentWidth / (ThumbnailSize + padding)), 1);
         float itemSize = ((ThumbnailSize) + padding);
 
-        var curPos = ImGui.GetCursorPos() + new Vector2(5, 5);
+        var curPos = ImGui.GetCursorPos() + new System.Numerics.Vector2(5, 5);
         int i = 0;
         if (!string.IsNullOrEmpty(_searchText))
         {
@@ -160,11 +159,11 @@ public class AssetBrowserWindow : EditorWindow {
         }
     }
 
-    private void RenderEntry(int rowCount, float itemSize, ref Vector2 curPos, ref int i, FileSystemInfo entry)
+    private void RenderEntry(int rowCount, float itemSize, ref System.Numerics.Vector2 curPos, ref int i, FileSystemInfo entry)
     {
         ImGui.PushID(i);
         ImGui.SetCursorPos(curPos);
-        ImGui.BeginChild("ClipBox", new Vector2(ThumbnailSize, ThumbnailSize), false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        ImGui.BeginChild("ClipBox", new System.Numerics.Vector2(ThumbnailSize, ThumbnailSize), false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
         RenderFileSystemEntry(entry);
         ImGui.EndChild();
         AssetsWindow.FileRightClick(entry);
@@ -183,10 +182,10 @@ public class AssetBrowserWindow : EditorWindow {
         float thumbnailSize = Math.Min(ThumbnailSize, ImGui.GetContentRegionAvail().X);
         ImGui.BeginGroup();
 
-        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(0.0f, 4.0f));
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new System.Numerics.Vector2(0.0f, 4.0f));
         ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 0.0f);
 
-        ImGui.Selectable("##" + entry.FullName, isSelected, ImGuiSelectableFlags.AllowOverlap, Vector2.One * thumbnailSize);
+        ImGui.Selectable("##" + entry.FullName, isSelected, ImGuiSelectableFlags.AllowOverlap, System.Numerics.Vector2.One * thumbnailSize);
         GUIHelper.ItemRect(0.5f, 0.5f, 0.5f, 0.1f);
         if (ImGui.IsItemHovered())
         {
@@ -248,8 +247,8 @@ public class AssetBrowserWindow : EditorWindow {
         thumbnailSize -= 30;
         float thumbnailWidth = ((float)thumbnail.Width / thumbnail.Height) * thumbnailSize;
         float xOffset = ((thumbnailSize - thumbnailWidth) / 2) + 15;
-        ImGui.SetCursorPos(new Vector2(xOffset, 10));
-        ImGui.Image((IntPtr)thumbnail.Handle, new Vector2(thumbnailWidth, thumbnailSize), Vector2.UnitY, Vector2.UnitX);
+        ImGui.SetCursorPos(new System.Numerics.Vector2(xOffset, 10));
+        ImGui.Image((IntPtr)thumbnail.Handle, new System.Numerics.Vector2(thumbnailWidth, thumbnailSize), System.Numerics.Vector2.UnitY, System.Numerics.Vector2.UnitX);
     }
 
     private Texture2D GetEntryThumbnail(FileSystemInfo entry)

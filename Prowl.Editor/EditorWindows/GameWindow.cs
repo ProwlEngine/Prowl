@@ -25,7 +25,7 @@ public class GameWindow : EditorWindow
     }
 
     protected override void PreWindowDraw() =>
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(0, 0));
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new System.Numerics.Vector2(0, 0));
 
     protected override void PostWindowDraw() =>
         ImGui.PopStyleVar(1);
@@ -61,7 +61,7 @@ public class GameWindow : EditorWindow
                 mainCam.Target = null;
             }
 
-            ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].id, ImGui.GetContentRegionAvail(), new Vector2(0, 1), new Vector2(1, 0));
+            ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].id, ImGui.GetContentRegionAvail(), new System.Numerics.Vector2(0, 1), new System.Numerics.Vector2(1, 0));
 
         }
     }
