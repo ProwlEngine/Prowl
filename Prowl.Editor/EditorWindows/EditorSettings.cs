@@ -1,4 +1,5 @@
 ﻿using Prowl.Runtime;
+using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -17,4 +18,10 @@ public class EditorSettings : IProjectSetting
     public float FarClip = 10000f;
     [Space] 
     public float RenderResolution = 1f;
+}
+
+public class BuildSettings : IProjectSetting
+{
+    [Header("Assets")]
+    public AssetRef<Scene> StartingScene;
 }

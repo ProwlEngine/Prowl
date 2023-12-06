@@ -6,19 +6,17 @@ namespace Prowl.Standalone;
 
 public class StandaloneAssetProvider : IAssetProvider
 {
-    public DirectoryInfo Data => new DirectoryInfo(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "GameData"));
-
     AssetBuildPackage[] packages;
 
     public StandaloneAssetProvider()
     {
         int packageIndex = 0;
-        FileInfo firstPackage = new FileInfo(Path.Combine(Data.FullName, $"Data{packageIndex++}.prowl"));
+        FileInfo firstPackage = new FileInfo(Path.Combine(Program.Data.FullName, $"Data{packageIndex++}.prowl"));
         List<AssetBuildPackage> packages = new();
         while (firstPackage.Exists)
         {
             packages.Add(new AssetBuildPackage(firstPackage.OpenRead(), ZipArchiveMode.Read));
-            firstPackage = new FileInfo(Path.Combine(Data.FullName, $"Data{packageIndex++}.prowl"));
+            firstPackage = new FileInfo(Path.Combine(Program.Data.FullName, $"Data{packageIndex++}.prowl"));
         }
         this.packages = packages.ToArray();
     }

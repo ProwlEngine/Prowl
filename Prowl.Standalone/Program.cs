@@ -1,15 +1,28 @@
 ﻿using Prowl.Runtime;
+using Prowl.Runtime.Resources;
+using Prowl.Runtime.SceneManagement;
+using Prowl.Runtime.Serializer;
 
 namespace Prowl.Standalone;
 
 internal class Program {
+
+    public static DirectoryInfo Data => new DirectoryInfo(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "GameData"));
 
     public static int Main(string[] args) {
 
         StandaloneApplication standaloneApplication = new();
         standaloneApplication.Initialize();
         Application.AssetProvider = new StandaloneAssetProvider();
-#warning TODO: Load Default Scene
+
+        FileInfo StartingScene = new FileInfo(Path.Combine(Data.FullName, "level.prowl"));
+        if (StartingScene.Exists)
+        {
+            Tag tag = BinaryTagConverter.ReadFromFile(StartingScene);
+            Scene scene = TagSerializer.Deserialize<Scene>((CompoundTag)tag);
+            SceneManager.LoadScene(scene);
+        }
+
         standaloneApplication.Run();
 
         return 0;

@@ -247,6 +247,19 @@ namespace Prowl.Runtime.Assets
             StopEditingAsset();
         }
 
+        public static void ExportAllBuildPackages(DirectoryInfo directoryInfo)
+        {
+            if (directoryInfo.Exists)
+            {
+                Debug.LogError("Cannot export package, Folder does not exist.");
+                return;
+            }
+
+            // Get all assets
+            var assets = AssetDatabase.GuidPathHolder.GUIDs.ToArray();
+            ExportBuildPackages(assets, directoryInfo);
+        }
+
         public static void ExportBuildPackages(Guid[] assetsToExport, DirectoryInfo destination)
         {
             if (destination.Exists)

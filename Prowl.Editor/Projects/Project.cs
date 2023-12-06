@@ -2,12 +2,17 @@ using Prowl.Runtime.Assets;
 using Prowl.Editor.Assets;
 using System.Diagnostics;
 using System.Reflection;
+using Prowl.Editor.EditorWindows;
+using Prowl.Runtime.Serializer;
 
 namespace Prowl.Editor;
 
 public static class Project {
 
     public static event Action OnProjectChanged;
+
+
+    public static BuildSettings BuildSettings => Project.ProjectSettings.GetSetting<BuildSettings>();
 
     public static string Projects_Directory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Prowl", "Projects");
 
@@ -233,41 +238,54 @@ public static class Project {
             return false;
         }
 
+        if(BuildSettings.StartingScene.IsAvailable == false)
+        {
+            Runtime.Debug.LogError($"No Starting Scene Assigned...");
+            return false;
+        }
+
         Runtime.Debug.Log($"Starting Project Build...");
-        Runtime.Debug.Log("**********************************************************************************************************************");
-        bool Built = true;
+        Runtime.Debug.Log("**********************************************************************************************************************", false);
+        Runtime.Debug.Log($"Creating Directories...");
+        Runtime.Debug.Log("**********************************************************************************************************************", false);
 
-        string BuildPath = @$"{ProjectDirectory}\Builds\Latest\";
-
-        // Create Directory - doesnt do anything if it already exists
+        string BuildPath = @$"{ProjectDirectory}\Builds\{DateTime.Now.ToString()}\";
+        string BuildDataPath = @$"{ProjectDirectory}\Builds\{DateTime.Now.ToString()}\GameData\";
+        // Create Directory
         Directory.CreateDirectory(BuildPath);
+        Directory.CreateDirectory(BuildDataPath);
 
-#warning TODO: Needs Asset Dependencies to track what assets are used in built scenes
-#warning TODO: Needs a Asset package sorta system and a Standalone Asset Provider for it
-        //Runtime.Debug.Log($"Copying Assets folder to {BuildPath}...");
-        //Runtime.Debug.Log("**********************************************************************************************************************");
-        //// Create all Asset Directories
-        //foreach (string dir in Directory.GetDirectories(ProjectAssetDirectory, "*", SearchOption.AllDirectories))
-        //    Directory.CreateDirectory(dir.Replace(ProjectAssetDirectory, Path.Combine(BuildPath, "Assets")));
-        //// Copy all files
-        //foreach (string newPath in Directory.GetFiles(ProjectAssetDirectory, "*.*", SearchOption.AllDirectories))
-        //    File.Copy(newPath, newPath.Replace(ProjectAssetDirectory, Path.Combine(BuildPath, "Assets")), true);
-        //Runtime.Debug.Log("**********************************************************************************************************************");
-
-        Runtime.Debug.Log($"Building is unfinished, this will only compile the assembly which is not very helpful.");
-
+        Runtime.Debug.Log("**********************************************************************************************************************", false);
         Runtime.Debug.Log($"Compiling project assembly to {BuildPath}...");
-        Runtime.Debug.Log("**********************************************************************************************************************");
-        // Compile game assembly as Release build - Also creates Directory
-        if (!Compile(Assembly_Proj, true)) Built = false;
-        Runtime.Debug.Log("**********************************************************************************************************************");
+        Runtime.Debug.Log("**********************************************************************************************************************", false);
+        if (!Compile(Assembly_Proj, true))
+        {
+            Runtime.Debug.LogError($"Failed to compile Project assembly!");
+            return false;
+        }
 
-        Runtime.Debug.Log($"Compiling standalone player assembly to {BuildPath}...");
-        Runtime.Debug.Log("**********************************************************************************************************************");
-        // Compile standalone player
-        Runtime.Debug.Log("**********************************************************************************************************************");
+        Runtime.Debug.Log("**********************************************************************************************************************", false);
+        Runtime.Debug.Log($"Exporting and Packing assets to {BuildDataPath}...");
+        Runtime.Debug.Log("**********************************************************************************************************************", false);
+#warning TODO: Needs Asset Dependencies to track what assets are used in built scenes rather then doing all assets
+        AssetDatabase.ExportAllBuildPackages(new DirectoryInfo(BuildDataPath));
 
-        Runtime.Debug.Log($"{(Built ? "Successfully built" : "Failed to build")} project!");
+        Runtime.Debug.Log("**********************************************************************************************************************", false);
+        Runtime.Debug.Log($"Copying standalone player to {BuildPath}...");
+        Runtime.Debug.Log("**********************************************************************************************************************", false);
+#warning TODO: How should we handle the standalone player? Embedded Resource? Copy from somewhere?
+
+        Runtime.Debug.Log("**********************************************************************************************************************", false);
+        Runtime.Debug.Log($"Preparing default scene to {BuildDataPath}...");
+        Runtime.Debug.Log("**********************************************************************************************************************", false);
+
+        FileInfo StartingScene = new FileInfo(@$"{ProjectDirectory}\Builds\{DateTime.Now.ToString()}\GameData\level.prowl");
+        Tag tag = TagSerializer.Serialize(BuildSettings.StartingScene.Res!);
+        BinaryTagConverter.WriteToFile((CompoundTag)tag, StartingScene);
+
+        Runtime.Debug.Log("**********************************************************************************************************************", false);
+
+        Runtime.Debug.Log($"Successfully built project!");
         Runtime.Debug.Log("");
         return true;
     }
