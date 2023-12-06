@@ -172,14 +172,24 @@ public class ViewportWindow : EditorWindow
 
     private void HandleDragnDrop()
     {
-        // GameObject from Assets - Prefab
+        // GameObject from Assets
         if (DragnDrop.ReceiveAsset<GameObject>(out var original))
         {
             GameObject clone = (GameObject)EngineObject.Instantiate(original.Res!, true);
+            clone.AssetID = Guid.Empty; // Remove AssetID so it's not a Prefab - These are just GameObjects like Models
             clone.Position = Cam.GameObject.GlobalPosition + Cam.GameObject.Forward * 10;
             clone.Orientation = original.Res!.Orientation;
             clone.Recalculate();
             Selection.Select(clone);
+        }
+        // Prefab from Assets
+        if (DragnDrop.ReceiveAsset<Prefab>(out var prefab))
+        {
+            var go = prefab.Res.Instantiate();
+            go.Position = Cam.GameObject.GlobalPosition + Cam.GameObject.Forward * 10;
+            go.Orientation = original.Res!.Orientation;
+            go.Recalculate();
+            Selection.Select(go);
         }
         // Scene from Assets
         if (DragnDrop.ReceiveAsset<Scene>(out var scene))

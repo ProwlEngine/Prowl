@@ -101,11 +101,16 @@ public class HierarchyWindow : EditorWindow {
                 if (DragnDrop.ReceiveAsset<GameObject>(out var original))
                 {
                     GameObject clone = (GameObject)EngineObject.Instantiate(original.Res!, true);
+                    clone.AssetID = Guid.Empty; // Remove AssetID so it's not a Prefab - These are just GameObjects like Models
                     clone.Position = original.Res!.Position;
                     clone.Orientation = original.Res!.Orientation;
                     clone.SetParent(null);
                     clone.Recalculate();
                     Selection.Select(clone);
+                }
+                if (DragnDrop.ReceiveAsset<Prefab>(out var prefab))
+                {
+                    Selection.Select(prefab.Res.Instantiate());
                 }
             }
 
@@ -210,16 +215,20 @@ public class HierarchyWindow : EditorWindow {
             go.SetParent(entity);
             Selection.Select(go);
         }
-        // GameObject from Assets - Prefab
+        // GameObject from Assets
         if (DragnDrop.ReceiveAsset<GameObject>(out var original))
         {
             GameObject clone = (GameObject)EngineObject.Instantiate(original.Res!, true);
+            clone.AssetID = Guid.Empty; // Remove AssetID so it's not a Prefab - These are just GameObjects like Models
             clone.Position = original.Res!.Position;
             clone.Orientation = original.Res!.Orientation;
             clone.SetParent(entity);
             clone.Recalculate();
             Selection.Select(clone);
         }
+        // Prefab from Assets
+        if (DragnDrop.ReceiveAsset<Prefab>(out var prefab))
+            Selection.Select(prefab.Res.Instantiate());
         // Scene from Assets
         if (DragnDrop.ReceiveAsset<Scene>(out var scene))
             SceneManager.LoadScene(scene);

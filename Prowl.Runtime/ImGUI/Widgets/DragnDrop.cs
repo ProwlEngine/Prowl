@@ -1,6 +1,5 @@
 ﻿using HexaEngine.ImGuiNET;
 using System;
-using System.Numerics;
 
 namespace Prowl.Runtime.ImGUI.Widgets
 {
