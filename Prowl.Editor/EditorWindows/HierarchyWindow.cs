@@ -259,19 +259,25 @@ public class HierarchyWindow : EditorWindow {
                 m_RenamingEntity = entity;
             if (ImGui.MenuItem("Duplicate", "Ctrl+D"))
             {
-                // Duplicating, Easiest way to duplicate is to Serialize then Deserialize
-                var serialized = TagSerializer.Serialize(entity);
-                var deserialized = TagSerializer.Deserialize<GameObject>(serialized);
-                deserialized.SetParent(entity.Parent);
-                Selection.Select(deserialized);
+                Selection.Foreach<GameObject>((go) =>
+                {
+                    // Duplicating, Easiest way to duplicate is to Serialize then Deserialize
+                    var serialized = TagSerializer.Serialize(go);
+                    var deserialized = TagSerializer.Deserialize<GameObject>(serialized);
+                    deserialized.SetParent(go.Parent);
+                    Selection.AddSelect(deserialized);
+                });
             }
-            if (ImGui.MenuItem("Align With View")) 
-            { 
-                Camera cam = ViewportWindow.LastFocusedCamera;
-                entity.GlobalPosition = cam.GameObject.GlobalPosition;
-                entity.GlobalOrientation = cam.GameObject.GlobalOrientation;
+            if (Selection.Count > 0 && ImGui.MenuItem("Align With View"))
+            {
+                Selection.Foreach<GameObject>((go) =>
+                {
+                    Camera cam = ViewportWindow.LastFocusedCamera;
+                    go.GlobalPosition = cam.GameObject.GlobalPosition;
+                    go.GlobalOrientation = cam.GameObject.GlobalOrientation;
+                });
             }
-            if (ImGui.MenuItem("Align View With"))
+            if (Selection.Count == 1 && ImGui.MenuItem("Align View With"))
             {
                 Camera cam = ViewportWindow.LastFocusedCamera;
                 cam.GameObject.GlobalPosition = entity.GlobalPosition;
