@@ -101,6 +101,7 @@ public class AssetBrowserWindow : EditorWindow {
 #warning TODO: Project.IsPathInProject(CurDirectory.Parent!.FullName); Would be nice here, then we disable if its not
         bool disabledUpButton = CurDirectory.FullName.Equals(Project.ProjectAssetDirectory, StringComparison.OrdinalIgnoreCase);
         disabledUpButton |= CurDirectory.FullName.Equals(Project.ProjectDefaultsDirectory, StringComparison.OrdinalIgnoreCase);
+        disabledUpButton |= CurDirectory.FullName.Equals(Project.ProjectPackagesDirectory, StringComparison.OrdinalIgnoreCase);
         disabledUpButton |= CurDirectory.Parent == null;
 
         if (disabledUpButton) ImGui.BeginDisabled(true);

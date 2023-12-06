@@ -37,8 +37,9 @@ public class AssetsWindow : EditorWindow {
             _found.Clear();
             if (!string.IsNullOrEmpty(_searchText))
             {
-                _found.AddRange(AssetDatabase.GetRootfolders()[1].EnumerateFiles("*", SearchOption.AllDirectories));
-                _found.AddRange(AssetDatabase.GetRootfolders()[0].EnumerateFiles("*", SearchOption.AllDirectories));
+                _found.AddRange(AssetDatabase.GetRootfolders()[2].EnumerateFiles("*", SearchOption.AllDirectories)); // Assets
+                _found.AddRange(AssetDatabase.GetRootfolders()[0].EnumerateFiles("*", SearchOption.AllDirectories)); // Defaults
+                _found.AddRange(AssetDatabase.GetRootfolders()[1].EnumerateFiles("*", SearchOption.AllDirectories)); // Packages Folder
                 // Remove Meta's & only keep the ones with SearchText inside them
                 _found.RemoveAll(f => f.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase) || !f.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
             }
@@ -71,8 +72,9 @@ public class AssetsWindow : EditorWindow {
         }
         else
         {
-            RenderRootFolter(ref count, true, AssetDatabase.GetRootfolders()[1]); // Assets Folder
+            RenderRootFolter(ref count, true, AssetDatabase.GetRootfolders()[2]); // Assets Folder
             RenderRootFolter(ref count, false, AssetDatabase.GetRootfolders()[0]); // Defaults Folder
+            RenderRootFolter(ref count, true, AssetDatabase.GetRootfolders()[1]); // Packages Folder
         }
         ImGui.EndChild();
     }

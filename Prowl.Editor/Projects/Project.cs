@@ -42,6 +42,7 @@ public static class Project {
 
         DefaultAssets.CreateDefaults("Defaults");
         AssetDatabase.AddRootFolder("Defaults");
+        AssetDatabase.AddRootFolder("Packages");
 
         AssetDatabase.AddRootFolder("Assets");
 
