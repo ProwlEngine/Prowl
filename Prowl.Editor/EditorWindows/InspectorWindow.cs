@@ -41,6 +41,10 @@ public class InspectorWindow : EditorWindow
 
         if (ImGui.BeginMenuBar())
         {
+            if(Selection.Count > 1)
+                ImGui.Text("Mult-Editing is not currently supported!");
+
+
             if (Selected == null) ImGui.Text("No object selected");
             if (Selected.IsAlive == false) ImGui.Text("Object Destroyed");
             else if (Selected.Target is EngineObject eo) ImGui.Text(eo.Name);
