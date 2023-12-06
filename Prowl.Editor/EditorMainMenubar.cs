@@ -120,6 +120,7 @@ public class EditorMainMenubar {
             if(ImGui.MenuItem("Hierarchy")) { new HierarchyWindow(); }
             if(ImGui.MenuItem("Inspector")) { new InspectorWindow(); }
             if(ImGui.MenuItem("Viewport")) { new ViewportWindow(); }
+            if(ImGui.MenuItem("Render Pipeline Graph")) { new RenderPipelineWindow(); }
             ImGui.EndMenu();
         }
         
