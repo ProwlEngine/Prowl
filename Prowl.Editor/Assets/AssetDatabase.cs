@@ -503,6 +503,10 @@ namespace Prowl.Runtime.Assets
                 string assetPath = Path.ChangeExtension(fullAssetPath.FullName, null);
                 if (!File.Exists(assetPath)) // Asset doesnt exist
                     fullAssetPath.Delete(); // Delete Meta
+                // Deleted a Serialized Asset file if we have one
+                var serialized = GetSerializedFile(FileToRelative(fullAssetPath));
+                if (serialized.Exists)
+                    serialized.Delete();
             }
             else
             {
