@@ -1,18 +1,30 @@
-using Prowl.Runtime;
-using Prowl.Runtime.Resources;
-using Prowl.Runtime.SceneManagement;
-using Prowl.Runtime.Utils;
+using HexaEngine.ImGuiNET;
 using Prowl.Editor.Assets;
 using Prowl.Editor.EditorWindows;
 using Prowl.Editor.PropertyDrawers;
-using HexaEngine.ImGuiNET;
+using Prowl.Runtime;
+using Prowl.Runtime.SceneManagement;
 using Raylib_cs;
 using System.Diagnostics;
-using Prowl.Runtime.Serializer;
-using Prowl.Runtime.Components.ImageEffects;
-using Prowl.Runtime.Components;
+using System.Text.Json;
+using static Prowl.Editor.EditorConfiguration;
 
 namespace Prowl.Editor;
+
+public class EditorConfiguration
+{
+    public class Hotkey
+    {
+        public KeyboardKey Key { get; set; }
+
+        public bool Ctrl { get; set; }
+        public bool Alt { get; set; }
+        public bool Shift { get; set; }
+    }
+
+    public Dictionary<string, Hotkey> hotkeys { get; set; } = new();
+
+}
 
 public unsafe class EditorApplication : Application {
 
@@ -23,14 +35,49 @@ public unsafe class EditorApplication : Application {
 
     static bool hasDockSetup = false;
 
+    public static EditorConfiguration EditorConfig = new();
+
     public bool IsReloadingExternalAssemblies { get; private set; }
     public void RegisterReloadOfExternalAssemblies() => IsReloadingExternalAssemblies = true;
+
+    public static void SaveConfig()
+    {
+        string filePath = Path.Combine(Project.Projects_Directory, "EditorConfig.setting");
+        string json = JsonSerializer.Serialize(EditorConfig);
+        File.WriteAllText(filePath, json);
+    }
+
+    public static bool IsHotkeyDown(string name, Hotkey defaultKey)
+    {
+        if (EditorConfig.hotkeys.TryGetValue(name, out var hotkey))
+        {
+            return Raylib.IsKeyDown(hotkey.Key) && Raylib.IsKeyDown(KeyboardKey.KEY_LEFT_CONTROL) == hotkey.Ctrl && Raylib.IsKeyDown(KeyboardKey.KEY_LEFT_ALT) == hotkey.Alt && Raylib.IsKeyDown(KeyboardKey.KEY_LEFT_SHIFT) == hotkey.Shift;
+        }
+        else
+        {
+            EditorConfig.hotkeys.Add(name, defaultKey);
+            SaveConfig();
+        }
+        return false;
+    }
 
     public override void Initialize()
     {
         // CompileExternalAssemblies();
         base.Initialize();
         Instance = this;
+
+        // Load Editor Config
+        string filePath = Path.Combine(Project.Projects_Directory, "EditorConfig.setting");
+        if (File.Exists(filePath))
+        {
+            string json = File.ReadAllText(filePath);
+            EditorConfig = JsonSerializer.Deserialize<EditorConfiguration>(json) ?? new();
+        }
+        else
+        {
+            SaveConfig();
+        }
 
         EditorGui.Initialize();
     }
@@ -62,6 +109,11 @@ public unsafe class EditorApplication : Application {
             if (Project.HasProject)
             {
                 //var setting = Project.ProjectSettings.GetSetting<ApplicationSettings>();
+
+                if (IsHotkeyDown("SaveSceneAs", new Hotkey() { Key = KeyboardKey.KEY_S, Ctrl = true, Shift = true }))
+                    MainMenuItems.SaveSceneAs();
+                else if (IsHotkeyDown("SaveScene", new Hotkey() { Key = KeyboardKey.KEY_S, Ctrl = true }))
+                    MainMenuItems.SaveScene();
 
                 SceneManager.Update();
 

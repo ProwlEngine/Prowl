@@ -7,7 +7,9 @@ using Prowl.Runtime.Resources;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Utils;
+using Raylib_cs;
 using System.Numerics;
+using static Prowl.Editor.EditorConfiguration;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -168,6 +170,9 @@ public class HierarchyWindow : EditorWindow {
                 m_RenamingEntity = entity;
         }
 
+        if (EditorApplication.IsHotkeyDown("Duplicate", new Hotkey() { Key = KeyboardKey.KEY_S, Ctrl = true }))
+            DuplicateSelected();
+
         DrawGameObjectContextMenu(entity);
 
         // Drag Drop
@@ -181,7 +186,10 @@ public class HierarchyWindow : EditorWindow {
             if (ImGui.IsItemDeactivated())
             {
                 m_RenamingEntity = null;
-                entity.Name = name;
+                Selection.Foreach<GameObject>((go) =>
+                {
+                    go.Name = name;
+                });
             }
         }
 
@@ -268,19 +276,10 @@ public class HierarchyWindow : EditorWindow {
             if (!Selection.IsSelected(entity))
                 Selection.Select(entity, true);
 
-            if (ImGui.MenuItem("Rename", "F2"))
+            if (ImGui.MenuItem("Rename"))
                 m_RenamingEntity = entity;
-            if (ImGui.MenuItem("Duplicate", "Ctrl+D"))
-            {
-                Selection.Foreach<GameObject>((go) =>
-                {
-                    // Duplicating, Easiest way to duplicate is to Serialize then Deserialize
-                    var serialized = TagSerializer.Serialize(go);
-                    var deserialized = TagSerializer.Deserialize<GameObject>(serialized);
-                    deserialized.SetParent(go.Parent);
-                    Selection.AddSelect(deserialized);
-                });
-            }
+            if (ImGui.MenuItem("Duplicate"))
+                DuplicateSelected();
             if (Selection.Count > 0 && ImGui.MenuItem("Align With View"))
             {
                 Selection.Foreach<GameObject>((go) =>
@@ -305,5 +304,17 @@ public class HierarchyWindow : EditorWindow {
 
             ImGui.EndPopup();
         }
+    }
+
+    public void DuplicateSelected()
+    {
+        Selection.Foreach<GameObject>((go) =>
+        {
+            // Duplicating, Easiest way to duplicate is to Serialize then Deserialize
+            var serialized = TagSerializer.Serialize(go);
+            var deserialized = TagSerializer.Deserialize<GameObject>(serialized);
+            deserialized.SetParent(go.Parent);
+            Selection.AddSelect(deserialized);
+        });
     }
 }

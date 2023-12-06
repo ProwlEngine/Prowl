@@ -1,7 +1,4 @@
-﻿using Prowl.Runtime.Assets;
-using Prowl.Runtime.Serializer;
-using Prowl.Runtime.Serializer;
-using Prowl.Runtime.Utils;
+﻿using Prowl.Runtime.Serializer;
 
 namespace Prowl.Editor
 {
@@ -17,10 +14,7 @@ namespace Prowl.Editor
 
         internal IEnumerable<Type> GetRegisteredSettingTypes() => settings.Keys;
 
-        public T GetSetting<T>() where T : IProjectSetting, new()
-        {
-            return (T)GetSetting(typeof(T));
-        }
+        public T GetSetting<T>() where T : IProjectSetting, new() => (T)GetSetting(typeof(T));
 
         public IProjectSetting GetSetting(Type settingType)
         {
