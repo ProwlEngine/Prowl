@@ -4,6 +4,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Components;
 using Prowl.Runtime.Components.ImageEffects;
+using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.Resources;
 using Prowl.Runtime.SceneManagement;
 using System.Runtime.CompilerServices;
@@ -77,6 +78,9 @@ public class ViewportWindow : EditorWindow
         Cam.RenderResolution = Settings.RenderResolution;
 
         ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].id, ImGui.GetContentRegionAvail(), new Vector2(0, 1), new Vector2(1, 0));
+        // Scene from Assets
+        if (DragnDrop.ReceiveAsset<Scene>(out var scene))
+            SceneManager.LoadScene(scene);
         ImGuizmo.SetDrawlist();
         ImGuizmo.Enable(true);
         ImGuizmo.SetOrthographic(false);

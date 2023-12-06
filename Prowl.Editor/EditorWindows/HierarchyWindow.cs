@@ -3,6 +3,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Components;
 using Prowl.Runtime.ImGUI.Widgets;
+using Prowl.Runtime.Resources;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Utils;
@@ -219,6 +220,9 @@ public class HierarchyWindow : EditorWindow {
             clone.Recalculate();
             Selection.Select(clone);
         }
+        // Scene from Assets
+        if (DragnDrop.ReceiveAsset<Scene>(out var scene))
+            SceneManager.LoadScene(scene);
         // Offer GameObject up from Hierarchy for Drag And Drop
         DragnDrop.OfferReference(entity);
     }
