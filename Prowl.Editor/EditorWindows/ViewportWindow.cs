@@ -78,9 +78,7 @@ public class ViewportWindow : EditorWindow
         Cam.RenderResolution = Settings.RenderResolution;
 
         ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].id, ImGui.GetContentRegionAvail(), new Vector2(0, 1), new Vector2(1, 0));
-        // Scene from Assets
-        if (DragnDrop.ReceiveAsset<Scene>(out var scene))
-            SceneManager.LoadScene(scene);
+        HandleDragnDrop();
         ImGuizmo.SetDrawlist();
         ImGuizmo.Enable(true);
         ImGuizmo.SetOrthographic(false);
@@ -170,6 +168,22 @@ public class ViewportWindow : EditorWindow
             Matrix4x4.Invert(view.ToDouble(), out var iview);
             //Cam.GameObject.Local = iview;
         }
+    }
+
+    private void HandleDragnDrop()
+    {
+        // GameObject from Assets - Prefab
+        if (DragnDrop.ReceiveAsset<GameObject>(out var original))
+        {
+            GameObject clone = (GameObject)EngineObject.Instantiate(original.Res!, true);
+            clone.Position = Cam.GameObject.GlobalPosition + Cam.GameObject.Forward * 10;
+            clone.Orientation = original.Res!.Orientation;
+            clone.Recalculate();
+            Selection.Select(clone);
+        }
+        // Scene from Assets
+        if (DragnDrop.ReceiveAsset<Scene>(out var scene))
+            SceneManager.LoadScene(scene);
     }
 
     protected override void Update()
