@@ -247,19 +247,19 @@ namespace Prowl.Runtime.Assets
             StopEditingAsset();
         }
 
-        public static void ExportBuildPackage(Guid[] assetsToExport, FileInfo destination, bool includeDependencies = false)
+        public static void ExportBuildPackages(Guid[] assetsToExport, DirectoryInfo destination)
         {
-#warning TODO: Handle Dependencies
-            if (includeDependencies) throw new NotImplementedException("Dependency tracking is not implemented yet.");
-
             if (destination.Exists)
             {
-                Debug.LogError("Cannot export package, File already exists.");
+                Debug.LogError("Cannot export package, Folder does not exist.");
                 return;
             }
 
+            int packageIndex = 0;
+            FileInfo firstPackage = new FileInfo(Path.Combine(destination.FullName, $"Data{packageIndex++}.prowl"));
+
             // Create the package
-            var package = AssetBuildPackage.CreateNew(destination);
+            var package = AssetBuildPackage.CreateNew(firstPackage);
             foreach (var assetGuid in assetsToExport)
             {
                 var asset = LoadAsset(assetGuid);
@@ -268,6 +268,14 @@ namespace Prowl.Runtime.Assets
                     Debug.LogError($"Failed to load asset {assetGuid}!");
                     continue;
                 }
+
+#warning TODO: We need to do (package.SizeInGB + SizeOfAsset > 4f) instead of just SizeInGB but for now this works
+                if (package.SizeInGB > 3f)
+                {
+                    FileInfo next = new FileInfo(Path.Combine(destination.FullName, $"Data{packageIndex++}.prowl"));
+                    package = AssetBuildPackage.CreateNew(next);
+                }
+
                 string relativeAssetPath = GUIDToAssetPath(assetGuid);
                 package.AddAsset(relativeAssetPath, assetGuid, asset);
             }

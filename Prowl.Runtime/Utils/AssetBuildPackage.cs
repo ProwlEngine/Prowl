@@ -6,12 +6,9 @@ using System.Linq;
 
 namespace Prowl.Runtime.Utils
 {
-    // TODO: Support Packages that exceed 4gb in size, by using multiple zip files
-    // Some platforms, USB's and drives may use FAT32 which has a 4gb file size limit
-    // So we need a way to split packages into multiple files
-
     public sealed class AssetBuildPackage : IDisposable
     {
+        private readonly Stream _stream;
         private readonly ZipArchive _zipArchive;
 
         readonly Dictionary<Guid, string> _guidToPath = new();
@@ -19,8 +16,22 @@ namespace Prowl.Runtime.Utils
         readonly Dictionary<string, Guid> _pathToGuid = new(StringComparer.OrdinalIgnoreCase);
         readonly Dictionary<string, ZipArchiveEntry> _pathToEntry = new(StringComparer.OrdinalIgnoreCase);
 
+        // Not sure if _stream.Length is reliably the size of the entire archive
+        //public float SizeInGB => _stream.Length / 1024f / 1024f / 1024f;
+        public float SizeInGB
+        {
+            get
+            {
+                long totalSize = 0;
+                foreach (var entry in _zipArchive.Entries)
+                    totalSize += entry.Length;
+                return totalSize / (1024f * 1024f * 1024f);
+            }
+        }
+
         public AssetBuildPackage(Stream stream, ZipArchiveMode mode)
         {
+            _stream = stream;
             _zipArchive = new ZipArchive(stream, mode);
 
             // Load all asset paths and guids into memory for faster access
@@ -231,6 +242,7 @@ namespace Prowl.Runtime.Utils
         #endregion
 
         #region Mapping
+        public bool HasAsset(Guid assetID) => _guidToPath.ContainsKey(assetID);
 
         public bool TryGetGuid(string assetPath, out Guid guid) => _pathToGuid.TryGetValue(NormalizePath(assetPath), out guid);
 
@@ -286,5 +298,6 @@ namespace Prowl.Runtime.Utils
         }
 
         void IDisposable.Dispose() => _zipArchive.Dispose();
+
     }
 }
