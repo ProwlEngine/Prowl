@@ -1,7 +1,7 @@
 using System.Reflection;
 using Prowl.Runtime;
 using JetBrains.Annotations;
-
+using HexaEngine.ImGuiNET;
 namespace Prowl.Editor.PropertyDrawers;
 
 [UsedImplicitly(ImplicitUseTargetFlags.WithInheritors)]
@@ -9,73 +9,46 @@ public abstract class PropertyDrawer {
     
     private static readonly Dictionary<Type, PropertyDrawer> _propertyDrawerLookup = new();
     protected internal abstract Type PropertyType { get; }
-    protected internal abstract bool DrawPropertyInternal(object container, FieldInfo fieldInfo);
-    protected internal abstract bool DrawPropertyInternal(object container, PropertyInfo propertyInfo);
-    
-    internal static bool Draw(object container, FieldInfo fieldInfo)
+    protected internal abstract bool Draw_Internal(string label, ref object value);
+
+
+    public static bool Draw(object container, FieldInfo fieldInfo)
     {
-        if (fieldInfo.FieldType.IsAssignableTo(typeof(EngineObject)))
-        {
-            // Special case, EngineObject is PropertyDrawerAsset type
-            if (_propertyDrawerLookup.TryGetValue(typeof(EngineObject), out PropertyDrawer? assetDrawer))
-            {
-                bool changed = assetDrawer.DrawPropertyInternal(container, fieldInfo);
-                if(changed) (container as EngineObject)?.OnValidate();
-                return changed;
-            }
-            // er, we dont have EngineObject drawer
-            // thats fine i guess fallback to whatever other drawer we have
-        }
-
-        if (_propertyDrawerLookup.TryGetValue(fieldInfo.FieldType, out PropertyDrawer? propertyDrawer)) {
-            return propertyDrawer.DrawPropertyInternal(container, fieldInfo);
-        } 
-        else {
-            // Couldnt find a direct type, maybe theres a base type that has a drawer?
-            foreach (KeyValuePair<Type, PropertyDrawer> pair in _propertyDrawerLookup)
-            {
-                if (pair.Key.IsAssignableFrom(fieldInfo.FieldType))
-                {
-                    return pair.Value.DrawPropertyInternal(container, fieldInfo);
-                }
-            }
-            //Debug.LogWarning($"Property can't be drawn because there is no property drawer defined for {fieldInfo.FieldType}");
-        }
-        return false;
+        var value = fieldInfo.GetValue(container);
+        bool changed = Draw(fieldInfo.Name, ref value);
+        if (changed) fieldInfo.SetValue(container, value);
+        return changed;
     }
-    
-    internal static bool Draw(object container, PropertyInfo propertyInfo) {
 
-        if(propertyInfo.PropertyType.IsAssignableTo(typeof(EngineObject)))
+    public static bool Draw(object container, PropertyInfo fieldInfo)
+    {
+        var value = fieldInfo.GetValue(container);
+        bool changed = Draw(fieldInfo.Name, ref value);
+        if (changed) fieldInfo.SetValue(container, value);
+        return changed;
+    }
+
+
+    public static bool Draw(string label, ref object value)
+    {
+        var objType = value.GetType();
+        bool changed = false;
+        ImGui.PushID(label);
+        if (_propertyDrawerLookup.TryGetValue(objType, out PropertyDrawer? propertyDrawer))
         {
-            // Special case, EngineObject is PropertyDrawerAsset type
-            if (_propertyDrawerLookup.TryGetValue(typeof(EngineObject), out PropertyDrawer? assetDrawer))
-            {
-                bool changed = assetDrawer.DrawPropertyInternal(container, propertyInfo);
-                if (changed) (container as EngineObject)?.OnValidate();
-                return changed;
-            }
-            // er, we dont have EngineObject drawer
-            // thats fine i guess fallback to whatever other drawer we have
+            changed = propertyDrawer.Draw_Internal(label, ref value);
         }
-
-        if(_propertyDrawerLookup.TryGetValue(propertyInfo.PropertyType, out PropertyDrawer? propertyDrawer)) {
-            return propertyDrawer.DrawPropertyInternal(container, propertyInfo);
-        } 
-        else {
-
-            // Couldnt find a direct type, maybe theres a base type that has a drawer?
+        else
+        {
             foreach (KeyValuePair<Type, PropertyDrawer> pair in _propertyDrawerLookup)
-            {
-                if (pair.Key.IsAssignableFrom(propertyInfo.PropertyType))
+                if (pair.Key.IsAssignableFrom(objType))
                 {
-                    return pair.Value.DrawPropertyInternal(container, propertyInfo);
+                    changed = pair.Value.Draw_Internal(label, ref value);
+                    break;
                 }
-            }
-
-            //Debug.LogWarning($"Property can't be drawn because there is no property drawer defined for {propertyInfo.PropertyType}");
         }
-        return false;
+        ImGui.PopID();
+        return changed;
     }
     
     public static void ClearLookUp() {
@@ -156,33 +129,24 @@ public abstract class PropertyDrawer {
 
 }
 
-public abstract class PropertyDrawer<TProperty> : PropertyDrawer {
+public abstract class PropertyDrawer<T> : PropertyDrawer {
     
-    protected internal sealed override Type PropertyType => typeof(TProperty);
+    protected internal sealed override Type PropertyType => typeof(T);
     
-    protected internal sealed override bool DrawPropertyInternal(object container, FieldInfo fieldInfo) {
-        var value = (TProperty?)fieldInfo.GetValue(container);
+    protected internal sealed override bool Draw_Internal(string label, ref object value) {
+        T typedValue = (T)value;
         var old = value;
-        DrawProperty(ref value, new Property(fieldInfo));
-        fieldInfo.SetValue(container, value);
+        bool changed = Draw(label, ref typedValue);
+        if (changed) // If the value has been modified, update the original value
+            value = typedValue;
+
         if (old == null && value == null) return false;
         else if (old == null && value != null) return true;
         else if (old.Equals(value) == false) return true; // Returns true if has been modified
-        return false;
+        
+        return changed;
     }
     
-    protected internal sealed override bool DrawPropertyInternal(object container, PropertyInfo propertyInfo) {
-        var value = (TProperty?)propertyInfo.GetValue(container);
-        var old = value;
-        DrawProperty(ref value, new Property(propertyInfo));
-        if(propertyInfo.CanWrite)
-            propertyInfo.SetValue(container, value);
-        if (old == null && value == null) return false;
-        else if (old == null && value != null) return true;
-        else if (old.Equals(value) == false) return true; // Returns true if has been modified
-        return false;
-    }
-    
-    protected abstract void DrawProperty(ref TProperty? value, Property property);
+    protected abstract bool Draw(string label, ref T? value);
     
 }

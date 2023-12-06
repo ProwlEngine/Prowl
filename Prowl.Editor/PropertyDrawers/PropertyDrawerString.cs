@@ -1,24 +1,24 @@
 using HexaEngine.ImGuiNET;
 
-namespace Prowl.Editor.PropertyDrawers; 
+namespace Prowl.Editor.PropertyDrawers;
 
 public class PropertyDrawerString : PropertyDrawer<string?> {
-    
-    protected override void DrawProperty(ref string? value, Property property) {
-        
+
+    protected override bool Draw(string label, ref string value)
+    {
+        bool changed = false;
         value ??= string.Empty;
         
         ImGui.Columns(2);
-        ImGui.Text(property.Name);
+        ImGui.Text(label);
         ImGui.SetColumnWidth(0, 70);
         ImGui.NextColumn();
 
         ImGui.PushItemWidth(ImGui.GetContentRegionAvail().X);
-        ImGui.PushID(property.Name);
-        ImGui.InputText("", ref value, 30);
-        ImGui.PopID();
+        changed = ImGui.InputText("", ref value, 30);
         ImGui.PopItemWidth();
         ImGui.Columns(1);
+        return changed;
     }
     
 }

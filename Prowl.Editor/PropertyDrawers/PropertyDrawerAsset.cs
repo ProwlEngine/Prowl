@@ -1,8 +1,7 @@
-﻿using Prowl.Runtime;
-using Prowl.Runtime.Assets;
+﻿using HexaEngine.ImGuiNET;
 using Prowl.Icons;
-using HexaEngine.ImGuiNET;
-using System.Numerics;
+using Prowl.Runtime;
+using Prowl.Runtime.Assets;
 using Prowl.Runtime.ImGUI.Widgets;
 
 namespace Prowl.Editor.PropertyDrawers;
@@ -11,27 +10,19 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
 {
     public virtual string Name { get; } = FontAwesome6.Circle;
 
-    protected override void DrawProperty(ref IAssetRef value, Property property)
+    protected override bool Draw(string label, ref IAssetRef value)
     {
-        Draw(ref value, property);
-    }
-
-    protected virtual void Draw(ref IAssetRef value, Property property)
-    {
+        bool changed = false;
         ImDrawListPtr drawList = ImGui.GetWindowDrawList();
 
         ImGui.Columns(2);
-        ImGui.Text(property.Name);
+        ImGui.Text(label);
         ImGui.SetColumnWidth(0, 70);
         ImGui.NextColumn();
 
         ImGui.PushItemWidth(ImGui.GetContentRegionAvail().X);
-        ImGui.PushID(property.Name);
-
-        var pos = ImGui.GetCursorPos();
 
         string path;
-
         if (value.IsExplicitNull)
         {
             path = "(Null)";
@@ -58,8 +49,10 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         }
 
         // DragDrop code
-        if(DragnDrop.ReceiveAsset(out Guid assetGuid, value.TypeName))
+        if (DragnDrop.ReceiveAsset(out Guid assetGuid, value.TypeName)) {
             value.AssetID = assetGuid;
+            changed = true;
+        }
 
         // Add a button for clearing the Asset
         if (ImGui.IsKeyPressed(ImGuiKey.Delete) && ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows))
@@ -67,12 +60,13 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
             if (Selection.IsSelected(this))
             {
                 value = null;
+                changed = true;
                 Selection.Clear();
             }
         }
 
-        ImGui.PopID();
         ImGui.PopItemWidth();
         ImGui.Columns(1);
+        return changed;
     }
 }
