@@ -143,6 +143,22 @@ namespace Prowl.Runtime.Assets
                 }
             }
 
+            static void OnDeleted(object sender, FileSystemEventArgs e)
+            {
+                string ext = Path.GetExtension(e.FullPath);
+                if (ext.Equals(".cs", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (Settings.m_AutoRecompile)
+                        EditorApplication.Instance.RegisterReloadOfExternalAssemblies();
+                }
+                var parent = Directory.GetParent(e.FullPath);
+                if (parent.Exists)
+                    Refresh(parent);
+                else
+                    RefreshAll();
+            }
+
+            watcher.Deleted += OnDeleted;
             watcher.Changed += OnChangedOrRenamed;
             watcher.Renamed += OnChangedOrRenamed;
 
