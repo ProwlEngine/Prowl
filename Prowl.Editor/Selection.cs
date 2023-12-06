@@ -1,3 +1,4 @@
+using ImageMagick;
 using Prowl.Runtime;
 
 namespace Prowl.Editor;
@@ -40,37 +41,52 @@ public static class Selection
         }
         else if(CanBeAdditive && additive)
         {
-            // Is same object already selected then de-select it
-            if (_currentRef.Any(x => x.Target == obj))
-            {
-                _currentRef.RemoveAll(x => x.Target == obj);
-                if(Count == 0) CurrentType = null;
-                OnDeselectObject?.Invoke(obj);
-                return;
-            }
-
-            // No object selected then just select it
-            if(CurrentType == null)
-            {
-                _currentRef.Add(new WeakReference(obj));
-                CurrentType = typeof(T);
-                OnSelectObject?.Invoke(obj);
-            }
-            else if (typeof(T).IsAssignableTo(CurrentType))
-            {
-                // Same type, add to selection
-                _currentRef.Add(new WeakReference(obj));
-                OnSelectObject?.Invoke(obj);
-            }
-            else
-            {
-                // New type, it overwrite all previous selected
-                Clear();
-                _currentRef.Add(new WeakReference(obj));
-                CurrentType = typeof(T);
-            }
+            AddSelect(obj);
         }
 
+    }
+
+    public static void AddSelect<T>(T? obj) where T : class
+    {
+        if (obj is null) return;
+
+        // Is same object already selected then de-select it
+        if (_currentRef.Any(x => x.Target == obj))
+        {
+            _currentRef.RemoveAll(x => x.Target == obj);
+            if (Count == 0) CurrentType = null;
+            OnDeselectObject?.Invoke(obj);
+            return;
+        }
+
+        // No object selected then just select it
+        if (CurrentType == null)
+        {
+            _currentRef.Add(new WeakReference(obj));
+            CurrentType = typeof(T);
+            OnSelectObject?.Invoke(obj);
+        }
+        else if (typeof(T).IsAssignableTo(CurrentType))
+        {
+            // Same type, add to selection
+            _currentRef.Add(new WeakReference(obj));
+            OnSelectObject?.Invoke(obj);
+        }
+        else
+        {
+            // New type, it overwrite all previous selected
+            Clear();
+            _currentRef.Add(new WeakReference(obj));
+            CurrentType = typeof(T);
+        }
+    }
+
+    public static void Foreach<T>(Action<T> action) where T : class
+    {
+        var copy = _currentRef.ToList();
+        foreach (var item in copy)
+            if (item.IsAlive && item.Target.GetType().IsAssignableTo(typeof(T)))
+                action((T)item.Target!);
     }
 
     public static bool IsSelected(object obj) => _currentRef.Any(x => ReferenceEquals(x.Target, obj));
