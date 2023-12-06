@@ -4,6 +4,7 @@ using Prowl.Editor.Assets;
 using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Utils;
 using System.Diagnostics;
+using System.IO.Compression;
 
 namespace Prowl.Runtime.Assets
 {
@@ -248,6 +249,7 @@ namespace Prowl.Runtime.Assets
 
         public static void ExportBuildPackage(Guid[] assetsToExport, FileInfo destination, bool includeDependencies = false)
         {
+#warning TODO: Handle Dependencies
             if (includeDependencies) throw new NotImplementedException("Dependency tracking is not implemented yet.");
 
             if (destination.Exists)
@@ -269,6 +271,56 @@ namespace Prowl.Runtime.Assets
                 string relativeAssetPath = GUIDToAssetPath(assetGuid);
                 package.AddAsset(relativeAssetPath, assetGuid, asset);
             }
+        }
+
+        public static void ExportPackage(DirectoryInfo directory, bool includeDependencies = false)
+        {
+#warning TODO: Handle Dependencies
+            if (includeDependencies) throw new NotImplementedException("Dependency tracking is not implemented yet.");
+
+            ImFileDialogInfo imFileDialogInfo = new ImFileDialogInfo()
+            {
+                title = "Export Package",
+                directoryPath = new DirectoryInfo(Project.ProjectDirectory),
+                fileName = "New Package.prowlpackage",
+                type = ImGuiFileDialogType.SaveFile,
+                OnComplete = (path) =>
+                {
+                    var file = new FileInfo(path);
+                    if (file.Exists)
+                    {
+                        Debug.LogError("Cannot export package, File already exists.");
+                        return;
+                    }
+
+                    // If no extension (or wrong extension) add .scene
+                    if (!file.Extension.Equals(".prowlpackage", StringComparison.OrdinalIgnoreCase))
+                        file = new FileInfo(file.FullName + ".prowlpackage");
+
+                    // Create the package
+                    // Shh, but packages are just zip files ;)
+                    using Stream dest = file.OpenWrite();
+                    ZipFile.CreateFromDirectory(directory.FullName, dest);
+                }
+            };
+        }
+
+        public static void ImportPackage(FileInfo packageFile)
+        {
+            if (!packageFile.Exists)
+            {
+                Debug.LogError("Cannot import package, File does not exist.");
+                return;
+            }
+
+            // Extract the package
+            using Stream source = packageFile.OpenRead();
+            ZipFile.ExtractToDirectory(packageFile.FullName, Project.ProjectPackagesDirectory);
+
+#warning TODO: Handle if we already have the asset in our asset database (just dont import it)
+
+            // Import all assets
+            RefreshAll();
         }
 
         /// <summary>
