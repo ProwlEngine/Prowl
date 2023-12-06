@@ -249,7 +249,7 @@ namespace Prowl.Runtime.Assets
 
         public static void ExportAllBuildPackages(DirectoryInfo directoryInfo)
         {
-            if (directoryInfo.Exists)
+            if (!directoryInfo.Exists)
             {
                 Debug.LogError("Cannot export package, Folder does not exist.");
                 return;
@@ -262,7 +262,7 @@ namespace Prowl.Runtime.Assets
 
         public static void ExportBuildPackages(Guid[] assetsToExport, DirectoryInfo destination)
         {
-            if (destination.Exists)
+            if (!destination.Exists)
             {
                 Debug.LogError("Cannot export package, Folder does not exist.");
                 return;
@@ -285,6 +285,7 @@ namespace Prowl.Runtime.Assets
 #warning TODO: We need to do (package.SizeInGB + SizeOfAsset > 4f) instead of just SizeInGB but for now this works
                 if (package.SizeInGB > 3f)
                 {
+                    package.Dispose();
                     FileInfo next = new FileInfo(Path.Combine(destination.FullName, $"Data{packageIndex++}.prowl"));
                     package = AssetBuildPackage.CreateNew(next);
                 }
@@ -292,6 +293,7 @@ namespace Prowl.Runtime.Assets
                 string relativeAssetPath = GUIDToAssetPath(assetGuid);
                 package.AddAsset(relativeAssetPath, assetGuid, asset);
             }
+            package.Dispose();
         }
 
         public static void ExportPackage(DirectoryInfo directory, bool includeDependencies = false)

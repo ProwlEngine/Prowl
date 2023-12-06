@@ -48,6 +48,7 @@
       <None Remove="EmbeddedResources\ModelIcon.png" />
       <None Remove="EmbeddedResources\NewScript.txt" />
       <None Remove="EmbeddedResources\ShaderIcon.png" />
+      <None Remove="EmbeddedResources\Standalone.zip" />
       <None Remove="font.ttf" />
     </ItemGroup>
 
@@ -107,6 +108,7 @@
       <EmbeddedResource Include="EmbeddedResources\ModelIcon.png" />
       <EmbeddedResource Include="EmbeddedResources\NewScript.txt" />
       <EmbeddedResource Include="EmbeddedResources\ShaderIcon.png" />
+      <EmbeddedResource Include="EmbeddedResources\Standalone.zip" />
     </ItemGroup>
 
     <ItemGroup>

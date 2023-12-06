@@ -16,35 +16,25 @@ namespace Prowl.Runtime.Utils
         readonly Dictionary<string, Guid> _pathToGuid = new(StringComparer.OrdinalIgnoreCase);
         readonly Dictionary<string, ZipArchiveEntry> _pathToEntry = new(StringComparer.OrdinalIgnoreCase);
 
-        // Not sure if _stream.Length is reliably the size of the entire archive
-        //public float SizeInGB => _stream.Length / 1024f / 1024f / 1024f;
-        public float SizeInGB
-        {
-            get
-            {
-                long totalSize = 0;
-                foreach (var entry in _zipArchive.Entries)
-                    totalSize += entry.Length;
-                return totalSize / (1024f * 1024f * 1024f);
-            }
-        }
-
         public AssetBuildPackage(Stream stream, ZipArchiveMode mode)
         {
             _stream = stream;
             _zipArchive = new ZipArchive(stream, mode);
 
-            // Load all asset paths and guids into memory for faster access
-            foreach (var entry in _zipArchive.Entries)
+            if (mode == ZipArchiveMode.Read)
             {
-                using var entryStream = entry.Open();
-                using var reader = new StreamReader(entryStream);
-                if (Guid.TryParse(reader.ReadLine(), out Guid guid))
+                // Load all asset paths and guids into memory for faster access
+                foreach (var entry in _zipArchive.Entries)
                 {
-                    _guidToPath[guid] = entry.FullName;
-                    _guidToEntry[guid] = entry;
-                    _pathToGuid[entry.FullName] = guid;
-                    _pathToEntry[entry.FullName] = entry;
+                    using var entryStream = entry.Open();
+                    using var reader = new StreamReader(entryStream);
+                    if (Guid.TryParse(reader.ReadLine(), out Guid guid))
+                    {
+                        _guidToPath[guid] = entry.FullName;
+                        _guidToEntry[guid] = entry;
+                        _pathToGuid[entry.FullName] = guid;
+                        _pathToEntry[entry.FullName] = entry;
+                    }
                 }
             }
         }
@@ -54,11 +44,12 @@ namespace Prowl.Runtime.Utils
             if (path.Exists)
                 throw new ArgumentException("File already exists.", nameof(path));
 
-            return new AssetBuildPackage(path.OpenWrite(), ZipArchiveMode.Create);
+            return new AssetBuildPackage(path.Open(FileMode.Create, FileAccess.ReadWrite), ZipArchiveMode.Update);
         }
 
         #region Assets
-
+        public long byteCount;
+        public float SizeInGB => byteCount / 1024f / 1024f / 1024f;
         public bool AddAsset(string assetPath, Guid guid, SerializedAsset asset)
         {
             assetPath = NormalizePath(assetPath);
@@ -70,12 +61,16 @@ namespace Prowl.Runtime.Utils
             }
 
             var entry = _zipArchive.CreateEntry(assetPath);
-            using (var entryStream = entry.Open())
-            using (var writer = new StreamWriter(entryStream))
-            {
-                writer.WriteLine(guid.ToString());
-                asset.SaveToStream(entryStream);
-            }
+            //using (var entryStream = entry.Open())
+            // I guess we dont dispose these streams? Throws an error if we do
+            var entryStream = entry.Open();
+            var writer = new StreamWriter(entryStream);
+
+            writer.WriteLine(guid.ToString());
+            asset.SaveToStream(entryStream);
+
+            //byteCount += entryStream.Length;
+            
 
             // Update mappings
             _guidToPath[guid] = assetPath;
@@ -297,7 +292,7 @@ namespace Prowl.Runtime.Utils
             return path;
         }
 
-        void IDisposable.Dispose() => _zipArchive.Dispose();
+        public void Dispose() => _zipArchive.Dispose();
 
     }
 }

@@ -102,6 +102,8 @@ public class EditorMainMenubar {
             ImGui.Separator();
             MenuItem.DrawMenuRoot("Scene");
             ImGui.Separator();
+            if (ImGui.MenuItem("Build")) Project.BuildProject();
+            ImGui.Separator();
             if (ImGui.MenuItem("Preferences")) { }
             if (ImGui.MenuItem("Project Settings")) { new ProjectSettingsWindow(); }
             ImGui.Separator();

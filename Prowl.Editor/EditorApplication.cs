@@ -109,11 +109,14 @@ public unsafe class EditorApplication : Application {
             if (Project.HasProject)
             {
                 //var setting = Project.ProjectSettings.GetSetting<ApplicationSettings>();
+                Project.ProjectSettings.GetSetting<BuildSettings>(); // Called to ensure the Editor Ui exists
 
                 if (IsHotkeyDown("SaveSceneAs", new Hotkey() { Key = KeyboardKey.KEY_S, Ctrl = true, Shift = true }))
                     MainMenuItems.SaveSceneAs();
                 else if (IsHotkeyDown("SaveScene", new Hotkey() { Key = KeyboardKey.KEY_S, Ctrl = true }))
                     MainMenuItems.SaveScene();
+                else if (IsHotkeyDown("BuildProject", new Hotkey() { Key = KeyboardKey.KEY_B, Ctrl = true }))
+                    Project.BuildProject();
 
                 SceneManager.Update();
 

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Reflection;
 using Prowl.Editor.EditorWindows;
 using Prowl.Runtime.Serializer;
+using System.IO.Compression;
 
 namespace Prowl.Editor;
 
@@ -249,11 +250,27 @@ public static class Project {
         Runtime.Debug.Log($"Creating Directories...");
         Runtime.Debug.Log("**********************************************************************************************************************", false);
 
-        string BuildPath = @$"{ProjectDirectory}\Builds\{DateTime.Now.ToString()}\";
-        string BuildDataPath = @$"{ProjectDirectory}\Builds\{DateTime.Now.ToString()}\GameData\";
-        // Create Directory
+        string BuildPath = Path.Combine(ProjectDirectory, "Builds", "Latest");
+        string BuildDataPath = Path.Combine(ProjectDirectory, "Builds", "Latest", "GameData");
+        // Check if "Latest" folder already exists
+        if (Directory.Exists(BuildPath))
+        {
+            // Increment the folder name
+            int count = 1;
+            string newBuildPath;
+            do
+            {
+                newBuildPath = Path.Combine(ProjectDirectory, "Builds", $"Latest_{count}");
+                count++;
+            } while (Directory.Exists(newBuildPath));
+
+            // Move the existing "Latest" folder to the new one
+            Directory.Move(BuildPath, newBuildPath);
+        }
+
         Directory.CreateDirectory(BuildPath);
         Directory.CreateDirectory(BuildDataPath);
+
 
         Runtime.Debug.Log("**********************************************************************************************************************", false);
         Runtime.Debug.Log($"Compiling project assembly to {BuildPath}...");
@@ -264,24 +281,32 @@ public static class Project {
             return false;
         }
 
+
         Runtime.Debug.Log("**********************************************************************************************************************", false);
         Runtime.Debug.Log($"Exporting and Packing assets to {BuildDataPath}...");
         Runtime.Debug.Log("**********************************************************************************************************************", false);
 #warning TODO: Needs Asset Dependencies to track what assets are used in built scenes rather then doing all assets
         AssetDatabase.ExportAllBuildPackages(new DirectoryInfo(BuildDataPath));
 
-        Runtime.Debug.Log("**********************************************************************************************************************", false);
-        Runtime.Debug.Log($"Copying standalone player to {BuildPath}...");
-        Runtime.Debug.Log("**********************************************************************************************************************", false);
-#warning TODO: How should we handle the standalone player? Embedded Resource? Copy from somewhere?
 
         Runtime.Debug.Log("**********************************************************************************************************************", false);
         Runtime.Debug.Log($"Preparing default scene to {BuildDataPath}...");
         Runtime.Debug.Log("**********************************************************************************************************************", false);
 
-        FileInfo StartingScene = new FileInfo(@$"{ProjectDirectory}\Builds\{DateTime.Now.ToString()}\GameData\level.prowl");
+        FileInfo StartingScene = new FileInfo(Path.Combine(BuildDataPath, "level.prowl"));
         Tag tag = TagSerializer.Serialize(BuildSettings.StartingScene.Res!);
         BinaryTagConverter.WriteToFile((CompoundTag)tag, StartingScene);
+
+
+        Runtime.Debug.Log("**********************************************************************************************************************", false);
+        Runtime.Debug.Log($"Copying standalone player to {BuildPath}...");
+        Runtime.Debug.Log("**********************************************************************************************************************", false);
+        // Get the Standalone.zip file from embedded resources
+        using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.Standalone.zip");
+        using ZipArchive archive = new(stream, ZipArchiveMode.Read);
+        // Extract the Standalone.zip file to the BuildPath
+        archive.ExtractToDirectory(BuildPath);
+        
 
         Runtime.Debug.Log("**********************************************************************************************************************", false);
 
