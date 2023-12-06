@@ -2,7 +2,6 @@
 using Prowl.Editor;
 using Prowl.Editor.Assets;
 using Prowl.Runtime.Serializer;
-using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Utils;
 using System.Diagnostics;
 
@@ -245,6 +244,31 @@ namespace Prowl.Runtime.Assets
             string newRelativeAssetPath = Path.GetDirectoryName(relativeAssetPath) + "/" + newName + Path.GetExtension(relativeAssetPath);
             MoveAsset(oldRelativeAssetPath, newRelativeAssetPath);
             StopEditingAsset();
+        }
+
+        public static void ExportBuildPackage(Guid[] assetsToExport, FileInfo destination, bool includeDependencies = false)
+        {
+            if (includeDependencies) throw new NotImplementedException("Dependency tracking is not implemented yet.");
+
+            if (destination.Exists)
+            {
+                Debug.LogError("Cannot export package, File already exists.");
+                return;
+            }
+
+            // Create the package
+            var package = AssetBuildPackage.CreateNew(destination);
+            foreach (var assetGuid in assetsToExport)
+            {
+                var asset = LoadAsset(assetGuid);
+                if (asset == null)
+                {
+                    Debug.LogError($"Failed to load asset {assetGuid}!");
+                    continue;
+                }
+                string relativeAssetPath = GUIDToAssetPath(assetGuid);
+                package.AddAsset(relativeAssetPath, assetGuid, asset);
+            }
         }
 
         /// <summary>

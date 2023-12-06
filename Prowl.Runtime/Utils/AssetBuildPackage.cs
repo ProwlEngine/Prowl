@@ -10,7 +10,7 @@ namespace Prowl.Runtime.Utils
     // Some platforms, USB's and drives may use FAT32 which has a 4gb file size limit
     // So we need a way to split packages into multiple files
 
-    public sealed class AssetPackage : IDisposable
+    public sealed class AssetBuildPackage : IDisposable
     {
         private readonly ZipArchive _zipArchive;
 
@@ -19,7 +19,7 @@ namespace Prowl.Runtime.Utils
         readonly Dictionary<string, Guid> _pathToGuid = new(StringComparer.OrdinalIgnoreCase);
         readonly Dictionary<string, ZipArchiveEntry> _pathToEntry = new(StringComparer.OrdinalIgnoreCase);
 
-        public AssetPackage(Stream stream, ZipArchiveMode mode)
+        public AssetBuildPackage(Stream stream, ZipArchiveMode mode)
         {
             _zipArchive = new ZipArchive(stream, mode);
 
@@ -36,6 +36,14 @@ namespace Prowl.Runtime.Utils
                     _pathToEntry[entry.FullName] = entry;
                 }
             }
+        }
+
+        public static AssetBuildPackage CreateNew(FileInfo path)
+        {
+            if (path.Exists)
+                throw new ArgumentException("File already exists.", nameof(path));
+
+            return new AssetBuildPackage(path.OpenWrite(), ZipArchiveMode.Create);
         }
 
         #region Assets
@@ -168,6 +176,11 @@ namespace Prowl.Runtime.Utils
                 }
             }
             return assets;
+        }
+
+        public List<Guid> GetAllGuids()
+        {
+            return _guidToEntry.Keys.ToList();
         }
 
         #endregion
