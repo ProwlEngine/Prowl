@@ -38,6 +38,7 @@ public static class Selection
             Clear();
             _currentRef.Add(new WeakReference(obj));
             CurrentType = typeof(T);
+            OnSelectObject?.Invoke(obj);
         }
         else if(CanBeAdditive && additive)
         {
@@ -78,6 +79,7 @@ public static class Selection
             Clear();
             _currentRef.Add(new WeakReference(obj));
             CurrentType = typeof(T);
+            OnSelectObject?.Invoke(obj);
         }
     }
 
