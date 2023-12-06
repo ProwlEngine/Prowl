@@ -1,5 +1,7 @@
 ﻿using HexaEngine.ImGuiNET;
 using HexaEngine.ImGuizmoNET;
+using HexaEngine.ImNodesNET;
+using HexaEngine.ImPlotNET;
 using Prowl.Icons;
 using Raylib_cs;
 using System;
@@ -15,17 +17,31 @@ namespace Prowl.Runtime.ImGUI
     public class ImGUIController : IDisposable
     {
         ImGuiContextPtr context;
+        ImNodesContextPtr nodesContext;
         Texture2D fontTexture;
         Vector2 scaleFactor = Vector2.One;
+        private ImPlotContextPtr plotContext;
 
         public ImGUIController()
         {
             context = ImGui.CreateContext();
             ImGui.SetCurrentContext(context);
+            ImGuizmo.SetImGuiContext(context);
+            ImPlot.SetImGuiContext(context);
+            ImNodes.SetImGuiContext(context);
+
+            nodesContext = ImNodes.CreateContext();
+            ImNodes.SetCurrentContext(nodesContext);
+            ImNodes.StyleColorsDark(ImNodes.GetStyle());
+
+            plotContext = ImPlot.CreateContext();
+            ImPlot.SetCurrentContext(plotContext);
+            ImPlot.StyleColorsDark(ImPlot.GetStyle());
         }
 
         public void Dispose()
         {
+            ImNodes.DestroyContext();
             ImGui.DestroyContext(context);
             Raylib.UnloadTexture(fontTexture);
         }
@@ -178,6 +194,14 @@ namespace Prowl.Runtime.ImGUI
             {
                 Resize(Raylib.GetScreenWidth(), Raylib.GetScreenHeight());
             }
+
+            ImGui.SetCurrentContext(context);
+            ImGuizmo.SetImGuiContext(context);
+            ImPlot.SetImGuiContext(context);
+            ImNodes.SetImGuiContext(context);
+
+            ImNodes.SetCurrentContext(nodesContext);
+            ImPlot.SetCurrentContext(plotContext);
 
             ImGui.NewFrame();
             ImGuizmo.BeginFrame();
