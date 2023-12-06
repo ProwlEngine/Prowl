@@ -95,11 +95,10 @@ Getting Prowl up and running is super easy!
 # Roadmap
 
 ### Engine
-- [ ] API Agnostic Backends to expand to support Vulkan, Metal, WebGPU, and more
 - [ ] Cross Platform
   - [x] Windows - Fully functional
-  - [ ] Linux - Compiles
-  - [ ] MacOS - Compiles
+  - [ ] Linux - Compiles & Opens but OpenGL Fails
+  - [ ] MacOS - Compiles, M1 fails rest unknown
   - [ ] Andriod - Unknown
   - [ ] iOS - Unknown
   - [ ] Web - Unknown
