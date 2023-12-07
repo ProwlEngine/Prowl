@@ -183,7 +183,7 @@ public unsafe class EditorApplication : Application {
             Raylib.EndDrawing();
 
             if (Raylib.WindowShouldClose())
-                Terminate();
+                Quit();
         }
 
     }

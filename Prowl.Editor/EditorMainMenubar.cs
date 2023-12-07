@@ -107,7 +107,7 @@ public class EditorMainMenubar {
             if (ImGui.MenuItem("Preferences")) { }
             if (ImGui.MenuItem("Project Settings")) { new ProjectSettingsWindow(); }
             ImGui.Separator();
-            if (ImGui.MenuItem("Quit")) EditorApplication.Instance.Terminate();
+            if (ImGui.MenuItem("Quit")) Application.Quit();
             ImGui.EndMenu();
         }
 

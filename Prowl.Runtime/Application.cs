@@ -112,11 +112,12 @@ public abstract class Application
             Raylib.EndDrawing();
 
             if (Raylib.WindowShouldClose())
-                Terminate();
+                Quit();
         }
 
     }
 
+    public static void Quit()
     {
         isRunning = false;
         Debug.Log("Is terminating...");
