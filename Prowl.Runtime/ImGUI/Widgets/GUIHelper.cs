@@ -2,6 +2,7 @@
 using Prowl.Icons;
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Numerics;
 using System.Text;
@@ -135,9 +136,32 @@ namespace Prowl.Runtime
             return opened != 0;
         }
 
-        public static void ItemRect(float r, float g, float b, float a)
+        public static void ItemRectFilled(float r, float g, float b, float a, float expand = 0.0f)
         {
-            ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(r, g, b, a)));
+            var min = ImGui.GetItemRectMin();
+            var max = ImGui.GetItemRectMax();
+            if(expand > 0)
+            {
+                min.X -= expand;
+                min.Y -= expand;
+                max.X += expand;
+                max.Y += expand;
+            }
+            ImGui.GetWindowDrawList().AddRectFilled(min, max, ImGui.GetColorU32(new Vector4(r, g, b, a)));
+        }
+
+        public static void ItemRect(float r, float g, float b, float a, float expand = 0.0f)
+        {
+            var min = ImGui.GetItemRectMin();
+            var max = ImGui.GetItemRectMax();
+            if(expand > 0)
+            {
+                min.X -= expand;
+                min.Y -= expand;
+                max.X += expand;
+                max.Y += expand;
+            }
+            ImGui.GetWindowDrawList().AddRect(min, max, ImGui.GetColorU32(new Vector4(r, g, b, a)));
         }
 
         public static bool Search(string v, ref string searchText, float x)
