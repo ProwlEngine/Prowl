@@ -136,7 +136,7 @@ namespace Prowl.Runtime
             return opened != 0;
         }
 
-        public static void ItemRectFilled(float r, float g, float b, float a, float expand = 0.0f)
+        public static void ItemRectFilled(float r, float g, float b, float a, float expand = 0.0f, float roundness = 0.0f)
         {
             var min = ImGui.GetItemRectMin();
             var max = ImGui.GetItemRectMax();
@@ -147,10 +147,10 @@ namespace Prowl.Runtime
                 max.X += expand;
                 max.Y += expand;
             }
-            ImGui.GetWindowDrawList().AddRectFilled(min, max, ImGui.GetColorU32(new Vector4(r, g, b, a)));
+            ImGui.GetWindowDrawList().AddRectFilled(min, max, ImGui.GetColorU32(new Vector4(r, g, b, a)), roundness);
         }
 
-        public static void ItemRect(float r, float g, float b, float a, float expand = 0.0f)
+        public static void ItemRect(float r, float g, float b, float a, float expand = 0.0f, float roundness = 0.0f, float thickness = 1.0f)
         {
             var min = ImGui.GetItemRectMin();
             var max = ImGui.GetItemRectMax();
@@ -161,7 +161,7 @@ namespace Prowl.Runtime
                 max.X += expand;
                 max.Y += expand;
             }
-            ImGui.GetWindowDrawList().AddRect(min, max, ImGui.GetColorU32(new Vector4(r, g, b, a)));
+            ImGui.GetWindowDrawList().AddRect(min, max, ImGui.GetColorU32(new Vector4(r, g, b, a)), roundness, thickness);
         }
 
         public static bool Search(string v, ref string searchText, float x)
