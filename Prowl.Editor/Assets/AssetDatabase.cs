@@ -273,6 +273,8 @@ namespace Prowl.Runtime.Assets
 
             // Create the package
             var package = AssetBuildPackage.CreateNew(firstPackage);
+            int count = 0;
+            int maxCount = assetsToExport.Length;
             foreach (var assetGuid in assetsToExport)
             {
                 var asset = LoadAsset(assetGuid);
@@ -292,6 +294,13 @@ namespace Prowl.Runtime.Assets
 
                 string relativeAssetPath = GUIDToAssetPath(assetGuid);
                 package.AddAsset(relativeAssetPath, assetGuid, asset);
+
+                count++;
+                if(count % 10 == 0 || count >= maxCount - 5)
+                {
+                    float percentComplete = ((float)count / (float)maxCount) * 100f;
+                    Debug.Log($"Exporting Assets: {count}/{maxCount} - {percentComplete}%");
+                }
             }
             package.Dispose();
         }
