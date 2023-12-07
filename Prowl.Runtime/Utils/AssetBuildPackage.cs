@@ -70,7 +70,7 @@ namespace Prowl.Runtime.Utils
             asset.SaveToStream(entryStream);
 
             //byteCount += entryStream.Length;
-            
+
 
             // Update mappings
             _guidToPath[guid] = assetPath;
@@ -292,7 +292,11 @@ namespace Prowl.Runtime.Utils
             return path;
         }
 
-        public void Dispose() => _zipArchive.Dispose();
+        public void Dispose()
+        {
+            _zipArchive.Dispose();
+            _stream.Dispose();
+        }
 
     }
 }
