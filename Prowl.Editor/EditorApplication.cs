@@ -118,6 +118,8 @@ public unsafe class EditorApplication : Application {
                 else if (IsHotkeyDown("BuildProject", new Hotkey() { Key = KeyboardKey.KEY_B, Ctrl = true }))
                     Project.BuildProject();
 
+                isPlaying = PlayMode.Current != PlayMode.Mode.Editing;
+
                 SceneManager.Update();
 
                 float physicsTime = (float)physicsTimer.Elapsed.TotalSeconds;

@@ -16,6 +16,8 @@ public abstract class Application {
 
     public static IAssetProvider AssetProvider { get; set; }
 
+    public static bool isPlaying = false;
+
     public bool IsRunning { get; protected set; }
     
     protected readonly ExternalAssemblyLoadContextManager _AssemblyManager = new();
@@ -88,6 +90,7 @@ public abstract class Application {
 
         while (IsRunning)
         {
+            isPlaying = true; // Base application is not the editor, isplaying is always true
 
             float updateTime = (float)updateTimer.Elapsed.TotalSeconds;
             Time.Update(updateTime);
