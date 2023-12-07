@@ -33,8 +33,12 @@ public static class SceneManager
     public static void InstantiateNewScene()
     {
         var go = new GameObject("Directional Light");
-        go.Rotation = new System.Numerics.Vector3(45, 70, 0);
+        go.Rotation = new System.Numerics.Vector3(130, 45, 0);
         go.AddComponent<DirectionalLight>();
+        var alGo = new GameObject("Ambient Light");
+        var al = alGo.AddComponent<AmbientLight>();
+        al.skyIntensity = 0.4f;
+        al.groundIntensity = 0.1f;
 
         var cam = new GameObject("Main Camera");
         cam.tag = "Main Camera";
