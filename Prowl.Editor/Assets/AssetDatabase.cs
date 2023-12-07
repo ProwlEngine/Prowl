@@ -269,6 +269,7 @@ namespace Prowl.Runtime.Assets
             }
 
             int packageIndex = 0;
+            Debug.Log($"Creating First Package {packageIndex}");
             FileInfo firstPackage = new FileInfo(Path.Combine(destination.FullName, $"Data{packageIndex++}.prowl"));
 
             // Create the package
@@ -287,7 +288,9 @@ namespace Prowl.Runtime.Assets
 #warning TODO: We need to do (package.SizeInGB + SizeOfAsset > 4f) instead of just SizeInGB but for now this works
                 if (package.SizeInGB > 3f)
                 {
+                    Debug.Log($"Packing, Reached 4GB...");
                     package.Dispose();
+                    Debug.Log($"Creating New Package {packageIndex}");
                     FileInfo next = new FileInfo(Path.Combine(destination.FullName, $"Data{packageIndex++}.prowl"));
                     package = AssetBuildPackage.CreateNew(next);
                 }
@@ -299,9 +302,10 @@ namespace Prowl.Runtime.Assets
                 if(count % 10 == 0 || count >= maxCount - 5)
                 {
                     float percentComplete = ((float)count / (float)maxCount) * 100f;
-                    Debug.Log($"Exporting Assets: {count}/{maxCount} - {percentComplete}%");
+                    Debug.Log($"Exporting Assets To Stream: {count}/{maxCount} - {percentComplete}%");
                 }
             }
+            Debug.Log($"Packing...");
             package.Dispose();
         }
 
