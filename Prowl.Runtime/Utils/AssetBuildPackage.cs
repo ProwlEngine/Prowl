@@ -27,8 +27,8 @@ namespace Prowl.Runtime.Utils
                 foreach (var entry in _zipArchive.Entries)
                 {
                     using var entryStream = entry.Open();
-                    using var reader = new StreamReader(entryStream);
-                    if (Guid.TryParse(reader.ReadLine(), out Guid guid))
+                    string guidS = entry.Comment;
+                    if (Guid.TryParse(guidS, out Guid guid))
                     {
                         _guidToPath[guid] = entry.FullName;
                         _guidToEntry[guid] = entry;
@@ -64,9 +64,7 @@ namespace Prowl.Runtime.Utils
             //using (var entryStream = entry.Open())
             // I guess we dont dispose these streams? Throws an error if we do
             var entryStream = entry.Open();
-            var writer = new StreamWriter(entryStream);
-
-            writer.WriteLine(guid.ToString());
+            entry.Comment = guid.ToString();
             asset.SaveToStream(entryStream);
 
             //byteCount += entryStream.Length;
@@ -249,8 +247,6 @@ namespace Prowl.Runtime.Utils
             if (entry != null)
             {
                 using var entryStream = entry.Open();
-                using var reader = new StreamReader(entryStream);
-                reader.ReadLine(); // Skip guid
                 asset = SerializedAsset.FromStream(entryStream);
                 return true;
             }
@@ -264,8 +260,6 @@ namespace Prowl.Runtime.Utils
             if (entry != null)
             {
                 using var entryStream = entry.Open();
-                using var reader = new StreamReader(entryStream);
-                reader.ReadLine(); // Skip guid
                 asset = SerializedAsset.FromStream(entryStream);
                 return true;
             }
