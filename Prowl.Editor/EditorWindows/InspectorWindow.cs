@@ -54,12 +54,13 @@ public class InspectorWindow : EditorWindow
 
         if (Selected == null) return;
         if (Selected.IsAlive == false) return;
+        if (Selected.Target is EngineObject eo1 && eo1.IsDestroyed) return;
 
         // remove nulls or destroyed
         while (_BackStack.Count > 0)
         {
             var peek = _BackStack.Peek();
-            if (peek == null || !peek.IsAlive || (peek.Target is EngineObject eObj && eObj.IsDestroyed) || ReferenceEquals(peek, Selected.Target))
+            if (peek == null || !peek.IsAlive || (peek.Target is EngineObject eo2 && eo2.IsDestroyed) || ReferenceEquals(peek, Selected.Target))
                 _BackStack.Pop();
             else
                 break;
@@ -81,7 +82,7 @@ public class InspectorWindow : EditorWindow
         while (_ForwardStack.Count > 0)
         {
             var peek = _ForwardStack.Peek();
-            if (peek == null || !peek.IsAlive || (peek.Target is EngineObject eObj && eObj.IsDestroyed) || ReferenceEquals(peek, Selected.Target))
+            if (peek == null || !peek.IsAlive || (peek.Target is EngineObject eo3 && eo3.IsDestroyed) || ReferenceEquals(peek, Selected.Target))
                 _ForwardStack.Pop();
             else
                 break;
