@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 
-namespace Prowl.Runtime.Serializer
+namespace Prowl.Runtime
 {
     public static class TagSerializer
     {
@@ -61,42 +61,42 @@ namespace Prowl.Runtime.Serializer
 
         private static Tag PrimitiveToTag(object p)
         {
-            if (p is byte b)             return new ByteTag(b);
-            else if (p is sbyte sb)      return new sByteTag(sb);
-            else if (p is short s)       return new ShortTag(s);
-            else if (p is int i)         return new IntTag(i);
-            else if (p is long l)        return new LongTag(l);
-            else if (p is uint ui)       return new UIntTag(ui);
-            else if (p is ulong ul)      return new ULongTag(ul);
-            else if (p is ushort us)     return new UShortTag(us);
-            else if (p is float f)       return new FloatTag(f);
-            else if (p is double d)      return new DoubleTag(d);
-            else if (p is decimal dec)   return new DecimalTag(dec);
-            else if (p is string str)    return new StringTag(str);
-            else if (p is byte[] bArr)   return new ByteArrayTag(bArr);
-            else if (p is bool bo)       return new BoolTag(bo);
+            if (p is byte b) return new ByteTag(b);
+            else if (p is sbyte sb) return new sByteTag(sb);
+            else if (p is short s) return new ShortTag(s);
+            else if (p is int i) return new IntTag(i);
+            else if (p is long l) return new LongTag(l);
+            else if (p is uint ui) return new UIntTag(ui);
+            else if (p is ulong ul) return new ULongTag(ul);
+            else if (p is ushort us) return new UShortTag(us);
+            else if (p is float f) return new FloatTag(f);
+            else if (p is double d) return new DoubleTag(d);
+            else if (p is decimal dec) return new DecimalTag(dec);
+            else if (p is string str) return new StringTag(str);
+            else if (p is byte[] bArr) return new ByteArrayTag(bArr);
+            else if (p is bool bo) return new BoolTag(bo);
             else if (p is DateTime date) return new LongTag(date.ToBinary());
-            else if (p is Guid g)        return new StringTag(g.ToString());
+            else if (p is Guid g) return new StringTag(g.ToString());
             else if (p.GetType().IsEnum) return new IntTag((int)p); // Serialize enums as integers
             else throw new NotSupportedException("The type '" + p.GetType() + "' is not a supported primitive.");
         }
 
         private static Type TagTypeToType(TagType tagType)
         {
-            if (tagType == TagType.Byte)           return typeof(byte);
-            else if (tagType == TagType.sByte)     return typeof(sbyte);
-            else if (tagType == TagType.Int)       return typeof(int);
-            else if (tagType == TagType.Long)      return typeof(long);
-            else if (tagType == TagType.Short)     return typeof(short);
-            else if (tagType == TagType.UInt)      return typeof(uint);
-            else if (tagType == TagType.ULong)     return typeof(ulong);
-            else if (tagType == TagType.UShort)    return typeof(ushort);
-            else if (tagType == TagType.Float)     return typeof(float);
-            else if (tagType == TagType.Double)    return typeof(double);
-            else if (tagType == TagType.Decimal)   return typeof(decimal);
-            else if (tagType == TagType.String)    return typeof(string);
+            if (tagType == TagType.Byte) return typeof(byte);
+            else if (tagType == TagType.sByte) return typeof(sbyte);
+            else if (tagType == TagType.Int) return typeof(int);
+            else if (tagType == TagType.Long) return typeof(long);
+            else if (tagType == TagType.Short) return typeof(short);
+            else if (tagType == TagType.UInt) return typeof(uint);
+            else if (tagType == TagType.ULong) return typeof(ulong);
+            else if (tagType == TagType.UShort) return typeof(ushort);
+            else if (tagType == TagType.Float) return typeof(float);
+            else if (tagType == TagType.Double) return typeof(double);
+            else if (tagType == TagType.Decimal) return typeof(decimal);
+            else if (tagType == TagType.String) return typeof(string);
             else if (tagType == TagType.ByteArray) return typeof(byte[]);
-            else if (tagType == TagType.Bool)      return typeof(bool);
+            else if (tagType == TagType.Bool) return typeof(bool);
             return typeof(object);
         }
 
@@ -112,8 +112,8 @@ namespace Prowl.Runtime.Serializer
         private static CompoundTag? DictionaryToTag(object obj, SerializationContext ctx)
         {
             var t = obj.GetType();
-            if (obj is IDictionary dict && 
-                 t.IsGenericType && 
+            if (obj is IDictionary dict &&
+                 t.IsGenericType &&
                  t.GetGenericArguments()[0] == typeof(string))
             {
                 CompoundTag tag = new();

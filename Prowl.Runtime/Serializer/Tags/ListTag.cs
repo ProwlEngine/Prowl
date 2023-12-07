@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace Prowl.Runtime.Serializer
+namespace Prowl.Runtime
 {
     public class ListTag : Tag
     {

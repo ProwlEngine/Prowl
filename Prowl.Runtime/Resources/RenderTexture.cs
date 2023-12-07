@@ -1,9 +1,7 @@
-﻿using Prowl.Runtime.Serializer;
-using Prowl.Runtime.Utils;
-using Raylib_cs;
+﻿using Raylib_cs;
 using System;
 
-namespace Prowl.Runtime.Resources
+namespace Prowl.Runtime
 {
     public sealed class RenderTexture : EngineObject, ISerializable
     {
@@ -17,8 +15,8 @@ namespace Prowl.Runtime.Resources
         private bool hasDepthAttachment;
         private PixelFormat[] textureFormats;
 
-        public RenderTexture() : base("RenderTexture") 
-        { 
+        public RenderTexture() : base("RenderTexture")
+        {
             Width = 0;
             Height = 0;
             numTextures = 0;
@@ -110,11 +108,11 @@ namespace Prowl.Runtime.Resources
 
         public void Begin()
         {
-            if(numTextures != 0)
+            if (numTextures != 0)
             {
                 Raylib.BeginTextureMode(new RenderTexture2D() { id = fboId, texture = InternalTextures[0], depth = InternalDepth });
             }
-            else if(hasDepthAttachment)
+            else if (hasDepthAttachment)
             {
                 Raylib.BeginTextureMode(new RenderTexture2D() { id = fboId, texture = InternalDepth, depth = InternalDepth });
             }

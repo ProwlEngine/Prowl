@@ -1,17 +1,10 @@
-﻿using Prowl.Runtime.Utils;
-using ImageMagick;
+﻿using ImageMagick;
 using Raylib_cs;
 using System;
-using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Numerics;
-using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
-using System.Runtime.Serialization;
-using Prowl.Runtime.Serializer;
 
-namespace Prowl.Runtime.Resources
+namespace Prowl.Runtime
 {
 
     // TODO: Raylib.ImageFormat support changing formats
@@ -194,7 +187,7 @@ namespace Prowl.Runtime.Resources
             {
                 int size = Raylib.GetPixelDataSize(Width, Height, Format);
                 byte[] byteArray = new byte[size];
-                Marshal.Copy((IntPtr)image.data, byteArray, 0, byteArray.Length);
+                Marshal.Copy((nint)image.data, byteArray, 0, byteArray.Length);
                 compoundTag.Add("Data", new ByteArrayTag(byteArray));
             }
             return compoundTag;

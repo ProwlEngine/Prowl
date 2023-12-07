@@ -2,7 +2,6 @@
 using HexaEngine.ImNodesNET;
 using Prowl.Runtime;
 using Prowl.Runtime.ImGUI.Widgets;
-using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.EditorWindows;
 

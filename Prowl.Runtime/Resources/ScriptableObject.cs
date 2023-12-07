@@ -1,7 +1,4 @@
-﻿using Prowl.Runtime.Serializer;
-using System;
-
-namespace Prowl.Runtime.Resources
+﻿namespace Prowl.Runtime
 {
     public class ScriptableObject : EngineObject
     {

@@ -1,12 +1,10 @@
-﻿using Prowl.Runtime.Components;
-using Prowl.Runtime.Resources;
-using Raylib_cs;
+﻿using Raylib_cs;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Material = Prowl.Runtime.Resources.Material;
-using Mesh = Prowl.Runtime.Resources.Mesh;
+using Material = Prowl.Runtime.Material;
+using Mesh = Prowl.Runtime.Mesh;
 
 namespace Prowl.Runtime
 {
@@ -54,7 +52,7 @@ namespace Prowl.Runtime
             get
             {
                 if (depthMat == null)
-                    depthMat = new Material(Resources.Shader.Find("Defaults/Depth.shader"));
+                    depthMat = new Material(Shader.Find("Defaults/Depth.shader"));
                 return depthMat;
             }
         }

@@ -1,12 +1,11 @@
-﻿using Prowl.Runtime.Resources;
-using Prowl.Icons;
+﻿using Prowl.Icons;
 using Raylib_cs;
 using System;
-using Material = Prowl.Runtime.Resources.Material;
-using Mesh = Prowl.Runtime.Resources.Mesh;
-using Shader = Prowl.Runtime.Resources.Shader;
+using Material = Prowl.Runtime.Material;
+using Mesh = Prowl.Runtime.Mesh;
+using Shader = Prowl.Runtime.Shader;
 
-namespace Prowl.Runtime.Components;
+namespace Prowl.Runtime;
 
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Spot Light")]
 public class SpotLight : MonoBehaviour
@@ -34,7 +33,7 @@ public class SpotLight : MonoBehaviour
         }
         else
         {
-            if(lastCamID != Camera.Current.InstanceID)
+            if (lastCamID != Camera.Current.InstanceID)
             {
                 lastCamID = Camera.Current.InstanceID;
                 lightMat.SetTexture("gAlbedoAO", Camera.Current.gBuffer.AlbedoAO);
@@ -42,8 +41,8 @@ public class SpotLight : MonoBehaviour
                 lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
             }
 
-            lightMat.SetVector("LightPosition", Vector3.Transform(this.GameObject.GlobalPosition - Camera.Current.GameObject.GlobalPosition, Graphics.MatView));
-            lightMat.SetVector("LightDirection", Vector3.TransformNormal(this.GameObject.Forward, Graphics.MatView));
+            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.GlobalPosition - Camera.Current.GameObject.GlobalPosition, Graphics.MatView));
+            lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.Forward, Graphics.MatView));
             //lightMat.SetVector("LightDirection",this.GameObject.Forward);
 
             lightMat.SetFloat("LightDistance", distance);

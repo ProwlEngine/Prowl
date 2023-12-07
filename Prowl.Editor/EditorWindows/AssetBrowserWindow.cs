@@ -5,9 +5,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
 using Prowl.Runtime.ImGUI.Widgets;
-using Prowl.Runtime.Resources;
 using Prowl.Runtime.SceneManagement;
-using Prowl.Runtime.Serializer;
 using System.Numerics;
 using System.Reflection;
 using static Assimp.Metadata;
@@ -250,7 +248,7 @@ public class AssetBrowserWindow : EditorWindow {
                     if (entry.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase))
                     {
                         var guid = AssetDatabase.GUIDFromAssetPath(relativeAssetPath);
-                        SceneManager.LoadScene(new AssetRef<Prowl.Runtime.Resources.Scene>(guid));
+                        SceneManager.LoadScene(new AssetRef<Runtime.Scene>(guid));
                     }
                     else
                     {

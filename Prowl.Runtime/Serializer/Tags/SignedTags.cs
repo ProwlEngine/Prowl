@@ -1,4 +1,4 @@
-﻿namespace Prowl.Runtime.Serializer
+﻿namespace Prowl.Runtime
 {
 
     public class sByteTag : Tag
@@ -20,8 +20,8 @@
     }
 
     public class IntTag : Tag
-	{
-		public int Value { get; set; }
+    {
+        public int Value { get; set; }
         public IntTag() { }
         public IntTag(int value = 0) => Value = value;
         public override TagType GetTagType() => TagType.Int;

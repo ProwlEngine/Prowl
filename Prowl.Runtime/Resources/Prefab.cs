@@ -1,6 +1,4 @@
-﻿using Prowl.Runtime.Serializer;
-
-namespace Prowl.Runtime.Resources
+﻿namespace Prowl.Runtime
 {
     public class Prefab : EngineObject
     {

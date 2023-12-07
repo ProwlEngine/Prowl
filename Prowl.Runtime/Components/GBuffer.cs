@@ -1,7 +1,6 @@
-﻿using Prowl.Runtime.Resources;
-using Raylib_cs;
+﻿using Raylib_cs;
 
-namespace Prowl.Runtime.Components;
+namespace Prowl.Runtime;
 
 public class GBuffer
 {
@@ -51,7 +50,7 @@ public class GBuffer
 
     public bool IsReady()
     {
-        return (fbo > 0) &&
+        return fbo > 0 &&
                 Raylib.IsTextureReady(AlbedoAO) &&
                 Raylib.IsTextureReady(NormalMetallic) &&
                 Raylib.IsTextureReady(PositionRoughness) &&
@@ -126,7 +125,7 @@ public class GBuffer
         Rlgl.rlDisableBackfaceCulling();
         //Rlgl.rlDisableColorBlend();
 
-        if(clear)
+        if (clear)
             Raylib.ClearBackground(new Color(0, 0, 0, 0));
     }
 

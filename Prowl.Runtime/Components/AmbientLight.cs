@@ -1,7 +1,6 @@
 ﻿using Prowl.Icons;
-using Shader = Prowl.Runtime.Resources.Shader;
 
-namespace Prowl.Runtime.Components;
+namespace Prowl.Runtime;
 
 [ExecuteAlways, AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Ambient Light")]
 public class AmbientLight : MonoBehaviour
@@ -13,11 +12,11 @@ public class AmbientLight : MonoBehaviour
     public float skyIntensity = 1f;
     public float groundIntensity = 1f;
 
-    Resources.Material? lightMat;
+    Material? lightMat;
 
     public void OnRenderObject()
     {
-        lightMat ??= new Resources.Material(Shader.Find("Defaults/AmbientLight.shader"));
+        lightMat ??= new Material(Shader.Find("Defaults/AmbientLight.shader"));
 
         lightMat.SetColor("SkyColor", skyColor);
         lightMat.SetColor("GroundColor", groundColor);

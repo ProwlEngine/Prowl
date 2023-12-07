@@ -1,8 +1,7 @@
-﻿using Prowl.Runtime.Serializer;
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 
-namespace Prowl.Runtime.Serializer
+namespace Prowl.Runtime
 {
     public static class StringTagConverter
     {

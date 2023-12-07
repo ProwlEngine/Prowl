@@ -1,9 +1,9 @@
-﻿namespace Prowl.Runtime.Serializer
+﻿namespace Prowl.Runtime
 {
     public class ByteTag : Tag
-	{
-		public byte Value { get; set; }
-		public ByteTag() {}
+    {
+        public byte Value { get; set; }
+        public ByteTag() { }
         public ByteTag(byte value) => Value = value;
         public override TagType GetTagType() => TagType.Byte;
         public override Tag Clone() => new ByteTag(Value);

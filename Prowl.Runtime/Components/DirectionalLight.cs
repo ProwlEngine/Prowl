@@ -1,10 +1,8 @@
 ﻿using Prowl.Icons;
-using Prowl.Runtime.Resources;
 using Prowl.Runtime.SceneManagement;
 using Raylib_cs;
-using Shader = Prowl.Runtime.Resources.Shader;
 
-namespace Prowl.Runtime.Components;
+namespace Prowl.Runtime;
 
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Directional Light")]
 [ExecuteAlways]
@@ -24,7 +22,7 @@ public class DirectionalLight : MonoBehaviour
     public float shadowNormalBias = 0.02f;
     public bool castShadows = true;
 
-    Resources.Material lightMat;
+    Material lightMat;
 
     RenderTexture? shadowMap;
     Matrix4x4 depthMVP;
@@ -41,8 +39,8 @@ public class DirectionalLight : MonoBehaviour
 
     public void OnRenderObject()
     {
-        lightMat ??= new Resources.Material(Shader.Find("Defaults/Directionallight.shader"));
-        lightMat.SetVector("LightDirection", Vector3.TransformNormal(this.GameObject.Forward, Graphics.MatView));
+        lightMat ??= new Material(Shader.Find("Defaults/Directionallight.shader"));
+        lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.Forward, Graphics.MatView));
         lightMat.SetColor("LightColor", color);
         lightMat.SetFloat("LightIntensity", intensity);
 

@@ -1,5 +1,4 @@
 ﻿using Prowl.Runtime;
-using Prowl.Runtime.Resources;
 using Prowl.Runtime.Utils;
 using HexaEngine.ImGuiNET;
 using Prowl.Runtime.Assets;

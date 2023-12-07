@@ -2,12 +2,9 @@ using HexaEngine.ImGuiNET;
 using HexaEngine.ImGuizmoNET;
 using Prowl.Icons;
 using Prowl.Runtime;
-using Prowl.Runtime.Components;
-using Prowl.Runtime.Components.ImageEffects;
+using Prowl.Runtime.ImageEffects;
 using Prowl.Runtime.ImGUI.Widgets;
-using Prowl.Runtime.Resources;
 using Prowl.Runtime.SceneManagement;
-using System.Runtime.CompilerServices;
 
 namespace Prowl.Editor.EditorWindows;
 

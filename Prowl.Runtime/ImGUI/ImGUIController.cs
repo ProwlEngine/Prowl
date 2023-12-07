@@ -6,7 +6,6 @@ using Prowl.Icons;
 using Raylib_cs;
 using System;
 using System.IO;
-using System.Numerics;
 using System.Reflection;
 
 namespace Prowl.Runtime.ImGUI
@@ -18,7 +17,7 @@ namespace Prowl.Runtime.ImGUI
     {
         ImGuiContextPtr context;
         ImNodesContextPtr nodesContext;
-        Texture2D fontTexture;
+        Raylib_cs.Texture2D fontTexture;
         Vector2 scaleFactor = Vector2.One;
         private ImPlotContextPtr plotContext;
 

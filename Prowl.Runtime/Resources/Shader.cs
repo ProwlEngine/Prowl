@@ -1,10 +1,9 @@
-﻿using Prowl.Runtime.Serializer;
-using Raylib_cs;
+﻿using Raylib_cs;
 using System;
 using System.Collections.Generic;
 using static System.Net.Mime.MediaTypeNames;
 
-namespace Prowl.Runtime.Resources
+namespace Prowl.Runtime
 {
     /// <summary>
     /// The Shader class itself doesnt do much, It stores the properties of the shader and the shader code and Keywords.
@@ -65,9 +64,9 @@ namespace Prowl.Runtime.Resources
 
         public Raylib_cs.Shader CompileShadowPass(string[] defines)
         {
-            if(ShadowPass == null)
+            if (ShadowPass == null)
             {
-                var defaultDepth = Shader.Find("Defaults/Depth.shader");
+                var defaultDepth = Find("Defaults/Depth.shader");
                 if (!defaultDepth.IsAvailable) throw new Exception($"Failed to default Depth shader for shader: {Name}");
                 return defaultDepth.Res!.CompilePass(0, []);
             }
@@ -93,7 +92,7 @@ namespace Prowl.Runtime.Resources
             Raylib_cs.Shader compiled = Raylib.LoadShaderFromMemory(vert, frag);
             if (compiled.id <= 0)
             {
-                var fallbackShader = Shader.Find(fallback);
+                var fallbackShader = Find(fallback);
                 if (fallbackShader.IsAvailable)
                     return fallbackShader.Res!.CompilePass(0, []);
             }

@@ -1,10 +1,9 @@
-﻿using Prowl.Runtime.Serializer;
-using Raylib_cs;
+﻿using Raylib_cs;
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
 
-namespace Prowl.Runtime.Resources
+namespace Prowl.Runtime
 {
     public sealed class Mesh : EngineObject, ISerializable
     {
@@ -57,11 +56,11 @@ namespace Prowl.Runtime.Resources
             int RL_FLOAT = 0x1406;
             int RL_UNSIGNED_BYTE = 0x1401;
 
-            if(vertices == null) throw new Exception("Vertices cannot be null");
+            if (vertices == null) throw new Exception("Vertices cannot be null");
 
             // Enable vertex attributes: position (shader-location = 0)
             fixed (float* vptr = vertices)
-                vboId[0] = Rlgl.rlLoadVertexBuffer(vptr, vertexCount*3*sizeof(float), dynamic);
+                vboId[0] = Rlgl.rlLoadVertexBuffer(vptr, vertexCount * 3 * sizeof(float), dynamic);
             Rlgl.rlSetVertexAttribute(0, 3, RL_FLOAT, 0, 0, null);
             Rlgl.rlEnableVertexAttribute(0);
 
@@ -69,7 +68,7 @@ namespace Prowl.Runtime.Resources
             {
                 // Enable vertex attributes: texcoords (shader-location = 1)
                 fixed (float* tptr = texcoords)
-                    vboId[1] = Rlgl.rlLoadVertexBuffer(tptr, vertexCount*2*sizeof(float), dynamic);
+                    vboId[1] = Rlgl.rlLoadVertexBuffer(tptr, vertexCount * 2 * sizeof(float), dynamic);
                 Rlgl.rlSetVertexAttribute(1, 2, RL_FLOAT, 0, 0, null);
                 Rlgl.rlEnableVertexAttribute(1);
             }
@@ -90,7 +89,7 @@ namespace Prowl.Runtime.Resources
             {
                 // Enable vertex attributes: normals (shader-location = 2)
                 fixed (float* nptr = normals)
-                    vboId[2] = Rlgl.rlLoadVertexBuffer(nptr, vertexCount*3*sizeof(float), dynamic);
+                    vboId[2] = Rlgl.rlLoadVertexBuffer(nptr, vertexCount * 3 * sizeof(float), dynamic);
                 Rlgl.rlSetVertexAttribute(2, 3, RL_FLOAT, 1, 0, null);
                 Rlgl.rlEnableVertexAttribute(2);
             }
@@ -103,12 +102,12 @@ namespace Prowl.Runtime.Resources
                     Rlgl.rlSetVertexAttributeDefault(2, nptr, (int)ShaderAttributeDataType.SHADER_ATTRIB_VEC3, 3);
                 Rlgl.rlDisableVertexAttribute(2);
             }
-        
+
             if (colors != null)
             {
                 // Enable vertex attribute: color (shader-location = 3)
                 fixed (byte* cptr = colors)
-                    vboId[3] = Rlgl.rlLoadVertexBuffer(cptr, vertexCount*4*sizeof(byte), dynamic);
+                    vboId[3] = Rlgl.rlLoadVertexBuffer(cptr, vertexCount * 4 * sizeof(byte), dynamic);
                 Rlgl.rlSetVertexAttribute(3, 4, RL_UNSIGNED_BYTE, 0, 0, null);
                 Rlgl.rlEnableVertexAttribute(3);
             }
@@ -121,12 +120,12 @@ namespace Prowl.Runtime.Resources
                     Rlgl.rlSetVertexAttributeDefault(3, cptr, (int)ShaderAttributeDataType.SHADER_ATTRIB_VEC4, 4);
                 Rlgl.rlDisableVertexAttribute(3);
             }
-        
+
             if (tangents != null)
             {
                 // Enable vertex attribute: tangent (shader-location = 4)
                 fixed (float* taptr = tangents)
-                    vboId[4] = Rlgl.rlLoadVertexBuffer(taptr, vertexCount*4*sizeof(float), dynamic);
+                    vboId[4] = Rlgl.rlLoadVertexBuffer(taptr, vertexCount * 4 * sizeof(float), dynamic);
                 Rlgl.rlSetVertexAttribute(4, 4, RL_FLOAT, 0, 0, null);
                 Rlgl.rlEnableVertexAttribute(4);
             }
@@ -139,12 +138,12 @@ namespace Prowl.Runtime.Resources
                     Rlgl.rlSetVertexAttributeDefault(4, taptr, (int)ShaderAttributeDataType.SHADER_ATTRIB_VEC4, 4);
                 Rlgl.rlDisableVertexAttribute(4);
             }
-        
+
             if (texcoords2 != null)
             {
                 // Enable vertex attribute: texcoord2 (shader-location = 5)
                 fixed (float* t2ptr = texcoords2)
-                    vboId[5] = Rlgl.rlLoadVertexBuffer(t2ptr, vertexCount*2*sizeof(float), dynamic);
+                    vboId[5] = Rlgl.rlLoadVertexBuffer(t2ptr, vertexCount * 2 * sizeof(float), dynamic);
                 Rlgl.rlSetVertexAttribute(5, 2, RL_FLOAT, 0, 0, null);
                 Rlgl.rlEnableVertexAttribute(5);
             }
@@ -157,13 +156,13 @@ namespace Prowl.Runtime.Resources
                     Rlgl.rlSetVertexAttributeDefault(5, t2ptr, (int)ShaderAttributeDataType.SHADER_ATTRIB_VEC2, 2);
                 Rlgl.rlDisableVertexAttribute(5);
             }
-        
+
             if (triangles != null)
             {
                 fixed (ushort* trptr = triangles)
-                    vboId[6] = Rlgl.rlLoadVertexBufferElement(trptr, triangleCount*3*sizeof(ushort), dynamic);
+                    vboId[6] = Rlgl.rlLoadVertexBufferElement(trptr, triangleCount * 3 * sizeof(ushort), dynamic);
             }
-        
+
             if (vaoId > 0) Debug.Log($"VAO: [ID {vaoId}] Mesh uploaded successfully to VRAM (GPU)");
             else Debug.Log("VBO: Mesh uploaded successfully to VRAM (GPU)");
 
@@ -225,7 +224,7 @@ namespace Prowl.Runtime.Resources
                     float phi = (float)j / slices * 2.0f * (float)Math.PI;
 
                     float x = (float)(Math.Sin(theta) * Math.Cos(phi));
-                    float y = (float)(Math.Cos(theta));
+                    float y = (float)Math.Cos(theta);
                     float z = (float)(Math.Sin(theta) * Math.Sin(phi));
 
                     mesh.vertices[vertexIndex] = radius * x;
@@ -349,11 +348,11 @@ namespace Prowl.Runtime.Resources
         // Helper method to serialize an array
         private static void SerializeArray<T>(BinaryWriter writer, T[] array) where T : struct
         {
-            if(array == null)
+            if (array == null)
             {
                 writer.Write(false);
                 return;
-            }    
+            }
             writer.Write(true);
             int length = array.Length;
             writer.Write(length);

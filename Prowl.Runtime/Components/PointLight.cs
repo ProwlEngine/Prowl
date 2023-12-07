@@ -1,9 +1,9 @@
 ﻿using Prowl.Icons;
-using Material = Prowl.Runtime.Resources.Material;
-using Mesh = Prowl.Runtime.Resources.Mesh;
-using Shader = Prowl.Runtime.Resources.Shader;
+using Material = Prowl.Runtime.Material;
+using Mesh = Prowl.Runtime.Mesh;
+using Shader = Prowl.Runtime.Shader;
 
-namespace Prowl.Runtime.Components;
+namespace Prowl.Runtime;
 
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Point Light")]
 public class PointLight : MonoBehaviour
@@ -29,7 +29,7 @@ public class PointLight : MonoBehaviour
         }
         else
         {
-            if(lastCamID != Camera.Current.InstanceID)
+            if (lastCamID != Camera.Current.InstanceID)
             {
                 lastCamID = Camera.Current.InstanceID;
                 lightMat.SetTexture("gAlbedoAO", Camera.Current.gBuffer.AlbedoAO);
@@ -37,7 +37,7 @@ public class PointLight : MonoBehaviour
                 lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
             }
 
-            lightMat.SetVector("LightPosition", Vector3.Transform(this.GameObject.GlobalPosition - Camera.Current.GameObject.GlobalPosition, Graphics.MatView));
+            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.GlobalPosition - Camera.Current.GameObject.GlobalPosition, Graphics.MatView));
             lightMat.SetColor("LightColor", color);
             lightMat.SetFloat("LightRadius", radius);
             lightMat.SetFloat("LightIntensity", intensity);

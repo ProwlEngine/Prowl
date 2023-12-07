@@ -1,8 +1,7 @@
-﻿using Prowl.Runtime.Resources;
-using Raylib_cs;
+﻿using Raylib_cs;
 using System;
 
-namespace Prowl.Runtime.Components.ImageEffects
+namespace Prowl.Runtime.ImageEffects
 {
     [RequireComponent(typeof(Camera))]
     [ExecuteAlways]
@@ -13,23 +12,23 @@ namespace Prowl.Runtime.Components.ImageEffects
         public int blurRadius = 10;
 
         Camera _cam;
-        Camera Cam 
-        { 
-            get 
-            { 
+        Camera Cam
+        {
+            get
+            {
                 _cam ??= GetComponent<Camera>();
-                return _cam; 
-            } 
+                return _cam;
+            }
         }
 
-        Resources.Material? _mat;
-        Resources.Material Mat 
-        { 
-            get 
+        Material? _mat;
+        Material Mat
+        {
+            get
             {
-                _mat ??= new Resources.Material(Resources.Shader.Find("Defaults/DOF.shader"));
-                return _mat; 
-            } 
+                _mat ??= new Material(Shader.Find("Defaults/DOF.shader"));
+                return _mat;
+            }
         }
 
         RenderTexture dof;
@@ -48,7 +47,7 @@ namespace Prowl.Runtime.Components.ImageEffects
         private void OnResize(int width, int height)
         {
             dof?.Destroy();
-            dof = new RenderTexture(width, height, 1, false, [Raylib_cs.PixelFormat.PIXELFORMAT_UNCOMPRESSED_R32G32B32A32]);
+            dof = new RenderTexture(width, height, 1, false, [PixelFormat.PIXELFORMAT_UNCOMPRESSED_R32G32B32A32]);
         }
 
         private void ApplyEffect(GBuffer gBuffer)

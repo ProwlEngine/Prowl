@@ -1,11 +1,10 @@
 ﻿using Prowl.Icons;
-using Prowl.Runtime.Resources;
 using Prowl.Runtime.SceneManagement;
 using Raylib_cs;
 using System;
-using Shader = Prowl.Runtime.Resources.Shader;
+using Shader = Prowl.Runtime.Shader;
 
-namespace Prowl.Runtime.Components;
+namespace Prowl.Runtime;
 
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Camera}  Camera")]
 public class Camera : MonoBehaviour
@@ -34,7 +33,7 @@ public class Camera : MonoBehaviour
     public AssetRef<RenderTexture> Target;
 
     public GBuffer gBuffer { get; private set; }
-    Resources.Material CombineShader;
+    Material CombineShader;
 
     public enum DebugDraw { Off, Diffuse, Normals, Depth, Lighting, Velocity }
     public DebugDraw debugDraw = DebugDraw.Off;
@@ -146,7 +145,7 @@ public class Camera : MonoBehaviour
         Current = this;
         Graphics.Resolution = new Vector2(width, height);
         Graphics.MatView = View;
-        Graphics.MatProjection = Camera.Current.GetProjectionMatrix(width, height);
+        Graphics.MatProjection = Current.GetProjectionMatrix(width, height);
         Graphics.OldMatView = oldView ?? Graphics.MatView;
         Graphics.OldMatProjection = oldProjection ?? Graphics.MatProjection;
 
@@ -177,15 +176,15 @@ public class Camera : MonoBehaviour
         Target.Res?.Begin();
         if (DoClear) Raylib.ClearBackground(ClearColor);
 
-        if(debugDraw == DebugDraw.Off)
+        if (debugDraw == DebugDraw.Off)
         {
             DrawFullScreenTexture(gBuffer.Combined);
         }
-        else if(debugDraw == DebugDraw.Diffuse) 
+        else if (debugDraw == DebugDraw.Diffuse)
             DrawFullScreenTexture(gBuffer.AlbedoAO);
-        else if (debugDraw == DebugDraw.Normals) 
+        else if (debugDraw == DebugDraw.Normals)
             DrawFullScreenTexture(gBuffer.NormalMetallic);
-        else if (debugDraw == DebugDraw.Depth) 
+        else if (debugDraw == DebugDraw.Depth)
             DrawFullScreenTexture(gBuffer.PositionRoughness);
         else if (debugDraw == DebugDraw.Lighting)
             DrawFullScreenTexture(gBuffer.Lighting);

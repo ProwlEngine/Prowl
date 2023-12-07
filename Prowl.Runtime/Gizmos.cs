@@ -1,9 +1,6 @@
 ﻿using HexaEngine.ImGuiNET;
-using Prowl.Runtime.Components;
-using Prowl.Runtime.Resources;
 using System;
 using System.Collections.Generic;
-using System.Numerics;
 
 namespace Prowl.Runtime
 {

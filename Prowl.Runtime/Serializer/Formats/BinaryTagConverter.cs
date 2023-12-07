@@ -1,9 +1,8 @@
-﻿using Prowl.Runtime.Serializer;
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 
-namespace Prowl.Runtime.Serializer
+namespace Prowl.Runtime
 {
     /// <summary>
     /// This class is responsible for converting CompoundTags to and from binary data.
@@ -40,8 +39,8 @@ namespace Prowl.Runtime.Serializer
             var type = tag.GetTagType();
             writer.Write((byte)type);
             if (type == TagType.Null) { } // Nothing for Null
-            else if(type == TagType.Byte) writer.Write(tag.ByteValue);
-            else if(type == TagType.sByte) writer.Write(tag.sByteValue);
+            else if (type == TagType.Byte) writer.Write(tag.ByteValue);
+            else if (type == TagType.sByte) writer.Write(tag.sByteValue);
             else if (type == TagType.Short) writer.Write(tag.ShortValue);
             else if (type == TagType.Int) writer.Write(tag.IntValue);
             else if (type == TagType.Long) writer.Write(tag.LongValue);
@@ -99,7 +98,7 @@ namespace Prowl.Runtime.Serializer
         {
             var type = (TagType)reader.ReadByte();
             if (type == TagType.Null) return new NullTag();
-            else if(type == TagType.Byte) return new ByteTag(reader.ReadByte());
+            else if (type == TagType.Byte) return new ByteTag(reader.ReadByte());
             else if (type == TagType.sByte) return new sByteTag(reader.ReadSByte());
             else if (type == TagType.Short) return new ShortTag(reader.ReadInt16());
             else if (type == TagType.Int) return new IntTag(reader.ReadInt32());

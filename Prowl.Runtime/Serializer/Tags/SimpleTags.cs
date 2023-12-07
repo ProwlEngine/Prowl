@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace Prowl.Runtime.Serializer
+namespace Prowl.Runtime
 {
     public class NullTag : Tag
     {
@@ -12,7 +12,7 @@ namespace Prowl.Runtime.Serializer
     public class StringTag : Tag
     {
         public string Value { get; set; }
-        public StringTag() {}
+        public StringTag() { }
         public StringTag(string value = "") => Value = value;
         public override TagType GetTagType() => TagType.String;
         public override Tag Clone() => new StringTag(Value);

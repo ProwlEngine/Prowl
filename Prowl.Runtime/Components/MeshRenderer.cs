@@ -1,9 +1,8 @@
 ﻿using Prowl.Icons;
-using Prowl.Runtime.Serializer;
-using Material = Prowl.Runtime.Resources.Material;
-using Mesh = Prowl.Runtime.Resources.Mesh;
+using Material = Prowl.Runtime.Material;
+using Mesh = Prowl.Runtime.Mesh;
 
-namespace Prowl.Runtime.Components;
+namespace Prowl.Runtime;
 
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Shapes}  Mesh Renderer")]
 public class MeshRenderer : MonoBehaviour, ISerializable
@@ -38,7 +37,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable
             mvp = Matrix4x4.Multiply(mvp, GameObject.GlobalCamRelative);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthProjection);
-            Material.Res!.SetMatrix("mvp",Matrix4x4.Transpose(mvp));
+            Material.Res!.SetMatrix("mvp", Matrix4x4.Transpose(mvp));
             Material.Res!.SetShadowPass(true);
             Graphics.DrawMeshNowDirect(Mesh.Res!);
             Material.Res!.EndPass();

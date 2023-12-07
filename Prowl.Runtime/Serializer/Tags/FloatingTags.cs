@@ -1,9 +1,9 @@
-﻿namespace Prowl.Runtime.Serializer
+﻿namespace Prowl.Runtime
 {
     public class FloatTag : Tag
-	{
-		public float Value { get; set; }
-        public FloatTag() {}
+    {
+        public float Value { get; set; }
+        public FloatTag() { }
         public FloatTag(float value = 0f) => Value = value;
         public override TagType GetTagType() => TagType.Float;
         public override Tag Clone() => new FloatTag(Value);

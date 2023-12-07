@@ -1,11 +1,10 @@
-﻿using Prowl.Runtime.Serializer;
-using Raylib_cs;
+﻿using Raylib_cs;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
-namespace Prowl.Runtime.Resources
+namespace Prowl.Runtime
 {
     public class MaterialPropertyBlock
     {
@@ -164,7 +163,7 @@ namespace Prowl.Runtime.Resources
         public Material(AssetRef<Shader> shader)
         {
             if (shader == null) throw new ArgumentNullException(nameof(shader));
-            this.Shader = shader;
+            Shader = shader;
             PropertyBlock = new();
         }
 
@@ -202,7 +201,7 @@ namespace Prowl.Runtime.Resources
             current = shader.Item1[pass];
             Raylib.BeginShaderMode(shader.Item1[pass]);
 
-            if(apply)
+            if (apply)
                 MaterialPropertyBlock.Apply(PropertyBlock, current.Value);
         }
 
@@ -234,13 +233,13 @@ namespace Prowl.Runtime.Resources
             passVariants ??= new();
 
             string keywords = string.Join("-", allKeywords);
-            string key = Shader.AssetID.ToString() + "-" + keywords + "-" + Resources.Shader.globalKeywords;
+            string key = Shader.AssetID.ToString() + "-" + keywords + "-" + Runtime.Shader.globalKeywords;
             if (passVariants.TryGetValue(key, out var s)) return s;
 
             PropertyBlock.ClearCache();
 
             // Add each global togather making sure to not add duplicates
-            string[] globals = Resources.Shader.globalKeywords.ToArray();
+            string[] globals = Runtime.Shader.globalKeywords.ToArray();
             for (int i = 0; i < globals.Length; i++)
             {
                 if (string.IsNullOrWhiteSpace(globals[i])) continue;
@@ -252,7 +251,7 @@ namespace Prowl.Runtime.Resources
 
             // Compile Each Pass
             (Raylib_cs.Shader[], Raylib_cs.Shader) compiledPasses = Shader.Res!.Compile(allKeywords);
-            
+
             passVariants[key] = compiledPasses;
             return compiledPasses;
         }

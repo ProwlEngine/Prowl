@@ -1,4 +1,4 @@
-﻿using Prowl.Runtime.Serializer;
+﻿using Prowl.Runtime;
 
 namespace Prowl.Editor
 {

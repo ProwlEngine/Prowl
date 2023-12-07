@@ -1,8 +1,7 @@
-﻿using Prowl.Runtime.Serializer;
-using Prowl.Runtime.Utils;
+﻿using Prowl.Runtime.Utils;
 using System;
 
-namespace Prowl.Runtime.Resources
+namespace Prowl.Runtime
 {
     [CreateAssetMenu("RenderPipeline")]
     public class RenderPipeline : ScriptableObject

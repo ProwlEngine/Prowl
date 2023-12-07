@@ -1,14 +1,12 @@
 ﻿using Assimp;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
-using Prowl.Runtime.Components;
-using Prowl.Runtime.Resources;
 using Prowl.Runtime.Utils;
 using HexaEngine.ImGuiNET;
 using System;
 using System.Xml.Linq;
-using Material = Prowl.Runtime.Resources.Material;
-using Mesh = Prowl.Runtime.Resources.Mesh;
+using Material = Prowl.Runtime.Material;
+using Mesh = Prowl.Runtime.Mesh;
 
 namespace Prowl.Editor.Assets
 {

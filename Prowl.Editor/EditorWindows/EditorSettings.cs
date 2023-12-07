@@ -1,5 +1,4 @@
 ﻿using Prowl.Runtime;
-using Prowl.Runtime.Resources;
 
 namespace Prowl.Editor.EditorWindows;
 

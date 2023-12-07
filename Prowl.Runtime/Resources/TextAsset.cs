@@ -1,4 +1,4 @@
-﻿namespace Prowl.Runtime.Resources
+﻿namespace Prowl.Runtime
 {
     public sealed class TextAsset : EngineObject
     {

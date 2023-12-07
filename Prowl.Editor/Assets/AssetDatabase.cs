@@ -1,7 +1,6 @@
 ﻿using JetBrains.Annotations;
 using Prowl.Editor;
 using Prowl.Editor.Assets;
-using Prowl.Runtime.Serializer;
 using Prowl.Runtime.Utils;
 using System.Diagnostics;
 using System.IO.Compression;

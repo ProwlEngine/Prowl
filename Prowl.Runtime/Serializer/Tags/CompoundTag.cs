@@ -6,17 +6,17 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Xml.Linq;
 
-namespace Prowl.Runtime.Serializer
+namespace Prowl.Runtime
 {
     public class CompoundTag : Tag
     {
         public Dictionary<string, Tag> Tags { get; set; }
-		public string SerializedType { get; set; } = "";
-		public int SerializedID { get; set; } = 0;
+        public string SerializedType { get; set; } = "";
+        public int SerializedID { get; set; } = 0;
 
-		public Tag this[string tagName]
-		{
-			get { return Get<Tag>(tagName); }
+        public Tag this[string tagName]
+        {
+            get { return Get<Tag>(tagName); }
             set
             {
                 if (tagName == null)
@@ -35,19 +35,19 @@ namespace Prowl.Runtime.Serializer
         [JsonIgnore]
         public IEnumerable<Tag> AllTags => Tags.Values;
 
-        public CompoundTag() : this(new (string, Tag)[]{}) { }
-		public CompoundTag(IEnumerable<(string, Tag)> tags)
-		{
-			Tags = new();
+        public CompoundTag() : this(new (string, Tag)[] { }) { }
+        public CompoundTag(IEnumerable<(string, Tag)> tags)
+        {
+            Tags = new();
             SerializedType = "";
-			SerializedID = 0;
+            SerializedID = 0;
 
-			foreach (var tag in tags)
-				Tags[tag.Item1] = tag.Item2;
-		}
+            foreach (var tag in tags)
+                Tags[tag.Item1] = tag.Item2;
+        }
 
-		public Tag Get(string tagName) => Get<Tag>(tagName);
-		public T Get<T>(string tagName) where T : Tag
+        public Tag Get(string tagName) => Get<Tag>(tagName);
+        public T Get<T>(string tagName) where T : Tag
         {
             if (tagName == null)
                 throw new ArgumentNullException("tagName");
@@ -152,15 +152,15 @@ namespace Prowl.Runtime.Serializer
         }
 
         public override string ToString()
-		{
-			var sb = new StringBuilder();
-			sb.Append("CompoundTAG");
-			sb.AppendFormat(": {0} entries\n", Tags.Count);
+        {
+            var sb = new StringBuilder();
+            sb.Append("CompoundTAG");
+            sb.AppendFormat(": {0} entries\n", Tags.Count);
 
-			sb.Append("{\n");
-			foreach(Tag tag in AllTags) sb.AppendFormat("\t{0}\n", tag.ToString().Replace("\n", "\n\t"));
-			sb.Append("}");
-			return sb.ToString();
-		}
-	}
+            sb.Append("{\n");
+            foreach (Tag tag in AllTags) sb.AppendFormat("\t{0}\n", tag.ToString().Replace("\n", "\n\t"));
+            sb.Append("}");
+            return sb.ToString();
+        }
+    }
 }

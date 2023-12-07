@@ -1,7 +1,5 @@
 ﻿using HexaEngine.ImGuiNET;
 using Prowl.Runtime;
-using Prowl.Runtime.Components;
-using Prowl.Runtime.Resources;
 using System.Numerics;
 
 namespace Prowl.Editor.EditorWindows;

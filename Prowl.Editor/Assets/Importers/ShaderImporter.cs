@@ -1,11 +1,11 @@
 ﻿using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 using System.Text.RegularExpressions;
-using static Prowl.Runtime.Resources.Shader;
+using static Prowl.Runtime.Shader;
 
 namespace Prowl.Editor.Assets
 {
-    [Importer("ShaderIcon.png", typeof(Runtime.Resources.Shader), ".shader")]
+    [Importer("ShaderIcon.png", typeof(Shader), ".shader")]
     public class ShaderImporter : ScriptedImporter
     {
         public static readonly string[] Supported = { ".shader" };
@@ -38,7 +38,7 @@ namespace Prowl.Editor.Assets
 
             // Now we have a Vertex and Fragment shader will all Includes, and Shared code inserted
             // Now we turn the ParsedShader into a Shader
-            Runtime.Resources.Shader shader = new();
+            Shader shader = new();
             shader.Name = parsedShader.Name;
             shader.Properties = parsedShader.Properties;
             shader.Passes = new();
