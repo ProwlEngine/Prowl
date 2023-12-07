@@ -100,7 +100,7 @@ public unsafe class EditorApplication : Application {
         // Start with the project window open
         new ProjectsWindow();
 
-        while (IsRunning)
+        while (isRunning)
         {
             CheckReloadingAssemblies();
 

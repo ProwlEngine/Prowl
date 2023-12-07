@@ -10,16 +10,15 @@ using System.Reflection;
 
 namespace Prowl.Runtime;
 
-public abstract class Application {
-    
-    public static Application Instance { get; private set; } = null!;
-
-    public static IAssetProvider AssetProvider { get; set; }
-
+public abstract class Application
+{
+    public static bool isRunning { get; protected set; }
     public static bool isPlaying { get; protected set; } = false;
     public static bool isEditor { get; protected set; } = false;
 
-    public bool IsRunning { get; protected set; }
+    public static IAssetProvider AssetProvider { get; set; }
+
+
     
     protected readonly ExternalAssemblyLoadContextManager _AssemblyManager = new();
     public IEnumerable<Assembly> ExternalAssemblies => _AssemblyManager.ExternalAssemblies;
@@ -27,6 +26,7 @@ public abstract class Application {
     protected double physicsTimer = 0;
 
     protected ImGUIController controller;
+
     public virtual void Initialize()
     {
         Debug.Log("Initializing...");
@@ -61,11 +61,9 @@ public abstract class Application {
 
     public virtual void Run()
     {
-        if (IsRunning)
+        if (isRunning)
             throw new Exception("Application is already running!");
-        IsRunning = true;
-
-        Instance = this;
+        isRunning = true;
 
         // starts loops on all threads
         Debug.If(!Raylib.IsWindowReady(), "rendering engine has not yet been initialized or initialization has not been fully completed");
@@ -89,7 +87,7 @@ public abstract class Application {
         updateTimer.Start();
         physicsTimer.Start();
 
-        while (IsRunning)
+        while (isRunning)
         {
             isPlaying = true; // Base application is not the editor, isplaying is always true
 
@@ -119,9 +117,8 @@ public abstract class Application {
 
     }
 
-    public virtual void Terminate()
     {
-        IsRunning = false;
+        isRunning = false;
         Debug.Log("Is terminating...");
     }
 
