@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Prowl.Runtime.Utils
+namespace Prowl.Runtime
 {
     [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
     public class SerializeFieldAttribute : Attribute
