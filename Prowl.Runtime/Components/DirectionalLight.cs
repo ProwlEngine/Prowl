@@ -41,35 +41,29 @@ public class DirectionalLight : MonoBehaviour
 
     public void OnRenderObject()
     {
-        if (lightMat == null)
-        {
-            lightMat = new Resources.Material(Shader.Find("Defaults/Directionallight.shader"));
-        }
-        else
-        {
-            lightMat.SetVector("LightDirection", Vector3.TransformNormal(this.GameObject.Forward, Graphics.MatView));
-            lightMat.SetColor("LightColor", color);
-            lightMat.SetFloat("LightIntensity", intensity);
+        lightMat ??= new Resources.Material(Shader.Find("Defaults/Directionallight.shader"));
+        lightMat.SetVector("LightDirection", Vector3.TransformNormal(this.GameObject.Forward, Graphics.MatView));
+        lightMat.SetColor("LightColor", color);
+        lightMat.SetFloat("LightIntensity", intensity);
 
-            lightMat.SetTexture("gAlbedoAO", Camera.Current.gBuffer.AlbedoAO);
-            lightMat.SetTexture("gNormalMetallic", Camera.Current.gBuffer.NormalMetallic);
-            lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
+        lightMat.SetTexture("gAlbedoAO", Camera.Current.gBuffer.AlbedoAO);
+        lightMat.SetTexture("gNormalMetallic", Camera.Current.gBuffer.NormalMetallic);
+        lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
 
-            lightMat.SetTexture("shadowMap", shadowMap.InternalDepth);
-            lightMat.SetMatrix("matCamViewInverse", Graphics.MatViewInverseTransposed);
-            lightMat.SetMatrix("matShadowView", Matrix4x4.Transpose(Graphics.MatDepthView));
-            lightMat.SetMatrix("matShadowSpace", Matrix4x4.Transpose(depthMVP));
+        lightMat.SetTexture("shadowMap", shadowMap.InternalDepth);
+        lightMat.SetMatrix("matCamViewInverse", Graphics.MatViewInverseTransposed);
+        lightMat.SetMatrix("matShadowView", Matrix4x4.Transpose(Graphics.MatDepthView));
+        lightMat.SetMatrix("matShadowSpace", Matrix4x4.Transpose(depthMVP));
 
-            lightMat.SetFloat("u_Radius", shadowRadius);
-            lightMat.SetFloat("u_Penumbra", shadowPenumbra);
-            lightMat.SetFloat("u_MinimumPenumbra", shadowMinimumPenumbra);
-            lightMat.SetInt("u_QualitySamples", (int)qualitySamples);
-            lightMat.SetInt("u_BlockerSamples", (int)blockerSamples);
-            lightMat.SetFloat("u_Bias", shadowBias);
-            lightMat.SetFloat("u_NormalBias", shadowNormalBias);
+        lightMat.SetFloat("u_Radius", shadowRadius);
+        lightMat.SetFloat("u_Penumbra", shadowPenumbra);
+        lightMat.SetFloat("u_MinimumPenumbra", shadowMinimumPenumbra);
+        lightMat.SetInt("u_QualitySamples", (int)qualitySamples);
+        lightMat.SetInt("u_BlockerSamples", (int)blockerSamples);
+        lightMat.SetFloat("u_Bias", shadowBias);
+        lightMat.SetFloat("u_NormalBias", shadowNormalBias);
 
-            Graphics.Blit(lightMat);
-        }
+        Graphics.Blit(lightMat);
 
         var s = Matrix4x4.CreateScale(0.5f);
         var r = Matrix4x4.CreateFromQuaternion(GameObject.GlobalOrientation);
