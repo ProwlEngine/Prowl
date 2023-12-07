@@ -45,17 +45,12 @@ public static class Project
     /// <param name="projectName">Name of project to load</param>
     /// <exception cref="UnauthorizedAccessException">Throws if Project Name doesn't exist</exception>
     /// <exception cref="ArgumentNullException">Throws if projectName is null or empty</exception>
-    public static void Open(string projectName) 
+    public static void Open(string projectName)
     {
-        string pathToProject = GetPath(projectName);
-        if (!Directory.Exists(pathToProject))
+        var projectDir = GetPath(projectName);
+        if (!projectDir.Exists)
         {
-            Runtime.Debug.LogError($"A project with the name {projectName} does not exists at path {pathToProject}");
-            return;
-        }
-        if (string.IsNullOrEmpty(pathToProject))
-        {
-            Runtime.Debug.LogError($"The path to project is Null or Empty.");
+            Runtime.Debug.LogError($"A project with the name {projectName} does not exists at path {projectDir.FullName}");
             return;
         }
 
@@ -82,24 +77,24 @@ public static class Project
     public static void CreateNew(string ProjectName)
     {
         Name = ProjectName;
-        string pathToProject = GetPath(ProjectName);
-        if (Directory.Exists(pathToProject))
+        var projectDir = GetPath(ProjectName);
+        if (projectDir.Exists)
         {
             Runtime.Debug.LogError($"A project with the name {ProjectName} already exists.");
             return;
         }
 
         // Create Path
-        Directory.CreateDirectory(pathToProject);
+        projectDir.Create();
 
         // Create Assets Folder
-        Directory.CreateDirectory(Path.Combine(pathToProject, @"Assets"));
+        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Assets"));
         DefaultAssets.CreateDefaults("Defaults");
-        Directory.CreateDirectory(Path.Combine(pathToProject, @"Library"));
-        Directory.CreateDirectory(Path.Combine(pathToProject, @"Packages"));
+        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Library"));
+        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Packages"));
 
         // Create Config Folder
-        string configPath = Path.Combine(pathToProject, @"Config");
+        string configPath = Path.Combine(projectDir.FullName, @"Config");
         Directory.CreateDirectory(configPath);
 
         ProjectSettings = new();
@@ -248,6 +243,13 @@ public static class Project
         return true;
     }
 
+    /// <summary>
+    /// Return the DirectoryInfo of a Project with a given name
+    /// </summary>
+    /// <param name="name">The Project Name</param>
+    /// <returns>Directory of given project</returns>
+    public static DirectoryInfo GetPath(string name) => new DirectoryInfo(Path.Combine(Projects_Directory, name));
+
     #endregion
 
 
@@ -340,11 +342,6 @@ public static class Project
         Runtime.Debug.Log("**********************************************************************************************************************", false);
         Runtime.Debug.Log(message);
         Runtime.Debug.Log("**********************************************************************************************************************", false);
-    }
-
-    private static string GetPath(string name)
-    {
-        return Path.Combine(Projects_Directory, name);
     }
 
     #endregion

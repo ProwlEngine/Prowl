@@ -88,7 +88,7 @@ public class ProjectsWindow : EditorWindow
         ImGui.SameLine();
 
         ImGui.SetCursorPos(new System.Numerics.Vector2(pos.X + item_size + 5, pos.Y));
-        ImGui.TextColored(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 1.0f), $"{FontAwesome6.Calendar} Modified: {Directory.GetLastWriteTime(Project.GetPath(name))}");
+        ImGui.TextColored(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 1.0f), $"{FontAwesome6.Calendar} Modified: {Project.GetPath(name).LastWriteTime}");
 
         ImGui.SetCursorPos(endpos);
     }
