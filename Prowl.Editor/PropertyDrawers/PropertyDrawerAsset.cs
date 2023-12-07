@@ -29,6 +29,7 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
             drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.9f, 0.1f, 0.1f, 0.3f)));
             if (ImGui.Selectable($"{Name}: {path}", false))
             {
+                AssetDatabase.Ping(value.AssetID);
 #warning TODO: Show a popup with a list of all assets of the type - property.Type.Name
             }
         }
@@ -38,6 +39,7 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
             drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.1f, 0.1f, 0.9f, 0.3f)));
             if (ImGui.Selectable($"{Name}: {path}", false))
             {
+                AssetDatabase.Ping(value.AssetID);
 #warning TODO: Show a popup with a list of all assets of the type - property.Type.Name
             }
         }
@@ -45,7 +47,10 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         {
             path = AssetDatabase.GUIDToAssetPath(value.AssetID);
             if (ImGui.Selectable($"{Name}: {path}", false))
+            {
+                AssetDatabase.Ping(value.AssetID);
                 Selection.Select(this, false);
+            }
         }
 
         // DragDrop code

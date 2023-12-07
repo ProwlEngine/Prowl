@@ -96,6 +96,7 @@ namespace Prowl.Runtime.Assets
         public static string TempAssetDirectory => Path.Combine(Project.ProjectDirectory, "Library/AssetDatabase");
 
         public static event Action<Guid, string>? AssetRemoved;
+        public static event Action<string>? Pinged;
 
         public static List<DirectoryInfo> GetRootfolders() => rootFolders;
 
@@ -178,6 +179,13 @@ namespace Prowl.Runtime.Assets
 
         public static void StartEditingAsset() => isEditing++;
         public static void StopEditingAsset() => isEditing = Math.Max(0, isEditing - 1);
+
+        public static void Ping(Guid guid) 
+        {
+            if (guid != Guid.Empty) 
+                Ping(GUIDToAssetPath(guid));
+        }
+        public static void Ping(string relativeAssetPath) => Pinged?.Invoke(relativeAssetPath);
 
         public static void MoveAsset(string oldRelativeAssetPath, string newRelativeAssetPath, bool overwrite = false)
         {

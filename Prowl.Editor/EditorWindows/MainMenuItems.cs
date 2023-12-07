@@ -29,6 +29,7 @@ namespace Prowl.Editor.EditorWindows
             StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), file);
 
             Selection.Select(file);
+            AssetDatabase.Ping(AssetDatabase.FileToRelative(file));
         }
 
         [MenuItem("Create/Script")]
@@ -45,6 +46,7 @@ namespace Prowl.Editor.EditorWindows
             File.WriteAllText(file.FullName, reader.ReadToEnd());
 
             Selection.Select(file);
+            AssetDatabase.Ping(AssetDatabase.FileToRelative(file));
         }
 
         #endregion
@@ -77,6 +79,7 @@ namespace Prowl.Editor.EditorWindows
             scene.GameObjects = (ListTag)TagSerializer.Serialize(allGameObjects);
             StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(scene), file);
             Selection.Select(file);
+            AssetDatabase.Ping(AssetDatabase.FileToRelative(file));
         }
 
         [MenuItem("Scene/Save As")]
@@ -108,6 +111,7 @@ namespace Prowl.Editor.EditorWindows
                     var tag = (CompoundTag)TagSerializer.Serialize(scene);
                     StringTagConverter.WriteToFile(tag, file);
                     Selection.Select(file);
+                    AssetDatabase.Ping(AssetDatabase.FileToRelative(file));
                 }   
             };
             ImGuiFileDialog.FileDialog(imFileDialogInfo);

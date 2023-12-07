@@ -31,11 +31,16 @@ public class AssetBrowserWindow : EditorWindow {
     private float ThumbnailSize => (1.0f + Settings.m_ThumbnailSize) * 65f;
 
 
+    private const float PingDuration = 3f;
+    private float pingTimer = 0;
+    private FileInfo pingedFile;
+
     public AssetBrowserWindow() : base()
     {
         Title = "Asset Browser";
         Project.OnProjectChanged += Invalidate;
         Selection.OnSelectObject += SelectionChanged;
+        AssetDatabase.Pinged += OnAssetPinged;
         Invalidate();
     }
 
@@ -43,6 +48,14 @@ public class AssetBrowserWindow : EditorWindow {
     {
         Project.OnProjectChanged -= Invalidate;
         Selection.OnSelectObject -= SelectionChanged;
+        AssetDatabase.Pinged -= OnAssetPinged;
+    }
+
+    private void OnAssetPinged(string relativeAssetPath)
+    {
+        pingTimer = PingDuration;
+        pingedFile = AssetDatabase.RelativeToFile(relativeAssetPath);
+        CurDirectory = pingedFile.Directory;
     }
 
     protected override void Draw()
@@ -184,6 +197,21 @@ public class AssetBrowserWindow : EditorWindow {
         ImGui.BeginChild("ClipBox", new System.Numerics.Vector2(ThumbnailSize, ThumbnailSize), false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
         RenderFileSystemEntry(entry);
         ImGui.EndChild();
+
+        // Ping Rendering
+        if (pingTimer > 0 && pingedFile.FullName.Equals(entry.FullName, StringComparison.OrdinalIgnoreCase))
+        {
+            pingTimer -= Time.deltaTimeF;
+            if (pingTimer > PingDuration - 1f)
+            {
+                // For the first second lock scroll to the target file and directory
+                CurDirectory = pingedFile.Directory;
+                ImGui.ScrollToItem(ImGuiScrollFlags.None);
+            }
+            GUIHelper.ItemRect(1f, 0.8f, 0.0f, 0.8f, MathF.Sin(pingTimer) * 1f, 3f, 2.5f);
+            GUIHelper.ItemRect(1f, 0.8f, 0.0f, 0.8f, MathF.Sin(pingTimer) * 6f, 3f, 2.5f);
+        }
+
         AssetsWindow.FileRightClick(entry);
         ImGui.PopID();
 
@@ -204,7 +232,9 @@ public class AssetBrowserWindow : EditorWindow {
         ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 0.0f);
 
         ImGui.Selectable("##" + entry.FullName, isSelected, ImGuiSelectableFlags.AllowOverlap, System.Numerics.Vector2.One * thumbnailSize);
-        GUIHelper.ItemRect(0.5f, 0.5f, 0.5f, 0.1f);
+
+        GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
+
         if (ImGui.IsItemHovered())
         {
             if (entry is FileInfo)
@@ -254,6 +284,7 @@ public class AssetBrowserWindow : EditorWindow {
             }
         }
         GUIHelper.Tooltip(entry.Name);
+
         ImGui.PopStyleVar(2);
 
         Texture2D thumbnail = GetEntryThumbnail(entry);
