@@ -73,6 +73,7 @@ public static class Project {
         Directory.CreateDirectory(Path.Combine(pathToProject, @"Assets"));
         DefaultAssets.CreateDefaults("Defaults");
         Directory.CreateDirectory(Path.Combine(pathToProject, @"Library"));
+        Directory.CreateDirectory(Path.Combine(pathToProject, @"Packages"));
 
         // Create Config Folder
         string configPath = Path.Combine(pathToProject, @"Config");
