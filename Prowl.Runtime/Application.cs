@@ -16,7 +16,8 @@ public abstract class Application {
 
     public static IAssetProvider AssetProvider { get; set; }
 
-    public static bool isPlaying = false;
+    public static bool isPlaying { get; protected set; } = false;
+    public static bool isEditor { get; protected set; } = false;
 
     public bool IsRunning { get; protected set; }
     

@@ -80,6 +80,8 @@ public unsafe class EditorApplication : Application {
         }
 
         EditorGui.Initialize();
+
+        isEditor = true;
     }
 
     protected override void Loop()
