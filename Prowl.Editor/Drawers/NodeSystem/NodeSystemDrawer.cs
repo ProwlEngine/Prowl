@@ -173,10 +173,11 @@ namespace Prowl.Editor.Drawers.NodeSystem
             {
                 ImNodes.BeginInputAttribute(port.InstanceID);
 
+                bool drawField = false;
                 var fieldInfo = GetFieldInfo(port.node.GetType(), port.fieldName);
                 InputAttribute input = fieldInfo.GetCustomAttributes<InputAttribute>(true).FirstOrDefault();
-                bool drawField = input.backingValue == ShowBackingValue.Always ||
-                                (input.backingValue == ShowBackingValue.Unconnected && !port.IsConnected);
+                if (input.backingValue != ShowBackingValue.Never)
+                    drawField = input.backingValue == ShowBackingValue.Always || (input.backingValue == ShowBackingValue.Unconnected && !port.IsConnected);
                 if (drawField)
                 {
                     var value = fieldInfo.GetValue(port.node);
