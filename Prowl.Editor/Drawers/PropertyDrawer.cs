@@ -15,6 +15,7 @@ public abstract class PropertyDrawer {
 
     public static bool Draw(object container, FieldInfo fieldInfo, float width = -1)
     {
+        if (fieldInfo == null) return false;
         if (width == -1) width = ImGui.GetContentRegionAvail().X;
         var value = fieldInfo.GetValue(container);
         bool changed = Draw(fieldInfo.Name, ref value, width);
@@ -22,18 +23,20 @@ public abstract class PropertyDrawer {
         return changed;
     }
 
-    public static bool Draw(object container, PropertyInfo fieldInfo, float width = -1)
+    public static bool Draw(object container, PropertyInfo propertyInfo, float width = -1)
     {
-        if(width == -1) width = ImGui.GetContentRegionAvail().X;
-        var value = fieldInfo.GetValue(container);
-        bool changed = Draw(fieldInfo.Name, ref value, width);
-        if (changed) fieldInfo.SetValue(container, value);
+        if (propertyInfo == null) return false;
+        if (width == -1) width = ImGui.GetContentRegionAvail().X;
+        var value = propertyInfo.GetValue(container);
+        bool changed = Draw(propertyInfo.Name, ref value, width);
+        if (changed) propertyInfo.SetValue(container, value);
         return changed;
     }
 
 
     public static bool Draw(string label, ref object value, float width = -1)
     {
+        if (value == null) return false;
         if (width == -1) width = ImGui.GetContentRegionAvail().X;
         var objType = value.GetType();
         bool changed = false;
