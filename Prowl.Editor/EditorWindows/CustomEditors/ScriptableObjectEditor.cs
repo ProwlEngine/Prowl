@@ -3,7 +3,6 @@ using Prowl.Editor.Assets;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
-using Prowl.Runtime.Utils;
 using System.Reflection;
 
 namespace Prowl.Editor.EditorWindows.CustomEditors
