@@ -6,16 +6,13 @@ namespace Prowl.Editor.PropertyDrawers;
 
 public class PropertyDrawerColor : PropertyDrawer<Color> {
 
-    protected override bool Draw(string label, ref Color value)
+    protected override bool Draw(string label, ref Color value, float width)
     {
         bool changed = false;
-        ImGui.Columns(2);
-        ImGui.Text(label);
-        ImGui.SetColumnWidth(0, 70);
-        ImGui.NextColumn();
-        
-        ImGui.PushItemWidth(ImGui.GetContentRegionAvail().X);
-        
+        DrawLabel(label, ref width);
+
+        ImGui.PushItemWidth(width);
+
         System.Numerics.Vector4 v4 = value;
         changed = ImGui.ColorEdit4("", ref v4);
         value = new Color(v4.X, v4.Y, v4.Z, v4.W);
@@ -28,15 +25,12 @@ public class PropertyDrawerColor : PropertyDrawer<Color> {
 
 public class PropertyDrawerColor32 : PropertyDrawer<Color32> {
 
-    protected override bool Draw(string label, ref Color32 value)
+    protected override bool Draw(string label, ref Color32 value, float width)
     {
         bool changed = false;
-        ImGui.Columns(2);
-        ImGui.Text(label);
-        ImGui.SetColumnWidth(0, 70);
-        ImGui.NextColumn();
-        
-        ImGui.PushItemWidth(ImGui.GetContentRegionAvail().X);
+        DrawLabel(label, ref width);
+
+        ImGui.PushItemWidth(width);
         
         System.Numerics.Vector4 v4 = new System.Numerics.Vector4(value.red / 255f, value.green / 255f, value.blue / 255f, value.alpha / 255f);
         changed = ImGui.ColorEdit4("", ref v4);

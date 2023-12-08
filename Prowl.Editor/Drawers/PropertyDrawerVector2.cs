@@ -5,15 +5,12 @@ namespace Prowl.Editor.PropertyDrawers;
 
 public class PropertyDrawerSystemVector2 : PropertyDrawer<System.Numerics.Vector2> {
 
-    protected override bool Draw(string label, ref System.Numerics.Vector2 v2)
+    protected override bool Draw(string label, ref System.Numerics.Vector2 v2, float width)
     {
         bool changed = false;
-        ImGui.Columns(2);
-        ImGui.Text(label);
-        ImGui.SetColumnWidth(0, 70);
-        ImGui.NextColumn();
-        
-        ImGui.PushItemWidth(ImGui.GetContentRegionAvail().X / 2 - 20);
+        DrawLabel(label, ref width);
+
+        ImGui.PushItemWidth(width / 2 - 10);
         ImGui.Text("X");
         ImGui.SameLine();
         changed |= ImGui.DragFloat("##X", ref v2.X);
@@ -31,15 +28,12 @@ public class PropertyDrawerSystemVector2 : PropertyDrawer<System.Numerics.Vector
 
 public class PropertyDrawerVector2 : PropertyDrawer<Vector2> {
 
-    protected override bool Draw(string label, ref Vector2 v2)
+    protected override bool Draw(string label, ref Vector2 v2, float width)
     {
         bool changed = false;
-        ImGui.Columns(2);
-        ImGui.Text(label);
-        ImGui.SetColumnWidth(0, 70);
-        ImGui.NextColumn();
-        
-        ImGui.PushItemWidth(ImGui.GetContentRegionAvail().X / 2 - 20);
+        DrawLabel(label, ref width);
+
+        ImGui.PushItemWidth(width / 2 - 10);
         ImGui.Text("X");
         ImGui.SameLine();
         changed |= GUIHelper.DragDouble("##X", ref v2.X, 0.01f);

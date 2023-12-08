@@ -10,17 +10,13 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
 {
     public virtual string Name { get; } = FontAwesome6.Circle;
 
-    protected override bool Draw(string label, ref IAssetRef value)
+    protected override bool Draw(string label, ref IAssetRef value, float width)
     {
         bool changed = false;
         ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+        DrawLabel(label, ref width);
 
-        ImGui.Columns(2);
-        ImGui.Text(label);
-        ImGui.SetColumnWidth(0, 70);
-        ImGui.NextColumn();
-
-        ImGui.PushItemWidth(ImGui.GetContentRegionAvail().X);
+        ImGui.PushItemWidth(width);
 
         string path;
         if (value.IsExplicitNull)

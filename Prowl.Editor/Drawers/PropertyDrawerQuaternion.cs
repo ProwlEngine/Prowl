@@ -5,15 +5,12 @@ namespace Prowl.Editor.PropertyDrawers;
 
 public class PropertyDrawerQuaternion : PropertyDrawer<Quaternion>
 {
-    protected override bool Draw(string label, ref Quaternion v3)
+    protected override bool Draw(string label, ref Quaternion v3, float width)
     {
         bool changed = false;
-        ImGui.Columns(2);
-        ImGui.Text(label);
-        ImGui.SetColumnWidth(0, 70);
-        ImGui.NextColumn();
+        DrawLabel(label, ref width);
 
-        ImGui.PushItemWidth(ImGui.GetContentRegionAvail().X / 3 - 20);
+        ImGui.PushItemWidth(width / 3 - 10);
         ImGui.Text("X");
         ImGui.SameLine();
         changed |= GUIHelper.DragDouble("##X", ref v3.X, 0.01f);
