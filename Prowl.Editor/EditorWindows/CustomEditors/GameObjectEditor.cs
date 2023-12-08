@@ -21,9 +21,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
         public override void OnEnable()
         {
-            var weak = target as WeakReference;
-            if (weak.IsAlive == false) return;
-            var go = weak.Target as GameObject;
+            var go = target as GameObject;
 
             // Create all the editors for all the types
             var comps = go.GetComponents<MonoBehaviour>();
@@ -35,7 +33,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 if (editorType != null)
                 {
                     var editor = (ScriptedEditor)Activator.CreateInstance(editorType);
-                    editor.target = new WeakReference(comp);
+                    editor.target = comp;
                     if (editor != null)
                     {
                         compEditors[comp.InstanceID] = editor;
@@ -53,9 +51,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
         public override void OnInspectorGUI()
         {
-            var weak = target as WeakReference;
-            if (weak.IsAlive == false) return;
-            var go = weak.Target as GameObject;
+            var go = target as GameObject;
 
             ImGui.PushID(go.GetHashCode());
             // GameObject's Drawer is Hardcoded

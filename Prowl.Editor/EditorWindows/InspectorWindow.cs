@@ -10,10 +10,10 @@ public class InspectorWindow : EditorWindow
 {
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoCollapse;
 
-    private Stack<WeakReference> _BackStack = new();
-    private Stack<WeakReference> _ForwardStack = new();
+    private Stack<object> _BackStack = new();
+    private Stack<object> _ForwardStack = new();
 
-    private WeakReference? Selected = null;
+    private object? Selected = null;
 
     (object, ScriptedEditor)? customEditor;
 
@@ -28,7 +28,7 @@ public class InspectorWindow : EditorWindow
         _ForwardStack.Clear();
         if(Selected != null)
             _BackStack.Push(Selected);
-        Selected = new WeakReference(n);
+        Selected = n;
     }
 
     ~InspectorWindow()
@@ -46,21 +46,19 @@ public class InspectorWindow : EditorWindow
 
 
             if (Selected == null) ImGui.Text("No object selected");
-            if (Selected.IsAlive == false) ImGui.Text("Object Destroyed");
-            else if (Selected.Target is EngineObject eo) ImGui.Text(eo.Name);
-            else ImGui.Text(Selected.Target.GetType().ToString());
+            else if (Selected is EngineObject eo) ImGui.Text(eo.Name);
+            else ImGui.Text(Selected.GetType().ToString());
             ImGui.EndMenuBar();
         }
 
         if (Selected == null) return;
-        if (Selected.IsAlive == false) return;
-        if (Selected.Target is EngineObject eo1 && eo1.IsDestroyed) return;
+        if (Selected is EngineObject eo1 && eo1.IsDestroyed) return;
 
         // remove nulls or destroyed
         while (_BackStack.Count > 0)
         {
             var peek = _BackStack.Peek();
-            if (peek == null || !peek.IsAlive || (peek.Target is EngineObject eo2 && eo2.IsDestroyed) || ReferenceEquals(peek, Selected.Target))
+            if (peek == null || (peek is EngineObject eo2 && eo2.IsDestroyed) || ReferenceEquals(peek, Selected))
                 _BackStack.Pop();
             else
                 break;
@@ -82,7 +80,7 @@ public class InspectorWindow : EditorWindow
         while (_ForwardStack.Count > 0)
         {
             var peek = _ForwardStack.Peek();
-            if (peek == null || !peek.IsAlive || (peek.Target is EngineObject eo3 && eo3.IsDestroyed) || ReferenceEquals(peek, Selected.Target))
+            if (peek == null || (peek is EngineObject eo3 && eo3.IsDestroyed) || ReferenceEquals(peek, Selected))
                 _ForwardStack.Pop();
             else
                 break;
@@ -100,7 +98,7 @@ public class InspectorWindow : EditorWindow
 
         bool destroyCustomEditor = true;
 
-        if (Selected.Target is EngineObject engineObj)
+        if (Selected is EngineObject engineObj)
         {
             if (customEditor == null)
             {
@@ -121,7 +119,7 @@ public class InspectorWindow : EditorWindow
                 destroyCustomEditor = false;
             }
         }
-        else if(Selected.Target is FileInfo path)
+        else if(Selected is FileInfo path)
         {
             if (customEditor == null) 
             {
