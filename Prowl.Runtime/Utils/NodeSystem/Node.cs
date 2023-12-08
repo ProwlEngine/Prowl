@@ -86,6 +86,9 @@ namespace Prowl.Runtime.NodeSystem
         [SerializeField] private Dictionary<string, NodePort> ports = new Dictionary<string, NodePort>();
         public int InstanceID;
 
+        public abstract string Title { get; }
+        public abstract float Width { get; }
+
         public void OnEnable()
         {
             InstanceID = graph.NextID;
@@ -127,6 +130,7 @@ namespace Prowl.Runtime.NodeSystem
 
         /// <summary> Initialize node. Called on enable. </summary>
         protected virtual void Init() { }
+        public virtual void OnValidate() { }
 
         /// <summary> Checks all connections for invalid references, and removes them. </summary>
         public void VerifyConnections()
@@ -274,37 +278,6 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> Called after a connection is removed from this port </summary>
         /// <param name="port">Output or Input</param>
         public virtual void OnRemoveConnection(NodePort port) { }
-
-        public virtual void OnDrawTitle()
-        {
-            ImGui.Text(GetType().Name);
-        }
-        public virtual void OnNodeDraw() 
-        {
-            foreach(var input in Inputs)
-                OnDrawPort(input);
-            foreach(var output in Outputs)
-                OnDrawPort(output);
-            foreach(var input in DynamicInputs)
-                OnDrawPort(input);
-            foreach(var output in DynamicOutputs)
-                OnDrawPort(output);
-        }
-        public virtual void OnDrawPort(NodePort port)
-        {
-            if (port.IsInput)
-            {
-                ImNodes.BeginInputAttribute(port.InstanceID);
-                ImGui.Text(port.fieldName);
-                ImNodes.EndInputAttribute();
-            }
-            else if (port.IsOutput)
-            {
-                ImNodes.BeginOutputAttribute(port.InstanceID);
-                ImGui.Text(port.fieldName);
-                ImNodes.EndOutputAttribute();
-            }
-        }
 
         /// <summary> Disconnect everything from this node </summary>
         public void ClearConnections()

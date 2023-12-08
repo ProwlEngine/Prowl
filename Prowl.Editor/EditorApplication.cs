@@ -1,5 +1,6 @@
 using HexaEngine.ImGuiNET;
 using Prowl.Editor.Assets;
+using Prowl.Editor.Drawers.NodeSystem;
 using Prowl.Editor.EditorWindows;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
@@ -228,6 +229,7 @@ public unsafe class EditorApplication : Application {
                     PropertyDrawer.ClearLookUp();
                     ImporterAttribute.ClearLookUp();
                     CustomEditorAttribute.ClearLookUp();
+                    NodeSystemDrawer.ClearLookUp();
                     MenuItem.ClearMenus();
 
                     ClearTypeDescriptorCache();
@@ -239,6 +241,7 @@ public unsafe class EditorApplication : Application {
                 PropertyDrawer.GenerateLookUp();
                 ImporterAttribute.GenerateLookUp();
                 CustomEditorAttribute.GenerateLookUp();
+                NodeSystemDrawer.GenerateLookUp();
                 MenuItem.FindAllMenus();
                 CreateAssetMenuHandler.FindAllMenus(); // Injects into Menuitem so doesnt need to Unload
 

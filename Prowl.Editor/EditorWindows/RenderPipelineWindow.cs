@@ -1,4 +1,5 @@
 ﻿using HexaEngine.ImGuiNET;
+using Prowl.Editor.Drawers.NodeSystem;
 using Prowl.Runtime;
 using Prowl.Runtime.ImGUI.Widgets;
 
@@ -23,6 +24,6 @@ public class RenderPipelineWindow : EditorWindow
 
         if (CurrentRenderPipeline.IsAvailable == false) return;
 
-        CurrentRenderPipeline.Res!.Draw();
+        bool changed = NodeSystemDrawer.Draw(CurrentRenderPipeline.Res);
     }
 }

@@ -7,6 +7,10 @@ namespace Prowl.Runtime
 
     public class MathNode : Node
     {
+        public override string Title => "Math Node";
+        public override float Width => 150;
+
+
         // Adding [Input] or [Output] is all you need to do to register a field as a valid port on your node 
         [Input] public float a;
         [Input] public float b;
@@ -16,6 +20,7 @@ namespace Prowl.Runtime
 
         // The value of 'mathType' will be displayed on the node in an editable format, similar to the inspector
         public MathType mathType = MathType.Add;
+
         public enum MathType { Add, Subtract, Multiply, Divide }
 
         // GetValue should be overridden to return a value for any specified output port

@@ -102,80 +102,19 @@ namespace Prowl.Runtime.NodeSystem
         
             return graph;
         }
-        
-        protected virtual void OnDestroy()
-        {
-            // Remove all nodes prior to graph destruction
-            Clear();
-        }
-        
-        public virtual void Draw()
+
+        /// <summary> Set the ImNodes Context </summary>
+        public void SetContext()
         {
             if (context.IsNull)
                 context = ImNodes.EditorContextCreate();
             ImNodes.EditorContextSet(context);
+        }
 
-            ImNodes.BeginNodeEditor();
-            foreach (var node in nodes)
-            {
-                ImNodes.BeginNode(node.InstanceID);
-
-                ImNodes.BeginNodeTitleBar();
-                node.OnDrawTitle();
-                ImNodes.EndNodeTitleBar();
-
-                node.OnNodeDraw();
-
-                ImNodes.EndNode();
-                node.position = ImNodes.GetNodeEditorSpacePos(node.InstanceID);
-            }
-
-            foreach (var node in nodes)
-                foreach (var output in node.Outputs) 
-                {
-                    int connectionCount = output.ConnectionCount;
-                    for(int i=0; i<connectionCount; i++)
-                    {
-                        var link = output.GetConnection(i);
-                        ImNodes.Link(output.GetConnectionInstanceID(i), output.InstanceID, link.InstanceID);
-                    }
-                }
-
-            if (ImNodes.IsEditorHovered() && ImGui.IsMouseClicked(ImGuiMouseButton.Right))
-            {
-                ImGui.OpenPopup("NodeCreatePopup");
-            }
-            if (ImGui.BeginPopup("NodeCreatePopup"))
-            {
-                foreach (var nodeType in NodeTypes)
-                    if (ImGui.Selectable(nodeType.Name))
-                        AddNode(nodeType);
-
-                ImGui.EndPopup();
-            }
-
-            ImNodes.MiniMap();
-            ImNodes.EndNodeEditor();
-
-            int start_node_id = 0;  
-            int start_link_id = 0;  
-            int end_node_id = 0;  
-            int end_link_id = 0;  
-            if (ImNodes.IsLinkCreated(ref start_node_id, ref start_link_id, ref end_node_id, ref end_link_id))
-            {
-                var output = GetNode(start_node_id);
-                var end = GetNode(end_node_id);
-                output.GetPort(start_link_id).Connect(end.GetPort(end_link_id));
-            }
-
-            int link_id = 0;
-            if (ImNodes.IsLinkDestroyed(ref link_id))
-            {
-            }
-
-            if (ImNodes.IsLinkHovered(ref link_id) && ImGui.IsMouseClicked(ImGuiMouseButton.Middle))
-            {
-            }
+        protected virtual void OnDestroy()
+        {
+            // Remove all nodes prior to graph destruction
+            Clear();
         }
 
         #region Attributes
