@@ -28,7 +28,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
 
         [Input(ShowBackingValue.Never)] public GBuffer CameraOutput;
 
-        [Output] public AssetRef<RenderTexture> LightingRT;
+        [Output] public RenderTexture LightingRT;
 
         RenderTexture _lighting;
         long lastRenderedFrame = -1;
@@ -50,25 +50,23 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             }
 
             // Start
-            Raylib.BeginTextureMode(new RenderTexture2D() { id = _lighting.fboId, texture = _lighting.InternalTextures[0] });
-            Rlgl.rlActiveDrawBuffers(1);
-
-            Rlgl.rlDisableDepthTest();
-            Rlgl.rlSetCullFace(0); // Cull the front faces for the lighting pass
+            _lighting.Begin();
 
             // Clear then Draw
             Raylib.ClearBackground(new Color(0, 0, 0, 0));
-            Camera.Current.RenderAllOfOrder(RenderingOrder.Lighting);
 
+            Rlgl.rlDisableDepthTest();
+            Rlgl.rlSetCullFace(0); // Cull the front faces for the lighting pass
+            Camera.Current.RenderAllOfOrder(RenderingOrder.Lighting);
             Rlgl.rlEnableDepthTest();
             Rlgl.rlSetCullFace(1);
 
-            Raylib.EndTextureMode();
+            _lighting.End();
 
             lastRenderedFrame = Time.frameCount;
             lastRenderedCam = Camera.Current;
 
-            return new AssetRef<RenderTexture>(_lighting);
+            return _lighting;
         }
     }
 
@@ -80,7 +78,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         [Input(ShowBackingValue.Never)] public GBuffer CameraOutput;
         [Input(ShowBackingValue.Never)] public RenderTexture LightingRT;
 
-        [Output] public AssetRef<RenderTexture> RenderTexture;
+        [Output] public RenderTexture RenderTexture;
 
         public float Contrast = 1.1f;
         public float Saturation = 1.2f;
@@ -100,7 +98,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
                 return _combined;
 
             var gbuffer = GetInputValue<GBuffer>("CameraOutput");
-            var lighting = GetInputValue<AssetRef<RenderTexture>>("LightingRT");
+            var lighting = GetInputValue<RenderTexture>("LightingRT");
 
             if (_combined == null || (gbuffer.Width != _combined.Width || gbuffer.Height != _combined.Height))
             {
@@ -109,42 +107,32 @@ namespace Prowl.Runtime.Resources.RenderPipeline
                 _combined = new RenderTexture((int)(gbuffer.Width / Camera.Current.RenderResolution), (int)(gbuffer.Height / Camera.Current.RenderResolution), 1, false, formats);
             }
 
-            Raylib.BeginTextureMode(new RenderTexture2D() { id = _combined.fboId, texture = _combined.InternalTextures[0] });
-            Rlgl.rlActiveDrawBuffers(1); // Drawing only into Diffuse for the final Combine pass
+            CombineShader ??= new(Shader.Find("Defaults/GBuffercombine.shader"));
+            CombineShader.SetTexture("gAlbedoAO", gbuffer.AlbedoAO);
+            CombineShader.SetTexture("gLighting", lighting.InternalTextures[0]);
+            CombineShader.SetFloat("Contrast", Math.Clamp(Contrast, 0, 2));
+            CombineShader.SetFloat("Saturation", Math.Clamp(Saturation, 0, 2));
 
-            Rlgl.rlDisableDepthMask();
-            Rlgl.rlDisableDepthTest();
-            Rlgl.rlDisableBackfaceCulling();
+            if (UseACES) CombineShader.EnableKeyword("ACESTONEMAP");
+            else CombineShader.DisableKeyword("ACESTONEMAP");
+            if (UseGammaCorrection) CombineShader.EnableKeyword("GAMMACORRECTION");
+            else CombineShader.DisableKeyword("GAMMACORRECTION");
+
+
+            _combined.Begin();
 
             Raylib.ClearBackground(new Color(0, 0, 0, 0));
 
-
-            CombineShader ??= new(Shader.Find("Defaults/GBuffercombine.shader"));
-            //CombineShader.mpb.Clear();
-            CombineShader.SetTexture("gAlbedoAO", gbuffer.AlbedoAO);
-            CombineShader.SetTexture("gLighting", lighting.Res!.InternalTextures[0]);
-            CombineShader.SetFloat("Contrast", Math.Clamp(Contrast, 0, 2));
-            CombineShader.SetFloat("Saturation", Math.Clamp(Saturation, 0, 2));
-            CombineShader.EnableKeyword("ACESTONEMAP");
-            CombineShader.EnableKeyword("GAMMACORRECTION");
             CombineShader.SetPass(0, true);
-            //CombineShader.Begin();
-            Camera.Current.DrawFullScreenTexture(lighting.Res!.InternalTextures[0]);
-            //CombineShader.End();
+            Camera.Current.DrawFullScreenTexture(lighting.InternalTextures[0]);
             CombineShader.EndPass();
 
-
-            Rlgl.rlEnableDepthMask();
-            Rlgl.rlEnableDepthTest();
-            Rlgl.rlEnableBackfaceCulling();
-
-            Raylib.EndTextureMode();
-
+            _combined.End();
 
             lastRenderedFrame = Time.frameCount;
             lastRenderedCam = Camera.Current;
 
-            return new AssetRef<RenderTexture>(_combined);
+            return _combined;
         }
     }
 
@@ -154,17 +142,49 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         public override float Width => 125;
 
         [Input(ShowBackingValue.Never)] public GBuffer CameraOutput;
-        [Input(ShowBackingValue.Never)] public AssetRef<RenderTexture> RenderTexture;
+        [Input(ShowBackingValue.Never)] public RenderTexture RenderTexture;
 
         public float FocusStrength = 150f;
         public float Quality = 0.05f;
         public int BlurRadius = 10;
 
-        [Output] public AssetRef<RenderTexture> DofRT;
+        [Output] public RenderTexture DofRT;
+
+        Material Mat;
+        RenderTexture _dof;
+        long lastRenderedFrame = -1;
+        Camera lastRenderedCam = null;
 
         public override object GetValue(NodePort port)
         {
-            return 0;
+            // If we already rendered this frame return that instead
+            if (lastRenderedFrame == Time.frameCount && lastRenderedCam == Camera.Current)
+                return _dof;
+
+            var gbuffer = GetInputValue<GBuffer>("CameraOutput");
+            var rt = GetInputValue<RenderTexture>("RenderTexture");
+
+            if (_dof == null || (gbuffer.Width != _dof.Width || gbuffer.Height != _dof.Height))
+            {
+                _dof?.Dispose();
+                PixelFormat[] formats = [PixelFormat.PIXELFORMAT_UNCOMPRESSED_R32G32B32];
+                _dof = new RenderTexture(gbuffer.Width, gbuffer.Height, 1, false, formats);
+            }
+
+            Mat ??= new Material(Shader.Find("Defaults/DOF.shader"));
+            Mat.SetTexture("gCombined", rt.InternalTextures[0]);
+            Mat.SetTexture("gDepth", gbuffer.Depth);
+
+            Mat.SetFloat("u_Quality", Math.Clamp(Quality, 0.0f, 0.9f));
+            Mat.SetFloat("u_BlurRadius", Math.Clamp(BlurRadius, 2, 40));
+            Mat.SetFloat("u_FocusStrength", FocusStrength);
+
+            Graphics.Blit(_dof, Mat, 0, true);
+
+            lastRenderedFrame = Time.frameCount;
+            lastRenderedCam = Camera.Current;
+
+            return _dof;
         }
     }
 
@@ -174,11 +194,11 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         public override string Title => "Output";
         public override float Width => 125;
 
-        [Input] public AssetRef<RenderTexture> RenderTexture;
+        [Input] public RenderTexture RenderTexture;
 
         public override object GetValue(NodePort port)
         {
-            return GetInputValue<AssetRef<RenderTexture>>("RenderTexture");
+            return GetInputValue<RenderTexture>("RenderTexture");
         }
     }
 }

@@ -2,7 +2,6 @@ using HexaEngine.ImGuiNET;
 using HexaEngine.ImGuizmoNET;
 using Prowl.Icons;
 using Prowl.Runtime;
-using Prowl.Runtime.ImageEffects;
 using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.SceneManagement;
 
@@ -30,8 +29,6 @@ public class ViewportWindow : EditorWindow
         CamObject.Position = new Vector3(0, 5, -10);
         Cam = CamObject.AddComponent<Camera>();
         LastFocusedCamera = Cam;
-        var dof = CamObject.AddComponent<DOFEffect>();
-        dof.OnEnable();
 
         RefreshRenderTexture(Width, Height);
     }

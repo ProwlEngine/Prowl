@@ -28,14 +28,11 @@ public class Camera : MonoBehaviour
     public enum ProjectionType { Perspective, Orthographic }
     public ProjectionType projectionType = ProjectionType.Perspective;
 
-    public event Action<GBuffer> PostProcessStagePreCombine;
-    public event Action<GBuffer> PostProcessStagePostCombine;
     public event Action<int, int> Resize;
 
     public AssetRef<RenderTexture> Target;
 
     public GBuffer gBuffer { get; private set; }
-    Material CombineShader;
 
     public enum DebugDraw { Off, Albedo, Normals, Depth, Velocity }
     public DebugDraw debugDraw = DebugDraw.Off;
@@ -84,9 +81,17 @@ public class Camera : MonoBehaviour
 
     public void DrawFullScreenTexture(Raylib_cs.Texture2D texture)
     {
+        Rlgl.rlDisableDepthMask();
+        Rlgl.rlDisableDepthTest();
+        Rlgl.rlDisableBackfaceCulling();
+
         var s = GetRenderTargetSize() * 1.0f;
         //var s = GetRenderTargetSize();
         Raylib.DrawTexturePro(texture, new Rectangle(0, 0, texture.width, -texture.height), new Rectangle(0, 0, (float)s.X, (float)s.Y), System.Numerics.Vector2.Zero, 0.0f, Color.white);
+
+        Rlgl.rlEnableDepthMask();
+        Rlgl.rlEnableDepthTest();
+        Rlgl.rlEnableBackfaceCulling();
     }
 
     private void OpaquePass()
@@ -157,14 +162,14 @@ public class Camera : MonoBehaviour
             return;
         }
 
-        AssetRef<RenderTexture> result = (AssetRef<RenderTexture>)rp.Res!.GetNode<OutputNode>().GetValue(null);
+        RenderTexture result = (RenderTexture)rp.Res!.GetNode<OutputNode>().GetValue(null);
 
-        if (result.IsAvailable == false)
+        if (result == null)
         {
             Current = null;
             Rlgl.rlSetBlendMode(BlendMode.BLEND_ALPHA);
 
-            Debug.LogError("RenderPipeline OutputNode failed to return a valid RenderTexture!");
+            Debug.LogError("RenderPipeline OutputNode failed to return a RenderTexture!");
             return;
         }
 
@@ -183,7 +188,7 @@ public class Camera : MonoBehaviour
         
         if (debugDraw == DebugDraw.Off)
         {
-            DrawFullScreenTexture(result.Res!.InternalTextures[0]);
+            DrawFullScreenTexture(result.InternalTextures[0]);
         }
         else if (debugDraw == DebugDraw.Albedo)
             DrawFullScreenTexture(gBuffer.AlbedoAO);

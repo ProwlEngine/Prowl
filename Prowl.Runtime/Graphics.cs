@@ -1,10 +1,7 @@
 ﻿using Raylib_cs;
 using System;
 using System.Collections.Generic;
-using System.Numerics;
 using System.Runtime.InteropServices;
-using Material = Prowl.Runtime.Material;
-using Mesh = Prowl.Runtime.Mesh;
 
 namespace Prowl.Runtime
 {
@@ -231,6 +228,9 @@ namespace Prowl.Runtime
         /// </summary>
         public static void Blit(RenderTexture renderTexture, Material mat, int pass = 0, bool clear = true)
         {
+            Rlgl.rlDisableDepthMask();
+            Rlgl.rlDisableDepthTest();
+            Rlgl.rlDisableBackfaceCulling();
             renderTexture.Begin();
             if (clear)
                 Raylib.ClearBackground(new Color(0, 0, 0, 0));
@@ -238,6 +238,9 @@ namespace Prowl.Runtime
             DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
             mat.EndPass();
             renderTexture.End();
+            Rlgl.rlEnableDepthMask();
+            Rlgl.rlEnableDepthTest();
+            Rlgl.rlEnableBackfaceCulling();
         }
 
     }
