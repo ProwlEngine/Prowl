@@ -1,19 +1,40 @@
 ﻿using HexaEngine.ImGuiNET;
 using HexaEngine.ImNodesNET;
 using Prowl.Editor.PropertyDrawers;
-using Prowl.Runtime.NodeSystem;
 using Prowl.Runtime;
+using Prowl.Runtime.NodeSystem;
+using Raylib_cs;
 using System.Reflection;
+using System.Text;
 using static Prowl.Runtime.NodeSystem.Node;
-using System.Data;
-using System.Reflection.Emit;
-using System.Threading.Channels;
 
 namespace Prowl.Editor.Drawers.NodeSystem
 {
     public abstract class NodeEditor
     {
         protected internal abstract Type GraphType { get; }
+
+        static NodeEditor()
+        {
+            var style = ImNodes.GetStyle();
+            var bg = new System.Numerics.Vector4(0.17f, 0.17f, 0.18f, 1f);
+            style.Colors[(int)ImNodesCol.NodeBackground] = ImGui.GetColorU32(bg);
+            style.Colors[(int)ImNodesCol.NodeBackgroundHovered] = ImGui.GetColorU32(bg * 1.5f);
+            style.Colors[(int)ImNodesCol.NodeBackgroundSelected] = ImGui.GetColorU32(bg * 2f);
+            style.Colors[(int)ImNodesCol.NodeOutline] = ImGui.GetColorU32(new System.Numerics.Vector4(0.10f, 0.11f, 0.11f, 0.75f));
+            style.Colors[(int)ImNodesCol.TitleBar] = ImGui.GetColorU32(bg);
+            style.Colors[(int)ImNodesCol.TitleBarHovered] = ImGui.GetColorU32(bg * 1.5f);
+            style.Colors[(int)ImNodesCol.TitleBarSelected] = ImGui.GetColorU32(bg * 2f);
+            style.Colors[(int)ImNodesCol.Link] = ImGui.GetColorU32(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 1f));
+            style.Colors[(int)ImNodesCol.LinkHovered] = ImGui.GetColorU32(new System.Numerics.Vector4(0.19f, 0.37f, 0.55f, 1f));
+            style.Colors[(int)ImNodesCol.LinkSelected] = ImGui.GetColorU32(new System.Numerics.Vector4(0.06f, 0.53f, 0.98f, 1f));
+            style.Colors[(int)ImNodesCol.Pin] = ImGui.GetColorU32(new System.Numerics.Vector4(0.1f, 0.5f, 0.1f, 1f));
+
+            style.Colors[(int)ImNodesCol.GridBackground] = ImGui.GetColorU32(new System.Numerics.Vector4(0.1f, 0.1f, 0.15f, 1f));
+            style.Colors[(int)ImNodesCol.GridLine] = ImGui.GetColorU32(new System.Numerics.Vector4(1f, 1f, 1f, 0.15f));
+
+            style.NodeBorderThickness = 3f;
+        }
 
         #region Graph
 
@@ -23,13 +44,20 @@ namespace Prowl.Editor.Drawers.NodeSystem
             graph.SetContext();
 
             ImNodes.BeginNodeEditor();
+            var drawlist = ImGui.GetWindowDrawList();
             foreach (var node in graph.nodes)
             {
                 ImNodes.BeginNode(node.InstanceID);
 
+                ImGui.Dummy(new System.Numerics.Vector2(node.Width, 0));
+
                 ImNodes.BeginNodeTitleBar();
                 changed |= OnDrawTitle(node);
+                // Draw Line as a Seperator without ImGui.Seperator()
+                var cPos = ImGui.GetCursorScreenPos();
+                drawlist.AddLine(new(cPos.X, cPos.Y + 3), new(cPos.X + (ImNodes.GetNodeDimensions(node.InstanceID).X - 15), cPos.Y + 3), ImGui.GetColorU32(ImGuiCol.Text));
                 ImNodes.EndNodeTitleBar();
+
 
                 changed |= OnNodeDraw(node);
 
@@ -166,8 +194,42 @@ namespace Prowl.Editor.Drawers.NodeSystem
             return changed;
         }
 
+        private static readonly Dictionary<Type, uint> typeColorCache = new Dictionary<Type, uint>();
+
+        public static uint GetUniqueColorForType(Type type)
+        {
+            if (typeColorCache.TryGetValue(type, out uint cachedColor))
+                return cachedColor;
+            uint uniqueColor = GenerateUniqueColor(type);
+            typeColorCache[type] = uniqueColor;
+            return uniqueColor;
+        }
+
+        private static uint GenerateUniqueColor(Type type)
+        {
+            unchecked
+            {
+                var array = type.FullName.GetUTF8Bytes();
+                if (array == null)
+                    return 0;
+                int hash = 17;
+                foreach (byte element in array)
+                    hash = hash * 31 + element;
+                var ran = new Random(hash+5);
+                float r = 0;
+                float g = 0;
+                float b = 0;
+                ImGui.ColorConvertHSVtoRGB((float)ran.NextDouble(), 0.8f + (float)ran.NextDouble() * 0.2f, 0.8f + (float)ran.NextDouble() * 0.2f, ref r, ref g, ref b);
+                return ImGui.GetColorU32(new Vector4(r, g, b, 1.0f));
+            }
+
+        }
+
         public virtual bool OnDrawPort(NodePort port)
         {
+            // Get random color based on port.ValueType
+            ImNodes.PushColorStyle(ImNodesCol.Pin, GetUniqueColorForType(port.ValueType));
+
             bool changed = false;
             if (port.IsInput)
             {
@@ -182,7 +244,7 @@ namespace Prowl.Editor.Drawers.NodeSystem
                 {
                     var value = fieldInfo.GetValue(port.node);
                     var width = ImNodes.GetNodeDimensions(port.node.InstanceID).X - 20;
-                    if (PropertyDrawer.Draw(port.fieldName, ref value, width))
+                    if (PropertyDrawer.Draw(port.fieldName, ref value, port.node.Width))
                     {
                         changed = true;
                         port.node.OnValidate();
