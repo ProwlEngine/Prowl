@@ -34,8 +34,8 @@ public class RenderPipelineWindow : EditorWindow
             CurrentRenderPipeline.Res!.OnValidate();
             string relativeAssetPath = AssetDatabase.GUIDToAssetPath(CurrentRenderPipeline.Res!.AssetID);
             var assetFile = AssetDatabase.RelativeToFile(relativeAssetPath);
-            //StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(CurrentRenderPipeline.Res!), assetFile);
-            //AssetDatabase.Reimport(AssetDatabase.FileToRelative(assetFile));
+            StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(CurrentRenderPipeline.Res!), assetFile);
+            AssetDatabase.Reimport(AssetDatabase.FileToRelative(assetFile));
         }
     }
 }
