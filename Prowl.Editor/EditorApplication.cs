@@ -150,7 +150,7 @@ public unsafe class EditorApplication : Application {
                 int dock_id_main_right_bottom = 0;
                 ImGui.DockBuilderSplitNode(dock_id_main_right, ImGuiDir.Up, 0.35f, ref dock_id_main_right_top, ref dock_id_main_right_bottom);
 
-                ImGui.DockBuilderDockWindow(FontAwesome6.DiagramProject + " Hierarchy", dock_id_main_right_top);
+                ImGui.DockBuilderDockWindow(FontAwesome6.FolderTree + " Hierarchy", dock_id_main_right_top);
                 ImGui.DockBuilderDockWindow(FontAwesome6.BookOpen + " Inspector", dock_id_main_right_bottom);
 
                 int dock_id_main_left_top = 0;

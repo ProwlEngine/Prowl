@@ -10,7 +10,7 @@ public class RenderPipelineWindow : EditorWindow
 {
     AssetRef<RenderPipeline> CurrentRenderPipeline;
 
-    public RenderPipelineWindow() : base() => Title = FontAwesome6.CameraRetro + " Render Pipeline Editor";
+    public RenderPipelineWindow() : base() => Title = FontAwesome6.DiagramProject + " Render Pipeline Editor";
 
     protected override void Draw()
     {
