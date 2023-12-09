@@ -186,7 +186,7 @@ namespace Prowl.Editor.Drawers.NodeSystem
 
         public virtual bool OnNodeDraw(Node node)
         {
-            bool changed = true;
+            bool changed = false;
             foreach (var input in node.Inputs)
                 changed |= OnDrawPort(input);
             foreach (var input in node.DynamicInputs)
@@ -289,7 +289,6 @@ namespace Prowl.Editor.Drawers.NodeSystem
                 if (drawField)
                 {
                     var value = fieldInfo.GetValue(port.node);
-                    var width = ImNodes.GetNodeDimensions(port.node.InstanceID).X - 20;
                     if (PropertyDrawer.Draw(port.fieldName, ref value, port.node.Width))
                     {
                         changed = true;
