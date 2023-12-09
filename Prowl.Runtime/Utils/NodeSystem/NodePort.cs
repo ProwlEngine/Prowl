@@ -74,8 +74,10 @@ namespace Prowl.Runtime.NodeSystem
         [SerializeField] private bool _dynamic;
         [SerializeField] public int InstanceID = 0;
 
+        public NodePort() { } // For Serialization
+
         /// <summary> Construct a static targetless nodeport. Used as a template. </summary>
-        public NodePort(FieldInfo fieldInfo, Node node)
+        public NodePort(FieldInfo fieldInfo, Node? node)
         {
             _fieldName = fieldInfo.Name;
             ValueType = fieldInfo.FieldType;
@@ -102,7 +104,7 @@ namespace Prowl.Runtime.NodeSystem
                 }
             }
             _node = node;
-            InstanceID = _node.graph.NextID;
+            InstanceID = node?.graph.NextID ?? 0;
         }
 
         /// <summary> Copy a nodePort but assign it to another node. </summary>
@@ -475,6 +477,8 @@ namespace Prowl.Runtime.NodeSystem
             public NodePort Port { get { return port != null ? port : port = GetPort(); } }
 
             [NonSerialized] private NodePort port;
+
+            public PortConnection() { } // for serialization
 
             public PortConnection(NodePort port)
             {
