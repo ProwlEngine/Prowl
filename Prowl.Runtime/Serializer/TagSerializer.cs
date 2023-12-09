@@ -164,13 +164,12 @@ namespace Prowl.Runtime
             else
             {
                 // Automatic Serializer
-                var properties = GetAllFields(type).Where(field => (field.IsPublic || field.GetCustomAttribute<SerializeAsAttribute>() != null) &&
+                var properties = GetAllFields(type).Where(field => (field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() != null) &&
                                                        field.GetCustomAttribute<SerializeIgnoreAttribute>() == null);
 
                 foreach (var field in properties)
                 {
-                    var nameAs = field.GetCustomAttribute<SerializeAsAttribute>();
-                    string name = nameAs != null ? nameAs.Name : field.Name;
+                    string name = field.Name;
 
                     var propValue = field.GetValue(value);
                     if (propValue == null)
@@ -315,28 +314,20 @@ namespace Prowl.Runtime
             {
                 FieldInfo[] fields = GetAllFields(oType).ToArray();
 
-                var properties = fields.Where(field => (field.IsPublic || field.GetCustomAttribute<SerializeAsAttribute>() != null) && field.GetCustomAttribute<SerializeIgnoreAttribute>() == null);
+                var properties = fields.Where(field => (field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() != null) && field.GetCustomAttribute<SerializeIgnoreAttribute>() == null);
                 foreach (var field in properties)
                 {
                     string name = field.Name;
-
-                    var nameAttributes = Attribute.GetCustomAttributes(field, typeof(SerializeAsAttribute));
-                    if (nameAttributes.Length != 0)
-                        name = ((SerializeAsAttribute)nameAttributes[0]).Name;
 
                     if (!compound.TryGet<Tag>(name, out var node))
                     {
                         // Before we completely give up, a field can have FormerlySerializedAs Attributes
                         // This allows backwards compatibility
                         var formerNames = Attribute.GetCustomAttributes(field, typeof(FormerlySerializedAsAttribute));
-                        foreach (SerializeAsAttribute formerName in formerNames)
                         foreach (FormerlySerializedAsAttribute formerName in formerNames)
                         {
-                            //if (compound.Tags.Any(a => a.Name == formerName.Name))
-                            if (compound.TryGet<Tag>(formerName.Name, out node))
                             if (compound.TryGet<Tag>(formerName.oldName, out node))
                             {
-                                name = formerName.Name;
                                 name = formerName.oldName;
                                 break;
                             }

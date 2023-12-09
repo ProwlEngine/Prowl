@@ -8,14 +8,14 @@ namespace Prowl.Runtime
 {
     public class MaterialPropertyBlock
     {
-        [SerializeAs("Colors")] private Dictionary<string, Color> colors = new();
-        [SerializeAs("Vectors2")] private Dictionary<string, Vector2> vectors2 = new();
-        [SerializeAs("Vectors3")] private Dictionary<string, Vector3> vectors3 = new();
-        [SerializeAs("Vectors4")] private Dictionary<string, Vector4> vectors4 = new();
-        [SerializeAs("Floats")] private Dictionary<string, float> floats = new();
-        [SerializeAs("Ints")] private Dictionary<string, int> ints = new();
-        [SerializeAs("Matrices")] private Dictionary<string, Matrix4x4> matrices = new();
-        [SerializeAs("Textures")] private Dictionary<string, AssetRef<Texture2D>> textures = new();
+        [SerializeField] private Dictionary<string, Color> colors = new();
+        [SerializeField] private Dictionary<string, Vector2> vectors2 = new();
+        [SerializeField] private Dictionary<string, Vector3> vectors3 = new();
+        [SerializeField] private Dictionary<string, Vector4> vectors4 = new();
+        [SerializeField] private Dictionary<string, float> floats = new();
+        [SerializeField] private Dictionary<string, int> ints = new();
+        [SerializeField] private Dictionary<string, Matrix4x4> matrices = new();
+        [SerializeField] private Dictionary<string, AssetRef<Texture2D>> textures = new();
 
         private Dictionary<string, int> cachedUniformLocs = new();
 

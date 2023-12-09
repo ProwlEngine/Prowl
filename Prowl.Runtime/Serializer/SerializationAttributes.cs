@@ -10,11 +10,9 @@ namespace Prowl.Runtime
     {
     }
 
-    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false)]
-    public class SerializeAsAttribute : Attribute
+    [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
+    public class SerializeFieldAttribute : Attribute
     {
-        public string Name { get; set; }
-        public SerializeAsAttribute(string name) => Name = name;
     }
 
     [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = true)]
