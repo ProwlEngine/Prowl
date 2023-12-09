@@ -38,94 +38,98 @@ public static class EditorGui {
     {
 
         // Fork of Rounded Visual Studio style from ImThemes
-        var style = HexaEngine.ImGuiNET.ImGui.GetStyle();
+        var style = ImGui.GetStyle();
+
+        style.Colors[(int)ImGuiCol.Text] = new(1.00f, 1.00f, 1.00f, 1.00f);
+        style.Colors[(int)ImGuiCol.TextDisabled] = new(0.50f, 0.50f, 0.50f, 1.00f);
+        style.Colors[(int)ImGuiCol.WindowBg] = new(0.17f, 0.17f, 0.18f, 0.94f);
+        style.Colors[(int)ImGuiCol.ChildBg] = new(0.17f, 0.17f, 0.18f, 0.00f);
+        style.Colors[(int)ImGuiCol.PopupBg] = new(0.17f, 0.17f, 0.18f, 0.94f);
+        style.Colors[(int)ImGuiCol.Border] = new(0.15f, 0.16f, 0.17f, 1.00f);
+        style.Colors[(int)ImGuiCol.BorderShadow] = new(0.10f, 0.11f, 0.11f, 1.00f);
+        style.Colors[(int)ImGuiCol.FrameBg] = new(0.10f, 0.11f, 0.11f, 1.00f);
+        style.Colors[(int)ImGuiCol.FrameBgHovered] = new(0.10f, 0.11f, 0.11f, 1.00f);
+        style.Colors[(int)ImGuiCol.FrameBgActive] = new(0.10f, 0.11f, 0.11f, 1.00f);
+        style.Colors[(int)ImGuiCol.TitleBg] = new(0.08f, 0.08f, 0.09f, 1.00f);
+        style.Colors[(int)ImGuiCol.TitleBgActive] = new(0.08f, 0.08f, 0.09f, 1.00f);
+        style.Colors[(int)ImGuiCol.TitleBgCollapsed] = new(0.08f, 0.08f, 0.09f, 1.00f);
+        style.Colors[(int)ImGuiCol.MenuBarBg] = new(0.08f, 0.08f, 0.09f, 1.00f);
+        style.Colors[(int)ImGuiCol.ScrollbarBg] = new(0.10f, 0.11f, 0.11f, 1.00f);
+        style.Colors[(int)ImGuiCol.ScrollbarGrab] = new(0.31f, 0.31f, 0.31f, 1.00f);
+        style.Colors[(int)ImGuiCol.ScrollbarGrabHovered] = new(0.41f, 0.41f, 0.41f, 1.00f);
+        style.Colors[(int)ImGuiCol.ScrollbarGrabActive] = new(0.51f, 0.51f, 0.51f, 1.00f);
+        style.Colors[(int)ImGuiCol.CheckMark] = new(0.26f, 0.59f, 0.98f, 1.00f);
+        style.Colors[(int)ImGuiCol.SliderGrab] = new(0.24f, 0.24f, 0.25f, 1.00f);
+        style.Colors[(int)ImGuiCol.SliderGrabActive] = new(0.26f, 0.59f, 0.98f, 1.00f);
+        style.Colors[(int)ImGuiCol.Button] = new(0.24f, 0.24f, 0.25f, 1.00f);
+        style.Colors[(int)ImGuiCol.ButtonHovered] = new(0.19f, 0.37f, 0.55f, 1.00f);
+        style.Colors[(int)ImGuiCol.ButtonActive] = new(0.06f, 0.53f, 0.98f, 1.00f);
+        style.Colors[(int)ImGuiCol.Header] = new(0.10f, 0.11f, 0.11f, 1.00f);
+        style.Colors[(int)ImGuiCol.HeaderHovered] = new(0.26f, 0.59f, 0.98f, 0.80f);
+        style.Colors[(int)ImGuiCol.HeaderActive] = new(0.26f, 0.59f, 0.98f, 1.00f);
+        style.Colors[(int)ImGuiCol.Separator] = new(0.43f, 0.43f, 0.50f, 0.50f);
+        style.Colors[(int)ImGuiCol.SeparatorHovered] = new(0.10f, 0.40f, 0.75f, 0.78f);
+        style.Colors[(int)ImGuiCol.SeparatorActive] = new(0.10f, 0.40f, 0.75f, 1.00f);
+        style.Colors[(int)ImGuiCol.ResizeGrip] = new(0.26f, 0.59f, 0.98f, 0.20f);
+        style.Colors[(int)ImGuiCol.ResizeGripHovered] = new(0.26f, 0.59f, 0.98f, 0.67f);
+        style.Colors[(int)ImGuiCol.ResizeGripActive] = new(0.26f, 0.59f, 0.98f, 0.95f);
+        style.Colors[(int)ImGuiCol.Tab] = new(0.08f, 0.08f, 0.09f, 1.00f);
+        style.Colors[(int)ImGuiCol.TabHovered] = new(0.26f, 0.59f, 0.98f, 1.00f);
+        style.Colors[(int)ImGuiCol.TabActive] = new(0.17f, 0.17f, 0.18f, 1.00f);
+        style.Colors[(int)ImGuiCol.TabUnfocused] = new(0.08f, 0.08f, 0.09f, 1.00f);
+        style.Colors[(int)ImGuiCol.TabUnfocusedActive] = new(0.17f, 0.17f, 0.18f, 1.00f);
+        style.Colors[(int)ImGuiCol.DockingPreview] = new(0.26f, 0.59f, 0.98f, 0.70f);
+        style.Colors[(int)ImGuiCol.DockingEmptyBg] = new(0.20f, 0.20f, 0.20f, 1.00f);
+        style.Colors[(int)ImGuiCol.PlotLines] = new(0.61f, 0.61f, 0.61f, 1.00f);
+        style.Colors[(int)ImGuiCol.PlotLinesHovered] = new(1.00f, 0.43f, 0.35f, 1.00f);
+        style.Colors[(int)ImGuiCol.PlotHistogram] = new(0.90f, 0.70f, 0.00f, 1.00f);
+        style.Colors[(int)ImGuiCol.PlotHistogramHovered] = new(1.00f, 0.60f, 0.00f, 1.00f);
+        style.Colors[(int)ImGuiCol.TableHeaderBg] = new(0.19f, 0.19f, 0.20f, 1.00f);
+        style.Colors[(int)ImGuiCol.TableBorderStrong] = new(0.31f, 0.31f, 0.35f, 1.00f);
+        style.Colors[(int)ImGuiCol.TableBorderLight] = new(0.23f, 0.23f, 0.25f, 1.00f);
+        style.Colors[(int)ImGuiCol.TableRowBg] = new(0.00f, 0.00f, 0.00f, 0.00f);
+        style.Colors[(int)ImGuiCol.TableRowBgAlt] = new(1.00f, 1.00f, 1.00f, 0.06f);
+        style.Colors[(int)ImGuiCol.TextSelectedBg] = new(0.26f, 0.59f, 0.98f, 0.35f);
+        style.Colors[(int)ImGuiCol.DragDropTarget] = new(1.00f, 1.00f, 0.00f, 0.90f);
+        style.Colors[(int)ImGuiCol.NavHighlight] = new(0.26f, 0.59f, 0.98f, 1.00f);
+        style.Colors[(int)ImGuiCol.NavWindowingHighlight] = new(1.00f, 1.00f, 1.00f, 0.70f);
+        style.Colors[(int)ImGuiCol.NavWindowingDimBg] = new(0.80f, 0.80f, 0.80f, 0.20f);
+        style.Colors[(int)ImGuiCol.ModalWindowDimBg] = new(0.80f, 0.80f, 0.80f, 0.35f);
+
+        style.WindowPadding = new Vector2(3.0f, 3.0f);
+        style.FramePadding = new Vector2(6.0f, 2.0f);
+        style.CellPadding = new Vector2(4.0f, 0.0f);
+        style.ItemSpacing = new Vector2(4.0f, 3.0f);
+        style.ItemInnerSpacing = new Vector2(4.0f, 4.0f);
+        style.IndentSpacing = 10.0f;
+        style.ScrollbarSize = 15.0f;
+        style.GrabMinSize = 10.0f;
+
+        style.WindowBorderSize = 0.0f;
+        style.ChildBorderSize = 0.0f;
+        style.PopupBorderSize = 0.0f;
+        style.FrameBorderSize = 0.0f;
+        style.TabBorderSize = 0.0f;
+
+        style.WindowRounding = 3.0f;
+        style.ChildRounding = 3.0f;
+        style.PopupRounding = 3.0f;
+        style.FrameRounding = 3.0f;
+        style.GrabRounding = 6.0f;
+        style.TabRounding = 3.0f;
+        style.ScrollbarRounding = 6.0f;
 
         style.Alpha = 1.0f;
         style.DisabledAlpha = 0.5f;
-        style.WindowPadding = new Vector2(4.0f, 3.0f);
-        style.WindowRounding = 3.0f;
-        style.WindowBorderSize = 0.01f;
         style.WindowMinSize = new Vector2(32.0f, 32.0f);
-        style.WindowTitleAlign = new Vector2(0.0f, 0.5f);
+        style.WindowTitleAlign = new Vector2(0.5f, 0.5f);
         style.WindowMenuButtonPosition = ImGuiDir.Left;
-        style.ChildRounding = 3.0f;
-        style.ChildBorderSize = 0.0f;
-        style.PopupRounding = 3.0f;
-        style.PopupBorderSize = 1.0f;
-        style.FramePadding = new Vector2(4.0f, 0.0f);
-        style.FrameRounding = 3.0f;
-        style.FrameBorderSize = 0.0f;
-        style.ItemSpacing = new Vector2(4.0f, 4.0f);
-        style.ItemInnerSpacing = new Vector2(4.0f, 4.0f);
-        style.CellPadding = new Vector2(4.0f, 2.0f);
-        style.IndentSpacing = 8.0f;
         style.ColumnsMinSpacing = 6.0f;
-        style.ScrollbarSize = 15.0f;
-        style.ScrollbarRounding = 6.0f;
-        style.GrabMinSize = 10.0f;
-        style.GrabRounding = 6.0f;
-        style.TabRounding = 3.0f;
-        style.TabBorderSize = 0.0f;
         //style.TabMinWidthForCloseButton = 0.0f;
         style.ColorButtonPosition = ImGuiDir.Right;
         style.ButtonTextAlign = new Vector2(0.5f, 0.5f);
         style.SelectableTextAlign = new Vector2(0.0f, 0.0f);
 
-        style.WindowTitleAlign = new Vector2(0.5f, 0.5f);
-
-
-
-
-        style.Colors[(int)ImGuiCol.Text] = new Vector4(1.0f, 1.0f, 1.0f, 1.0f);
-        style.Colors[(int)ImGuiCol.TextDisabled] = new Vector4(0.5921568870544434f, 0.5921568870544434f, 0.5921568870544434f, 1.0f);
-        style.Colors[(int)ImGuiCol.WindowBg] = new Vector4(0.13f, 0.13f, 0.14f, 1.00f);
-        style.Colors[(int)ImGuiCol.ChildBg] = new Vector4(0.10f, 0.10f, 0.11f, 1.00f);
-        style.Colors[(int)ImGuiCol.PopupBg] = new Vector4(0.10f, 0.10f, 0.11f, 1.00f);
-        style.Colors[(int)ImGuiCol.Border] = new Vector4(0.00f, 0.00f, 0.00f, 0.50f);
-        style.Colors[(int)ImGuiCol.BorderShadow] = new Vector4(0.20f, 0.20f, 0.20f, 1.00f);
-        style.Colors[(int)ImGuiCol.FrameBg] = new Vector4(0.18f, 0.18f, 0.20f, 1.00f);
-        style.Colors[(int)ImGuiCol.FrameBgHovered] = new Vector4(0.1137254908680916f, 0.5921568870544434f, 0.9254902005195618f, 1.0f);
-        style.Colors[(int)ImGuiCol.FrameBgActive] = new Vector4(0.0f, 0.4666666686534882f, 0.7843137383460999f, 1.0f);
-        style.Colors[(int)ImGuiCol.TitleBg] = new Vector4(0.08f, 0.08f, 0.10f, 1.00f);
-        style.Colors[(int)ImGuiCol.TitleBgActive] = new Vector4(0.10f, 0.10f, 0.13f, 1.00f);
-        style.Colors[(int)ImGuiCol.TitleBgCollapsed] = new Vector4(0.10f, 0.10f, 0.13f, 1.00f);
-        style.Colors[(int)ImGuiCol.MenuBarBg] = new Vector4(0.08f, 0.08f, 0.10f, 1.00f);
-        style.Colors[(int)ImGuiCol.ScrollbarBg] = new Vector4(0.08f, 0.08f, 0.10f, 1.00f);
-        style.Colors[(int)ImGuiCol.ScrollbarGrab] = new Vector4(0.14f, 0.14f, 0.18f, 1.00f);
-        style.Colors[(int)ImGuiCol.ScrollbarGrabHovered] = new Vector4(0.14f, 0.14f, 0.22f, 1.00f);
-        style.Colors[(int)ImGuiCol.ScrollbarGrabActive] = new Vector4(0.14f, 0.14f, 0.25f, 1.00f);
-        style.Colors[(int)ImGuiCol.CheckMark] = new Vector4(0.0f, 0.4666666686534882f, 0.7843137383460999f, 1.0f);
-        style.Colors[(int)ImGuiCol.SliderGrab] = new Vector4(0.00f, 0.47f, 0.78f, 1.00f);
-        style.Colors[(int)ImGuiCol.SliderGrabActive] = new Vector4(0.00f, 0.60f, 1.00f, 1.00f);
-        style.Colors[(int)ImGuiCol.Button] = new Vector4(0.22f, 0.22f, 0.22f, 1.00f);
-        style.Colors[(int)ImGuiCol.ButtonHovered] = new Vector4(0.1137254908680916f, 0.5921568870544434f, 0.9254902005195618f, 1.0f);
-        style.Colors[(int)ImGuiCol.ButtonActive] = new Vector4(0.1137254908680916f, 0.5921568870544434f, 0.9254902005195618f, 1.0f);
-        style.Colors[(int)ImGuiCol.Header] = new Vector4(0.2000000029802322f, 0.2000000029802322f, 0.2156862765550613f, 1.0f);
-        style.Colors[(int)ImGuiCol.HeaderHovered] = new Vector4(0.1137254908680916f, 0.5921568870544434f, 0.9254902005195618f, 1.0f);
-        style.Colors[(int)ImGuiCol.HeaderActive] = new Vector4(0.0f, 0.4666666686534882f, 0.7843137383460999f, 1.0f);
-        style.Colors[(int)ImGuiCol.Separator] = new Vector4(0.39f, 0.39f, 0.39f, 1.00f);
-        style.Colors[(int)ImGuiCol.SeparatorHovered] = new Vector4(0.50f, 0.50f, 0.50f, 1.00f);
-        style.Colors[(int)ImGuiCol.SeparatorActive] = new Vector4(0.71f, 0.71f, 0.71f, 1.00f);
-        style.Colors[(int)ImGuiCol.ResizeGrip] = new Vector4(0.00f, 0.00f, 0.00f, 0.00f);
-        style.Colors[(int)ImGuiCol.ResizeGripHovered] = new Vector4(0.25f, 0.25f, 0.50f, 1.00f);
-        style.Colors[(int)ImGuiCol.ResizeGripActive] = new Vector4(0.50f, 0.50f, 1.00f, 1.00f);
-        style.Colors[(int)ImGuiCol.Tab] = new Vector4(0.22f, 0.22f, 0.22f, 1.00f);
-        style.Colors[(int)ImGuiCol.TabHovered] = new Vector4(0.1137254908680916f, 0.5921568870544434f, 0.9254902005195618f, 1.0f);
-        style.Colors[(int)ImGuiCol.TabActive] = new Vector4(0.0f, 0.4666666686534882f, 0.7843137383460999f, 1.0f);
-        style.Colors[(int)ImGuiCol.TabUnfocused] = new Vector4(0.1450980454683304f, 0.1450980454683304f, 0.1490196138620377f, 1.0f);
-        style.Colors[(int)ImGuiCol.TabUnfocusedActive] = new Vector4(0.0f, 0.4666666686534882f, 0.7843137383460999f, 1.0f);
-        style.Colors[(int)ImGuiCol.PlotLines] = new Vector4(0.0f, 0.4666666686534882f, 0.7843137383460999f, 1.0f);
-        style.Colors[(int)ImGuiCol.PlotLinesHovered] = new Vector4(0.1137254908680916f, 0.5921568870544434f, 0.9254902005195618f, 1.0f);
-        style.Colors[(int)ImGuiCol.PlotHistogram] = new Vector4(0.0f, 0.4666666686534882f, 0.7843137383460999f, 1.0f);
-        style.Colors[(int)ImGuiCol.PlotHistogramHovered] = new Vector4(0.1137254908680916f, 0.5921568870544434f, 0.9254902005195618f, 1.0f);
-        style.Colors[(int)ImGuiCol.TableHeaderBg] = new Vector4(0.08f, 0.08f, 0.10f, 1.00f);
-        style.Colors[(int)ImGuiCol.TableBorderLight] = new Vector4(0.20f, 0.20f, 0.20f, 0.50f);
-        style.Colors[(int)ImGuiCol.TextSelectedBg] = new Vector4(0.0f, 0.4666666686534882f, 0.7843137383460999f, 1.0f);
-        style.Colors[(int)ImGuiCol.DragDropTarget] = new Vector4(0.1450980454683304f, 0.1450980454683304f, 0.1490196138620377f, 1.0f);
-        style.Colors[(int)ImGuiCol.NavHighlight] = new Vector4(0.1450980454683304f, 0.1450980454683304f, 0.1490196138620377f, 1.0f);
-        style.Colors[(int)ImGuiCol.NavWindowingHighlight] = new Vector4(1.0f, 1.0f, 1.0f, 0.699999988079071f);
-        style.Colors[(int)ImGuiCol.NavWindowingDimBg] = new Vector4(0.800000011920929f, 0.800000011920929f, 0.800000011920929f, 0.2000000029802322f);
-        style.Colors[(int)ImGuiCol.ModalWindowDimBg] = new Vector4(0.1450980454683304f, 0.1450980454683304f, 0.1490196138620377f, 1.0f);
     }
 
 }

@@ -107,14 +107,14 @@ public class ViewportWindow : EditorWindow
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 5));
         if (ImGui.Button($"{FontAwesome6.ArrowsUpDownLeftRight}")) SceneManager.GizmosOperation = ImGuizmoOperation.Translate;
         GUIHelper.Tooltip("Translate");
-        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (22), 5));
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (27), 5));
         if (ImGui.Button($"{FontAwesome6.ArrowsSpin}")) SceneManager.GizmosOperation = ImGuizmoOperation.Rotate;
         GUIHelper.Tooltip("Rotate");
-        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (44), 5));
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (54), 5));
         if (ImGui.Button($"{FontAwesome6.GroupArrowsRotate}")) SceneManager.GizmosOperation = ImGuizmoOperation.Scale;
         GUIHelper.Tooltip("Scale");
 
-        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (72), 5));
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (81), 5));
 
         if (SceneManager.GizmosSpace == ImGuizmoMode.World && ImGui.Button($"{FontAwesome6.Globe}"))
             SceneManager.GizmosSpace = ImGuizmoMode.Local;
@@ -122,7 +122,7 @@ public class ViewportWindow : EditorWindow
             SceneManager.GizmosSpace = ImGuizmoMode.World;
         GUIHelper.Tooltip(SceneManager.GizmosSpace.ToString());
 
-        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (100), 5));
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (115), 5));
         ImGui.SetNextItemWidth(20);
         // Dropdown to pick Camera DebugDraw mode
         if (ImGui.BeginCombo($"##DebugDraw", $"{FontAwesome6.Eye}", ImGuiComboFlags.NoArrowButton))
@@ -143,17 +143,17 @@ public class ViewportWindow : EditorWindow
         }
         GUIHelper.Tooltip("Debug Visualization: " + Cam.debugDraw.ToString());
 
-        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (123), 5));
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (140), 5));
         if (ImGui.Button($"{FontAwesome6.TableCells}"))
             DrawGrid = !DrawGrid;
         GUIHelper.Tooltip("Show Grid: " + DrawGrid.ToString());
 
-        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (151), 5));
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (172), 5));
         if (ImGui.Button($"{FontAwesome6.Camera}"))
             Selection.Select(Cam.GameObject, false);
         GUIHelper.Tooltip("Viewport Camera Settings");
 
-        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 22));
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 25));
         ImGui.Text("FPS: " + Raylib_cs.Raylib.GetFPS());
 
         // Show ViewManipulation at the end

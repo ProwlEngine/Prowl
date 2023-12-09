@@ -144,7 +144,7 @@ public class AssetBrowserWindow : EditorWindow {
         ImGui.Text(assetPath);
 
         ImGui.SetCursorPosY(cPY);
-        ImGui.SetCursorPosX(windowWidth - rightOffset - sizeSliderSize - padding - 24);
+        ImGui.SetCursorPosX(windowWidth - rightOffset - sizeSliderSize - padding - 30);
         if (ImGui.Button(Locked ? FontAwesome6.Lock : FontAwesome6.LockOpen))
             Locked = !Locked;
 
