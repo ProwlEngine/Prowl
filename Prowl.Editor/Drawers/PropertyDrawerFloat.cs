@@ -36,7 +36,7 @@ public class PropertyDrawerInt : PropertyDrawer<int> {
     {
         DrawLabel(label, ref width);
         ImGui.SetNextItemWidth(width);
-        bool changed = ImGui.DragInt("", ref value, 0.01f, int.MinValue, int.MaxValue, "%g");
+        bool changed = ImGui.DragInt("", ref value, 0f, int.MinValue, int.MaxValue);
         ImGui.Columns(1);
         return changed;
     }
@@ -50,7 +50,7 @@ public class PropertyDrawerShort : PropertyDrawer<short> {
         DrawLabel(label, ref width);
         ImGui.SetNextItemWidth(width);
         int valInt = value;
-        bool changed = ImGui.DragInt("", ref valInt, 0.01f, short.MinValue, short.MaxValue, "%g");
+        bool changed = ImGui.DragInt("", ref valInt, 0f, short.MinValue, short.MaxValue);
         value = (short)valInt;
         ImGui.Columns(1);
         return changed;
