@@ -1,12 +1,11 @@
-﻿using HexaEngine.ImGuiNET;
-using HexaEngine.ImNodesNET;
+﻿using HexaEngine.ImNodesNET;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace Prowl.Runtime.NodeSystem
 {
-    public abstract class NodeGraph : ScriptableObject
+    public abstract class NodeGraph : ScriptableObject, ISerializeCallbacks
     {
         [SerializeField] int _nextID = 0;
         public int NextID => _nextID++;
@@ -18,16 +17,6 @@ namespace Prowl.Runtime.NodeSystem
         private ImNodesEditorContextPtr context;
 
         public abstract Type[] NodeTypes { get; }
-
-        public override void CreatedInstance()
-        {
-            base.CreatedInstance();
-            foreach (Node node in nodes)
-            {
-                node.graph = this;
-                node.OnEnable();
-            }
-        }
 
         /// <summary> Add a node to the graph by type (convenience method - will call the System.Type version) </summary>
         public T AddNode<T>() where T : Node
@@ -116,6 +105,19 @@ namespace Prowl.Runtime.NodeSystem
             // Remove all nodes prior to graph destruction
             Clear();
         }
+
+        public void PreSerialize() { }
+
+        public void PostSerialize()
+        {
+            foreach (Node node in nodes)
+            {
+                node.graph = this;
+                node.OnEnable();
+            }
+        }
+
+        public void PostCreation() { }
 
         #region Attributes
         /// <summary> Automatically ensures the existance of a certain node type, and prevents it from being deleted. </summary>
