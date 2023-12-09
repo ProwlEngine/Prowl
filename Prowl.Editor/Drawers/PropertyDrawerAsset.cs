@@ -15,13 +15,11 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         bool changed = false;
         DrawLabel(label, ref width);
 
-        ImGui.SetNextItemWidth(width);
-
         string path;
         if (value.IsExplicitNull)
         {
             path = "(Null)";
-            if (ImGui.Selectable($"{Name}: {path}", false))
+            if (ImGui.Selectable($"{Name}: {path}", false, new System.Numerics.Vector2(width, 17)))
             {
                 AssetDatabase.Ping(value.AssetID);
 #warning TODO: Show a popup with a list of all assets of the type - property.Type.Name
@@ -31,7 +29,7 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         else if (value.IsRuntimeResource)
         {
             path = "(Runtime)" + value.Name;
-            if (ImGui.Selectable($"{Name}: {path}", false))
+            if (ImGui.Selectable($"{Name}: {path}", false, new System.Numerics.Vector2(width, 17)))
             {
                 AssetDatabase.Ping(value.AssetID);
 #warning TODO: Show a popup with a list of all assets of the type - property.Type.Name
@@ -41,7 +39,7 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         else if (AssetDatabase.Contains(value.AssetID))
         {
             path = AssetDatabase.GUIDToAssetPath(value.AssetID);
-            if (ImGui.Selectable($"{Name}: {path}", false))
+            if (ImGui.Selectable($"{Name}: {path}", false, new System.Numerics.Vector2(width, 17)))
             {
                 AssetDatabase.Ping(value.AssetID);
                 Selection.Select(this, false);
