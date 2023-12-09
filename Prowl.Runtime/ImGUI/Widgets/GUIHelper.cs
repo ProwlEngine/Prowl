@@ -185,7 +185,7 @@ namespace Prowl.Runtime
             unsafe
             {
                 fixed (double* v = &value)
-                    return ImGui.DragScalar(v1, ImGuiDataType.Double, v, v2);
+                    return ImGui.DragScalar(v1, ImGuiDataType.Double, v, v2, "%g");
             }
         }
     }
