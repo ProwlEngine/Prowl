@@ -21,7 +21,7 @@ public class ProjectsWindow : EditorWindow
 
     public ProjectsWindow() : base()
     {
-        Title = "Projects";
+        Title = FontAwesome6.Book + " Projects";
     }
 
     protected override void Draw()

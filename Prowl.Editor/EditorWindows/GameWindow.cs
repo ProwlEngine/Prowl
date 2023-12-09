@@ -1,4 +1,5 @@
 ﻿using HexaEngine.ImGuiNET;
+using Prowl.Icons;
 using Prowl.Runtime;
 using System.Numerics;
 
@@ -12,7 +13,7 @@ public class GameWindow : EditorWindow
 
     public GameWindow() : base()
     {
-        Title = "Game";
+        Title = FontAwesome6.Gamepad + " Game";
         RefreshRenderTexture(Width, Height);
     }
 

@@ -51,7 +51,7 @@ namespace Prowl.Editor.EditorWindows
         }
 
         public string[] IconStrings;
-        private string _searchText;
+        private string _searchText = "";
 
         public void DrawIcons()
         {

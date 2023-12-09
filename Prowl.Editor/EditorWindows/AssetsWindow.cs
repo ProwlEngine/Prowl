@@ -24,7 +24,7 @@ public class AssetsWindow : EditorWindow {
 
     public AssetsWindow() : base()
     {
-        Title = "Assets";
+        Title = FontAwesome6.FolderTree + " Assets";
     }
 
     protected override void Draw()

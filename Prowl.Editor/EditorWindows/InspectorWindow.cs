@@ -19,7 +19,7 @@ public class InspectorWindow : EditorWindow
 
     public InspectorWindow() : base()
     {
-        Title = "Inspector";
+        Title = FontAwesome6.BookOpen + " Inspector";
         Selection.OnSelectObject += Selection_OnSelectObject;
     }
 

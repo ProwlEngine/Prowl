@@ -85,7 +85,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
             Space();
 
-            if (ImGui.CollapsingHeader(FontAwesome6.LocationArrow + "  Transform", ImGuiTreeNodeFlags.DefaultOpen))
+            if (ImGui.CollapsingHeader(FontAwesome6.LocationArrow + " Transform", ImGuiTreeNodeFlags.DefaultOpen))
             {
                 PropertyDrawer.Draw(go, typeof(GameObject).GetProperty("Position")!);
                 PropertyDrawer.Draw(go, typeof(GameObject).GetProperty("Rotation")!);
@@ -107,7 +107,11 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 if (comp.hideFlags.HasFlag(HideFlags.NotEditable)) ImGui.BeginDisabled();
 
                 ImGui.PushID(comp.GetHashCode() + i);
-                if (ImGui.CollapsingHeader(comp.GetType().Name, ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.OpenOnArrow))
+                // if has a AddComponentMenu then name is the path name
+                var t = comp.GetType();
+                var addToMenuAttribute = t.GetCustomAttribute<AddComponentMenuAttribute>();
+                string compName = addToMenuAttribute != null ? Path.GetFileName(addToMenuAttribute.Path) : t.Name;
+                if (ImGui.CollapsingHeader(compName, ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.OpenOnArrow))
                 {
                     if (ImGui.BeginPopupContextItem())
                     {

@@ -18,7 +18,7 @@ public class HierarchyWindow : EditorWindow {
 
     public HierarchyWindow() : base()
     {
-        Title = "Hierarchy";
+        Title = FontAwesome6.DiagramProject + " Hierarchy";
     }
     
     private string _searchText = "";

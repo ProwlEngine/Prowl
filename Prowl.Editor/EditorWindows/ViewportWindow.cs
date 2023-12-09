@@ -22,7 +22,7 @@ public class ViewportWindow : EditorWindow
 
     public ViewportWindow() : base()
     {
-        Title = "Viewport";
+        Title = FontAwesome6.Camera + " Viewport";
 
         var CamObject = GameObject.CreateSilently();
         CamObject.Name = "Editor-Camera";

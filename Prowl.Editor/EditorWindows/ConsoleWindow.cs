@@ -1,6 +1,7 @@
 using Prowl.Runtime;
 using HexaEngine.ImGuiNET;
 using System.Numerics;
+using Prowl.Icons;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -18,7 +19,7 @@ public class ConsoleWindow : EditorWindow {
     private bool _showErrorLogMessages = true;
 
     public ConsoleWindow() : base() {
-        Title = "Console";
+        Title = FontAwesome6.Terminal + " Console";
         _logMessages = new List<LogMessage>();
         Debug.OnLog += OnLog;
     }

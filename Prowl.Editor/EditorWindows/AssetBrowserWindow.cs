@@ -35,7 +35,7 @@ public class AssetBrowserWindow : EditorWindow {
 
     public AssetBrowserWindow() : base()
     {
-        Title = "Asset Browser";
+        Title = FontAwesome6.BoxOpen + " Asset Browser";
         Project.OnProjectChanged += Invalidate;
         Selection.OnSelectObject += SelectionChanged;
         AssetDatabase.Pinged += OnAssetPinged;

@@ -3,6 +3,7 @@ using Prowl.Editor.PropertyDrawers;
 using HexaEngine.ImGuiNET;
 using System.Numerics;
 using System.Reflection;
+using Prowl.Icons;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -15,7 +16,7 @@ public class ProjectSettingsWindow : EditorWindow {
 
     private Type? currentType;
 
-    public ProjectSettingsWindow() : base() { Title = "Project Settings"; }
+    public ProjectSettingsWindow() : base() { Title = FontAwesome6.Gear + " Project Settings"; }
 
     public ProjectSettingsWindow(IProjectSetting settingToOpen) : base() { currentType = settingToOpen.GetType(); }
 
