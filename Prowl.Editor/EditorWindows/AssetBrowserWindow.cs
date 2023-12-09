@@ -237,12 +237,23 @@ public class AssetBrowserWindow : EditorWindow {
         {
             if (entry is FileInfo)
             {
-                string relativeAssetPath = Path.GetRelativePath(Project.ProjectDirectory, entry.FullName);
-
-                bool isAsset = AssetDatabase.Contains(relativeAssetPath);
+                // Drag and Drop Payload
+                if (ImporterAttribute.SupportsExtension(entry.Extension))
+                {
+                    Type type = ImporterAttribute.GetGeneralType(entry.Extension);
+                    if (type != null)
+                    {
+                        var guid = AssetDatabase.GUIDFromAssetPath(Path.GetRelativePath(Project.ProjectDirectory, entry.FullName));
+                        DragnDrop.OfferAsset(guid, type.Name);
+                        goto end; // Dont do Selection/Open stuff
+                    }
+                }
 
                 if (ImGui.IsMouseClicked(0))
                     Selection.Select(entry, true);
+
+                string relativeAssetPath = Path.GetRelativePath(Project.ProjectDirectory, entry.FullName);
+                bool isAsset = AssetDatabase.Contains(relativeAssetPath);
                 if (isAsset && ImGui.IsMouseDoubleClicked(0))
                 {
                     if (entry.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase))
@@ -253,17 +264,6 @@ public class AssetBrowserWindow : EditorWindow {
                     else
                     {
                         AssetDatabase.OpenAsset(relativeAssetPath);
-                    }
-                }
-
-                // Drag and Drop Payload
-                if (ImporterAttribute.SupportsExtension(entry.Extension))
-                {
-                    Type type = ImporterAttribute.GetGeneralType(entry.Extension);
-                    if (type != null)
-                    {
-                        var guid = AssetDatabase.GUIDFromAssetPath(Path.GetRelativePath(Project.ProjectDirectory, entry.FullName));
-                        DragnDrop.OfferAsset(guid, type.Name);
                     }
                 }
             }
@@ -281,6 +281,7 @@ public class AssetBrowserWindow : EditorWindow {
                     CurDirectory = new DirectoryInfo(entry.FullName);
             }
         }
+        end:;
         GUIHelper.Tooltip(entry.Name);
 
         ImGui.PopStyleVar(2);
