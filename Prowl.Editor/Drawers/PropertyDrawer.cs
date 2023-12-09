@@ -108,10 +108,9 @@ public abstract class PropertyDrawer<T> : PropertyDrawer {
     
     protected void DrawLabel(string label, ref float width)
     {
-        ImGui.Columns(2);
+        ImGui.Columns(2, false);
         ImGui.Text(label);
-        //var w = Math.Min(70, ImGui.GetItemRectSize().X + 7);
-        var w = 70;
+        var w = width / 2.5f;
         ImGui.SetColumnWidth(0, w);
         width -= w;
         ImGui.NextColumn();
