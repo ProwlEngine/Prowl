@@ -9,7 +9,7 @@ public class PropertyDrawerDouble : PropertyDrawer<double> {
     {
         DrawLabel(label, ref width);
 
-        ImGui.SetNextItemWidth(width / 2);
+        ImGui.SetNextItemWidth(width);
         bool changed = GUIHelper.DragDouble("", ref value, 0.01f);
         ImGui.Columns(1);
         return changed;
