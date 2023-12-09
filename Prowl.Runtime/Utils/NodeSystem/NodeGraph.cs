@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 namespace Prowl.Runtime.NodeSystem
 {
@@ -27,6 +28,17 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> Add a node to the graph by type </summary>
         public virtual Node AddNode(Type type)
         {
+            // if it has a DisallowMultipleNodesAttribute and there is already one in the graph return null
+            var attrib = type.GetCustomAttribute<Node.DisallowMultipleNodesAttribute>(true);
+            if (attrib != null)
+            {
+                if (nodes.Where(n => n.GetType() == type).Count() >= attrib.max)
+                {
+                    Debug.LogError($"Only {attrib.max} nodes of type {type} are allowed in the graph!");
+                    return null;
+                }
+            }
+
             Node node = Activator.CreateInstance(type) as Node;
             node.graph = this;
             nodes.Add(node);
@@ -34,6 +46,11 @@ namespace Prowl.Runtime.NodeSystem
             return node;
         }
         
+        public Node GetNode<T>() where T : Node
+        {
+            return nodes.Where(n => n.GetType() == typeof(T)).FirstOrDefault();
+        }
+
         public virtual Node GetNode(int instanceID)
         {
             return nodes.Where(n => n.InstanceID == instanceID).FirstOrDefault();

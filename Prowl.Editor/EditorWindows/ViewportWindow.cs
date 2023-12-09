@@ -129,14 +129,12 @@ public class ViewportWindow : EditorWindow
         {
             if (ImGui.Selectable($"Off", Cam.debugDraw == Camera.DebugDraw.Off))
                 Cam.debugDraw = Camera.DebugDraw.Off;
-            if (ImGui.Selectable($"Diffuse", Cam.debugDraw == Camera.DebugDraw.Diffuse))
-                Cam.debugDraw = Camera.DebugDraw.Diffuse;
+            if (ImGui.Selectable($"Diffuse", Cam.debugDraw == Camera.DebugDraw.Albedo))
+                Cam.debugDraw = Camera.DebugDraw.Albedo;
             if (ImGui.Selectable($"Normals", Cam.debugDraw == Camera.DebugDraw.Normals))
                 Cam.debugDraw = Camera.DebugDraw.Normals;
             if (ImGui.Selectable($"Depth", Cam.debugDraw == Camera.DebugDraw.Depth))
                 Cam.debugDraw = Camera.DebugDraw.Depth;
-            if (ImGui.Selectable($"Lighting", Cam.debugDraw == Camera.DebugDraw.Lighting))
-                Cam.debugDraw = Camera.DebugDraw.Lighting;
             if (ImGui.Selectable($"Velocity", Cam.debugDraw == Camera.DebugDraw.Velocity))
                 Cam.debugDraw = Camera.DebugDraw.Velocity;
             ImGui.EndCombo();

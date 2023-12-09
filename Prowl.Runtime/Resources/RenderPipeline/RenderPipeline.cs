@@ -13,8 +13,8 @@ namespace Prowl.Runtime
         public override Type[] NodeTypes => [ 
             typeof(CameraNode), 
             typeof(PBRDeferredNode),
+            typeof(PostPBRDeferredNode),
             typeof(DepthOfFieldNode),
-            typeof(AcesFittedNode),
             typeof(OutputNode),
             ];
     }

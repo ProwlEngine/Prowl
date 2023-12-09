@@ -52,26 +52,26 @@ namespace Prowl.Runtime.ImageEffects
 
         private void ApplyEffect(GBuffer gBuffer)
         {
-            if (dof == null) OnResize(gBuffer.Width, gBuffer.Height);
-
-            Mat.SetTexture("gCombined", gBuffer.Combined);
-            Mat.SetTexture("gDepth", gBuffer.Depth);
-
-            Mat.SetFloat("u_Quality", Math.Clamp(quality, 0.0f, 0.9f));
-            Mat.SetFloat("u_BlurRadius", Math.Clamp(blurRadius, 2, 40));
-            Mat.SetFloat("u_FocusStrength", focusStrength);
-
-            Rlgl.rlDisableDepthMask();
-            Rlgl.rlDisableDepthTest();
-            Rlgl.rlDisableBackfaceCulling();
-            Graphics.Blit(dof, Mat, 0, true);
-            Rlgl.rlEnableDepthMask();
-            Rlgl.rlEnableDepthTest();
-            Rlgl.rlEnableBackfaceCulling();
-
-            gBuffer.BeginCombine();
-            Cam.DrawFullScreenTexture(dof.InternalTextures[0]);
-            gBuffer.EndCombine();
+            //if (dof == null) OnResize(gBuffer.Width, gBuffer.Height);
+            //
+            //Mat.SetTexture("gCombined", gBuffer.Combined);
+            //Mat.SetTexture("gDepth", gBuffer.Depth);
+            //
+            //Mat.SetFloat("u_Quality", Math.Clamp(quality, 0.0f, 0.9f));
+            //Mat.SetFloat("u_BlurRadius", Math.Clamp(blurRadius, 2, 40));
+            //Mat.SetFloat("u_FocusStrength", focusStrength);
+            //
+            //Rlgl.rlDisableDepthMask();
+            //Rlgl.rlDisableDepthTest();
+            //Rlgl.rlDisableBackfaceCulling();
+            //Graphics.Blit(dof, Mat, 0, true);
+            //Rlgl.rlEnableDepthMask();
+            //Rlgl.rlEnableDepthTest();
+            //Rlgl.rlEnableBackfaceCulling();
+            //
+            //gBuffer.BeginCombine();
+            //Cam.DrawFullScreenTexture(dof.InternalTextures[0]);
+            //gBuffer.EndCombine();
         }
 
     }

@@ -1,4 +1,5 @@
 ﻿using Prowl.Icons;
+using Prowl.Runtime.Resources.RenderPipeline;
 using Prowl.Runtime.SceneManagement;
 using Raylib_cs;
 using System;
@@ -36,7 +37,7 @@ public class Camera : MonoBehaviour
     public GBuffer gBuffer { get; private set; }
     Material CombineShader;
 
-    public enum DebugDraw { Off, Diffuse, Normals, Depth, Lighting, Velocity }
+    public enum DebugDraw { Off, Albedo, Normals, Depth, Velocity }
     public DebugDraw debugDraw = DebugDraw.Off;
 
     public Matrix4x4 GetProjectionMatrix(float width, float height)
@@ -61,18 +62,18 @@ public class Camera : MonoBehaviour
         Vector2 size = GetRenderTargetSize() * RenderResolution;
         if (gBuffer == null)
         {
-            gBuffer = new GBuffer((int)size.X, (int)size.Y, RenderResolution);
+            gBuffer = new GBuffer((int)size.X, (int)size.Y);
             Resize?.Invoke(gBuffer.Width, gBuffer.Height);
         }
         else if (gBuffer.Width != (int)size.X || gBuffer.Height != (int)size.Y)
         {
             gBuffer.UnloadGBuffer();
-            gBuffer = new GBuffer((int)size.X, (int)size.Y, RenderResolution);
+            gBuffer = new GBuffer((int)size.X, (int)size.Y);
             Resize?.Invoke(gBuffer.Width, gBuffer.Height);
         }
     }
 
-    private void RenderAllOfOrder(RenderingOrder order)
+    internal void RenderAllOfOrder(RenderingOrder order)
     {
         foreach (var go in SceneManager.AllGameObjects)
             if (go.EnabledInHierarchy)
@@ -93,32 +94,6 @@ public class Camera : MonoBehaviour
         gBuffer.Begin();                            // Start
         RenderAllOfOrder(RenderingOrder.Opaque);    // Render
         gBuffer.End();                              // End
-    }
-
-    private void LightingPass()
-    {
-        gBuffer.BeginLighting();
-        RenderAllOfOrder(RenderingOrder.Lighting);
-        gBuffer.EndLighting();
-    }
-
-    private void CombinePass()
-    {
-        gBuffer.BeginCombine();
-        CombineShader ??= new(Shader.Find("Defaults/GBuffercombine.shader"));
-        //CombineShader.mpb.Clear();
-        CombineShader.SetTexture("gAlbedoAO", gBuffer.AlbedoAO);
-        CombineShader.SetTexture("gLighting", gBuffer.Lighting);
-        CombineShader.SetFloat("Contrast", Math.Clamp(Contrast, 0, 2));
-        CombineShader.SetFloat("Saturation", Math.Clamp(Saturation, 0, 2));
-        CombineShader.EnableKeyword("ACESTONEMAP");
-        CombineShader.EnableKeyword("GAMMACORRECTION");
-        CombineShader.SetPass(0, true);
-        //CombineShader.Begin();
-        DrawFullScreenTexture(gBuffer.Lighting);
-        //CombineShader.End();
-        CombineShader.EndPass();
-        gBuffer.EndCombine();
     }
 
     Matrix4x4? oldView = null;
@@ -175,34 +150,50 @@ public class Camera : MonoBehaviour
 #warning TODO: Smarter Shadowmap Updating, updating every frame for every camera is stupid
         Graphics.UpdateAllShadowmaps();
 
-        LightingPass();
+        var outputNode = rp.Res!.GetNode<OutputNode>();
+        if (outputNode == null)
+        {
+            Debug.LogError("RenderPipeline has no OutputNode!"); 
+            return;
+        }
 
-        PostProcessStagePreCombine?.Invoke(gBuffer);
+        AssetRef<RenderTexture> result = (AssetRef<RenderTexture>)rp.Res!.GetNode<OutputNode>().GetValue(null);
 
-        if (debugDraw == DebugDraw.Off)
-            CombinePass();
+        if (result.IsAvailable == false)
+        {
+            Current = null;
+            Rlgl.rlSetBlendMode(BlendMode.BLEND_ALPHA);
 
-        PostProcessStagePostCombine?.Invoke(gBuffer);
+            Debug.LogError("RenderPipeline OutputNode failed to return a valid RenderTexture!");
+            return;
+        }
+
+        //LightingPass();
+        //
+        //PostProcessStagePreCombine?.Invoke(gBuffer);
+        //
+        //if (debugDraw == DebugDraw.Off)
+        //    CombinePass();
+        //
+        //PostProcessStagePostCombine?.Invoke(gBuffer);
 
         // Draw to Screen
         Target.Res?.Begin();
         if (DoClear) Raylib.ClearBackground(ClearColor);
-
+        
         if (debugDraw == DebugDraw.Off)
         {
-            DrawFullScreenTexture(gBuffer.Combined);
+            DrawFullScreenTexture(result.Res!.InternalTextures[0]);
         }
-        else if (debugDraw == DebugDraw.Diffuse)
+        else if (debugDraw == DebugDraw.Albedo)
             DrawFullScreenTexture(gBuffer.AlbedoAO);
         else if (debugDraw == DebugDraw.Normals)
             DrawFullScreenTexture(gBuffer.NormalMetallic);
         else if (debugDraw == DebugDraw.Depth)
             DrawFullScreenTexture(gBuffer.PositionRoughness);
-        else if (debugDraw == DebugDraw.Lighting)
-            DrawFullScreenTexture(gBuffer.Lighting);
         else if (debugDraw == DebugDraw.Velocity)
             DrawFullScreenTexture(gBuffer.Velocity);
-
+        
         Target.Res?.End();
 
         Current = null;
