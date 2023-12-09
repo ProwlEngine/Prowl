@@ -123,6 +123,7 @@ public class EditorMainMenubar {
             if(ImGui.MenuItem("Inspector")) { new InspectorWindow(); }
             if(ImGui.MenuItem("Viewport")) { new ViewportWindow(); }
             if(ImGui.MenuItem("Render Pipeline Graph")) { new RenderPipelineWindow(); }
+            if(ImGui.MenuItem("Utilities")) { new UtilitiesWindow(); }
             ImGui.EndMenu();
         }
         
