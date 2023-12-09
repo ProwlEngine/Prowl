@@ -7,6 +7,6 @@ public class PropertyDrawerBool : PropertyDrawer<bool> {
     protected override bool Draw(string label, ref bool value, float width)
     {
         ImGui.SetNextItemWidth(width);
-        return ImGui.Checkbox(label, ref value);
+        return ImGui.Checkbox(Prettify(label), ref value);
     }
 }
