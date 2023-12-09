@@ -2,6 +2,7 @@
 using HexaEngine.ImNodesNET;
 using ImageMagick;
 using Prowl.Runtime.Utils;
+using Prowl.Runtime.Utils.NodeSystem;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -92,39 +93,7 @@ namespace Prowl.Runtime.NodeSystem
         public void OnEnable()
         {
             InstanceID = graph.NextID;
-            Type nodeType = this.GetType();
-            List<FieldInfo> fieldInfo = new List<FieldInfo>(nodeType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance));
-            // GetFields doesnt return inherited private fields, so walk through base types and pick those up
-            System.Type tempType = nodeType;
-            while ((tempType = tempType.BaseType) != typeof(Node))
-            {
-                FieldInfo[] parentFields = tempType.GetFields(BindingFlags.NonPublic | BindingFlags.Instance);
-                for (int i = 0; i < parentFields.Length; i++)
-                {
-                    // Ensure that we do not already have a member with this type and name
-                    FieldInfo parentField = parentFields[i];
-                    if (fieldInfo.TrueForAll(x => x.Name != parentField.Name))
-                        fieldInfo.Add(parentField);
-                }
-            }
-
-            for (int i = 0; i < fieldInfo.Count; i++)
-            {
-                //Get InputAttribute and OutputAttribute
-                object[] attribs = fieldInfo[i].GetCustomAttributes(true);
-                Node.InputAttribute inputAttrib = attribs.FirstOrDefault(x => x is Node.InputAttribute) as Node.InputAttribute;
-                Node.OutputAttribute outputAttrib = attribs.FirstOrDefault(x => x is Node.OutputAttribute) as Node.OutputAttribute;
-
-                if (inputAttrib == null && outputAttrib == null) continue;
-
-                if (inputAttrib != null && outputAttrib != null) Debug.LogError("Field " + fieldInfo[i].Name + " of type " + nodeType.FullName + " cannot be both input and output.");
-                else
-                {
-                    NodePort port = new NodePort(fieldInfo[i], this);
-                    ports.Add(port.fieldName, port);
-                }
-            }
-
+            NodeDataCache.UpdatePorts(this, ports);
             Init();
         }
 
