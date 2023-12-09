@@ -11,6 +11,7 @@ public class Camera : MonoBehaviour
 {
     public static Camera? Current;
 
+    public AssetRef<RenderPipeline> RenderPipeline;
     public bool DoClear = true;
     public Color ClearColor = new Color(0f, 0f, 0f, 1f);
     public float FieldOfView = 60f;
@@ -127,6 +128,17 @@ public class Camera : MonoBehaviour
 
     public void Render(int width, int height)
     {
+        var rp = RenderPipeline;
+        if (rp.IsAvailable == false) 
+        {
+            rp = Application.AssetProvider.LoadAsset<RenderPipeline>("Defaults/DefaultRenderPipeline.scriptobj");
+            if (rp.IsAvailable == false)
+            {
+                Debug.LogError($"Camera on {GameObject.Name} cannot render, Missing Default Render Pipeline!");
+                return;
+            }
+        }
+
         if (Target.IsAvailable)
         {
             width = Target.Res!.Width;
