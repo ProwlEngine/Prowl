@@ -166,6 +166,7 @@ namespace Prowl.Runtime
 
         public static bool Search(string v, ref string searchText, float x)
         {
+            searchText ??= "";
             float cPX = ImGui.GetCursorPosX();
             ImGui.SetNextItemWidth(x);
             bool changed = ImGui.InputText(v, ref searchText, 0x100);
