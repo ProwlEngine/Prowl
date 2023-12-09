@@ -90,6 +90,41 @@ namespace Prowl.Editor.Drawers.NodeSystem
                 ImGui.EndPopup();
             }
 
+            if (ImGui.IsKeyPressed(ImGuiKey.Delete))
+            {
+                int numLinks = ImNodes.NumSelectedLinks();
+                if (numLinks > 0)
+                {
+                    int[] ids = new int[numLinks];
+                    ImNodes.GetSelectedLinks(ref ids[0]);
+                    foreach (var id in ids)
+                    {
+                        var nodeAndID = FindLink(graph, id);
+                        if (nodeAndID.Item1 != null)
+                        {
+                            changed = true;
+                            nodeAndID.Item1.Disconnect(nodeAndID.Item2);
+                        }
+                    }
+                }
+                int numNodes = ImNodes.NumSelectedNodes();
+                if (numNodes > 0)
+                {
+                    int[] ids = new int[numNodes];
+                    ImNodes.GetSelectedNodes(ref ids[0]);
+                    foreach (var id in ids)
+                    {
+                        foreach (var node in graph.nodes)
+                            if (node.InstanceID == id)
+                            {
+                                changed = true;
+                                graph.RemoveNode(node);
+                                break;
+                            }
+                    }
+                }
+            }
+
             ImNodes.MiniMap();
             ImNodes.EndNodeEditor();
 
@@ -111,21 +146,32 @@ namespace Prowl.Editor.Drawers.NodeSystem
             int link_id = 0;
             if (ImNodes.IsLinkDestroyed(ref link_id))
             {
-                changed = true;
-                // Search all nodes for the destroyed link
-                foreach (var node in graph.nodes)
-                {
-                    var port = node.GetPort(link_id);
-                    if (port != null)
-                        for (int i = 0; i < port.ConnectionCount; i++)
-                            if (port.GetConnectionInstanceID(i) == link_id)
-                            {
-                                port.Disconnect(i);
-                                break;
-                            }
-                }
+                Debug.Log("Disconnected Link");
+                //changed = true;
+                //// Search all nodes for the destroyed link
+                //foreach (var node in graph.nodes)
+                //{
+                //    var port = node.GetPort(link_id);
+                //    if (port != null)
+                //        for (int i = 0; i < port.ConnectionCount; i++)
+                //            if (port.GetConnectionInstanceID(i) == link_id)
+                //            {
+                //                port.Disconnect(i);
+                //                break;
+                //            }
+                //}
             }
             return changed;
+        }
+
+        (NodePort, int) FindLink(NodeGraph graph, int link_id)
+        {
+            foreach (var node in graph.nodes)
+                foreach (var port in node.Ports)
+                    for (int i = 0; i < port.ConnectionCount; i++)
+                        if (port.GetConnectionInstanceID(i) == link_id)
+                            return (port, i);
+            return (null, 0);
         }
 
         #endregion
