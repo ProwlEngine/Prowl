@@ -515,9 +515,9 @@ namespace Prowl.Runtime.Assets
             }
         }
 
-        public static SerializedAsset LoadAsset(string relativeAssetPath) => LoadAsset(GuidPathHolder.GetGuid(relativeAssetPath));
+        public static SerializedAsset? LoadAsset(string relativeAssetPath) => LoadAsset(GuidPathHolder.GetGuid(relativeAssetPath));
 
-        public static SerializedAsset LoadAsset(Guid assetGuid)
+        public static SerializedAsset? LoadAsset(Guid assetGuid)
         {
             if (assetGuid == Guid.Empty) throw new ArgumentException("Asset Guid cannot be empty", nameof(assetGuid));
 
@@ -528,7 +528,7 @@ namespace Prowl.Runtime.Assets
             if (relativeAssetPath == null) return null; // Asset is missing from database
 
             FileInfo asset = RelativeToFile(GuidPathHolder.GetPath(assetGuid));
-            if (!asset.Exists) throw new FileNotFoundException("Asset file does not exist", asset.FullName);
+            if (!asset.Exists) throw null;
 
 
             FileInfo serializedAssetPath = GetSerializedFile(relativeAssetPath);
@@ -546,6 +546,7 @@ namespace Prowl.Runtime.Assets
         public static void AddObjectToAsset(Guid assetGuid, string name, EngineObject obj)
         {
             var serializedAsset = LoadAsset(assetGuid);
+            if (serializedAsset == null) throw new Exception("Asset does not exist!");
             if (serializedAsset.SubAssets.Contains(obj)) throw new Exception("Asset already contains this sub asset!");
             serializedAsset.SubAssets.Add(obj);
             dirtyAssetData.Add(assetGuid);
@@ -554,6 +555,7 @@ namespace Prowl.Runtime.Assets
         public static void RemoveObjectFromAsset(Guid assetGuid, EngineObject obj)
         {
             var serializedAsset = LoadAsset(assetGuid);
+            if (serializedAsset == null) throw new Exception("Asset does not exist!");
             if (!serializedAsset.SubAssets.Contains(obj)) throw new Exception("Asset does not contain this sub asset!");
             serializedAsset.SubAssets.Remove(obj);
             dirtyAssetData.Add(assetGuid);
