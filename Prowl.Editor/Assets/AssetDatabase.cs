@@ -640,7 +640,7 @@ namespace Prowl.Runtime.Assets
                 {
                     fullAssetPath.Delete(); // Delete Meta
                     // Deleted a Serialized Asset file if we have one
-                    var serialized = GetSerializedFile(FileToRelative(fullAssetPath));
+                    var serialized = GetSerializedFile(FileToRelative(new FileInfo(assetPath)));
                     if (serialized.Exists)
                         serialized.Delete();
                 }
