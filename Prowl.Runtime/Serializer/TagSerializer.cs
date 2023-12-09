@@ -330,11 +330,14 @@ namespace Prowl.Runtime
                         // This allows backwards compatibility
                         var formerNames = Attribute.GetCustomAttributes(field, typeof(FormerlySerializedAsAttribute));
                         foreach (SerializeAsAttribute formerName in formerNames)
+                        foreach (FormerlySerializedAsAttribute formerName in formerNames)
                         {
                             //if (compound.Tags.Any(a => a.Name == formerName.Name))
                             if (compound.TryGet<Tag>(formerName.Name, out node))
+                            if (compound.TryGet<Tag>(formerName.oldName, out node))
                             {
                                 name = formerName.Name;
+                                name = formerName.oldName;
                                 break;
                             }
                         }
