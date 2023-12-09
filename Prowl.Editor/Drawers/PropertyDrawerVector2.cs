@@ -13,11 +13,11 @@ public class PropertyDrawerSystemVector2 : PropertyDrawer<System.Numerics.Vector
         ImGui.PushItemWidth(width / 2 - 10);
         ImGui.Text("X");
         ImGui.SameLine();
-        changed |= ImGui.DragFloat("##X", ref v2.X);
+        changed |= ImGui.DragFloat("##X", ref v2.X, "%g");
         ImGui.SameLine();
         ImGui.Text("Y");
         ImGui.SameLine();
-        changed |= ImGui.DragFloat("##Y", ref v2.Y);
+        changed |= ImGui.DragFloat("##Y", ref v2.Y, "%g");
         
         ImGui.PopItemWidth();
         ImGui.Columns(1);
