@@ -62,7 +62,16 @@ namespace Prowl.Editor.Drawers.NodeSystem
                 changed |= OnNodeDraw(node);
 
                 ImNodes.EndNode();
-                node.position = ImNodes.GetNodeEditorSpacePos(node.InstanceID);
+                var nodePos = ImNodes.GetNodeGridSpacePos(node.InstanceID);
+                if (node.position != default && nodePos == default)
+                {
+                    ImNodes.SetNodeGridSpacePos(node.InstanceID, node.position);
+                    nodePos = node.position;
+                }
+                else
+                {
+                    node.position = ImNodes.GetNodeGridSpacePos(node.InstanceID);
+                }
             }
 
             foreach (var node in graph.nodes)
@@ -147,20 +156,8 @@ namespace Prowl.Editor.Drawers.NodeSystem
             if (ImNodes.IsLinkDestroyed(ref link_id))
             {
                 Debug.Log("Disconnected Link");
-                //changed = true;
-                //// Search all nodes for the destroyed link
-                //foreach (var node in graph.nodes)
-                //{
-                //    var port = node.GetPort(link_id);
-                //    if (port != null)
-                //        for (int i = 0; i < port.ConnectionCount; i++)
-                //            if (port.GetConnectionInstanceID(i) == link_id)
-                //            {
-                //                port.Disconnect(i);
-                //                break;
-                //            }
-                //}
             }
+
             return changed;
         }
 
