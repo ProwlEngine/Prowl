@@ -115,6 +115,7 @@ namespace Prowl.Runtime.Assets
 
             rootFolders.Add(info);
             RefreshAll();
+            ReimportDirtyMeta();
 
             var watcher = new FileSystemWatcher(info.FullName)
             {
@@ -140,7 +141,9 @@ namespace Prowl.Runtime.Assets
                         Refresh(new DirectoryInfo(e.FullPath));
                     else
                         Refresh(new FileInfo(e.FullPath));
+                    ReimportDirtyMeta();
                 }
+                
             }
 
             static void OnDeleted(object sender, FileSystemEventArgs e)
@@ -156,6 +159,7 @@ namespace Prowl.Runtime.Assets
                     Refresh(parent);
                 else
                     RefreshAll();
+                ReimportDirtyMeta();
             }
 
             watcher.Deleted += OnDeleted;
@@ -364,6 +368,7 @@ namespace Prowl.Runtime.Assets
 
             // Import all assets
             RefreshAll();
+            ReimportDirtyMeta();
         }
 
         /// <summary>
@@ -427,6 +432,11 @@ namespace Prowl.Runtime.Assets
                 }
             }
 
+            // Make sure path exists
+            var assetFile = RelativeToFile(relativeAssetPath);
+            if (!assetFile.Exists)
+                return false; // Asset doesnt exist
+
             // Cleanup input string, Makes it consistent
             relativeAssetPath = NormalizeString(relativeAssetPath);
 
@@ -435,8 +445,6 @@ namespace Prowl.Runtime.Assets
                 return false; // No valid Meta file
             if (meta.importer == null)
                 return false; // No valid Importer
-
-            var assetFile = RelativeToFile(relativeAssetPath);
 
             // Import the asset
             SerializedAsset ctx = new();
