@@ -56,6 +56,12 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             ImGui.PushID(go.GetHashCode());
             // GameObject's Drawer is Hardcoded
 
+            // position cursor back to window start
+            ImGui.SetCursorPosX(56);
+            ImGui.SetCursorPosY(24);
+
+            ImGui.SetNextItemWidth(ImGui.GetWindowWidth() - 100);
+            ImGui.InputText("##GOName", ref go.Name, 0x100);
             ImGui.SameLine();
 
             bool isEnabled = go.Enabled;
@@ -64,26 +70,24 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 go.Enabled = isEnabled;
             GUIHelper.Tooltip("Is Enabled");
 
-            ImGui.SameLine();
-
-            string name = go.Name;
-            ImGui.SetNextItemWidth(ImGui.GetWindowWidth() - 100);
-            if (ImGui.InputText("##GOName", ref name, 0x100))
-                go.Name = name;
-
+            ImGui.SetCursorPosY(52);
+            
+            //float widthToWorkWith = ImGui.GetWindowWidth() - 24f;
+            //ImGui.SetNextItemWidth((widthToWorkWith / 2) - (13));
+            //ImGui.Combo("##Tag", ref go.tagIndex, TagLayerManager.tags.ToArray(), TagLayerManager.tags.Count);
+            //GUIHelper.Tooltip("Tag");
             //ImGui.SameLine();
-
-            //if (ImGui.Button(go.isStatic ? FontAwesome6.Lock : FontAwesome6.Unlock))
-            //    go.isStatic = !go.isStatic;
+            //ImGui.SetNextItemWidth((widthToWorkWith / 2) - (14));
+            //ImGui.Combo("##Layer", ref go.layerIndex, TagLayerManager.layers.ToArray(), TagLayerManager.layers.Count);
+            //GUIHelper.Tooltip("Layer");
+            //ImGui.SameLine();
+            //bool isStatic = false;
+            //ImGui.BeginDisabled();
+            //ImGui.Button(isStatic ? FontAwesome6.Lock : FontAwesome6.Unlock);
             //GUIHelper.Tooltip("Is Static");
-
-            ImGui.SetNextItemWidth((ImGui.GetWindowWidth() / 2) - (50));
-            ImGui.Combo("Tag", ref go.tagIndex, TagLayerManager.tags.ToArray(), TagLayerManager.tags.Count);
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth((ImGui.GetWindowWidth() / 2) - (50));
-            ImGui.Combo("Layer", ref go.layerIndex, TagLayerManager.layers.ToArray(), TagLayerManager.layers.Count);
-
-            Space();
+            //ImGui.EndDisabled();
+            //
+            //ImGui.Separator();
 
             if (ImGui.CollapsingHeader(FontAwesome6.LocationArrow + " Transform", ImGuiTreeNodeFlags.DefaultOpen))
             {
@@ -91,8 +95,6 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 PropertyDrawer.Draw(go, typeof(GameObject).GetProperty("Rotation")!);
                 PropertyDrawer.Draw(go, typeof(GameObject).GetProperty("Scale")!);
             }
-
-            Space();
 
             // Draw Components
             HashSet<int> editorsNeeded = new();

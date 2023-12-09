@@ -38,63 +38,18 @@ public class InspectorWindow : EditorWindow
 
     protected override void Draw()
     {
+        ForwardBackButtons();
+        ImGui.Separator();
+        ImGui.Spacing();
 
-        if (ImGui.BeginMenuBar())
+        if (Selection.Count > 1)
         {
-            if(Selection.Count > 1)
-                ImGui.Text("Mult-Editing is not currently supported!");
-
-
-            if (Selected == null) ImGui.Text("No object selected");
-            else if (Selected is EngineObject eo) ImGui.Text(eo.Name);
-            else ImGui.Text(Selected.GetType().ToString());
-            ImGui.EndMenuBar();
+            ImGui.Text("Mult-Editing is not currently supported!");
+            return;
         }
 
         if (Selected == null) return;
         if (Selected is EngineObject eo1 && eo1.IsDestroyed) return;
-
-        // remove nulls or destroyed
-        while (_BackStack.Count > 0)
-        {
-            var peek = _BackStack.Peek();
-            if (peek == null || (peek is EngineObject eo2 && eo2.IsDestroyed) || ReferenceEquals(peek, Selected))
-                _BackStack.Pop();
-            else
-                break;
-        }
-
-        if (_BackStack.Count == 0) ImGui.BeginDisabled();
-        {
-            if (ImGui.Button(FontAwesome6.ArrowLeft))
-            {
-                _ForwardStack.Push(Selected);
-                Selected = _BackStack.Pop();
-            }
-        }
-        if (_BackStack.Count == 0) ImGui.EndDisabled();
-
-        ImGui.SameLine();
-
-        // remove nulls or destroyed
-        while (_ForwardStack.Count > 0)
-        {
-            var peek = _ForwardStack.Peek();
-            if (peek == null || (peek is EngineObject eo3 && eo3.IsDestroyed) || ReferenceEquals(peek, Selected))
-                _ForwardStack.Pop();
-            else
-                break;
-        }
-
-        if (_ForwardStack.Count == 0) ImGui.BeginDisabled();
-        {
-            if (ImGui.Button(FontAwesome6.ArrowRight))
-            {
-                _BackStack.Push(Selected);
-                Selected = _ForwardStack.Pop();
-            }
-        }
-        if (_ForwardStack.Count == 0) ImGui.EndDisabled();
 
         bool destroyCustomEditor = true;
 
@@ -119,9 +74,9 @@ public class InspectorWindow : EditorWindow
                 destroyCustomEditor = false;
             }
         }
-        else if(Selected is FileInfo path)
+        else if (Selected is FileInfo path)
         {
-            if (customEditor == null) 
+            if (customEditor == null)
             {
                 string? relativeAssetPath = AssetDatabase.GetRelativePath(path.FullName);
                 if (relativeAssetPath != null)
@@ -181,4 +136,49 @@ public class InspectorWindow : EditorWindow
 
     }
 
+    private void ForwardBackButtons()
+    {
+
+        // remove nulls or destroyed
+        while (_BackStack.Count > 0)
+        {
+            var peek = _BackStack.Peek();
+            if (peek == null || (peek is EngineObject eo2 && eo2.IsDestroyed) || ReferenceEquals(peek, Selected))
+                _BackStack.Pop();
+            else
+                break;
+        }
+
+        if (_BackStack.Count == 0) ImGui.BeginDisabled();
+        {
+            if (ImGui.Button(FontAwesome6.ArrowLeft))
+            {
+                _ForwardStack.Push(Selected);
+                Selected = _BackStack.Pop();
+            }
+        }
+        if (_BackStack.Count == 0) ImGui.EndDisabled();
+
+        ImGui.SameLine();
+
+        // remove nulls or destroyed
+        while (_ForwardStack.Count > 0)
+        {
+            var peek = _ForwardStack.Peek();
+            if (peek == null || (peek is EngineObject eo3 && eo3.IsDestroyed) || ReferenceEquals(peek, Selected))
+                _ForwardStack.Pop();
+            else
+                break;
+        }
+
+        if (_ForwardStack.Count == 0) ImGui.BeginDisabled();
+        {
+            if (ImGui.Button(FontAwesome6.ArrowRight))
+            {
+                _BackStack.Push(Selected);
+                Selected = _ForwardStack.Pop();
+            }
+        }
+        if (_ForwardStack.Count == 0) ImGui.EndDisabled();
+    }
 }

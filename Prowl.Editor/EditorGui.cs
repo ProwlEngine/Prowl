@@ -123,7 +123,7 @@ public static class EditorGui {
         style.DisabledAlpha = 0.5f;
         style.WindowMinSize = new Vector2(32.0f, 32.0f);
         style.WindowTitleAlign = new Vector2(0.5f, 0.5f);
-        style.WindowMenuButtonPosition = ImGuiDir.Left;
+        style.WindowMenuButtonPosition = ImGuiDir.None;
         style.ColumnsMinSpacing = 6.0f;
         //style.TabMinWidthForCloseButton = 0.0f;
         style.ColorButtonPosition = ImGuiDir.Right;

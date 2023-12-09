@@ -3,9 +3,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.SceneManagement;
-using Prowl.Runtime.Utils;
 using Raylib_cs;
-using System.Numerics;
 using static Prowl.Editor.EditorConfiguration;
 
 namespace Prowl.Editor.EditorWindows;
@@ -50,7 +48,7 @@ public class HierarchyWindow : EditorWindow {
             ImGui.TextUnformatted(FontAwesome6.MagnifyingGlass + " Search...");
         }
         clicked = false;
-        if (ImGui.BeginTable("HierarchyTable", 2, tableFlags))
+        if (ImGui.BeginTable("HierarchyTable", 4, tableFlags))
         {
             if (ImGui.BeginPopupContextWindow("SceneHierarchyContextWindow", ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.NoOpenOverItems))
             {
@@ -59,12 +57,14 @@ public class HierarchyWindow : EditorWindow {
             }
 
             ImGui.TableSetupColumn("  Label", ImGuiTableColumnFlags.NoHide | ImGuiTableColumnFlags.NoClip, contentWidth);
-            ImGui.TableSetupColumn(" " + FontAwesome6.Eye, ImGuiTableColumnFlags.WidthFixed, lineHeight * 1.25f);
+            ImGui.TableSetupColumn(" " + FontAwesome6.Tag, ImGuiTableColumnFlags.WidthFixed, lineHeight * 1.0f);
+            ImGui.TableSetupColumn(" " + FontAwesome6.LayerGroup, ImGuiTableColumnFlags.WidthFixed, lineHeight * 1.0f);
+            ImGui.TableSetupColumn(" " + FontAwesome6.Eye, ImGuiTableColumnFlags.WidthFixed, lineHeight * 1.0f);
 
             ImGui.TableSetupScrollFreeze(0, 1);
 
             ImGui.TableNextRow(ImGuiTableRowFlags.Headers, ImGui.GetFrameHeight());
-            for (int column = 0; column < 2; ++column)
+            for (int column = 0; column < 4; ++column)
             {
                 ImGui.TableSetColumnIndex(column);
                 string columnName = ImGui.TableGetColumnNameS(column);
@@ -191,7 +191,10 @@ public class HierarchyWindow : EditorWindow {
         }
 
         ImGui.TableNextColumn();
-
+        DrawTagIcon(entity);
+        ImGui.TableNextColumn();
+        DrawLayerIcon(entity);
+        ImGui.TableNextColumn();
         DrawVisibilityToggle(entity);
 
         // Open
@@ -241,11 +244,52 @@ public class HierarchyWindow : EditorWindow {
         DragnDrop.OfferReference(entity);
     }
 
+    private static void DrawTagIcon(GameObject entity)
+    {
+        ImGui.Text(" " + FontAwesome6.Tag);
+        if (ImGui.IsItemHovered())
+        {
+            GUIHelper.ItemRectFilled(1f, 1f, 1f, 0.25f);
+            if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
+                ImGui.OpenPopup("GameObjecTags##" + entity.InstanceID);
+        }
+        GUIHelper.Tooltip("Tag: " + TagLayerManager.tags[entity.tagIndex]);
+
+        if (ImGui.BeginPopup("GameObjecTags##" + entity.InstanceID))
+        {
+            ImGui.Combo("##Tag", ref entity.tagIndex, TagLayerManager.tags.ToArray(), TagLayerManager.tags.Count);
+            ImGui.EndPopup();
+        }
+    }
+
+    private static void DrawLayerIcon(GameObject entity)
+    {
+        ImGui.Text(" " + FontAwesome6.LayerGroup);
+        if (ImGui.IsItemHovered()) 
+        {
+            GUIHelper.ItemRectFilled(1f, 1f, 1f, 0.25f);
+            if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
+                ImGui.OpenPopup("GameObjectLayers##"+entity.InstanceID);
+        }
+        GUIHelper.Tooltip("Layer: " + TagLayerManager.layers[entity.layerIndex]);
+
+        if (ImGui.BeginPopup("GameObjectLayers##" + entity.InstanceID))
+        {
+            ImGui.Combo("##Layers", ref entity.layerIndex, TagLayerManager.layers.ToArray(), TagLayerManager.layers.Count);
+            ImGui.EndPopup();
+        }
+    }
+
     private static void DrawVisibilityToggle(GameObject entity)
     {
         ImGui.Text(" " + (entity.Enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash));
-        if (ImGui.IsItemHovered() && ImGui.IsMouseReleased(ImGuiMouseButton.Left))
-            entity.Enabled = !entity.Enabled;
+        if (ImGui.IsItemHovered())
+        {
+            GUIHelper.ItemRectFilled(1f, 1f, 1f, 0.25f);
+            if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
+                entity.Enabled = !entity.Enabled;
+        }
+        GUIHelper.Tooltip("Visibility: " + (entity.Enabled ? "Visible" : "Hidden"));
     }
 
     void DrawContextMenu(GameObject context = null)
