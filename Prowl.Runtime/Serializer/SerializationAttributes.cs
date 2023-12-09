@@ -20,7 +20,7 @@ namespace Prowl.Runtime
     [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = true)]
     public class FormerlySerializedAsAttribute : Attribute
     {
-        public string Name { get; set; }
-        public FormerlySerializedAsAttribute(string name) => Name = name;
+        public string oldName { get; set; }
+        public FormerlySerializedAsAttribute(string name) => oldName = name;
     }
 }

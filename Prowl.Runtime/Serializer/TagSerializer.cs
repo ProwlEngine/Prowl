@@ -56,6 +56,9 @@ namespace Prowl.Runtime
             var tag = DictionaryToTag(value, ctx);
             if (tag != null) return tag;
 
+            if(value is IList iList)
+                return IListToTag(iList, ctx);
+
             return SerializeObject(value, ctx);
         }
 
@@ -102,7 +105,6 @@ namespace Prowl.Runtime
 
         private static ListTag ArrayToListTag(Array array, SerializationContext ctx)
         {
-            var elementType = array.GetType().GetElementType()!;
             List<Tag> tags = [];
             for (int i = 0; i < array.Length; i++)
                 tags.Add(Serialize(array.GetValue(i), ctx));
@@ -122,6 +124,14 @@ namespace Prowl.Runtime
                 return tag;
             }
             return null;
+        }
+
+        private static ListTag IListToTag(IList iList, SerializationContext ctx)
+        {
+            List<Tag> tags = [];
+            foreach (var item in iList)
+                tags.Add(Serialize(item, ctx));
+            return new ListTag(tags);
         }
 
         private static Tag SerializeObject(object? value, SerializationContext ctx)
@@ -241,15 +251,21 @@ namespace Prowl.Runtime
                 {
                     // Deserialize List into Array
                     type = targetType.GetElementType();
-                    // The question now is can the tags be deserialized into the type?
                     var array = Array.CreateInstance(type, list.Count);
                     for (int idx = 0; idx < array.Length; idx++)
                         array.SetValue(Deserialize(list[idx], type, ctx), idx);
                     return array;
                 }
-                else if (targetType is IEnumerable enumarable)
+                else if (targetType.IsAssignableTo(typeof(IList)))
                 {
-                    throw new NotImplementedException("IEnumerable cannot be deserialized as of now");
+                    // IEnumerable covers many types, we need to find the type of element in the IEnumrable
+                    // For now just assume its the first generic argument
+                    type = targetType.GetGenericArguments()[0];
+                    var list2 = (IList)Activator.CreateInstance(targetType);
+                    foreach (var tag in list.Tags)
+                        list2.Add(Deserialize(tag, type, ctx));
+                    return list2;
+
                 }
 
                 throw new InvalidCastException("ListTag cannot deserialize into type of: '" + targetType + "'");
