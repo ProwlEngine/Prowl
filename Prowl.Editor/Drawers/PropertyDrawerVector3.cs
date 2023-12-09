@@ -10,7 +10,7 @@ public class PropertyDrawerSystemVector3 : PropertyDrawer<System.Numerics.Vector
         bool changed = false;
         DrawLabel(label, ref width);
 
-        ImGui.PushItemWidth(width / 3 - 10);
+        ImGui.PushItemWidth(width / 3 - 13.5f);
         ImGui.Text("X");
         ImGui.SameLine();
         changed |= ImGui.DragFloat("##X", ref v3.X, "%g");
@@ -35,7 +35,7 @@ public class PropertyDrawerVector3 : PropertyDrawer<Vector3> {
         bool changed = false;
         DrawLabel(label, ref width);
 
-        ImGui.PushItemWidth(width / 3 - 10);
+        ImGui.PushItemWidth(width / 3 - 13.5f);
         ImGui.Text("X");
         ImGui.SameLine();
         changed |= GUIHelper.DragDouble("##X", ref v3.X, 0.01f);
