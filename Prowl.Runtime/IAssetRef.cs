@@ -10,6 +10,6 @@ namespace Prowl.Runtime
         bool IsRuntimeResource { get; }
         bool IsLoaded { get; }
         bool IsExplicitNull { get; }
-        string TypeName { get; }
+        Type InstanceType { get; }
     }
 }

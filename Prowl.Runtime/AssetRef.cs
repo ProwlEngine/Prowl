@@ -106,7 +106,7 @@ namespace Prowl.Runtime
             }
         }
 
-        public string TypeName => typeof(T).Name;
+        public Type InstanceType => typeof(T);
 
 
         /// <summary>

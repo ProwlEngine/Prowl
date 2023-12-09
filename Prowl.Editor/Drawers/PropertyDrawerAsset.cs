@@ -47,7 +47,11 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         }
 
         // DragDrop code
-        if (DragnDrop.ReceiveAsset(out Guid assetGuid, value.TypeName)) {
+        string payloadName = value.InstanceType.Name;
+        if (value.InstanceType.IsAssignableTo(typeof(ScriptableObject)))
+            payloadName = "ScriptableObject"; // Scriptable objects are a special case
+        if (DragnDrop.ReceiveAsset(out Guid assetGuid, payloadName)) 
+        {
             value.AssetID = assetGuid;
             changed = true;
         }
