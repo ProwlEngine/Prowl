@@ -640,7 +640,7 @@ namespace Prowl.Runtime.Assets
                 {
                     fullAssetPath.Delete(); // Delete Meta
                     // Deleted a Serialized Asset file if we have one
-                    var serialized = GetSerializedFile(assetPath);
+                    var serialized = GetSerializedFile(FileToRelative(fullAssetPath));
                     if (serialized.Exists)
                         serialized.Delete();
                 }
@@ -651,13 +651,17 @@ namespace Prowl.Runtime.Assets
                 var relativeAssetPath = FileToRelative(fullAssetPath);
                 //string relativeAssetPath = GetAssetRelativePath(root, fullAssetPath);
                 relativeAssetPath = NormalizeString(relativeAssetPath);
+                var serialized = GetSerializedFile(relativeAssetPath);
 
                 // Make sure we have a meta file
                 var meta = LoadMeta(relativeAssetPath);
                 if (meta == null) // no meta, cannot import or handle this asset type
+                {
+                    if(serialized.Exists)
+                        serialized.Delete(); // Delete Serialized Asset as the meta file doesnt exist, this serialized asset isnt guranteed to be valid anymore
                     return;
+                }
 
-                var serialized = GetSerializedFile(relativeAssetPath);
                 if (!serialized.Exists) // We dont have the asset, Import it
                     refreshedMeta.Enqueue(meta.guid);
             }
