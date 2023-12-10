@@ -15,9 +15,7 @@ public class GBuffer
     public Raylib_cs.Texture2D Emission { get { return buffer.InternalTextures[3]; } }
     public Raylib_cs.Texture2D Velocity { get { return buffer.InternalTextures[4]; } }
     public Raylib_cs.Texture2D Depth { get { return buffer.InternalDepth; } }
-
-    public bool IsRendering;
-
+    
     public GBuffer(int width, int height)
     {
 #warning TODO: Dont always use 32bits, optomize this and use only whats absolutely needed, some precision loss is ok as long as it doesnt hurt visuals much, normals for example could probably be 16
@@ -48,12 +46,9 @@ public class GBuffer
 
     public void Begin(bool clear = true)
     {
-        IsRendering = true;
         Raylib.BeginTextureMode(new RenderTexture2D() { id = fbo, texture = AlbedoAO, depth = Depth });
         Rlgl.rlActiveDrawBuffers(5);
         Rlgl.rlDisableColorBlend();
-
-        //Raylib.BeginBlendMode(BlendMode.BLEND_ADDITIVE);
 
         // Start with the initial GBuffer Clear
         if (clear)
@@ -64,10 +59,6 @@ public class GBuffer
     {
         Rlgl.rlEnableColorBlend();
         Raylib.EndTextureMode();
-
-        //Raylib.EndBlendMode();
-
-        IsRendering = false;
     }
 
     public void UnloadGBuffer()

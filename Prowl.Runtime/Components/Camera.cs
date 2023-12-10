@@ -166,6 +166,12 @@ public class Camera : MonoBehaviour
 
         if (result == null)
         {
+            if (DoClear)
+            {
+                Target.Res?.Begin();
+                Raylib.ClearBackground(ClearColor);
+                Target.Res?.End();
+            }
             Current = null;
             Rlgl.rlSetBlendMode(BlendMode.BLEND_ALPHA);
 

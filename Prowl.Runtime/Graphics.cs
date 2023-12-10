@@ -234,7 +234,7 @@ namespace Prowl.Runtime
             renderTexture.Begin();
             if (clear)
                 Raylib.ClearBackground(new Color(0, 0, 0, 0));
-            mat.SetPass(pass, true);
+            mat.SetPass(pass);
             DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
             mat.EndPass();
             renderTexture.End();
