@@ -1,4 +1,4 @@
-﻿Shader "Default/GBuffer"
+﻿Shader "Default/Aces"
 
 Pass 0
 {
