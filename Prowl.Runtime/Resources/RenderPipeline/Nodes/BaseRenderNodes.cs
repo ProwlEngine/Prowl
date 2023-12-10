@@ -9,26 +9,12 @@ namespace Prowl.Runtime.Resources.RenderPipeline
     // 1. Move Buffers to exist on the Camera's, the camera will then be responsible for their width/height and clearing unused ones after X frames
     // 2. Combine PBR Deferred and Post PBR Deferred, they dont need to be two nodes
 
-    [DisallowMultipleNodes]
-    public class CameraNode : Node
-    {
-        public override string Title => "Camera";
-        public override float Width => 50;
-
-        [Output] public GBuffer CameraOutput;
-
-        public override object GetValue(NodePort port)
-        {
-            return Camera.Current.gBuffer;
-        }
-    }
-
     public abstract class RenderPassNode : Node
     {
         public abstract override string Title { get; }
         public abstract override float Width { get; }
 
-        [Output] public RenderTexture OutputRT;
+        [Output, SerializeIgnore] public RenderTexture OutputRT;
         public bool Clear = true;
 
         protected RenderTexture renderRT;
@@ -84,7 +70,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         public override string Title => "Post PBR Deferred Pass";
         public override float Width => 100;
 
-        [Input(ShowBackingValue.Never)] public RenderTexture LightingRT;
+        [Input(ShowBackingValue.Never), SerializeIgnore] public RenderTexture LightingRT;
 
         Material? CombineShader = null;
 
@@ -106,7 +92,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         public override string Title => "Depth Of Field";
         public override float Width => 125;
 
-        [Input(ShowBackingValue.Never)] public RenderTexture RenderTexture;
+        [Input(ShowBackingValue.Never), SerializeIgnore] public RenderTexture RenderTexture;
 
         public float FocusStrength = 150f;
         public float Quality = 0.05f;
@@ -132,12 +118,42 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         }
     }
 
+    public class ProceduralSkyboxNode : RenderPassNode
+    {
+        public override string Title => "Procedural Skybox Pass";
+        public override float Width => 125;
+
+        [Input(ShowBackingValue.Never)] public RenderTexture RenderTexture;
+
+        Material Mat;
+
+        public override void Render()
+        {
+            var gbuffer = Camera.Current.gBuffer;
+            var rt = GetInputValue<RenderTexture>("RenderTexture");
+            if (rt == null) return;
+
+            Mat ??= new Material(Shader.Find("Defaults/ProcedualSkybox.shader"));
+            Mat.SetTexture("gColor", rt.InternalTextures[0]);
+            Mat.SetTexture("gPositionRoughness", gbuffer.PositionRoughness);
+
+            // Find DirectionalLight
+            DirectionalLight? light = EngineObject.FindObjectOfType<DirectionalLight>();
+            if (light != null)
+                Mat.SetVector("uSunPos", -light.GameObject.Forward);
+            else // Fallback to a reasonable default
+                Mat.SetVector("uSunPos", new Vector3(0.5f, 0.5f, 0.5f));
+
+            Graphics.Blit(renderRT, Mat, 0, true);
+        }
+    }
+
     public class AcesTonemappingNode : RenderPassNode
     {
         public override string Title => "Aces Tonemapping Pass";
         public override float Width => 100;
 
-        [Input(ShowBackingValue.Never)] public RenderTexture RenderTexture;
+        [Input(ShowBackingValue.Never), SerializeIgnore] public RenderTexture RenderTexture;
 
         public float Contrast = 1.1f;
         public float Saturation = 1.2f;
@@ -171,7 +187,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         public override string Title => "Output";
         public override float Width => 125;
 
-        [Input] public RenderTexture RenderTexture;
+        [Input(ShowBackingValue.Never), SerializeIgnore] public RenderTexture RenderTexture;
 
         public override object GetValue(NodePort port)
         {

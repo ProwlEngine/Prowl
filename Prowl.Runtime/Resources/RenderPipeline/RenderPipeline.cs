@@ -11,9 +11,9 @@ namespace Prowl.Runtime
     public class RenderPipeline : NodeGraph
     {
         public override Type[] NodeTypes => [ 
-            typeof(CameraNode), 
             typeof(PBRDeferredNode),
             typeof(PostPBRDeferredNode),
+            typeof(ProceduralSkyboxNode),
             typeof(DepthOfFieldNode),
             typeof(AcesTonemappingNode),
             typeof(OutputNode),

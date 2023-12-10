@@ -37,6 +37,7 @@
       <None Remove="EmbeddedResources\DefaultAssets\Plane.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\Pointlight.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Pointlight.shader.meta" />
+      <None Remove="EmbeddedResources\DefaultAssets\ProcedualSkybox.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Sphere.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\Spotlight.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Standard.shader" />
@@ -68,6 +69,9 @@
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_specular.png" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_white.png" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\AmbientLight.shader">
+        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      </EmbeddedResource>
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\ProcedualSkybox.shader">
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       </EmbeddedResource>
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\noise.png" />
