@@ -5,34 +5,23 @@ Pass 0
 	Vertex
 	{
 		in vec3 vertexPosition;
-		in vec2 vertexTexCoord;
-		in vec3 vertexNormal;
-		
-		uniform mat4 mvp;
-		
-		out vec2 fragTexCoord;
-		
-		void main()
+
+		void main() 
 		{
-			fragTexCoord = vertexTexCoord;
-			gl_Position = mvp * vec4(vertexPosition, 1.0);
+			gl_Position =vec4(vertexPosition, 1.0);
 		}
 	}
 
 	Fragment
 	{
-		in vec2 fragTexCoord;
-		in vec4 fragColor;
-		
 		uniform vec2 Resolution;
-		uniform float Sharpness;
 		uniform float Contrast;
 		uniform float Saturation;
 
 		uniform sampler2D gAlbedoAO; // Diffuse
 		uniform sampler2D gLighting; // Lighting
 		
-		out vec4 finalColor;
+		layout(location = 0) out vec4 OutputColor;
 		
 
 		const mat3x3 ACESInputMat = mat3x3
@@ -107,9 +96,11 @@ Pass 0
 
 		void main()
 		{
-			float AO = texture(gAlbedoAO, fragTexCoord).w;
-			vec3 diffuseColor = texture(gAlbedoAO, fragTexCoord) * 0.01;
-			vec3 lightingColor = texture(gLighting, fragTexCoord).rgb;
+			vec2 texCoords = gl_FragCoord.xy / Resolution;
+			vec4 albedoAO = texture(gAlbedoAO, texCoords);
+			float AO = albedoAO.w;
+			vec3 diffuseColor = albedoAO.rgb * 0.01;
+			vec3 lightingColor = texture(gLighting, texCoords).rgb;
 		
 			vec3 color = diffuseColor + (lightingColor * AO);
 
@@ -125,7 +116,7 @@ Pass 0
 			color = pow(color, vec3(1.0/2.2));
 			#endif 
 
-			finalColor = contrastMatrix() * saturationMatrix() * vec4(color, 1.0);
+			OutputColor = contrastMatrix() * saturationMatrix() * vec4(color, 1.0);
 		}
 	}
 }
