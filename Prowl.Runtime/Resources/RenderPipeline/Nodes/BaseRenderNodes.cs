@@ -7,7 +7,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
 {
 
     // 1. Move Buffers to exist on the Camera's, the camera will then be responsible for their width/height and clearing unused ones after X frames
-    // 2. 
+    // 2. Combine PBR Deferred and Post PBR Deferred, they dont need to be two nodes
 
     [DisallowMultipleNodes]
     public class CameraNode : Node
