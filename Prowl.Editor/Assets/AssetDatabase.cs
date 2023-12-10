@@ -416,19 +416,22 @@ namespace Prowl.Runtime.Assets
             }
         }
 
-        public static bool Reimport(string relativeAssetPath)
+        public static bool Reimport(string relativeAssetPath, bool disposeExisting = true)
         {
 
             // Dispose if we already have it
-            Guid assetGuid = GUIDFromAssetPath(relativeAssetPath);
-            if (assetGuid != Guid.Empty)
+            if (true)
             {
-                if (guidToAssetData.ContainsKey(assetGuid))
+                Guid assetGuid = GUIDFromAssetPath(relativeAssetPath);
+                if (assetGuid != Guid.Empty)
                 {
-                    var asset = guidToAssetData[assetGuid];
-                    asset.Main.DestroyImmediate();
-                    asset.SubAssets.ForEach(x => x.DestroyImmediate());
-                    guidToAssetData.Remove(assetGuid);
+                    if (guidToAssetData.ContainsKey(assetGuid))
+                    {
+                        var asset = guidToAssetData[assetGuid];
+                        asset.Main.DestroyImmediate();
+                        asset.SubAssets.ForEach(x => x.DestroyImmediate());
+                        guidToAssetData.Remove(assetGuid);
+                    }
                 }
             }
 
