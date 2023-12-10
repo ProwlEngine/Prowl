@@ -263,6 +263,8 @@ Pass 0
                     0.758                           // Mie preferred scattering direction
                 );
                 
+	            color.rgb += step(0.9985, dot(normalize(vPosition), normalize(uSunPos))); // Sun
+
                 // Apply exposure.
                 color = 1.0 - exp(-1.0 * color);
 
