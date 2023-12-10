@@ -278,7 +278,7 @@ namespace Prowl.Runtime
         public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
         {
             assetID = Guid.Parse(value["AssetID"].StringValue);
-            if (value.TryGet("Instance", out CompoundTag tag))
+            if (assetID == Guid.Empty && value.TryGet("Instance", out CompoundTag tag))
                 instance = TagSerializer.Deserialize<T?>(tag, ctx);
         }
     }
