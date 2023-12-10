@@ -305,6 +305,9 @@ namespace Prowl.Runtime
 
             ctx.idToObject[compound.SerializedID] = resultObject;
 
+            if (resultObject is ISerializeCallbacks callback1)
+                callback1.PreDeserialize();
+
             if (resultObject is ISerializable serializable)
             {
                 serializable.Deserialize(compound, ctx);
@@ -351,6 +354,9 @@ namespace Prowl.Runtime
                 }
             }
 
+            if (resultObject is ISerializeCallbacks callback2)
+                callback2.PostDeserialize();
+
             return resultObject;
         }
 
@@ -358,10 +364,6 @@ namespace Prowl.Runtime
         static object CreateInstance(Type type)
         {
             object data = Activator.CreateInstance(type);
-
-            if (data is ISerializeCallbacks callback2)
-                callback2.PostCreation();
-
             return data;
         }
 

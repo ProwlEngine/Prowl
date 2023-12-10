@@ -17,8 +17,13 @@
         public void PostSerialize();
 
         /// <summary>
-        /// Called right after the TagSerializer Creates this instance, Behaves like a constructor
+        /// Called right before the TagSerializer deserializes this object
         /// </summary>
-        public void PostCreation();
+        public void PreDeserialize();
+
+        /// <summary>
+        /// Called right after the TagSerializer deserializes this object
+        /// </summary>
+        public void PostDeserialize();
     }
 }
