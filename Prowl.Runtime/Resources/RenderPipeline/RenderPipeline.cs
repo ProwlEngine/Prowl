@@ -15,6 +15,7 @@ namespace Prowl.Runtime
             typeof(PBRDeferredNode),
             typeof(PostPBRDeferredNode),
             typeof(DepthOfFieldNode),
+            typeof(AcesTonemappingNode),
             typeof(OutputNode),
             ];
     }

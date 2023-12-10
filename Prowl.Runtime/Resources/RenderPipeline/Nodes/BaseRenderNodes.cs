@@ -86,11 +86,6 @@ namespace Prowl.Runtime.Resources.RenderPipeline
 
         [Input(ShowBackingValue.Never)] public RenderTexture LightingRT;
 
-        public float Contrast = 1.1f;
-        public float Saturation = 1.2f;
-        public bool UseACES = true;
-        public bool UseGammaCorrection = true;
-
         Material? CombineShader = null;
 
         public override void Render()
@@ -98,36 +93,11 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             var gbuffer = Camera.Current.gBuffer;
             var lighting = GetInputValue<RenderTexture>("LightingRT");
 
-            SetupMaterial(gbuffer, lighting);
-
-            Graphics.Blit(renderRT, CombineShader, 0, Clear);
-            //Rlgl.rlDisableDepthMask();
-            //Rlgl.rlDisableDepthTest();
-            //Rlgl.rlDisableBackfaceCulling();
-            ////Camera.Current.DrawFullScreenTexture(lighting.InternalTextures[0]);
-            //var t = lighting.InternalTextures[0];
-            //CombineShader.SetPass(0, true);
-            //Raylib.DrawTexturePro(t, new Rectangle(0, 0, t.width, -t.height), new Rectangle(0, 0, renderRT.Width, renderRT.Height), System.Numerics.Vector2.Zero, 0.0f, Color.white);
-            //CombineShader.EndPass();
-            //Rlgl.rlEnableDepthMask();
-            //Rlgl.rlEnableDepthTest();
-            //Rlgl.rlEnableBackfaceCulling();
-
-            //Graphics.Blit(renderRT, CombineShader, 0, Clear);
-        }
-
-        private void SetupMaterial(GBuffer gbuffer, RenderTexture lighting)
-        {
             CombineShader ??= new(Shader.Find("Defaults/GBuffercombine.shader"));
             CombineShader.SetTexture("gAlbedoAO", gbuffer.AlbedoAO);
             CombineShader.SetTexture("gLighting", lighting.InternalTextures[0]);
-            CombineShader.SetFloat("Contrast", Math.Clamp(Contrast, 0, 2));
-            CombineShader.SetFloat("Saturation", Math.Clamp(Saturation, 0, 2));
 
-            if (UseACES) CombineShader.EnableKeyword("ACESTONEMAP");
-            else CombineShader.DisableKeyword("ACESTONEMAP");
-            if (UseGammaCorrection) CombineShader.EnableKeyword("GAMMACORRECTION");
-            else CombineShader.DisableKeyword("GAMMACORRECTION");
+            Graphics.Blit(renderRT, CombineShader, 0, Clear);
         }
     }
 
@@ -159,6 +129,39 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             Mat.SetFloat("u_FocusStrength", FocusStrength);
 
             Graphics.Blit(renderRT, Mat, 0, true);
+        }
+    }
+
+    public class AcesTonemappingNode : RenderPassNode
+    {
+        public override string Title => "Aces Tonemapping Pass";
+        public override float Width => 100;
+
+        [Input(ShowBackingValue.Never)] public RenderTexture RenderTexture;
+
+        public float Contrast = 1.1f;
+        public float Saturation = 1.2f;
+        public bool UseACES = true;
+        public bool UseGammaCorrection = true;
+
+        Material? AcesMat = null;
+
+        public override void Render()
+        {
+            var rt = GetInputValue<RenderTexture>("RenderTexture");
+            if (rt == null) return;
+
+            AcesMat ??= new(Shader.Find("Defaults/AcesTonemapper.shader"));
+            AcesMat.SetTexture("gAlbedo", rt.InternalTextures[0]);
+            AcesMat.SetFloat("Contrast", Math.Clamp(Contrast, 0, 2));
+            AcesMat.SetFloat("Saturation", Math.Clamp(Saturation, 0, 2));
+
+            if (UseACES) AcesMat.EnableKeyword("ACESTONEMAP");
+            else AcesMat.DisableKeyword("ACESTONEMAP");
+            if (UseGammaCorrection) AcesMat.EnableKeyword("GAMMACORRECTION");
+            else AcesMat.DisableKeyword("GAMMACORRECTION");
+
+            Graphics.Blit(renderRT, AcesMat, 0, Clear);
         }
     }
 

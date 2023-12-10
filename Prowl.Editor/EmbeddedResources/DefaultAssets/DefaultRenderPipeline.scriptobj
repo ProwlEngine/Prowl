@@ -2,7 +2,7 @@
   "Tags": {
     "_nextID": {
       "$type": "I",
-      "Value": 48
+      "Value": 33
     },
     "nodes": {
       "$type": "LIST",
@@ -10,12 +10,8 @@
         {
           "$type": "COMPOUND",
           "Tags": {
-            "OutputRT": {
+            "RenderTexture": {
               "$type": "NULL"
-            },
-            "Clear": {
-              "$type": "BOOL",
-              "Value": true
             },
             "graph": {
               "$type": "COMPOUND",
@@ -28,11 +24,11 @@
               "Tags": {
                 "X": {
                   "$type": "D",
-                  "Value": 20.000030517578125
+                  "Value": 768.8300170898438
                 },
                 "Y": {
                   "$type": "D",
-                  "Value": 64
+                  "Value": 68.14766693115234
                 }
               },
               "SerializedType": "Prowl.Runtime.Vector2, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
@@ -41,12 +37,12 @@
             "ports": {
               "$type": "COMPOUND",
               "Tags": {
-                "OutputRT": {
+                "RenderTexture": {
                   "$type": "COMPOUND",
                   "Tags": {
                     "_fieldName": {
                       "$type": "STR",
-                      "Value": "OutputRT"
+                      "Value": "RenderTexture"
                     },
                     "_node": {
                       "$type": "COMPOUND",
@@ -66,12 +62,12 @@
                           "Tags": {
                             "fieldName": {
                               "$type": "STR",
-                              "Value": "LightingRT"
+                              "Value": "OutputRT"
                             },
                             "node": {
                               "$type": "COMPOUND",
                               "Tags": {
-                                "LightingRT": {
+                                "RenderTexture": {
                                   "$type": "NULL"
                                 },
                                 "Contrast": {
@@ -108,11 +104,11 @@
                                   "Tags": {
                                     "X": {
                                       "$type": "D",
-                                      "Value": 225.00003051757812
+                                      "Value": 519
                                     },
                                     "Y": {
                                       "$type": "D",
-                                      "Value": 3
+                                      "Value": -12
                                     }
                                   },
                                   "SerializedType": "Prowl.Runtime.Vector2, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
@@ -121,12 +117,12 @@
                                 "ports": {
                                   "$type": "COMPOUND",
                                   "Tags": {
-                                    "LightingRT": {
+                                    "RenderTexture": {
                                       "$type": "COMPOUND",
                                       "Tags": {
                                         "_fieldName": {
                                           "$type": "STR",
-                                          "Value": "LightingRT"
+                                          "Value": "RenderTexture"
                                         },
                                         "_node": {
                                           "$type": "COMPOUND",
@@ -147,73 +143,6 @@
                                                 "fieldName": {
                                                   "$type": "STR",
                                                   "Value": "OutputRT"
-                                                },
-                                                "node": {
-                                                  "$type": "COMPOUND",
-                                                  "Tags": {},
-                                                  "SerializedType": "",
-                                                  "SerializedID": 2
-                                                },
-                                                "InstanceID": {
-                                                  "$type": "I",
-                                                  "Value": 13
-                                                }
-                                              },
-                                              "SerializedType": "Prowl.Runtime.NodeSystem.NodePort\u002BPortConnection, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                              "SerializedID": 9
-                                            }
-                                          ]
-                                        },
-                                        "_direction": {
-                                          "$type": "I",
-                                          "Value": 0
-                                        },
-                                        "_connectionType": {
-                                          "$type": "I",
-                                          "Value": 0
-                                        },
-                                        "_typeConstraint": {
-                                          "$type": "I",
-                                          "Value": 0
-                                        },
-                                        "_dynamic": {
-                                          "$type": "BOOL",
-                                          "Value": false
-                                        },
-                                        "InstanceID": {
-                                          "$type": "I",
-                                          "Value": 5
-                                        }
-                                      },
-                                      "SerializedType": "Prowl.Runtime.NodeSystem.NodePort, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                      "SerializedID": 8
-                                    },
-                                    "OutputRT": {
-                                      "$type": "COMPOUND",
-                                      "Tags": {
-                                        "_fieldName": {
-                                          "$type": "STR",
-                                          "Value": "OutputRT"
-                                        },
-                                        "_node": {
-                                          "$type": "COMPOUND",
-                                          "Tags": {},
-                                          "SerializedType": "",
-                                          "SerializedID": 6
-                                        },
-                                        "_typeQualifiedName": {
-                                          "$type": "STR",
-                                          "Value": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
-                                        },
-                                        "connections": {
-                                          "$type": "LIST",
-                                          "Tags": [
-                                            {
-                                              "$type": "COMPOUND",
-                                              "Tags": {
-                                                "fieldName": {
-                                                  "$type": "STR",
-                                                  "Value": "RenderTexture"
                                                 },
                                                 "node": {
                                                   "$type": "COMPOUND",
@@ -251,15 +180,15 @@
                                                       "Tags": {
                                                         "X": {
                                                           "$type": "D",
-                                                          "Value": 427
+                                                          "Value": 294
                                                         },
                                                         "Y": {
                                                           "$type": "D",
-                                                          "Value": 21
+                                                          "Value": 2
                                                         }
                                                       },
                                                       "SerializedType": "Prowl.Runtime.Vector2, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                      "SerializedID": 13
+                                                      "SerializedID": 11
                                                     },
                                                     "ports": {
                                                       "$type": "COMPOUND",
@@ -275,7 +204,7 @@
                                                               "$type": "COMPOUND",
                                                               "Tags": {},
                                                               "SerializedType": "",
-                                                              "SerializedID": 12
+                                                              "SerializedID": 10
                                                             },
                                                             "_typeQualifiedName": {
                                                               "$type": "STR",
@@ -293,76 +222,16 @@
                                                                     },
                                                                     "node": {
                                                                       "$type": "COMPOUND",
-                                                                      "Tags": {},
-                                                                      "SerializedType": "",
-                                                                      "SerializedID": 6
-                                                                    },
-                                                                    "InstanceID": {
-                                                                      "$type": "I",
-                                                                      "Value": 47
-                                                                    }
-                                                                  },
-                                                                  "SerializedType": "Prowl.Runtime.NodeSystem.NodePort\u002BPortConnection, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                                  "SerializedID": 15
-                                                                }
-                                                              ]
-                                                            },
-                                                            "_direction": {
-                                                              "$type": "I",
-                                                              "Value": 0
-                                                            },
-                                                            "_connectionType": {
-                                                              "$type": "I",
-                                                              "Value": 0
-                                                            },
-                                                            "_typeConstraint": {
-                                                              "$type": "I",
-                                                              "Value": 0
-                                                            },
-                                                            "_dynamic": {
-                                                              "$type": "BOOL",
-                                                              "Value": false
-                                                            },
-                                                            "InstanceID": {
-                                                              "$type": "I",
-                                                              "Value": 8
-                                                            }
-                                                          },
-                                                          "SerializedType": "Prowl.Runtime.NodeSystem.NodePort, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                          "SerializedID": 14
-                                                        },
-                                                        "OutputRT": {
-                                                          "$type": "COMPOUND",
-                                                          "Tags": {
-                                                            "_fieldName": {
-                                                              "$type": "STR",
-                                                              "Value": "OutputRT"
-                                                            },
-                                                            "_node": {
-                                                              "$type": "COMPOUND",
-                                                              "Tags": {},
-                                                              "SerializedType": "",
-                                                              "SerializedID": 12
-                                                            },
-                                                            "_typeQualifiedName": {
-                                                              "$type": "STR",
-                                                              "Value": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
-                                                            },
-                                                            "connections": {
-                                                              "$type": "LIST",
-                                                              "Tags": [
-                                                                {
-                                                                  "$type": "COMPOUND",
-                                                                  "Tags": {
-                                                                    "fieldName": {
-                                                                      "$type": "STR",
-                                                                      "Value": "RenderTexture"
-                                                                    },
-                                                                    "node": {
-                                                                      "$type": "COMPOUND",
                                                                       "Tags": {
-                                                                        "RenderTexture": {
+                                                                        "LightingRT": {
                                                                           "$type": "NULL"
+                                                                        },
+                                                                        "OutputRT": {
+                                                                          "$type": "NULL"
+                                                                        },
+                                                                        "Clear": {
+                                                                          "$type": "BOOL",
+                                                                          "Value": true
                                                                         },
                                                                         "graph": {
                                                                           "$type": "COMPOUND",
@@ -375,31 +244,31 @@
                                                                           "Tags": {
                                                                             "X": {
                                                                               "$type": "D",
-                                                                              "Value": 605
+                                                                              "Value": 131
                                                                             },
                                                                             "Y": {
                                                                               "$type": "D",
-                                                                              "Value": 59
+                                                                              "Value": 64
                                                                             }
                                                                           },
                                                                           "SerializedType": "Prowl.Runtime.Vector2, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                                          "SerializedID": 19
+                                                                          "SerializedID": 15
                                                                         },
                                                                         "ports": {
                                                                           "$type": "COMPOUND",
                                                                           "Tags": {
-                                                                            "RenderTexture": {
+                                                                            "LightingRT": {
                                                                               "$type": "COMPOUND",
                                                                               "Tags": {
                                                                                 "_fieldName": {
                                                                                   "$type": "STR",
-                                                                                  "Value": "RenderTexture"
+                                                                                  "Value": "LightingRT"
                                                                                 },
                                                                                 "_node": {
                                                                                   "$type": "COMPOUND",
                                                                                   "Tags": {},
                                                                                   "SerializedType": "",
-                                                                                  "SerializedID": 18
+                                                                                  "SerializedID": 14
                                                                                 },
                                                                                 "_typeQualifiedName": {
                                                                                   "$type": "STR",
@@ -417,17 +286,124 @@
                                                                                         },
                                                                                         "node": {
                                                                                           "$type": "COMPOUND",
-                                                                                          "Tags": {},
-                                                                                          "SerializedType": "",
-                                                                                          "SerializedID": 12
+                                                                                          "Tags": {
+                                                                                            "OutputRT": {
+                                                                                              "$type": "NULL"
+                                                                                            },
+                                                                                            "Clear": {
+                                                                                              "$type": "BOOL",
+                                                                                              "Value": true
+                                                                                            },
+                                                                                            "graph": {
+                                                                                              "$type": "COMPOUND",
+                                                                                              "Tags": {},
+                                                                                              "SerializedType": "",
+                                                                                              "SerializedID": 1
+                                                                                            },
+                                                                                            "position": {
+                                                                                              "$type": "COMPOUND",
+                                                                                              "Tags": {
+                                                                                                "X": {
+                                                                                                  "$type": "D",
+                                                                                                  "Value": -4
+                                                                                                },
+                                                                                                "Y": {
+                                                                                                  "$type": "D",
+                                                                                                  "Value": 66
+                                                                                                }
+                                                                                              },
+                                                                                              "SerializedType": "Prowl.Runtime.Vector2, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                              "SerializedID": 19
+                                                                                            },
+                                                                                            "ports": {
+                                                                                              "$type": "COMPOUND",
+                                                                                              "Tags": {
+                                                                                                "OutputRT": {
+                                                                                                  "$type": "COMPOUND",
+                                                                                                  "Tags": {
+                                                                                                    "_fieldName": {
+                                                                                                      "$type": "STR",
+                                                                                                      "Value": "OutputRT"
+                                                                                                    },
+                                                                                                    "_node": {
+                                                                                                      "$type": "COMPOUND",
+                                                                                                      "Tags": {},
+                                                                                                      "SerializedType": "",
+                                                                                                      "SerializedID": 18
+                                                                                                    },
+                                                                                                    "_typeQualifiedName": {
+                                                                                                      "$type": "STR",
+                                                                                                      "Value": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+                                                                                                    },
+                                                                                                    "connections": {
+                                                                                                      "$type": "LIST",
+                                                                                                      "Tags": [
+                                                                                                        {
+                                                                                                          "$type": "COMPOUND",
+                                                                                                          "Tags": {
+                                                                                                            "fieldName": {
+                                                                                                              "$type": "STR",
+                                                                                                              "Value": "LightingRT"
+                                                                                                            },
+                                                                                                            "node": {
+                                                                                                              "$type": "COMPOUND",
+                                                                                                              "Tags": {},
+                                                                                                              "SerializedType": "",
+                                                                                                              "SerializedID": 14
+                                                                                                            },
+                                                                                                            "InstanceID": {
+                                                                                                              "$type": "I",
+                                                                                                              "Value": 15
+                                                                                                            }
+                                                                                                          },
+                                                                                                          "SerializedType": "Prowl.Runtime.NodeSystem.NodePort\u002BPortConnection, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                                          "SerializedID": 21
+                                                                                                        }
+                                                                                                      ]
+                                                                                                    },
+                                                                                                    "_direction": {
+                                                                                                      "$type": "I",
+                                                                                                      "Value": 1
+                                                                                                    },
+                                                                                                    "_connectionType": {
+                                                                                                      "$type": "I",
+                                                                                                      "Value": 0
+                                                                                                    },
+                                                                                                    "_typeConstraint": {
+                                                                                                      "$type": "I",
+                                                                                                      "Value": 0
+                                                                                                    },
+                                                                                                    "_dynamic": {
+                                                                                                      "$type": "BOOL",
+                                                                                                      "Value": false
+                                                                                                    },
+                                                                                                    "InstanceID": {
+                                                                                                      "$type": "I",
+                                                                                                      "Value": 7
+                                                                                                    }
+                                                                                                  },
+                                                                                                  "SerializedType": "Prowl.Runtime.NodeSystem.NodePort, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                                  "SerializedID": 20
+                                                                                                }
+                                                                                              },
+                                                                                              "SerializedType": "",
+                                                                                              "SerializedID": 0
+                                                                                            },
+                                                                                            "InstanceID": {
+                                                                                              "$type": "I",
+                                                                                              "Value": 6
+                                                                                            }
+                                                                                          },
+                                                                                          "SerializedType": "Prowl.Runtime.Resources.RenderPipeline.PBRDeferredNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                          "SerializedID": 18
                                                                                         },
                                                                                         "InstanceID": {
                                                                                           "$type": "I",
-                                                                                          "Value": 43
+                                                                                          "Value": 16
                                                                                         }
                                                                                       },
                                                                                       "SerializedType": "Prowl.Runtime.NodeSystem.NodePort\u002BPortConnection, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                                                      "SerializedID": 21
+                                                                                      "SerializedID": 17
                                                                                     }
                                                                                   ]
                                                                                 },
@@ -449,11 +425,78 @@
                                                                                 },
                                                                                 "InstanceID": {
                                                                                   "$type": "I",
-                                                                                  "Value": 11
+                                                                                  "Value": 13
                                                                                 }
                                                                               },
                                                                               "SerializedType": "Prowl.Runtime.NodeSystem.NodePort, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                                              "SerializedID": 20
+                                                                              "SerializedID": 16
+                                                                            },
+                                                                            "OutputRT": {
+                                                                              "$type": "COMPOUND",
+                                                                              "Tags": {
+                                                                                "_fieldName": {
+                                                                                  "$type": "STR",
+                                                                                  "Value": "OutputRT"
+                                                                                },
+                                                                                "_node": {
+                                                                                  "$type": "COMPOUND",
+                                                                                  "Tags": {},
+                                                                                  "SerializedType": "",
+                                                                                  "SerializedID": 14
+                                                                                },
+                                                                                "_typeQualifiedName": {
+                                                                                  "$type": "STR",
+                                                                                  "Value": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+                                                                                },
+                                                                                "connections": {
+                                                                                  "$type": "LIST",
+                                                                                  "Tags": [
+                                                                                    {
+                                                                                      "$type": "COMPOUND",
+                                                                                      "Tags": {
+                                                                                        "fieldName": {
+                                                                                          "$type": "STR",
+                                                                                          "Value": "RenderTexture"
+                                                                                        },
+                                                                                        "node": {
+                                                                                          "$type": "COMPOUND",
+                                                                                          "Tags": {},
+                                                                                          "SerializedType": "",
+                                                                                          "SerializedID": 10
+                                                                                        },
+                                                                                        "InstanceID": {
+                                                                                          "$type": "I",
+                                                                                          "Value": 22
+                                                                                        }
+                                                                                      },
+                                                                                      "SerializedType": "Prowl.Runtime.NodeSystem.NodePort\u002BPortConnection, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                      "SerializedID": 23
+                                                                                    }
+                                                                                  ]
+                                                                                },
+                                                                                "_direction": {
+                                                                                  "$type": "I",
+                                                                                  "Value": 1
+                                                                                },
+                                                                                "_connectionType": {
+                                                                                  "$type": "I",
+                                                                                  "Value": 0
+                                                                                },
+                                                                                "_typeConstraint": {
+                                                                                  "$type": "I",
+                                                                                  "Value": 0
+                                                                                },
+                                                                                "_dynamic": {
+                                                                                  "$type": "BOOL",
+                                                                                  "Value": false
+                                                                                },
+                                                                                "InstanceID": {
+                                                                                  "$type": "I",
+                                                                                  "Value": 14
+                                                                                }
+                                                                              },
+                                                                              "SerializedType": "Prowl.Runtime.NodeSystem.NodePort, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                              "SerializedID": 22
                                                                             }
                                                                           },
                                                                           "SerializedType": "",
@@ -461,19 +504,86 @@
                                                                         },
                                                                         "InstanceID": {
                                                                           "$type": "I",
-                                                                          "Value": 10
+                                                                          "Value": 12
                                                                         }
                                                                       },
-                                                                      "SerializedType": "Prowl.Runtime.Resources.RenderPipeline.OutputNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                                      "SerializedID": 18
+                                                                      "SerializedType": "Prowl.Runtime.Resources.RenderPipeline.PostPBRDeferredNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                      "SerializedID": 14
                                                                     },
                                                                     "InstanceID": {
                                                                       "$type": "I",
-                                                                      "Value": 42
+                                                                      "Value": 23
                                                                     }
                                                                   },
                                                                   "SerializedType": "Prowl.Runtime.NodeSystem.NodePort\u002BPortConnection, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                                  "SerializedID": 17
+                                                                  "SerializedID": 13
+                                                                }
+                                                              ]
+                                                            },
+                                                            "_direction": {
+                                                              "$type": "I",
+                                                              "Value": 0
+                                                            },
+                                                            "_connectionType": {
+                                                              "$type": "I",
+                                                              "Value": 0
+                                                            },
+                                                            "_typeConstraint": {
+                                                              "$type": "I",
+                                                              "Value": 0
+                                                            },
+                                                            "_dynamic": {
+                                                              "$type": "BOOL",
+                                                              "Value": false
+                                                            },
+                                                            "InstanceID": {
+                                                              "$type": "I",
+                                                              "Value": 20
+                                                            }
+                                                          },
+                                                          "SerializedType": "Prowl.Runtime.NodeSystem.NodePort, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                          "SerializedID": 12
+                                                        },
+                                                        "OutputRT": {
+                                                          "$type": "COMPOUND",
+                                                          "Tags": {
+                                                            "_fieldName": {
+                                                              "$type": "STR",
+                                                              "Value": "OutputRT"
+                                                            },
+                                                            "_node": {
+                                                              "$type": "COMPOUND",
+                                                              "Tags": {},
+                                                              "SerializedType": "",
+                                                              "SerializedID": 10
+                                                            },
+                                                            "_typeQualifiedName": {
+                                                              "$type": "STR",
+                                                              "Value": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+                                                            },
+                                                            "connections": {
+                                                              "$type": "LIST",
+                                                              "Tags": [
+                                                                {
+                                                                  "$type": "COMPOUND",
+                                                                  "Tags": {
+                                                                    "fieldName": {
+                                                                      "$type": "STR",
+                                                                      "Value": "RenderTexture"
+                                                                    },
+                                                                    "node": {
+                                                                      "$type": "COMPOUND",
+                                                                      "Tags": {},
+                                                                      "SerializedType": "",
+                                                                      "SerializedID": 6
+                                                                    },
+                                                                    "InstanceID": {
+                                                                      "$type": "I",
+                                                                      "Value": 29
+                                                                    }
+                                                                  },
+                                                                  "SerializedType": "Prowl.Runtime.NodeSystem.NodePort\u002BPortConnection, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                  "SerializedID": 25
                                                                 }
                                                               ]
                                                             },
@@ -495,11 +605,11 @@
                                                             },
                                                             "InstanceID": {
                                                               "$type": "I",
-                                                              "Value": 9
+                                                              "Value": 21
                                                             }
                                                           },
                                                           "SerializedType": "Prowl.Runtime.NodeSystem.NodePort, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                          "SerializedID": 16
+                                                          "SerializedID": 24
                                                         }
                                                       },
                                                       "SerializedType": "",
@@ -507,19 +617,86 @@
                                                     },
                                                     "InstanceID": {
                                                       "$type": "I",
-                                                      "Value": 7
+                                                      "Value": 19
                                                     }
                                                   },
                                                   "SerializedType": "Prowl.Runtime.Resources.RenderPipeline.DepthOfFieldNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                  "SerializedID": 12
+                                                  "SerializedID": 10
                                                 },
                                                 "InstanceID": {
                                                   "$type": "I",
-                                                  "Value": 46
+                                                  "Value": 30
                                                 }
                                               },
                                               "SerializedType": "Prowl.Runtime.NodeSystem.NodePort\u002BPortConnection, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                              "SerializedID": 11
+                                              "SerializedID": 9
+                                            }
+                                          ]
+                                        },
+                                        "_direction": {
+                                          "$type": "I",
+                                          "Value": 0
+                                        },
+                                        "_connectionType": {
+                                          "$type": "I",
+                                          "Value": 0
+                                        },
+                                        "_typeConstraint": {
+                                          "$type": "I",
+                                          "Value": 0
+                                        },
+                                        "_dynamic": {
+                                          "$type": "BOOL",
+                                          "Value": false
+                                        },
+                                        "InstanceID": {
+                                          "$type": "I",
+                                          "Value": 27
+                                        }
+                                      },
+                                      "SerializedType": "Prowl.Runtime.NodeSystem.NodePort, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                      "SerializedID": 8
+                                    },
+                                    "OutputRT": {
+                                      "$type": "COMPOUND",
+                                      "Tags": {
+                                        "_fieldName": {
+                                          "$type": "STR",
+                                          "Value": "OutputRT"
+                                        },
+                                        "_node": {
+                                          "$type": "COMPOUND",
+                                          "Tags": {},
+                                          "SerializedType": "",
+                                          "SerializedID": 6
+                                        },
+                                        "_typeQualifiedName": {
+                                          "$type": "STR",
+                                          "Value": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"
+                                        },
+                                        "connections": {
+                                          "$type": "LIST",
+                                          "Tags": [
+                                            {
+                                              "$type": "COMPOUND",
+                                              "Tags": {
+                                                "fieldName": {
+                                                  "$type": "STR",
+                                                  "Value": "RenderTexture"
+                                                },
+                                                "node": {
+                                                  "$type": "COMPOUND",
+                                                  "Tags": {},
+                                                  "SerializedType": "",
+                                                  "SerializedID": 2
+                                                },
+                                                "InstanceID": {
+                                                  "$type": "I",
+                                                  "Value": 31
+                                                }
+                                              },
+                                              "SerializedType": "Prowl.Runtime.NodeSystem.NodePort\u002BPortConnection, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                              "SerializedID": 27
                                             }
                                           ]
                                         },
@@ -541,11 +718,11 @@
                                         },
                                         "InstanceID": {
                                           "$type": "I",
-                                          "Value": 6
+                                          "Value": 28
                                         }
                                       },
                                       "SerializedType": "Prowl.Runtime.NodeSystem.NodePort, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                      "SerializedID": 10
+                                      "SerializedID": 26
                                     }
                                   },
                                   "SerializedType": "",
@@ -553,15 +730,15 @@
                                 },
                                 "InstanceID": {
                                   "$type": "I",
-                                  "Value": 4
+                                  "Value": 26
                                 }
                               },
-                              "SerializedType": "Prowl.Runtime.Resources.RenderPipeline.PostPBRDeferredNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                              "SerializedType": "Prowl.Runtime.Resources.RenderPipeline.AcesTonemappingNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
                               "SerializedID": 6
                             },
                             "InstanceID": {
                               "$type": "I",
-                              "Value": 12
+                              "Value": 32
                             }
                           },
                           "SerializedType": "Prowl.Runtime.NodeSystem.NodePort\u002BPortConnection, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
@@ -571,7 +748,7 @@
                     },
                     "_direction": {
                       "$type": "I",
-                      "Value": 1
+                      "Value": 0
                     },
                     "_connectionType": {
                       "$type": "I",
@@ -602,32 +779,38 @@
               "Value": 2
             }
           },
-          "SerializedType": "Prowl.Runtime.Resources.RenderPipeline.PBRDeferredNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+          "SerializedType": "Prowl.Runtime.Resources.RenderPipeline.OutputNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
           "SerializedID": 2
         },
         {
           "$type": "COMPOUND",
           "Tags": {},
           "SerializedType": "",
-          "SerializedID": 6
-        },
-        {
-          "$type": "COMPOUND",
-          "Tags": {},
-          "SerializedType": "",
-          "SerializedID": 12
-        },
-        {
-          "$type": "COMPOUND",
-          "Tags": {},
-          "SerializedType": "",
           "SerializedID": 18
+        },
+        {
+          "$type": "COMPOUND",
+          "Tags": {},
+          "SerializedType": "",
+          "SerializedID": 14
+        },
+        {
+          "$type": "COMPOUND",
+          "Tags": {},
+          "SerializedType": "",
+          "SerializedID": 10
+        },
+        {
+          "$type": "COMPOUND",
+          "Tags": {},
+          "SerializedType": "",
+          "SerializedID": 6
         }
       ]
     },
     "AssetID": {
       "$type": "STR",
-      "Value": "1c698804-b4b6-4011-996a-7cfe476411c7"
+      "Value": "3b4e2c66-22c0-46e1-8c29-930141da7fad"
     },
     "Name": {
       "$type": "STR",
