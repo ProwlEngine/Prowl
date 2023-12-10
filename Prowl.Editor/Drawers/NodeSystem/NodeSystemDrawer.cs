@@ -219,12 +219,10 @@ namespace Prowl.Editor.Drawers.NodeSystem
                 }
                 else
                 {
-                    object value = field.GetValue(node);
                     if (PropertyDrawer.Draw(node, field, node.Width))
                     {
                         changed = true;
                         node.OnValidate();
-                        field.SetValue(node, value);
                     }
                 }
 
