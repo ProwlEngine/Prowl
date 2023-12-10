@@ -65,14 +65,16 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
         - Metallic Map
         - Ambient Occclusion Map
         - Emission Map
-    -  Deferred Renderer
-    -  Point, Spot, and Directional Lights
-    -  Shadow Mapping + Contact Hardening (Variable Penumbra)
-    -  Post Processing
+    - Node-Based Customizable Render Pipelines
+    - Deferred Renderer
+    - Point, Spot, and Directional Lights
+    - Shadow Mapping + Contact Hardening (Variable Penumbra)
+    - Post Processing
         - HDR with Aces Fitted Tonemapping
         - Bokeh Depth of Field
     - Adjustable Render Resolutions per camera
     - Dedicated Shadow Pass for Shaders
+    - Skybox-Blended Fog
 
 -   **Asset Pipeline:**
     - A Powerful Asset Pipeline with a very similar structure to unity
@@ -119,8 +121,6 @@ Getting Prowl up and running is super easy!
 - [ ] Realtime GI
 - [ ] Lightmaps and Light Probes
 - [ ] Cascaded shadow mapping
-- [ ] Procedural Skybox
-   - [ ] Volumetric Clouds
 - [ ] Skinned Mesh Rendering & Animations
 - [ ] Particle System
 - [ ] Terrain Engine
@@ -209,9 +209,14 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 # Screenshots
 ![Bokeh Depth of Field](https://i.imgur.com/VYs44qq.png)
-![Editor](https://github.com/michaelsakharov/Prowl/assets/8621606/c488efc4-69e8-404c-a5ed-be1df850c681)
+![Editor](https://github.com/michaelsakharov/Prowl/assets/8621606/bb3c423b-3cc8-45a1-baa7-c9ad31d945c6)
+![image](https://github.com/michaelsakharov/Prowl/assets/8621606/f755ee5d-eba5-4453-9f31-f61768c2554c)
 ![Flight Model](https://github.com/michaelsakharov/Prowl/assets/8621606/7683759c-5e0c-4689-acba-c733b3a64b5c)
 ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/b95d24d5-f3a8-4652-9489-bfd6660ae497)
+![Skybox-Aware Fog](https://github.com/michaelsakharov/Prowl/assets/8621606/0cf60c18-b6bc-4190-b458-a92aca29c0d9)
+![image](https://github.com/michaelsakharov/Prowl/assets/8621606/6bee582a-903d-4b30-8c0b-50023ccc0c4e)
+
+
 
 
 
