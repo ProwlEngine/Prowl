@@ -125,6 +125,8 @@ namespace Prowl.Runtime.Resources.RenderPipeline
 
         [Input(ShowBackingValue.Never)] public RenderTexture RenderTexture;
 
+        public float FogDensity = 0.08f;
+
         Material Mat;
 
         public override void Render()
@@ -136,6 +138,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             Mat ??= new Material(Shader.Find("Defaults/ProcedualSkybox.shader"));
             Mat.SetTexture("gColor", rt.InternalTextures[0]);
             Mat.SetTexture("gPositionRoughness", gbuffer.PositionRoughness);
+            Mat.SetFloat("fogDensity", FogDensity);
 
             // Find DirectionalLight
             DirectionalLight? light = EngineObject.FindObjectOfType<DirectionalLight>();
