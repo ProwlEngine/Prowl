@@ -29,5 +29,10 @@ public static class DefaultAssets
             }
         }
 
+        // Clear the cached folder
+        info = new(Path.Combine(Project.ProjectDirectory, "Library", "AssetDatabase", rootFolder));
+        if (!info.Exists) info.Create();
+        foreach (FileInfo file in info.GetFiles())
+            file.Delete();
     }
 }
