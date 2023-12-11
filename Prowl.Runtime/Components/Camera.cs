@@ -158,7 +158,9 @@ public class Camera : MonoBehaviour
         var outputNode = rp.Res!.GetNode<OutputNode>();
         if (outputNode == null)
         {
-            Debug.LogError("RenderPipeline has no OutputNode!"); 
+            EarlyEndRender();
+
+            Debug.LogError("RenderPipeline has no OutputNode!");
             return;
         }
 
@@ -166,14 +168,7 @@ public class Camera : MonoBehaviour
 
         if (result == null)
         {
-            if (DoClear)
-            {
-                Target.Res?.Begin();
-                Raylib.ClearBackground(ClearColor);
-                Target.Res?.End();
-            }
-            Current = null;
-            Rlgl.rlSetBlendMode(BlendMode.BLEND_ALPHA);
+            EarlyEndRender();
 
             Debug.LogError("RenderPipeline OutputNode failed to return a RenderTexture!");
             return;
@@ -216,4 +211,15 @@ public class Camera : MonoBehaviour
         oldProjection = Graphics.MatProjection;
     }
 
+    private void EarlyEndRender()
+    {
+        if (DoClear)
+        {
+            Target.Res?.Begin();
+            Raylib.ClearBackground(ClearColor);
+            Target.Res?.End();
+        }
+        Current = null;
+        Rlgl.rlSetBlendMode(BlendMode.BLEND_ALPHA);
+    }
 }
