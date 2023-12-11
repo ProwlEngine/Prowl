@@ -38,7 +38,7 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - C# Scripting
     - Gameobject & Component structure
     - .NET 8
-    - Dear ImGUI Editor + (ImGuizmo, ImPlot, ImNodes)
+    - Dear ImGUI Editor, including ImGuizmo, ImPlot, ImNodes
     - Editor with support for Editor Scripts and Custom Editors
     - Less than 10k lines of Executable Code for both the Editor and Engine combined!
     - Unity-Like Coroutines
