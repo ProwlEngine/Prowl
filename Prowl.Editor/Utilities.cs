@@ -58,5 +58,19 @@ namespace Prowl.Editor
             }
             return false;
         }
+
+        /// <summary>Calculate a unique file path for the given directory, file name and extension with period '.mat'</summary>
+        /// <returns>
+        /// Path.Combine(dir.FullName, $"{fileName}.{ext}") If that path exists, 
+        /// we add an incrementing number to the end of the file name and try again.
+        /// </returns>
+        public static FileInfo GetUniqueFilePath(DirectoryInfo dir, string fileName, string ext)
+        {
+            FileInfo file = new(Path.Combine(dir.FullName, $"{fileName}.{ext}"));
+            int matAttempt = 0;
+            while (file.Exists)
+                file = new(Path.Combine(dir.FullName, $"{fileName}-{matAttempt++}.ext"));
+            return file;
+        }
     }
 }
