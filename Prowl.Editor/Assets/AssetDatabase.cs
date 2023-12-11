@@ -556,54 +556,6 @@ namespace Prowl.Runtime.Assets
             return serializedAsset;
         }
 
-        public static void AddObjectToAsset(Guid assetGuid, string name, EngineObject obj)
-        {
-            var serializedAsset = LoadAsset(assetGuid);
-            if (serializedAsset == null) throw new Exception("Asset does not exist!");
-            if (serializedAsset.SubAssets.Contains(obj)) throw new Exception("Asset already contains this sub asset!");
-            serializedAsset.SubAssets.Add(obj);
-            dirtyAssetData.Add(assetGuid);
-        }
-
-        public static void RemoveObjectFromAsset(Guid assetGuid, EngineObject obj)
-        {
-            var serializedAsset = LoadAsset(assetGuid);
-            if (serializedAsset == null) throw new Exception("Asset does not exist!");
-            if (!serializedAsset.SubAssets.Contains(obj)) throw new Exception("Asset does not contain this sub asset!");
-            serializedAsset.SubAssets.Remove(obj);
-            dirtyAssetData.Add(assetGuid);
-        }
-
-        public static void SaveAssetIfDirty(Guid assetGuid)
-        {
-            if (dirtyAssetData.Contains(assetGuid) && guidToAssetData.TryGetValue(assetGuid, out var serializedAsset))
-            {
-                StartEditingAsset();
-                var assetFile = RelativeToFile(GuidPathHolder.GetPath(assetGuid));
-                serializedAsset.SaveToFile(assetFile);
-                dirtyAssetData.Remove(assetGuid);
-                StopEditingAsset();
-            }
-        }
-
-        public static void SaveAssets()
-        {
-            StartEditingAsset();
-            while (dirtyAssetData.Count > 0)
-            {
-                Guid guid = dirtyAssetData[dirtyAssetData.Count - 1];
-                dirtyAssetData.RemoveAt(dirtyAssetData.Count - 1);
-
-                // Save asset if we have it loaded
-                if (guidToAssetData.TryGetValue(guid, out var asset))
-                {
-                    var assetFile = RelativeToFile(GuidPathHolder.GetPath(guid));
-                    asset.SaveToFile(assetFile);
-                }
-            }
-            StopEditingAsset();
-        }
-
         public static string? GetRelativePath(string fullFilePath)
         {
             foreach (var rootFolder in rootFolders)
