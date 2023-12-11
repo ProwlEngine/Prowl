@@ -14,6 +14,7 @@ public class GBuffer
     public Raylib_cs.Texture2D PositionRoughness { get { return buffer.InternalTextures[2]; } }
     public Raylib_cs.Texture2D Emission { get { return buffer.InternalTextures[3]; } }
     public Raylib_cs.Texture2D Velocity { get { return buffer.InternalTextures[4]; } }
+    public Raylib_cs.Texture2D ObjectIDs { get { return buffer.InternalTextures[5]; } }
     public Raylib_cs.Texture2D Depth { get { return buffer.InternalDepth; } }
     
     public GBuffer(int width, int height)
@@ -27,8 +28,9 @@ public class GBuffer
             PixelFormat.PIXELFORMAT_UNCOMPRESSED_R32G32B32A32, // Position & Roughness
             PixelFormat.PIXELFORMAT_UNCOMPRESSED_R32G32B32A32, // Emission
             PixelFormat.PIXELFORMAT_UNCOMPRESSED_R32G32B32A32, // Velocity
+            PixelFormat.PIXELFORMAT_UNCOMPRESSED_R32, // ObjectIDs
         ];
-        buffer = new RenderTexture(width, height, 5, true, formats);
+        buffer = new RenderTexture(width, height, 6, true, formats);
 
 
     }
@@ -41,13 +43,14 @@ public class GBuffer
                 Raylib.IsTextureReady(PositionRoughness) &&
                 Raylib.IsTextureReady(Emission) &&
                 Raylib.IsTextureReady(Velocity) &&
+                Raylib.IsTextureReady(ObjectIDs) &&
                 Raylib.IsTextureReady(Depth);
     }
 
     public void Begin(bool clear = true)
     {
         Raylib.BeginTextureMode(new RenderTexture2D() { id = fbo, texture = AlbedoAO, depth = Depth });
-        Rlgl.rlActiveDrawBuffers(5);
+        Rlgl.rlActiveDrawBuffers(6);
         Rlgl.rlDisableColorBlend();
 
         // Start with the initial GBuffer Clear
@@ -69,6 +72,7 @@ public class GBuffer
         Rlgl.rlUnloadTexture(PositionRoughness.id);
         Rlgl.rlUnloadTexture(Emission.id);
         Rlgl.rlUnloadTexture(Velocity.id);
+        Rlgl.rlUnloadTexture(ObjectIDs.id);
         // Depth should be automatically unloaded
         Rlgl.rlUnloadFramebuffer(fbo);
     }

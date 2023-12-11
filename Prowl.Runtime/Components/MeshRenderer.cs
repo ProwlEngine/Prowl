@@ -22,6 +22,8 @@ public class MeshRenderer : MonoBehaviour, ISerializable
                 Material.Res!.SetColor("_MainColor", mainColor);
                 Material.Res!.SetPass(i);
 
+                Material.Res!.SetInt("ObjectID", InstanceID);
+
 #warning TODO: Previous matrix needs to support LargeWorldCamera
                 Graphics.DrawMeshNow(Mesh.Res!, GameObject.GlobalCamRelative, Material.Res!, GameObject.GlobalCamPreviousRelative);
                 Material.Res!.EndPass();

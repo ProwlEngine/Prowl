@@ -82,6 +82,7 @@ Pass 0
 		layout (location = 2) out vec4 gPositionRoughness; // PositionX, PositionY, PositionZ, Roughness
 		layout (location = 3) out vec3 gEmission; // EmissionR, EmissionG, EmissionB, 
 		layout (location = 4) out vec2 gVelocity; // VelocityX, VelocityY
+		layout (location = 5) out float gObjectID; // ObjectID
 
 		in vec3 FragPos;
 		in vec3 Pos;
@@ -91,6 +92,8 @@ Pass 0
 		//in mat3 TBN;
 		in vec4 PosProj;
 		in vec4 PosProjOld;
+
+		uniform int ObjectID;
 
 		uniform mat4 matView;
 		uniform float emissionIntensity = 1.0;
@@ -148,6 +151,7 @@ Pass 0
 			vec2 b = (PosProjOld.xy / PosProjOld.w) * 0.5 + 0.5;
 			gVelocity.xy = a - b;
 
+			gObjectID = float(ObjectID);
 		}
 	}
 }

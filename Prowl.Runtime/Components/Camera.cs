@@ -34,7 +34,7 @@ public class Camera : MonoBehaviour
 
     public GBuffer gBuffer { get; private set; }
 
-    public enum DebugDraw { Off, Albedo, Normals, Depth, Velocity }
+    public enum DebugDraw { Off, Albedo, Normals, Depth, Velocity, ObjectID }
     public DebugDraw debugDraw = DebugDraw.Off;
 
     public Matrix4x4 GetProjectionMatrix(float width, float height)
@@ -204,6 +204,8 @@ public class Camera : MonoBehaviour
             DrawFullScreenTexture(gBuffer.PositionRoughness);
         else if (debugDraw == DebugDraw.Velocity)
             DrawFullScreenTexture(gBuffer.Velocity);
+        else if (debugDraw == DebugDraw.ObjectID)
+            DrawFullScreenTexture(gBuffer.ObjectIDs);
         
         Target.Res?.End();
 
