@@ -244,8 +244,8 @@ public class AssetBrowserWindow : EditorWindow {
                     if (type != null)
                     {
                         var guid = AssetDatabase.GUIDFromAssetPath(Path.GetRelativePath(Project.ProjectDirectory, entry.FullName));
-                        DragnDrop.OfferAsset(guid, type.Name);
-                        goto end; // Dont do Selection/Open stuff
+                        if(DragnDrop.OfferAsset(guid, type.Name))
+                            goto end; // Dont do Selection/Open stuff
                     }
                 }
 
