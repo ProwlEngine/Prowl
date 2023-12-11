@@ -82,6 +82,8 @@ namespace Prowl.Runtime.Assets
 
         public static AssetDatabaseSettings Settings => Project.ProjectSettings.GetSetting<AssetDatabaseSettings>();
 
+        public static Guid LastLoadedAssetID { get; private set; } = Guid.Empty;
+
         static readonly List<DirectoryInfo> rootFolders = new();
         static readonly List<FileSystemWatcher> rootWatchers = new();
 
@@ -707,7 +709,9 @@ namespace Prowl.Runtime.Assets
             var meta = new FileInfo(info.FullName + ".meta");
             if (!meta.Exists)
             {
-                return GenerateNewMetaFile(relativeAssetPath);
+                var newMeta = GenerateNewMetaFile(relativeAssetPath);
+                LastLoadedAssetID = newMeta?.guid ?? Guid.Empty;
+                return newMeta;
             }
             else
             {
@@ -717,9 +721,12 @@ namespace Prowl.Runtime.Assets
                 {
                     Debug.LogError($"Failed to load meta file for {relativeAssetPath}, Regenerating!");
                     meta.Delete();
-                    return GenerateNewMetaFile(relativeAssetPath);
+                    var newMeta = GenerateNewMetaFile(relativeAssetPath);
+                    LastLoadedAssetID = newMeta?.guid ?? Guid.Empty;
+                    return newMeta;
                 }
                 GuidPathHolder.Add(metaFile.guid, relativeAssetPath);
+                LastLoadedAssetID = metaFile.guid;
                 return metaFile;
             }
         }
