@@ -12,6 +12,7 @@
       <None Remove="EmbeddedResources\AudioIcon.png" />
       <None Remove="EmbeddedResources\Checkerboard.png" />
       <None Remove="EmbeddedResources\CSharpIcon.png" />
+      <None Remove="EmbeddedResources\DefaultAssets\AcesTonemapper.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\AmbientLight.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Cube.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\Cylinder.obj" />
@@ -57,6 +58,7 @@
       <EmbeddedResource Include="EmbeddedResources\AudioIcon.png" />
       <EmbeddedResource Include="EmbeddedResources\Checkerboard.png" />
       <EmbeddedResource Include="EmbeddedResources\CSharpIcon.png" />
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\AcesTonemapper.shader" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Cube.obj" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Cylinder.obj" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_ao.png" />
