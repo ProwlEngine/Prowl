@@ -117,7 +117,7 @@ namespace Prowl.Runtime
                 Raylib.BeginTextureMode(new RenderTexture2D() { id = fboId, texture = InternalDepth, depth = InternalDepth });
             }
 
-            Rlgl.rlActiveDrawBuffers(numTextures);
+            Rlgl.rlActiveDrawBuffers(Math.Max(1, numTextures));
         }
 
         public void End()
