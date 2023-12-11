@@ -13,7 +13,7 @@ namespace Prowl.Runtime
 
         public static string Write(CompoundTag tag)
         {
-            return JsonSerializer.Serialize(tag, new JsonSerializerOptions { WriteIndented = true });
+            return JsonSerializer.Serialize(tag, new JsonSerializerOptions { WriteIndented = true, MaxDepth = 1024 });
         }
 
         public static CompoundTag ReadFromFile(FileInfo file)
@@ -24,7 +24,7 @@ namespace Prowl.Runtime
 
         public static CompoundTag Read(string json)
         {
-            return JsonSerializer.Deserialize<CompoundTag>(json);
+            return JsonSerializer.Deserialize<CompoundTag>(json, new JsonSerializerOptions { MaxDepth = 1024 });
         }
 
     }

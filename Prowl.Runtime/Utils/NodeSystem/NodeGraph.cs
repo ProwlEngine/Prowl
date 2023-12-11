@@ -125,7 +125,11 @@ namespace Prowl.Runtime.NodeSystem
 
         public void PreSerialize() { }
 
-        public void PostSerialize()
+        public void PostSerialize() { }
+
+        public void PreDeserialize() { }
+
+        public void PostDeserialize()
         {
             foreach (Node node in nodes)
             {
@@ -133,8 +137,6 @@ namespace Prowl.Runtime.NodeSystem
                 node.OnEnable();
             }
         }
-
-        public void PostCreation() { }
 
         #region Attributes
         /// <summary> Automatically ensures the existance of a certain node type, and prevents it from being deleted. </summary>
