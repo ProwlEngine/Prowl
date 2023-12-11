@@ -89,6 +89,9 @@ public class HierarchyWindow : EditorWindow {
             if (!clicked && ImGui.IsItemClicked(0))
                 Selection.Clear();
 
+            if (EditorApplication.IsHotkeyDown("Duplicate", new Hotkey() { Key = KeyboardKey.KEY_D, Ctrl = true }))
+                DuplicateSelected();
+
             unsafe
             {
                 if (DragnDrop.ReceiveReference<GameObject>(out var go))
@@ -166,9 +169,6 @@ public class HierarchyWindow : EditorWindow {
             if (ImGui.IsMouseDoubleClicked(0))
                 m_RenamingEntity = entity;
         }
-
-        if (EditorApplication.IsHotkeyDown("Duplicate", new Hotkey() { Key = KeyboardKey.KEY_S, Ctrl = true }))
-            DuplicateSelected();
 
         DrawGameObjectContextMenu(entity);
 
