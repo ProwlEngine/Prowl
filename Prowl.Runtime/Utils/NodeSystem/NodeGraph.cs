@@ -131,9 +131,12 @@ namespace Prowl.Runtime.NodeSystem
 
         public void PostDeserialize()
         {
+            // Clear null nodes
+            nodes.RemoveAll(n => n == null);
             foreach (Node node in nodes)
             {
                 node.graph = this;
+                node.VerifyConnections();
                 node.OnEnable();
             }
         }
