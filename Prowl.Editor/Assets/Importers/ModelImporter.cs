@@ -1,10 +1,8 @@
 ﻿using Assimp;
+using HexaEngine.ImGuiNET;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
 using Prowl.Runtime.Utils;
-using HexaEngine.ImGuiNET;
-using System;
-using System.Xml.Linq;
 using Material = Prowl.Runtime.Material;
 using Mesh = Prowl.Runtime.Mesh;
 
@@ -60,6 +58,9 @@ namespace Prowl.Editor.Assets
                 if (scene == null) Failed("Assimp returned null object.");
 
                 DirectoryInfo? parentDir = assetPath.Directory;
+                // SubAssetDataPath is a folder next to the asset file with the same name and a _Data added to the end
+                DirectoryInfo subAssetPath = new DirectoryInfo(Path.Combine(assetPath.Directory.FullName, Path.GetFileNameWithoutExtension(assetPath.Name) + "_Data"));
+                subAssetPath.Create();
 
                 if (!scene.HasMeshes) Failed("Model has no Meshes.");
 
@@ -68,7 +69,7 @@ namespace Prowl.Editor.Assets
                     foreach (var m in scene.Materials)
                     {
                         Material mat = new Material(Shader.Find("Defaults/Standard.shader"));
-                        ctx.AddSubObject(mat);
+                        string? name = m.HasName ? m.Name : null;
 
                         // Albedo
                         if (m.HasColorDiffuse)
@@ -80,6 +81,7 @@ namespace Prowl.Editor.Assets
                         if (m.HasTextureDiffuse)
                         {
                             var file = new FileInfo(Path.Combine(parentDir.FullName, m.TextureDiffuse.FilePath));
+                            name ??= Path.GetFileNameWithoutExtension(file.Name);
                             if (file.Exists)
                                 LoadTextureIntoMesh("_MainTex", ctx, file, mat);
                             else
@@ -92,6 +94,7 @@ namespace Prowl.Editor.Assets
                         if (m.HasTextureNormal)
                         {
                             var file = new FileInfo(Path.Combine(parentDir.FullName, m.TextureNormal.FilePath));
+                            name ??= Path.GetFileNameWithoutExtension(file.Name);
                             if (file.Exists)
                                 LoadTextureIntoMesh("_NormalTex", ctx, file, mat);
                             else
@@ -104,6 +107,7 @@ namespace Prowl.Editor.Assets
                         if (m.GetMaterialTexture(TextureType.Roughness, 0, out var roughnessSlot))
                         {
                             var file = new FileInfo(Path.Combine(parentDir.FullName, roughnessSlot.FilePath));
+                            name ??= Path.GetFileNameWithoutExtension(file.Name);
                             if (file.Exists)
                                 LoadTextureIntoMesh("_RoughnessTex", ctx, file, mat);
                             else
@@ -116,6 +120,7 @@ namespace Prowl.Editor.Assets
                         if (m.GetMaterialTexture(TextureType.Shininess, 0, out var shininessSlot))
                         {
                             var file = new FileInfo(Path.Combine(parentDir.FullName, shininessSlot.FilePath));
+                            name ??= Path.GetFileNameWithoutExtension(file.Name);
                             if (file.Exists)
                                 LoadTextureIntoMesh("_RoughnessTex", ctx, file, mat);
                             else
@@ -128,6 +133,7 @@ namespace Prowl.Editor.Assets
                         if (m.GetMaterialTexture(TextureType.Metalness, 0, out var metalnessSlot))
                         {
                             var file = new FileInfo(Path.Combine(parentDir.FullName, metalnessSlot.FilePath));
+                            name ??= Path.GetFileNameWithoutExtension(file.Name);
                             if (file.Exists)
                                 LoadTextureIntoMesh("_MetallicTex", ctx, file, mat);
                             else
@@ -140,6 +146,7 @@ namespace Prowl.Editor.Assets
                         if (m.GetMaterialTexture(TextureType.Specular, 0, out var specularSlot))
                         {
                             var file = new FileInfo(Path.Combine(parentDir.FullName, specularSlot.FilePath));
+                            name ??= Path.GetFileNameWithoutExtension(file.Name);
                             if (file.Exists)
                                 LoadTextureIntoMesh("_MetallicTex", ctx, file, mat);
                             else
@@ -152,6 +159,7 @@ namespace Prowl.Editor.Assets
                         if (m.HasTextureEmissive)
                         {
                             var file = new FileInfo(Path.Combine(parentDir.FullName, m.TextureEmissive.FilePath));
+                            name ??= Path.GetFileNameWithoutExtension(file.Name);
                             if (file.Exists)
                                 LoadTextureIntoMesh("_EmissionTex", ctx, file, mat);
                             else
@@ -164,6 +172,7 @@ namespace Prowl.Editor.Assets
                         if (m.HasTextureAmbientOcclusion)
                         {
                             var file = new FileInfo(Path.Combine(parentDir.FullName, m.TextureAmbientOcclusion.FilePath));
+                            name ??= Path.GetFileNameWithoutExtension(file.Name);
                             if (file.Exists)
                                 LoadTextureIntoMesh("_OcclusionTex", ctx, file, mat);
                             else
@@ -171,6 +180,14 @@ namespace Prowl.Editor.Assets
                         }
                         else
                             mat.SetTexture("_OcclusionTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_ao.png")));
+
+                        name ??= "StandardMat";
+                        FileInfo matFilePath = new FileInfo(Path.Combine(subAssetPath.FullName, $"{name}.mat"));
+                        // If it already exists it gets overwritten
+                        AssetDatabase.Remove(AssetDatabase.FileToRelative(matFilePath));
+                        StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), matFilePath);
+                        AssetDatabase.Refresh(matFilePath);
+                        mat.AssetID = AssetDatabase.LastLoadedAssetID;
 
                         mats.Add(mat);
                     }
@@ -248,7 +265,13 @@ namespace Prowl.Editor.Assets
                         mesh.triangles = triangles.ToArray();
                         mesh.texcoords = uvs.ToArray();
                         mesh.texcoords2 = uvs2.ToArray();
-                        ctx.AddSubObject(mesh);
+
+                        FileInfo meshFilePath = new FileInfo(Path.Combine(subAssetPath.FullName, $"{m.Name}.mesh"));
+                        // If it already exists it gets overwritten
+                        AssetDatabase.Remove(AssetDatabase.FileToRelative(meshFilePath));
+                        StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mesh), meshFilePath);
+                        AssetDatabase.Refresh(meshFilePath);
+                        mesh.AssetID = AssetDatabase.LastLoadedAssetID;
 
                         meshMats.Add(new MeshMaterialBinding(m.Name, mesh, mats[m.MaterialIndex]));
                     }
@@ -271,15 +294,17 @@ namespace Prowl.Editor.Assets
             }
             else
             {
-                // Ok so the texture isnt loaded, lets make sure it exists
-                if (!file.Exists)
-                    throw new FileNotFoundException($"Texture file for model was not found!", file.FullName);
-
-                // Ok so we dont have it in the asset database but the file does infact exist
-                // so lets load it in as a sub asset to this object
-                Texture2D tex = new Texture2D(file.FullName);
-                ctx.AddSubObject(tex);
-                mat.SetTexture(name, new AssetRef<Texture2D>(guid));
+#warning TODO: Handle importing external textures
+                Debug.LogError($"Failed to load texture for model at path '{file.FullName}'");
+                //// Ok so the texture isnt loaded, lets make sure it exists
+                //if (!file.Exists)
+                //    throw new FileNotFoundException($"Texture file for model was not found!", file.FullName);
+                //
+                //// Ok so we dont have it in the asset database but the file does infact exist
+                //// so lets load it in as a sub asset to this object
+                //Texture2D tex = new Texture2D(file.FullName);
+                //ctx.AddSubObject(tex);
+                //mat.SetTexture(name, new AssetRef<Texture2D>(guid));
             }
         }
 

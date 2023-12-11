@@ -8,7 +8,6 @@ namespace Prowl.Runtime.Utils
     public class SerializedAsset
     {
         public EngineObject? Main;
-        public List<EngineObject> SubAssets = new();
 
         public bool HasMain => Main != null;
 
@@ -61,17 +60,9 @@ namespace Prowl.Runtime.Utils
             return obj;
         }
 
-        public void AddSubObject(EngineObject obj)
-        {
-            if (obj == null) throw new Exception("Asset cannot be null");
-            if (SubAssets.Contains(obj) || ReferenceEquals(Main, obj)) throw new Exception("Asset already contains this object: " + obj);
-            SubAssets.Add(obj);
-        }
-
         public void SetMainObject(EngineObject obj)
         {
             if (obj == null) throw new Exception("Asset cannot be null");
-            if (SubAssets.Contains(obj)) throw new Exception("Asset already contains this object: " + obj);
             Main = obj;
         }
     }

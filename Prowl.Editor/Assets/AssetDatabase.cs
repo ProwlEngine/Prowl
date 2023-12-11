@@ -431,7 +431,6 @@ namespace Prowl.Runtime.Assets
                     {
                         var asset = guidToAssetData[assetGuid];
                         asset.Main.DestroyImmediate();
-                        asset.SubAssets.ForEach(x => x.DestroyImmediate());
                         guidToAssetData.Remove(assetGuid);
                     }
                 }
@@ -498,7 +497,6 @@ namespace Prowl.Runtime.Assets
             {
                 var asset = guidToAssetData[assetGuid];
                 asset.Main.DestroyImmediate();
-                asset.SubAssets.ForEach(x => x.DestroyImmediate());
             }
 
             guidToAssetData.Remove(assetGuid);
