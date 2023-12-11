@@ -299,7 +299,10 @@ namespace Prowl.Runtime
 
             Type oType = Type.GetType(compound.SerializedType);
             if (oType == null)
-                throw new Exception("Cannot deserialize type '" + compound.SerializedType + "', It does not exist.");
+            {
+                Debug.LogError("[TagSerializer] Couldn't find type: " + compound.SerializedType);
+                return null;
+            }
 
             object resultObject = CreateInstance(oType);
 
