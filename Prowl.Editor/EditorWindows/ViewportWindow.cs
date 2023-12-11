@@ -16,6 +16,7 @@ public class ViewportWindow : EditorWindow
     Camera Cam;
     RenderTexture RenderTarget;
     bool IsFocused = false;
+    bool IsHovered = false;
     Vector2 WindowCenter;
     bool DrawGrid = false;
 
@@ -56,6 +57,7 @@ public class ViewportWindow : EditorWindow
         if (!Project.HasProject) return;
 
         IsFocused = ImGui.IsWindowFocused();
+        IsHovered = ImGui.IsWindowHovered();
 
         var cStart = ImGui.GetCursorPos();
         var windowSize = ImGui.GetWindowSize();
@@ -226,7 +228,7 @@ public class ViewportWindow : EditorWindow
 
             Raylib_cs.Raylib.SetMousePosition((int)WindowCenter.X, (int)WindowCenter.Y);
         }
-        else if (Input.IsMouseButtonDown(Raylib_cs.MouseButton.MOUSE_MIDDLE_BUTTON))
+        else if (Input.IsMouseButtonDown(Raylib_cs.MouseButton.MOUSE_MIDDLE_BUTTON) && IsHovered)
         {
             var mouseDelta = Input.MouseDelta;
             var pos = Cam.GameObject.Position;
