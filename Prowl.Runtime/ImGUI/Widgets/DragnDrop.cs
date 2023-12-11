@@ -67,7 +67,7 @@ namespace Prowl.Runtime.ImGUI.Widgets
             return false;
         }
 
-        public static void OfferAsset<T>(AssetRef<T> offeredAsset) where T : EngineObject
+        public static bool OfferAsset<T>(AssetRef<T> offeredAsset) where T : EngineObject
         {
             if (ImGui.BeginDragDropSource())
             {
@@ -75,10 +75,12 @@ namespace Prowl.Runtime.ImGUI.Widgets
                 unsafe { ImGui.SetDragDropPayload(AssetPayload + typeof(T).Name, null, 0); }
                 ImGui.TextUnformatted(offeredAsset.Name + " - " + offeredAsset.AssetID);
                 ImGui.EndDragDropSource();
+                return true;
             }
+            return false;
         }
 
-        public static void OfferAsset(Guid offeredAsset, string typeName)
+        public static bool OfferAsset(Guid offeredAsset, string typeName)
         {
             if (ImGui.BeginDragDropSource())
             {
@@ -86,10 +88,12 @@ namespace Prowl.Runtime.ImGUI.Widgets
                 unsafe { ImGui.SetDragDropPayload(AssetPayload + typeName, null, 0); }
                 ImGui.TextUnformatted(typeName + " - Asset");
                 ImGui.EndDragDropSource();
+                return true;
             }
+            return false;
         }
 
-        public static void OfferReference<T>(T offeredObject) where T : class
+        public static bool OfferReference<T>(T offeredObject) where T : class
         {
             if (ImGui.BeginDragDropSource())
             {
@@ -97,7 +101,9 @@ namespace Prowl.Runtime.ImGUI.Widgets
                 unsafe { ImGui.SetDragDropPayload(ReferencePayload + typeof(T).Name, null, 0); }
                 ImGui.TextUnformatted(typeof(T).Name + " - Instance");
                 ImGui.EndDragDropSource();
+                return true;
             }
+            return false;
         }
     }
 }
