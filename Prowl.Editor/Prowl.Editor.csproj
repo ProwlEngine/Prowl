@@ -15,7 +15,6 @@
       <None Remove="EmbeddedResources\DefaultAssets\AmbientLight.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Cube.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\Cylinder.obj" />
-      <None Remove="EmbeddedResources\DefaultAssets\DefaultRenderPipeline.scriptobj" />
       <None Remove="EmbeddedResources\DefaultAssets\default_ao.png" />
       <None Remove="EmbeddedResources\DefaultAssets\default_emission.png" />
       <None Remove="EmbeddedResources\DefaultAssets\default_gray18.png" />
@@ -60,7 +59,6 @@
       <EmbeddedResource Include="EmbeddedResources\CSharpIcon.png" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Cube.obj" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Cylinder.obj" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\DefaultRenderPipeline.scriptobj" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_ao.png" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_emission.png" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_gray18.png" />
