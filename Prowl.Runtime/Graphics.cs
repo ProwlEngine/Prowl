@@ -33,6 +33,8 @@ namespace Prowl.Runtime
         public static Matrix4x4 MatViewInverseTransposed;
         public static Matrix4x4 MatProjection;
         public static Matrix4x4 MatProjectionTransposed;
+        public static Matrix4x4 MatProjectionInverse;
+        public static Matrix4x4 MatProjectionInverseTransposed;
         public static Matrix4x4 OldMatView;
         public static Matrix4x4 OldMatViewTransposed;
         public static Matrix4x4 OldMatProjection;
@@ -77,6 +79,7 @@ namespace Prowl.Runtime
             // Upload view and projection matrices(if locations available)
             material.SetMatrix("matView", MatViewTransposed);
             material.SetMatrix("matProjection", MatProjectionTransposed);
+            material.SetMatrix("matProjectionInverse", MatProjectionInverseTransposed);
             // Model transformation matrix is sent to shader
             material.SetMatrix("matModel", Matrix4x4.Transpose(transform));
 

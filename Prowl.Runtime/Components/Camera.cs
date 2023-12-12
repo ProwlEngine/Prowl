@@ -147,6 +147,8 @@ public class Camera : MonoBehaviour
         Graphics.MatProjectionTransposed = Matrix4x4.Transpose(Graphics.MatProjection);
         Matrix4x4.Invert(Graphics.MatView, out Graphics.MatViewInverse);
         Graphics.MatViewInverseTransposed = Matrix4x4.Transpose(Graphics.MatViewInverse);
+        Matrix4x4.Invert(Graphics.MatProjection, out Graphics.MatProjectionInverse);
+        Graphics.MatProjectionInverseTransposed = Matrix4x4.Transpose(Graphics.MatProjectionInverse);
 
         CheckGBuffer();
 
