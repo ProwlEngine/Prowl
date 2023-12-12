@@ -110,10 +110,9 @@ namespace Prowl.Editor.Assets
                                 {
                                     path = "(Null)";
                                     drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.9f, 0.1f, 0.1f, 0.3f)));
-                                    if (ImGui.Selectable($"{property.DisplayName}: {path}", false))
-                                    {
-#warning TODO: Show a popup with a list of all assets of the type - property.Type.Name
-                                    }
+                                    if (ImGui.Selectable("##" + path, false, new System.Numerics.Vector2(50, 50)))
+                                        AssetDatabase.Ping(tex.AssetID);
+                                    GUIHelper.Tooltip(path);
                                 }
                                 else if (tex.IsRuntimeResource)
                                 {
@@ -126,8 +125,11 @@ namespace Prowl.Editor.Assets
                                 else if (AssetDatabase.Contains(tex.AssetID))
                                 {
                                     path = AssetDatabase.GUIDToAssetPath(tex.AssetID);
-                                    if (ImGui.Selectable($"{property.DisplayName}: {path}", false))
-                                        Selection.Select(this);
+                                    var thumbnail = Application.AssetProvider.LoadAsset<Texture2D>(tex.AssetID);
+                                    var cPos = ImGui.GetCursorScreenPos();
+                                    ImGui.SetCursorScreenPos(new System.Numerics.Vector2(cPos.X, cPos.Y + 50));
+                                    ImGui.Image(new ImTextureID((nint)thumbnail.Handle), new System.Numerics.Vector2(50, -50));
+                                    ImGui.SetCursorScreenPos(cPos);
                                     if (ImGui.Selectable("##" + path, false, new System.Numerics.Vector2(50, 50)))
                                         AssetDatabase.Ping(tex.AssetID);
                                     GUIHelper.Tooltip(path);
