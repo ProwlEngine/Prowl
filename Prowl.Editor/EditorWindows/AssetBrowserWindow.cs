@@ -249,7 +249,7 @@ public class AssetBrowserWindow : EditorWindow {
                     }
                 }
 
-                if (ImGui.IsMouseClicked(0))
+                if (ImGui.IsMouseReleased(0))
                     Selection.Select(entry, true);
 
                 string relativeAssetPath = Path.GetRelativePath(Project.ProjectDirectory, entry.FullName);
