@@ -17,12 +17,10 @@
       <None Remove="EmbeddedResources\DefaultAssets\Cube.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\Cylinder.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\DefaultRenderPipeline.scriptobj" />
-      <None Remove="EmbeddedResources\DefaultAssets\default_ao.png" />
       <None Remove="EmbeddedResources\DefaultAssets\default_emission.png" />
       <None Remove="EmbeddedResources\DefaultAssets\default_gray18.png" />
       <None Remove="EmbeddedResources\DefaultAssets\default_normal.png" />
-      <None Remove="EmbeddedResources\DefaultAssets\default_roughness.png" />
-      <None Remove="EmbeddedResources\DefaultAssets\default_specular.png" />
+      <None Remove="EmbeddedResources\DefaultAssets\default_surface.png" />
       <None Remove="EmbeddedResources\DefaultAssets\default_white.png" />
       <None Remove="EmbeddedResources\DefaultAssets\Depth.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Directionallight.shader" />
@@ -41,6 +39,7 @@
       <None Remove="EmbeddedResources\DefaultAssets\ProcedualSkybox.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Sphere.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\Spotlight.shader" />
+      <None Remove="EmbeddedResources\DefaultAssets\SSR.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Standard.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Standard.shader.meta" />
       <None Remove="EmbeddedResources\FileIcon.png" />
@@ -63,12 +62,10 @@
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Cube.obj" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Cylinder.obj" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\DefaultRenderPipeline.scriptobj" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_ao.png" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_emission.png" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_gray18.png" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_normal.png" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_roughness.png" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_specular.png" />
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_surface.png" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_white.png" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\AmbientLight.shader">
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>

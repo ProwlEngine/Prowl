@@ -25,11 +25,13 @@ Pass 0
 		{
 			vec2 texCoords = gl_FragCoord.xy / Resolution;
 			vec4 albedoAO = texture(gAlbedoAO, texCoords);
-			float AO = albedoAO.w;
 			vec3 diffuseColor = albedoAO.rgb * 0.01;
 			vec3 lightingColor = texture(gLighting, texCoords).rgb;
+			// Apply AO onto the lightingColor
+			// AO comes in as 0-1, 0 being no AO, 1 being full AO
+			lightingColor *= (1.0 - albedoAO.w);
 		
-			vec3 color = diffuseColor + (lightingColor * AO);
+			vec3 color = diffuseColor + (lightingColor);
 
 			OutputColor = vec4(color, 1.0);
 		}

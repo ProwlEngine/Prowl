@@ -5,12 +5,10 @@ Properties
 	// Material property declarations go here
 	_MainTex("Albedo Map", TEXTURE2D)
 	_NormalTex("Normal Map", TEXTURE2D)
-	_RoughnessTex("Roughness Map", TEXTURE2D)
-	_MetallicTex("Metallic Map", TEXTURE2D)
-	_EmissionTex("Emission Map", TEXTURE2D)
+	_SurfaceTex("Surface Map x:AO y:Rough z:Metal", TEXTURE2D)
 	_OcclusionTex("Occlusion Map", TEXTURE2D)
 
-	_MainColor("Main Color", VEC4)
+	_MainColor("Main Color", COLOR)
 
 	//_ExampleName("Integer display name", INTEGER)
 	//_ExampleName("Float display name", FLOAT)
@@ -100,10 +98,8 @@ Pass 0
 		
 		uniform sampler2D _MainTex; // diffuse
 		uniform sampler2D _NormalTex; // Normal
-		uniform sampler2D _RoughnessTex; // Roughness
-		uniform sampler2D _MetallicTex; // Metallic
+		uniform sampler2D _SurfaceTex; // AO, Roughness, Metallic
 		uniform sampler2D _EmissionTex; // Emissive
-		uniform sampler2D _OcclusionTex; // Ambient Occlusion
 		uniform vec4 _MainColor; // color
 
 		vec3 getNormalFromMap()
@@ -128,20 +124,20 @@ Pass 0
 			vec4 alb = texture(_MainTex, TexCoords).rgba;
 			if(alb.a < 0.5) discard;
 
-			// Occlusion
-			float ao = texture(_OcclusionTex, TexCoords).r;
+			// AO, Roughness, Metallic
+			vec3 surface = texture(_SurfaceTex, TexCoords).rgb;
 			// Albedo
 			//gAlbedoAO = vec4(alb.xyz * _MainColor.rgb, ao);
-			gAlbedoAO = vec4(pow(alb.xyz * _MainColor.rgb, vec3(2.2)), ao);
+			gAlbedoAO = vec4(pow(alb.xyz * _MainColor.rgb, vec3(2.2)), surface.r);
 	
 			// Position & Roughness
-			gPositionRoughness = vec4(FragPos, texture(_RoughnessTex, TexCoords).r);
+			gPositionRoughness = vec4(FragPos, surface.g);
 
 			// Normal & Metallic
 			//vec4 normal = vec4(TBN * (texture(_NormalTex, TexCoords).rgb * 2.0 - 1), 0);
-			//gNormalMetallic = vec4((view * normal).rgb, texture(_MetallicTex, TexCoords).r);
+			//gNormalMetallic = vec4((view * normal).rgb, surface.b);
 			// ^ Produces NAN?
-			gNormalMetallic = vec4((matView * vec4(getNormalFromMap(), 0)).rgb, texture(_MetallicTex, TexCoords).r);
+			gNormalMetallic = vec4((matView * vec4(getNormalFromMap(), 0)).rgb, surface.b);
 			
 			// Emission
 			gEmission.rgb = texture(_EmissionTex, TexCoords).rgb * emissionIntensity;

@@ -103,57 +103,18 @@ namespace Prowl.Editor.Assets
                         else
                             mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_normal.png")));
 
-                        // Roughness Texture
-                        if (m.GetMaterialTexture(TextureType.Roughness, 0, out var roughnessSlot))
+                        //AO, Roughness, Metallic Texture
+                        if (m.GetMaterialTexture(TextureType.Unknown, 0, out var surface))
                         {
-                            var file = new FileInfo(Path.Combine(parentDir.FullName, roughnessSlot.FilePath));
+                            var file = new FileInfo(Path.Combine(parentDir.FullName, surface.FilePath));
                             name ??= Path.GetFileNameWithoutExtension(file.Name);
                             if (file.Exists)
-                                LoadTextureIntoMesh("_RoughnessTex", ctx, file, mat);
+                                LoadTextureIntoMesh("_SurfaceTex", ctx, file, mat);
                             else
-                                mat.SetTexture("_RoughnessTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_roughness.png")));
+                                mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_surface.png")));
                         }
                         else
-                            mat.SetTexture("_RoughnessTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_roughness.png")));
-
-                        // Shininess Texture
-                        if (m.GetMaterialTexture(TextureType.Shininess, 0, out var shininessSlot))
-                        {
-                            var file = new FileInfo(Path.Combine(parentDir.FullName, shininessSlot.FilePath));
-                            name ??= Path.GetFileNameWithoutExtension(file.Name);
-                            if (file.Exists)
-                                LoadTextureIntoMesh("_RoughnessTex", ctx, file, mat);
-                            else
-                                mat.SetTexture("_RoughnessTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_roughness.png")));
-                        }
-                        else
-                            mat.SetTexture("_RoughnessTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_roughness.png")));
-
-                        // Metallic Texture
-                        if (m.GetMaterialTexture(TextureType.Metalness, 0, out var metalnessSlot))
-                        {
-                            var file = new FileInfo(Path.Combine(parentDir.FullName, metalnessSlot.FilePath));
-                            name ??= Path.GetFileNameWithoutExtension(file.Name);
-                            if (file.Exists)
-                                LoadTextureIntoMesh("_MetallicTex", ctx, file, mat);
-                            else
-                                mat.SetTexture("_MetallicTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_emission.png")));
-                        }
-                        else
-                            mat.SetTexture("_MetallicTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_emission.png")));
-
-                        // Specular Texture (As Metallic)
-                        if (m.GetMaterialTexture(TextureType.Specular, 0, out var specularSlot))
-                        {
-                            var file = new FileInfo(Path.Combine(parentDir.FullName, specularSlot.FilePath));
-                            name ??= Path.GetFileNameWithoutExtension(file.Name);
-                            if (file.Exists)
-                                LoadTextureIntoMesh("_MetallicTex", ctx, file, mat);
-                            else
-                                mat.SetTexture("_MetallicTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_emission.png")));
-                        }
-                        else
-                            mat.SetTexture("_MetallicTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_emission.png")));
+                            mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_surface.png")));
 
                         // Emissive Texture
                         if (m.HasTextureEmissive)
@@ -167,19 +128,6 @@ namespace Prowl.Editor.Assets
                         }
                         else
                             mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_emission.png")));
-
-                        // Ambient Occlusion Texture
-                        if (m.HasTextureAmbientOcclusion)
-                        {
-                            var file = new FileInfo(Path.Combine(parentDir.FullName, m.TextureAmbientOcclusion.FilePath));
-                            name ??= Path.GetFileNameWithoutExtension(file.Name);
-                            if (file.Exists)
-                                LoadTextureIntoMesh("_OcclusionTex", ctx, file, mat);
-                            else
-                                mat.SetTexture("_OcclusionTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_ao.png")));
-                        }
-                        else
-                            mat.SetTexture("_OcclusionTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_ao.png")));
 
                         name ??= "StandardMat";
                         FileInfo matFilePath = new FileInfo(Path.Combine(subAssetPath.FullName, $"{name}.mat"));
