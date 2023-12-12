@@ -119,16 +119,18 @@ namespace Prowl.Editor.Assets
                                 {
                                     path = "(Runtime)" + tex.Name;
                                     drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.1f, 0.1f, 0.9f, 0.3f)));
-                                    if (ImGui.Selectable($"{property.DisplayName}: {path}", false))
-                                    {
-#warning TODO: Show a popup with a list of all assets of the type - property.Type.Name
+                                    if (ImGui.Selectable("##" + path, false, new System.Numerics.Vector2(50, 50)))
+                                        AssetDatabase.Ping(tex.AssetID);
+                                        GUIHelper.Tooltip(path);
                                     }
-                                }
                                 else if (AssetDatabase.Contains(tex.AssetID))
                                 {
                                     path = AssetDatabase.GUIDToAssetPath(tex.AssetID);
                                     if (ImGui.Selectable($"{property.DisplayName}: {path}", false))
                                         Selection.Select(this);
+                                    if (ImGui.Selectable("##" + path, false, new System.Numerics.Vector2(50, 50)))
+                                        AssetDatabase.Ping(tex.AssetID);
+                                    GUIHelper.Tooltip(path);
                                 }
 
                                 // DragDrop code
