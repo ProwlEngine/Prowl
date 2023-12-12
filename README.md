@@ -34,18 +34,18 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
 # Features
 
 -   **General:**
-    - Unity-Like Editor & Scripting API
+    - Unity-like Editor & Scripting API
     - C# Scripting
     - Gameobject & Component structure
     - .NET 8
     - Dear ImGUI Editor, including ImGuizmo, ImPlot, ImNodes
     - Editor with support for Editor Scripts and Custom Editors
     - Less than 10k lines of Executable Code for both the Editor and Engine combined!
-    - Unity-Like Coroutines
+    - Unity-like Coroutines
     - Playtest directly in Editor
     - ScriptableObjects
     - Projects & Project Settings
-    - Unity-Like Serializer to In-Memory Graph
+    - Unity-like Serializer to create In-Memory Graphs
        - Graph -> Text (System.Text.Json)
        - Graph -> Binary
     - Full 64-bit using Doubles
@@ -72,9 +72,10 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - Post Processing
         - HDR with Aces Fitted Tonemapping
         - Bokeh Depth of Field
+        - Screen Space Reflections
     - Adjustable Render Resolutions per camera
     - Dedicated Shadow Pass for Shaders
-    - Skybox-Blended Fog
+    - Procedural Skybox with Skybox-Blended Fog
 
 -   **Asset Pipeline:**
     - A Powerful Asset Pipeline with a very similar structure to unity
@@ -116,7 +117,7 @@ Getting Prowl up and running is super easy!
 - [ ] Networking Solution
 
 ### Rendering
-- [ ] SSAO, SSR, TAA, Bloom, Screen-Space Decals, etc.
+- [ ] SSAO, TAA, Bloom, Screen-Space Decals, etc.
 - [ ] Transparency
 - [ ] Realtime GI
 - [ ] Lightmaps and Light Probes
