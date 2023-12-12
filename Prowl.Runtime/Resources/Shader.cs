@@ -15,7 +15,7 @@ namespace Prowl.Runtime
         {
             public string Name = "";
             public string DisplayName = "";
-            public enum PropertyType { FLOAT, VEC2, VEC3, VEC4, INTEGER, IVEC2, IVEC3, IVEC4, TEXTURE2D }
+            public enum PropertyType { FLOAT, VEC2, VEC3, VEC4, COLOR, INTEGER, IVEC2, IVEC3, IVEC4, TEXTURE2D }
             public PropertyType Type;
         }
 

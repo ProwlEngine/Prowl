@@ -82,6 +82,11 @@ namespace Prowl.Editor.Assets
                                 changed |= ImGui.DragFloat4(property.DisplayName, ref v4, 0.01f);
                                 if (changed) mat.PropertyBlock.SetVector(property.Name, v4);
                                 break;
+                            case Shader.Property.PropertyType.COLOR:
+                                var c = mat.PropertyBlock.GetVector4(property.Name).ToFloat();
+                                changed |= ImGui.ColorEdit4(property.DisplayName, ref c);
+                                if (changed) mat.PropertyBlock.SetVector(property.Name, c);
+                                break;
 
                             case Shader.Property.PropertyType.TEXTURE2D:
                                 var texNullable = mat.PropertyBlock.GetTexture(property.Name);
