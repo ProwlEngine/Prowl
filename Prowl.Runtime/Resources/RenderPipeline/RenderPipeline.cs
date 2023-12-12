@@ -14,6 +14,7 @@ namespace Prowl.Runtime
             typeof(PBRDeferredNode),
             typeof(PostPBRDeferredNode),
             typeof(ProceduralSkyboxNode),
+            typeof(ScreenSpaceReflectionNode),
             typeof(DepthOfFieldNode),
             typeof(AcesTonemappingNode),
             typeof(OutputNode),

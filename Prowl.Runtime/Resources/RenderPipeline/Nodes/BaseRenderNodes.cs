@@ -184,6 +184,42 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         }
     }
 
+    public class ScreenSpaceReflectionNode : RenderPassNode
+    {
+        public override string Title => "Screen Space Reflection";
+        public override float Width => 125;
+
+        [Input(ShowBackingValue.Never), SerializeIgnore] public RenderTexture RenderTexture;
+
+        public int Steps = 16;
+        public int RefineSteps = 4;
+
+        Material Mat;
+
+        public override void Render()
+        {
+            var gbuffer = Camera.Current.gBuffer;
+            var rt = GetInputValue<RenderTexture>("RenderTexture");
+            if (rt == null) return;
+
+            if (rt.InternalTextures[0].mipmaps == 1)
+                Raylib.GenTextureMipmaps(ref rt.InternalTextures[0]);
+            if (rt.InternalTextures[0].mipmaps == 1)
+                Debug.LogWarning("ScreenSpaceReflectionNode: RenderTexture has no mipmaps, Generation failed!");
+
+            Mat ??= new Material(Shader.Find("Defaults/SSR.shader"));
+            Mat.SetTexture("gColor", rt.InternalTextures[0]);
+            Mat.SetTexture("gNormalMetallic", gbuffer.NormalMetallic);
+            Mat.SetTexture("gPositionRoughness", gbuffer.PositionRoughness);
+            Mat.SetTexture("gDepth", gbuffer.Depth);
+
+            Mat.SetInt("SSR_STEPS", Math.Clamp(Steps, 16, 32));
+            Mat.SetInt("SSR_BISTEPS", Math.Clamp(RefineSteps, 0, 16));
+
+            Graphics.Blit(renderRT, Mat, 0, true);
+        }
+    }
+
     [DisallowMultipleNodes]
     public class OutputNode : Node
     {

@@ -70,6 +70,9 @@
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\AmbientLight.shader">
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       </EmbeddedResource>
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\SSR.shader">
+        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      </EmbeddedResource>
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\ProcedualSkybox.shader">
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       </EmbeddedResource>
