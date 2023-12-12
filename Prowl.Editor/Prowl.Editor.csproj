@@ -42,6 +42,7 @@
       <None Remove="EmbeddedResources\DefaultAssets\SSR.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Standard.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Standard.shader.meta" />
+      <None Remove="EmbeddedResources\DefaultAssets\Utilities.glsl" />
       <None Remove="EmbeddedResources\FileIcon.png" />
       <None Remove="EmbeddedResources\FolderEmptyIcon.png" />
       <None Remove="EmbeddedResources\FolderFilledIcon.png" />
@@ -70,6 +71,7 @@
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\AmbientLight.shader">
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       </EmbeddedResource>
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Utilities.glsl" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\SSR.shader">
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       </EmbeddedResource>
