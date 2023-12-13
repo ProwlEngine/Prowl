@@ -7,25 +7,6 @@ namespace Prowl.Runtime
 {
     public static class Graphics
     {
-        static Stack<IntPtr> pointers = new ();
-        internal static unsafe sbyte* ToPtr(string text)
-        {
-            pointers.Push(Marshal.StringToCoTaskMemUTF8(text));
-            return (sbyte*)pointers.Peek();
-        }
-
-        static unsafe void DisposeText()
-        {
-            while (pointers.TryPop(out var ptr))
-                Marshal.ZeroFreeCoTaskMemUTF8(ptr);
-        }
-
-        public static void BindTexture(Raylib_cs.Texture2D texture, int i)
-        {
-            Rlgl.rlActiveTextureSlot(i);
-            Rlgl.rlEnableTexture(texture.id);
-        }
-
         public static Vector2 Resolution;
         public static Matrix4x4 MatView;
         public static Matrix4x4 MatViewTransposed;
@@ -109,110 +90,24 @@ namespace Prowl.Runtime
             DrawMeshNowDirect(mesh);
         }
 
-        private static Dictionary<string, int> attribCache = new();
-
-        private unsafe static int GetAttribLocation(string attributeName)
-        {
-            var key = Material.current.Value.id + attributeName;
-            if (!attribCache.TryGetValue(key, out int location))
-            {
-                location = Rlgl.rlGetLocationAttrib(Material.current.Value.id, ToPtr(attributeName));
-                attribCache[key] = location;
-            }
-            return location;
-        }
-
         public static void DrawMeshNowDirect(Mesh mesh)
         {
             if (Camera.Current == null) throw new Exception("DrawMeshNow must be called during a rendering context like OnRenderObject()!");
             if (Material.current == null) throw new Exception("Use Material.SetPass first before called DrawMeshNow!");
 
-            if (mesh.vaoId <= 0)
-                mesh.Upload(false);
+            mesh.Upload();
 
             unsafe
             {
-                int RL_FLOAT = 0x1406;
-                int RL_UNSIGNED_BYTE = 0x1401;
+                Rlgl.rlEnableVertexArray(mesh.vao);
+                //Rlgl.rlEnableVertexBuffer(mesh.vbo);
+                //Rlgl.rlEnableVertexBufferElement(mesh.ibo);
 
-                int vertexLoc = GetAttribLocation("vertexPosition");
-                int texLoc = GetAttribLocation("vertexTexCoord");
-                int normalLoc = GetAttribLocation("vertexNormal");
-                int colorLoc = GetAttribLocation("vertexColor");
-                int tangentLoc = GetAttribLocation("vertexTangent");
-                int tex2Loc = GetAttribLocation("vertexTexCoord2");
-                DisposeText();
-                if (!Rlgl.rlEnableVertexArray(mesh.vaoId))
-                {
+                Rlgl.rlDrawVertexArrayElements(0, mesh.indices.Length, null);
 
-                    // Bind mesh VBO data: vertex position (shader-location = 0)
-                    Rlgl.rlEnableVertexBuffer(mesh.vboId[0]);
-                    Rlgl.rlSetVertexAttribute((uint)vertexLoc, 3, RL_FLOAT, 0, 0, null);
-                    Rlgl.rlEnableVertexAttribute((uint)vertexLoc);
-
-                    // Bind mesh VBO data: vertex texcoords (shader-location = 1)
-                    Rlgl.rlEnableVertexBuffer(mesh.vboId[1]);
-                    Rlgl.rlSetVertexAttribute((uint)texLoc, 2, RL_FLOAT, 0, 0, null);
-                    Rlgl.rlEnableVertexAttribute((uint)texLoc);
-
-                    if (normalLoc != -1)
-                    {
-                        // Bind mesh VBO data: vertex normals (shader-location = 2)
-                        Rlgl.rlEnableVertexBuffer(mesh.vboId[2]);
-                        Rlgl.rlSetVertexAttribute((uint)normalLoc, 3, RL_FLOAT, 0, 0, null);
-                        Rlgl.rlEnableVertexAttribute((uint)normalLoc);
-                    }
-
-                    // Bind mesh VBO data: vertex colors (shader-location = 3, if available)
-                    if (colorLoc != -1)
-                    {
-                        if (mesh.vboId[3] != 0)
-                        {
-                            Rlgl.rlEnableVertexBuffer(mesh.vboId[3]);
-                            Rlgl.rlSetVertexAttribute((uint)colorLoc, 4, RL_UNSIGNED_BYTE, 1, 0, null);
-                            Rlgl.rlEnableVertexAttribute((uint)colorLoc);
-                        }
-                        else
-                        {
-                            // Set default value for defined vertex attribute in shader but not provided by mesh
-                            // WARNING: It could result in GPU undefined behaviour
-                            float[] value = { 1.0f, 1.0f, 1.0f, 1.0f };
-                            fixed (float* ptr = value)
-                                Rlgl.rlSetVertexAttributeDefault(colorLoc, ptr, (int)ShaderAttributeDataType.SHADER_ATTRIB_VEC4, 4);
-                            Rlgl.rlDisableVertexAttribute((uint)colorLoc);
-                        }
-                    }
-
-                    // Bind mesh VBO data: vertex tangents (shader-location = 4, if available)
-                    if (tangentLoc != -1)
-                    {
-                        Rlgl.rlEnableVertexBuffer(mesh.vboId[4]);
-                        Rlgl.rlSetVertexAttribute((uint)tangentLoc, 4, RL_FLOAT, 0, 0, null);
-                        Rlgl.rlEnableVertexAttribute((uint)tangentLoc);
-                    }
-
-                    // Bind mesh VBO data: vertex texcoords2 (shader-location = 5, if available)
-                    if (tex2Loc != -1)
-                    {
-                        Rlgl.rlEnableVertexBuffer(mesh.vboId[5]);
-                        Rlgl.rlSetVertexAttribute((uint)tex2Loc, 2, RL_FLOAT, 0, 0, null);
-                        Rlgl.rlEnableVertexAttribute((uint)tex2Loc);
-                    }
-
-                    if (mesh.triangles != null) Rlgl.rlEnableVertexBufferElement(mesh.vboId[6]);
-                }
-
-                // WARNING: Disable vertex attribute color input if mesh can not provide that data (despite location being enabled in shader)
-                if (mesh.vboId[3] == 0) Rlgl.rlDisableVertexAttribute((uint)colorLoc);
-
-                // Draw mesh
-                if (mesh.triangles != null) Rlgl.rlDrawVertexArrayElements(0, mesh.triangleCount * 3, null);
-                else Rlgl.rlDrawVertexArray(0, mesh.vertexCount);
-
-                // Disable all possible vertex array objects (or VBOs)
                 Rlgl.rlDisableVertexArray();
-                Rlgl.rlDisableVertexBuffer();
-                Rlgl.rlDisableVertexBufferElement();
+                //Rlgl.rlDisableVertexBuffer();
+                //Rlgl.rlDisableVertexBufferElement();
             }
         }
 

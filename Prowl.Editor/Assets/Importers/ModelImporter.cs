@@ -3,8 +3,13 @@ using HexaEngine.ImGuiNET;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
 using Prowl.Runtime.Utils;
+using System.ComponentModel.Design;
+using System.Linq;
+using static Prowl.Runtime.Mesh;
 using Material = Prowl.Runtime.Material;
 using Mesh = Prowl.Runtime.Mesh;
+using Node = Assimp.Node;
+using Texture2D = Prowl.Runtime.Texture2D;
 
 namespace Prowl.Editor.Assets
 {
@@ -63,6 +68,11 @@ namespace Prowl.Editor.Assets
                 subAssetPath.Create();
 
                 if (!scene.HasMeshes) Failed("Model has no Meshes.");
+
+                // Create the object tree, We need to do this first so we can get the bone names
+                List<(GameObject, Node)> GOs = [];
+                Dictionary<string, int> nameToIndex = [];
+                GetNodes(scene.RootNode, ref GOs, ref nameToIndex);
 
                 List<Material> mats = new();
                 if (scene.HasMaterials)
@@ -132,6 +142,7 @@ namespace Prowl.Editor.Assets
                         name ??= "StandardMat";
                         FileInfo matFilePath = new FileInfo(Path.Combine(subAssetPath.FullName, $"{name}.mat"));
                         // If it already exists it gets overwritten
+#warning TODO: Decide, Should we overwrite, or is it better to re-use the existing one incase they modified it?
                         AssetDatabase.Remove(AssetDatabase.FileToRelative(matFilePath));
                         StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), matFilePath);
                         AssetDatabase.Refresh(matFilePath);
@@ -144,78 +155,100 @@ namespace Prowl.Editor.Assets
                 if (scene.HasMeshes)
                     foreach (var m in scene.Meshes)
                     {
-                        List<float> verts = new List<float>();
-                        List<float> norms = new List<float>();
-                        List<float> uvs = new List<float>();
-                        List<float> uvs2 = new List<float>();
-                        List<ushort> triangles = new List<ushort>();
+                        if (m.PrimitiveType != PrimitiveType.Triangle)
+                        {
+                            Debug.Log($"{assetPath.Name} 's mesh '{m.Name}' is not of Triangle Primitive, Skipping...");
+                            continue;
+                        }
 
-                        // Vertices
-                        if (m.HasVertices)
-                            foreach (var v in m.Vertices)
-                            {
-                                verts.Add(-v.X);
-                                verts.Add(v.Y);
-                                verts.Add(v.Z);
-                            }
+                        if (!m.HasNormals)
+                        {
+                            Debug.Log($"{assetPath.Name} Does not have any normals in mesh '{m.Name}', Skipping...");
+                            continue;
+                        }
 
-                        // Normals
-                        if (m.HasNormals)
-                            foreach (var n in m.Normals)
-                            {
-                                if (InvertNormals)
-                                {
-                                    norms.Add(n.X);
-                                    norms.Add(-n.Y);
-                                    norms.Add(-n.Z);
-                                }
-                                else
-                                {
-                                    norms.Add(-n.X);
-                                    norms.Add(n.Y);
-                                    norms.Add(n.Z);
-                                }
-                            }
+                        if (!m.HasTangentBasis)
+                        {
+                            Debug.Log($"{assetPath.Name} Does not have any tangents in mesh '{m.Name}', Skipping...");
+                            continue;
+                        }
 
-                        // Triangles
-                        if (m.HasFaces)
-                            foreach (var f in m.Faces)
-                            {
-                                // Ignore degenerate faces
-                                if (f.IndexCount == 1 || f.IndexCount == 2)
-                                    continue;
-
-                                for (int i = 0; i < (f.IndexCount - 2); i++)
-                                {
-                                    triangles.Add((ushort)f.Indices[i + 2]);
-                                    triangles.Add((ushort)f.Indices[i + 1]);
-                                    triangles.Add((ushort)f.Indices[0]);
-                                }
-                            }
-
-                        // Uv (texture coordinate) 
-                        if (m.HasTextureCoords(0))
-                            foreach (var uv in m.TextureCoordinateChannels[0])
-                            {
-                                uvs.Add(uv.X); uvs.Add(uv.Y);
-                            }
-
-                        // Uv2 (texture coordinate) 
-                        if (m.HasTextureCoords(1))
-                            foreach (var uv in m.TextureCoordinateChannels[1])
-                            {
-                                uvs2.Add(uv.X); uvs2.Add(uv.Y);
-                            }
+                        List<Mesh.VertexFormat.Element> elements = [
+                            new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.Position, Mesh.VertexFormat.VertexType.Float, 3),
+                            new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.TexCoord, Mesh.VertexFormat.VertexType.Float, 2),
+                            new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.Normal, Mesh.VertexFormat.VertexType.Float, 3, 0, true),
+                            new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.Color, Mesh.VertexFormat.VertexType.Float, 3),
+                            new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.Tangent, Mesh.VertexFormat.VertexType.Float, 3),
+                            new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.BoneIndex, Mesh.VertexFormat.VertexType.UnsignedByte, 4),
+                            new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.BoneWeight, Mesh.VertexFormat.VertexType.Float, 4)
+                        ];
+                        Mesh.VertexFormat format = new(elements.ToArray());
 
                         Mesh mesh = new();
-                        mesh.vertices = verts.ToArray();
-                        mesh.normals = norms.ToArray();
-                        mesh.triangles = triangles.ToArray();
-                        mesh.texcoords = uvs.ToArray();
-                        mesh.texcoords2 = uvs2.ToArray();
+                        mesh.format = format;
+
+                        var verts = m.Vertices;
+                        var norms = m.Normals;
+                        var tangs = m.Tangents;
+                        var texs = m.TextureCoordinateChannels[0];
+                        Vertex[] vertices = new Vertex[m.VertexCount];
+
+                        for (var i = 0; i < vertices.Length; i++)
+                        {
+                            Vertex vert = new Vertex();
+                            var v = verts[i]; var n = norms[i]; var t = tangs[i]; var tc = texs[i];
+                            vert.Position = new Vector3(v.X, v.Y, v.Z);
+                            vert.TexCoord = new Vector2(tc.X, tc.Y);
+                            vert.Normal = new Vector3(n.X, n.Y, n.Z);
+                            if (m.HasVertexColors(0))
+                            {
+                                var c = m.VertexColorChannels[0][i];
+                                vert.Color = new Vector3(c.R, c.G, c.B);
+                            }
+                            else {
+                                vert.Color = Vector3.One;
+                            }
+                            vert.Tangent = new Vector3(t.X, t.Y, t.Z);
+
+                            vertices[i] = vert;
+                        }
+
+                        if (m.HasBones)
+                        {
+                            for (var i = 0; i < m.Bones.Count; i++)
+                            {
+                                var bone = m.Bones[i];
+                                if (!bone.HasVertexWeights) continue;
+
+                                int nameIndex = nameToIndex[bone.Name];
+                                var weight0 = bone.VertexWeights[0];
+                                var weight1 = bone.VertexWeights[1];
+                                var weight2 = bone.VertexWeights[2];
+                                var weight3 = bone.VertexWeights[3];
+                                vertices[weight0.VertexID] = vertices[weight0.VertexID] with { BoneIndex0 = (byte)nameIndex, Weight0 = weight0.Weight };
+                                vertices[weight1.VertexID] = vertices[weight1.VertexID] with { BoneIndex1 = (byte)nameIndex, Weight1 = weight1.Weight };
+                                vertices[weight2.VertexID] = vertices[weight2.VertexID] with { BoneIndex2 = (byte)nameIndex, Weight2 = weight2.Weight };
+                                vertices[weight3.VertexID] = vertices[weight3.VertexID] with { BoneIndex3 = (byte)nameIndex, Weight3 = weight3.Weight };
+                            }
+
+                            for (int i = 0; i < vertices.Length; i++)
+                            {
+                                var v = vertices[i];
+                                var totalWeight = v.Weight0 + v.Weight1 + v.Weight2 + v.Weight3;
+                                v.Weight0 /= totalWeight;
+                                v.Weight1 /= totalWeight;
+                                v.Weight2 /= totalWeight;
+                                v.Weight3 /= totalWeight;
+                                vertices[i] = v;
+                            }
+                        }
+
+                        mesh.vertices = vertices;
+                        mesh.indices = m.GetShortIndices().Cast<ushort>().ToArray();
 
                         FileInfo meshFilePath = new FileInfo(Path.Combine(subAssetPath.FullName, $"{m.Name}.mesh"));
                         // If it already exists it gets overwritten
+#warning TODO: Decide, Should we overwrite, or is it better to re-use the existing one incase they modified it?
                         AssetDatabase.Remove(AssetDatabase.FileToRelative(meshFilePath));
                         StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mesh), meshFilePath);
                         AssetDatabase.Refresh(meshFilePath);
@@ -224,11 +257,37 @@ namespace Prowl.Editor.Assets
                         meshMats.Add(new MeshMaterialBinding(m.Name, mesh, mats[m.MaterialIndex]));
                     }
 
-                GameObject rootNode = NodeToGameObject(scene.RootNode, meshMats);
+                // Create Meshes
+                foreach (var goNode in GOs)
+                {
+                    var node = goNode.Item2;
+                    var go = goNode.Item1;
+                    // Set Mesh
+                    if (node.HasMeshes)
+                        foreach (var mIdx in node.MeshIndices)
+                        {
+                            var uMeshAndMat = meshMats[mIdx];
+                            GameObject uSubOb = GameObject.CreateSilently();
+                            uSubOb.Name = uMeshAndMat.MeshName;
+                            var mr = uSubOb.AddComponent<MeshRenderer>();
+                            mr.Mesh = uMeshAndMat.Mesh;
+                            mr.Material = uMeshAndMat.Material;
+                            uSubOb.SetParent(go);
+                        }
+
+                    // Transform
+                    node.Transform.Decompose(out var aScale, out var aQuat, out var aTranslation);
+
+                    go.Scale = new Vector3(aScale.X, aScale.Y, aScale.Z);
+                    go.Position = new Vector3(aTranslation.X, aTranslation.Y, aTranslation.Z);
+                    go.Orientation = new Prowl.Runtime.Quaternion(aQuat.X, aQuat.Y, aQuat.Z, aQuat.W);
+                }
+
+                GameObject rootNode = GOs[0].Item1;
                 rootNode.Scale = Vector3.One * UnitScale;
                 ctx.SetMainObject(rootNode);
 
-                ImGuiNotify.InsertNotification("Model Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);
+                ImGuiNotify.InsertNotification("Model Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), AssetDatabase.FileToRelative(assetPath));
             }
         }
 
@@ -256,24 +315,12 @@ namespace Prowl.Editor.Assets
             }
         }
 
-        // Create GameObjects from nodes
-        GameObject NodeToGameObject(Node node, in List<MeshMaterialBinding> meshMats)
+        GameObject GetNodes(Node node, ref List<(GameObject, Node)> GOs, ref Dictionary<string, int> nameToIndex)
         {
             GameObject uOb = GameObject.CreateSilently();
+            nameToIndex.Add(node.Name, GOs.Count);
+            GOs.Add((uOb, node));
             uOb.Name = node.Name;
-
-            // Set Mesh
-            if (node.HasMeshes)
-                foreach (var mIdx in node.MeshIndices)
-                {
-                    var uMeshAndMat = meshMats[mIdx];
-                    GameObject uSubOb = GameObject.CreateSilently();
-                    uSubOb.Name = uMeshAndMat.MeshName;
-                    uSubOb.AddComponent<MeshRenderer>();
-                    uSubOb.GetComponent<MeshRenderer>().Mesh = uMeshAndMat.Mesh;
-                    uSubOb.GetComponent<MeshRenderer>().Material = uMeshAndMat.Material;
-                    uSubOb.SetParent(uOb);
-                }
 
             // Transform
             node.Transform.Decompose(out var aScale, out var aQuat, out var aTranslation);
@@ -282,11 +329,10 @@ namespace Prowl.Editor.Assets
             uOb.Position = new Vector3(aTranslation.X, aTranslation.Y, aTranslation.Z);
             uOb.Orientation = new Prowl.Runtime.Quaternion(aQuat.X, aQuat.Y, aQuat.Z, aQuat.W);
 
-            if (node.HasChildren) foreach (var cn in node.Children) NodeToGameObject(cn, meshMats).SetParent(uOb);
+            if (node.HasChildren) foreach (var cn in node.Children) GetNodes(cn, ref GOs, ref nameToIndex).SetParent(uOb);
 
             return uOb;
         }
-
 
         class MeshMaterialBinding
         {

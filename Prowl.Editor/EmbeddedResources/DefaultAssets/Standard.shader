@@ -28,14 +28,16 @@ Pass 0
 		layout (location = 0) in vec3 vertexPosition;
 		layout (location = 1) in vec2 vertexTexCoord;
 		layout (location = 2) in vec3 vertexNormal;
-		layout (location = 3) in vec4 vertexColor;
-		layout (location = 4) in vec4 vertexTangent;
+		layout (location = 3) in vec3 vertexColor;
+		layout (location = 4) in vec3 vertexTangent;
+		//layout (location = 5) in ivec4 vertexBoneIndices;
+		//layout (location = 6) in vec4 vertexBoneWeights;
 
 		out vec3 FragPos;
 		out vec3 Pos;
 		out vec2 TexCoords;
 		out vec3 VertNormal;
-		out vec4 VertColor;
+		out vec3 VertColor;
 		//out mat3 TBN;
 		out vec4 PosProj;
 		out vec4 PosProjOld;
@@ -60,7 +62,7 @@ Pass 0
 			VertNormal = normalize(normalMatrix * vertexNormal);
 
 		    //vec3 n = normalize((matModel * vec4(vertexNormal, 0.0)).xyz);
-		    //vec3 t = normalize((matModel * vec4(vertexTangent.rgb, 0.0)).xyz);
+		    //vec3 t = normalize((matModel * vec4(vertexTangent, 0.0)).xyz);
 		    //t = normalize(t - dot(t, n) * n);
 		    
 		    //vec3 bitangent = cross(n, t);
@@ -86,7 +88,7 @@ Pass 0
 		in vec3 Pos;
 		in vec2 TexCoords;
 		in vec3 VertNormal;
-		in vec4 VertColor;
+		in vec3 VertColor;
 		//in mat3 TBN;
 		in vec4 PosProj;
 		in vec4 PosProjOld;
@@ -123,6 +125,7 @@ Pass 0
 		{
 			vec4 alb = texture(_MainTex, TexCoords).rgba;
 			if(alb.a < 0.5) discard;
+			alb.rgb *= VertColor;
 
 			// AO, Roughness, Metallic
 			vec3 surface = texture(_SurfaceTex, TexCoords).rgb;
