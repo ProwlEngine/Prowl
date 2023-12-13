@@ -254,7 +254,7 @@ namespace Prowl.Editor.Assets
                         AssetDatabase.Refresh(meshFilePath);
                         mesh.AssetID = AssetDatabase.LastLoadedAssetID;
 
-                        meshMats.Add(new MeshMaterialBinding(m.Name, mesh, mats[m.MaterialIndex]));
+                        meshMats.Add(new MeshMaterialBinding(m.Name, m.HasBones, mesh, mats[m.MaterialIndex]));
                     }
 
                 // Create Meshes
@@ -269,9 +269,20 @@ namespace Prowl.Editor.Assets
                             var uMeshAndMat = meshMats[mIdx];
                             GameObject uSubOb = GameObject.CreateSilently();
                             uSubOb.Name = uMeshAndMat.MeshName;
-                            var mr = uSubOb.AddComponent<MeshRenderer>();
-                            mr.Mesh = uMeshAndMat.Mesh;
-                            mr.Material = uMeshAndMat.Material;
+                            if (uMeshAndMat.HasBones)
+                            {
+                                var mr = uSubOb.AddComponent<SkinnedMeshRenderer>();
+                                mr.Mesh = uMeshAndMat.Mesh;
+                                mr.Material = uMeshAndMat.Material;
+                                mr.Root = GOs[0].Item1;
+                                mr.ProcessBoneTree();
+                            }
+                            else
+                            {
+                                var mr = uSubOb.AddComponent<MeshRenderer>();
+                                mr.Mesh = uMeshAndMat.Mesh;
+                                mr.Material = uMeshAndMat.Material;
+                            }
                             uSubOb.SetParent(go);
                         }
 
@@ -338,17 +349,20 @@ namespace Prowl.Editor.Assets
         {
             private string meshName;
             private Mesh mesh;
+            private bool hasBones;
             private Material material;
 
             private MeshMaterialBinding() { }
-            public MeshMaterialBinding(string meshName, Mesh mesh, Material material)
+            public MeshMaterialBinding(string meshName, bool hasBones, Mesh mesh, Material material)
             {
                 this.meshName = meshName;
                 this.mesh = mesh;
+                this.hasBones = hasBones;
                 this.material = material;
             }
 
             public Mesh Mesh { get => mesh; }
+            public bool HasBones { get => hasBones; }
             public Material Material { get => material; }
             public string MeshName { get => meshName; }
         }

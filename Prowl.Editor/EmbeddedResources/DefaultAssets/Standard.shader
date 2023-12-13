@@ -30,11 +30,13 @@ Pass 0
 		layout (location = 2) in vec3 vertexNormal;
 		layout (location = 3) in vec3 vertexColor;
 		layout (location = 4) in vec3 vertexTangent;
+#ifdef SKINNING
 		layout (location = 5) in ivec4 vertexBoneIndices;
 		layout (location = 6) in vec4 vertexBoneWeights;
 		
 		const int MAX_BONE_INFLUENCE = 4;
 		uniform mat4 bindposes[100];
+#endif
 
 		out vec3 FragPos;
 		out vec3 Pos;
@@ -54,12 +56,16 @@ Pass 0
 		{
 			vec3 boneVertexPosition = vertexPosition;
 			vec3 boneVertexNormal = vertexNormal;
+			
+#ifdef SKINNING
 			for(int i=0; i<MAX_BONE_INFLUENCE; i++) {
 				int index = vertexBoneIndices[i];
 				if (index != 0) {
-					boneVertexPosition += (bindposes[index] * vec4(vertexPosition,1.0)).xyz * vertexBoneWeights[i];
+					boneVertexPosition += (bindposes[index] * vec4(vertexPosition, 1.0)).xyz * vertexBoneWeights[i];
+					boneVertexNormal += (bindposes[index] * vec4(vertexNormal, 0.0)).xyz * vertexBoneWeights[i];
 				}
 			}
+#endif
 
 		    /*
 		    * Position and Normal are in view space
@@ -71,9 +77,9 @@ Pass 0
 		    VertColor = vertexColor;
 
 			mat3 normalMatrix = transpose(inverse(mat3(matModel)));
-			VertNormal = normalize(normalMatrix * vertexNormal);
+			VertNormal = normalize(normalMatrix * boneVertexNormal);
 
-		    //vec3 n = normalize((matModel * vec4(vertexNormal, 0.0)).xyz);
+		    //vec3 n = normalize((matModel * vec4(boneVertexNormal, 0.0)).xyz);
 		    //vec3 t = normalize((matModel * vec4(vertexTangent, 0.0)).xyz);
 		    //t = normalize(t - dot(t, n) * n);
 		    
