@@ -30,8 +30,11 @@ Pass 0
 		layout (location = 2) in vec3 vertexNormal;
 		layout (location = 3) in vec3 vertexColor;
 		layout (location = 4) in vec3 vertexTangent;
-		//layout (location = 5) in ivec4 vertexBoneIndices;
-		//layout (location = 6) in vec4 vertexBoneWeights;
+		layout (location = 5) in ivec4 vertexBoneIndices;
+		layout (location = 6) in vec4 vertexBoneWeights;
+		
+		const int MAX_BONE_INFLUENCE = 4;
+		uniform mat4 bindposes[100];
 
 		out vec3 FragPos;
 		out vec3 Pos;
@@ -49,11 +52,20 @@ Pass 0
 
 		void main()
 		{
+			vec3 boneVertexPosition = vertexPosition;
+			vec3 boneVertexNormal = vertexNormal;
+			for(int i=0; i<MAX_BONE_INFLUENCE; i++) {
+				int index = vertexBoneIndices[i];
+				if (index != 0) {
+					boneVertexPosition += (bindposes[index] * vec4(vertexPosition,1.0)).xyz * vertexBoneWeights[i];
+				}
+			}
+
 		    /*
 		    * Position and Normal are in view space
 		    */
-		 	vec4 viewPos = matView * matModel * vec4(vertexPosition, 1.0);
-		    Pos = (matModel * vec4(vertexPosition, 1.0)).xyz;
+		 	vec4 viewPos = matView * matModel * vec4(boneVertexPosition, 1.0);
+		    Pos = (matModel * vec4(boneVertexPosition, 1.0)).xyz;
 		    FragPos = viewPos.xyz; 
 		    TexCoords = vertexTexCoord;
 		    VertColor = vertexColor;
@@ -68,8 +80,8 @@ Pass 0
 		    //vec3 bitangent = cross(n, t);
 		    //TBN = mat3(t, bitangent, n);
 		
-		    PosProj = mvp * vec4(vertexPosition, 1.0);
-		    PosProjOld = mvpOld * vec4(vertexPosition, 1.0);
+		    PosProj = mvp * vec4(boneVertexPosition, 1.0);
+		    PosProjOld = mvpOld * vec4(boneVertexPosition, 1.0);
 		
 		    gl_Position = PosProj;
 		}
