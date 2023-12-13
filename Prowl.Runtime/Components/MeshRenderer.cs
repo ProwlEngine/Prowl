@@ -17,14 +17,11 @@ public class MeshRenderer : MonoBehaviour, ISerializable
     {
         if (Mesh.IsAvailable && Material.IsAvailable)
         {
+            Material.Res!.SetColor("_MainColor", mainColor);
+            Material.Res!.SetInt("ObjectID", InstanceID);
             for (int i = 0; i < Material.Res!.PassCount; i++)
             {
-                Material.Res!.SetColor("_MainColor", mainColor);
                 Material.Res!.SetPass(i);
-
-                Material.Res!.SetInt("ObjectID", InstanceID);
-
-#warning TODO: Previous matrix needs to support LargeWorldCamera
                 Graphics.DrawMeshNow(Mesh.Res!, GameObject.GlobalCamRelative, Material.Res!, GameObject.GlobalCamPreviousRelative);
                 Material.Res!.EndPass();
             }
