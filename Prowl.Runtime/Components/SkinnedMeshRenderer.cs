@@ -34,12 +34,21 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
                 GetNodes(c, ref bones);
     }
 
+    Matrix4x4[] GetBoneMatrices()
+    {
+        Matrix4x4[] matrices = new Matrix4x4[bones.Length];
+        for (int i = 0; i < bones.Length; i++)
+            matrices[i] = bones[i].Local;
+        return matrices;
+    }
+
     public void OnRenderObject()
     {
         if (Mesh.IsAvailable && Material.IsAvailable)
         {
             Material.Res!.EnableKeyword("SKINNED");
             Material.Res!.SetInt("ObjectID", InstanceID);
+            Material.Res!.SetMatrices("bindposes", GetBoneMatrices());
             for (int i = 0; i < Material.Res!.PassCount; i++)
             {
                 Material.Res!.SetPass(i);
