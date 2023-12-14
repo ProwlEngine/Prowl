@@ -221,13 +221,20 @@ namespace Prowl.Editor.Assets
                                 if (!bone.HasVertexWeights) continue;
 
                                 int nameIndex = nameToIndex[bone.Name];
+
                                 var weight0 = bone.VertexWeights[0];
-                                var weight1 = bone.VertexWeights[1];
-                                var weight2 = bone.VertexWeights[2];
-                                var weight3 = bone.VertexWeights[3];
                                 vertices[weight0.VertexID] = vertices[weight0.VertexID] with { BoneIndex0 = (byte)nameIndex, Weight0 = weight0.Weight };
+                                if (bone.VertexWeightCount == 1) continue;
+
+                                var weight1 = bone.VertexWeights[1];
                                 vertices[weight1.VertexID] = vertices[weight1.VertexID] with { BoneIndex1 = (byte)nameIndex, Weight1 = weight1.Weight };
+                                if (bone.VertexWeightCount == 2) continue;
+
+                                var weight2 = bone.VertexWeights[2];
                                 vertices[weight2.VertexID] = vertices[weight2.VertexID] with { BoneIndex2 = (byte)nameIndex, Weight2 = weight2.Weight };
+                                if (bone.VertexWeightCount == 3) continue;
+
+                                var weight3 = bone.VertexWeights[3];
                                 vertices[weight3.VertexID] = vertices[weight3.VertexID] with { BoneIndex3 = (byte)nameIndex, Weight3 = weight3.Weight };
                             }
 
@@ -275,7 +282,6 @@ namespace Prowl.Editor.Assets
                                 mr.Mesh = uMeshAndMat.Mesh;
                                 mr.Material = uMeshAndMat.Material;
                                 mr.Root = GOs[0].Item1;
-                                mr.ProcessBoneTree();
                             }
                             else
                             {
