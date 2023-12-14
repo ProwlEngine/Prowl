@@ -52,7 +52,7 @@ namespace Prowl.Runtime
         public void SetInt(string name, int value) => ints[name] = value;
         public int GetInt(string name) => ints.ContainsKey(name) ? ints[name] : 0;
         public void SetMatrix(string name, Matrix4x4 value) => matrices[name] = value;
-        public void SetMatrices(string name, Matrix4x4[] value) => matrixArr[name] = value.Cast<System.Numerics.Matrix4x4>().ToArray();
+        public void SetMatrices(string name, System.Numerics.Matrix4x4[] value) => matrixArr[name] = value.Cast<System.Numerics.Matrix4x4>().ToArray();
         public Matrix4x4 GetMatrix(string name) => matrices.ContainsKey(name) ? matrices[name] : Matrix4x4.Identity;
         public void SetTexture(string name, Texture2D value) => textures[name] = value;
         public void SetTexture(string name, AssetRef<Texture2D> value) => textures[name] = value;
@@ -270,7 +270,7 @@ namespace Prowl.Runtime
         public void SetFloat(string name, float value) => PropertyBlock.SetFloat(name, value);
         public void SetInt(string name, int value) => PropertyBlock.SetInt(name, value);
         public void SetMatrix(string name, Matrix4x4 value) => PropertyBlock.SetMatrix(name, value);
-        public void SetMatrices(string name, Matrix4x4[] value) => PropertyBlock.SetMatrices(name, value);
+        public void SetMatrices(string name, System.Numerics.Matrix4x4[] value) => PropertyBlock.SetMatrices(name, value);
         public void SetTexture(string name, Texture2D value) => PropertyBlock.SetTexture(name, value);
         public void SetTexture(string name, AssetRef<Texture2D> value) => PropertyBlock.SetTexture(name, value);
         public void SetTexture(string name, Raylib_cs.Texture2D value) => PropertyBlock.SetTexture(name, new Texture2D(value));

@@ -34,11 +34,12 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
                 GetNodes(c, ref bones);
     }
 
-    Matrix4x4[] GetBoneMatrices()
+    System.Numerics.Matrix4x4[] GetBoneMatrices()
     {
-        Matrix4x4[] matrices = new Matrix4x4[bones.Length];
+        ProcessBoneTree();
+        System.Numerics.Matrix4x4[] matrices = new System.Numerics.Matrix4x4[bones.Length];
         for (int i = 0; i < bones.Length; i++)
-            matrices[i] = bones[i].Local;
+            matrices[i] = bones[i].Local.ToFloat();
         return matrices;
     }
 
@@ -48,7 +49,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         {
             Material.Res!.EnableKeyword("SKINNED");
             Material.Res!.SetInt("ObjectID", InstanceID);
-            Material.Res!.SetMatrices("bindposes", GetBoneMatrices());
+            //Material.Res!.SetMatrices("bindposes", GetBoneMatrices());
             for (int i = 0; i < Material.Res!.PassCount; i++)
             {
                 Material.Res!.SetPass(i);
@@ -61,7 +62,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
 
     public void OnRenderObjectDepth()
     {
-        if (Mesh.IsAvailable)
+        if (Mesh.IsAvailable && Material.IsAvailable)
         {
             var mvp = Matrix4x4.Identity;
             mvp = Matrix4x4.Multiply(mvp, GameObject.GlobalCamRelative);
