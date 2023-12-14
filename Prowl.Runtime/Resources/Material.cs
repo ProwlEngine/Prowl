@@ -15,6 +15,7 @@ namespace Prowl.Runtime
         [SerializeField] private Dictionary<string, float> floats = new();
         [SerializeField] private Dictionary<string, int> ints = new();
         [SerializeField] private Dictionary<string, Matrix4x4> matrices = new();
+        [SerializeField] private Dictionary<string, System.Numerics.Matrix4x4[]> matrixArr = new();
         [SerializeField] private Dictionary<string, AssetRef<Texture2D>> textures = new();
 
         private Dictionary<string, int> cachedUniformLocs = new();
@@ -51,6 +52,7 @@ namespace Prowl.Runtime
         public void SetInt(string name, int value) => ints[name] = value;
         public int GetInt(string name) => ints.ContainsKey(name) ? ints[name] : 0;
         public void SetMatrix(string name, Matrix4x4 value) => matrices[name] = value;
+        public void SetMatrices(string name, Matrix4x4[] value) => matrixArr[name] = value.Cast<System.Numerics.Matrix4x4>().ToArray();
         public Matrix4x4 GetMatrix(string name) => matrices.ContainsKey(name) ? matrices[name] : Matrix4x4.Identity;
         public void SetTexture(string name, Texture2D value) => textures[name] = value;
         public void SetTexture(string name, AssetRef<Texture2D> value) => textures[name] = value;
@@ -115,6 +117,11 @@ namespace Prowl.Runtime
             foreach (var item in mpb.matrices)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
                     Raylib.SetShaderValueMatrix(shader, loc, item.Value.ToFloat());
+
+            foreach (var item in mpb.matrixArr)
+                for (int i = 0; i < item.Value.Length; i++)
+                    if (TryGetLoc(shader, item.Key + $"[{i}]", mpb, out var loc))
+                        Raylib.SetShaderValueMatrix(shader, loc, item.Value[i]);
 
             int texSlot = 0;
             var keysToUpdate = new List<(string, AssetRef<Texture2D>)>();
@@ -263,6 +270,7 @@ namespace Prowl.Runtime
         public void SetFloat(string name, float value) => PropertyBlock.SetFloat(name, value);
         public void SetInt(string name, int value) => PropertyBlock.SetInt(name, value);
         public void SetMatrix(string name, Matrix4x4 value) => PropertyBlock.SetMatrix(name, value);
+        public void SetMatrices(string name, Matrix4x4[] value) => PropertyBlock.SetMatrices(name, value);
         public void SetTexture(string name, Texture2D value) => PropertyBlock.SetTexture(name, value);
         public void SetTexture(string name, AssetRef<Texture2D> value) => PropertyBlock.SetTexture(name, value);
         public void SetTexture(string name, Raylib_cs.Texture2D value) => PropertyBlock.SetTexture(name, new Texture2D(value));
