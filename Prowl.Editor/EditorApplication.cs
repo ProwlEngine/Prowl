@@ -53,7 +53,7 @@ public unsafe class EditorApplication : Application {
     {
         if (EditorConfig.hotkeys.TryGetValue(name, out var hotkey))
         {
-            return Raylib.IsKeyDown(hotkey.Key) && Raylib.IsKeyDown(KeyboardKey.KEY_LEFT_CONTROL) == hotkey.Ctrl && Raylib.IsKeyDown(KeyboardKey.KEY_LEFT_ALT) == hotkey.Alt && Raylib.IsKeyDown(KeyboardKey.KEY_LEFT_SHIFT) == hotkey.Shift;
+            return Raylib.IsKeyPressed(hotkey.Key) && Raylib.IsKeyDown(KeyboardKey.KEY_LEFT_CONTROL) == hotkey.Ctrl && Raylib.IsKeyDown(KeyboardKey.KEY_LEFT_ALT) == hotkey.Alt && Raylib.IsKeyDown(KeyboardKey.KEY_LEFT_SHIFT) == hotkey.Shift;
         }
         else
         {
