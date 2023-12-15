@@ -549,9 +549,17 @@ namespace Prowl.Runtime.Assets
                     Debug.LogError($"Failed to import {serializedAssetPath.FullName}!", true);
                     throw new Exception($"Failed to import {serializedAssetPath.FullName}");
                 }
-            var serializedAsset = SerializedAsset.FromSerializedAsset(serializedAssetPath.FullName);
-            guidToAssetData[assetGuid] = serializedAsset;
-            return serializedAsset;
+            try
+            {
+                var serializedAsset = SerializedAsset.FromSerializedAsset(serializedAssetPath.FullName);
+                guidToAssetData[assetGuid] = serializedAsset;
+                return serializedAsset;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Failed to load serialized asset {serializedAssetPath.FullName}!", true);
+                return null; // Failed file might be in use?
+            }
         }
 
         public static string? GetRelativePath(string fullFilePath)
