@@ -47,6 +47,7 @@ public abstract class MonoBehaviour : EngineObject
     public GameObject GameObject => _go;
 
     private bool executeAlways = false;
+    private bool hasCached = false;
 
     public string Tag => _go.tag;
 
@@ -123,53 +124,59 @@ public abstract class MonoBehaviour : EngineObject
 
     #region Behaviour
 
-    internal void Internal_Awake()
+    internal bool Internal_Awake()
     {
-        List<string> methodNames = new List<string>()
+        if (!hasCached)
         {
-            "OnEnable",
-            "OnDisable",
-            "Awake",
-            "Start",
-            "FixedUpdate",
-            "Update",
-            "LateUpdate",
-            "OnDestroy",
-            "OnRenderObject",
-            "OnRenderObjectDepth",
-            "DrawGizmos",
-            "DrawGizmosSelected",
-            "OnSceneLoaded",
-        };
+            hasCached = true;
+            List<string> methodNames = new List<string>()
+            {
+                "OnEnable",
+                "OnDisable",
+                "Awake",
+                "Start",
+                "FixedUpdate",
+                "Update",
+                "LateUpdate",
+                "OnDestroy",
+                "OnRenderObject",
+                "OnRenderObjectDepth",
+                "DrawGizmos",
+                "DrawGizmosSelected",
+                "OnSceneLoaded",
+            };
 
-        MethodInfo[] retMethods = new MethodInfo[methodNames.Count];
-        foreach (var method in GetType().GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy))
-        {
-            var ind = methodNames.IndexOf(method.Name);
-            if (ind != -1) retMethods[ind] = method;
+            MethodInfo[] retMethods = new MethodInfo[methodNames.Count];
+            foreach (var method in GetType().GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy))
+            {
+                var ind = methodNames.IndexOf(method.Name);
+                if (ind != -1) retMethods[ind] = method;
+            }
+
+            onEnable = retMethods[0];
+            onDisable = retMethods[1];
+            awake = retMethods[2];
+            start = retMethods[3];
+            fixedUpdate = retMethods[4];
+            update = retMethods[5];
+            lateUpdate = retMethods[6];
+            onDestroy = retMethods[7];
+            onRenderObject = retMethods[8];
+            onRenderObjectDepth = retMethods[9];
+            drawGizmos = retMethods[10];
+            drawGizmosSelected = retMethods[11];
+            onSceneLoaded = retMethods[12];
+
+            executeAlways = this.GetType().GetCustomAttribute<ExecuteAlwaysAttribute>() != null;
         }
-
-        onEnable = retMethods[0];
-        onDisable = retMethods[1];
-        awake = retMethods[2];
-        start = retMethods[3];
-        fixedUpdate = retMethods[4];
-        update = retMethods[5];
-        lateUpdate = retMethods[6];
-        onDestroy = retMethods[7];
-        onRenderObject = retMethods[8];
-        onRenderObjectDepth = retMethods[9];
-        drawGizmos = retMethods[10];
-        drawGizmosSelected = retMethods[10];
-        onSceneLoaded = retMethods[11];
-
-        executeAlways = this.GetType().GetCustomAttribute<ExecuteAlwaysAttribute>() != null;
 
         if (!PauseLogic || executeAlways)
         {
             awake?.Invoke(this, []);
             onEnable?.Invoke(this, []);
+            return true;
         }
+        return false;
     }
 
     internal void Internal_OnEnabled()

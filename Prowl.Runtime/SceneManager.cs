@@ -80,10 +80,10 @@ public static class SceneManager
                 {
                     try
                     {
-                        comp.HasStarted = true;
 #warning TODO: Awake should be called immediately after the creation of the component/gameobject not in the first frame
-                        comp.Internal_Awake();
-                        comp.Internal_Start();
+                        comp.HasStarted |= comp.Internal_Awake();
+                        if(comp.HasStarted)
+                            comp.Internal_Start();
                     }
                     catch (Exception e)
                     {
