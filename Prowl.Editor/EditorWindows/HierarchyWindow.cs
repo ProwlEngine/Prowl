@@ -363,7 +363,7 @@ public class HierarchyWindow : EditorWindow {
             var serialized = TagSerializer.Serialize(go);
             var deserialized = TagSerializer.Deserialize<GameObject>(serialized);
             deserialized.SetParent(go.Parent);
-            Selection.AddSelect(deserialized);
+                Selection.Select(deserialized);
         });
     }
 }
