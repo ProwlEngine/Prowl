@@ -17,6 +17,7 @@ namespace Prowl.Runtime
         public static void Circle(Vector3 center, float radiusInPixels, Color color, float thickness = 1f) => gizmos.Add((new CircleGizmo(center, radiusInPixels, color, thickness), Matrix));
 
         public static void CircleFilled(Vector3 center, float radiusInPixels, Color color) => gizmos.Add((new CircleFilledGizmo(center, radiusInPixels, color), Matrix));
+        public static void Cube(Color color, float thickness = 1f) => gizmos.Add((new CubeGizmo(color, thickness), Matrix));
 
         public static void Triangle(Vector3 pointA, Vector3 pointB, Vector3 pointC, Color color, float thickness = 1f) => gizmos.Add((new TriangleGizmo(pointA, pointB, pointC, color, thickness), Matrix));
 
@@ -247,6 +248,39 @@ namespace Prowl.Runtime
             new Circle3DGizmo(color, thickness).Render(drawList, mvp, m);
             m = Matrix4x4.CreateRotationY(MathF.PI / 2f) * m;
             new Circle3DGizmo(color, thickness).Render(drawList, mvp, m);
+        }
+    }
+
+    public class CubeGizmo(Vector4 color, float thickness = 1f) : Gizmo
+    {
+        public override void Render(ImDrawListPtr drawList, Matrix4x4 mvp, Matrix4x4 m)
+        {
+            base.matrix = m;
+            base.mvp = mvp;
+
+            // Draw cube lines
+            Vector3[] points = new Vector3[8];
+            points[0] = new Vector3(-0.5f, -0.5f, -0.5f);
+            points[1] = new Vector3(0.5f, -0.5f, -0.5f);
+            points[2] = new Vector3(0.5f, 0.5f, -0.5f);
+            points[3] = new Vector3(-0.5f, 0.5f, -0.5f);
+            points[4] = new Vector3(-0.5f, -0.5f, 0.5f);
+            points[5] = new Vector3(0.5f, -0.5f, 0.5f);
+            points[6] = new Vector3(0.5f, 0.5f, 0.5f);
+            points[7] = new Vector3(-0.5f, 0.5f, 0.5f);
+
+            drawList.AddLine(Pos(points[0]), Pos(points[1]), ImGui.GetColorU32(color), thickness);
+            drawList.AddLine(Pos(points[1]), Pos(points[2]), ImGui.GetColorU32(color), thickness);
+            drawList.AddLine(Pos(points[2]), Pos(points[3]), ImGui.GetColorU32(color), thickness);
+            drawList.AddLine(Pos(points[3]), Pos(points[0]), ImGui.GetColorU32(color), thickness);
+            drawList.AddLine(Pos(points[4]), Pos(points[5]), ImGui.GetColorU32(color), thickness);
+            drawList.AddLine(Pos(points[5]), Pos(points[6]), ImGui.GetColorU32(color), thickness);
+            drawList.AddLine(Pos(points[6]), Pos(points[7]), ImGui.GetColorU32(color), thickness);
+            drawList.AddLine(Pos(points[7]), Pos(points[4]), ImGui.GetColorU32(color), thickness);
+            drawList.AddLine(Pos(points[0]), Pos(points[4]), ImGui.GetColorU32(color), thickness);
+            drawList.AddLine(Pos(points[1]), Pos(points[5]), ImGui.GetColorU32(color), thickness);
+            drawList.AddLine(Pos(points[2]), Pos(points[6]), ImGui.GetColorU32(color), thickness);
+            drawList.AddLine(Pos(points[3]), Pos(points[7]), ImGui.GetColorU32(color), thickness);
         }
     }
 
