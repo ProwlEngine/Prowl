@@ -9,6 +9,8 @@ Properties
 	_SurfaceTex("Surface Map x:AO y:Rough z:Metal", TEXTURE2D)
 	_OcclusionTex("Occlusion Map", TEXTURE2D)
 
+	_EmissiveColor("Emissive Color", COLOR)
+	_EmissionIntensity("Emissive Intensity", FLOAT)
 	_MainColor("Main Color", COLOR)
 
 	//_ExampleName("Integer display name", INTEGER)
@@ -115,13 +117,14 @@ Pass 0
 		uniform int ObjectID;
 
 		uniform mat4 matView;
-		uniform float emissionIntensity = 1.0;
 		
 		uniform sampler2D _MainTex; // diffuse
 		uniform sampler2D _NormalTex; // Normal
 		uniform sampler2D _SurfaceTex; // AO, Roughness, Metallic
 		uniform sampler2D _EmissionTex; // Emissive
+		uniform vec4 _EmissiveColor; // Emissive color
 		uniform vec4 _MainColor; // color
+		uniform float _EmissionIntensity;
 
 		vec3 getNormalFromMap()
 		{
@@ -162,7 +165,7 @@ Pass 0
 			gNormalMetallic = vec4((matView * vec4(getNormalFromMap(), 0)).rgb, surface.b);
 			
 			// Emission
-			gEmission.rgb = texture(_EmissionTex, TexCoords).rgb * emissionIntensity;
+			gEmission.rgb = (texture(_EmissionTex, TexCoords).rgb + Emissive) * emissionIntensity;
 
 			// Velocity
 			vec2 a = (PosProj.xy / PosProj.w) * 0.5 + 0.5;
