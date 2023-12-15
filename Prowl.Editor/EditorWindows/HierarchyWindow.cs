@@ -340,6 +340,14 @@ public class HierarchyWindow : EditorWindow {
             ImGui.Separator();
             if (ImGui.MenuItem("Delete", "Del"))
                 entity.Destroy();
+            if (Selection.Count > 0 && ImGui.MenuItem("Delete All"))
+            {
+                Selection.Foreach<GameObject>((go) =>
+                {
+                    go.Destroy();
+                });
+                Selection.Clear();
+            }
 
             DrawContextMenu(entity);
 
