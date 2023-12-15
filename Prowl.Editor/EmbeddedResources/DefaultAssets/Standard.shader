@@ -5,6 +5,7 @@ Properties
 	// Material property declarations go here
 	_MainTex("Albedo Map", TEXTURE2D)
 	_NormalTex("Normal Map", TEXTURE2D)
+	_EmissionTex("Emissive Map", TEXTURE2D)
 	_SurfaceTex("Surface Map x:AO y:Rough z:Metal", TEXTURE2D)
 	_OcclusionTex("Occlusion Map", TEXTURE2D)
 
