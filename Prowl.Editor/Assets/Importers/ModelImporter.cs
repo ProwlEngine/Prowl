@@ -87,6 +87,18 @@ namespace Prowl.Editor.Assets
                         else
                             mat.SetColor("_MainColor", Color.white);
 
+                        // Emissive Color
+                        if (m.HasColorEmissive)
+                        {
+                            mat.SetFloat("_EmissionIntensity", 1f);
+                            mat.SetColor("_EmissiveColor", new Color(m.ColorEmissive.R, m.ColorEmissive.G, m.ColorEmissive.B, m.ColorEmissive.A));
+                        }
+                        else {
+
+                            mat.SetFloat("_EmissionIntensity", 0f);
+                            mat.SetColor("_EmissiveColor", Color.black);
+                        }
+
                         // Texture
                         if (m.HasTextureDiffuse)
                         {
@@ -132,7 +144,10 @@ namespace Prowl.Editor.Assets
                             var file = new FileInfo(Path.Combine(parentDir.FullName, m.TextureEmissive.FilePath));
                             name ??= Path.GetFileNameWithoutExtension(file.Name);
                             if (file.Exists)
+                            {
+                                mat.SetFloat("_EmissionIntensity", 1f);
                                 LoadTextureIntoMesh("_EmissionTex", ctx, file, mat);
+                            }
                             else
                                 mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_emission.png")));
                         }
