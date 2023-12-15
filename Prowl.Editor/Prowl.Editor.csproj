@@ -14,6 +14,7 @@
       <None Remove="EmbeddedResources\CSharpIcon.png" />
       <None Remove="EmbeddedResources\DefaultAssets\AcesTonemapper.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\AmbientLight.shader" />
+      <None Remove="EmbeddedResources\DefaultAssets\Bloom.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Cube.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\Cylinder.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\DefaultRenderPipeline.scriptobj" />
@@ -69,6 +70,9 @@
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_surface.png" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_white.png" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\AmbientLight.shader">
+        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      </EmbeddedResource>
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Bloom.shader">
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       </EmbeddedResource>
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Utilities.glsl" />

@@ -161,6 +161,62 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         }
     }
 
+    public class BloomNode : RenderPassNode
+    {
+        public override string Title => "Bloom Pass";
+        public override float Width => 125;
+
+        [Input(ShowBackingValue.Never), SerializeIgnore] public RenderTexture RenderTexture;
+
+        public override int Downsample => 1;
+        public override int RTCount => 2;
+
+        public float Radius = 1f;
+        public float Threshold = 1f;
+        public int Passes = 10;
+
+        Material Mat;
+
+        public override void Render()
+        {
+            var rt = GetInputValue<RenderTexture>("RenderTexture");
+            if (rt == null) return;
+
+            Mat ??= new Material(Shader.Find("Defaults/Bloom.shader"));
+
+            RenderTexture[] rts = [renderRTs[0], renderRTs[1]];
+
+            Mat.SetFloat("u_Alpha", 1.0f);
+            Mat.SetTexture("gColor", rt.InternalTextures[0]);
+            Mat.SetFloat("u_Radius", 1.5f);
+            Mat.SetFloat("u_Threshold", Math.Clamp(Threshold, 0.0f, 8f));
+            Graphics.Blit(renderRTs[0], Mat, 0, true);
+            Graphics.Blit(renderRTs[1], Mat, 0, true);
+            Mat.SetFloat("u_Threshold", 0.0f);
+
+            Raylib.BeginBlendMode(BlendMode.BLEND_ALPHA);
+            for (int i = 1; i <= Passes; i++)
+            {
+                Mat.SetFloat("u_Alpha", 1.0f);
+                Mat.SetTexture("gColor", renderRTs[0].InternalTextures[0]);
+                Mat.SetFloat("u_Radius", Math.Clamp(Radius+i, 0.0f, 32f));
+                Graphics.Blit(renderRTs[1], Mat, 0, false);
+
+                var tmp = renderRTs[0];
+                renderRTs[0] = renderRTs[1];
+                renderRTs[1] = tmp;
+            }
+            Raylib.EndBlendMode();
+
+            // Final pass
+            Graphics.Blit(renderRTs[0], new Texture2D(rt.InternalTextures[0]), false);
+
+
+
+            //renderRT = rts[currentRenderTextureIndex];
+        }
+    }
+
     public class AcesTonemappingNode : RenderPassNode
     {
         public override string Title => "Aces Tonemapping Pass";

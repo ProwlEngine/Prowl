@@ -16,6 +16,7 @@ namespace Prowl.Runtime
             typeof(ProceduralSkyboxNode),
             typeof(ScreenSpaceReflectionNode),
             typeof(DepthOfFieldNode),
+            typeof(BloomNode),
             typeof(AcesTonemappingNode),
             typeof(OutputNode),
             ];
