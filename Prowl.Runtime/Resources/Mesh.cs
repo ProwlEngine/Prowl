@@ -101,7 +101,6 @@ namespace Prowl.Runtime
             mesh.indices = new ushort[triangleCount * 3];
 
             int vertexIndex = 0;
-            int texIndex = 0;
             int triangleIndex = 0;
 
             // Generate vertices and normals
@@ -122,10 +121,7 @@ namespace Prowl.Runtime
                         Normal = new Vector3(x, y, z),
                         TexCoord = new Vector2((float)j / slices, (float)i / rings)
                     };
-                    mesh.vertices[vertexIndex] = v;
-
-                    vertexIndex += 3;
-                    texIndex += 2;
+                    mesh.vertices[vertexIndex++] = v;
                 }
             }
 
