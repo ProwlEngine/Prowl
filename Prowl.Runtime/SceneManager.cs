@@ -61,9 +61,9 @@ public static class SceneManager
 
     public static void Clear()
     {
-        foreach (var go in _gameObjects)
-            if (!_dontDestroyOnLoad.Contains(go.InstanceID))
-                go.Destroy();
+        for (int i = 0; i < _gameObjects.Count; i++)
+            if (!_dontDestroyOnLoad.Contains(_gameObjects[i].InstanceID))
+                _gameObjects[i].Destroy();
         EngineObject.HandleDestroyed();
         _gameObjects.Clear();
         MainScene = new();
@@ -73,8 +73,8 @@ public static class SceneManager
     {
         EngineObject.HandleDestroyed();
 
-        foreach (var go in _gameObjects)
-            foreach (var comp in go.GetComponents<MonoBehaviour>())
+        for (int i=0; i< _gameObjects.Count; i++)
+            foreach (var comp in _gameObjects[i].GetComponents<MonoBehaviour>())
             {
                 if (!comp.HasStarted)
                 {
@@ -87,7 +87,7 @@ public static class SceneManager
                     }
                     catch (Exception e)
                     {
-                        Debug.LogError($"Error in {comp.GetType().Name}.Start of {go.Name}: {e.Message} \n StackTrace: {e.StackTrace}");
+                        Debug.LogError($"Error in {comp.GetType().Name}.Start of {_gameObjects[i].Name}: {e.Message} \n StackTrace: {e.StackTrace}");
                     }
                 }
 
@@ -98,12 +98,12 @@ public static class SceneManager
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"Error in {comp.GetType().Name}.Update of {go.Name}: {e.Message} \n StackTrace: {e.StackTrace}");
+                    Debug.LogError($"Error in {comp.GetType().Name}.Update of {_gameObjects[i].Name}: {e.Message} \n StackTrace: {e.StackTrace}");
                 }
             }
 
-        foreach (var go in _gameObjects)
-            foreach (var comp in go.GetComponents<MonoBehaviour>())
+        for (int i = 0; i < _gameObjects.Count; i++)
+            foreach (var comp in _gameObjects[i].GetComponents<MonoBehaviour>())
             {
                 try
                 {
@@ -111,12 +111,12 @@ public static class SceneManager
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"Error in {comp.GetType().Name}.LateUpdate of {go.Name}: {e.Message} \n StackTrace: {e.StackTrace}");
+                    Debug.LogError($"Error in {comp.GetType().Name}.LateUpdate of {_gameObjects[i].Name}: {e.Message} \n StackTrace: {e.StackTrace}");
                 }
             }
 
-        foreach (var go in _gameObjects)
-            foreach (var comp in go.GetComponents<MonoBehaviour>())
+        for (int i = 0; i < _gameObjects.Count; i++)
+            foreach (var comp in _gameObjects[i].GetComponents<MonoBehaviour>())
             {
                 try
                 {
@@ -124,14 +124,15 @@ public static class SceneManager
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"Error in {comp.GetType().Name}.UpdateEndOfFrameCoroutines of {go.Name}: {e.Message} \n StackTrace: {e.StackTrace}");
+                    Debug.LogError($"Error in {comp.GetType().Name}.UpdateEndOfFrameCoroutines of {_gameObjects[i].Name}: {e.Message} \n StackTrace: {e.StackTrace}");
                 }
             }
     }
 
-    public static void PhysicsUpdate() {
-        foreach (var go in _gameObjects)
-            foreach (var comp in go.GetComponents<MonoBehaviour>())
+    public static void PhysicsUpdate()
+    {
+        for (int i = 0; i < _gameObjects.Count; i++)
+            foreach (var comp in _gameObjects[i].GetComponents<MonoBehaviour>())
             {
                 try
                 {
@@ -139,7 +140,7 @@ public static class SceneManager
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"Error in {comp.GetType().Name}.FixedUpdate of {go.Name}: {e.Message} \n StackTrace: {e.StackTrace}");
+                    Debug.LogError($"Error in {comp.GetType().Name}.FixedUpdate of {_gameObjects[i].Name}: {e.Message} \n StackTrace: {e.StackTrace}");
                 }
             }
     }
@@ -157,8 +158,8 @@ public static class SceneManager
         Clear();
         MainScene = scene;
         MainScene.InstantiateScene();
-        foreach (var go in _gameObjects)
-            foreach (var comp in go.GetComponents<MonoBehaviour>())
+        for (int i = 0; i < _gameObjects.Count; i++)
+            foreach (var comp in _gameObjects[i].GetComponents<MonoBehaviour>())
                 comp.Internal_OnSceneLoaded();
     }
 
@@ -168,8 +169,8 @@ public static class SceneManager
         Clear();
         MainScene = scene.Res;
         MainScene.InstantiateScene();
-        foreach (var go in _gameObjects)
-            foreach (var comp in go.GetComponents<MonoBehaviour>())
+        for (int i = 0; i < _gameObjects.Count; i++)
+            foreach (var comp in _gameObjects[i].GetComponents<MonoBehaviour>())
                 comp.Internal_OnSceneLoaded();
     }
 
