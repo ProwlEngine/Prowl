@@ -141,5 +141,25 @@ namespace Prowl.Runtime
             Rlgl.rlEnableBackfaceCulling();
         }
 
+        /// <summary>
+        /// Draws texture into a RenderTexture Additively
+        /// </summary>
+        public static void Blit(RenderTexture renderTexture, Texture2D texture, bool clear = true)
+        {
+            Rlgl.rlDisableDepthMask();
+            Rlgl.rlDisableDepthTest();
+            Rlgl.rlDisableBackfaceCulling();
+            renderTexture.Begin();
+            if (clear)
+                Raylib.ClearBackground(new Color(0, 0, 0, 0));
+            Raylib.BeginBlendMode(BlendMode.BLEND_ADDITIVE);
+            Raylib.DrawTexturePro(texture.InternalTexture, new Rectangle(0, 0, texture.Width, -texture.Height), new Rectangle(0, 0, renderTexture.Width, renderTexture.Height), new Vector2(0, 0), 0, Color.white);
+            Raylib.EndBlendMode();
+            renderTexture.End();
+            Rlgl.rlEnableDepthMask();
+            Rlgl.rlEnableDepthTest();
+            Rlgl.rlEnableBackfaceCulling();
+        }
+
     }
 }
