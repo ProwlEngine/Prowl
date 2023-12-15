@@ -73,6 +73,7 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
         - HDR with Aces Fitted Tonemapping
         - Bokeh Depth of Field
         - Screen Space Reflections
+        - Kawase Multi-Pass Bloom
     - Adjustable Render Resolutions per camera
     - Dedicated Shadow Pass for Shaders
     - Procedural Skybox with Skybox-Blended Fog
@@ -112,17 +113,17 @@ Getting Prowl up and running is super easy!
   - [ ] iOS - Unknown
   - [ ] Web - Unknown
 - [ ] VR Support
-- [ ] BepuPhysics v2
+- [ ] BepuPhysics v2 - In Development Now
 - [ ] Navmesh and AI Agents
 - [ ] Networking Solution
 
 ### Rendering
-- [ ] SSAO, TAA, Bloom, Screen-Space Decals, etc.
+- [ ] SSAO, TAA, Screen-Space Decals, etc.
 - [ ] Transparency
 - [ ] Realtime GI
 - [ ] Lightmaps and Light Probes
 - [ ] Cascaded shadow mapping
-- [ ] Skinned Mesh Rendering & Animations
+- [ ] Skinned Mesh Rendering & Animations - In Development Now
 - [ ] Particle System
 - [ ] Terrain Engine
 
