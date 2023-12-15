@@ -165,7 +165,7 @@ Pass 0
 			gNormalMetallic = vec4((matView * vec4(getNormalFromMap(), 0)).rgb, surface.b);
 			
 			// Emission
-			gEmission.rgb = (texture(_EmissionTex, TexCoords).rgb + Emissive) * emissionIntensity;
+			gEmission.rgb = (texture(_EmissionTex, TexCoords).rgb + _EmissiveColor.rgb) * _EmissionIntensity;
 
 			// Velocity
 			vec2 a = (PosProj.xy / PosProj.w) * 0.5 + 0.5;
