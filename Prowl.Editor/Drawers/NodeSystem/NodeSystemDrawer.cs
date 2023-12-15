@@ -70,7 +70,12 @@ namespace Prowl.Editor.Drawers.NodeSystem
                 }
                 else
                 {
-                    node.position = ImNodes.GetNodeGridSpacePos(node.InstanceID);
+                    var newPos = ImNodes.GetNodeGridSpacePos(node.InstanceID);
+                    if (newPos != node.position.ToFloat())
+                    {
+                        changed = true;
+                        node.position = newPos;
+                    }
                 }
             }
 
