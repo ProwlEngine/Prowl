@@ -40,6 +40,7 @@
     </ItemGroup>
     
     <ItemGroup>
+      <PackageReference Include="BepuPhysics" Version="2.5.0-beta.17" />
       <PackageReference Include="HexaEngine.ImGui" Version="2.0.17" />
       <PackageReference Include="HexaEngine.ImGuizmo" Version="2.0.17" />
       <PackageReference Include="HexaEngine.ImNodes" Version="2.0.17" />

@@ -12,6 +12,8 @@
       <None Remove="EmbeddedResources\AudioIcon.png" />
       <None Remove="EmbeddedResources\Checkerboard.png" />
       <None Remove="EmbeddedResources\CSharpIcon.png" />
+      <None Remove="EmbeddedResources\DefaultAssets\1mcube.fbx" />
+      <None Remove="EmbeddedResources\DefaultAssets\1mcube.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\AcesTonemapper.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\AmbientLight.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Bloom.shader" />
@@ -60,6 +62,7 @@
       <EmbeddedResource Include="EmbeddedResources\AudioIcon.png" />
       <EmbeddedResource Include="EmbeddedResources\Checkerboard.png" />
       <EmbeddedResource Include="EmbeddedResources\CSharpIcon.png" />
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\1mcube.obj" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\AcesTonemapper.shader" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Cube.obj" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Cylinder.obj" />

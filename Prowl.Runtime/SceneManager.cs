@@ -66,6 +66,8 @@ public static class SceneManager
                 _gameObjects[i].Destroy();
         EngineObject.HandleDestroyed();
         _gameObjects.Clear();
+        Physics.Dispose();
+        Physics.Initialize();
         MainScene = new();
     }
 

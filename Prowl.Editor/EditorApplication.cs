@@ -89,9 +89,7 @@ public unsafe class EditorApplication : Application {
     protected override void Loop()
     {
         Stopwatch updateTimer = new();
-        Stopwatch physicsTimer = new();
         updateTimer.Start();
-        physicsTimer.Start();
 
         // Immediately start with pausing all components, since were in editor we dont want them running just yet
         MonoBehaviour.PauseLogic = true;
@@ -123,15 +121,11 @@ public unsafe class EditorApplication : Application {
                     Project.BuildProject();
 
                 isPlaying = PlayMode.Current != PlayMode.Mode.Editing;
+                isActivelyPlaying = PlayMode.Current == PlayMode.Mode.Playing;
 
                 SceneManager.Update();
-
-                float physicsTime = (float)physicsTimer.Elapsed.TotalSeconds;
-                if (physicsTime > Time.fixedDeltaTime)
-                {
-                    SceneManager.PhysicsUpdate();
-                    physicsTimer.Restart();
-                }
+                if(isActivelyPlaying)
+                    Physics.Update();
             }
 
             controller.Update(updateTime);
@@ -188,6 +182,7 @@ public unsafe class EditorApplication : Application {
                 Quit();
         }
 
+        Physics.Dispose();
     }
 
     public void CheckReloadingAssemblies()

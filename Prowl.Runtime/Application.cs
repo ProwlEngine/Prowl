@@ -14,6 +14,7 @@ public abstract class Application
 {
     public static bool isRunning { get; protected set; }
     public static bool isPlaying { get; protected set; } = false;
+    public static bool isActivelyPlaying { get; protected set; } = false;
     public static bool isEditor { get; protected set; } = false;
 
     public static IAssetProvider AssetProvider { get; set; }
@@ -47,6 +48,7 @@ public abstract class Application
         controller.Load(1280, 720);
 
         SceneManager.Initialize();
+        Physics.Initialize();
 
         AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
 
@@ -83,25 +85,18 @@ public abstract class Application
     protected virtual void Loop()
     {
         Stopwatch updateTimer = new();
-        Stopwatch physicsTimer = new();
         updateTimer.Start();
-        physicsTimer.Start();
 
         while (isRunning)
         {
             isPlaying = true; // Base application is not the editor, isplaying is always true
+            isActivelyPlaying = true; // Base application is not the editor, isActivelyPlaying is always true
 
             float updateTime = (float)updateTimer.Elapsed.TotalSeconds;
             Time.Update(updateTime);
             updateTimer.Restart();
             SceneManager.Update();
-
-            float physicsTime = (float)physicsTimer.Elapsed.TotalSeconds;
-            if (physicsTime > Time.fixedDeltaTime)
-            {
-                SceneManager.PhysicsUpdate();
-                physicsTimer.Restart();
-            }
+            Physics.Update();
 
             Raylib.BeginDrawing();
             Raylib.ClearBackground(Raylib_cs.Color.DARKGRAY);
@@ -115,6 +110,7 @@ public abstract class Application
                 Quit();
         }
 
+        Physics.Dispose();
     }
 
     public static void Quit()

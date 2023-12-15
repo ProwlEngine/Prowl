@@ -234,6 +234,7 @@ public class HierarchyWindow : EditorWindow {
             clone.Recalculate();
             Selection.Select(clone);
         }
+
         // Prefab from Assets
         if (DragnDrop.ReceiveAsset<Prefab>(out var prefab))
             Selection.Select(prefab.Res.Instantiate());
