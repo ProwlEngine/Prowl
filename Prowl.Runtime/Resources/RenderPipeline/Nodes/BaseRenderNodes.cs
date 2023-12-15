@@ -16,8 +16,11 @@ namespace Prowl.Runtime.Resources.RenderPipeline
 
         [Output, SerializeIgnore] public RenderTexture OutputRT;
         public bool Clear = true;
+        public virtual int Downsample { get; } = 1;
+        public virtual int RTCount { get; } = 1;
 
-        protected RenderTexture renderRT;
+        protected RenderTexture renderRT => renderRTs[0];
+        protected RenderTexture[] renderRTs;
         long lastRenderedFrame = -1;
         Camera lastRenderedCam = null;
 
@@ -29,11 +32,18 @@ namespace Prowl.Runtime.Resources.RenderPipeline
 
             var gbuffer = Camera.Current.gBuffer;
 
-            if (renderRT == null || (gbuffer.Width != renderRT.Width || gbuffer.Height != renderRT.Height))
+            int width = gbuffer.Width / Downsample;
+            int height = gbuffer.Height / Downsample;
+
+            if (renderRTs == null || (width != renderRT.Width || height != renderRT.Height))
             {
-                renderRT?.Dispose();
-                PixelFormat[] formats = [PixelFormat.PIXELFORMAT_UNCOMPRESSED_R32G32B32];
-                renderRT = new RenderTexture(gbuffer.Width, gbuffer.Height, 1, false, formats);
+                renderRTs ??= new RenderTexture[RTCount];
+                for (int i = 0; i < RTCount; i++)
+                {
+                    renderRTs[i]?.Dispose();
+                    PixelFormat[] formats = [PixelFormat.PIXELFORMAT_UNCOMPRESSED_R32G32B32];
+                    renderRTs[i] = new RenderTexture(width, height, 1, false, formats);
+                }
             }
 
             Render();
