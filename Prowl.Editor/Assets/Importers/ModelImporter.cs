@@ -59,6 +59,7 @@ namespace Prowl.Editor.Assets
                 if (FlipWindingOrder) steps |= PostProcessSteps.FlipWindingOrder;
                 if (WeldVertices) steps |= PostProcessSteps.JoinIdenticalVertices;
                 if (GlobalScale) steps |= PostProcessSteps.GlobalScale;
+                importer.Scale = UnitScale;
                 var scene = importer.ImportFile(assetPath.FullName, steps);
                 if (scene == null) Failed("Assimp returned null object.");
 
@@ -316,7 +317,7 @@ namespace Prowl.Editor.Assets
                 }
 
                 GameObject rootNode = GOs[0].Item1;
-                rootNode.Scale = Vector3.One * UnitScale;
+                rootNode.Scale = Vector3.One;
                 ctx.SetMainObject(rootNode);
 
                 ImGuiNotify.InsertNotification("Model Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), AssetDatabase.FileToRelative(assetPath));
