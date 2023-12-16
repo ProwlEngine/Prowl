@@ -153,6 +153,7 @@ public class SelectHandler<T> where T : class
 
     private void SetSelectedIndex(T entity)
     {
+        if (previousFrameSorted == null) return;
         // if sorted has this value using reference equals, set lastSelectedIndex to the index of it
         for (int i = 0; i < previousFrameSorted.Count; i++) {
             if (ReferenceEquals(previousFrameSorted.Values[i].Target, entity)) {
