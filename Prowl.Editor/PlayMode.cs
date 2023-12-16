@@ -53,9 +53,6 @@ public static class PlayMode {
         ////GameObjectManager.LoadScene(s, false);
         SceneManager.Clear();
         var deserialized = TagSerializer.Deserialize<GameObject[]>(PreviousScene);
-        
-        // TODO: come up with a clean way to maintain the selected object
-        Selection.Clear();
 
         ImGuiNotify.InsertNotification(new ImGuiToast()
         {

@@ -37,7 +37,7 @@ public class AssetBrowserWindow : EditorWindow {
     {
         Title = FontAwesome6.BoxOpen + " Asset Browser";
         Project.OnProjectChanged += Invalidate;
-        Selection.OnSelectObject += SelectionChanged;
+        AssetsWindow.SelectHandler.OnSelectObject += SelectionChanged;
         AssetDatabase.Pinged += OnAssetPinged;
         Invalidate();
     }
@@ -45,7 +45,7 @@ public class AssetBrowserWindow : EditorWindow {
     ~AssetBrowserWindow()
     {
         Project.OnProjectChanged -= Invalidate;
-        Selection.OnSelectObject -= SelectionChanged;
+        AssetsWindow.SelectHandler.OnSelectObject -= SelectionChanged;
         AssetDatabase.Pinged -= OnAssetPinged;
     }
 
@@ -83,8 +83,14 @@ public class AssetBrowserWindow : EditorWindow {
                 file = new FileInfo(file.FullName.Replace(".prefab", "") + " new.prefab");
             }
             StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(prefab), file);
-            Selection.Select(file);
+
+            var r = AssetDatabase.FileToRelative(file);
+            AssetDatabase.Reimport(r);
+            AssetDatabase.Ping(r);
         }
+
+        if (!AssetsWindow.SelectHandler.SelectedThisFrame && ImGui.IsItemClicked(0))
+            AssetsWindow.SelectHandler.Clear();
     }
 
     public void Invalidate()
@@ -250,7 +256,7 @@ public class AssetBrowserWindow : EditorWindow {
                 }
 
                 if (ImGui.IsMouseReleased(0))
-                    Selection.Select(entry, true);
+                    AssetsWindow.SelectHandler.Select(entry);
 
                 string relativeAssetPath = Path.GetRelativePath(Project.ProjectDirectory, entry.FullName);
                 bool isAsset = AssetDatabase.Contains(relativeAssetPath);
@@ -274,7 +280,7 @@ public class AssetBrowserWindow : EditorWindow {
                 if (ImGui.IsMouseClicked(0))
                 {
                     var old = CurDirectory;
-                    Selection.Select(entry, true);
+                    AssetsWindow.SelectHandler.Select(entry);
                     CurDirectory = old;
                 }
                 if (ImGui.IsMouseDoubleClicked(0))

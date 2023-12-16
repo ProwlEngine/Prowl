@@ -220,7 +220,6 @@ public unsafe class EditorApplication : Application {
                     EngineObject.HandleDestroyed();
 
                     SceneManager.Clear();
-                    Selection.Clear();
 
                     PropertyDrawer.ClearLookUp();
                     ImporterAttribute.ClearLookUp();

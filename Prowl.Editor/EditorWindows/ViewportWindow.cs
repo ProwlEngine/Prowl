@@ -100,7 +100,7 @@ public class ViewportWindow : EditorWindow
         view.Translation = new System.Numerics.Vector3(0, 0, 0);
         foreach (var activeGO in SceneManager.AllGameObjects)
             if (activeGO.EnabledInHierarchy)
-                activeGO.DrawGizmos(view, projection, Selection.IsSelected(activeGO));
+                activeGO.DrawGizmos(view, projection, HierarchyWindow.SelectHandler.IsSelected(activeGO));
         Camera.Current = null;
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 5));
@@ -147,7 +147,7 @@ public class ViewportWindow : EditorWindow
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (172), 5));
         if (ImGui.Button($"{FontAwesome6.Camera}"))
-            Selection.Select(Cam.GameObject, false);
+            HierarchyWindow.SelectHandler.SetSelection(Cam.GameObject);
         GUIHelper.Tooltip("Viewport Camera Settings");
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 25));
@@ -174,7 +174,7 @@ public class ViewportWindow : EditorWindow
             clone.Position = Cam.GameObject.GlobalPosition + Cam.GameObject.Forward * 10;
             clone.Orientation = original.Res!.Orientation;
             clone.Recalculate();
-            Selection.Select(clone);
+            HierarchyWindow.SelectHandler.SetSelection(clone);
         }
         // Prefab from Assets
         if (DragnDrop.ReceiveAsset<Prefab>(out var prefab))
@@ -183,7 +183,7 @@ public class ViewportWindow : EditorWindow
             go.Position = Cam.GameObject.GlobalPosition + Cam.GameObject.Forward * 10;
             go.Orientation = original.Res!.Orientation;
             go.Recalculate();
-            Selection.Select(go);
+            HierarchyWindow.SelectHandler.SetSelection(go);
         }
         // Scene from Assets
         if (DragnDrop.ReceiveAsset<Scene>(out var scene))

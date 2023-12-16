@@ -1,5 +1,6 @@
 ﻿using Prowl.Editor.EditorWindows;
 using Prowl.Runtime;
+using Prowl.Runtime.Assets;
 using Prowl.Runtime.Utils;
 using System.Reflection;
 using static Prowl.Editor.MenuItem;
@@ -78,8 +79,8 @@ namespace Prowl.Editor
                 file = new FileInfo(file.FullName.Replace(".scriptobj", "") + " New.scriptobj");
             }
             StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(obj), file);
-
-            Selection.Select(file);
+            AssetDatabase.Reimport(AssetDatabase.FileToRelative(file));
+            AssetDatabase.Ping(AssetDatabase.LastLoadedAssetID);
         }
     }
 }

@@ -24,8 +24,9 @@ namespace Prowl.Editor.EditorWindows
             }
             StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), file);
 
-            Selection.Select(file);
-            AssetDatabase.Ping(AssetDatabase.FileToRelative(file));
+            var r = AssetDatabase.FileToRelative(file);
+            AssetDatabase.Reimport(r);
+            AssetDatabase.Ping(r);
         }
 
         [MenuItem("Create/Script")]
@@ -40,9 +41,9 @@ namespace Prowl.Editor.EditorWindows
             using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
             using StreamReader reader = new StreamReader(stream);
             File.WriteAllText(file.FullName, reader.ReadToEnd());
-
-            Selection.Select(file);
-            AssetDatabase.Ping(AssetDatabase.FileToRelative(file));
+            var r = AssetDatabase.FileToRelative(file);
+            AssetDatabase.Reimport(r);
+            AssetDatabase.Ping(r);
         }
 
         #endregion
@@ -52,7 +53,6 @@ namespace Prowl.Editor.EditorWindows
         [MenuItem("Scene/New")]
         public static void NewScene()
         {
-            Selection.Clear();
             SceneManager.Clear();
             SceneManager.InstantiateNewScene();
         }
@@ -74,8 +74,9 @@ namespace Prowl.Editor.EditorWindows
             var allGameObjects = SceneManager.AllGameObjects.ToArray();
             scene.GameObjects = (ListTag)TagSerializer.Serialize(allGameObjects);
             StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(scene), file);
-            Selection.Select(file);
-            AssetDatabase.Ping(AssetDatabase.FileToRelative(file));
+            var r = AssetDatabase.FileToRelative(file);
+            AssetDatabase.Reimport(r);
+            AssetDatabase.Ping(r);
         }
 
         [MenuItem("Scene/Save As")]
@@ -106,8 +107,9 @@ namespace Prowl.Editor.EditorWindows
                     scene.GameObjects = (ListTag)TagSerializer.Serialize(allGameObjects);
                     var tag = (CompoundTag)TagSerializer.Serialize(scene);
                     StringTagConverter.WriteToFile(tag, file);
-                    Selection.Select(file);
-                    AssetDatabase.Ping(AssetDatabase.FileToRelative(file));
+                    var r = AssetDatabase.FileToRelative(file);
+                    AssetDatabase.Reimport(r);
+                    AssetDatabase.Ping(r);
                 }   
             };
             ImGuiFileDialog.FileDialog(imFileDialogInfo);
@@ -131,7 +133,7 @@ namespace Prowl.Editor.EditorWindows
             var go = new GameObject("Ambient Light");
             go.GlobalPosition = GetPosition();
             go.AddComponent<AmbientLight>();
-            Selection.Select(go);
+            HierarchyWindow.SelectHandler.SetSelection(go);
         }
 
         [MenuItem("Template/Lights/Directional Light")]
@@ -141,7 +143,7 @@ namespace Prowl.Editor.EditorWindows
             go.GlobalPosition = GetPosition();
             go.AddComponent<DirectionalLight>();
             go.Rotation = new System.Numerics.Vector3(45, 70, 0);
-            Selection.Select(go);
+            HierarchyWindow.SelectHandler.SetSelection(go);
         }
 
         [MenuItem("Template/Lights/Point Light")]
@@ -150,7 +152,7 @@ namespace Prowl.Editor.EditorWindows
             var go = new GameObject("Point Light");
             go.GlobalPosition = GetPosition();
             go.AddComponent<PointLight>();
-            Selection.Select(go);
+            HierarchyWindow.SelectHandler.SetSelection(go);
         }
 
         [MenuItem("Template/Lights/Spot Light")]
@@ -159,7 +161,7 @@ namespace Prowl.Editor.EditorWindows
             var go = new GameObject("Spot Light");
             go.GlobalPosition = GetPosition();
             go.AddComponent<SpotLight>();
-            Selection.Select(go);
+            HierarchyWindow.SelectHandler.SetSelection(go);
         }
 
         #endregion

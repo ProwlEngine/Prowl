@@ -20,7 +20,7 @@ public class InspectorWindow : EditorWindow
     public InspectorWindow() : base()
     {
         Title = FontAwesome6.BookOpen + " Inspector";
-        Selection.OnSelectObject += Selection_OnSelectObject;
+        GlobalSelectHandler.OnGlobalSelectObject += Selection_OnSelectObject;
     }
 
     private void Selection_OnSelectObject(object n)
@@ -31,9 +31,9 @@ public class InspectorWindow : EditorWindow
         Selected = n;
     }
 
-    ~InspectorWindow()
+    protected override void Close()
     {
-        Selection.OnSelectObject -= Selection_OnSelectObject;
+        GlobalSelectHandler.OnGlobalSelectObject -= Selection_OnSelectObject;
     }
 
     protected override void Draw()
@@ -41,12 +41,6 @@ public class InspectorWindow : EditorWindow
         ForwardBackButtons();
         ImGui.Separator();
         ImGui.Spacing();
-
-        if (Selection.Count > 1)
-        {
-            ImGui.Text("Mult-Editing is not currently supported!");
-            return;
-        }
 
         if (Selected == null) return;
         if (Selected is EngineObject eo1 && eo1.IsDestroyed) return;
