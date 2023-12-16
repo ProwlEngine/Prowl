@@ -89,6 +89,7 @@ public class EditorWindow {
         {
             EditorApplication.OnDrawEditor -= DrawWindow;
             EditorApplication.OnUpdateEditor -= UpdateWindow;
+            Close();
         }
     }
     
@@ -104,5 +105,6 @@ public class EditorWindow {
     
     protected virtual void Draw() { }
     protected virtual void Update() { }
+    protected virtual void Close() { }
     
 }
