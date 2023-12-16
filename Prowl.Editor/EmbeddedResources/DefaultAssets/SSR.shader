@@ -28,10 +28,12 @@ Pass 0
 		uniform mat4 matViewInverse;
 
 		uniform float Time;
+		uniform int Frame;
 
 		uniform int SSR_STEPS; // [16 20 24 28 32]
 		uniform int SSR_BISTEPS; // [0 4 8 16]
 		
+		#include "Random"
 		#include "Utilities"
 		#include "PBR"
 
@@ -41,6 +43,13 @@ Pass 0
 			vec3 reflectedScreenPos = rayTrace(screenPos, viewPos, reflect(normalize(viewPos), gBMVNorm), dither, SSR_STEPS, SSR_BISTEPS, gDepth);
 			if(reflectedScreenPos.z < 0.5) return vec3(0);
 			return vec3(reflectedScreenPos.xy, 1);
+		}
+
+		vec3 CosineSampleHemisphere(vec3 normal)
+		{
+			float a = 6.283185 * RandNextF();
+			float u = 2.0 * RandNextF() - 1.0;
+			return normalize( normal + vec3(sqrt(1.0-u*u) * vec2(cos(a), sin(a)), u) );
 		}
 
 		void main()
@@ -59,23 +68,27 @@ Pass 0
 				vec3 normal = normalAndMetallic.xyz;
 				float metallic = normalAndMetallic.w;
 				
+				vec3 roughNormal = CosineSampleHemisphere(normal);
+				normal = mix(normal, roughNormal, viewPosAndRough.w * 0.4);
+
 				vec3 screenPos = getScreenPos(texCoords, gDepth);
 				vec3 viewPos = getViewFromScreenPos(screenPos);
 
 				bool isMetal = metallic > 0.9;
 
 				// Get fresnel
-				vec3 fresnel = FresnelSchlick(max(dot(normal, -normalize(viewPos)), 0.0),
-					isMetal ? color : vec3(metallic)) * smoothness;
+				vec3 F0 = vec3(0.04); 
+				F0 = mix(F0, color, metallic);
+				vec3 fresnel = FresnelSchlick(max(dot(normal, normalize(-viewPos)), 0.0), F0);
 				
 				float dither = fract(sin(dot(texCoords + vec2(Time, Time), vec2(12.9898,78.233))) * 43758.5453123);
 
 				vec3 SSRCoord = calculateSSR(viewPos, screenPos, normalize(normal), dither);
-				vec3 ssrColor = SSRCoord.z > 0.5 ? texture2D(gColor, SSRCoord.xy).xyz : color;
-				//vec3 ssrColor = texture2D(gColor, SSRCoord.xy).xyz;
-				
-				OutputColor.rgb *= isMetal ? vec3(1.0 - smoothness) : 1.0 - fresnel;
-				OutputColor.rgb += ssrColor * fresnel;
+				if(SSRCoord.z > 0.5)
+				{
+					OutputColor.rgb *= isMetal ? vec3(1.0 - smoothness) : 1.0 - fresnel;
+					OutputColor.rgb += texture2D(gColor, SSRCoord.xy).xyz * fresnel;
+				}
 			}
 		}
 
