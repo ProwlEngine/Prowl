@@ -51,6 +51,7 @@ namespace Prowl.Runtime
 
             material.SetVector("Resolution", Graphics.Resolution);
             material.SetFloat("Time", (float)Time.time);
+            material.SetInt("Frame", (int)Time.frameCount);
             //material.SetFloat("DeltaTime", Time.deltaTimeF);
             //material.SetInt("RandomSeed", Random.Shared.Next());
             //material.SetInt("ObjectID", mesh.InstanceID);
