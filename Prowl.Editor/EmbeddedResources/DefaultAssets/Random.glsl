@@ -26,9 +26,4 @@ vec4 RandNext4F() { return vec4(RandNext4()) / float(0xffffffffu); }
 float RandF (uint  seed) { return float(triple32(seed))                    / float(0xffffffffu); }
 vec2  Rand2F(uvec2 seed) { return vec2(triple32(seed.x), triple32(seed.y)) / float(0xffffffffu); }
 
-vec2 TAAHash() {
-	vec2 rand = (Rand2F(uvec2(uint(Frame*2), uint(Frame*2 + 1))) - 0.5) / Resolution;
-	return rand;
-}
-
 #endif
