@@ -69,7 +69,7 @@ Pass 0
 				float metallic = normalAndMetallic.w;
 				
 				vec3 roughNormal = CosineSampleHemisphere(normal);
-				normal = mix(normal, roughNormal, viewPosAndRough.w * 0.4);
+				normal = normalize(mix(normal, roughNormal, viewPosAndRough.w * 0.5));
 
 				vec3 screenPos = getScreenPos(texCoords, gDepth);
 				vec3 viewPos = getViewFromScreenPos(screenPos);
