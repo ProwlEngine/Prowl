@@ -29,6 +29,30 @@ namespace Prowl.Runtime
 
         public static event Action UpdateShadowmaps;
 
+        public readonly static Vector2[] Halton16 =
+        [
+            new Vector2(0.5f, 0.333333f),
+            new Vector2(0.25f, 0.666667f),
+            new Vector2(0.75f, 0.111111f),
+            new Vector2(0.125f, 0.444444f),
+            new Vector2(0.625f, 0.777778f),
+            new Vector2(0.375f, 0.222222f),
+            new Vector2(0.875f, 0.555556f),
+            new Vector2(0.0625f, 0.888889f),
+            new Vector2(0.5625f, 0.037037f),
+            new Vector2(0.3125f, 0.370370f),
+            new Vector2(0.8125f, 0.703704f),
+            new Vector2(0.1875f, 0.148148f),
+            new Vector2(0.6875f, 0.481481f),
+            new Vector2(0.4375f, 0.814815f),
+            new Vector2(0.9375f, 0.259259f),
+            new Vector2(0.03125f, 0.592593f),
+        ];
+
+        public static Vector2 Jitter { get; private set; }
+        public static Vector2 PreviousJitter { get; private set; }
+        public static bool UseJitter;
+
         public static Material DepthMat
         {
             get
@@ -37,6 +61,15 @@ namespace Prowl.Runtime
                     depthMat = new Material(Shader.Find("Defaults/Depth.shader"));
                 return depthMat;
             }
+        }
+
+        public static void Update()
+        {
+            // Halton Jitter
+            long n = Time.frameCount % 16;
+            var halton = Graphics.Halton16[n];
+            PreviousJitter = Jitter;
+            Jitter = new Vector2((halton.X - 0.5f), (halton.Y - 0.5f)) * 2.0;
         }
 
         public static void UpdateAllShadowmaps()
@@ -56,6 +89,15 @@ namespace Prowl.Runtime
             }
 
             material.SetTexture("DefaultNoise", defaultNoise);
+
+            if (UseJitter) {
+                material.SetVector("Jitter", Jitter / Resolution);
+                material.SetVector("PreviousJitter", PreviousJitter / Resolution);
+            } else {
+                material.SetVector("Jitter", Vector2.Zero);
+                material.SetVector("PreviousJitter", Vector2.Zero);
+            }
+
             material.SetVector("Resolution", Graphics.Resolution);
             material.SetFloat("Time", (float)Time.time);
             material.SetInt("Frame", (int)Time.frameCount);
@@ -67,8 +109,11 @@ namespace Prowl.Runtime
 
             // Upload view and projection matrices(if locations available)
             material.SetMatrix("matView", MatViewTransposed);
+            material.SetMatrix("matOldView", MatOldViewTransposed);
+
             material.SetMatrix("matProjection", MatProjectionTransposed);
             material.SetMatrix("matProjectionInverse", MatProjectionInverseTransposed);
+            material.SetMatrix("matOldProjection", MatOldProjectionTransposed);
             // Model transformation matrix is sent to shader
             material.SetMatrix("matModel", Matrix4x4.Transpose(transform));
 

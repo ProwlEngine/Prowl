@@ -142,6 +142,8 @@ public class Camera : MonoBehaviour
         Graphics.OldMatView = oldView ?? Graphics.MatView;
         Graphics.OldMatProjection = oldProjection ?? Graphics.MatProjection;
 
+        // Set default jitter to false, this is set to true in a TAA pass
+        Graphics.UseJitter = false;
         foreach (var node in rp.Res!.nodes) {
             if (node is RenderPassNode renderPass)
                 renderPass.PreRender();

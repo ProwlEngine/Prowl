@@ -98,6 +98,8 @@ Pass 0
 
 	Fragment
 	{
+		#extension GL_ARB_derivative_control : enable
+
 		layout (location = 0) out vec4 gAlbedoAO; // AlbedoR, AlbedoG, AlbedoB, Ambient Occlusion
 		layout (location = 1) out vec4 gNormalMetallic; // NormalX, NormalY, NormalZ, Metallic
 		layout (location = 2) out vec4 gPositionRoughness; // PositionX, PositionY, PositionZ, Roughness
@@ -118,6 +120,13 @@ Pass 0
 
 		uniform mat4 matView;
 		
+		uniform vec2 Jitter;
+		uniform vec2 PreviousJitter;
+		uniform int Frame;
+		uniform vec2 Resolution;
+		
+		uniform sampler2D NoiseTexture; // r:Blue g:White b:Voronoi
+
 		uniform sampler2D _MainTex; // diffuse
 		uniform sampler2D _NormalTex; // Normal
 		uniform sampler2D _SurfaceTex; // AO, Roughness, Metallic
@@ -143,6 +152,12 @@ Pass 0
 		    return normalize(TBN * tangentNormal);
 		}
 		
+		// Interesting method someone gave me, Not sure if it works
+		//vec2 UnjitterTextureUV(vec2 uv, vec2 currentJitterInPixels)
+		//{
+		//    // Note: We negate the y because UV and screen space run in opposite directions
+		//    return uv - ddx_fine(uv) * currentJitterInPixels.x + ddy_fine(uv) * currentJitterInPixels.y;
+		//}
 		float InterleavedGradientNoise(vec2 pixel, int frame) 
 		{
 		    pixel += (float(frame) * 5.588238f);
@@ -151,8 +166,8 @@ Pass 0
 		
 		void main()
 		{
-			vec4 alb = texture(_MainTex, TexCoords).rgba;
-			if(alb.a < 0.5) discard;
+			//vec2 uv = UnjitterTextureUV(TexCoords, Jitter);
+			vec2 uv = TexCoords;
 
 			vec4 alb = texture(_MainTex, uv).rgba;
 			float rng = InterleavedGradientNoise(gl_FragCoord.xy, Frame % 32);
@@ -160,7 +175,7 @@ Pass 0
 			alb.rgb *= VertColor;
 
 			// AO, Roughness, Metallic
-			vec3 surface = texture(_SurfaceTex, TexCoords).rgb;
+			vec3 surface = texture(_SurfaceTex, uv).rgb;
 			// Albedo
 			//gAlbedoAO = vec4(alb.xyz * _MainColor.rgb, ao);
 			gAlbedoAO = vec4(pow(alb.xyz * _MainColor.rgb, vec3(2.2)), surface.r);
@@ -169,18 +184,20 @@ Pass 0
 			gPositionRoughness = vec4(FragPos, surface.g);
 
 			// Normal & Metallic
-			//vec4 normal = vec4(TBN * (texture(_NormalTex, TexCoords).rgb * 2.0 - 1), 0);
+			//vec4 normal = vec4(TBN * (texture(_NormalTex, uv).rgb * 2.0 - 1), 0);
 			//gNormalMetallic = vec4((view * normal).rgb, surface.b);
 			// ^ Produces NAN?
 			gNormalMetallic = vec4((matView * vec4(getNormalFromMap(), 0)).rgb, surface.b);
 			
 			// Emission
-			gEmission.rgb = (texture(_EmissionTex, TexCoords).rgb + _EmissiveColor.rgb) * _EmissionIntensity;
+			gEmission.rgb = (texture(_EmissionTex, uv).rgb + _EmissiveColor.rgb) * _EmissionIntensity;
 
 			// Velocity
-			vec2 a = (PosProj.xy / PosProj.w) * 0.5 + 0.5;
-			vec2 b = (PosProjOld.xy / PosProjOld.w) * 0.5 + 0.5;
-			gVelocity.xy = a - b;
+			vec2 a = (PosProj.xy / PosProj.w) - Jitter;
+			vec2 b = (PosProjOld.xy / PosProjOld.w) - PreviousJitter;
+			gVelocity.xy = (b - a) * 0.5;
+
+
 
 			gObjectID = float(ObjectID);
 		}
