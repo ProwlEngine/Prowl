@@ -153,11 +153,12 @@ Pass 0
 		}
 		
 		// Interesting method someone gave me, Not sure if it works
-		//vec2 UnjitterTextureUV(vec2 uv, vec2 currentJitterInPixels)
-		//{
-		//    // Note: We negate the y because UV and screen space run in opposite directions
-		//    return uv - ddx_fine(uv) * currentJitterInPixels.x + ddy_fine(uv) * currentJitterInPixels.y;
-		//}
+		vec2 UnjitterTextureUV(vec2 uv, vec2 currentJitterInPixels)
+		{
+		    // Note: We negate the y because UV and screen space run in opposite directions
+		    return uv - ddx_fine(uv) * currentJitterInPixels.x + ddy_fine(uv) * currentJitterInPixels.y;
+		}
+
 		float InterleavedGradientNoise(vec2 pixel, int frame) 
 		{
 		    pixel += (float(frame) * 5.588238f);
@@ -166,10 +167,10 @@ Pass 0
 		
 		void main()
 		{
-			//vec2 uv = UnjitterTextureUV(TexCoords, Jitter);
-			vec2 uv = TexCoords;
+			vec2 uv = UnjitterTextureUV(TexCoords, Jitter);
+			//vec2 uv = TexCoords;
 
-			vec4 alb = texture(_MainTex, uv).rgba;
+			vec4 alb = texture(_MainTex, uv).rgba; 
 			float rng = InterleavedGradientNoise(gl_FragCoord.xy, Frame % 32);
 			if(rng > alb.a * _MainColor.a) discard;
 			alb.rgb *= VertColor;
