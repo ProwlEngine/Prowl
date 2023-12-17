@@ -45,8 +45,7 @@ namespace Prowl.Editor.Assets
             if (!Supported.Contains(assetPath.Extension))
                 Failed("Format Not Supported: " + assetPath.Extension);
 
-            using (var importer = new AssimpContext())
-            {
+            using (var importer = new AssimpContext()) {
                 importer.SetConfig(new Assimp.Configs.VertexBoneWeightLimitConfig(4));
                 var steps = PostProcessSteps.LimitBoneWeights | PostProcessSteps.GenerateUVCoords;
                 if (GenerateNormals && GenerateSmoothNormals) steps |= PostProcessSteps.GenerateSmoothNormals;
@@ -76,8 +75,7 @@ namespace Prowl.Editor.Assets
 
                 List<Material> mats = new();
                 if (scene.HasMaterials)
-                    foreach (var m in scene.Materials)
-                    {
+                    foreach (var m in scene.Materials) {
                         Material mat = new Material(Shader.Find("Defaults/Standard.shader"));
                         string? name = m.HasName ? m.Name : null;
 
@@ -88,70 +86,58 @@ namespace Prowl.Editor.Assets
                             mat.SetColor("_MainColor", Color.white);
 
                         // Emissive Color
-                        if (m.HasColorEmissive)
-                        {
+                        if (m.HasColorEmissive) {
                             mat.SetFloat("_EmissionIntensity", 1f);
                             mat.SetColor("_EmissiveColor", new Color(m.ColorEmissive.R, m.ColorEmissive.G, m.ColorEmissive.B, m.ColorEmissive.A));
-                        }
-                        else {
+                        } else {
 
                             mat.SetFloat("_EmissionIntensity", 0f);
                             mat.SetColor("_EmissiveColor", Color.black);
                         }
 
                         // Texture
-                        if (m.HasTextureDiffuse)
-                        {
+                        if (m.HasTextureDiffuse) {
                             var file = new FileInfo(Path.Combine(parentDir.FullName, m.TextureDiffuse.FilePath));
                             name ??= Path.GetFileNameWithoutExtension(file.Name);
                             if (file.Exists)
                                 LoadTextureIntoMesh("_MainTex", ctx, file, mat);
                             else
                                 mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/grid.png")));
-                        }
-                        else
+                        } else
                             mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/grid.png")));
 
                         // Normal Texture
-                        if (m.HasTextureNormal)
-                        {
+                        if (m.HasTextureNormal) {
                             var file = new FileInfo(Path.Combine(parentDir.FullName, m.TextureNormal.FilePath));
                             name ??= Path.GetFileNameWithoutExtension(file.Name);
                             if (file.Exists)
                                 LoadTextureIntoMesh("_NormalTex", ctx, file, mat);
                             else
                                 mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_normal.png")));
-                        }
-                        else
+                        } else
                             mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_normal.png")));
 
                         //AO, Roughness, Metallic Texture
-                        if (m.GetMaterialTexture(TextureType.Unknown, 0, out var surface))
-                        {
+                        if (m.GetMaterialTexture(TextureType.Unknown, 0, out var surface)) {
                             var file = new FileInfo(Path.Combine(parentDir.FullName, surface.FilePath));
                             name ??= Path.GetFileNameWithoutExtension(file.Name);
                             if (file.Exists)
                                 LoadTextureIntoMesh("_SurfaceTex", ctx, file, mat);
                             else
                                 mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_surface.png")));
-                        }
-                        else
+                        } else
                             mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_surface.png")));
 
                         // Emissive Texture
-                        if (m.HasTextureEmissive)
-                        {
+                        if (m.HasTextureEmissive) {
                             var file = new FileInfo(Path.Combine(parentDir.FullName, m.TextureEmissive.FilePath));
                             name ??= Path.GetFileNameWithoutExtension(file.Name);
-                            if (file.Exists)
-                            {
+                            if (file.Exists) {
                                 mat.SetFloat("_EmissionIntensity", 1f);
                                 LoadTextureIntoMesh("_EmissionTex", ctx, file, mat);
-                            }
-                            else
+                            } else
                                 mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_emission.png")));
-                        }
-                        else
+                        } else
                             mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_emission.png")));
 
                         name ??= "StandardMat";
@@ -168,22 +154,18 @@ namespace Prowl.Editor.Assets
 
                 List<MeshMaterialBinding> meshMats = new List<MeshMaterialBinding>();
                 if (scene.HasMeshes)
-                    foreach (var m in scene.Meshes)
-                    {
-                        if (m.PrimitiveType != PrimitiveType.Triangle)
-                        {
+                    foreach (var m in scene.Meshes) {
+                        if (m.PrimitiveType != PrimitiveType.Triangle) {
                             Debug.Log($"{assetPath.Name} 's mesh '{m.Name}' is not of Triangle Primitive, Skipping...");
                             continue;
                         }
 
-                        if (!m.HasNormals)
-                        {
+                        if (!m.HasNormals) {
                             Debug.Log($"{assetPath.Name} Does not have any normals in mesh '{m.Name}', Skipping...");
                             continue;
                         }
 
-                        if (!m.HasTangentBasis)
-                        {
+                        if (!m.HasTangentBasis) {
                             Debug.Log($"{assetPath.Name} Does not have any tangents in mesh '{m.Name}', Skipping...");
                             continue;
                         }
@@ -208,19 +190,16 @@ namespace Prowl.Editor.Assets
                         var texs = m.TextureCoordinateChannels[0];
                         Vertex[] vertices = new Vertex[m.VertexCount];
 
-                        for (var i = 0; i < vertices.Length; i++)
-                        {
+                        for (var i = 0; i < vertices.Length; i++) {
                             Vertex vert = new Vertex();
                             var v = verts[i]; var n = norms[i]; var t = tangs[i]; var tc = texs[i];
                             vert.Position = new Vector3(v.X, v.Y, v.Z);
                             vert.TexCoord = new Vector2(tc.X, tc.Y);
                             vert.Normal = new Vector3(n.X, n.Y, n.Z);
-                            if (m.HasVertexColors(0))
-                            {
+                            if (m.HasVertexColors(0)) {
                                 var c = m.VertexColorChannels[0][i];
                                 vert.Color = new Vector3(c.R, c.G, c.B);
-                            }
-                            else {
+                            } else {
                                 vert.Color = Vector3.One;
                             }
                             vert.Tangent = new Vector3(t.X, t.Y, t.Z);
@@ -228,10 +207,8 @@ namespace Prowl.Editor.Assets
                             vertices[i] = vert;
                         }
 
-                        if (m.HasBones)
-                        {
-                            for (var i = 0; i < m.Bones.Count; i++)
-                            {
+                        if (m.HasBones) {
+                            for (var i = 0; i < m.Bones.Count; i++) {
                                 var bone = m.Bones[i];
                                 if (!bone.HasVertexWeights) continue;
 
@@ -253,8 +230,7 @@ namespace Prowl.Editor.Assets
                                 vertices[weight3.VertexID] = vertices[weight3.VertexID] with { BoneIndex3 = (byte)nameIndex, Weight3 = weight3.Weight };
                             }
 
-                            for (int i = 0; i < vertices.Length; i++)
-                            {
+                            for (int i = 0; i < vertices.Length; i++) {
                                 var v = vertices[i];
                                 var totalWeight = v.Weight0 + v.Weight1 + v.Weight2 + v.Weight3;
                                 v.Weight0 /= totalWeight;
@@ -280,32 +256,24 @@ namespace Prowl.Editor.Assets
                     }
 
                 // Create Meshes
-                foreach (var goNode in GOs)
-                {
+                foreach (var goNode in GOs) {
                     var node = goNode.Item2;
                     var go = goNode.Item1;
                     // Set Mesh
-                    if (node.HasMeshes)
-                        foreach (var mIdx in node.MeshIndices)
-                        {
-                            var uMeshAndMat = meshMats[mIdx];
-                            GameObject uSubOb = GameObject.CreateSilently();
-                            uSubOb.Name = uMeshAndMat.MeshName;
-                            if (uMeshAndMat.HasBones)
-                            {
-                                var mr = uSubOb.AddComponent<SkinnedMeshRenderer>();
-                                mr.Mesh = uMeshAndMat.Mesh;
-                                mr.Material = uMeshAndMat.Material;
-                                mr.Root = GOs[0].Item1;
+                    if (node.HasMeshes) {
+                        if (node.MeshIndices.Count == 1) {
+                            var uMeshAndMat = meshMats[node.MeshIndices[0]];
+                            AddMeshComponent(GOs, go, uMeshAndMat);
+                        } else {
+                            foreach (var mIdx in node.MeshIndices) {
+                                var uMeshAndMat = meshMats[mIdx];
+                                GameObject uSubOb = GameObject.CreateSilently();
+                                uSubOb.Name = uMeshAndMat.MeshName;
+                                AddMeshComponent(GOs, uSubOb, uMeshAndMat);
+                                uSubOb.SetParent(go);
                             }
-                            else
-                            {
-                                var mr = uSubOb.AddComponent<MeshRenderer>();
-                                mr.Mesh = uMeshAndMat.Mesh;
-                                mr.Material = uMeshAndMat.Material;
-                            }
-                            uSubOb.SetParent(go);
                         }
+                    }
 
                     // Transform
                     node.Transform.Decompose(out var aScale, out var aQuat, out var aTranslation);
@@ -320,6 +288,20 @@ namespace Prowl.Editor.Assets
                 ctx.SetMainObject(rootNode);
 
                 ImGuiNotify.InsertNotification("Model Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), AssetDatabase.FileToRelative(assetPath));
+            }
+
+            static void AddMeshComponent(List<(GameObject, Node)> GOs, GameObject go, MeshMaterialBinding uMeshAndMat)
+            {
+                if (uMeshAndMat.HasBones) {
+                    var mr = go.AddComponent<SkinnedMeshRenderer>();
+                    mr.Mesh = uMeshAndMat.Mesh;
+                    mr.Material = uMeshAndMat.Material;
+                    mr.Root = GOs[0].Item1;
+                } else {
+                    var mr = go.AddComponent<MeshRenderer>();
+                    mr.Mesh = uMeshAndMat.Mesh;
+                    mr.Material = uMeshAndMat.Material;
+                }
             }
         }
 
