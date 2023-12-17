@@ -25,6 +25,8 @@ namespace Prowl.Runtime
         public static Matrix4x4 MatDepthView;
 
         private static Material depthMat;
+        private static AssetRef<Texture2D> defaultNoise;
+
         public static event Action UpdateShadowmaps;
 
         public static Material DepthMat
@@ -49,6 +51,11 @@ namespace Prowl.Runtime
 
             oldTransform ??= transform;
 
+            if(defaultNoise.IsAvailable == false) {
+                defaultNoise = Application.AssetProvider.LoadAsset<Texture2D>("Defaults/noise.png");
+            }
+
+            material.SetTexture("DefaultNoise", defaultNoise);
             material.SetVector("Resolution", Graphics.Resolution);
             material.SetFloat("Time", (float)Time.time);
             material.SetInt("Frame", (int)Time.frameCount);
