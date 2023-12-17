@@ -45,13 +45,6 @@ Pass 0
 			return vec3(reflectedScreenPos.xy, 1);
 		}
 
-		vec3 CosineSampleHemisphere(vec3 normal)
-		{
-			float a = 6.283185 * RandNextF();
-			float u = 2.0 * RandNextF() - 1.0;
-			return normalize( normal + vec3(sqrt(1.0-u*u) * vec2(cos(a), sin(a)), u) );
-		}
-
 		void main()
 		{
 			vec2 texCoords = gl_FragCoord.xy / Resolution;
@@ -68,8 +61,10 @@ Pass 0
 				vec3 normal = normalAndMetallic.xyz;
 				float metallic = normalAndMetallic.w;
 				
-				vec3 roughNormal = CosineSampleHemisphere(normal);
-				normal = normalize(mix(normal, roughNormal, viewPosAndRough.w * 0.5));
+				//vec3 roughNormal = CosineSampleHemisphere(normal);
+				//normal = normalize(mix(normal, roughNormal, viewPosAndRough.w * 0.5));
+				vec3 perturbedNormal = normalize(vec3(RandNextF(), RandNextF(), RandNextF()) * 2.0 - 1.0);
+				normal = normalize(mix(normal, perturbedNormal, viewPosAndRough.w * 0.4));
 
 				vec3 screenPos = getScreenPos(texCoords, gDepth);
 				vec3 viewPos = getViewFromScreenPos(screenPos);
