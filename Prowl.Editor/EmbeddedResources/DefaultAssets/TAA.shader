@@ -82,6 +82,13 @@ Pass 0
 		    , sy);
 		}
 
+		// https://www.elopezr.com/temporal-aa-and-the-quest-for-the-holy-trail/
+		vec3 AdjustHDRColor(vec3 color) {
+			return vec3(color.x > 0.0 ? log(color.x) : -10.0, 
+						color.y > 0.0 ? log(color.y) : -10.0, 
+						color.z > 0.0 ? log(color.z) : -10.0); // Guard against nan
+		}
+
 		void main()
 		{
 			vec2 texCoords = gl_FragCoord.xy / Resolution;
@@ -89,15 +96,15 @@ Pass 0
 			
 			vec3 neighbourhood[9];
 			
-			neighbourhood[0] = texture2D(gColor, texCoords + vec2(-1, -1) * pixel_size).xyz;
-			neighbourhood[1] = texture2D(gColor, texCoords + vec2(+0, -1) * pixel_size).xyz;
-			neighbourhood[2] = texture2D(gColor, texCoords + vec2(+1, -1) * pixel_size).xyz;
-			neighbourhood[3] = texture2D(gColor, texCoords + vec2(-1, +0) * pixel_size).xyz;
-			neighbourhood[4] = texture2D(gColor, texCoords + vec2(+0, +0) * pixel_size).xyz;
-			neighbourhood[5] = texture2D(gColor, texCoords + vec2(+1, +0) * pixel_size).xyz;
-			neighbourhood[6] = texture2D(gColor, texCoords + vec2(-1, +1) * pixel_size).xyz;
-			neighbourhood[7] = texture2D(gColor, texCoords + vec2(+0, +1) * pixel_size).xyz;
-			neighbourhood[8] = texture2D(gColor, texCoords + vec2(+1, +1) * pixel_size).xyz;
+			neighbourhood[0] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(-1, -1) * pixel_size).xyz);
+			neighbourhood[1] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(+0, -1) * pixel_size).xyz);
+			neighbourhood[2] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(+1, -1) * pixel_size).xyz);
+			neighbourhood[3] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(-1, +0) * pixel_size).xyz);
+			neighbourhood[4] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(+0, +0) * pixel_size).xyz);
+			neighbourhood[5] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(+1, +0) * pixel_size).xyz);
+			neighbourhood[6] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(-1, +1) * pixel_size).xyz);
+			neighbourhood[7] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(+0, +1) * pixel_size).xyz);
+			neighbourhood[8] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(+1, +1) * pixel_size).xyz);
 
 			vec3 nmin = neighbourhood[0];
 			vec3 nmax = neighbourhood[0];   
@@ -110,7 +117,7 @@ Pass 0
 			vec2 histUv = texCoords + velocity;
 			
 			// sample from history buffer, with neighbourhood clamping.  
-			vec3 histSample = clamp(texture2D(gHistory, histUv).xyz, nmin, nmax);
+			vec3 histSample = clamp(AdjustHDRColor(texture2D(gHistory, histUv).xyz), nmin, nmax);
 			//vec3 histSample = texture2D(gHistory, histUv).xyz;
 			
 			// blend factor
@@ -124,6 +131,8 @@ Pass 0
 			vec3 curSample = neighbourhood[4];
 			// finally, blend current and clamped history sample.
 			OutputColor = vec4(mix(histSample, curSample, vec3(blend)), 1.0);
+
+			OutputColor.rgb = exp(OutputColor.rgb); // Undo log transformation
 		}
 
 	}
