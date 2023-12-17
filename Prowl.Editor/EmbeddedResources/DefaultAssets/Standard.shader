@@ -228,14 +228,22 @@ ShadowPass 0
 		layout (location = 0) out float fragmentdepth;
 		
 		uniform sampler2D _MainTex; // diffuse
+		uniform vec4 _MainColor;
+		uniform int Frame;
 
 		in vec2 TexCoords;
+		
+		float InterleavedGradientNoise(vec2 pixel, int frame) 
+		{
+		    pixel += (float(frame) * 5.588238f);
+		    return fract(52.9829189f * fract(0.06711056f*float(pixel.x) + 0.00583715f*float(pixel.y)));  
+		}
 
 		void main()
 		{
-			if(texture(_MainTex, TexCoords).a < 0.5) discard;
-
-			//fragmentdepth = gl_FragCoord.z;
+			float alpha = texture(_MainTex, TexCoords).a; 
+			float rng = InterleavedGradientNoise(gl_FragCoord.xy, Frame % 32);
+			if(rng > alpha * _MainColor.a) discard;
 		}
 	}
 }
