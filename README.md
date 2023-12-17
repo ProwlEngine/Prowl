@@ -215,7 +215,7 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 ![Editor](https://github.com/michaelsakharov/Prowl/assets/8621606/bb3c423b-3cc8-45a1-baa7-c9ad31d945c6)
 ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/f755ee5d-eba5-4453-9f31-f61768c2554c)
 ![Flight Model](https://github.com/michaelsakharov/Prowl/assets/8621606/7683759c-5e0c-4689-acba-c733b3a64b5c)
-![image](https://github.com/michaelsakharov/Prowl/assets/8621606/b95d24d5-f3a8-4652-9489-bfd6660ae497)
+![image](https://github.com/michaelsakharov/Prowl/assets/8621606/43d9f1db-1806-4961-bc40-fd77b196043b)
 ![Skybox-Aware Fog](https://github.com/michaelsakharov/Prowl/assets/8621606/0cf60c18-b6bc-4190-b458-a92aca29c0d9)
 ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/6bee582a-903d-4b30-8c0b-50023ccc0c4e)
 ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/5108bd1f-a822-47c0-855d-c3c4f4fb29b3)
