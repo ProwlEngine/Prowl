@@ -18,6 +18,7 @@ namespace Prowl.Runtime
             typeof(DepthOfFieldNode),
             typeof(BloomNode),
             typeof(AcesTonemappingNode),
+            typeof(TAANode),
             typeof(OutputNode),
             ];
     }

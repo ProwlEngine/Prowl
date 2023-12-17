@@ -287,6 +287,46 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         }
     }
 
+    public class TAANode : RenderPassNode
+    {
+        public override string Title => "Temporal Anti-Aliasing";
+        public override float Width => 125;
+        public override int RTCount => 2;
+
+        [Input(ShowBackingValue.Never), SerializeIgnore] public RenderTexture RenderTexture;
+
+        Material Mat;
+
+        public override void PreRender()
+        {
+            // Apply jitter
+            // Graphics class by default comes packed with a Halton16 sequence specifically for TAA jitter
+            Graphics.UseJitter = true; // This applies the jitter to the Velocity Buffer/Motion Vectors
+            Graphics.MatProjection.M31 += Graphics.Jitter.X / Graphics.Resolution.X;
+            Graphics.MatProjection.M32 += Graphics.Jitter.Y / Graphics.Resolution.Y;
+        }
+
+        public override void Render()
+        {
+            var rt = GetInputValue<RenderTexture>("RenderTexture");
+            if (rt == null) return;
+
+            Mat ??= new Material(Shader.Find("Defaults/TAA.shader"));
+            Mat.SetTexture("gColor", rt.InternalTextures[0]);
+            Mat.SetTexture("gHistory", renderRTs[1].InternalTextures[0]);
+            Mat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
+            Mat.SetTexture("gVelocity", Camera.Current.gBuffer.Velocity);
+            Mat.SetTexture("gDepth", Camera.Current.gBuffer.Depth);
+
+            Mat.SetVector("Jitter", Graphics.Jitter);
+            Mat.SetVector("PreviousJitter", Graphics.PreviousJitter);
+
+            Graphics.Blit(renderRTs[0], Mat, 0, true);
+
+            Graphics.Blit(renderRTs[1], renderRT.InternalTextures[0], true);
+        }
+    }
+
     [DisallowMultipleNodes]
     public class OutputNode : Node
     {
