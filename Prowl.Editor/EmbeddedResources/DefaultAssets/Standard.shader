@@ -143,10 +143,20 @@ Pass 0
 		    return normalize(TBN * tangentNormal);
 		}
 		
+		float InterleavedGradientNoise(vec2 pixel, int frame) 
+		{
+		    pixel += (float(frame) * 5.588238f);
+		    return fract(52.9829189f * fract(0.06711056f*float(pixel.x) + 0.00583715f*float(pixel.y)));  
+		}
+		
 		void main()
 		{
 			vec4 alb = texture(_MainTex, TexCoords).rgba;
 			if(alb.a < 0.5) discard;
+
+			vec4 alb = texture(_MainTex, uv).rgba;
+			float rng = InterleavedGradientNoise(gl_FragCoord.xy, Frame % 32);
+			if(rng > alb.a * _MainColor.a) discard;
 			alb.rgb *= VertColor;
 
 			// AO, Roughness, Metallic
