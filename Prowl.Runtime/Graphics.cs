@@ -17,9 +17,9 @@ namespace Prowl.Runtime
         public static Matrix4x4 MatProjectionInverse;
         public static Matrix4x4 MatProjectionInverseTransposed;
         public static Matrix4x4 OldMatView;
-        public static Matrix4x4 OldMatViewTransposed;
+        public static Matrix4x4 MatOldViewTransposed;
         public static Matrix4x4 OldMatProjection;
-        public static Matrix4x4 OldMatProjectionTransposed;
+        public static Matrix4x4 MatOldProjectionTransposed;
 
         public static Matrix4x4 MatDepthProjection;
         public static Matrix4x4 MatDepthView;
@@ -142,10 +142,12 @@ namespace Prowl.Runtime
             Rlgl.rlEnableBackfaceCulling();
         }
 
+        public static void Blit(RenderTexture renderTexture, Texture2D texture, bool clear = true) => Blit(renderTexture, texture.InternalTexture, clear);
+
         /// <summary>
         /// Draws texture into a RenderTexture Additively
         /// </summary>
-        public static void Blit(RenderTexture renderTexture, Texture2D texture, bool clear = true)
+        public static void Blit(RenderTexture renderTexture, Raylib_cs.Texture2D texture, bool clear = true)
         {
             Rlgl.rlDisableDepthMask();
             Rlgl.rlDisableDepthTest();
@@ -154,7 +156,7 @@ namespace Prowl.Runtime
             if (clear)
                 Raylib.ClearBackground(new Color(0, 0, 0, 0));
             Raylib.BeginBlendMode(BlendMode.BLEND_ADDITIVE);
-            Raylib.DrawTexturePro(texture.InternalTexture, new Rectangle(0, 0, texture.Width, -texture.Height), new Rectangle(0, 0, renderTexture.Width, renderTexture.Height), new Vector2(0, 0), 0, Color.white);
+            Raylib.DrawTexturePro(texture, new Rectangle(0, 0, texture.width, -texture.height), new Rectangle(0, 0, renderTexture.Width, renderTexture.Height), new Vector2(0, 0), 0, Color.white);
             Raylib.EndBlendMode();
             renderTexture.End();
             Rlgl.rlEnableDepthMask();

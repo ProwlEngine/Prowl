@@ -54,6 +54,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             return renderRT;
         }
 
+        public virtual void PreRender() { }
         public abstract void Render();
     }
 
@@ -268,10 +269,10 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             var rt = GetInputValue<RenderTexture>("RenderTexture");
             if (rt == null) return;
 
-            if (rt.InternalTextures[0].mipmaps == 1)
+            //if (rt.InternalTextures[0].mipmaps == 1)
                 Raylib.GenTextureMipmaps(ref rt.InternalTextures[0]);
-            if (rt.InternalTextures[0].mipmaps == 1)
-                Debug.LogWarning("ScreenSpaceReflectionNode: RenderTexture has no mipmaps, Generation failed!");
+            //if (rt.InternalTextures[0].mipmaps == 1)
+            //    Debug.LogWarning("ScreenSpaceReflectionNode: RenderTexture has no mipmaps, Generation failed!");
 
             Mat ??= new Material(Shader.Find("Defaults/SSR.shader"));
             Mat.SetTexture("gColor", rt.InternalTextures[0]);

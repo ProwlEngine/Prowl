@@ -136,13 +136,19 @@ public class Camera : MonoBehaviour
         Rlgl.rlSetBlendMode(BlendMode.BLEND_ADD_COLORS);
         Current = this;
         Graphics.Resolution = new Vector2(width, height);
+
         Graphics.MatView = View;
         Graphics.MatProjection = Current.GetProjectionMatrix(width, height);
         Graphics.OldMatView = oldView ?? Graphics.MatView;
         Graphics.OldMatProjection = oldProjection ?? Graphics.MatProjection;
 
-        Graphics.OldMatViewTransposed = Matrix4x4.Transpose(Graphics.OldMatView);
-        Graphics.OldMatProjectionTransposed = Matrix4x4.Transpose(Graphics.OldMatProjection);
+        foreach (var node in rp.Res!.nodes) {
+            if (node is RenderPassNode renderPass)
+                renderPass.PreRender();
+        }
+
+        Graphics.MatOldViewTransposed = Matrix4x4.Transpose(Graphics.OldMatView);
+        Graphics.MatOldProjectionTransposed = Matrix4x4.Transpose(Graphics.OldMatProjection);
         Graphics.MatViewTransposed = Matrix4x4.Transpose(Graphics.MatView);
         Graphics.MatProjectionTransposed = Matrix4x4.Transpose(Graphics.MatProjection);
         Matrix4x4.Invert(Graphics.MatView, out Graphics.MatViewInverse);
