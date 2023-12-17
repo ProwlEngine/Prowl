@@ -3,6 +3,7 @@ using HexaEngine.ImGuiNET;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
 using Prowl.Runtime.Utils;
+using System;
 using System.ComponentModel.Design;
 using System.Linq;
 using static Prowl.Runtime.Mesh;
@@ -72,6 +73,56 @@ namespace Prowl.Editor.Assets
                 List<(GameObject, Node)> GOs = [];
                 Dictionary<string, int> nameToIndex = [];
                 GetNodes(scene.RootNode, ref GOs, ref nameToIndex);
+
+                //if (scene.HasTextures) {
+                //    // Embedded textures, Extract them first
+                //    foreach (var t in scene.Textures) {
+                //        if (t.IsCompressed) {
+                //            // Export it as whatever format it already is to a file
+                //            var format = ImageMagick.MagickFormat.Png;
+                //            switch (t.CompressedFormatHint) {
+                //                case "png":
+                //                    format = ImageMagick.MagickFormat.Png;
+                //                    break;
+                //                case "tga":
+                //                    format = ImageMagick.MagickFormat.Tga;
+                //                    break;
+                //                case "dds":
+                //                    format = ImageMagick.MagickFormat.Dds;
+                //                    break;
+                //                case "jpg":
+                //                    format = ImageMagick.MagickFormat.Jpg;
+                //                    break;
+                //                case "bmp":
+                //                    format = ImageMagick.MagickFormat.Bmp;
+                //                    break;
+                //                default:
+                //                    Debug.LogWarning($"Unknown texture format '{t.CompressedFormatHint}'");
+                //                    break;
+                //            }
+                //            ImageMagick.MagickImage img = new ImageMagick.MagickImage(t.CompressedData, new ImageMagick.MagickReadSettings() { Format = format });
+                //            var file = new FileInfo(Path.Combine(subAssetPath.FullName, $"{t.Filename}.{t.CompressedFormatHint}"));
+                //            img.Write(file.FullName, format);
+                //            AssetDatabase.Refresh(file);
+                //            //AssetDatabase.LastLoadedAssetID; the textures guid
+                //        } else {
+                //            // Export it as a png
+                //            byte[] data = new byte[t.NonCompressedData.Length * 4];
+                //            for (int i = 0; i < t.NonCompressedData.Length; i++) {
+                //                data[i * 4 + 0] = t.NonCompressedData[i].R;
+                //                data[i * 4 + 1] = t.NonCompressedData[i].G;
+                //                data[i * 4 + 2] = t.NonCompressedData[i].B;
+                //                data[i * 4 + 3] = t.NonCompressedData[i].A;
+                //            }
+                //
+                //            ImageMagick.MagickImage img = new ImageMagick.MagickImage(data);
+                //            var file = new FileInfo(Path.Combine(subAssetPath.FullName, $"{t.Filename}.png"));
+                //            img.Write(file.FullName, ImageMagick.MagickFormat.Png);
+                //            AssetDatabase.Refresh(file);
+                //            //AssetDatabase.LastLoadedAssetID; the textures guid
+                //        }
+                //    }
+                //}
 
                 List<Material> mats = new();
                 if (scene.HasMaterials)
