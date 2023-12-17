@@ -153,18 +153,19 @@ Pass 0
 		{
 			vec2 texCoords = gl_FragCoord.xy / Resolution;
 			vec2 pixel_size = vec2(1.0) / Resolution;
+			ivec2 pixelPos = ivec2(gl_FragCoord.xy);
 			
 			vec3 neighbourhood[9];
 			
-			neighbourhood[0] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(-1, -1) * pixel_size).xyz);
-			neighbourhood[1] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(+0, -1) * pixel_size).xyz);
-			neighbourhood[2] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(+1, -1) * pixel_size).xyz);
-			neighbourhood[3] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(-1, +0) * pixel_size).xyz);
-			neighbourhood[4] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(+0, +0) * pixel_size).xyz);
-			neighbourhood[5] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(+1, +0) * pixel_size).xyz);
-			neighbourhood[6] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(-1, +1) * pixel_size).xyz);
-			neighbourhood[7] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(+0, +1) * pixel_size).xyz);
-			neighbourhood[8] = AdjustHDRColor(texture2D(gColor, texCoords + vec2(+1, +1) * pixel_size).xyz);
+			neighbourhood[0] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(-1, -1), 0).xyz);
+			neighbourhood[1] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+0, -1), 0).xyz);
+			neighbourhood[2] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+1, -1), 0).xyz);
+			neighbourhood[3] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(-1, +0), 0).xyz);
+			neighbourhood[4] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+0, +0), 0).xyz);
+			neighbourhood[5] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+1, +0), 0).xyz);
+			neighbourhood[6] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(-1, +1), 0).xyz);
+			neighbourhood[7] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+0, +1), 0).xyz);
+			neighbourhood[8] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+1, +1), 0).xyz);
 
 			vec3 nmin = neighbourhood[0];
 			vec3 nmax = neighbourhood[0];   
@@ -173,7 +174,7 @@ Pass 0
 			    nmax = max(nmax, neighbourhood[i]);
 			}
 			
-			vec2 velocity = texture2D(gVelocity, texCoords).xy;
+			vec2 velocity = texelFetch(gVelocity, pixelPos, 0).xy;
 			vec2 histUv = texCoords + velocity;
 			
 			// sample from history buffer, with neighbourhood clamping.  
