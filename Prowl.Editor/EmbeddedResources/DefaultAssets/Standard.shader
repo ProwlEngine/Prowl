@@ -46,7 +46,7 @@ Pass 0
 		out vec2 TexCoords;
 		out vec3 VertNormal;
 		out vec3 VertColor;
-		//out mat3 TBN;
+		out mat3 TBN;
 		out vec4 PosProj;
 		out vec4 PosProjOld;
 		
@@ -59,6 +59,7 @@ Pass 0
 		{
 			vec3 boneVertexPosition = vertexPosition;
 			vec3 boneVertexNormal = vertexNormal;
+			vec3 boneVertexTangent = vertexTangent;
 			
 #ifdef SKINNING
 			for(int i=0; i<MAX_BONE_INFLUENCE; i++) {
@@ -66,6 +67,7 @@ Pass 0
 				if (index != 0) {
 					boneVertexPosition += (bindposes[index] * vec4(vertexPosition, 1.0)).xyz * vertexBoneWeights[i];
 					boneVertexNormal += (bindposes[index] * vec4(vertexNormal, 0.0)).xyz * vertexBoneWeights[i];
+					boneVertexTangent += (bindposes[index] * vec4(vertexNormal, 0.0)).xyz * vertexBoneWeights[i];
 				}
 			}
 #endif
@@ -81,13 +83,11 @@ Pass 0
 
 			mat3 normalMatrix = transpose(inverse(mat3(matModel)));
 			VertNormal = normalize(normalMatrix * boneVertexNormal);
-
-		    //vec3 n = normalize((matModel * vec4(boneVertexNormal, 0.0)).xyz);
-		    //vec3 t = normalize((matModel * vec4(vertexTangent, 0.0)).xyz);
-		    //t = normalize(t - dot(t, n) * n);
-		    
-		    //vec3 bitangent = cross(n, t);
-		    //TBN = mat3(t, bitangent, n);
+			
+			vec3 T = normalize(vec3(matModel * vec4(boneVertexTangent, 0.0)));
+			vec3 B = normalize(vec3(matModel * vec4(cross(boneVertexNormal, boneVertexTangent), 0.0)));
+			vec3 N = normalize(vec3(matModel * vec4(boneVertexNormal, 0.0)));
+		    TBN = mat3(T, B, N);
 		
 		    PosProj = mvp * vec4(boneVertexPosition, 1.0);
 		    PosProjOld = mvpOld * vec4(boneVertexPosition, 1.0);
@@ -112,7 +112,7 @@ Pass 0
 		in vec2 TexCoords;
 		in vec3 VertNormal;
 		in vec3 VertColor;
-		//in mat3 TBN;
+		in mat3 TBN;
 		in vec4 PosProj;
 		in vec4 PosProjOld;
 
@@ -135,23 +135,6 @@ Pass 0
 		uniform vec4 _MainColor; // color
 		uniform float _EmissionIntensity;
 
-		vec3 getNormalFromMap()
-		{
-		    vec3 tangentNormal = texture(_NormalTex, TexCoords).xyz * 2.0 - 1.0;
-		
-		    vec3 Q1  = dFdx(FragPos);
-		    vec3 Q2  = dFdy(FragPos);
-		    vec2 st1 = dFdx(TexCoords);
-		    vec2 st2 = dFdy(TexCoords);
-		
-		    vec3 N  = normalize(VertNormal);
-		    vec3 T  = normalize(Q1*st2.t - Q2*st1.t);
-		    vec3 B  = -normalize(cross(N, T));
-		    mat3 TBN = mat3(T, B, N);
-		
-		    return normalize(TBN * tangentNormal);
-		}
-		
 		// Interesting method someone gave me, Not sure if it works
 		vec2 UnjitterTextureUV(vec2 uv, vec2 currentJitterInPixels)
 		{
@@ -185,10 +168,10 @@ Pass 0
 			gPositionRoughness = vec4(FragPos, surface.g);
 
 			// Normal & Metallic
-			//vec4 normal = vec4(TBN * (texture(_NormalTex, uv).rgb * 2.0 - 1), 0);
-			//gNormalMetallic = vec4((view * normal).rgb, surface.b);
-			// ^ Produces NAN?
-			gNormalMetallic = vec4((matView * vec4(getNormalFromMap(), 0)).rgb, surface.b);
+			vec3 normal = texture(_NormalTex, uv).rgb;
+			normal = normal * 2.0 - 1.0;   
+			normal = normalize(TBN * normal); 
+			gNormalMetallic = vec4((matView * vec4(normal, 0)).rgb, surface.b);
 			
 			// Emission
 			gEmission.rgb = (texture(_EmissionTex, uv).rgb + _EmissiveColor.rgb) * _EmissionIntensity;
