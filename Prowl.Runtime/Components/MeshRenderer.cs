@@ -1,4 +1,6 @@
 ﻿using Prowl.Icons;
+using System;
+using System.Collections.Generic;
 using Material = Prowl.Runtime.Material;
 using Mesh = Prowl.Runtime.Mesh;
 
@@ -13,19 +15,28 @@ public class MeshRenderer : MonoBehaviour, ISerializable
     public AssetRef<Material> Material;
     public Color mainColor = Color.white;
 
+    private Dictionary<int, Matrix4x4> prevMats = new();
+
     public void OnRenderObject()
     {
-        if (Mesh.IsAvailable && Material.IsAvailable)
-        {
+        var mat = GameObject.GlobalCamRelative;
+        int camID = Camera.Current.InstanceID;
+        if (!prevMats.ContainsKey(camID)) prevMats[camID] = GameObject.GlobalCamRelative;
+        var prevMat = prevMats[camID];
+
+        if (Mesh.IsAvailable && Material.IsAvailable) {
             Material.Res!.SetColor("_MainColor", mainColor);
             Material.Res!.SetInt("ObjectID", InstanceID);
-            for (int i = 0; i < Material.Res!.PassCount; i++)
-            {
+            for (int i = 0; i < Material.Res!.PassCount; i++) {
+
                 Material.Res!.SetPass(i);
-                Graphics.DrawMeshNow(Mesh.Res!, GameObject.GlobalCamRelative, Material.Res!, GameObject.GlobalCamPreviousRelative);
+                Graphics.DrawMeshNow(Mesh.Res!, mat, Material.Res!, prevMat);
+
                 Material.Res!.EndPass();
             }
         }
+
+        prevMats[camID] = mat;
     }
 
     public void OnRenderObjectDepth()
