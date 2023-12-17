@@ -52,6 +52,7 @@ public class GameObject : EngineObject, ISerializable
     protected Vector3 rotation;
     protected Vector3 scale = Vector3.One;
     protected Vector3 globalPosition;
+    protected Vector3 globalPreviousPosition;
     protected Vector3 velocity, oldpos;
     protected Vector3 globalScale;
     protected Quaternion orientation = Quaternion.Identity, globalOrientation;
@@ -184,17 +185,6 @@ public class GameObject : EngineObject, ISerializable
          {
              Matrix4x4 matrix = Global;
              matrix.Translation -= Camera.Current.GameObject.GlobalPosition;
-             return matrix;
-         }
-     }
-
-     /// <summary>Returns a matrix relative/local to the currently rendering camera, Will throw an error if used outside rendering method</summary>
-     public Matrix4x4 GlobalCamPreviousRelative
-     {
-         get
-         {
-             Matrix4x4 matrix = Global;
-             matrix.Translation -= Camera.Current.GameObject.GlobalPrevious.Translation;
              return matrix;
          }
      }
