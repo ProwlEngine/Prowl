@@ -74,6 +74,8 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
         - Bokeh Depth of Field
         - Screen Space Reflections
         - Kawase Multi-Pass Bloom
+        - Temporal Anti-Aliasing
+    - Stochastic Transparency
     - Adjustable Render Resolutions per camera
     - Dedicated Shadow Pass for Shaders
     - Procedural Skybox with Skybox-Blended Fog
@@ -118,8 +120,7 @@ Getting Prowl up and running is super easy!
 - [ ] Networking Solution
 
 ### Rendering
-- [ ] SSAO, TAA, Screen-Space Decals, etc.
-- [ ] Transparency
+- [ ] SSAO, Screen-Space Decals, etc.
 - [ ] Realtime GI
 - [ ] Lightmaps and Light Probes
 - [ ] Cascaded shadow mapping
@@ -217,6 +218,7 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/b95d24d5-f3a8-4652-9489-bfd6660ae497)
 ![Skybox-Aware Fog](https://github.com/michaelsakharov/Prowl/assets/8621606/0cf60c18-b6bc-4190-b458-a92aca29c0d9)
 ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/6bee582a-903d-4b30-8c0b-50023ccc0c4e)
+![image](https://github.com/michaelsakharov/Prowl/assets/8621606/5108bd1f-a822-47c0-855d-c3c4f4fb29b3)
 
 
 
