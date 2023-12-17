@@ -149,6 +149,22 @@ Pass 0
 		    return result;
 		}
 
+		vec2 GetVelocity(ivec2 pixelPos) {
+			float closestDepth = 100.0;
+			ivec2 closestUVOffset;
+			for(int j = -1; j <= 1; ++j) {
+			    for(int i = -1; i <= 1; ++i) {
+			         float neighborDepth = texelFetch(gDepth, pixelPos + ivec2(i, j), 0).x;
+			         if(neighborDepth < closestDepth)
+			         {
+			             closestUVOffset = ivec2(i, j);
+			             closestDepth = neighborDepth;
+			         }
+			    }
+			}
+			return texelFetch(gVelocity, pixelPos + closestUVOffset, 0).xy;
+		}
+
 		void main()
 		{
 			vec2 texCoords = gl_FragCoord.xy / Resolution;
@@ -174,7 +190,11 @@ Pass 0
 			    nmax = max(nmax, neighbourhood[i]);
 			}
 			
-			vec2 velocity = texelFetch(gVelocity, pixelPos, 0).xy;
+			//vec2 velocity = texelFetch(gVelocity, pixelPos, 0).xy;
+			// Inflate Velocity Edge
+			vec2 velocity = GetVelocity(pixelPos);
+
+
 			vec2 histUv = texCoords + velocity;
 			
 			// sample from history buffer, with neighbourhood clamping.  
