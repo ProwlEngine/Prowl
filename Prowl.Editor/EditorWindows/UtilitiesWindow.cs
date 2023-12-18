@@ -1,7 +1,6 @@
 ﻿using HexaEngine.ImGuiNET;
 using Prowl.Icons;
 using Prowl.Runtime;
-using Raylib_cs;
 
 namespace Prowl.Editor.EditorWindows
 {

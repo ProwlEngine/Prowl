@@ -100,9 +100,6 @@ namespace Prowl.Runtime
         public static implicit operator Color(Vector4 v) => new Color((float)v.X, (float)v.Y, (float)v.Z, (float)v.W);
         public static implicit operator Color(System.Numerics.Vector4 v) => new Color(v.X, v.Y, v.Z, v.W);
 
-        public static implicit operator Raylib_cs.Color(Color c) => new Raylib_cs.Color((byte)(c.r*255f), (byte)(c.g * 255f), (byte)(c.b * 255f), (byte)(c.a * 255f));
-        public static implicit operator Color(Raylib_cs.Color c) => new Color(c.r/255f, c.g / 255f, c.b / 255f, c.a / 255f);
-
         public static bool operator !=(Color lhs, Color rhs) => lhs != rhs;
 
         public static Color operator *(Color a, Color b) => new Color(a.r * b.r, a.g * b.g, a.b * b.b, a.a * b.a);

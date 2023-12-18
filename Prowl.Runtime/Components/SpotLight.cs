@@ -1,9 +1,4 @@
 ﻿using Prowl.Icons;
-using Raylib_cs;
-using System;
-using Material = Prowl.Runtime.Material;
-using Mesh = Prowl.Runtime.Mesh;
-using Shader = Prowl.Runtime.Shader;
 
 namespace Prowl.Runtime;
 

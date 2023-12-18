@@ -5,8 +5,10 @@ using Prowl.Editor.EditorWindows;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Icons;
 using Prowl.Runtime;
+using Prowl.Runtime.ImGUI;
 using Prowl.Runtime.SceneManagement;
-using Raylib_cs;
+using Silk.NET.Input;
+using System;
 using System.Diagnostics;
 using System.Text.Json;
 using static Prowl.Editor.EditorConfiguration;
@@ -17,7 +19,7 @@ public class EditorConfiguration
 {
     public class Hotkey
     {
-        public KeyboardKey Key { get; set; }
+        public Key Key { get; set; }
 
         public bool Ctrl { get; set; }
         public bool Alt { get; set; }
@@ -53,7 +55,7 @@ public unsafe class EditorApplication : Application {
     {
         if (EditorConfig.hotkeys.TryGetValue(name, out var hotkey))
         {
-            return Raylib.IsKeyPressed(hotkey.Key) && Raylib.IsKeyDown(KeyboardKey.KEY_LEFT_CONTROL) == hotkey.Ctrl && Raylib.IsKeyDown(KeyboardKey.KEY_LEFT_ALT) == hotkey.Alt && Raylib.IsKeyDown(KeyboardKey.KEY_LEFT_SHIFT) == hotkey.Shift;
+            return Input.IsKeyPressed(hotkey.Key) && Input.IsKeyDown(Key.ControlLeft) == hotkey.Ctrl && Input.IsKeyDown(Key.AltLeft) == hotkey.Alt && Input.IsKeyDown(Key.ShiftLeft) == hotkey.Shift;
         }
         else
         {
@@ -65,8 +67,111 @@ public unsafe class EditorApplication : Application {
 
     public override void Initialize()
     {
-        // CompileExternalAssemblies();
-        base.Initialize();
+        Window.InitWindow("Prowl", 1920, 1080, Silk.NET.Windowing.WindowState.Normal, true);
+
+        Window.Load += () => {
+            controller = new ImGUIController();
+            controller.Load(1280, 720);
+
+            SceneManager.Initialize();
+            Physics.Initialize();
+
+            AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
+
+            // Immediately start with pausing all components, since were in editor we dont want them running just yet
+            MonoBehaviour.PauseLogic = true;
+
+            // Early Importer Initialization
+            ImporterAttribute.GenerateLookUp();
+
+            // Start with the project window open
+            new ProjectsWindow();
+
+            Runtime.Debug.LogSuccess("Initialization complete");
+        };
+
+        Window.Update += (delta) => {
+            try {
+                CheckReloadingAssemblies();
+
+                Time.Update(delta);
+
+                if (Project.HasProject) {
+                    //var setting = Project.ProjectSettings.GetSetting<ApplicationSettings>();
+                    Project.ProjectSettings.GetSetting<BuildSettings>(); // Called to ensure the Editor Ui exists
+
+                    if (IsHotkeyDown("SaveSceneAs", new Hotkey() { Key = Key.S, Ctrl = true, Shift = true }))
+                        MainMenuItems.SaveSceneAs();
+                    else if (IsHotkeyDown("SaveScene", new Hotkey() { Key = Key.S, Ctrl = true }))
+                        MainMenuItems.SaveScene();
+                    else if (IsHotkeyDown("BuildProject", new Hotkey() { Key = Key.B, Ctrl = true }))
+                        Project.BuildProject();
+
+                    isPlaying = PlayMode.Current != PlayMode.Mode.Editing;
+                    isActivelyPlaying = PlayMode.Current == PlayMode.Mode.Playing;
+
+                    SceneManager.Update();
+                    if (isActivelyPlaying)
+                        Physics.Update();
+                }
+
+                controller.Update((float)delta);
+                int dockspaceID = ImGui.DockSpaceOverViewport(ImGui.GetMainViewport());
+
+                if (hasDockSetup == false) {
+                    ImGui.DockBuilderRemoveNode(dockspaceID);
+                    ImGui.DockBuilderAddNode(dockspaceID, ImGuiDockNodeFlags.None);
+                    ImGui.DockBuilderSetNodeSize(dockspaceID, ImGui.GetMainViewport().Size);
+
+                    int dock_id_main_right = 0;
+                    int dock_id_main_left = 0;
+                    ImGui.DockBuilderSplitNode(dockspaceID, ImGuiDir.Right, 0.2f, ref dock_id_main_right, ref dock_id_main_left);
+                    int dock_id_main_right_top = 0;
+                    int dock_id_main_right_bottom = 0;
+                    ImGui.DockBuilderSplitNode(dock_id_main_right, ImGuiDir.Up, 0.35f, ref dock_id_main_right_top, ref dock_id_main_right_bottom);
+
+                    ImGui.DockBuilderDockWindow(FontAwesome6.FolderTree + " Hierarchy", dock_id_main_right_top);
+                    ImGui.DockBuilderDockWindow(FontAwesome6.BookOpen + " Inspector", dock_id_main_right_bottom);
+
+                    int dock_id_main_left_top = 0;
+                    int dock_id_main_left_bottom = 0;
+                    ImGui.DockBuilderSplitNode(dock_id_main_left, ImGuiDir.Down, 0.3f, ref dock_id_main_left_bottom, ref dock_id_main_left_top);
+                    ImGui.DockBuilderDockWindow(FontAwesome6.Gamepad + " Game", dock_id_main_left_top);
+                    ImGui.DockBuilderDockWindow(FontAwesome6.Camera + " Viewport", dock_id_main_left_top);
+
+                    int dock_id_main_left_bottom_left = 0;
+                    int dock_id_main_left_bottom_right = 0;
+                    ImGui.DockBuilderSplitNode(dock_id_main_left_bottom, ImGuiDir.Left, 0.25f, ref dock_id_main_left_bottom_left, ref dock_id_main_left_bottom_right);
+                    ImGui.DockBuilderDockWindow(FontAwesome6.BoxOpen + " Asset Browser", dock_id_main_left_bottom_right);
+                    ImGui.DockBuilderDockWindow(FontAwesome6.Terminal + " Console", dock_id_main_left_bottom_right);
+                    ImGui.DockBuilderDockWindow(FontAwesome6.FolderTree + " Assets", dock_id_main_left_bottom_left);
+
+                    ImGui.DockBuilderFinish(dockspaceID);
+                    hasDockSetup = true;
+                }
+
+                OnUpdateEditor?.Invoke();
+            } catch (Exception e) {
+                Console.WriteLine(e.ToString());
+            }
+        };
+
+        Window.Render += (delta) => {
+            Graphics.StartFrame();
+
+            OnDrawEditor?.Invoke();
+            EditorGui.Update();
+            controller.Draw();
+
+            Graphics.EndFrame();
+        };
+
+        Window.Closing += () => {
+            isRunning = false;
+            Physics.Dispose();
+            Runtime.Debug.Log("Is terminating...");
+        };
+
         Instance = this;
 
         // Load Editor Config
@@ -84,106 +189,8 @@ public unsafe class EditorApplication : Application {
         EditorGui.Initialize();
 
         isEditor = true;
-    }
-
-    protected override void Loop()
-    {
-        Stopwatch updateTimer = new();
-        updateTimer.Start();
-
-        // Immediately start with pausing all components, since were in editor we dont want them running just yet
-        MonoBehaviour.PauseLogic = true;
-
-        // Early Importer Initialization
-        ImporterAttribute.GenerateLookUp();
-
-        // Start with the project window open
-        new ProjectsWindow();
-
-        while (isRunning)
-        {
-            CheckReloadingAssemblies();
-
-            float updateTime = (float)updateTimer.Elapsed.TotalSeconds;
-            Time.Update(updateTime);
-            updateTimer.Restart();
-            Graphics.Update();
-
-            if (Project.HasProject)
-            {
-                //var setting = Project.ProjectSettings.GetSetting<ApplicationSettings>();
-                Project.ProjectSettings.GetSetting<BuildSettings>(); // Called to ensure the Editor Ui exists
-
-                if (IsHotkeyDown("SaveSceneAs", new Hotkey() { Key = KeyboardKey.KEY_S, Ctrl = true, Shift = true }))
-                    MainMenuItems.SaveSceneAs();
-                else if (IsHotkeyDown("SaveScene", new Hotkey() { Key = KeyboardKey.KEY_S, Ctrl = true }))
-                    MainMenuItems.SaveScene();
-                else if (IsHotkeyDown("BuildProject", new Hotkey() { Key = KeyboardKey.KEY_B, Ctrl = true }))
-                    Project.BuildProject();
-
-                isPlaying = PlayMode.Current != PlayMode.Mode.Editing;
-                isActivelyPlaying = PlayMode.Current == PlayMode.Mode.Playing;
-
-                SceneManager.Update();
-                if(isActivelyPlaying)
-                    Physics.Update();
-            }
-
-            controller.Update(updateTime);
-            int dockspaceID = ImGui.DockSpaceOverViewport(ImGui.GetMainViewport());
-
-            if (hasDockSetup == false)
-            {
-                ImGui.DockBuilderRemoveNode(dockspaceID);
-                ImGui.DockBuilderAddNode(dockspaceID, ImGuiDockNodeFlags.None);
-                ImGui.DockBuilderSetNodeSize(dockspaceID, ImGui.GetMainViewport().Size);
-
-                int dock_id_main_right = 0;
-                int dock_id_main_left = 0;
-                ImGui.DockBuilderSplitNode(dockspaceID, ImGuiDir.Right, 0.2f, ref dock_id_main_right, ref dock_id_main_left);
-                int dock_id_main_right_top = 0;
-                int dock_id_main_right_bottom = 0;
-                ImGui.DockBuilderSplitNode(dock_id_main_right, ImGuiDir.Up, 0.35f, ref dock_id_main_right_top, ref dock_id_main_right_bottom);
-
-                ImGui.DockBuilderDockWindow(FontAwesome6.FolderTree + " Hierarchy", dock_id_main_right_top);
-                ImGui.DockBuilderDockWindow(FontAwesome6.BookOpen + " Inspector", dock_id_main_right_bottom);
-
-                int dock_id_main_left_top = 0;
-                int dock_id_main_left_bottom = 0;
-                ImGui.DockBuilderSplitNode(dock_id_main_left, ImGuiDir.Down, 0.3f, ref dock_id_main_left_bottom, ref dock_id_main_left_top);
-                ImGui.DockBuilderDockWindow(FontAwesome6.Gamepad + " Game", dock_id_main_left_top);
-                ImGui.DockBuilderDockWindow(FontAwesome6.Camera + " Viewport", dock_id_main_left_top);
-
-                int dock_id_main_left_bottom_left = 0;
-                int dock_id_main_left_bottom_right = 0;
-                ImGui.DockBuilderSplitNode(dock_id_main_left_bottom, ImGuiDir.Left, 0.25f, ref dock_id_main_left_bottom_left, ref dock_id_main_left_bottom_right);
-                ImGui.DockBuilderDockWindow(FontAwesome6.BoxOpen + " Asset Browser", dock_id_main_left_bottom_right);
-                ImGui.DockBuilderDockWindow(FontAwesome6.Terminal + " Console", dock_id_main_left_bottom_right);
-                ImGui.DockBuilderDockWindow(FontAwesome6.FolderTree + " Assets", dock_id_main_left_bottom_left);
-
-                ImGui.DockBuilderFinish(dockspaceID);
-                hasDockSetup = true;
-            }
-
-            OnUpdateEditor?.Invoke();
-
-            Raylib.BeginDrawing();
-            Raylib.ClearBackground(Raylib_cs.Color.DARKGRAY);
-
-            OnDrawEditor?.Invoke();
-            EditorGui.Update(); 
-            // Editor doesnt draw the normal way, Rendering is done entirely manually
-            //if (Project.HasProject)
-            //    GameObjectManager.Draw();
-            controller.Draw();
-
-            Raylib.EndDrawing();
-
-            if (Raylib.WindowShouldClose())
-                Quit();
-        }
-
-        Physics.Dispose();
+        isRunning = true;
+        Window.Start();
     }
 
     public void CheckReloadingAssemblies()

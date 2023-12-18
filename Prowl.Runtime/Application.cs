@@ -1,11 +1,9 @@
 ﻿using Prowl.Runtime.ImGUI;
 using Prowl.Runtime.SceneManagement;
-using Raylib_cs;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Reflection;
 
 namespace Prowl.Runtime;
@@ -33,93 +31,63 @@ public abstract class Application
         Debug.Log("Initializing...");
 
         // TODO: Load Config Settings from file'
-        unsafe
-        {
-            Raylib.SetTraceLogCallback(&Logging.LogConsole);
-        }
-        Raylib.SetTraceLogLevel(TraceLogLevel.LOG_ERROR);
-        Raylib.SetConfigFlags(ConfigFlags.FLAG_VSYNC_HINT | ConfigFlags.FLAG_WINDOW_RESIZABLE);
-        Raylib.InitWindow(1280, 720, "Prowl");
-        Raylib.SetTargetFPS(60);
 
-        Raylib.InitAudioDevice();
+        Window.InitWindow("Prowl", 1920, 1080, Silk.NET.Windowing.WindowState.Normal, true);
 
-        controller = new ImGUIController();
-        controller.Load(1280, 720);
+        Window.Load += () => {
+            controller = new ImGUIController();
+            controller.Load(1280, 720);
 
-        SceneManager.Initialize();
-        Physics.Initialize();
+            SceneManager.Initialize();
+            Physics.Initialize();
 
-        AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
+            AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
 
-        Debug.LogSuccess("Initialization complete");
+            Debug.LogSuccess("Initialization complete");
+        };
+
+        Window.Update += (delta) => {
+            try {
+                Time.Update(delta);
+
+                SceneManager.Update();
+                Physics.Update();
+            } catch (Exception e) {
+                Console.WriteLine(e.ToString());
+            }
+        };
+
+        Window.Render += (delta) => {
+            Graphics.StartFrame();
+
+            SceneManager.Draw();
+            controller.Draw();
+
+            Graphics.EndFrame();
+        };
+
+        Window.Closing += () => {
+            isRunning = false;
+            Physics.Dispose();
+            Debug.Log("Is terminating...");
+        };
+
+        isRunning = true;
+        isPlaying = true; // Base application is not the editor, isplaying is always true
+        isActivelyPlaying = true; // Base application is not the editor, isActivelyPlaying is always true
+        Window.Start();
     }
 
-    static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+    protected static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
         // Log the exception, display it, etc
         Console.WriteLine((e.ExceptionObject as Exception).Message);
     }
 
-    public virtual void Run()
-    {
-        if (isRunning)
-            throw new Exception("Application is already running!");
-        isRunning = true;
-
-        // starts loops on all threads
-        Debug.If(!Raylib.IsWindowReady(), "rendering engine has not yet been initialized or initialization has not been fully completed");
-        Debug.If(!Raylib.IsAudioDeviceReady(), "Audio engine has not yet been initialized or initialization has not been fully completed");
-        //Console.If(!PhysicsEngine.IsInit, "physics engine has not yet been initialized or initialization has not been fully completed");
-
-        try
-        {
-            Loop();
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine(e.ToString());
-        }
-    }
-
-    protected virtual void Loop()
-    {
-        Stopwatch updateTimer = new();
-        updateTimer.Start();
-
-        while (isRunning)
-        {
-            isPlaying = true; // Base application is not the editor, isplaying is always true
-            isActivelyPlaying = true; // Base application is not the editor, isActivelyPlaying is always true
-
-            float updateTime = (float)updateTimer.Elapsed.TotalSeconds;
-            Time.Update(updateTime);
-            updateTimer.Restart();
-            Graphics.Update();
-            SceneManager.Update();
-            Physics.Update();
-
-            Raylib.BeginDrawing();
-            Raylib.ClearBackground(Raylib_cs.Color.DARKGRAY);
-
-            SceneManager.Draw();
-            controller.Draw();
-
-            Raylib.EndDrawing();
-
-            if (Raylib.WindowShouldClose())
-                Quit();
-        }
-
-        Physics.Dispose();
-    }
-
     public static void Quit()
     {
-        isRunning = false;
-        Debug.Log("Is terminating...");
+        Window.Stop();
     }
-
 
     public static void ClearTypeDescriptorCache() {
         var typeConverterAssembly = typeof(TypeConverter).Assembly;

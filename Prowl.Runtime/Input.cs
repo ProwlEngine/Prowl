@@ -1,56 +1,51 @@
-﻿using Raylib_cs;
-using System.Numerics;
+﻿using Silk.NET.Input;
+using Silk.NET.Maths;
+using System.Collections.Generic;
 
 namespace Prowl.Runtime;
 
 public static class Input
 {
+    public static IInputContext Context { get; internal set; }
 
-    // KEYBOARD
-    public static bool IsKeyPressed(KeyboardKey key) => Raylib.IsKeyPressed(key);
-    public static bool IsKeyDown(KeyboardKey key) => Raylib.IsKeyDown(key);
-    public static bool IsKeyReleased(KeyboardKey key) => Raylib.IsKeyReleased(key);
-    public static bool IsKeyUp(KeyboardKey key) => Raylib.IsKeyUp(key);
-    public static int GetKeyPressed() => Raylib.GetKeyPressed();
-    public static void SetExitKey(KeyboardKey key) => Raylib.SetExitKey(key);
+    public static IReadOnlyList<IKeyboard> Keyboards => Context.Keyboards;
+    public static IReadOnlyList<IMouse> Mice => Context.Mice;
+    public static IReadOnlyList<IJoystick> Joysticks => Context.Joysticks;
 
-    // MOUSE
-    public static bool IsMouseButtonPressed(MouseButton button) => Raylib.IsMouseButtonPressed(button);
-    public static bool IsMouseButtonDown(MouseButton button) => Raylib.IsMouseButtonDown(button);
-    public static bool IsMouseButtonReleased(MouseButton button) => Raylib.IsMouseButtonReleased(button);
-    public static bool IsMouseButtonUp(MouseButton button) => Raylib.IsMouseButtonUp(button);
-    public static Vector2 MousePosition => Raylib.GetMousePosition().ToDouble();
-    public static Vector2 MouseDelta => Raylib.GetMouseDelta().ToDouble();
-    public static float MouseWheel() => Raylib.GetMouseWheelMove();
-    public static void SetMouseCursor(MouseCursor cursor) => Raylib.SetMouseCursor(cursor);
-    public static void SetMousePosition(Vector2 pos) => Raylib.SetMousePosition((int)pos.X, (int)pos.Y);
-    public static void SetMouseOffset(Vector2 offset) => Raylib.SetMouseOffset((int)offset.X, (int)offset.Y);
-    public static void SetMouseScale(Vector2 scale) => Raylib.SetMouseScale((float)scale.X, (float)scale.Y);
+    internal static void Initialize()
+    {
+        Context = Window.InternalWindow.CreateInput();
+        PreviousMousePosition = MousePosition;
+    }
 
-    // GAMEPAD
-    public static bool IsGamepadAvailable(int gamepad) => Raylib.IsGamepadAvailable(gamepad);
-    public static bool IsGamepadButtonPressed(int gamepad, GamepadButton button) => Raylib.IsGamepadButtonPressed(gamepad, button);
-    public static bool IsGamepadButtonDown(int gamepad, GamepadButton button) => Raylib.IsGamepadButtonDown(gamepad, button);
-    public static bool IsGamepadButtonReleased(int gamepad, GamepadButton button) => Raylib.IsGamepadButtonReleased(gamepad, button);
-    public static bool IsGamepadButtonUp(int gamepad, GamepadButton button) => Raylib.IsGamepadButtonUp(gamepad, button);
-    public static int GetGamepadButtonPressed() => Raylib.GetGamepadButtonPressed();
-    public static int GetGamepadAxisCount(int gamepad) => Raylib.GetGamepadAxisCount(gamepad);
-    public static float GetGamepadAxisMovement(int gamepad, GamepadAxis axis) => Raylib.GetGamepadAxisMovement(gamepad, axis);
-    public static unsafe void SetGamepadMappings(string mappings) => Raylib.SetGamepadMappings(mappings.ToUTF8Buffer().AsPointer());
+    internal static void Dispose()
+    {
+        Context.Dispose();
+    }
 
-    // TODO IMPLEMENT TOUCH
+    internal static void Update()
+    {
+        PreviousMousePosition = MousePosition;
+    }
 
-    // CURSOR
-    public static void ShowCursor() => Raylib.ShowCursor();
+    public static bool IsKeyDown(Key key)
+    {
+        foreach (var keyboard in Keyboards)
+            if (keyboard.IsKeyPressed(key))
+                return true;
+        return false;
+    } 
 
-    public static void HideCursor() => Raylib.HideCursor();
+    public static Vector2D<float> PreviousMousePosition { get; private set; }
+    public static Vector2D<float> MouseDelta => PreviousMousePosition - MousePosition;
+    public static Vector2D<float> MousePosition => Mice[0].Position.ToGeneric();
 
-    public static bool IsCursorHidden() => Raylib.IsCursorHidden();
 
-    public static void EnableCursor() => Raylib.EnableCursor();
-
-    public static void DisableCursor() => Raylib.DisableCursor();
-
-    public static bool IsCursorOnScreen() => Raylib.IsCursorOnScreen();
-
+    public static bool IsMouseDown(MouseButton button)
+    {
+        foreach (var mouse in Mice)
+            if (mouse.IsButtonPressed(button))
+                return true;
+        return false;
+    }
 }

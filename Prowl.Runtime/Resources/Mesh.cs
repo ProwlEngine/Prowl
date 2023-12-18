@@ -1,7 +1,6 @@
-﻿using Raylib_cs;
+﻿using Silk.NET.OpenGL;
 using System;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
 using static Prowl.Runtime.Mesh.VertexFormat;
 
@@ -48,39 +47,44 @@ namespace Prowl.Runtime
             if (vertices.Length == 0) throw new($"The mesh argument '{nameof(vertices)}' is empty!");
             ArgumentNullException.ThrowIfNull(indices);
 
-            vao = Rlgl.rlLoadVertexArray();
-            Rlgl.rlEnableVertexArray(vao);
-
-            fixed (Vertex* vptr = vertices)
-                vbo = Rlgl.rlLoadVertexBuffer(vptr, vertexCount * sizeof(Vertex), false);
-
+            vao = Graphics.GL.GenVertexArray();
+            Graphics.GL.BindVertexArray(vao);
+            Graphics.CheckGL();
+            fixed (Vertex* vptr = vertices) {
+                vbo  = Graphics.GL.GenBuffer();
+                Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
+                Graphics.GL.BufferData(BufferTargetARB.ArrayBuffer, (uint)(vertexCount * sizeof(Vertex)), vptr, BufferUsageARB.StaticDraw);
+            }
+            Graphics.CheckGL();
             for (var i = 0; i < format.Elements.Length; i++)
             {
                 var element = format.Elements[i];
-                var index = (int)element.Semantic;
-                Rlgl.rlEnableVertexAttribute((uint)index);
-                //Rlgl.rlSetVertexAttribute((uint)index, element.Count, (int)element.Type, element.Normalized, element.Offset, null);
+                var index = (uint)element.Semantic;
+                Graphics.GL.EnableVertexAttribArray(index);
                 int offset = (int)element.Offset;
-                Rlgl.rlSetVertexAttribute((uint)index, element.Count, (int)element.Type, element.Normalized, format.Size, (void*)offset);
-                //Rlgl.rlSetVertexAttributeDivisor((uint)index, element.Divisor);
+                Graphics.GL.VertexAttribPointer(index, element.Count, (GLEnum)element.Type, element.Normalized, (uint)format.Size, (void*)offset);
             }
 
-            fixed (ushort* iptr = indices)
-                ibo = Rlgl.rlLoadVertexBufferElement(iptr, indices.Length * sizeof(ushort), false);
+            fixed (ushort* iptr = indices) {
+
+                ibo = Graphics.GL.GenBuffer();
+                Graphics.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, ibo);
+                Graphics.GL.BufferData(BufferTargetARB.ElementArrayBuffer, (uint)(indices.Length * sizeof(ushort)), iptr, BufferUsageARB.StaticDraw);
+            }
 
             Debug.Log($"VAO: [ID {vao}] Mesh uploaded successfully to VRAM (GPU)");
 
-            Rlgl.rlDisableVertexBuffer();
-            Rlgl.rlDisableVertexArray();
+            Graphics.GL.BindVertexArray(0);
+            Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, 0);
         }
 
         // Unload from memory (RAM and VRAM)
         void Unload()
         {
             // Unload rlgl vboId data
-            Rlgl.rlUnloadVertexArray(vao);
+            Graphics.GL.DeleteVertexArray(vao);
             vao = 0;
-            Rlgl.rlUnloadVertexBuffer(vbo);
+            Graphics.GL.DeleteBuffer(vbo);
         }
 
         public override void OnDispose()
@@ -267,7 +271,7 @@ namespace Prowl.Runtime
             writer.Write(length);
             int elementSize = Marshal.SizeOf<T>();
             byte[] bytes = new byte[length * elementSize];
-            Buffer.BlockCopy(array, 0, bytes, 0, bytes.Length);
+            System.Buffer.BlockCopy(array, 0, bytes, 0, bytes.Length);
             writer.Write(bytes);
         }
 
@@ -282,7 +286,7 @@ namespace Prowl.Runtime
             byte[] bytes = reader.ReadBytes(length * elementSize);
             T[] array = new T[length];
 
-            Buffer.BlockCopy(bytes, 0, array, 0, bytes.Length);
+            System.Buffer.BlockCopy(bytes, 0, array, 0, bytes.Length);
 
             return array;
         }

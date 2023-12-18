@@ -47,7 +47,7 @@
       <PackageReference Include="HexaEngine.ImPlot" Version="2.0.17" />
       <PackageReference Include="JetBrains.Annotations" Version="2022.1.0" />
       <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="13.4.0" />
-      <PackageReference Include="Raylib-cs" Version="4.5.0.4" />
+      <PackageReference Include="Silk.NET" Version="2.20.0" />
       <PackageReference Include="System.Collections.Specialized" Version="4.3.0" />
     </ItemGroup>
 

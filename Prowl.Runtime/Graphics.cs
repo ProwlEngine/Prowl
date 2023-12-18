@@ -1,12 +1,51 @@
-﻿using Raylib_cs;
+﻿using Silk.NET.Core.Native;
+using Silk.NET.Maths;
+using Silk.NET.OpenGL;
 using System;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
 namespace Prowl.Runtime
 {
     public static class Graphics
     {
+
+        public static int GLMajorVersion { get; private set; }
+
+        public static int GLMinorVersion { get; private set; }
+
+        public static GL GL { get; internal set; }
+
+        public static bool DepthTest {
+            get {
+                return GL.IsEnabled(GLEnum.DepthTest);
+            }
+            set {
+                if (value) GL.Enable(GLEnum.DepthTest);
+                else GL.Disable(GLEnum.DepthTest);
+            }
+        }
+
+        public static bool CullFace {
+            get {
+                return GL.IsEnabled(GLEnum.CullFace);
+            }
+            set {
+                if (value) GL.Enable(GLEnum.CullFace);
+                else GL.Disable(GLEnum.CullFace);
+            }
+        }
+
+        public static bool Blend {
+            get {
+                return GL.IsEnabled(GLEnum.Blend);
+            }
+            set {
+                if (value) GL.Enable(GLEnum.Blend);
+                else GL.Disable(GLEnum.Blend);
+            }
+        }
+
+        public static event Action UpdateShadowmaps;
+
         public static Vector2 Resolution;
         public static Matrix4x4 MatView;
         public static Matrix4x4 MatViewTransposed;
@@ -24,11 +63,13 @@ namespace Prowl.Runtime
         public static Matrix4x4 MatDepthProjection;
         public static Matrix4x4 MatDepthView;
 
+        public static Vector2 Jitter { get; private set; }
+        public static Vector2 PreviousJitter { get; private set; }
+        public static bool UseJitter;
+
         private static Material depthMat;
         private static AssetRef<Texture2D> defaultNoise;
-
-        public static event Action UpdateShadowmaps;
-
+        internal static Vector2D<int> FrameBufferSize;
         public readonly static Vector2[] Halton16 =
         [
             new Vector2(0.5f, 0.333333f),
@@ -49,27 +90,105 @@ namespace Prowl.Runtime
             new Vector2(0.03125f, 0.592593f),
         ];
 
-        public static Vector2 Jitter { get; private set; }
-        public static Vector2 PreviousJitter { get; private set; }
-        public static bool UseJitter;
-
-        public static Material DepthMat
+        static readonly DrawBufferMode[] buffers =
         {
-            get
-            {
-                if (depthMat == null)
-                    depthMat = new Material(Shader.Find("Defaults/Depth.shader"));
-                return depthMat;
+            DrawBufferMode.ColorAttachment0,  DrawBufferMode.ColorAttachment1,  DrawBufferMode.ColorAttachment2,
+            DrawBufferMode.ColorAttachment3,  DrawBufferMode.ColorAttachment4,  DrawBufferMode.ColorAttachment5,
+            DrawBufferMode.ColorAttachment6,  DrawBufferMode.ColorAttachment7,  DrawBufferMode.ColorAttachment8,
+            DrawBufferMode.ColorAttachment9,  DrawBufferMode.ColorAttachment10, DrawBufferMode.ColorAttachment11,
+            DrawBufferMode.ColorAttachment12, DrawBufferMode.ColorAttachment13, DrawBufferMode.ColorAttachment14,
+            DrawBufferMode.ColorAttachment15, DrawBufferMode.ColorAttachment16, DrawBufferMode.ColorAttachment16,
+            DrawBufferMode.ColorAttachment17, DrawBufferMode.ColorAttachment18, DrawBufferMode.ColorAttachment19,
+            DrawBufferMode.ColorAttachment20, DrawBufferMode.ColorAttachment21, DrawBufferMode.ColorAttachment22,
+            DrawBufferMode.ColorAttachment23, DrawBufferMode.ColorAttachment24, DrawBufferMode.ColorAttachment25,
+            DrawBufferMode.ColorAttachment26, DrawBufferMode.ColorAttachment27, DrawBufferMode.ColorAttachment28,
+            DrawBufferMode.ColorAttachment29, DrawBufferMode.ColorAttachment30, DrawBufferMode.ColorAttachment31
+        };
+
+        public static int MaxRenderbufferSize { get; private set; }
+        public static int MaxFramebufferColorAttachments { get; private set; }
+        public static int MaxDrawBuffers { get; private set; }
+        public static int MaxSamples { get; private set; }
+
+        public static void Initialize()
+        {
+            GL = GL.GetApi(Window.InternalWindow);
+
+            unsafe {
+                GL.DebugMessageCallback(DebugCallback, null);
+            }
+            GL.Enable(EnableCap.DebugOutput);
+            GL.Enable(EnableCap.DebugOutputSynchronous);
+
+            GLMajorVersion = GL.GetInteger(GLEnum.MajorVersion);
+            GLMinorVersion = GL.GetInteger(GLEnum.MinorVersion);
+
+            if (GLMajorVersion < 3)
+                throw new PlatformNotSupportedException("Burex only supports platforms with OpenGL 3.0 and up.");
+
+            CheckGL();
+
+            // Textures
+            MaxSamples = GL.GetInteger(GLEnum.MaxSamples);
+            MaxTextureSize = GL.GetInteger(GLEnum.MaxTextureSize);
+            MaxTextureBufferSize = GL.GetInteger(GLEnum.MaxTextureBufferSize);
+            Max3DTextureSize = GL.GetInteger(GLEnum.Max3DTextureSize);
+            MaxCubeMapTextureSize = GL.GetInteger(GLEnum.MaxCubeMapTextureSize);
+            MaxArrayTextureLayers = GL.GetInteger(GLEnum.MaxArrayTextureLayers);
+
+            MaximumTextureUnits = GL.GetInteger(GetPName.MaxTextureImageUnits);
+            currentlyBoundSlots = new uint[MaximumTextureUnits];
+            for (int i = 0; i < MaximumTextureUnits; i++)
+                currentlyBoundSlots[i] = 0;
+
+            MaxRenderbufferSize = GL.GetInteger(GLEnum.MaxRenderbufferSize);
+            MaxFramebufferColorAttachments = GL.GetInteger(GLEnum.MaxColorAttachments);
+            MaxDrawBuffers = GL.GetInteger(GLEnum.MaxDrawBuffers);
+
+            CheckGL();
+        }
+
+        private static void DebugCallback(GLEnum source, GLEnum type, int id, GLEnum severity, int length, nint message, nint userParam)
+        {
+            var msg = SilkMarshal.PtrToString(message, NativeStringEncoding.UTF8);
+            Console.WriteLine($"OpenGL Debug Message: {msg}");
+        }
+
+        public static void CheckGL()
+        {
+            var errorCode = GL.GetError();
+            while (errorCode != GLEnum.NoError) {
+                Console.WriteLine($"OpenGL Error: {errorCode}" + Environment.NewLine + $"StackTrace: " + Environment.StackTrace);
+                errorCode = GL.GetError();
             }
         }
 
-        public static void Update()
+        public static void ActivateDrawBuffers(int count)
+        {
+            GL.DrawBuffers((uint)count, buffers); CheckGL();
+        }
+
+        public static void Clear(float r = 0, float g = 0, float b = 0, float a = 1, bool color = true, bool depth = true, bool stencil = true)
+        {
+            GL.ClearColor(r, g, b, a);
+            GL.Clear((uint)(color ? ClearBufferMask.ColorBufferBit : 0) | (uint)(depth ? ClearBufferMask.DepthBufferBit : 0) | (uint)(stencil ? ClearBufferMask.StencilBufferBit : 0));
+            CheckGL();
+        }
+
+        public static void StartFrame()
         {
             // Halton Jitter
             long n = Time.frameCount % 16;
-            var halton = Graphics.Halton16[n];
+            var halton = Halton16[n];
             PreviousJitter = Jitter;
             Jitter = new Vector2((halton.X - 0.5f), (halton.Y - 0.5f)) * 2.0;
+
+            Clear();
+        }
+
+        public static void EndFrame()
+        {
+
         }
 
         public static void UpdateAllShadowmaps()
@@ -216,5 +335,10 @@ namespace Prowl.Runtime
             Rlgl.rlEnableBackfaceCulling();
         }
 
+
+        internal static void Dispose()
+        {
+            GL.Dispose();
+        }
     }
 }

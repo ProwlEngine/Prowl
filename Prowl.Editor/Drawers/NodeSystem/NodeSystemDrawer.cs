@@ -3,7 +3,6 @@ using HexaEngine.ImNodesNET;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
 using Prowl.Runtime.NodeSystem;
-using Raylib_cs;
 using System.Reflection;
 using System.Text;
 using static Prowl.Runtime.NodeSystem.Node;
@@ -255,11 +254,10 @@ namespace Prowl.Editor.Drawers.NodeSystem
         {
             unchecked
             {
-                var array = type.FullName.GetUTF8Bytes();
-                if (array == null)
-                    return 0;
+                byte[] arr = new byte[type.FullName.Length];
+                Encoding.ASCII.GetBytes(type.FullName, 0, type.FullName.Length, arr, 0);
                 int hash = 17;
-                foreach (byte element in array)
+                foreach (byte element in arr)
                     hash = hash * 31 + element;
                 var ran = new Random(hash+5);
                 float r = 0;

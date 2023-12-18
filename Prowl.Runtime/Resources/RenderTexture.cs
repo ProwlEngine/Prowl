@@ -1,4 +1,5 @@
-﻿using Raylib_cs;
+﻿using Silk.NET.Maths;
+using Silk.NET.OpenGL;
 using System;
 
 namespace Prowl.Runtime
@@ -6,14 +7,15 @@ namespace Prowl.Runtime
     public sealed class RenderTexture : EngineObject, ISerializable
     {
         public uint fboId { get; private set; }
-        public Raylib_cs.Texture2D[] InternalTextures { get; private set; }
-        public Raylib_cs.Texture2D InternalDepth { get; private set; }
+        public Texture2D MainTexture => InternalTextures[0];
+        public Texture2D[] InternalTextures { get; private set; }
+        public RenderBuffer InternalDepth { get; private set; }
 
-        public int Width;
-        public int Height;
+        public int Width { get; private set; }
+        public int Height { get; private set; }
         private int numTextures;
         private bool hasDepthAttachment;
-        private PixelFormat[] textureFormats;
+        private Texture.TextureImageFormat[] textureFormats;
 
         public RenderTexture() : base("RenderTexture")
         {
@@ -26,117 +28,89 @@ namespace Prowl.Runtime
 
         public RenderTexture(int Width, int Height, int numTextures = 1, bool hasDepthAttachment = true, PixelFormat[]? formats = null) : base("RenderTexture")
         {
-            if (numTextures < 0 || numTextures > 8)
-                throw new Exception("Invalid number of textures! [0-8]");
+            if (numTextures < 1 || numTextures > Graphics.MaxFramebufferColorAttachments)
+                throw new Exception("Invalid number of textures! [1-" + Graphics.MaxFramebufferColorAttachments + "]");
 
             this.Width = Width;
             this.Height = Height;
             this.numTextures = numTextures;
             this.hasDepthAttachment = hasDepthAttachment;
 
-            if (formats == null)
-            {
-                textureFormats = new PixelFormat[numTextures];
+            if (formats == null) {
+                this.textureFormats = new Texture.TextureImageFormat[numTextures];
                 for (int i = 0; i < numTextures; i++)
-                    textureFormats[i] = PixelFormat.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8;
-            }
-            else
-            {
+                    this.textureFormats[i] = Texture.TextureImageFormat.Float4;
+            } else {
                 if (formats.Length != numTextures)
                     throw new ArgumentException("Invalid number of texture formats!");
-                textureFormats = formats;
+                this.textureFormats = formats;
             }
 
             // Generate FBO
-            fboId = Rlgl.rlLoadFramebuffer(Width, Height);
+            fboId = Graphics.GL.GenFramebuffer();
             if (fboId <= 0)
                 throw new Exception("RenderTexture: [ID {fboId}] Failed to generate RenderTexture.");
 
-            Rlgl.rlEnableFramebuffer(fboId);
+            Graphics.GL.BindFramebuffer(FramebufferTarget.Framebuffer, fboId);
 
-            unsafe
-            {
+            unsafe {
                 // Generate textures
-                InternalTextures = new Raylib_cs.Texture2D[numTextures];
-                for (int i = 0; i < numTextures; i++)
-                {
-                    InternalTextures[i].id = Rlgl.rlLoadTexture(null, Width, Height, textureFormats[i], 1);
-                    if (InternalTextures[i].id <= 0) throw new Exception("RenderTexture: [ID {fboId}] Failed to generate Texture for RenderTexture.");
-                    InternalTextures[i].format = textureFormats[i];
-                    InternalTextures[i].width = Width;
-                    InternalTextures[i].height = Height;
-                    InternalTextures[i].mipmaps = 1;
-                    Raylib.SetTextureFilter(InternalTextures[i], TextureFilter.TEXTURE_FILTER_BILINEAR);
-                    Raylib.SetTextureWrap(InternalTextures[i], TextureWrap.TEXTURE_WRAP_CLAMP);
-
-                    Rlgl.rlFramebufferAttach(fboId, InternalTextures[i].id, FramebufferAttachType.RL_ATTACHMENT_COLOR_CHANNEL0 + i, FramebufferAttachTextureType.RL_ATTACHMENT_TEXTURE2D, 0);
+                InternalTextures = new Texture2D[numTextures];
+                for (int i = 0; i < numTextures; i++) {
+                    InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, false, 0, this.textureFormats[i]);
+                    Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, (TextureTarget)InternalTextures[i].Type, InternalTextures[i].Handle, 0);
                 }
-                Rlgl.rlActiveDrawBuffers(numTextures);
+                Graphics.ActivateDrawBuffers(numTextures);
 
                 // Generate depth attachment if requested
-                if (hasDepthAttachment)
-                {
-                    var depth = new Raylib_cs.Texture2D();
-                    depth.id = Rlgl.rlLoadTextureDepth(Width, Height, false);
-                    depth.format = (PixelFormat)19;
-                    depth.width = Width;
-                    depth.height = Height;
-                    depth.mipmaps = 1;
+                if (hasDepthAttachment) {
+                    var depth = new RenderBuffer((uint)Width, (uint)Height, RenderBuffer.RenderbufferFormat.Depth24);
                     InternalDepth = depth;
-                    //Raylib.SetTextureFilter(depth, TextureFilter.TEXTURE_FILTER_POINT);
-                    // 0x2800 = GL_TEXTURE_MAG_FILTER
-                    // 0x2801 = GL_TEXTURE_MIN_FILTER
-                    // 0x2802 = L_TEXTURE_WRAP_S
-                    // 0x2803 = L_TEXTURE_WRAP_T
-                    // 0x2600 = GL_NEAREST
-                    // 0x812F = GL_CLAMP_TO_EDGE
-                    Rlgl.rlTextureParameters(depth.id, 0x2800, 0x2600);
-                    Rlgl.rlTextureParameters(depth.id, 0x2801, 0x2600);
-                    Rlgl.rlTextureParameters(depth.id, 0x2802, 0x812F);
-                    Rlgl.rlTextureParameters(depth.id, 0x2803, 0x812F);
+                    Graphics.GL.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, RenderbufferTarget.Renderbuffer, depth.Handle);
 
-                    Rlgl.rlFramebufferAttach(fboId, InternalDepth.id, FramebufferAttachType.RL_ATTACHMENT_DEPTH, FramebufferAttachTextureType.RL_ATTACHMENT_TEXTURE2D, 0);
                 }
 
-                if (!Rlgl.rlFramebufferComplete(fboId))
+                if (Graphics.GL.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
                     throw new Exception("RenderTexture: [ID {fboId}] RenderTexture object creation failed.");
 
                 // Unbind FBO
-                Rlgl.rlDisableFramebuffer();
+                Graphics.GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
             }
+
+            Graphics.CheckGL();
         }
 
         public void Begin()
         {
-            if (numTextures != 0)
-            {
-                Raylib.BeginTextureMode(new RenderTexture2D() { id = fboId, texture = InternalTextures[0], depth = InternalDepth });
-            }
-            else if (hasDepthAttachment)
-            {
-                Raylib.BeginTextureMode(new RenderTexture2D() { id = fboId, texture = InternalDepth, depth = InternalDepth });
-            }
+            Graphics.GL.BindFramebuffer(FramebufferTarget.Framebuffer, fboId);
+            Graphics.GL.Viewport(0, 0, (uint)Width, (uint)Height);
+            Graphics.FrameBufferSize = new Vector2D<int>(Width, Height);
 
-            Rlgl.rlActiveDrawBuffers(Math.Max(1, numTextures));
+            Graphics.ActivateDrawBuffers(Math.Max(1, numTextures));
         }
 
         public void End()
         {
-            Raylib.EndTextureMode();
+            Graphics.GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            Graphics.GL.Viewport(0, 0, (uint)Window.InternalWindow.Size.X, (uint)Window.InternalWindow.Size.Y);
+            Graphics.FrameBufferSize = new Vector2D<int>(Width, Height);
         }
 
         public override void OnDispose()
         {
             if (fboId <= 0) return;
             foreach (var texture in InternalTextures)
-                Rlgl.rlUnloadTexture(texture.id);
+                Graphics.GL.DeleteTexture(texture.Handle);
 
-            // Depth should be automatically unloaded
-            Rlgl.rlUnloadFramebuffer(fboId);
+            Graphics.GL.DeleteRenderbuffer(InternalDepth.Handle);
+            Graphics.GL.DeleteFramebuffer(fboId);
+
+            Graphics.CheckGL();
         }
 
         public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
         {
+            asd
             CompoundTag compoundTag = new CompoundTag();
             compoundTag.Add("Width", new IntTag(Width));
             compoundTag.Add("Height", new IntTag(Height));
@@ -151,6 +125,7 @@ namespace Prowl.Runtime
 
         public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
         {
+            asd
             Width = value["Width"].IntValue;
             Height = value["Height"].IntValue;
             numTextures = value["NumTextures"].IntValue;

@@ -1,7 +1,6 @@
-﻿using Raylib_cs;
+﻿using Silk.NET.OpenGL;
 using System;
 using System.Collections.Generic;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace Prowl.Runtime
 {
@@ -54,15 +53,15 @@ namespace Prowl.Runtime
         public List<ShaderPass> Passes = new();
         public ShaderShadowPass? ShadowPass;
 
-        public (Raylib_cs.Shader[], Raylib_cs.Shader) Compile(string[] defines)
+        public (uint[], uint) Compile(string[] defines)
         {
-            Raylib_cs.Shader[] compiledPasses = new Raylib_cs.Shader[Passes.Count];
+            uint[] compiledPasses = new uint[Passes.Count];
             for (int i = 0; i < Passes.Count; i++)
                 compiledPasses[i] = CompilePass(i, defines);
             return (compiledPasses, CompileShadowPass(defines));
         }
 
-        public Raylib_cs.Shader CompileShadowPass(string[] defines)
+        public uint CompileShadowPass(string[] defines)
         {
             if (ShadowPass == null)
             {
@@ -79,7 +78,7 @@ namespace Prowl.Runtime
             }
         }
 
-        public Raylib_cs.Shader CompilePass(int pass, string[] defines)
+        public uint CompilePass(int pass, string[] defines)
         {
             string frag = Passes[pass].Fragment;
             string vert = Passes[pass].Vertex;
@@ -87,16 +86,15 @@ namespace Prowl.Runtime
             return CompileShader(frag, vert, "Defaults/Invalid.shader");
         }
 
-        private Raylib_cs.Shader CompileShader(string frag, string vert, string fallback)
+        private uint CompileShader(string frag, string vert, string fallback)
         {
-            Raylib_cs.Shader compiled = Raylib.LoadShaderFromMemory(vert, frag);
-            if (compiled.id <= 0)
-            {
-                var fallbackShader = Find(fallback);
-                if (fallbackShader.IsAvailable)
-                    return fallbackShader.Res!.CompilePass(0, []);
+            try {
+                return Compile(vert, "", frag);
+            } catch (Exception e) {
+                Console.WriteLine(e);
             }
-            return compiled;
+            var fallbackShader = Find(fallback);
+            return fallbackShader.Res.CompilePass(0, []);
         }
 
         private void PrepareFragVert(ref string frag, ref string vert, string[] defines)
@@ -118,6 +116,127 @@ namespace Prowl.Runtime
             // Insert the version at the start
             frag = frag.Insert(0, $"#version 330\n");
             vert = vert.Insert(0, $"#version 330\n");
+        }
+
+        private uint Compile(string vertexSource, string geometrySource, string fragmentSource)
+        {
+            // Create the program
+            uint shaderProgram = Graphics.GL.CreateProgram();
+
+            // Initialize compilation log info variables
+            int statusCode = -1;
+            string info = string.Empty;
+
+            // Create vertex shader if requested
+            if (!string.IsNullOrEmpty(vertexSource)) {
+                // Create and compile the shader
+                uint vertexShader = Graphics.GL.CreateShader(ShaderType.VertexShader);
+                Graphics.GL.ShaderSource(vertexShader, vertexSource);
+                Graphics.GL.CompileShader(vertexShader);
+
+                // Check the compile log
+                Graphics.GL.GetShaderInfoLog(vertexShader, out info);
+                Graphics.GL.GetShader(vertexShader, ShaderParameterName.CompileStatus, out statusCode);
+
+                // Check the compile log
+                if (statusCode != 1) {
+                    // Delete every handles when compilation failed
+                    Graphics.GL.DeleteShader(vertexShader);
+                    Graphics.GL.DeleteProgram(shaderProgram);
+
+                    throw new InvalidOperationException("Failed to Compile Vertex Shader Source.\n" +
+                        info + "\n\n" +
+                        "Status Code: " + statusCode.ToString());
+                }
+
+                // Attach the shader to the program, and delete it (not needed anymore)
+                Graphics.GL.AttachShader(shaderProgram, vertexShader);
+                Graphics.GL.DeleteShader(vertexShader);
+
+                Graphics.CheckGL();
+            }
+
+            // Create geometry shader if requested
+            if (!string.IsNullOrEmpty(geometrySource)) {
+                // Create and compile the shader
+                uint geometryShader = Graphics.GL.CreateShader(ShaderType.GeometryShader);
+                Graphics.GL.ShaderSource(geometryShader, geometrySource);
+                Graphics.GL.CompileShader(geometryShader);
+
+                // Check the compile log
+                Graphics.GL.GetShaderInfoLog(geometryShader, out info);
+                Graphics.GL.GetShader(geometryShader, ShaderParameterName.CompileStatus, out statusCode);
+
+                // Check the compile log
+                if (statusCode != 1) {
+                    // Delete every handles when compilation failed
+                    Graphics.GL.DeleteShader(geometryShader);
+                    Graphics.GL.DeleteProgram(shaderProgram);
+
+                    throw new InvalidOperationException("Failed to Compile Geometry Shader Source.\n" +
+                        info + "\n\n" +
+                        "Status Code: " + statusCode.ToString());
+                }
+
+                // Attach the shader to the program, and delete it (not needed anymore)
+                Graphics.GL.AttachShader(shaderProgram, geometryShader);
+                Graphics.GL.DeleteShader(geometryShader);
+
+                Graphics.CheckGL();
+            }
+
+            // Create fragment shader if requested
+            if (!string.IsNullOrEmpty(fragmentSource)) {
+                // Create and compile the shader
+                uint fragmentShader = Graphics.GL.CreateShader(ShaderType.FragmentShader);
+                Graphics.GL.ShaderSource(fragmentShader, fragmentSource);
+                Graphics.GL.CompileShader(fragmentShader);
+
+                // Check the compile log
+                Graphics.GL.GetShaderInfoLog(fragmentShader, out info);
+                Graphics.GL.GetShader(fragmentShader, ShaderParameterName.CompileStatus, out statusCode);
+
+                // Check the compile log
+                if (statusCode != 1) {
+                    // Delete every handles when compilation failed
+                    Graphics.GL.DeleteShader(fragmentShader);
+                    Graphics.GL.DeleteProgram(shaderProgram);
+
+                    throw new InvalidOperationException("Failed to Compile Fragment Shader Source.\n" +
+                        info + "\n\n" +
+                        "Status Code: " + statusCode.ToString());
+                }
+
+                // Attach the shader to the program, and delete it (not needed anymore)
+                Graphics.GL.AttachShader(shaderProgram, fragmentShader);
+                Graphics.GL.DeleteShader(fragmentShader);
+
+                Graphics.CheckGL();
+            }
+
+            // Link the compiled program
+            Graphics.GL.LinkProgram(shaderProgram);
+
+            Graphics.CheckGL();
+
+            // Check for link status
+            Graphics.GL.GetProgramInfoLog(shaderProgram, out info);
+            Graphics.GL.GetProgram(shaderProgram, ProgramPropertyARB.LinkStatus, out statusCode);
+            if (statusCode != 1) {
+                // Delete the handles when failed to link the program
+                Graphics.GL.DeleteProgram(shaderProgram);
+
+                throw new InvalidOperationException("Failed to Link Shader Program.\n" +
+                        info + "\n\n" +
+                        "Status Code: " + statusCode.ToString());
+            }
+
+            // Force an OpenGL flush, so that the shader will appear updated
+            // in all contexts immediately (solves problems in multi-threaded apps)
+            Graphics.GL.Flush();
+            Graphics.CheckGL();
+
+            return shaderProgram;
         }
 
         public static AssetRef<Shader> Find(string path)

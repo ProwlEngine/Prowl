@@ -1,4 +1,5 @@
 ﻿using Raylib_cs;
+using Silk.NET.OpenGL;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -76,64 +77,64 @@ namespace Prowl.Runtime
             cachedUniformLocs.Clear();
         }
 
-        private static bool TryGetLoc(Raylib_cs.Shader shader, string name, MaterialPropertyBlock mpb, out int loc)
+        private static bool TryGetLoc(uint shader, string name, MaterialPropertyBlock mpb, out int loc)
         {
             loc = -1;
-            string key = shader.id + "_" + name;
+            string key = shader + "_" + name;
             if (!mpb.cachedUniformLocs.TryGetValue(key, out loc))
             {
-                loc = Raylib.GetShaderLocation(shader, name);
+                loc = Graphics.GL.GetUniformLocation(shader, name);
                 mpb.cachedUniformLocs[key] = loc;
             }
             //if (loc == -1) Debug.LogWarning("Shader does not have a uniform named " + name);
             return loc != -1;
         }
 
-        public static void Apply(MaterialPropertyBlock mpb, Raylib_cs.Shader shader)
+        public static void Apply(MaterialPropertyBlock mpb, uint shader)
         {
-            Rlgl.rlEnableShader(shader.id); // Ensure the shader is enabled for this
+            Graphics.GL.UseProgram(shader);
 
             foreach (var item in mpb.floats)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Raylib.SetShaderValue(shader, loc, item.Value, ShaderUniformDataType.SHADER_UNIFORM_FLOAT);
+                    Graphics.GL.Uniform1(loc, item.Value);
 
             foreach (var item in mpb.ints)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Raylib.SetShaderValue(shader, loc, item.Value, ShaderUniformDataType.SHADER_UNIFORM_INT);
+                    Graphics.GL.Uniform1(loc, item.Value);
 
             foreach (var item in mpb.vectors2)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Raylib.SetShaderValue(shader, loc, item.Value.ToFloat(), ShaderUniformDataType.SHADER_UNIFORM_VEC2);
+                    Graphics.GL.Uniform2(loc, item.Value);
             foreach (var item in mpb.vectors3)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Raylib.SetShaderValue(shader, loc, item.Value.ToFloat(), ShaderUniformDataType.SHADER_UNIFORM_VEC3);
+                    Graphics.GL.Uniform3(loc, item.Value);
             foreach (var item in mpb.vectors4)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Raylib.SetShaderValue(shader, loc, item.Value.ToFloat(), ShaderUniformDataType.SHADER_UNIFORM_VEC4);
+                    Graphics.GL.Uniform4(loc, item.Value);
             foreach (var item in mpb.colors)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Raylib.SetShaderValue(shader, loc, new System.Numerics.Vector4(item.Value.r, item.Value.g, item.Value.b, item.Value.a), ShaderUniformDataType.SHADER_UNIFORM_VEC4);
+                    Graphics.GL.Uniform4(loc, new System.Numerics.Vector4(item.Value.r, item.Value.g, item.Value.b, item.Value.a));
 
             foreach (var item in mpb.matrices)
-                if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Raylib.SetShaderValueMatrix(shader, loc, item.Value.ToFloat());
+                if (TryGetLoc(shader, item.Key, mpb, out var loc)) {
+                    var m = item.Value.ToFloat();
+                    Graphics.GL.UniformMatrix4(loc, 1, false, in m.M11);
+                }
 
             foreach (var item in mpb.matrixArr)
-                for (int i = 0; i < item.Value.Length; i++)
-                    if (TryGetLoc(shader, item.Key + $"[{i}]", mpb, out var loc))
-                        Raylib.SetShaderValueMatrix(shader, loc, item.Value[i]);
+                if (TryGetLoc(shader, item.Key, mpb, out var loc)) {
+                    var m = item.Value;
+                    Graphics.GL.UniformMatrix4(loc, (uint)item.Value.Length, false, in m[0].M11);
+                }
 
             int texSlot = 0;
             var keysToUpdate = new List<(string, AssetRef<Texture2D>)>();
-            foreach (var item in mpb.textures)
-            {
+            foreach (var item in mpb.textures) {
                 var tex = item.Value;
-                if (tex.IsAvailable)
-                {
+                if (tex.IsAvailable) {
 
                     // Get the memory address of the texture slot as void* using unsafe context
-                    unsafe
-                    {
+                    unsafe {
                         if (TryGetLoc(shader, item.Key, mpb, out var loc)) {
                             texSlot++;
                             Rlgl.rlActiveTextureSlot(texSlot);
@@ -157,9 +158,9 @@ namespace Prowl.Runtime
         public MaterialPropertyBlock PropertyBlock;
 
         // Key is Shader.GUID + "-" + keywords + "-" + Shader.globalKeywords
-        static Dictionary<string, (Raylib_cs.Shader[], Raylib_cs.Shader)> passVariants = new();
+        static Dictionary<string, (uint[], uint)> passVariants = new();
         HashSet<string> keywords = new();
-        internal static Raylib_cs.Shader? current;
+        internal static uint? current;
 
         public int PassCount => Shader.IsAvailable ? CompileKeywordVariant(keywords.ToArray()).Item1.Length : 0;
 
@@ -207,7 +208,7 @@ namespace Prowl.Runtime
 
             // Set the shader
             current = shader.Item1[pass];
-            Raylib.BeginShaderMode(shader.Item1[pass]);
+            Graphics.GL.UseProgram(shader.Item1[pass]);
 
             if (apply)
                 MaterialPropertyBlock.Apply(PropertyBlock, current.Value);
@@ -222,7 +223,7 @@ namespace Prowl.Runtime
 
             // Set the shader
             current = shader.Item2;
-            Raylib.BeginShaderMode(shader.Item2);
+            Graphics.GL.UseProgram(shader.Item2);
 
             if (apply)
                 MaterialPropertyBlock.Apply(PropertyBlock, current.Value);
@@ -231,11 +232,11 @@ namespace Prowl.Runtime
         public void EndPass()
         {
             if (Shader.IsAvailable == false) return;
-            Raylib.EndShaderMode();
+            Graphics.GL.UseProgram(0);
             current = null;
         }
 
-        (Raylib_cs.Shader[], Raylib_cs.Shader) CompileKeywordVariant(string[] allKeywords)
+        (uint[], uint) CompileKeywordVariant(string[] allKeywords)
         {
             if (Shader.IsAvailable == false) throw new Exception("Cannot compile without a valid shader assigned");
             passVariants ??= new();
@@ -258,7 +259,7 @@ namespace Prowl.Runtime
             allKeywords = allKeywords.Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
 
             // Compile Each Pass
-            (Raylib_cs.Shader[], Raylib_cs.Shader) compiledPasses = Shader.Res!.Compile(allKeywords);
+            (uint[], uint) compiledPasses = Shader.Res!.Compile(allKeywords);
 
             passVariants[key] = compiledPasses;
             return compiledPasses;
