@@ -130,17 +130,18 @@ namespace Prowl.Runtime
                 var tex = item.Value;
                 if (tex.IsAvailable)
                 {
-                    texSlot++;
 
                     // Get the memory address of the texture slot as void* using unsafe context
                     unsafe
                     {
-                        if (TryGetLoc(shader, item.Key, mpb, out var loc))
+                        if (TryGetLoc(shader, item.Key, mpb, out var loc)) {
+                            texSlot++;
+                            Rlgl.rlActiveTextureSlot(texSlot);
+                            Rlgl.rlEnableTexture(tex.Res!.InternalTexture.id);
                             Rlgl.rlSetUniform(loc, &texSlot, (int)ShaderUniformDataType.SHADER_UNIFORM_INT, 1);
+                        }
                     }
 
-                    Rlgl.rlActiveTextureSlot(texSlot);
-                    Rlgl.rlEnableTexture(tex.Res!.InternalTexture.id);
 
                     keysToUpdate.Add((item.Key, tex));
                 }
