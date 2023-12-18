@@ -248,6 +248,7 @@ namespace Prowl.Runtime.Utils
             {
                 using var entryStream = entry.Open();
                 asset = SerializedAsset.FromStream(entryStream);
+                asset.Main.AssetID = guid;
                 return true;
             }
             asset = null;
@@ -261,6 +262,7 @@ namespace Prowl.Runtime.Utils
             {
                 using var entryStream = entry.Open();
                 asset = SerializedAsset.FromStream(entryStream);
+                asset.Main.AssetID = _pathToGuid[assetPath];
                 return true;
             }
             asset = null;
