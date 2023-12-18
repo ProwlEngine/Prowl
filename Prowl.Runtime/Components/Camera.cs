@@ -108,17 +108,17 @@ public class Camera : MonoBehaviour
 
     public void Render(int width, int height)
     {
-        var rp = RenderPipeline;
-        if (rp.IsAvailable == false) 
+        if (RenderPipeline.IsAvailable == false) 
         {
-            rp = Application.AssetProvider.LoadAsset<RenderPipeline>("Defaults/DefaultRenderPipeline.scriptobj");
-            if (rp.IsAvailable == false)
+            RenderPipeline = Application.AssetProvider.LoadAsset<RenderPipeline>("Defaults/DefaultRenderPipeline.scriptobj");
+            if (RenderPipeline.IsAvailable == false)
             {
                 Debug.LogError($"Camera on {GameObject.Name} cannot render, Missing Default Render Pipeline!");
                 return;
             }
         }
 
+        var rp = RenderPipeline;
         if (Target.IsAvailable)
         {
             width = Target.Res!.Width;
