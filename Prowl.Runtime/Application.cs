@@ -95,6 +95,7 @@ public abstract class Application
             float updateTime = (float)updateTimer.Elapsed.TotalSeconds;
             Time.Update(updateTime);
             updateTimer.Restart();
+            Graphics.Update();
             SceneManager.Update();
             Physics.Update();
 
