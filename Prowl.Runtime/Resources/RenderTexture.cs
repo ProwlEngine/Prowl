@@ -28,8 +28,8 @@ namespace Prowl.Runtime
 
         public RenderTexture(int Width, int Height, int numTextures = 1, bool hasDepthAttachment = true, Texture.TextureImageFormat[]? formats = null) : base("RenderTexture")
         {
-            if (numTextures < 1 || numTextures > Graphics.MaxFramebufferColorAttachments)
-                throw new Exception("Invalid number of textures! [1-" + Graphics.MaxFramebufferColorAttachments + "]");
+            if (numTextures < 0 || numTextures > Graphics.MaxFramebufferColorAttachments)
+                throw new Exception("Invalid number of textures! [0-" + Graphics.MaxFramebufferColorAttachments + "]");
 
             this.Width = Width;
             this.Height = Height;
@@ -56,17 +56,19 @@ namespace Prowl.Runtime
             unsafe {
                 // Generate textures
                 InternalTextures = new Texture2D[numTextures];
-                for (int i = 0; i < numTextures; i++) {
-                    InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, false, this.textureFormats[i]);
-                    Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, (TextureTarget)InternalTextures[i].Type, InternalTextures[i].Handle, 0);
+                if (numTextures > 0) {
+                    for (int i = 0; i < numTextures; i++) {
+                        InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, false, this.textureFormats[i]);
+                        Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, (TextureTarget)InternalTextures[i].Type, InternalTextures[i].Handle, 0);
+                    }
+                    Graphics.ActivateDrawBuffers(numTextures);
                 }
-                Graphics.ActivateDrawBuffers(numTextures);
 
                 // Generate depth attachment if requested
                 if (hasDepthAttachment) {
                     var depth = new Texture2D((uint)Width, (uint)Height, false, Texture.TextureImageFormat.Depth24);
                     InternalDepth = depth;
-                    Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Renderbuffer, depth.Handle, 0);
+                    Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, depth.Handle, 0);
 
                 }
 

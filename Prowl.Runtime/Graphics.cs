@@ -333,8 +333,9 @@ namespace Prowl.Runtime
 
             defaultMat ??= new Material(Shader.Find("Defaults/Basic.shader"));
             defaultMat.SetTexture("texture0", texture);
-
+            defaultMat.SetPass(0);
             DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, defaultMat);
+            defaultMat.EndPass();
             //DrawTexturePro(texture, new Rectangle<int>(0, 0, (int)texture.Width, (int)-texture.Height), new Rectangle<int>(0, 0, renderTexture.Width, renderTexture.Height), new Vector2D<float>(0, 0), 0, Color.white);
             // Revert to alpha Blendmode
             GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
