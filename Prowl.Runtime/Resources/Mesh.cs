@@ -50,11 +50,11 @@ namespace Prowl.Runtime
             vao = Graphics.GL.GenVertexArray();
             Graphics.GL.BindVertexArray(vao);
             Graphics.CheckGL();
-            fixed (Vertex* vptr = vertices) {
-                vbo  = Graphics.GL.GenBuffer();
-                Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
-                Graphics.GL.BufferData(BufferTargetARB.ArrayBuffer, (uint)(vertexCount * sizeof(Vertex)), vptr, BufferUsageARB.StaticDraw);
-            }
+
+            vbo  = Graphics.GL.GenBuffer();
+            Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
+            Graphics.GL.BufferData(BufferTargetARB.ArrayBuffer, new ReadOnlySpan<Vertex>(vertices), BufferUsageARB.StaticDraw);
+
             Graphics.CheckGL();
             for (var i = 0; i < format.Elements.Length; i++)
             {
@@ -65,12 +65,9 @@ namespace Prowl.Runtime
                 Graphics.GL.VertexAttribPointer(index, element.Count, (GLEnum)element.Type, element.Normalized, (uint)format.Size, (void*)offset);
             }
 
-            fixed (ushort* iptr = indices) {
-
-                ibo = Graphics.GL.GenBuffer();
-                Graphics.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, ibo);
-                Graphics.GL.BufferData(BufferTargetARB.ElementArrayBuffer, (uint)(indices.Length * sizeof(ushort)), iptr, BufferUsageARB.StaticDraw);
-            }
+            ibo = Graphics.GL.GenBuffer();
+            Graphics.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, ibo);
+            Graphics.GL.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<ushort>(indices), BufferUsageARB.StaticDraw);
 
             Debug.Log($"VAO: [ID {vao}] Mesh uploaded successfully to VRAM (GPU)");
 

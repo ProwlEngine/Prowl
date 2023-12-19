@@ -266,7 +266,7 @@ namespace Prowl.Runtime
             unsafe
             {
                 GL.BindVertexArray(mesh.vao);
-                GL.DrawArrays(PrimitiveType.Triangles, 0, (uint)mesh.vertexCount);
+                GL.DrawElements(PrimitiveType.Triangles, (uint)mesh.indices.Length, DrawElementsType.UnsignedShort, null);
                 GL.BindVertexArray(0);
             }
         }
