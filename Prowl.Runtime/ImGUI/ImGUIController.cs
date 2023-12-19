@@ -1,16 +1,17 @@
 ﻿using HexaEngine.ImGuiNET;
+using HexaEngine.ImGuizmoNET;
+using HexaEngine.ImNodesNET;
+using HexaEngine.ImPlotNET;
 using Prowl.Icons;
 using Silk.NET.Input;
 using Silk.NET.Maths;
+using Silk.NET.OpenAL;
 using Silk.NET.OpenGL;
-using Silk.NET.SDL;
 using Silk.NET.Windowing;
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
 using System.Reflection;
-using System.Reflection.Metadata;
 
 namespace Prowl.Runtime.ImGUI
 {
@@ -22,6 +23,9 @@ namespace Prowl.Runtime.ImGUI
         private bool _frameBegun;
         private readonly List<char> _pressedChars = new List<char>();
         private IKeyboard _keyboard;
+
+        private ImNodesContextPtr nodesContext;
+        private ImPlotContextPtr plotContext;
 
         private int _attribLocationTex;
         private int _attribLocationProjMtx;
@@ -96,11 +100,26 @@ namespace Prowl.Runtime.ImGUI
             Context = ImGui.CreateContext();
             ImGui.SetCurrentContext(Context);
             ImGui.StyleColorsDark();
+
+            ImGuizmo.SetImGuiContext(Context);
+            ImGuizmo.AllowAxisFlip(false);
+            ImPlot.SetImGuiContext(Context);
+            ImNodes.SetImGuiContext(Context);
+
+            nodesContext = ImNodes.CreateContext();
+            ImNodes.SetCurrentContext(nodesContext);
+            ImNodes.StyleColorsDark(ImNodes.GetStyle());
+
+            plotContext = ImPlot.CreateContext();
+            ImPlot.SetCurrentContext(plotContext);
+            ImPlot.StyleColorsDark(ImPlot.GetStyle());
+
         }
 
         private void BeginFrame()
         {
             ImGui.NewFrame();
+            ImGuizmo.BeginFrame();
             _frameBegun = true;
             _keyboard = _input.Keyboards[0];
             _view.Resize += WindowResized;
@@ -188,9 +207,13 @@ namespace Prowl.Runtime.ImGUI
 
             _frameBegun = true;
             ImGui.NewFrame();
+            ImGuizmo.BeginFrame();
 
             if (oldCtx != Context) {
                 ImGui.SetCurrentContext(oldCtx);
+                ImGuizmo.SetImGuiContext(oldCtx);
+                ImPlot.SetImGuiContext(oldCtx);
+                ImNodes.SetImGuiContext(oldCtx);
             }
         }
 
@@ -577,6 +600,7 @@ namespace Prowl.Runtime.ImGUI
             _fontTexture.Dispose();
             _gl.DeleteProgram(_shader);
 
+            ImNodes.DestroyContext();
             ImGui.DestroyContext(Context);
         }
 
