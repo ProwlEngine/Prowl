@@ -95,35 +95,43 @@ namespace Prowl.Runtime
             foreach (var item in mpb.floats)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
                     Graphics.GL.Uniform1(loc, item.Value);
+            Graphics.CheckGL();
 
             foreach (var item in mpb.ints)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
                     Graphics.GL.Uniform1(loc, item.Value);
+            Graphics.CheckGL();
 
             foreach (var item in mpb.vectors2)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
                     Graphics.GL.Uniform2(loc, item.Value);
+            Graphics.CheckGL();
             foreach (var item in mpb.vectors3)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
                     Graphics.GL.Uniform3(loc, item.Value);
+            Graphics.CheckGL();
             foreach (var item in mpb.vectors4)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
                     Graphics.GL.Uniform4(loc, item.Value);
+            Graphics.CheckGL();
             foreach (var item in mpb.colors)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
                     Graphics.GL.Uniform4(loc, new System.Numerics.Vector4(item.Value.r, item.Value.g, item.Value.b, item.Value.a));
+            Graphics.CheckGL();
 
             foreach (var item in mpb.matrices)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc)) {
                     var m = item.Value.ToFloat();
                     Graphics.GL.UniformMatrix4(loc, 1, false, in m.M11);
                 }
+            Graphics.CheckGL();
 
             foreach (var item in mpb.matrixArr)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc)) {
                     var m = item.Value;
                     Graphics.GL.UniformMatrix4(loc, (uint)item.Value.Length, false, in m[0].M11);
                 }
+            Graphics.CheckGL();
 
             uint texSlot = 0;
             var keysToUpdate = new List<(string, AssetRef<Texture2D>)>();
@@ -136,8 +144,11 @@ namespace Prowl.Runtime
                         if (TryGetLoc(shader, item.Key, mpb, out var loc)) {
                             texSlot++;
                             Graphics.GL.ActiveTexture((TextureUnit)((uint)TextureUnit.Texture0 + texSlot));
+                            Graphics.CheckGL();
                             Graphics.GL.BindTexture((TextureTarget)tex.Res!.Type, tex.Res!.Handle);
-                            Graphics.GL.Uniform1(loc, texSlot);
+                            Graphics.CheckGL();
+                            Graphics.GL.Uniform1(loc, (int)texSlot);
+                            Graphics.CheckGL();
                         }
                     }
 
@@ -147,6 +158,7 @@ namespace Prowl.Runtime
             }
             foreach (var item in keysToUpdate)
                 mpb.textures[item.Item1] = item.Item2;
+            Graphics.CheckGL();
         }
     }
 
