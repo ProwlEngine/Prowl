@@ -15,16 +15,6 @@ namespace Prowl.Runtime
 
         public static GL GL { get; internal set; }
 
-        public static bool DepthMask {
-            get {
-                return GL.IsEnabled(GLEnum.DepthWritemask);
-            }
-            set {
-                if (value) GL.Enable(GLEnum.DepthWritemask);
-                else GL.Disable(GLEnum.DepthWritemask);
-            }
-        }
-
         public static bool DepthTest {
             get {
                 return GL.IsEnabled(GLEnum.DepthTest);
@@ -101,19 +91,19 @@ namespace Prowl.Runtime
             new Vector2(0.03125f, 0.592593f),
         ];
 
-        static readonly DrawBufferMode[] buffers =
+        static readonly GLEnum[] buffers =
         {
-            DrawBufferMode.ColorAttachment0,  DrawBufferMode.ColorAttachment1,  DrawBufferMode.ColorAttachment2,
-            DrawBufferMode.ColorAttachment3,  DrawBufferMode.ColorAttachment4,  DrawBufferMode.ColorAttachment5,
-            DrawBufferMode.ColorAttachment6,  DrawBufferMode.ColorAttachment7,  DrawBufferMode.ColorAttachment8,
-            DrawBufferMode.ColorAttachment9,  DrawBufferMode.ColorAttachment10, DrawBufferMode.ColorAttachment11,
-            DrawBufferMode.ColorAttachment12, DrawBufferMode.ColorAttachment13, DrawBufferMode.ColorAttachment14,
-            DrawBufferMode.ColorAttachment15, DrawBufferMode.ColorAttachment16, DrawBufferMode.ColorAttachment16,
-            DrawBufferMode.ColorAttachment17, DrawBufferMode.ColorAttachment18, DrawBufferMode.ColorAttachment19,
-            DrawBufferMode.ColorAttachment20, DrawBufferMode.ColorAttachment21, DrawBufferMode.ColorAttachment22,
-            DrawBufferMode.ColorAttachment23, DrawBufferMode.ColorAttachment24, DrawBufferMode.ColorAttachment25,
-            DrawBufferMode.ColorAttachment26, DrawBufferMode.ColorAttachment27, DrawBufferMode.ColorAttachment28,
-            DrawBufferMode.ColorAttachment29, DrawBufferMode.ColorAttachment30, DrawBufferMode.ColorAttachment31
+            GLEnum.ColorAttachment0,  GLEnum.ColorAttachment1,  GLEnum.ColorAttachment2,
+            GLEnum.ColorAttachment3,  GLEnum.ColorAttachment4,  GLEnum.ColorAttachment5,
+            GLEnum.ColorAttachment6,  GLEnum.ColorAttachment7,  GLEnum.ColorAttachment8,
+            GLEnum.ColorAttachment9,  GLEnum.ColorAttachment10, GLEnum.ColorAttachment11,
+            GLEnum.ColorAttachment12, GLEnum.ColorAttachment13, GLEnum.ColorAttachment14,
+            GLEnum.ColorAttachment15, GLEnum.ColorAttachment16, GLEnum.ColorAttachment16,
+            GLEnum.ColorAttachment17, GLEnum.ColorAttachment18, GLEnum.ColorAttachment19,
+            GLEnum.ColorAttachment20, GLEnum.ColorAttachment21, GLEnum.ColorAttachment22,
+            GLEnum.ColorAttachment23, GLEnum.ColorAttachment24, GLEnum.ColorAttachment25,
+            GLEnum.ColorAttachment26, GLEnum.ColorAttachment27, GLEnum.ColorAttachment28,
+            GLEnum.ColorAttachment29, GLEnum.ColorAttachment30, GLEnum.ColorAttachment31
         };
 
         public static int MaxTextureSize { get; private set; }
@@ -158,8 +148,8 @@ namespace Prowl.Runtime
 
         private static void DebugCallback(GLEnum source, GLEnum type, int id, GLEnum severity, int length, nint message, nint userParam)
         {
-            var msg = SilkMarshal.PtrToString(message, NativeStringEncoding.UTF8);
-            Console.WriteLine($"OpenGL Debug Message: {msg}");
+            //var msg = SilkMarshal.PtrToString(message, NativeStringEncoding.UTF8);
+            //Console.WriteLine($"OpenGL Debug Message: {msg}");
         }
 
         public static void CheckGL()
@@ -302,7 +292,7 @@ namespace Prowl.Runtime
         /// </summary>
         public static void Blit(RenderTexture? renderTexture, Material mat, int pass = 0, bool clear = true)
         {
-            DepthMask = false;
+            Graphics.GL.DepthMask(false);
             DepthTest = false;
             CullFace = false;
             renderTexture?.Begin();
@@ -312,7 +302,7 @@ namespace Prowl.Runtime
             DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
             mat.EndPass();
             renderTexture?.End();
-            DepthMask = true;
+            Graphics.GL.DepthMask(true);
             DepthTest = true;
             CullFace = true;
         }
@@ -322,7 +312,7 @@ namespace Prowl.Runtime
         /// </summary>
         public static void Blit(RenderTexture? renderTexture, Texture2D texture, bool clear = true)
         {
-            DepthMask = false;
+            Graphics.GL.DepthMask(false);
             DepthTest = false;
             CullFace = false;
             renderTexture?.Begin();
@@ -340,7 +330,7 @@ namespace Prowl.Runtime
             // Revert to alpha Blendmode
             GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
             renderTexture?.End();
-            DepthMask = true;
+            Graphics.GL.DepthMask(true);
             DepthTest = true;
             CullFace = true;
         }
