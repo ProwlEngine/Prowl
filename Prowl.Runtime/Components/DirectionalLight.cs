@@ -48,9 +48,9 @@ public class DirectionalLight : MonoBehaviour
         lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
 
         lightMat.SetTexture("shadowMap", shadowMap.InternalDepth);
-        lightMat.SetMatrix("matCamViewInverse", Graphics.MatViewInverseTransposed);
-        lightMat.SetMatrix("matShadowView", Matrix4x4.Transpose(Graphics.MatDepthView));
-        lightMat.SetMatrix("matShadowSpace", Matrix4x4.Transpose(depthMVP));
+        lightMat.SetMatrix("matCamViewInverse", Graphics.MatViewInverse);
+        lightMat.SetMatrix("matShadowView", Graphics.MatDepthView);
+        lightMat.SetMatrix("matShadowSpace", depthMVP);
 
         lightMat.SetFloat("u_Radius", shadowRadius);
         lightMat.SetFloat("u_Penumbra", shadowPenumbra);

@@ -76,7 +76,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
             mvp = Matrix4x4.Multiply(mvp, GameObject.GlobalCamRelative);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthProjection);
-            Material.Res!.SetMatrix("mvp", Matrix4x4.Transpose(mvp));
+            Material.Res!.SetMatrix("mvp", mvp);
             Material.Res!.SetShadowPass(true);
             Graphics.DrawMeshNowDirect(Mesh.Res!);
             Material.Res!.EndPass();

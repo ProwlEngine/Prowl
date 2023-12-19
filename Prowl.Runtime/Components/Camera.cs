@@ -135,14 +135,8 @@ public class Camera : MonoBehaviour
                 renderPass.PreRender();
         }
 
-        Graphics.MatOldViewTransposed = Matrix4x4.Transpose(Graphics.OldMatView);
-        Graphics.MatOldProjectionTransposed = Matrix4x4.Transpose(Graphics.OldMatProjection);
-        Graphics.MatViewTransposed = Matrix4x4.Transpose(Graphics.MatView);
-        Graphics.MatProjectionTransposed = Matrix4x4.Transpose(Graphics.MatProjection);
         Matrix4x4.Invert(Graphics.MatView, out Graphics.MatViewInverse);
-        Graphics.MatViewInverseTransposed = Matrix4x4.Transpose(Graphics.MatViewInverse);
         Matrix4x4.Invert(Graphics.MatProjection, out Graphics.MatProjectionInverse);
-        Graphics.MatProjectionInverseTransposed = Matrix4x4.Transpose(Graphics.MatProjectionInverse);
 
         CheckGBuffer();
 

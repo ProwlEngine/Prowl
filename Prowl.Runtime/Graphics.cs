@@ -49,17 +49,11 @@ namespace Prowl.Runtime
 
         public static Vector2 Resolution;
         public static Matrix4x4 MatView;
-        public static Matrix4x4 MatViewTransposed;
         public static Matrix4x4 MatViewInverse;
-        public static Matrix4x4 MatViewInverseTransposed;
         public static Matrix4x4 MatProjection;
-        public static Matrix4x4 MatProjectionTransposed;
         public static Matrix4x4 MatProjectionInverse;
-        public static Matrix4x4 MatProjectionInverseTransposed;
         public static Matrix4x4 OldMatView;
-        public static Matrix4x4 MatOldViewTransposed;
         public static Matrix4x4 OldMatProjection;
-        public static Matrix4x4 MatOldProjectionTransposed;
 
         public static Matrix4x4 MatDepthProjection;
         public static Matrix4x4 MatDepthView;
@@ -148,8 +142,8 @@ namespace Prowl.Runtime
 
         private static void DebugCallback(GLEnum source, GLEnum type, int id, GLEnum severity, int length, nint message, nint userParam)
         {
-            //var msg = SilkMarshal.PtrToString(message, NativeStringEncoding.UTF8);
-            //Console.WriteLine($"OpenGL Debug Message: {msg}");
+            var msg = SilkMarshal.PtrToString(message, NativeStringEncoding.UTF8);
+            Console.WriteLine($"OpenGL Debug Message: {msg}");
         }
 
         public static void CheckGL()
@@ -227,16 +221,16 @@ namespace Prowl.Runtime
             //material.SetVector("Camera_NearFarFOV", new Vector3(Camera.Current.NearClip, Camera.Current.FarClip, Camera.Current.FieldOfView));
 
             // Upload view and projection matrices(if locations available)
-            material.SetMatrix("matView", MatViewTransposed);
-            material.SetMatrix("matOldView", MatOldViewTransposed);
+            material.SetMatrix("matView", MatView);
+            material.SetMatrix("matOldView", OldMatView);
 
-            material.SetMatrix("matProjection", MatProjectionTransposed);
-            material.SetMatrix("matProjectionInverse", MatProjectionInverseTransposed);
-            material.SetMatrix("matOldProjection", MatOldProjectionTransposed);
+            material.SetMatrix("matProjection", MatProjection);
+            material.SetMatrix("matProjectionInverse", MatProjectionInverse);
+            material.SetMatrix("matOldProjection", OldMatProjection);
             // Model transformation matrix is sent to shader
-            material.SetMatrix("matModel", Matrix4x4.Transpose(transform));
+            material.SetMatrix("matModel", transform);
 
-            material.SetMatrix("matViewInverse", MatViewInverseTransposed);
+            material.SetMatrix("matViewInverse", MatViewInverse);
 
             Matrix4x4 matMVP = Matrix4x4.Identity;
             matMVP = Matrix4x4.Multiply(matMVP, transform);
@@ -250,10 +244,10 @@ namespace Prowl.Runtime
 
             // Send combined model-view-projection matrix to shader
             //material.SetMatrix("mvp", matModelViewProjection);
-            material.SetMatrix("mvp", Matrix4x4.Transpose(matMVP));
+            material.SetMatrix("mvp", matMVP);
             Matrix4x4.Invert(matMVP, out var mvpInverse);
-            material.SetMatrix("mvpInverse", Matrix4x4.Transpose(mvpInverse));
-            material.SetMatrix("mvpOld", Matrix4x4.Transpose(oldMatMVP));
+            material.SetMatrix("mvpInverse", mvpInverse);
+            material.SetMatrix("mvpOld", oldMatMVP);
 
 
             // All material uniforms have been assigned, its time to properly set them
