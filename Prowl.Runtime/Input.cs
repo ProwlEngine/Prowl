@@ -37,7 +37,7 @@ public static class Input
     } 
 
     public static Vector2D<float> PreviousMousePosition { get; private set; }
-    public static Vector2D<float> MouseDelta => PreviousMousePosition - MousePosition;
+    public static Vector2D<float> MouseDelta => MousePosition - PreviousMousePosition;
     public static Vector2D<float> MousePosition {
         get {
             return Mice[0].Position.ToGeneric();
