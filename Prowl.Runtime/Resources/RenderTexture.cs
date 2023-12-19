@@ -104,7 +104,8 @@ namespace Prowl.Runtime
             foreach (var texture in InternalTextures)
                 Graphics.GL.DeleteTexture(texture.Handle);
 
-            Graphics.GL.DeleteRenderbuffer(InternalDepth.Handle);
+            //if(hasDepthAttachment) // Should auto dispose of Depth
+            //    Graphics.GL.DeleteRenderbuffer(InternalDepth.Handle);
             Graphics.GL.DeleteFramebuffer(fboId);
 
             Graphics.CheckGL();
