@@ -177,6 +177,8 @@ namespace Prowl.Runtime
 
             Clear();
             GL.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
+
+            GL.CullFace(TriangleFace.Back);
         }
 
         public static void EndFrame()

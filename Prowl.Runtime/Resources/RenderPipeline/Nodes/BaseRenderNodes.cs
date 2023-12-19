@@ -70,7 +70,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             Graphics.DepthTest = false;
             Graphics.GL.CullFace(Silk.NET.OpenGL.TriangleFace.Front);
             Camera.Current.RenderAllOfOrder(RenderingOrder.Lighting);
-            Graphics.GL.CullFace(Silk.NET.OpenGL.TriangleFace.Front);
+            Graphics.GL.CullFace(Silk.NET.OpenGL.TriangleFace.Back);
             Graphics.DepthTest = true;
             renderRT.End();
         }
