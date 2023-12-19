@@ -185,7 +185,7 @@ namespace Prowl.Runtime
         {
             base.matrix = m;
             base.mvp = mvp;
-            drawList.AddImage(new ImTextureID((nint)texture.InternalTexture.id), Pos(position), Pos(position + new Vector3(size.X, size.Y, 0f)), Vector2.Zero, Vector2.One, ImGui.GetColorU32(color));
+            drawList.AddImage(new ImTextureID((nint)texture.Handle), Pos(position), Pos(position + new Vector3(size.X, size.Y, 0f)), Vector2.Zero, Vector2.One, ImGui.GetColorU32(color));
         }
     }
 

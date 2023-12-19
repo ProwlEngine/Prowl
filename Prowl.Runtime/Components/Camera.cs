@@ -1,9 +1,8 @@
 ﻿using Prowl.Icons;
 using Prowl.Runtime.Resources.RenderPipeline;
 using Prowl.Runtime.SceneManagement;
-using Raylib_cs;
+using Silk.NET.OpenGL;
 using System;
-using Shader = Prowl.Runtime.Shader;
 
 namespace Prowl.Runtime;
 
@@ -49,7 +48,7 @@ public class Camera : MonoBehaviour
     private Vector2 GetRenderTargetSize()
     {
         if (Target.IsAvailable) return new Vector2(Target.Res!.Width, Target.Res!.Height);
-        return new Vector2(Raylib.GetScreenWidth(), Raylib.GetScreenHeight());
+        return new Vector2(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
     }
 
     private void CheckGBuffer()
@@ -77,21 +76,6 @@ public class Camera : MonoBehaviour
                 foreach (var comp in go.GetComponents())
                     if (comp.Enabled && comp.RenderOrder == order)
                         comp.Internal_OnRenderObject();
-    }
-
-    public void DrawFullScreenTexture(Raylib_cs.Texture2D texture)
-    {
-        Rlgl.rlDisableDepthMask();
-        Rlgl.rlDisableDepthTest();
-        Rlgl.rlDisableBackfaceCulling();
-
-        var s = GetRenderTargetSize() * 1.0f;
-        //var s = GetRenderTargetSize();
-        Raylib.DrawTexturePro(texture, new Rectangle(0, 0, texture.width, -texture.height), new Rectangle(0, 0, (float)s.X, (float)s.Y), System.Numerics.Vector2.Zero, 0.0f, Color.white);
-
-        Rlgl.rlEnableDepthMask();
-        Rlgl.rlEnableDepthTest();
-        Rlgl.rlEnableBackfaceCulling();
     }
 
     private void OpaquePass()
@@ -126,14 +110,16 @@ public class Camera : MonoBehaviour
         }
         else if (width == -1 || height == -1)
         {
-            width = Rlgl.rlGetFramebufferWidth();
-            height = Rlgl.rlGetFramebufferHeight();
+            width = Window.InternalWindow.FramebufferSize.X;
+            height = Window.InternalWindow.FramebufferSize.Y;
         }
 
         width = (int)(width * RenderResolution);
         height = (int)(height * RenderResolution);
 
-        Rlgl.rlSetBlendMode(BlendMode.BLEND_ADD_COLORS);
+        //Rlgl.rlSetBlendMode(BlendMode.BLEND_ADD_COLORS);
+        // Additive
+        Graphics.GL.BlendFunc(BlendingFactor.One, BlendingFactor.One);
         Current = this;
         Graphics.Resolution = new Vector2(width, height);
 
@@ -194,28 +180,24 @@ public class Camera : MonoBehaviour
         //PostProcessStagePostCombine?.Invoke(gBuffer);
 
         // Draw to Screen
-        Target.Res?.Begin();
-        if (DoClear) Raylib.ClearBackground(ClearColor);
-        
-        if (debugDraw == DebugDraw.Off)
-        {
-            DrawFullScreenTexture(result.InternalTextures[0]);
+
+
+        if (debugDraw == DebugDraw.Off) {
+            Graphics.Blit(Target.Res ?? null, result.InternalTextures[0], DoClear);
         }
         else if (debugDraw == DebugDraw.Albedo)
-            DrawFullScreenTexture(gBuffer.AlbedoAO);
+            Graphics.Blit(Target.Res ?? null, gBuffer.AlbedoAO, DoClear);
         else if (debugDraw == DebugDraw.Normals)
-            DrawFullScreenTexture(gBuffer.NormalMetallic);
+            Graphics.Blit(Target.Res ?? null, gBuffer.NormalMetallic, DoClear);
         else if (debugDraw == DebugDraw.Depth)
-            DrawFullScreenTexture(gBuffer.PositionRoughness);
+            Graphics.Blit(Target.Res ?? null, gBuffer.Depth, DoClear);
         else if (debugDraw == DebugDraw.Velocity)
-            DrawFullScreenTexture(gBuffer.Velocity);
+            Graphics.Blit(Target.Res ?? null, gBuffer.Velocity, DoClear);
         else if (debugDraw == DebugDraw.ObjectID)
-            DrawFullScreenTexture(gBuffer.ObjectIDs);
-        
-        Target.Res?.End();
+            Graphics.Blit(Target.Res ?? null, gBuffer.ObjectIDs, DoClear);
 
         Current = null;
-        Rlgl.rlSetBlendMode(BlendMode.BLEND_ALPHA);
+        Graphics.GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
         oldView = Graphics.MatView;
         oldProjection = Graphics.MatProjection;
@@ -226,10 +208,10 @@ public class Camera : MonoBehaviour
         if (DoClear)
         {
             Target.Res?.Begin();
-            Raylib.ClearBackground(ClearColor);
+            Graphics.Clear(ClearColor.r, ClearColor.g, ClearColor.b, ClearColor.a);
             Target.Res?.End();
         }
         Current = null;
-        Rlgl.rlSetBlendMode(BlendMode.BLEND_ALPHA);
+        Graphics.GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
     }
 }

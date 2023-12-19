@@ -1,4 +1,5 @@
 ﻿using Prowl.Runtime.NodeSystem;
+using Silk.NET.OpenGL;
 using System;
 using static Prowl.Runtime.MonoBehaviour;
 
@@ -40,7 +41,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
                 for (int i = 0; i < RTCount; i++)
                 {
                     renderRTs[i]?.Dispose();
-                    PixelFormat[] formats = [PixelFormat.PIXELFORMAT_UNCOMPRESSED_R32G32B32];
+                    Texture.TextureImageFormat[] formats = [Texture.TextureImageFormat.Float3];
                     renderRTs[i] = new RenderTexture(width, height, 1, false, formats);
                 }
             }
@@ -65,12 +66,12 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         public override void Render()
         {
             renderRT.Begin();
-            if(Clear) Raylib.ClearBackground(Color.clear);
-            Rlgl.rlDisableDepthTest();
-            Rlgl.rlSetCullFace(0); // Cull the front faces for the lighting pass
+            if (Clear) Graphics.Clear();
+            Graphics.DepthTest = false;
+            Graphics.GL.CullFace(Silk.NET.OpenGL.TriangleFace.Front);
             Camera.Current.RenderAllOfOrder(RenderingOrder.Lighting);
-            Rlgl.rlEnableDepthTest();
-            Rlgl.rlSetCullFace(1);
+            Graphics.GL.CullFace(Silk.NET.OpenGL.TriangleFace.Front);
+            Graphics.DepthTest = true;
             renderRT.End();
         }
     }
@@ -194,7 +195,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             Graphics.Blit(renderRTs[1], Mat, 0, true);
             Mat.SetFloat("u_Threshold", 0.0f);
 
-            Raylib.BeginBlendMode(BlendMode.BLEND_ALPHA);
+            Graphics.GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.One);
             for (int i = 1; i <= Passes; i++)
             {
                 Mat.SetFloat("u_Alpha", 1.0f);
@@ -206,10 +207,9 @@ namespace Prowl.Runtime.Resources.RenderPipeline
                 renderRTs[0] = renderRTs[1];
                 renderRTs[1] = tmp;
             }
-            Raylib.EndBlendMode();
 
             // Final pass
-            Graphics.Blit(renderRTs[0], new Texture2D(rt.InternalTextures[0]), false);
+            Graphics.Blit(renderRTs[0], rt.InternalTextures[0], false);
 
 
 
@@ -267,11 +267,6 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             var gbuffer = Camera.Current.gBuffer;
             var rt = GetInputValue<RenderTexture>("RenderTexture");
             if (rt == null) return;
-
-            //if (rt.InternalTextures[0].mipmaps == 1)
-                Raylib.GenTextureMipmaps(ref rt.InternalTextures[0]);
-            //if (rt.InternalTextures[0].mipmaps == 1)
-            //    Debug.LogWarning("ScreenSpaceReflectionNode: RenderTexture has no mipmaps, Generation failed!");
 
             Mat ??= new Material(Shader.Find("Defaults/SSR.shader"));
             Mat.SetTexture("gColor", rt.InternalTextures[0]);

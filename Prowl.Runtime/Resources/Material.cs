@@ -1,9 +1,7 @@
-﻿using Raylib_cs;
-using Silk.NET.OpenGL;
+﻿using Silk.NET.OpenGL;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
 
 namespace Prowl.Runtime
 {
@@ -127,7 +125,7 @@ namespace Prowl.Runtime
                     Graphics.GL.UniformMatrix4(loc, (uint)item.Value.Length, false, in m[0].M11);
                 }
 
-            int texSlot = 0;
+            uint texSlot = 0;
             var keysToUpdate = new List<(string, AssetRef<Texture2D>)>();
             foreach (var item in mpb.textures) {
                 var tex = item.Value;
@@ -137,9 +135,9 @@ namespace Prowl.Runtime
                     unsafe {
                         if (TryGetLoc(shader, item.Key, mpb, out var loc)) {
                             texSlot++;
-                            Rlgl.rlActiveTextureSlot(texSlot);
-                            Rlgl.rlEnableTexture(tex.Res!.InternalTexture.id);
-                            Rlgl.rlSetUniform(loc, &texSlot, (int)ShaderUniformDataType.SHADER_UNIFORM_INT, 1);
+                            Graphics.GL.ActiveTexture((TextureUnit)((uint)TextureUnit.Texture0 + texSlot));
+                            Graphics.GL.BindTexture((TextureTarget)tex.Res!.Type, tex.Res!.Handle);
+                            Graphics.GL.Uniform1(loc, texSlot);
                         }
                     }
 
@@ -275,7 +273,6 @@ namespace Prowl.Runtime
         public void SetMatrices(string name, System.Numerics.Matrix4x4[] value) => PropertyBlock.SetMatrices(name, value);
         public void SetTexture(string name, Texture2D value) => PropertyBlock.SetTexture(name, value);
         public void SetTexture(string name, AssetRef<Texture2D> value) => PropertyBlock.SetTexture(name, value);
-        public void SetTexture(string name, Raylib_cs.Texture2D value) => PropertyBlock.SetTexture(name, new Texture2D(value));
 
         //public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
         //{

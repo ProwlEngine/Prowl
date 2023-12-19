@@ -1,4 +1,5 @@
 ﻿using Silk.NET.Core.Native;
+using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using System;
@@ -13,6 +14,16 @@ namespace Prowl.Runtime
         public static int GLMinorVersion { get; private set; }
 
         public static GL GL { get; internal set; }
+
+        public static bool DepthMask {
+            get {
+                return GL.IsEnabled(GLEnum.DepthWritemask);
+            }
+            set {
+                if (value) GL.Enable(GLEnum.DepthWritemask);
+                else GL.Disable(GLEnum.DepthWritemask);
+            }
+        }
 
         public static bool DepthTest {
             get {
@@ -67,7 +78,7 @@ namespace Prowl.Runtime
         public static Vector2 PreviousJitter { get; private set; }
         public static bool UseJitter;
 
-        private static Material depthMat;
+        private static Material defaultMat;
         private static AssetRef<Texture2D> defaultNoise;
         internal static Vector2D<int> FrameBufferSize;
         public readonly static Vector2[] Halton16 =
@@ -105,6 +116,10 @@ namespace Prowl.Runtime
             DrawBufferMode.ColorAttachment29, DrawBufferMode.ColorAttachment30, DrawBufferMode.ColorAttachment31
         };
 
+        public static int MaxTextureSize { get; private set; }
+        public static int MaxCubeMapTextureSize { get; private set; }
+        public static int MaxArrayTextureLayers { get; private set; }
+
         public static int MaxRenderbufferSize { get; private set; }
         public static int MaxFramebufferColorAttachments { get; private set; }
         public static int MaxDrawBuffers { get; private set; }
@@ -131,15 +146,8 @@ namespace Prowl.Runtime
             // Textures
             MaxSamples = GL.GetInteger(GLEnum.MaxSamples);
             MaxTextureSize = GL.GetInteger(GLEnum.MaxTextureSize);
-            MaxTextureBufferSize = GL.GetInteger(GLEnum.MaxTextureBufferSize);
-            Max3DTextureSize = GL.GetInteger(GLEnum.Max3DTextureSize);
             MaxCubeMapTextureSize = GL.GetInteger(GLEnum.MaxCubeMapTextureSize);
             MaxArrayTextureLayers = GL.GetInteger(GLEnum.MaxArrayTextureLayers);
-
-            MaximumTextureUnits = GL.GetInteger(GetPName.MaxTextureImageUnits);
-            currentlyBoundSlots = new uint[MaximumTextureUnits];
-            for (int i = 0; i < MaximumTextureUnits; i++)
-                currentlyBoundSlots[i] = 0;
 
             MaxRenderbufferSize = GL.GetInteger(GLEnum.MaxRenderbufferSize);
             MaxFramebufferColorAttachments = GL.GetInteger(GLEnum.MaxColorAttachments);
@@ -184,6 +192,7 @@ namespace Prowl.Runtime
             Jitter = new Vector2((halton.X - 0.5f), (halton.Y - 0.5f)) * 2.0;
 
             Clear();
+            GL.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
         }
 
         public static void EndFrame()
@@ -218,6 +227,7 @@ namespace Prowl.Runtime
             }
 
             material.SetVector("Resolution", Graphics.Resolution);
+            material.SetVector("ScreenResolution", new Vector2(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y));
             material.SetFloat("Time", (float)Time.time);
             material.SetInt("Frame", (int)Time.frameCount);
             //material.SetFloat("DeltaTime", Time.deltaTimeF);
@@ -271,15 +281,9 @@ namespace Prowl.Runtime
 
             unsafe
             {
-                Rlgl.rlEnableVertexArray(mesh.vao);
-                //Rlgl.rlEnableVertexBuffer(mesh.vbo);
-                //Rlgl.rlEnableVertexBufferElement(mesh.ibo);
-
-                Rlgl.rlDrawVertexArrayElements(0, mesh.indices.Length, null);
-
-                Rlgl.rlDisableVertexArray();
-                //Rlgl.rlDisableVertexBuffer();
-                //Rlgl.rlDisableVertexBufferElement();
+                GL.BindVertexArray(mesh.vao);
+                GL.DrawArrays(PrimitiveType.Triangles, 0, (uint)mesh.vertexCount);
+                GL.BindVertexArray(0);
             }
         }
 
@@ -296,45 +300,49 @@ namespace Prowl.Runtime
         /// <summary>
         /// Draws material with a FullScreen Quad onto a RenderTexture
         /// </summary>
-        public static void Blit(RenderTexture renderTexture, Material mat, int pass = 0, bool clear = true)
+        public static void Blit(RenderTexture? renderTexture, Material mat, int pass = 0, bool clear = true)
         {
-            Rlgl.rlDisableDepthMask();
-            Rlgl.rlDisableDepthTest();
-            Rlgl.rlDisableBackfaceCulling();
-            renderTexture.Begin();
+            DepthMask = false;
+            DepthTest = false;
+            CullFace = false;
+            renderTexture?.Begin();
             if (clear)
-                Raylib.ClearBackground(new Color(0, 0, 0, 0));
+                Clear(0, 0, 0, 0);
             mat.SetPass(pass);
             DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
             mat.EndPass();
-            renderTexture.End();
-            Rlgl.rlEnableDepthMask();
-            Rlgl.rlEnableDepthTest();
-            Rlgl.rlEnableBackfaceCulling();
+            renderTexture?.End();
+            DepthMask = true;
+            DepthTest = true;
+            CullFace = true;
         }
-
-        public static void Blit(RenderTexture renderTexture, Texture2D texture, bool clear = true) => Blit(renderTexture, texture.InternalTexture, clear);
 
         /// <summary>
         /// Draws texture into a RenderTexture Additively
         /// </summary>
-        public static void Blit(RenderTexture renderTexture, Raylib_cs.Texture2D texture, bool clear = true)
+        public static void Blit(RenderTexture? renderTexture, Texture2D texture, bool clear = true)
         {
-            Rlgl.rlDisableDepthMask();
-            Rlgl.rlDisableDepthTest();
-            Rlgl.rlDisableBackfaceCulling();
-            renderTexture.Begin();
+            DepthMask = false;
+            DepthTest = false;
+            CullFace = false;
+            renderTexture?.Begin();
             if (clear)
-                Raylib.ClearBackground(new Color(0, 0, 0, 0));
-            Raylib.BeginBlendMode(BlendMode.BLEND_ADDITIVE);
-            Raylib.DrawTexturePro(texture, new Rectangle(0, 0, texture.width, -texture.height), new Rectangle(0, 0, renderTexture.Width, renderTexture.Height), new Vector2(0, 0), 0, Color.white);
-            Raylib.EndBlendMode();
-            renderTexture.End();
-            Rlgl.rlEnableDepthMask();
-            Rlgl.rlEnableDepthTest();
-            Rlgl.rlEnableBackfaceCulling();
-        }
+                Clear(0, 0, 0, 0);
+            // Additive BlendMode
+            GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.One);
 
+            defaultMat ??= new Material(Shader.Find("Defaults/Basic.shader"));
+            defaultMat.SetTexture("texture0", texture);
+
+            DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, defaultMat);
+            //DrawTexturePro(texture, new Rectangle<int>(0, 0, (int)texture.Width, (int)-texture.Height), new Rectangle<int>(0, 0, renderTexture.Width, renderTexture.Height), new Vector2D<float>(0, 0), 0, Color.white);
+            // Revert to alpha Blendmode
+            GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+            renderTexture?.End();
+            DepthMask = true;
+            DepthTest = true;
+            CullFace = true;
+        }
 
         internal static void Dispose()
         {

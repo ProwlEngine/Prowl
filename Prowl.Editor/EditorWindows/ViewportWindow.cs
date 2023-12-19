@@ -4,6 +4,8 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.SceneManagement;
+using Silk.NET.Input;
+using Silk.NET.Maths;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -73,7 +75,7 @@ public class ViewportWindow : EditorWindow
         Settings.RenderResolution = Math.Clamp(Settings.RenderResolution, 0.1f, 8.0f);
         Cam.RenderResolution = Settings.RenderResolution;
 
-        ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].id, ImGui.GetContentRegionAvail(), new Vector2(0, 1), new Vector2(1, 0));
+        ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].Handle, ImGui.GetContentRegionAvail(), new Vector2(0, 1), new Vector2(1, 0));
         HandleDragnDrop();
         ImGuizmo.SetDrawlist();
         ImGuizmo.Enable(true);
@@ -151,7 +153,7 @@ public class ViewportWindow : EditorWindow
         GUIHelper.Tooltip("Viewport Camera Settings");
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 25));
-        ImGui.Text("FPS: " + Raylib_cs.Raylib.GetFPS());
+        ImGui.Text("FPS: " + 1.0 / Time.deltaTime);
 
         // Show ViewManipulation at the end
         //view *= Matrix4x4.CreateScale(1, -1, 1);
@@ -196,25 +198,25 @@ public class ViewportWindow : EditorWindow
 
         LastFocusedCamera = Cam;
 
-        if (Input.IsMouseButtonDown(Raylib_cs.MouseButton.MOUSE_RIGHT_BUTTON))
+        if (Input.IsMouseDown(MouseButton.Right))
         {
             Vector3 moveDir = Vector3.Zero;
-            if (Input.IsKeyDown(Raylib_cs.KeyboardKey.KEY_W))
+            if (Input.IsKeyDown(Key.W))
                 moveDir += Cam.GameObject.Forward;
-            if (Input.IsKeyDown(Raylib_cs.KeyboardKey.KEY_S))
+            if (Input.IsKeyDown(Key.S))
                 moveDir -= Cam.GameObject.Forward;
-            if (Input.IsKeyDown(Raylib_cs.KeyboardKey.KEY_A))
+            if (Input.IsKeyDown(Key.A))
                 moveDir -= Cam.GameObject.Right;
-            if (Input.IsKeyDown(Raylib_cs.KeyboardKey.KEY_D))
+            if (Input.IsKeyDown(Key.D))
                 moveDir += Cam.GameObject.Right;
-            if (Input.IsKeyDown(Raylib_cs.KeyboardKey.KEY_E))
+            if (Input.IsKeyDown(Key.E))
                 moveDir += Cam.GameObject.Up;
-            if (Input.IsKeyDown(Raylib_cs.KeyboardKey.KEY_Q))
+            if (Input.IsKeyDown(Key.Q))
                 moveDir -= Cam.GameObject.Up;
             if (moveDir != Vector3.Zero)
             {
                 moveDir = Vector3.Normalize(moveDir);
-                if (Input.IsKeyDown(Raylib_cs.KeyboardKey.KEY_LEFT_SHIFT))
+                if (Input.IsKeyDown(Key.ShiftLeft))
                     moveDir *= 2.0f;
                 Cam.GameObject.Position += moveDir * (Time.deltaTimeF * 10f);
             }
@@ -226,9 +228,9 @@ public class ViewportWindow : EditorWindow
             rot.Y += mouseDelta.Y * (Time.deltaTimeF * 5f * Settings.LookSensitivity);
             Cam.GameObject.Rotation = rot;
 
-            Raylib_cs.Raylib.SetMousePosition((int)WindowCenter.X, (int)WindowCenter.Y);
+            Input.MousePosition = WindowCenter.ToFloat().ToGeneric();
         }
-        else if (Input.IsMouseButtonDown(Raylib_cs.MouseButton.MOUSE_MIDDLE_BUTTON) && IsHovered)
+        else if (Input.IsMouseDown(MouseButton.Middle) && IsHovered)
         {
             var mouseDelta = Input.MouseDelta;
             var pos = Cam.GameObject.Position;
@@ -239,22 +241,22 @@ public class ViewportWindow : EditorWindow
         else
         {
             // If not looking around Viewport Keybinds are used instead
-            if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_Q))
-            {
-                SceneManager.GizmosOperation = ImGuizmoOperation.Translate;
-            }
-            else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_W))
-            {
-                SceneManager.GizmosOperation = ImGuizmoOperation.Rotate;
-            }
-            else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_E))
-            {
-                SceneManager.GizmosOperation = ImGuizmoOperation.Scale;
-            }
-            else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_R))
-            {
-                SceneManager.GizmosOperation = ImGuizmoOperation.Universal;
-            }
+            //if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_Q))
+            //{
+            //    SceneManager.GizmosOperation = ImGuizmoOperation.Translate;
+            //}
+            //else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_W))
+            //{
+            //    SceneManager.GizmosOperation = ImGuizmoOperation.Rotate;
+            //}
+            //else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_E))
+            //{
+            //    SceneManager.GizmosOperation = ImGuizmoOperation.Scale;
+            //}
+            //else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_R))
+            //{
+            //    SceneManager.GizmosOperation = ImGuizmoOperation.Universal;
+            //}
         }
     }
 

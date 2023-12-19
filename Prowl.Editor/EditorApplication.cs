@@ -53,15 +53,15 @@ public unsafe class EditorApplication : Application {
 
     public static bool IsHotkeyDown(string name, Hotkey defaultKey)
     {
-        if (EditorConfig.hotkeys.TryGetValue(name, out var hotkey))
-        {
-            return Input.IsKeyPressed(hotkey.Key) && Input.IsKeyDown(Key.ControlLeft) == hotkey.Ctrl && Input.IsKeyDown(Key.AltLeft) == hotkey.Alt && Input.IsKeyDown(Key.ShiftLeft) == hotkey.Shift;
-        }
-        else
-        {
-            EditorConfig.hotkeys.Add(name, defaultKey);
-            SaveConfig();
-        }
+        //if (EditorConfig.hotkeys.TryGetValue(name, out var hotkey))
+        //{
+        //    return Input.IsKeyPressed(hotkey.Key) && Input.IsKeyDown(Key.ControlLeft) == hotkey.Ctrl && Input.IsKeyDown(Key.AltLeft) == hotkey.Alt && Input.IsKeyDown(Key.ShiftLeft) == hotkey.Shift;
+        //}
+        //else
+        //{
+        //    EditorConfig.hotkeys.Add(name, defaultKey);
+        //    SaveConfig();
+        //}
         return false;
     }
 
@@ -70,8 +70,8 @@ public unsafe class EditorApplication : Application {
         Window.InitWindow("Prowl", 1920, 1080, Silk.NET.Windowing.WindowState.Normal, true);
 
         Window.Load += () => {
-            controller = new ImGUIController();
-            controller.Load(1280, 720);
+
+            EditorGui.Initialize();
 
             SceneManager.Initialize();
             Physics.Initialize();
@@ -115,7 +115,6 @@ public unsafe class EditorApplication : Application {
                         Physics.Update();
                 }
 
-                controller.Update((float)delta);
                 int dockspaceID = ImGui.DockSpaceOverViewport(ImGui.GetMainViewport());
 
                 if (hasDockSetup == false) {
@@ -161,7 +160,6 @@ public unsafe class EditorApplication : Application {
 
             OnDrawEditor?.Invoke();
             EditorGui.Update();
-            controller.Draw();
 
             Graphics.EndFrame();
         };
@@ -186,11 +184,8 @@ public unsafe class EditorApplication : Application {
             SaveConfig();
         }
 
-        EditorGui.Initialize();
-
         isEditor = true;
         isRunning = true;
-        Window.Start();
     }
 
     public void CheckReloadingAssemblies()

@@ -2,10 +2,6 @@
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Prowl.Runtime
 {
@@ -13,7 +9,7 @@ namespace Prowl.Runtime
     {
 
         public static IWindow InternalWindow { get; internal set; }
-        public static ImGuiController imguiController { get; internal set; }
+        public static ImGUIController imguiController { get; internal set; }
 
         public static event Action? Load;
         public static event Action<double>? Update;
@@ -82,7 +78,7 @@ namespace Prowl.Runtime
             Graphics.Initialize();
             //Audio.Initialize();
 
-            imguiController = new ImGuiController(Graphics.GL, InternalWindow, Input.Context);
+            imguiController = new ImGUIController(Graphics.GL, InternalWindow, Input.Context);
             Load?.Invoke();
         }
 
@@ -101,13 +97,11 @@ namespace Prowl.Runtime
 
         public static void OnResize(Vector2D<int> size)
         {
-            Graphics.resize(size);
             Resize?.Invoke(size);
         }
 
         public static void OnFramebufferResize(Vector2D<int> size)
         {
-            Graphics.resize(size);
             FramebufferResize?.Invoke(size);
         }
 

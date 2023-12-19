@@ -24,8 +24,6 @@ public abstract class Application
 
     protected double physicsTimer = 0;
 
-    protected ImGUIController controller;
-
     public virtual void Initialize()
     {
         Debug.Log("Initializing...");
@@ -35,9 +33,6 @@ public abstract class Application
         Window.InitWindow("Prowl", 1920, 1080, Silk.NET.Windowing.WindowState.Normal, true);
 
         Window.Load += () => {
-            controller = new ImGUIController();
-            controller.Load(1280, 720);
-
             SceneManager.Initialize();
             Physics.Initialize();
 
@@ -61,7 +56,6 @@ public abstract class Application
             Graphics.StartFrame();
 
             SceneManager.Draw();
-            controller.Draw();
 
             Graphics.EndFrame();
         };

@@ -2,6 +2,7 @@
 using Prowl.Runtime.Utils;
 using HexaEngine.ImGuiNET;
 using Prowl.Runtime.Assets;
+using Silk.NET.OpenGL;
 
 namespace Prowl.Editor.Assets
 {
@@ -11,8 +12,9 @@ namespace Prowl.Editor.Assets
         public static readonly string[] Supported = { ".png", ".bmp", ".jpg", ".jpeg", ".qoi", ".psd", ".tga", ".dds", ".hdr", ".ktx", ".pkm", ".pvr" };
 
         public bool generateMipmaps = true;
-        public Raylib_cs.TextureWrap textureWrap = Raylib_cs.TextureWrap.TEXTURE_WRAP_REPEAT;
-        public Raylib_cs.TextureFilter textureFilter = Raylib_cs.TextureFilter.TEXTURE_FILTER_BILINEAR;
+        public TextureWrapMode textureWrap = TextureWrapMode.Repeat;
+        public TextureMinFilter textureMinFilter = TextureMinFilter.Nearest;
+        public TextureMagFilter textureMagFilter = TextureMagFilter.Linear;
 
         public override void Import(SerializedAsset ctx, FileInfo assetPath)
         {
@@ -23,12 +25,12 @@ namespace Prowl.Editor.Assets
             }
 
             // Load the Texture into a TextureData Object and serialize to Asset Folder
-            Texture2D texture = new Texture2D(assetPath.FullName);
+            Texture2D texture = Texture2D.FromFile(assetPath.FullName);
             if (generateMipmaps)
-                texture.GenerateMipMaps();
+                texture.GenerateMipmaps();
 
-            texture.SetFilter(textureFilter);
-            texture.SetWrap(textureWrap);
+            texture.SetTextureFilters(textureMinFilter, textureMagFilter);
+            texture.SetWrapModes(textureWrap, textureWrap);
 
             ctx.SetMainObject(texture);
 
@@ -47,11 +49,13 @@ namespace Prowl.Editor.Assets
     [CustomEditor(typeof(TextureImporter))]
     public class TextureEditor : ScriptedEditor
     {
-        private string[] filterNames = Enum.GetNames<Raylib_cs.TextureFilter>();
-        private Raylib_cs.TextureFilter[] filters = Enum.GetValues<Raylib_cs.TextureFilter>();
+        private string[] filterNames = Enum.GetNames<TextureMinFilter>();
+        private TextureMinFilter[] filters = Enum.GetValues<TextureMinFilter>();
+        private string[] filterMagNames = Enum.GetNames<TextureMagFilter>();
+        private TextureMagFilter[] filtersMag = Enum.GetValues<TextureMagFilter>();
 
-        private string[] wrapNames = Enum.GetNames<Raylib_cs.TextureWrap>();
-        private Raylib_cs.TextureWrap[] wraps = Enum.GetValues<Raylib_cs.TextureWrap>();
+        private string[] wrapNames = Enum.GetNames<TextureWrapMode>();
+        private TextureWrapMode[] wraps = Enum.GetValues<TextureWrapMode>();
 
         public override void OnInspectorGUI()
         {
@@ -59,9 +63,12 @@ namespace Prowl.Editor.Assets
 
             ImGui.Checkbox("Generate Mipmaps", ref importer.generateMipmaps);
             // textureFilter
-            int filterIndex = Array.IndexOf(filters, importer.textureFilter);
-            if (ImGui.Combo("##FilterMode", ref filterIndex, filterNames, filterNames.Length))
-                importer.textureFilter = filters[filterIndex];
+            int filterMinIndex = Array.IndexOf(filters, importer.textureMinFilter);
+            if (ImGui.Combo("Min Filter##FilterMinMode", ref filterMinIndex, filterNames, filterNames.Length))
+                importer.textureMinFilter = filters[filterMinIndex];
+            int filterMagIndex = Array.IndexOf(filtersMag, importer.textureMagFilter);
+            if (ImGui.Combo("Mag Filter##filtersMag", ref filterMagIndex, filterMagNames, filterMagNames.Length))
+                importer.textureMagFilter = filtersMag[filterMagIndex];
             // textureWrap
             int wrapIndex = Array.IndexOf(wraps, importer.textureWrap);
             if (ImGui.Combo("##WrapMode", ref wrapIndex, wrapNames, wrapNames.Length))

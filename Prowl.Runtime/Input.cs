@@ -38,7 +38,14 @@ public static class Input
 
     public static Vector2D<float> PreviousMousePosition { get; private set; }
     public static Vector2D<float> MouseDelta => PreviousMousePosition - MousePosition;
-    public static Vector2D<float> MousePosition => Mice[0].Position.ToGeneric();
+    public static Vector2D<float> MousePosition {
+        get {
+            return Mice[0].Position.ToGeneric();
+        }
+        set {
+            Mice[0].Position = value.ToSystem();
+        }
+    }
 
 
     public static bool IsMouseDown(MouseButton button)

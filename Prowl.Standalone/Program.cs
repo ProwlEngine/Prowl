@@ -21,7 +21,7 @@ internal class Program {
             SceneManager.LoadScene(scene);
         }
 
-        standaloneApplication.Run();
+        Window.Start();
 
         return 0;
     }

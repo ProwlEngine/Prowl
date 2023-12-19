@@ -330,8 +330,7 @@ public class AssetBrowserWindow : EditorWindow {
             if (!cachedThumbnails.ContainsKey(fileName))
             {
                 using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources." + fileName);
-                cachedThumbnails[fileName] = new Texture2D(stream);
-                cachedThumbnails[fileName].SetFilter(Raylib_cs.TextureFilter.TEXTURE_FILTER_BILINEAR);
+                cachedThumbnails[fileName] = Texture2D.FromStream(stream);
             }
         }
         else if (entry is FileInfo file)
@@ -369,8 +368,7 @@ public class AssetBrowserWindow : EditorWindow {
             lastGenerated = (Time.frameCount, true);
             using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources." + fileName))
             {
-                cachedThumbnails[fileName] = new Texture2D(stream);
-                cachedThumbnails[fileName].SetFilter(Raylib_cs.TextureFilter.TEXTURE_FILTER_BILINEAR);
+                cachedThumbnails[fileName] = Texture2D.FromStream(stream);
             }
         }
         return cachedThumbnails[fileName];

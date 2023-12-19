@@ -10,7 +10,7 @@ public static class Program {
         EditorApplication editorApplication = new();
         Application.AssetProvider = new EditorAssetProvider();
         editorApplication.Initialize();
-        editorApplication.Run();
+        Window.Start();
 
         return 0;
     }

@@ -16,6 +16,7 @@
       <None Remove="EmbeddedResources\DefaultAssets\1mcube.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\AcesTonemapper.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\AmbientLight.shader" />
+      <None Remove="EmbeddedResources\DefaultAssets\Basic.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Bloom.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Cube.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\Cylinder.obj" />
@@ -81,6 +82,9 @@
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       </EmbeddedResource>
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Random.glsl" />
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Basic.shader">
+        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      </EmbeddedResource>
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\TAA.shader">
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       </EmbeddedResource>

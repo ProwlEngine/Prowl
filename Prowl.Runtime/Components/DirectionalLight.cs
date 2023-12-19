@@ -1,6 +1,5 @@
 ﻿using Prowl.Icons;
 using Prowl.Runtime.SceneManagement;
-using Raylib_cs;
 
 namespace Prowl.Runtime;
 
@@ -91,20 +90,17 @@ public class DirectionalLight : MonoBehaviour
             //Graphics.MatDepth = depthMVP;
 
             shadowMap.Begin();
-            Raylib.ClearBackground(Color.white);
-            Rlgl.rlClearScreenBuffers();
-            Rlgl.rlClearColor(255, 255, 255, 255);
-            Rlgl.rlDisableColorBlend();
-            //Rlgl.rlEnableDepthMask();
-            //Rlgl.rlEnableDepthTest();
-            Rlgl.rlSetCullFace(0); // Cull the front faces for the shadow pass
+            Graphics.Clear(1, 1, 1, 1);
+            Graphics.Blend = false;
+            Graphics.CullFace = true;
+            Graphics.GL.CullFace(Silk.NET.OpenGL.TriangleFace.Front);
             foreach (var go in SceneManager.AllGameObjects)
                 if (go.EnabledInHierarchy)
                     foreach (var comp in go.GetComponents())
                         if (comp.Enabled && comp.RenderOrder == RenderingOrder.Opaque)
                             comp.Internal_OnRenderObjectDepth();
-            Rlgl.rlSetCullFace(1);
-            Rlgl.rlEnableColorBlend();
+            Graphics.GL.CullFace(Silk.NET.OpenGL.TriangleFace.Back);
+            Graphics.Blend = true;
             shadowMap.End();
         }
     }

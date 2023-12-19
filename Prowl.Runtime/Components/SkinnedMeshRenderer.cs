@@ -43,8 +43,14 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         return matrices;
     }
 
+    private Dictionary<int, Matrix4x4> prevMats = new();
     public void OnRenderObject()
     {
+        var mat = GameObject.GlobalCamRelative;
+        int camID = Camera.Current.InstanceID;
+        if (!prevMats.ContainsKey(camID)) prevMats[camID] = GameObject.GlobalCamRelative;
+        var prevMat = prevMats[camID];
+        
         if (Mesh.IsAvailable && Material.IsAvailable)
         {
             Material.Res!.EnableKeyword("SKINNED");
@@ -53,11 +59,13 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
             for (int i = 0; i < Material.Res!.PassCount; i++)
             {
                 Material.Res!.SetPass(i);
-                Graphics.DrawMeshNow(Mesh.Res!, GameObject.GlobalCamRelative, Material.Res!, GameObject.GlobalCamPreviousRelative);
+                Graphics.DrawMeshNow(Mesh.Res!, mat, Material.Res!, prevMat);
                 Material.Res!.EndPass();
             }
             Material.Res!.DisableKeyword("SKINNED");
         }
+
+        prevMats[camID] = mat;
     }
 
     public void OnRenderObjectDepth()

@@ -60,7 +60,7 @@ public class GameWindow : EditorWindow
                 mainCam.Target = null;
             }
 
-            ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].id, ImGui.GetContentRegionAvail(), new System.Numerics.Vector2(0, 1), new System.Numerics.Vector2(1, 0));
+            ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].Handle, ImGui.GetContentRegionAvail(), new System.Numerics.Vector2(0, 1), new System.Numerics.Vector2(1, 0));
 
         }
     }

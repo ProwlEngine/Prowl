@@ -9,7 +9,7 @@ namespace Prowl.Runtime
         public uint fboId { get; private set; }
         public Texture2D MainTexture => InternalTextures[0];
         public Texture2D[] InternalTextures { get; private set; }
-        public RenderBuffer InternalDepth { get; private set; }
+        public Texture2D InternalDepth { get; private set; }
 
         public int Width { get; private set; }
         public int Height { get; private set; }
@@ -23,10 +23,10 @@ namespace Prowl.Runtime
             Height = 0;
             numTextures = 0;
             hasDepthAttachment = false;
-            textureFormats = new PixelFormat[0];
+            textureFormats = new Texture.TextureImageFormat[0];
         }
 
-        public RenderTexture(int Width, int Height, int numTextures = 1, bool hasDepthAttachment = true, PixelFormat[]? formats = null) : base("RenderTexture")
+        public RenderTexture(int Width, int Height, int numTextures = 1, bool hasDepthAttachment = true, Texture.TextureImageFormat[]? formats = null) : base("RenderTexture")
         {
             if (numTextures < 1 || numTextures > Graphics.MaxFramebufferColorAttachments)
                 throw new Exception("Invalid number of textures! [1-" + Graphics.MaxFramebufferColorAttachments + "]");
@@ -57,16 +57,16 @@ namespace Prowl.Runtime
                 // Generate textures
                 InternalTextures = new Texture2D[numTextures];
                 for (int i = 0; i < numTextures; i++) {
-                    InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, false, 0, this.textureFormats[i]);
+                    InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, false, this.textureFormats[i]);
                     Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, (TextureTarget)InternalTextures[i].Type, InternalTextures[i].Handle, 0);
                 }
                 Graphics.ActivateDrawBuffers(numTextures);
 
                 // Generate depth attachment if requested
                 if (hasDepthAttachment) {
-                    var depth = new RenderBuffer((uint)Width, (uint)Height, RenderBuffer.RenderbufferFormat.Depth24);
+                    var depth = new Texture2D((uint)Width, (uint)Height, false, Texture.TextureImageFormat.Depth24);
                     InternalDepth = depth;
-                    Graphics.GL.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, RenderbufferTarget.Renderbuffer, depth.Handle);
+                    Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Renderbuffer, depth.Handle, 0);
 
                 }
 
@@ -92,7 +92,7 @@ namespace Prowl.Runtime
         public void End()
         {
             Graphics.GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-            Graphics.GL.Viewport(0, 0, (uint)Window.InternalWindow.Size.X, (uint)Window.InternalWindow.Size.Y);
+            Graphics.GL.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
             Graphics.FrameBufferSize = new Vector2D<int>(Width, Height);
         }
 
@@ -110,7 +110,6 @@ namespace Prowl.Runtime
 
         public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
         {
-            asd
             CompoundTag compoundTag = new CompoundTag();
             compoundTag.Add("Width", new IntTag(Width));
             compoundTag.Add("Height", new IntTag(Height));
@@ -125,17 +124,16 @@ namespace Prowl.Runtime
 
         public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
         {
-            asd
             Width = value["Width"].IntValue;
             Height = value["Height"].IntValue;
             numTextures = value["NumTextures"].IntValue;
             hasDepthAttachment = value["HasDepthAttachment"].ByteValue == 1;
-            textureFormats = new PixelFormat[numTextures];
+            textureFormats = new Texture.TextureImageFormat[numTextures];
             var textureFormatsTag = value.Get<ListTag>("TextureFormats");
             for (int i = 0; i < numTextures; i++)
-                textureFormats[i] = (PixelFormat)textureFormatsTag[i].ByteValue;
+                textureFormats[i] = (Texture.TextureImageFormat)textureFormatsTag[i].ByteValue;
 
-            var param = new[] { typeof(int), typeof(int), typeof(int), typeof(bool), typeof(PixelFormat[]) };
+            var param = new[] { typeof(int), typeof(int), typeof(int), typeof(bool), typeof(Texture.TextureImageFormat[]) };
             var values = new object[] { Width, Height, numTextures, hasDepthAttachment, textureFormats };
             typeof(RenderTexture).GetConstructor(param).Invoke(this, values);
         }
