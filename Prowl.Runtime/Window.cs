@@ -84,7 +84,6 @@ namespace Prowl.Runtime
 
         public static void OnRender(double delta)
         {
-            imguiController.Update((float)delta);
             Render?.Invoke(delta);
             PostRender?.Invoke(delta);
             imguiController.Render();
@@ -107,6 +106,7 @@ namespace Prowl.Runtime
 
         public static void OnUpdate(double delta)
         {
+            imguiController.Update((float)delta);
             Input.Update();
             Update?.Invoke(delta);
         }
