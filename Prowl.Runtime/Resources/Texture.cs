@@ -282,6 +282,5 @@ namespace Prowl.Runtime
                 || textureType == TextureType.Texture1DArray || textureType == TextureType.Texture2DArray
                 || textureType == TextureType.TextureCubeMap || textureType == TextureType.TextureCubeMapArray;
         }
-
     }
 }

@@ -11,13 +11,15 @@ namespace Prowl.Runtime
     /// <summary>
     /// A <see cref="Texture"/> whose image has two dimensions and support for multisampling.
     /// </summary>
-    public sealed class Texture2D : Texture
+    public sealed class Texture2D : Texture, ISerializable
     {
         /// <summary>The width of this <see cref="Texture2D"/>.</summary>
         public uint Width { get; private set; }
 
         /// <summary>The height of this <see cref="Texture2D"/>.</summary>
         public uint Height { get; private set; }
+
+        public Texture2D() : base(TextureType.Texture2D, TextureImageFormat.Color4b) { }
 
         /// <summary>
         /// Creates a <see cref="Texture2D"/> with the desired parameters but no image data.
@@ -343,5 +345,34 @@ namespace Prowl.Runtime
 
         #endregion
 
+
+        public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
+        {
+            CompoundTag compoundTag = new CompoundTag();
+            compoundTag.Add("Width", new IntTag((int)Width));
+            compoundTag.Add("Height", new IntTag((int)Height));
+            compoundTag.Add("IsMipMapped", new BoolTag(IsMipmapped));
+            compoundTag.Add("ImageFormat", new ByteTag((byte)ImageFormat));
+            Memory<byte> memory = new byte[Width * Height * 4];
+            GetData(memory);
+            compoundTag.Add("Data", new ByteArrayTag(memory.ToArray()));
+
+            return compoundTag;
+        }
+
+        public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
+        {
+            Width = (uint)value["Width"].IntValue;
+            Height = (uint)value["Height"].IntValue;
+            bool isMipMapped = value["IsMipMapped"].BoolValue;
+            TextureImageFormat imageFormat = (TextureImageFormat)value["ImageFormat"].ByteValue;
+
+            var param = new[] { typeof(uint), typeof(uint), typeof(bool), typeof(TextureImageFormat) };
+            var values = new object[] { Width, Height, isMipMapped, imageFormat };
+            typeof(Texture2D).GetConstructor(param).Invoke(this, values);
+
+            Memory<byte> memory = value["Data"].ByteArrayValue;
+            SetData(memory);
+        }
     }
 }
