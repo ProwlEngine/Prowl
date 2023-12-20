@@ -54,7 +54,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             return renderRT;
         }
 
-        public virtual void PreRender() { }
+        public virtual void PreRender(int width, int height) { }
         public abstract void Render();
     }
 
@@ -293,13 +293,13 @@ namespace Prowl.Runtime.Resources.RenderPipeline
 
         Material Mat;
 
-        public override void PreRender()
+        public override void PreRender(int width, int height)
         {
             // Apply jitter
             // Graphics class by default comes packed with a Halton16 sequence specifically for TAA jitter
             Graphics.UseJitter = true; // This applies the jitter to the Velocity Buffer/Motion Vectors
-            Graphics.MatProjection.M31 += Graphics.Jitter.X / Graphics.Resolution.X;
-            Graphics.MatProjection.M32 += Graphics.Jitter.Y / Graphics.Resolution.Y;
+            Graphics.MatProjection.M31 += Graphics.Jitter.X / width;
+            Graphics.MatProjection.M32 += Graphics.Jitter.Y / height;
         }
 
         public override void Render()

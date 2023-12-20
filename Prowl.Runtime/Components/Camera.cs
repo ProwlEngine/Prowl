@@ -131,7 +131,7 @@ public class Camera : MonoBehaviour
         Graphics.UseJitter = false;
         foreach (var node in rp.Res!.nodes) {
             if (node is RenderPassNode renderPass)
-                renderPass.PreRender();
+                renderPass.PreRender(width, height);
         }
 
         Matrix4x4.Invert(Graphics.MatView, out Graphics.MatViewInverse);
