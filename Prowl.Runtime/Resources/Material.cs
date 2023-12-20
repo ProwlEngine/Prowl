@@ -233,7 +233,6 @@ namespace Prowl.Runtime
 
         public void EndPass()
         {
-            if (Shader.IsAvailable == false) return;
             Graphics.GL.UseProgram(0);
             current = null;
         }
