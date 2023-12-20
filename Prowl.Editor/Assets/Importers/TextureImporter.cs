@@ -26,11 +26,12 @@ namespace Prowl.Editor.Assets
 
             // Load the Texture into a TextureData Object and serialize to Asset Folder
             Texture2D texture = Texture2D.FromFile(assetPath.FullName);
-            if (generateMipmaps)
-                texture.GenerateMipmaps();
 
             texture.SetTextureFilters(textureMinFilter, textureMagFilter);
             texture.SetWrapModes(textureWrap, textureWrap);
+
+            if (generateMipmaps)
+                texture.GenerateMipmaps();
 
             ctx.SetMainObject(texture);
 

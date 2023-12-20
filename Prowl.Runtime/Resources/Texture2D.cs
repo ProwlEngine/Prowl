@@ -1,10 +1,9 @@
 using Silk.NET.OpenGL;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using ImageMagick;
 using System;
 using System.IO;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+using Silk.NET.Vulkan;
 
 namespace Prowl.Runtime
 {
@@ -38,6 +37,8 @@ namespace Prowl.Runtime
 
             Graphics.GL.TexParameter((TextureTarget)Type, TextureParameterName.TextureMinFilter, IsMipmapped ? (int)DefaultMipmapMinFilter : (int)DefaultMinFilter);
             Graphics.GL.TexParameter((TextureTarget)Type, TextureParameterName.TextureMagFilter, (int)DefaultMagFilter);
+            MinFilter = IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter;
+            MagFilter = DefaultMagFilter;
             Graphics.CheckGL();
         }
 
@@ -50,7 +51,7 @@ namespace Prowl.Runtime
         /// <param name="rectWidth">The width of the rectangle of pixels to write.</param>
         /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
         /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
-        public unsafe void SetDataPtr(void* ptr, int rectX, int rectY, uint rectWidth, uint rectHeight, PixelFormat pixelFormat = 0)
+        public unsafe void SetDataPtr(void* ptr, int rectX, int rectY, uint rectWidth, uint rectHeight, Silk.NET.OpenGL.PixelFormat pixelFormat = 0)
         {
             ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
 
@@ -121,6 +122,36 @@ namespace Prowl.Runtime
             Graphics.CheckGL();
         }
 
+        public int GetSize()
+        {
+            int size = (int)Width * (int)Height;
+            switch (ImageFormat) {
+                case TextureImageFormat.UnsignedInt:
+                case TextureImageFormat.Int:
+                case TextureImageFormat.Float:
+                    return size * 4;
+                case TextureImageFormat.UnsignedInt2:
+                case TextureImageFormat.Int2:
+                case TextureImageFormat.Float2:
+                    return size * 4 * 2;
+                case TextureImageFormat.UnsignedInt3:
+                case TextureImageFormat.Int3:
+                case TextureImageFormat.Float3:
+                    return size * 4 * 3;
+                case TextureImageFormat.UnsignedInt4:
+                case TextureImageFormat.Int4:
+                case TextureImageFormat.Float4:
+                    return size * 4 * 4;
+                case TextureImageFormat.Depth16:
+                    return size * 2;
+                case TextureImageFormat.Depth24:
+                    return size * 3;
+                case TextureImageFormat.Depth32f:
+                    return size * 4;
+                default: return size * 4;
+            }
+        }
+
         /// <summary>
         /// Sets the texture coordinate wrapping modes for when a texture is sampled outside the [0, 1] range.
         /// </summary>
@@ -179,87 +210,40 @@ namespace Prowl.Runtime
                 throw new ArgumentOutOfRangeException("Specified area is outside of the texture's storage");
         }
 
-        #region SixLabors ImageSharp integration
-
-
-        /// <summary>
-        /// Sets a the data of an area of a <see cref="Texture2D"/> from an <see cref="Image{Rgba32}"/>.
-        /// </summary>
-        /// <param name="x">The x position of the first pixel to set.</param>
-        /// <param name="y">The y position of the first pixel to set.</param>
-        /// <param name="image">The image to set the data from. The width and height is taken from here.</param>
-        public void SetData(int x, int y, Image<Rgba32> image)
-        {
-            if (ImageFormat != TextureImageFormat.Color4b)
-                throw new ArgumentException("Texture2D", TextureFormatMustBeColor4bError);
-
-            if (image == null)
-                throw new ArgumentNullException(nameof(image));
-
-            if (!image.DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixels))
-                throw new InvalidDataException(ImageNotContiguousError);
-
-            SetData<Rgba32>(pixels, x, y, (uint)image.Width, (uint)image.Height, PixelFormat.Rgba);
-        }
-
-        /// <summary>
-        /// Sets a the data of an entire <see cref="Texture2D"/> from an <see cref="Image{Rgba32}"/>.
-        /// </summary>
-        /// <param name="image">The image to set the data from.</param>
-        public void SetData(Image<Rgba32> image)
-        {
-            SetData(0, 0, image);
-        }
-
-        /// <summary>
-        /// Gets the data of the entire <see cref="Texture2D"/>.
-        /// </summary>
-        /// <param name="image">The image in which to write the pixel data.</param>
-        /// <param name="flip">Whether to flip the image after the pixels are read.</param>
-        public void GetData(Image<Rgba32> image, bool flip = false)
-        {
-            if (ImageFormat != TextureImageFormat.Color4b)
-                throw new ArgumentException("Texture2D", TextureFormatMustBeColor4bError);
-
-            if (image == null)
-                throw new ArgumentNullException(nameof(image));
-
-            if (image.Width != Width || image.Height != Height)
-                throw new ArgumentException(nameof(image), ImageSizeMustMatchTextureSizeError);
-
-            if (!image.DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixels))
-                throw new InvalidDataException(ImageNotContiguousError);
-            GetData(pixels, PixelFormat.Rgba);
-
-            if (flip)
-                image.Mutate(x => x.Flip(FlipMode.Vertical));
-        }
+        #region ImageMagick integration
 
         /// <summary>
         /// Creates a <see cref="Texture2D"/> from an <see cref="Image{Rgba32}"/>.
         /// </summary>
         /// <param name="image">The image to create the <see cref="Texture2D"/> with.</param>
         /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
-        public static Texture2D FromImage(Image<Rgba32> image, bool generateMipmaps = false)
+        public static Texture2D FromImage(MagickImage image, bool generateMipmaps = false)
         {
             if (image == null)
                 throw new ArgumentNullException(nameof(image));
 
-            if (!image.DangerousTryGetSinglePixelMemory(out Memory<Rgba32> pixels))
-                throw new InvalidDataException(ImageNotContiguousError);
+            image.Flip();
 
-            Texture2D texture = new Texture2D((uint)image.Width, (uint)image.Height);
-            try
-            {
-                texture.SetData<Rgba32>(pixels, PixelFormat.Rgba);
+            TextureImageFormat format = TextureImageFormat.Color4b;
+            image.ColorType = ColorType.TrueColorAlpha;
+
+            var pixels = image.GetPixelsUnsafe().GetAreaPointer(0, 0, image.Width, image.Height);
+
+            Texture2D texture = new Texture2D((uint)image.Width, (uint)image.Height, false, format);
+            try {
+
+                Graphics.GL.BindTexture((TextureTarget)texture.Type, texture.Handle);
+                unsafe {
+                    Graphics.GL.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
+                    Graphics.GL.TexSubImage2D((TextureTarget)texture.Type, 0, 0, 0, (uint)image.Width, (uint)image.Height, texture.PixelFormat, PixelType.UnsignedShort, (void*)pixels);
+                }
+                Graphics.CheckGL();
 
                 if (generateMipmaps)
                     texture.GenerateMipmaps();
 
                 return texture;
-            }
-            catch
-            {
+            } catch {
                 texture.Dispose();
                 throw;
             }
@@ -272,9 +256,7 @@ namespace Prowl.Runtime
         /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
         public static Texture2D FromStream(Stream stream, bool generateMipmaps = false)
         {
-            using Image<Rgba32> image = Image.Load<Rgba32>(stream);
-            //flip
-            image.Mutate(x => x.Flip(FlipMode.Vertical));
+            var image = new MagickImage(stream);
             return FromImage(image, generateMipmaps);
         }
 
@@ -285,66 +267,16 @@ namespace Prowl.Runtime
         /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
         public static Texture2D FromFile(string file, bool generateMipmaps = false)
         {
-            using Image<Rgba32> image = Image.Load<Rgba32>(file);
-            image.Mutate(x => x.Flip(FlipMode.Vertical));
+            var image = new MagickImage(file);
             return FromImage( image, generateMipmaps);
         }
 
-        public enum SaveImageFormat
-        {
-            Png, Jpeg, Bmp, Gif
-        }
-
-        /// <summary>
-        /// Saves this <see cref="Texture2D"/>'s image to a stream. You can't save multisampled textures.
-        /// </summary>
-        /// <param name="stream">The stream to save the texture image to.</param>
-        /// <param name="imageFormat">The format the image will be saved as.</param>
-        /// <param name="flip">Whether to flip the image after the pixels are read.</param>
-        public void SaveAsImage(Stream stream, SaveImageFormat imageFormat, bool flip = false)
-        {
-            if (stream == null)
-                throw new ArgumentException("You must specify a stream", nameof(stream));
-
-            IImageFormat format = GetFormatFor(imageFormat);
-            using Image<Rgba32> image = new Image<Rgba32>((int)Width, (int)Height);
-            GetData(image, flip);
-            image.Save(stream, format);
-        }
-
-        /// <summary>
-        /// Saves this <see cref="Texture2D"/>'s image to a file. You can't save multisampled textures.
-        /// If the file already exists, it will be replaced.
-        /// </summary>
-        /// <param name="file">The name of the file where the image will be saved.</param>
-        /// <param name="imageFormat">The format the image will be saved as.</param>
-        /// <param name="flip">Whether to flip the image after the pixels are read.</param>
-        public void SaveAsImage(string file, SaveImageFormat imageFormat, bool flip = false)
-        {
-            using FileStream fileStream = new FileStream(file, FileMode.Create, FileAccess.Write, FileShare.Read);
-            SaveAsImage(fileStream, imageFormat, flip);
-        }
 
         internal const string ImageNotContiguousError = "To load/save an image, it's backing memory must be contiguous. Consider using smaller image sizes or changing your ImageSharp memory allocation settings to allow larger buffers.";
 
         internal const string ImageSizeMustMatchTextureSizeError = "The size of the image must match the size of the texture";
 
         internal const string TextureFormatMustBeColor4bError = "The texture's format must be Color4b (RGBA)";
-
-        /// <summary>
-        /// Gets an appropiate <see cref="IImageFormat"/> for the given <see cref="SaveImageFormat"/>.
-        /// </summary>
-        public static IImageFormat GetFormatFor(SaveImageFormat imageFormat)
-        {
-            return imageFormat switch
-            {
-                SaveImageFormat.Png => SixLabors.ImageSharp.Formats.Png.PngFormat.Instance,
-                SaveImageFormat.Jpeg => SixLabors.ImageSharp.Formats.Jpeg.JpegFormat.Instance,
-                SaveImageFormat.Bmp => SixLabors.ImageSharp.Formats.Bmp.BmpFormat.Instance,
-                SaveImageFormat.Gif => SixLabors.ImageSharp.Formats.Gif.GifFormat.Instance,
-                _ => throw new ArgumentException("Invalid " + nameof(SaveImageFormat), nameof(imageFormat)),
-            };
-        }
 
         #endregion
 
@@ -355,9 +287,13 @@ namespace Prowl.Runtime
             compoundTag.Add("Width", new IntTag((int)Width));
             compoundTag.Add("Height", new IntTag((int)Height));
             compoundTag.Add("IsMipMapped", new BoolTag(IsMipmapped));
-            compoundTag.Add("ImageFormat", new ByteTag((byte)ImageFormat));
-            Memory<byte> memory = new byte[Width * Height * 4];
-            GetData(memory);
+            compoundTag.Add("ImageFormat", new IntTag((int)ImageFormat));
+            compoundTag.Add("PixelFormat", new IntTag((int)PixelFormat));
+            compoundTag.Add("MinFilter", new IntTag((int)MinFilter));
+            compoundTag.Add("MagFilter", new IntTag((int)MagFilter));
+            compoundTag.Add("Wrap", new IntTag((int)WrapMode));
+            Memory<byte> memory = new byte[GetSize()];
+            GetData(memory, PixelFormat);
             compoundTag.Add("Data", new ByteArrayTag(memory.ToArray()));
 
             return compoundTag;
@@ -368,17 +304,24 @@ namespace Prowl.Runtime
             Width = (uint)value["Width"].IntValue;
             Height = (uint)value["Height"].IntValue;
             bool isMipMapped = value["IsMipMapped"].BoolValue;
-            TextureImageFormat imageFormat = (TextureImageFormat)value["ImageFormat"].ByteValue;
+            TextureImageFormat imageFormat = (TextureImageFormat)value["ImageFormat"].IntValue;
+            var PixelFormat = (Silk.NET.OpenGL.PixelFormat)value["PixelFormat"].IntValue;
+            var MinFilter = (TextureMinFilter)value["MinFilter"].IntValue;
+            var MagFilter = (TextureMagFilter)value["MagFilter"].IntValue;
+            var Wrap = (TextureWrapMode)value["Wrap"].IntValue;
 
             var param = new[] { typeof(uint), typeof(uint), typeof(bool), typeof(TextureImageFormat) };
             var values = new object[] { Width, Height, false, imageFormat };
             typeof(Texture2D).GetConstructor(param).Invoke(this, values);
 
             Memory<byte> memory = value["Data"].ByteArrayValue;
-            SetData(memory);
+            SetData(memory, PixelFormat);
 
             if(isMipMapped)
                 GenerateMipmaps();
+
+            SetTextureFilters(MinFilter, MagFilter);
+            SetWrapModes(Wrap, Wrap);
         }
     }
 }

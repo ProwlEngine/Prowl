@@ -61,6 +61,10 @@ namespace Prowl.Runtime
         /// <summary>The type of this <see cref="Texture"/>, such as 1D, 2D, Multisampled 2D, Array 2D, CubeMap, etc.</summary>
         public readonly TextureType Type;
 
+        public TextureMinFilter MinFilter { get; protected set; }
+        public TextureMagFilter MagFilter { get; protected set; }
+        public TextureWrapMode WrapMode { get; protected set; }
+
         /// <summary>The internal format of the pixels, such as RGBA, RGB, R32f, or even different depth/stencil formats.</summary>
         internal readonly InternalFormat PixelInternalFormat;
 
@@ -108,6 +112,9 @@ namespace Prowl.Runtime
             Graphics.GL.TexParameter((TextureTarget)Type, TextureParameterName.TextureWrapT, (int)TextureWrapMode.Repeat);
             Graphics.GL.TexParameter((TextureTarget)Type, TextureParameterName.TextureMinFilter, (int)DefaultMinFilter);
             Graphics.GL.TexParameter((TextureTarget)Type, TextureParameterName.TextureMagFilter, (int)DefaultMagFilter);
+            MinFilter = DefaultMinFilter;
+            MagFilter = DefaultMagFilter;
+            WrapMode = TextureWrapMode.Repeat;
 
             Graphics.CheckGL();
         }
@@ -122,6 +129,8 @@ namespace Prowl.Runtime
             Graphics.GL.BindTexture((TextureTarget)Type, Handle);
             Graphics.GL.TexParameter((TextureTarget)Type, TextureParameterName.TextureMinFilter, (int)minFilter);
             Graphics.GL.TexParameter((TextureTarget)Type, TextureParameterName.TextureMagFilter, (int)magFilter);
+            MinFilter = minFilter;
+            MagFilter = magFilter;
             Graphics.CheckGL();
         }
 
