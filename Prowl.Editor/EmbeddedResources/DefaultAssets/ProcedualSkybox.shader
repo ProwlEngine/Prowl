@@ -5,7 +5,9 @@ Pass 0
 	Vertex
 	{
 		in vec3 vertexPosition;
-
+		in vec2 vertexTexCoord;
+		
+		out vec2 TexCoords;
         out vec3 vPosition;
 
 		uniform mat4 mvpInverse;
@@ -15,6 +17,7 @@ Pass 0
 			gl_Position =vec4(vertexPosition, 1.0);
             // vertexPosition is in screen space, convert it into world space
             vPosition = (mvpInverse * vec4(vertexPosition, 1.0)).xyz;
+			TexCoords = vertexTexCoord;
 		}
 	}
 
@@ -23,6 +26,7 @@ Pass 0
 		layout(location = 0) out vec4 OutputColor;
 		
         in vec3 vPosition;
+		in vec2 TexCoords;
 
 		uniform vec2 Resolution;
 		uniform vec3 uSunPos;
@@ -221,8 +225,7 @@ Pass 0
 
 		void main()
 		{
-			vec2 texCoords = gl_FragCoord.xy / Resolution;
-            vec3 gPos = textureLod(gPositionRoughness, texCoords, 0).rgb;
+            vec3 gPos = textureLod(gPositionRoughness, TexCoords, 0).rgb;
 			if(gPos != vec3(0, 0, 0))
             {
                 // Fog
@@ -243,7 +246,7 @@ Pass 0
 			    float nearest = length(gPos);
 			    float fogStrength = 1.0 - clamp(exp(-nearest * nearest * fogDist), 0.0, 1.0);
 
-			    OutputColor = vec4(mix(texture(gColor, texCoords).rgb, color, fogStrength), 1.0);
+			    OutputColor = vec4(mix(texture(gColor, TexCoords).rgb, color, fogStrength), 1.0);
                 return;
             }
             else

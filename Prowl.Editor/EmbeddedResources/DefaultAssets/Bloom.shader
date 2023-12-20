@@ -5,10 +5,14 @@ Pass 0
 	Vertex
 	{
 		in vec3 vertexPosition;
+		in vec2 vertexTexCoord;
+		
+		out vec2 TexCoords;
 
 		void main() 
 		{
 			gl_Position =vec4(vertexPosition, 1.0);
+			TexCoords = vertexTexCoord;
 		}
 	}
 
@@ -16,6 +20,7 @@ Pass 0
 	{
 		layout(location = 0) out vec4 OutputColor;
 		
+		in vec2 TexCoords;
 		uniform vec2 Resolution;
 		
 		uniform sampler2D gColor;
@@ -28,17 +33,15 @@ Pass 0
 		
 		void main()
 		{
-			vec2 texCoords = gl_FragCoord.xy / Resolution;
-
 			// Kawase Blur
 			vec2 ps = (vec2(1.0, 1.0) / Resolution) * u_Radius;
 			vec3 thres = vec3(u_Threshold, u_Threshold, u_Threshold);
 			vec3 zero = vec3(0.0, 0.0, 0.0);
-			vec3 color = max(texture(gColor, texCoords).rgb - thres, zero);
-            color += max(texture(gColor, texCoords + vec2(ps.x, ps.y)).rgb - thres, zero);
-            color += max(texture(gColor, texCoords + vec2(ps.x, -ps.y)).rgb - thres, zero);
-            color += max(texture(gColor, texCoords + vec2(-ps.x, ps.y)).rgb - thres, zero);
-            color += max(texture(gColor, texCoords + vec2(-ps.x, -ps.y)).rgb - thres, zero);
+			vec3 color = max(texture(gColor, TexCoords).rgb - thres, zero);
+            color += max(texture(gColor, TexCoords + vec2(ps.x, ps.y)).rgb - thres, zero);
+            color += max(texture(gColor, TexCoords + vec2(ps.x, -ps.y)).rgb - thres, zero);
+            color += max(texture(gColor, TexCoords + vec2(-ps.x, ps.y)).rgb - thres, zero);
+            color += max(texture(gColor, TexCoords + vec2(-ps.x, -ps.y)).rgb - thres, zero);
 			color /= 5.0;
 
 

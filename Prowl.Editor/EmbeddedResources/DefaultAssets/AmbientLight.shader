@@ -5,10 +5,14 @@ Pass 0
 	Vertex
 	{
 		in vec3 vertexPosition;
+		in vec2 vertexTexCoord;
+		
+		out vec2 TexCoords;
 
 		void main() 
 		{
 			gl_Position =vec4(vertexPosition, 1.0);
+			TexCoords = vertexTexCoord;
 		}
 	}
 
@@ -17,8 +21,8 @@ Pass 0
 		layout(location = 0) out vec4 gBuffer_lighting;
 		
 		uniform mat4 matView;
-
-		uniform vec2 Resolution;
+		
+		in vec2 TexCoords;
 		
 		uniform vec4 SkyColor;
 		uniform vec4 GroundColor;
@@ -33,8 +37,6 @@ Pass 0
 
 		void main()
 		{
-			vec2 TexCoords = gl_FragCoord.xy / Resolution;
-
 			vec4 gPosRough = textureLod(gPositionRoughness, TexCoords, 0);
 			if(gPosRough.rgb == vec3(0, 0, 0)) discard;
 		

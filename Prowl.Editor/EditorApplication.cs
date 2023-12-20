@@ -115,7 +115,7 @@ public unsafe class EditorApplication : Application {
                         Physics.Update();
                 }
 
-                int dockspaceID = ImGui.DockSpaceOverViewport(ImGui.GetMainViewport());
+                int dockspaceID = ImGui.DockSpaceOverViewport();
 
                 if (hasDockSetup == false) {
                     ImGui.DockBuilderRemoveNode(dockspaceID);

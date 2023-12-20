@@ -5,16 +5,20 @@ Pass 0
 	Vertex
 	{
 		in vec3 vertexPosition;
+		in vec2 vertexTexCoord;
+		
+		out vec2 TexCoords;
 
 		void main() 
 		{
 			gl_Position =vec4(vertexPosition, 1.0);
+			TexCoords = vertexTexCoord;
 		}
 	}
 
 	Fragment
 	{
-		uniform vec2 Resolution;
+		in vec2 TexCoords;
 		uniform float Contrast;
 		uniform float Saturation;
 
@@ -95,8 +99,7 @@ Pass 0
 
 		void main()
 		{
-			vec2 texCoords = gl_FragCoord.xy / Resolution;
-			vec3 color = texture(gAlbedo, texCoords).rgb;
+			vec3 color = texture(gAlbedo, TexCoords).rgb;
 		
 			#ifdef ACESTONEMAP
 			color = ACESFitted(color);

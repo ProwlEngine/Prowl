@@ -5,10 +5,14 @@ Pass 0
 	Vertex
 	{
 		in vec3 vertexPosition;
+		in vec2 vertexTexCoord;
+		
+		out vec2 TexCoords;
 
 		void main() 
 		{
-			gl_Position = vec4(vertexPosition, 1.0);
+			gl_Position =vec4(vertexPosition, 1.0);
+			TexCoords = vertexTexCoord;
 		}
 	}
 
@@ -16,8 +20,10 @@ Pass 0
 	{
 		layout(location = 0) out vec4 OutputColor;
 		
-		uniform vec2 Resolution;
+		in vec2 TexCoords;
 		
+		uniform vec2 Resolution;
+
 		uniform sampler2D gColor;
 		uniform sampler2D gHistory;
 		uniform sampler2D gPositionRoughness;
@@ -167,7 +173,6 @@ Pass 0
 
 		void main()
 		{
-			vec2 texCoords = gl_FragCoord.xy / Resolution;
 			vec2 pixel_size = vec2(1.0) / Resolution;
 			ivec2 pixelPos = ivec2(gl_FragCoord.xy);
 			
@@ -195,7 +200,7 @@ Pass 0
 			vec2 velocity = GetVelocity(pixelPos);
 
 
-			vec2 histUv = texCoords + velocity;
+			vec2 histUv = TexCoords + velocity;
 			
 			// sample from history buffer, with neighbourhood clamping.  
 			//vec3 histSample = texture2D(gHistory, histUv).xyz;

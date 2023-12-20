@@ -11,25 +11,27 @@ Pass 0
 	Vertex
 	{
 		in vec3 vertexPosition;
+		in vec2 vertexTexCoord;
+		
+		out vec2 TexCoords;
 
 		void main() 
 		{
 			gl_Position =vec4(vertexPosition, 1.0);
+			TexCoords = vertexTexCoord;
 		}
 	}
 
 	Fragment
 	{
-		in vec2 fragTexCoord;
-		uniform vec2 ScreenResolution;
+		in vec2 TexCoords;
 		uniform sampler2D texture0;
 		
 		out vec4 finalColor;
 		
 		void main()
 		{
-			vec2 texCoords = gl_FragCoord.xy / ScreenResolution;
-		    finalColor = texture(texture0, texCoords);
+		    finalColor = texture(texture0, TexCoords);
 		}
 	}
 }
