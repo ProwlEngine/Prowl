@@ -41,7 +41,7 @@ public class GBuffer
 
         // Start with the initial GBuffer Clear
         if (clear)
-            Graphics.Clear();
+            Graphics.Clear(0,0,0,0);
     }
 
     public void End()
