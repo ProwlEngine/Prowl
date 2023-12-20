@@ -140,6 +140,7 @@ public class Camera : MonoBehaviour
         Graphics.Blend = false;
         OpaquePass();
         Graphics.Blend = true;
+        Graphics.GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
 #warning TODO: Smarter Shadowmap Updating, updating every frame for every camera is stupid
         Graphics.UpdateAllShadowmaps();
