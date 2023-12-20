@@ -181,10 +181,18 @@ namespace Prowl.Runtime
             PreviousJitter = Jitter;
             Jitter = new Vector2((halton.X - 0.5f), (halton.Y - 0.5f)) * 2.0;
 
-            Clear();
-            Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
+            GL.DepthFunc(DepthFunction.Lequal);
+            DepthTest = true;
+
+            GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+            Blend = true;
 
             GL.CullFace(TriangleFace.Back);
+            GL.FrontFace(FrontFaceDirection.Ccw); // Front face are defined counter clockwise (default)
+            CullFace = true;
+
+            Clear();
+            Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
         }
 
         public static void EndFrame()
@@ -271,8 +279,7 @@ namespace Prowl.Runtime
 
             mesh.Upload();
 
-            unsafe
-            {
+            unsafe {
                 GL.BindVertexArray(mesh.vao);
                 GL.DrawElements(PrimitiveType.Triangles, (uint)mesh.indices.Length, DrawElementsType.UnsignedShort, null);
                 GL.BindVertexArray(0);
@@ -321,7 +328,7 @@ namespace Prowl.Runtime
             if (clear)
                 Clear(0, 0, 0, 0);
             // Additive BlendMode
-            GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.One);
+            GL.BlendFunc(BlendingFactor.One, BlendingFactor.One);
 
             defaultMat ??= new Material(Shader.Find("Defaults/Basic.shader"));
             defaultMat.SetTexture("texture0", texture);
