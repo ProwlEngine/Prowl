@@ -76,8 +76,11 @@ namespace Prowl.Editor.Assets
                 importer.textureWrap = wraps[wrapIndex];
 
 
-            if(ImGui.Button("Save"))
+            if (ImGui.Button("Save")) {
                 (target as MetaFile).Save();
+                // reimport
+                AssetDatabase.Reimport(AssetDatabase.FileToRelative((target as MetaFile).AssetPath));
+            }
         }
     }
 }
