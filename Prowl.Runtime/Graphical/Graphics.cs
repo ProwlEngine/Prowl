@@ -1,6 +1,4 @@
-﻿using Silk.NET.Core.Native;
-using Silk.NET.Input;
-using Silk.NET.Maths;
+﻿using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using System;
 
@@ -8,42 +6,14 @@ namespace Prowl.Runtime
 {
     public static class Graphics
     {
-
-        public static int GLMajorVersion { get; private set; }
-
-        public static int GLMinorVersion { get; private set; }
-
         public static GL GL { get; internal set; }
 
-        public static bool DepthTest {
-            get {
-                return GL.IsEnabled(GLEnum.DepthTest);
-            }
-            set {
-                if (value) GL.Enable(GLEnum.DepthTest);
-                else GL.Disable(GLEnum.DepthTest);
-            }
-        }
+        public static int GLMajorVersion { get; private set; }
+        public static int GLMinorVersion { get; private set; }
 
-        public static bool CullFace {
-            get {
-                return GL.IsEnabled(GLEnum.CullFace);
-            }
-            set {
-                if (value) GL.Enable(GLEnum.CullFace);
-                else GL.Disable(GLEnum.CullFace);
-            }
-        }
-
-        public static bool Blend {
-            get {
-                return GL.IsEnabled(GLEnum.Blend);
-            }
-            set {
-                if (value) GL.Enable(GLEnum.Blend);
-                else GL.Disable(GLEnum.Blend);
-            }
-        }
+        public static BlendingFactor CustomBlendSrcFactor { get; set; }
+        public static BlendingFactor CustomBlendDstFactor { get; set; }
+        public static BlendEquationModeEXT CustomBlendEquation { get; set; }
 
         public static event Action UpdateShadowmaps;
 
@@ -122,9 +92,6 @@ namespace Prowl.Runtime
             GLMajorVersion = GL.GetInteger(GLEnum.MajorVersion);
             GLMinorVersion = GL.GetInteger(GLEnum.MinorVersion);
 
-            if (GLMajorVersion < 3)
-                throw new PlatformNotSupportedException("Burex only supports platforms with OpenGL 3.0 and up.");
-
             CheckGL();
 
             // Textures
@@ -139,6 +106,15 @@ namespace Prowl.Runtime
 
             CheckGL();
         }
+
+        public static IDisposable UseBlendMode(BlendMode mode) => new ActiveBlendMode(mode);
+        public static IDisposable UseFaceCull(TriangleFace face) => new ActiveFaceCull(face);
+        //public static IDisposable UseMaterial(Material material, int pass = 0) => new ActiveMaterial(material, pass);
+        //public static IDisposable UseRenderTexture(RenderTexture target) => new ActiveRenderTexture(target);
+
+        public static IDisposable UseDepthTest(bool doTest) => new ActiveDepthTest(doTest);
+        public static IDisposable UseColorBlend(bool doBlend) => new ActiveColorBlend(doBlend);
+        public static IDisposable UseCulling(bool doCulling) => new ActiveCullFace(doCulling);
 
         public static void Viewport(int width, int height)
         {
@@ -182,14 +158,28 @@ namespace Prowl.Runtime
             Jitter = new Vector2((halton.X - 0.5f), (halton.Y - 0.5f)) * 2.0;
 
             GL.DepthFunc(DepthFunction.Lequal);
-            DepthTest = true;
 
-            GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
-            Blend = true;
+            GL.Enable(EnableCap.DepthTest);
+            GL.Enable(EnableCap.Blend);
+            GL.Enable(EnableCap.CullFace);
 
-            GL.CullFace(TriangleFace.Back);
+            ActiveDepthTest.Stack.Clear();
+            ActiveDepthTest.SetDefault();
+
+            ActiveColorBlend.Stack.Clear();
+            ActiveColorBlend.SetDefault();
+
+            ActiveCullFace.Stack.Clear();
+            ActiveCullFace.SetDefault();
+
+
+            ActiveBlendMode.Stack.Clear();
+            ActiveBlendMode.SetDefault();
+
+            ActiveFaceCull.Stack.Clear();
+            ActiveFaceCull.SetDefault();
+
             GL.FrontFace(FrontFaceDirection.Ccw); // Front face are defined counter clockwise (default)
-            CullFace = true;
 
             Clear();
             Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
@@ -291,9 +281,13 @@ namespace Prowl.Runtime
         /// </summary>
         public static void Blit(Material mat, int pass = 0)
         {
-            mat.SetPass(pass);
-            DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
-            mat.EndPass();
+            using (UseDepthTest(false)) {
+                using (UseCulling(false)) {
+                    mat.SetPass(pass);
+                    DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
+                    mat.EndPass();
+                }
+            }
         }
 
         /// <summary>
@@ -302,18 +296,18 @@ namespace Prowl.Runtime
         public static void Blit(RenderTexture? renderTexture, Material mat, int pass = 0, bool clear = true)
         {
             Graphics.GL.DepthMask(false);
-            DepthTest = false;
-            CullFace = false;
-            renderTexture?.Begin();
-            if (clear)
-                Clear(0, 0, 0, 0);
-            mat.SetPass(pass);
-            DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
-            mat.EndPass();
-            renderTexture?.End();
+            using (UseDepthTest(false)) {
+                using (UseCulling(false)) {
+                    renderTexture?.Begin();
+                    if (clear)
+                        Clear(0, 0, 0, 0);
+                    mat.SetPass(pass);
+                    DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
+                    mat.EndPass();
+                    renderTexture?.End();
+                }
+            }
             Graphics.GL.DepthMask(true);
-            DepthTest = true;
-            CullFace = true;
         }
 
         /// <summary>
@@ -321,25 +315,24 @@ namespace Prowl.Runtime
         /// </summary>
         public static void Blit(RenderTexture? renderTexture, Texture2D texture, bool clear = true)
         {
-            Graphics.GL.DepthMask(false);
-            DepthTest = false;
-            CullFace = false;
-            Blend = false;
-            renderTexture?.Begin();
-            if (clear)
-                Clear(0, 0, 0, 0);
             defaultMat ??= new Material(Shader.Find("Defaults/Basic.shader"));
             defaultMat.SetTexture("texture0", texture);
             defaultMat.SetPass(0);
-            DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, defaultMat);
-            defaultMat.EndPass();
-            //DrawTexturePro(texture, new Rectangle<int>(0, 0, (int)texture.Width, (int)-texture.Height), new Rectangle<int>(0, 0, renderTexture.Width, renderTexture.Height), new Vector2D<float>(0, 0), 0, Color.white);
-            // Revert to alpha Blendmode
-            renderTexture?.End();
+
+            Graphics.GL.DepthMask(false);
+            using (UseDepthTest(false)) {
+                using (UseCulling(false)) {
+                    using (UseBlendMode(BlendMode.Additive)) {
+                        renderTexture?.Begin();
+                        if (clear) Clear(0, 0, 0, 0);
+                        DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, defaultMat);
+                        renderTexture?.End();
+                    }
+                }
+            }
             Graphics.GL.DepthMask(true);
-            DepthTest = true;
-            CullFace = true;
-            Blend = true;
+
+            defaultMat.EndPass();
         }
 
         internal static void Dispose()

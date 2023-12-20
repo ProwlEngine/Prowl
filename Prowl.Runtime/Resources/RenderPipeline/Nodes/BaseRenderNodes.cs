@@ -67,11 +67,11 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         {
             renderRT.Begin();
             if (Clear) Graphics.Clear();
-            Graphics.DepthTest = false;
-            Graphics.GL.CullFace(Silk.NET.OpenGL.TriangleFace.Front);
-            Camera.Current.RenderAllOfOrder(RenderingOrder.Lighting);
-            Graphics.GL.CullFace(Silk.NET.OpenGL.TriangleFace.Back);
-            Graphics.DepthTest = true;
+            using (Graphics.UseDepthTest(false)) {
+                using (Graphics.UseFaceCull(TriangleFace.Front)) {
+                    Camera.Current.RenderAllOfOrder(RenderingOrder.Lighting);
+                }
+            }
             renderRT.End();
         }
     }

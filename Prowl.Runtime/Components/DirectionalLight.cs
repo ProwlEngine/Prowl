@@ -1,5 +1,6 @@
 ﻿using Prowl.Icons;
 using Prowl.Runtime.SceneManagement;
+using Silk.NET.OpenGL;
 
 namespace Prowl.Runtime;
 
@@ -91,16 +92,15 @@ public class DirectionalLight : MonoBehaviour
 
             shadowMap.Begin();
             Graphics.Clear(1, 1, 1, 1);
-            Graphics.Blend = false;
-            Graphics.CullFace = true;
-            Graphics.GL.CullFace(Silk.NET.OpenGL.TriangleFace.Front);
-            foreach (var go in SceneManager.AllGameObjects)
-                if (go.EnabledInHierarchy)
-                    foreach (var comp in go.GetComponents())
-                        if (comp.Enabled && comp.RenderOrder == RenderingOrder.Opaque)
-                            comp.Internal_OnRenderObjectDepth();
-            Graphics.GL.CullFace(Silk.NET.OpenGL.TriangleFace.Back);
-            Graphics.Blend = true;
+            using (Graphics.UseColorBlend(false)) {
+                using (Graphics.UseFaceCull(TriangleFace.Front)) {
+                    foreach (var go in SceneManager.AllGameObjects)
+                        if (go.EnabledInHierarchy)
+                            foreach (var comp in go.GetComponents())
+                                if (comp.Enabled && comp.RenderOrder == RenderingOrder.Opaque)
+                                    comp.Internal_OnRenderObjectDepth();
+                }
+            }
             shadowMap.End();
         }
     }

@@ -1,4 +1,6 @@
-﻿namespace Prowl.Runtime;
+﻿using Silk.NET.OpenGL;
+
+namespace Prowl.Runtime;
 
 public class GBuffer
 {
@@ -35,7 +37,7 @@ public class GBuffer
     {
         Graphics.GL.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, fbo);
         Graphics.ActivateDrawBuffers(6);
-        Graphics.Blend = false;
+        Graphics.GL.Disable(GLEnum.Blend);
 
         Graphics.Viewport(Width, Height);
 
@@ -46,7 +48,7 @@ public class GBuffer
 
     public void End()
     {
-        Graphics.Blend = true;
+        Graphics.GL.Enable(GLEnum.Blend);
         Graphics.GL.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, 0);
     }
 
