@@ -140,10 +140,16 @@ namespace Prowl.Runtime
             CheckGL();
         }
 
+        public static void Viewport(int width, int height)
+        {
+            GL.Viewport(0, 0, (uint)width, (uint)height);
+            Resolution = new Vector2(width, height);
+        }
+
         private static void DebugCallback(GLEnum source, GLEnum type, int id, GLEnum severity, int length, nint message, nint userParam)
         {
-            var msg = SilkMarshal.PtrToString(message, NativeStringEncoding.UTF8);
-            Console.WriteLine($"OpenGL Debug Message: {msg}");
+            //var msg = SilkMarshal.PtrToString(message, NativeStringEncoding.UTF8);
+            //Console.WriteLine($"OpenGL Debug Message: {msg}");
         }
 
         public static void CheckGL()
@@ -176,7 +182,7 @@ namespace Prowl.Runtime
             Jitter = new Vector2((halton.X - 0.5f), (halton.Y - 0.5f)) * 2.0;
 
             Clear();
-            GL.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
+            Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
 
             GL.CullFace(TriangleFace.Back);
         }
@@ -213,7 +219,7 @@ namespace Prowl.Runtime
             }
 
             material.SetVector("Resolution", Graphics.Resolution);
-            material.SetVector("ScreenResolution", new Vector2(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y));
+            //material.SetVector("ScreenResolution", new Vector2(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y));
             material.SetFloat("Time", (float)Time.time);
             material.SetInt("Frame", (int)Time.frameCount);
             //material.SetFloat("DeltaTime", Time.deltaTimeF);

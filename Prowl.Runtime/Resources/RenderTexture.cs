@@ -85,7 +85,7 @@ namespace Prowl.Runtime
         public void Begin()
         {
             Graphics.GL.BindFramebuffer(FramebufferTarget.Framebuffer, fboId);
-            Graphics.GL.Viewport(0, 0, (uint)Width, (uint)Height);
+            Graphics.Viewport(Width, Height);
             Graphics.FrameBufferSize = new Vector2D<int>(Width, Height);
 
             Graphics.ActivateDrawBuffers(Math.Max(1, numTextures));
@@ -94,7 +94,7 @@ namespace Prowl.Runtime
         public void End()
         {
             Graphics.GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-            Graphics.GL.Viewport(0, 0, (uint)Window.InternalWindow.FramebufferSize.X, (uint)Window.InternalWindow.FramebufferSize.Y);
+            Graphics.Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
             Graphics.FrameBufferSize = new Vector2D<int>(Width, Height);
         }
 

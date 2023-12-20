@@ -53,7 +53,7 @@ public class Camera : MonoBehaviour
 
     private void CheckGBuffer()
     {
-        RenderResolution = Math.Clamp(RenderResolution, 0.1f, 8.0f);
+        RenderResolution = Math.Clamp(RenderResolution, 0.1f, 4.0f);
 
         Vector2 size = GetRenderTargetSize() * RenderResolution;
         if (gBuffer == null)
@@ -117,11 +117,11 @@ public class Camera : MonoBehaviour
         width = (int)(width * RenderResolution);
         height = (int)(height * RenderResolution);
 
-        //Rlgl.rlSetBlendMode(BlendMode.BLEND_ADD_COLORS);
+        CheckGBuffer();
+
         // Additive
         Graphics.GL.BlendFunc(BlendingFactor.One, BlendingFactor.One);
         Current = this;
-        Graphics.Resolution = new Vector2(width, height);
 
         Graphics.MatView = View;
         Graphics.MatProjection = Current.GetProjectionMatrix(width, height);
@@ -137,8 +137,6 @@ public class Camera : MonoBehaviour
 
         Matrix4x4.Invert(Graphics.MatView, out Graphics.MatViewInverse);
         Matrix4x4.Invert(Graphics.MatProjection, out Graphics.MatProjectionInverse);
-
-        CheckGBuffer();
 
         OpaquePass();
 
