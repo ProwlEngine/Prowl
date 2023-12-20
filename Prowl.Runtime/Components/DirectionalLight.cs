@@ -1,6 +1,7 @@
 ﻿using Prowl.Icons;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.OpenGL;
+using System;
 
 namespace Prowl.Runtime;
 
@@ -21,6 +22,7 @@ public class DirectionalLight : MonoBehaviour
     public float shadowBias = 0.0f;
     public float shadowNormalBias = 0.02f;
     public bool castShadows = true;
+    public bool useFrontFaceCulling = true;
 
     Material lightMat;
 
@@ -91,11 +93,15 @@ public class DirectionalLight : MonoBehaviour
 
             shadowMap.Begin();
             Graphics.Clear(1, 1, 1, 1);
+            IDisposable? disposable = null;
+            if (useFrontFaceCulling)
+                disposable = Graphics.UseFaceCull(TriangleFace.Front);
             foreach (var go in SceneManager.AllGameObjects)
                 if (go.EnabledInHierarchy)
                     foreach (var comp in go.GetComponents())
                         if (comp.Enabled && comp.RenderOrder == RenderingOrder.Opaque)
                             comp.Internal_OnRenderObjectDepth();
+            disposable?.Dispose();
             shadowMap.End();
         }
     }
