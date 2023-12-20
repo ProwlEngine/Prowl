@@ -17,6 +17,8 @@ public class MeshRenderer : MonoBehaviour, ISerializable
 
     private Dictionary<int, Matrix4x4> prevMats = new();
 
+    private static Material? InvalidMat;
+
     public void OnRenderObject()
     {
         var mat = GameObject.GlobalCamRelative;
@@ -24,15 +26,21 @@ public class MeshRenderer : MonoBehaviour, ISerializable
         if (!prevMats.ContainsKey(camID)) prevMats[camID] = GameObject.GlobalCamRelative;
         var prevMat = prevMats[camID];
 
-        if (Mesh.IsAvailable && Material.IsAvailable) {
-            Material.Res!.SetColor("_MainColor", mainColor);
-            Material.Res!.SetInt("ObjectID", InstanceID);
-            for (int i = 0; i < Material.Res!.PassCount; i++) {
+        var material = Material.Res;
+        if(material == null) {
+            InvalidMat ??= new Material(Shader.Find("Defaults/Invalid.shader"));
+            material = InvalidMat;
+        }
 
-                Material.Res!.SetPass(i);
-                Graphics.DrawMeshNow(Mesh.Res!, mat, Material.Res!, prevMat);
+        if (Mesh.IsAvailable && material != null) {
+            material.SetColor("_MainColor", mainColor);
+            material.SetInt("ObjectID", InstanceID);
+            for (int i = 0; i < material.PassCount; i++) {
 
-                Material.Res!.EndPass();
+                material.SetPass(i);
+                Graphics.DrawMeshNow(Mesh.Res!, mat, material, prevMat);
+
+                material.EndPass();
             }
         }
 
@@ -41,8 +49,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable
 
     public void OnRenderObjectDepth()
     {
-        if (Mesh.IsAvailable)
-        {
+        if (Mesh.IsAvailable && Material.IsAvailable) {
             var mvp = Matrix4x4.Identity;
             mvp = Matrix4x4.Multiply(mvp, GameObject.GlobalCamRelative);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
