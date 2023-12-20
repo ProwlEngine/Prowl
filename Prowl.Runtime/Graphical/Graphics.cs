@@ -155,7 +155,7 @@ namespace Prowl.Runtime
             long n = Time.frameCount % 16;
             var halton = Halton16[n];
             PreviousJitter = Jitter;
-            Jitter = new Vector2((halton.X - 0.5f), (halton.Y - 0.5f)) * 4.0;
+            Jitter = new Vector2((halton.X - 0.5f), (halton.Y - 0.5f)) * 2.0;
 
             GL.DepthFunc(DepthFunction.Lequal);
 
