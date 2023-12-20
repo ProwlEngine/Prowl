@@ -31,7 +31,7 @@ Pass 0
 		
 		void main()
 		{
-		    finalColor = texture(texture0, TexCoords);
+		    finalColor = vec4(texture(texture0, TexCoords).xyz, 1.0);
 		}
 	}
 }
