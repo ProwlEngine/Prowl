@@ -74,8 +74,7 @@ public class DirectionalLight : MonoBehaviour
     public void UpdateShadowmap()
     {
         // Populate Shadowmap
-        if (castShadows)
-        {
+        if (castShadows) {
             shadowMap ??= new RenderTexture(4096, 4096, 0);
 
             // Compute the MVP matrix from the light's point of view
@@ -92,15 +91,11 @@ public class DirectionalLight : MonoBehaviour
 
             shadowMap.Begin();
             Graphics.Clear(1, 1, 1, 1);
-            using (Graphics.UseColorBlend(false)) {
-                using (Graphics.UseFaceCull(TriangleFace.Front)) {
-                    foreach (var go in SceneManager.AllGameObjects)
-                        if (go.EnabledInHierarchy)
-                            foreach (var comp in go.GetComponents())
-                                if (comp.Enabled && comp.RenderOrder == RenderingOrder.Opaque)
-                                    comp.Internal_OnRenderObjectDepth();
-                }
-            }
+            foreach (var go in SceneManager.AllGameObjects)
+                if (go.EnabledInHierarchy)
+                    foreach (var comp in go.GetComponents())
+                        if (comp.Enabled && comp.RenderOrder == RenderingOrder.Opaque)
+                            comp.Internal_OnRenderObjectDepth();
             shadowMap.End();
         }
     }
