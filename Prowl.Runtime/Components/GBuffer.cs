@@ -26,8 +26,8 @@ public class GBuffer
             Texture.TextureImageFormat.Float4, // Albedo & AO
             Texture.TextureImageFormat.Float4, // Normal & Metalness
             Texture.TextureImageFormat.Float4, // Position & Roughness
-            Texture.TextureImageFormat.Float4, // Emission
-            Texture.TextureImageFormat.Float4, // Velocity
+            Texture.TextureImageFormat.Float3, // Emission
+            Texture.TextureImageFormat.Float2, // Velocity
             Texture.TextureImageFormat.Float, // ObjectIDs
         ];
         buffer = new RenderTexture(width, height, 6, true, formats);
