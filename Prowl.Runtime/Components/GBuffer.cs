@@ -37,6 +37,8 @@ public class GBuffer
         Graphics.ActivateDrawBuffers(6);
         Graphics.Blend = false;
 
+        Graphics.Viewport(Width, Height);
+
         // Start with the initial GBuffer Clear
         if (clear)
             Graphics.Clear();
