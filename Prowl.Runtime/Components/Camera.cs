@@ -119,8 +119,7 @@ public class Camera : MonoBehaviour
 
         CheckGBuffer();
 
-        // Additive
-        Graphics.GL.BlendFunc(BlendingFactor.One, BlendingFactor.One);
+        
         Current = this;
 
         Graphics.MatView = View;
@@ -138,7 +137,9 @@ public class Camera : MonoBehaviour
         Matrix4x4.Invert(Graphics.MatView, out Graphics.MatViewInverse);
         Matrix4x4.Invert(Graphics.MatProjection, out Graphics.MatProjectionInverse);
 
+        Graphics.Blend = false;
         OpaquePass();
+        Graphics.Blend = true;
 
 #warning TODO: Smarter Shadowmap Updating, updating every frame for every camera is stupid
         Graphics.UpdateAllShadowmaps();
