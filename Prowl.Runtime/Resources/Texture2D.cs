@@ -371,11 +371,14 @@ namespace Prowl.Runtime
             TextureImageFormat imageFormat = (TextureImageFormat)value["ImageFormat"].ByteValue;
 
             var param = new[] { typeof(uint), typeof(uint), typeof(bool), typeof(TextureImageFormat) };
-            var values = new object[] { Width, Height, isMipMapped, imageFormat };
+            var values = new object[] { Width, Height, false, imageFormat };
             typeof(Texture2D).GetConstructor(param).Invoke(this, values);
 
             Memory<byte> memory = value["Data"].ByteArrayValue;
             SetData(memory);
+
+            if(isMipMapped)
+                GenerateMipmaps();
         }
     }
 }
