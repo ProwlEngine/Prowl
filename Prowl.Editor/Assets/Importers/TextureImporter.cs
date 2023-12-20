@@ -13,7 +13,7 @@ namespace Prowl.Editor.Assets
 
         public bool generateMipmaps = true;
         public TextureWrapMode textureWrap = TextureWrapMode.Repeat;
-        public TextureMinFilter textureMinFilter = TextureMinFilter.Nearest;
+        public TextureMinFilter textureMinFilter = TextureMinFilter.LinearMipmapLinear;
         public TextureMagFilter textureMagFilter = TextureMagFilter.Linear;
 
         public override void Import(SerializedAsset ctx, FileInfo assetPath)
