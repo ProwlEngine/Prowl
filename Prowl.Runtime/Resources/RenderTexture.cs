@@ -39,7 +39,7 @@ namespace Prowl.Runtime
             if (formats == null) {
                 this.textureFormats = new Texture.TextureImageFormat[numTextures];
                 for (int i = 0; i < numTextures; i++)
-                    this.textureFormats[i] = Texture.TextureImageFormat.Float4;
+                    this.textureFormats[i] = Texture.TextureImageFormat.Color4b;
             } else {
                 if (formats.Length != numTextures)
                     throw new ArgumentException("Invalid number of texture formats!");
