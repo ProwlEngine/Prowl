@@ -273,6 +273,8 @@ namespace Prowl.Runtime
         public static Texture2D FromStream(Stream stream, bool generateMipmaps = false)
         {
             using Image<Rgba32> image = Image.Load<Rgba32>(stream);
+            //flip
+            image.Mutate(x => x.Flip(FlipMode.Vertical));
             return FromImage(image, generateMipmaps);
         }
 
@@ -284,6 +286,7 @@ namespace Prowl.Runtime
         public static Texture2D FromFile(string file, bool generateMipmaps = false)
         {
             using Image<Rgba32> image = Image.Load<Rgba32>(file);
+            image.Mutate(x => x.Flip(FlipMode.Vertical));
             return FromImage( image, generateMipmaps);
         }
 
