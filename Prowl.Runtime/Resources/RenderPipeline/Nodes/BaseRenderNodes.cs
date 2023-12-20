@@ -69,7 +69,9 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             if (Clear) Graphics.Clear();
             using (Graphics.UseDepthTest(false)) {
                 using (Graphics.UseFaceCull(TriangleFace.Front)) {
-                    Camera.Current.RenderAllOfOrder(RenderingOrder.Lighting);
+                    using (Graphics.UseBlendMode(BlendMode.Additive)) {
+                        Camera.Current.RenderAllOfOrder(RenderingOrder.Lighting);
+                    }
                 }
             }
             renderRT.End();
