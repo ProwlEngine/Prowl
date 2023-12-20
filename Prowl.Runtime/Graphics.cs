@@ -324,12 +324,10 @@ namespace Prowl.Runtime
             Graphics.GL.DepthMask(false);
             DepthTest = false;
             CullFace = false;
+            Blend = false;
             renderTexture?.Begin();
             if (clear)
                 Clear(0, 0, 0, 0);
-            // Additive BlendMode
-            GL.BlendFunc(BlendingFactor.One, BlendingFactor.One);
-
             defaultMat ??= new Material(Shader.Find("Defaults/Basic.shader"));
             defaultMat.SetTexture("texture0", texture);
             defaultMat.SetPass(0);
@@ -337,11 +335,11 @@ namespace Prowl.Runtime
             defaultMat.EndPass();
             //DrawTexturePro(texture, new Rectangle<int>(0, 0, (int)texture.Width, (int)-texture.Height), new Rectangle<int>(0, 0, renderTexture.Width, renderTexture.Height), new Vector2D<float>(0, 0), 0, Color.white);
             // Revert to alpha Blendmode
-            GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
             renderTexture?.End();
             Graphics.GL.DepthMask(true);
             DepthTest = true;
             CullFace = true;
+            Blend = true;
         }
 
         internal static void Dispose()
