@@ -175,8 +175,8 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         public override int Downsample => 1;
         public override int RTCount => 2;
 
-        public float Radius = 1f;
-        public float Threshold = 1f;
+        public float Radius = 10f;
+        public float Threshold = 0.5f;
         public int Passes = 10;
 
         Material Mat;
@@ -198,22 +198,23 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             Graphics.Blit(renderRTs[1], Mat, 0, true);
             Mat.SetFloat("u_Threshold", 0.0f);
 
-            Graphics.GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.One);
-            for (int i = 1; i <= Passes; i++)
-            {
-                Mat.SetFloat("u_Alpha", 1.0f);
-                Mat.SetTexture("gColor", renderRTs[0].InternalTextures[0]);
-                Mat.SetFloat("u_Radius", Math.Clamp(Radius+i, 0.0f, 32f));
-                Graphics.Blit(renderRTs[1], Mat, 0, false);
+            using (Graphics.UseBlendMode(BlendMode.Alpha)) {
+                for (int i = 1; i <= Passes; i++) {
+                    Mat.SetFloat("u_Alpha", 1.0f);
+                    Mat.SetTexture("gColor", renderRTs[0].InternalTextures[0]);
+                    Mat.SetFloat("u_Radius", Math.Clamp(Radius, 0.0f, 32f) + i);
+                    Graphics.Blit(renderRTs[1], Mat, 0, false);
 
-                var tmp = renderRTs[0];
-                renderRTs[0] = renderRTs[1];
-                renderRTs[1] = tmp;
+                    var tmp = renderRTs[0];
+                    renderRTs[0] = renderRTs[1];
+                    renderRTs[1] = tmp;
+                }
             }
 
             // Final pass
-            Graphics.Blit(renderRTs[0], rt.InternalTextures[0], false);
-
+            using (Graphics.UseBlendMode(BlendMode.Additive)) {
+                Graphics.Blit(renderRTs[0], rt.InternalTextures[0], false);
+            }
 
 
             //renderRT = rts[currentRenderTextureIndex];
