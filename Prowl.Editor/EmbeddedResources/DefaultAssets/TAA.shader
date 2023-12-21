@@ -90,64 +90,43 @@ Pass 0
 						color.z > 0.0 ? log(color.z) : -10.0); // Guard against nan
 		}
 
-		//note: see also http://www.decarpentier.nl/2d-catmull-rom-in-4-samples.
-		vec4 sampleLevel0(sampler2D tex, vec2 uv)
+		float BSpline( float x )
 		{
-		    return texture(tex, uv, -10.0);
+			float f = abs(x);
+		
+			if(f <= 1.0 )
+				return (( 2.0 / 3.0 ) + ( 0.5 ) * ( f * f * f ) - (f * f));
+			else
+			{
+				f = 2.0 - f;
+				return (1.0 / 6.0 * f * f * f);
+			}
 		}
+		const vec4 offset = vec4(-1.0, 1.0, 1.0 ,-1.0);
 		
-		// note: entirely stolen from https://gist.github.com/TheRealMJP/c83b8c0f46b63f3a88a5986f4fa982b1
-		//
-		// Samples a texture with Catmull-Rom filtering, using 9 texture fetches instead of 16.
-		// See http://vec3.ca/bicubic-filtering-in-fewer-taps/ for more details
-		vec4 SampleTextureCatmullRom(sampler2D tex, vec2 uv, vec2 texSize)
+		vec4 bicubicFilter(sampler2D tex, vec2 texcoord)
 		{
-		    // We're going to sample a a 4x4 grid of texels surrounding the target UV coordinate. We'll do this by rounding
-		    // down the sample location to get the exact center of our "starting" texel. The starting texel will be at
-		    // location [1, 1] in the grid, where [0, 0] is the top left corner.
-		    vec2 samplePos = uv * texSize;
-		    vec2 texPos1 = floor(samplePos - 0.5) + 0.5;
+			float fx = fract(texcoord.x);
+			float fy = fract(texcoord.y);
+			texcoord.x -= fx;
+			texcoord.y -= fy;
 		
-		    // Compute the fractional offset from our starting texel to our original sample location, which we'll
-		    // feed into the Catmull-Rom spline function to get our filter weights.
-		    vec2 f = samplePos - texPos1;
+			vec4 xcubic = vec4(BSpline(- 1 - fx), BSpline(-fx), BSpline(1 - fx), BSpline(2 - fx));
+			vec4 ycubic = vec4(BSpline(- 1 - fy), BSpline(-fy), BSpline(1 - fy), BSpline(2 - fy));
 		
-		    // Compute the Catmull-Rom weights using the fractional offset that we calculated earlier.
-		    // These equations are pre-expanded based on our knowledge of where the texels will be located,
-		    // which lets us avoid having to evaluate a piece-wise function.
-		    vec2 w0 = f * ( -0.5 + f * (1.0 - 0.5*f));
-		    vec2 w1 = 1.0 + f * f * (-2.5 + 1.5*f);
-		    vec2 w2 = f * ( 0.5 + f * (2.0 - 1.5*f) );
-		    vec2 w3 = f * f * (-0.5 + 0.5 * f);
-		    
-		    // Work out weighting factors and sampling offsets that will let us use bilinear filtering to
-		    // simultaneously evaluate the middle 2 samples from the 4x4 grid.
-		    vec2 w12 = w1 + w2;
-		    vec2 offset12 = w2 / w12;
+			vec4 c = vec4(texcoord.x - 0.5, texcoord.x + 0.5, texcoord.y - 0.5, texcoord.y + 0.5);
+			vec4 s = vec4(xcubic.x + xcubic.y, xcubic.z + xcubic.w, ycubic.x + ycubic.y, ycubic.z + ycubic.w);
+			vec4 offset = c + vec4(xcubic.y, xcubic.w, ycubic.y, ycubic.w) / s;
 		
-		    // Compute the final UV coordinates we'll use for sampling the texture
-		    vec2 texPos0 = texPos1 - vec2(1.0);
-		    vec2 texPos3 = texPos1 + vec2(2.0);
-		    vec2 texPos12 = texPos1 + offset12;
+			vec4 sample0 = texture2D(tex, vec2(offset.x, offset.z) / Resolution);
+			vec4 sample1 = texture2D(tex, vec2(offset.y, offset.z) / Resolution);
+			vec4 sample2 = texture2D(tex, vec2(offset.x, offset.w) / Resolution);
+			vec4 sample3 = texture2D(tex, vec2(offset.y, offset.w) / Resolution);
 		
-		    texPos0 /= texSize;
-		    texPos3 /= texSize;
-		    texPos12 /= texSize;
+			float sx = s.x / (s.x + s.y);
+			float sy = s.z / (s.z + s.w);
 		
-		    vec4 result = vec4(0.0);
-		    result += sampleLevel0(tex, vec2(texPos0.x,  texPos0.y)) * w0.x * w0.y;
-		    result += sampleLevel0(tex, vec2(texPos12.x, texPos0.y)) * w12.x * w0.y;
-		    result += sampleLevel0(tex, vec2(texPos3.x,  texPos0.y)) * w3.x * w0.y;
-								    
-		    result += sampleLevel0(tex, vec2(texPos0.x,  texPos12.y)) * w0.x * w12.y;
-		    result += sampleLevel0(tex, vec2(texPos12.x, texPos12.y)) * w12.x * w12.y;
-		    result += sampleLevel0(tex, vec2(texPos3.x,  texPos12.y)) * w3.x * w12.y;
-								    
-		    result += sampleLevel0(tex, vec2(texPos0.x,  texPos3.y)) * w0.x * w3.y;
-		    result += sampleLevel0(tex, vec2(texPos12.x, texPos3.y)) * w12.x * w3.y;
-		    result += sampleLevel0(tex, vec2(texPos3.x,  texPos3.y)) * w3.x * w3.y;
-		
-		    return result;
+			return mix(mix(sample3, sample2, sx), mix(sample1, sample0, sx), sy);
 		}
 
 		vec2 GetVelocity(ivec2 pixelPos) {
@@ -186,20 +165,6 @@ Pass 0
 					nmax = max(nmax, neighbor);
 				}
 			}
-			//neighbourhood[0] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(-2, -2), 0).xyz);
-			//neighbourhood[1] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+0, -2), 0).xyz);
-			//neighbourhood[2] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+2, -2), 0).xyz);
-			//neighbourhood[3] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(-2, +0), 0).xyz);
-			//neighbourhood[4] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+0, +0), 0).xyz);
-			//neighbourhood[5] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+2, +0), 0).xyz);
-			//neighbourhood[6] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(-2, +2), 0).xyz);
-			//neighbourhood[7] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+0, +2), 0).xyz);
-			//neighbourhood[8] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+2, +2), 0).xyz);
-
-			//for(int i = 1; i < 9; ++i) {
-			//    nmin = min(nmin, neighbourhood[i]);
-			//    nmax = max(nmax, neighbourhood[i]);
-			//}
 			
 			//vec2 velocity = texelFetch(gVelocity, pixelPos, 0).xy;
 			// Inflate Velocity Edge
@@ -209,9 +174,10 @@ Pass 0
 			vec2 histUv = TexCoords + velocity;
 			
 			// sample from history buffer, with neighbourhood clamping.  
-			vec3 histSample = SampleTextureCatmullRom(gHistory, histUv, Resolution).xyz;
-			histSample = clamp(AdjustHDRColor(histSample), nmin, nmax);
-			//histSample = AdjustHDRColor(histSample);
+			//vec3 histSample = AdjustHDRColor(SampleTextureCatmullRom(gHistory, histUv, Resolution).xyz);
+			vec3 histSample = AdjustHDRColor(bicubicFilter(gHistory, histUv * Resolution).xyz);
+			//vec3 histSample = AdjustHDRColor(texture(gHistory, histUv).xyz);
+			//histSample = clamp(histSample, nmin, nmax);
 			
 			// blend factor
 			// 16 frames of jitter so match that for accumulation
@@ -224,7 +190,6 @@ Pass 0
 			// if history sample is outside screen, switch to aliased image as a fallback.
 			blend = any(bvec2(any(a), any(b))) ? 1.0 : blend;
 			
-			//vec3 curSample = neighbourhood[4];
 			vec3 curSample = curr;
 			// finally, blend current and clamped history sample.
 			OutputColor = vec4(mix(histSample, curSample, vec3(blend)), 1.0);
