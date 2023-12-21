@@ -353,9 +353,11 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             Mat.SetVector("Jitter", Graphics.Jitter);
             Mat.SetVector("PreviousJitter", Graphics.PreviousJitter);
 
-            Graphics.Blit(renderRTs[0], Mat, 0, true);
+            using (Graphics.UseColorBlend(false)) {
+                Graphics.Blit(renderRTs[0], Mat, 0, true);
 
-            Graphics.Blit(renderRTs[1], renderRT.InternalTextures[0], true);
+                Graphics.Blit(renderRTs[1], renderRT.InternalTextures[0], true);
+            }
         }
     }
 
