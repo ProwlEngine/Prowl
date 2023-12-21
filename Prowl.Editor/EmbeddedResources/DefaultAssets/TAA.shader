@@ -5,22 +5,16 @@ Pass 0
 	Vertex
 	{
 		in vec3 vertexPosition;
-		in vec2 vertexTexCoord;
 		
-		out vec2 TexCoords;
-
 		void main() 
 		{
 			gl_Position =vec4(vertexPosition, 1.0);
-			TexCoords = vertexTexCoord;
 		}
 	}
 
 	Fragment
 	{
 		layout(location = 0) out vec4 OutputColor;
-		
-		in vec2 TexCoords;
 		
 		uniform vec2 Resolution;
 
@@ -36,6 +30,7 @@ Pass 0
 		uniform mat4 matViewInverse;
 		uniform mat4 matOldView;
 
+		uniform int ClampRadius;
 		uniform vec2 Jitter;
 		uniform vec2 PreviousJitter;
 
@@ -173,27 +168,38 @@ Pass 0
 
 		void main()
 		{
+			vec2 TexCoords = gl_FragCoord.xy / Resolution.xy;
+
 			vec2 pixel_size = vec2(1.0) / Resolution;
 			ivec2 pixelPos = ivec2(gl_FragCoord.xy);
 			
 			vec3 neighbourhood[9];
 			
-			neighbourhood[0] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(-1, -1), 0).xyz);
-			neighbourhood[1] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+0, -1), 0).xyz);
-			neighbourhood[2] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+1, -1), 0).xyz);
-			neighbourhood[3] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(-1, +0), 0).xyz);
-			neighbourhood[4] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+0, +0), 0).xyz);
-			neighbourhood[5] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+1, +0), 0).xyz);
-			neighbourhood[6] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(-1, +1), 0).xyz);
-			neighbourhood[7] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+0, +1), 0).xyz);
-			neighbourhood[8] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+1, +1), 0).xyz);
-
-			vec3 nmin = neighbourhood[0];
-			vec3 nmax = neighbourhood[0];   
-			for(int i = 1; i < 9; ++i) {
-			    nmin = min(nmin, neighbourhood[i]);
-			    nmax = max(nmax, neighbourhood[i]);
+			vec3 curr = AdjustHDRColor(texelFetch(gColor, pixelPos, 0).xyz);
+			vec3 nmin = curr;
+			vec3 nmax = curr;   
+			for (int x=-ClampRadius; x<= ClampRadius; x++) {
+				for (int y=-ClampRadius; y<= ClampRadius; y++) {
+					if(x == 0 && y == 0) continue;
+					vec3 neighbor = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(x, y), 0).xyz);
+					nmin = min(nmin, neighbor);
+					nmax = max(nmax, neighbor);
+				}
 			}
+			//neighbourhood[0] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(-2, -2), 0).xyz);
+			//neighbourhood[1] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+0, -2), 0).xyz);
+			//neighbourhood[2] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+2, -2), 0).xyz);
+			//neighbourhood[3] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(-2, +0), 0).xyz);
+			//neighbourhood[4] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+0, +0), 0).xyz);
+			//neighbourhood[5] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+2, +0), 0).xyz);
+			//neighbourhood[6] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(-2, +2), 0).xyz);
+			//neighbourhood[7] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+0, +2), 0).xyz);
+			//neighbourhood[8] = AdjustHDRColor(texelFetch(gColor, pixelPos + ivec2(+2, +2), 0).xyz);
+
+			//for(int i = 1; i < 9; ++i) {
+			//    nmin = min(nmin, neighbourhood[i]);
+			//    nmax = max(nmax, neighbourhood[i]);
+			//}
 			
 			//vec2 velocity = texelFetch(gVelocity, pixelPos, 0).xy;
 			// Inflate Velocity Edge
@@ -203,20 +209,23 @@ Pass 0
 			vec2 histUv = TexCoords + velocity;
 			
 			// sample from history buffer, with neighbourhood clamping.  
-			//vec3 histSample = texture2D(gHistory, histUv).xyz;
-			//vec3 histSample = clamp(AdjustHDRColor(texture2D(gHistory, histUv).xyz), nmin, nmax);
 			vec3 histSample = SampleTextureCatmullRom(gHistory, histUv, Resolution).xyz;
 			histSample = clamp(AdjustHDRColor(histSample), nmin, nmax);
+			//histSample = AdjustHDRColor(histSample);
 			
 			// blend factor
-			float blend = 1.0 / 16.0; // 16 frames of jitter so match that for accumulation
+			// 16 frames of jitter so match that for accumulation
+			// Strangely it seems 16 doesnt work as well as 32
+			// it takes longer but the resulting AA is far better
+			float blend = 1.0 / 32.0; 
 			
 			bvec2 a = greaterThan(histUv, vec2(1.0, 1.0));
 			bvec2 b = lessThan(histUv, vec2(0.0, 0.0));
 			// if history sample is outside screen, switch to aliased image as a fallback.
 			blend = any(bvec2(any(a), any(b))) ? 1.0 : blend;
 			
-			vec3 curSample = neighbourhood[4];
+			//vec3 curSample = neighbourhood[4];
+			vec3 curSample = curr;
 			// finally, blend current and clamped history sample.
 			OutputColor = vec4(mix(histSample, curSample, vec3(blend)), 1.0);
 

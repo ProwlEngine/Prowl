@@ -1,5 +1,6 @@
 ﻿using Prowl.Runtime.NodeSystem;
 using Silk.NET.OpenGL;
+using Silk.NET.Vulkan;
 using System;
 using static Prowl.Runtime.MonoBehaviour;
 
@@ -291,15 +292,48 @@ namespace Prowl.Runtime.Resources.RenderPipeline
 
         [Input(ShowBackingValue.Never), SerializeIgnore] public RenderTexture RenderTexture;
 
+        public bool Jitter2X = false;
+
         Material Mat;
+        Vector2 Jitter;
+        Vector2 PreviousJitter;
+
+        readonly static Vector2[] Halton16 =
+        [
+            new Vector2(0.5f, 0.333333f),
+            new Vector2(0.25f, 0.666667f),
+            new Vector2(0.75f, 0.111111f),
+            new Vector2(0.125f, 0.444444f),
+            new Vector2(0.625f, 0.777778f),
+            new Vector2(0.375f, 0.222222f),
+            new Vector2(0.875f, 0.555556f),
+            new Vector2(0.0625f, 0.888889f),
+            new Vector2(0.5625f, 0.037037f),
+            new Vector2(0.3125f, 0.370370f),
+            new Vector2(0.8125f, 0.703704f),
+            new Vector2(0.1875f, 0.148148f),
+            new Vector2(0.6875f, 0.481481f),
+            new Vector2(0.4375f, 0.814815f),
+            new Vector2(0.9375f, 0.259259f),
+            new Vector2(0.03125f, 0.592593f),
+        ];
 
         public override void PreRender(int width, int height)
         {
-            // Apply jitter
-            // Graphics class by default comes packed with a Halton16 sequence specifically for TAA jitter
+            // Apply Halton jitter
+            long n = Time.frameCount % 16;
+            var halton = Halton16[n];
+            PreviousJitter = Jitter;
+            Jitter = new Vector2((halton.X - 0.5f), (halton.Y - 0.5f)) * 2.0;
+            if (Jitter2X)
+                Jitter *= 2.0;
+
+            Graphics.MatProjection.M31 += Jitter.X / width;
+            Graphics.MatProjection.M32 += Jitter.Y / height;
+
             Graphics.UseJitter = true; // This applies the jitter to the Velocity Buffer/Motion Vectors
-            Graphics.MatProjection.M31 += Graphics.Jitter.X / width;
-            Graphics.MatProjection.M32 += Graphics.Jitter.Y / height;
+            Graphics.Jitter = Jitter / new Vector2(width, height);
+            Graphics.PreviousJitter = PreviousJitter / new Vector2(width, height);
         }
 
         public override void Render()
@@ -313,6 +347,8 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             Mat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
             Mat.SetTexture("gVelocity", Camera.Current.gBuffer.Velocity);
             Mat.SetTexture("gDepth", Camera.Current.gBuffer.Depth);
+
+            Mat.SetInt("ClampRadius", Jitter2X ? 2 : 1);
 
             Mat.SetVector("Jitter", Graphics.Jitter);
             Mat.SetVector("PreviousJitter", Graphics.PreviousJitter);

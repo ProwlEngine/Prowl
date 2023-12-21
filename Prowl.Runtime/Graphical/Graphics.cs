@@ -28,32 +28,13 @@ namespace Prowl.Runtime
         public static Matrix4x4 MatDepthProjection;
         public static Matrix4x4 MatDepthView;
 
-        public static Vector2 Jitter { get; private set; }
-        public static Vector2 PreviousJitter { get; private set; }
+        public static Vector2 Jitter { get; set; }
+        public static Vector2 PreviousJitter { get; set; }
         public static bool UseJitter;
 
         private static Material defaultMat;
         private static AssetRef<Texture2D> defaultNoise;
         internal static Vector2D<int> FrameBufferSize;
-        public readonly static Vector2[] Halton16 =
-        [
-            new Vector2(0.5f, 0.333333f),
-            new Vector2(0.25f, 0.666667f),
-            new Vector2(0.75f, 0.111111f),
-            new Vector2(0.125f, 0.444444f),
-            new Vector2(0.625f, 0.777778f),
-            new Vector2(0.375f, 0.222222f),
-            new Vector2(0.875f, 0.555556f),
-            new Vector2(0.0625f, 0.888889f),
-            new Vector2(0.5625f, 0.037037f),
-            new Vector2(0.3125f, 0.370370f),
-            new Vector2(0.8125f, 0.703704f),
-            new Vector2(0.1875f, 0.148148f),
-            new Vector2(0.6875f, 0.481481f),
-            new Vector2(0.4375f, 0.814815f),
-            new Vector2(0.9375f, 0.259259f),
-            new Vector2(0.03125f, 0.592593f),
-        ];
 
         static readonly GLEnum[] buffers =
         {
@@ -151,12 +132,6 @@ namespace Prowl.Runtime
 
         public static void StartFrame()
         {
-            // Halton Jitter
-            long n = Time.frameCount % 16;
-            var halton = Halton16[n];
-            PreviousJitter = Jitter;
-            Jitter = new Vector2((halton.X - 0.5f), (halton.Y - 0.5f)) * 2.0;
-
             GL.DepthFunc(DepthFunction.Lequal);
 
             GL.Enable(EnableCap.DepthTest);
@@ -209,8 +184,8 @@ namespace Prowl.Runtime
             material.SetTexture("DefaultNoise", defaultNoise);
 
             if (UseJitter) {
-                material.SetVector("Jitter", Jitter / Resolution);
-                material.SetVector("PreviousJitter", PreviousJitter / Resolution);
+                material.SetVector("Jitter", Jitter);
+                material.SetVector("PreviousJitter", PreviousJitter);
             } else {
                 material.SetVector("Jitter", Vector2.Zero);
                 material.SetVector("PreviousJitter", Vector2.Zero);
