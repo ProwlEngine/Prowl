@@ -60,6 +60,7 @@ namespace Prowl.Runtime
                     for (int i = 0; i < numTextures; i++) {
                         InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, false, this.textureFormats[i]);
                         InternalTextures[i].SetTextureFilters(TextureMinFilter.Linear, TextureMagFilter.Linear);
+                        InternalTextures[i].SetWrapModes(TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge);
                         Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, (TextureTarget)InternalTextures[i].Type, InternalTextures[i].Handle, 0);
                     }
                     Graphics.ActivateDrawBuffers(numTextures);

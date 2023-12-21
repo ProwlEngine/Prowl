@@ -168,6 +168,17 @@ Pass 0
 			return texelFetch(gVelocity, pixelPos + closestUVOffset, 0).xy;
 		}
 
+		// Source Unknown, Was passed around amongst some friends, apperantly its a better color clamp
+		vec3 NeighborClip(vec3 c, vec3 cmin, vec3 cmax){
+			vec3 p = 0.5 * (cmax + cmin);
+		
+			vec3 v = c - vec3(p);
+			vec3 a = abs(v.xyz / (0.5 * (cmax - cmin) + 0.00000001));
+			float ma = max(a.x, max(a.y, a.z));
+		
+			return ma > 1.0 ? vec3(p) + v / ma : c;
+		}
+
 		void main()
 		{
 			vec2 TexCoords = gl_FragCoord.xy / Resolution.xy;
@@ -195,7 +206,8 @@ Pass 0
 			
 			// sample from history buffer, with neighbourhood clamping.  
 			vec3 histSample = AdjustHDRColor(SampleTextureCatmullRom(gHistory, histUv, Resolution).xyz);
-			histSample = clamp(histSample, nmin, nmax);
+			//histSample = clamp(histSample, nmin, nmax);
+			histSample = NeighborClip(histSample, nmin, nmax); // I think this method is better?
 			
 			// blend factor
 			// 16 frames of jitter so match that for accumulation
