@@ -177,7 +177,7 @@ Pass 0
 			//vec3 histSample = AdjustHDRColor(SampleTextureCatmullRom(gHistory, histUv, Resolution).xyz);
 			vec3 histSample = AdjustHDRColor(bicubicFilter(gHistory, histUv * Resolution).xyz);
 			//vec3 histSample = AdjustHDRColor(texture(gHistory, histUv).xyz);
-			//histSample = clamp(histSample, nmin, nmax);
+			histSample = clamp(histSample, nmin, nmax);
 			
 			// blend factor
 			// 16 frames of jitter so match that for accumulation
