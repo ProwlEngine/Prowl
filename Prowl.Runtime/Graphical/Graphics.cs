@@ -297,12 +297,10 @@ namespace Prowl.Runtime
             Graphics.GL.DepthMask(false);
             using (UseDepthTest(false)) {
                 using (UseCulling(false)) {
-                    using (UseBlendMode(BlendMode.Additive)) {
-                        renderTexture?.Begin();
-                        if (clear) Clear(0, 0, 0, 0);
-                        DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, defaultMat);
-                        renderTexture?.End();
-                    }
+                    renderTexture?.Begin();
+                    if (clear) Clear(0, 0, 0, 0);
+                    DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, defaultMat);
+                    renderTexture?.End();
                 }
             }
             Graphics.GL.DepthMask(true);
