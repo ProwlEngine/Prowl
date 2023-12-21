@@ -97,8 +97,14 @@ public unsafe class EditorApplication : Application {
                 Time.Update(delta);
 
                 if (Project.HasProject) {
+
                     //var setting = Project.ProjectSettings.GetSetting<ApplicationSettings>();
                     Project.ProjectSettings.GetSetting<BuildSettings>(); // Called to ensure the Editor Ui exists
+                    EditorSettings Settings = Project.ProjectSettings.GetSetting<EditorSettings>();
+
+                    Window.InternalWindow.VSync = Settings.VSync;
+                    //Window.InternalWindow.FramesPerSecond = 60;
+                    //Window.InternalWindow.UpdatesPerSecond = 60;
 
                     if (IsHotkeyDown("SaveSceneAs", new Hotkey() { Key = Key.S, Ctrl = true, Shift = true }))
                         MainMenuItems.SaveSceneAs();

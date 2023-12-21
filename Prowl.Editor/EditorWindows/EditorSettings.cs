@@ -17,6 +17,9 @@ public class EditorSettings : IProjectSetting
     public float FarClip = 10000f;
     [Space] 
     public float RenderResolution = 1f;
+    [Space]
+    public bool VSync = true;
+    public int TargetFPS = 120;
 }
 
 public class BuildSettings : IProjectSetting
