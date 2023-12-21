@@ -63,15 +63,16 @@ public class ViewportWindow : EditorWindow
 
         var cStart = ImGui.GetCursorPos();
         var windowSize = ImGui.GetWindowSize();
-        if (windowSize.X != RenderTarget.Width || windowSize.Y != RenderTarget.Height)
-            RefreshRenderTexture((int)windowSize.X, (int)windowSize.Y);
+        var renderSize = ImGui.GetContentRegionAvail();
+        if (renderSize.X != RenderTarget.Width || renderSize.Y != RenderTarget.Height)
+            RefreshRenderTexture((int)renderSize.X, (int)renderSize.Y);
 
         WindowCenter = ImGui.GetWindowPos() + new System.Numerics.Vector2(windowSize.X / 2, windowSize.Y / 2);
 
         // Manually Render to the RenderTexture
         Cam.NearClip = Settings.NearClip;
         Cam.FarClip = Settings.FarClip;
-        Cam.Render((int)windowSize.X, (int)windowSize.Y);
+        Cam.Render((int)renderSize.X, (int)renderSize.Y);
         Settings.RenderResolution = Math.Clamp(Settings.RenderResolution, 0.1f, 8.0f);
         Cam.RenderResolution = Settings.RenderResolution;
 
@@ -83,7 +84,7 @@ public class ViewportWindow : EditorWindow
         ImGuizmo.SetRect(ImGui.GetWindowPos().X, ImGui.GetWindowPos().Y, windowSize.X, windowSize.Y);
 
         var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Position, Cam.GameObject.Forward, Cam.GameObject.Up).ToFloat();
-        var projection = Cam.GetProjectionMatrix(windowSize.X, windowSize.Y).ToFloat();
+        var projection = Cam.GetProjectionMatrix(renderSize.X, renderSize.Y).ToFloat();
 
         if (DrawGrid)
         {
@@ -93,7 +94,7 @@ public class ViewportWindow : EditorWindow
 
         Camera.Current = Cam;
         var mvp = view.ToDouble();
-        mvp *= Cam.GetProjectionMatrix(windowSize.X, windowSize.Y);
+        mvp *= Cam.GetProjectionMatrix(renderSize.X, renderSize.Y);
         var drawList = ImGui.GetWindowDrawList();
         Runtime.Gizmos.Render(drawList, mvp);
 

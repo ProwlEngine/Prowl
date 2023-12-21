@@ -35,8 +35,9 @@ public class GameWindow : EditorWindow
 
         var cStart = ImGui.GetCursorPos();
         var windowSize = ImGui.GetWindowSize();
-        if (windowSize.X != RenderTarget.Width || windowSize.Y != RenderTarget.Height)
-            RefreshRenderTexture((int)windowSize.X, (int)windowSize.Y);
+        var renderSize = ImGui.GetContentRegionAvail();
+        if (renderSize.X != RenderTarget.Width || renderSize.Y != RenderTarget.Height)
+            RefreshRenderTexture((int)renderSize.X, (int)renderSize.Y);
 
         // Find Camera to render
         var allCameras = EngineObject.FindObjectsOfType<Camera>();
@@ -56,7 +57,7 @@ public class GameWindow : EditorWindow
             if (Time.frameCount % 8 == 0)
             {
                 mainCam.Target = RenderTarget;
-                mainCam.Render((int)windowSize.X, (int)windowSize.Y);
+                mainCam.Render((int)renderSize.X, (int)renderSize.Y);
                 mainCam.Target = null;
             }
 
