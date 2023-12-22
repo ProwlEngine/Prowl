@@ -36,7 +36,9 @@ namespace Prowl.Runtime
 
         public uint vao { get; private set; }
         public uint vbo { get; private set; }
+        private int uploadedVBOSize = 0;
         public uint ibo { get; private set; }
+        private int uploadedIBOSize = 0;
 
         public unsafe void Upload()
         {
@@ -53,6 +55,7 @@ namespace Prowl.Runtime
             vbo  = Graphics.GL.GenBuffer();
             Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
             Graphics.GL.BufferData(BufferTargetARB.ArrayBuffer, new ReadOnlySpan<Vertex>(vertices), BufferUsageARB.StaticDraw);
+            uploadedVBOSize = vertices.Length;
 
             Graphics.CheckGL();
             for (var i = 0; i < format.Elements.Length; i++)
@@ -64,6 +67,7 @@ namespace Prowl.Runtime
                 Graphics.GL.VertexAttribPointer(index, element.Count, (GLEnum)element.Type, element.Normalized, (uint)format.Size, (void*)offset);
             }
 
+            uploadedIBOSize = indices?.Length ?? 0;
             if (indices != null) {
                 ibo = Graphics.GL.GenBuffer();
                 Graphics.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, ibo);
@@ -76,9 +80,61 @@ namespace Prowl.Runtime
             Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, 0);
         }
 
-        // Unload from memory (RAM and VRAM)
-        void Unload()
+        // Update the data inside the VBO and IBO if it exist if not it just unloads and reuploads
+        public void Update()
         {
+            if (vao <= 0) {
+                Upload();
+                return;
+            }
+
+            Graphics.GL.BindVertexArray(vao);
+            Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
+            if(uploadedVBOSize != vertices.Length) {
+                // Vertex count changed then reallocate it
+                Graphics.GL.BufferData(BufferTargetARB.ArrayBuffer, new ReadOnlySpan<Vertex>(vertices), BufferUsageARB.StaticDraw);
+            } else {
+                // Vertex count didnt change so just update it
+                Graphics.GL.BufferSubData(BufferTargetARB.ArrayBuffer, IntPtr.Zero, new ReadOnlySpan<Vertex>(vertices));
+            }
+            uploadedVBOSize = vertices.Length;
+
+            if ((uploadedIBOSize > 0 && indices == null) || (uploadedIBOSize != indices.Length)) {
+                uploadedIBOSize = indices?.Length ?? 0;
+
+
+                // if indices has been deleted
+                if (indices == null) {
+                    Graphics.GL.DeleteBuffer(ibo);
+                    ibo = 0;
+                } else {
+                    // If we dont have an indices buffer create one
+                    if(ibo == 0) {
+                        ibo = Graphics.GL.GenBuffer();
+                    }
+
+                    // if indices has been changed
+                    Graphics.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, ibo);
+                    if (uploadedIBOSize != vertices.Length) {
+                        // Size changed so reallocate
+                        Graphics.GL.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<ushort>(indices), BufferUsageARB.StaticDraw);
+                    } else {
+                        // Size didnt change so just update
+                        Graphics.GL.BufferSubData(BufferTargetARB.ElementArrayBuffer, IntPtr.Zero, new ReadOnlySpan<ushort>(indices));
+                    }
+                }
+            }
+
+            Graphics.GL.BindVertexArray(0);
+            Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, 0);
+
+        }
+
+        // Unload from memory (RAM and VRAM)
+        public void Unload()
+        {
+            if (vao <= 0) return; // nothing to unload
+
             // Unload rlgl vboId data
             Graphics.GL.DeleteVertexArray(vao);
             vao = 0;
