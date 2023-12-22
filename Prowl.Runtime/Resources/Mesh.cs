@@ -45,7 +45,6 @@ namespace Prowl.Runtime
 
             ArgumentNullException.ThrowIfNull(vertices);
             if (vertices.Length == 0) throw new($"The mesh argument '{nameof(vertices)}' is empty!");
-            ArgumentNullException.ThrowIfNull(indices);
 
             vao = Graphics.GL.GenVertexArray();
             Graphics.GL.BindVertexArray(vao);
@@ -65,9 +64,11 @@ namespace Prowl.Runtime
                 Graphics.GL.VertexAttribPointer(index, element.Count, (GLEnum)element.Type, element.Normalized, (uint)format.Size, (void*)offset);
             }
 
-            ibo = Graphics.GL.GenBuffer();
-            Graphics.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, ibo);
-            Graphics.GL.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<ushort>(indices), BufferUsageARB.StaticDraw);
+            if (indices != null) {
+                ibo = Graphics.GL.GenBuffer();
+                Graphics.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, ibo);
+                Graphics.GL.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<ushort>(indices), BufferUsageARB.StaticDraw);
+            }
 
             Debug.Log($"VAO: [ID {vao}] Mesh uploaded successfully to VRAM (GPU)");
 
