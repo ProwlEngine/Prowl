@@ -1,5 +1,6 @@
 ﻿using Silk.NET.OpenGL;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using static Prowl.Runtime.Mesh.VertexFormat;
@@ -148,6 +149,80 @@ namespace Prowl.Runtime
 
         #region Create Primitives
 
+        public struct CubeFace
+        {
+            public bool enabled;
+            public Vector2[] texCoords;
+        }
+
+        /// <summary>
+        /// 24 vertex cube with per face control
+        /// </summary>
+        /// <param name="size">Size of the cube</param>
+        /// <param name="faces">0=(Z+) 1=(Z-) 2=(Y+) 3=(Y-) 4=(X+) 5=(X-)</param>
+        public static Mesh CreateCube(Vector3 size, CubeFace[] faces)
+        {
+            if (faces.Length != 6) throw new($"The argument '{nameof(faces)}' must have 6 elements!");
+
+            Mesh mesh = new();
+
+            List<Vertex> vertices = new();
+            List<ushort> indices = new();
+
+            // Front Face (Z+) - 0
+            if (faces[0].enabled) {
+                vertices.Add(new Vertex { Position = new Vector3(-size.X, -size.Y, size.Z), TexCoord = faces[0].texCoords[0] });
+                vertices.Add(new Vertex { Position = new Vector3(size.X, -size.Y, size.Z), TexCoord = faces[0].texCoords[1] });
+                vertices.Add(new Vertex { Position = new Vector3(size.X, size.Y, size.Z), TexCoord = faces[0].texCoords[2] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.X, size.Y, size.Z), TexCoord = faces[0].texCoords[3] });
+                indices.AddRange(new ushort[] { 0, 1, 2, 0, 2, 3 });
+            }
+            // Back Face (Z-) - 1
+            if (faces[1].enabled) {
+                vertices.Add(new Vertex { Position = new Vector3(size.X, -size.Y, -size.Z), TexCoord = faces[1].texCoords[0] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.X, -size.Y, -size.Z), TexCoord = faces[1].texCoords[1] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.X, size.Y, -size.Z), TexCoord = faces[1].texCoords[2] });
+                vertices.Add(new Vertex { Position = new Vector3(size.X, size.Y, -size.Z), TexCoord = faces[1].texCoords[3] });
+                indices.AddRange(new ushort[] { 4, 5, 6, 4, 6, 7 });
+            }
+            // Top Face (Y+) - 2
+            if (faces[2].enabled) {
+                vertices.Add(new Vertex { Position = new Vector3(-size.X, size.Y, -size.Z), TexCoord = faces[2].texCoords[0] });
+                vertices.Add(new Vertex { Position = new Vector3(size.X, size.Y, -size.Z), TexCoord = faces[2].texCoords[1] });
+                vertices.Add(new Vertex { Position = new Vector3(size.X, size.Y, size.Z), TexCoord = faces[2].texCoords[2] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.X, size.Y, size.Z), TexCoord = faces[2].texCoords[3] });
+                indices.AddRange(new ushort[] { 8, 9, 10, 8, 10, 11 });
+            }
+            // Bottom Face (Y-) - 3
+            if (faces[3].enabled) {
+                vertices.Add(new Vertex { Position = new Vector3(size.X, -size.Y, -size.Z), TexCoord = faces[3].texCoords[0] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.X, -size.Y, -size.Z), TexCoord = faces[3].texCoords[1] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.X, -size.Y, size.Z), TexCoord = faces[3].texCoords[2] });
+                vertices.Add(new Vertex { Position = new Vector3(size.X, -size.Y, size.Z), TexCoord = faces[3].texCoords[3] });
+                indices.AddRange(new ushort[] { 12, 13, 14, 12, 14, 15 });
+            }
+            // Right Face (X+) - 4
+            if (faces[4].enabled) {
+                vertices.Add(new Vertex { Position = new Vector3(size.X, -size.Y, size.Z), TexCoord = faces[4].texCoords[0] });
+                vertices.Add(new Vertex { Position = new Vector3(size.X, -size.Y, -size.Z), TexCoord = faces[4].texCoords[1] });
+                vertices.Add(new Vertex { Position = new Vector3(size.X, size.Y, -size.Z), TexCoord = faces[4].texCoords[2] });
+                vertices.Add(new Vertex { Position = new Vector3(size.X, size.Y, size.Z), TexCoord = faces[4].texCoords[3] });
+                indices.AddRange(new ushort[] { 16, 17, 18, 16, 18, 19 });
+            }
+            // Left Face (X-) - 5
+            if (faces[5].enabled) {
+                vertices.Add(new Vertex { Position = new Vector3(-size.X, -size.Y, -size.Z), TexCoord = faces[5].texCoords[0] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.X, -size.Y, size.Z), TexCoord = faces[5].texCoords[1] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.X, size.Y, size.Z), TexCoord = faces[5].texCoords[2] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.X, size.Y, -size.Z), TexCoord = faces[5].texCoords[3] });
+                indices.AddRange(new ushort[] { 20, 21, 22, 20, 22, 23 });
+            }
+
+            mesh.vertices = [.. vertices];
+            mesh.indices = [.. indices];
+            return mesh;
+        }
+
         public static Mesh CreateSphere(float radius, int rings, int slices)
         {
             Mesh mesh = new();
@@ -208,7 +283,6 @@ namespace Prowl.Runtime
         }
 
         private static Mesh fullScreenQuad;
-
         public static Mesh GetFullscreenQuad()
         {
             if (fullScreenQuad != null) return fullScreenQuad;
