@@ -508,15 +508,15 @@ public class GameObject : EngineObject, ISerializable
         return null;
     }
 
-    public IEnumerable<T> GetComponentsInParent<T>() where T : MonoBehaviour
+    public IEnumerable<T> GetComponentsInParent<T>(bool includeSelf = true) where T : MonoBehaviour
     {
         // First check the current Object
-        foreach (var component in GetComponents<T>())
-            yield return component;
+        if (includeSelf)
+            foreach (var component in GetComponents<T>())
+                yield return component;
         // Now check all parents
         GameObject parent = this;
-        while ((parent = parent.Parent) != null)
-        {
+        while ((parent = parent.Parent) != null) {
             foreach (var component in parent.GetComponents<T>())
                 yield return component;
         }
@@ -541,14 +541,14 @@ public class GameObject : EngineObject, ISerializable
     }
 
 
-    public IEnumerable<T> GetComponentsInChildren<T>() where T : MonoBehaviour
+    public IEnumerable<T> GetComponentsInChildren<T>(bool includeSelf = true) where T : MonoBehaviour
     {
         // First check the current Object
-        foreach (var component in GetComponents<T>())
-            yield return component;
+        if (includeSelf)
+            foreach (var component in GetComponents<T>())
+                yield return component;
         // Now check all children
-        foreach (var child in Children)
-        {
+        foreach (var child in Children) {
             foreach (var component in child.GetComponentsInChildren<T>())
                 yield return component;
         }
