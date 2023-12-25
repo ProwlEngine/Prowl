@@ -27,9 +27,10 @@ public class ViewportWindow : EditorWindow
         Title = FontAwesome6.Camera + " Viewport";
 
         var CamObject = GameObject.CreateSilently();
+        var t = CamObject.AddComponent<Transform>();
         CamObject.Name = "Editor-Camera";
         CamObject.hideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
-        CamObject.Position = new Vector3(0, 5, -10);
+        t.Position = new Vector3(0, 5, -10);
         Cam = CamObject.AddComponent<Camera>();
         LastFocusedCamera = Cam;
 
@@ -83,7 +84,7 @@ public class ViewportWindow : EditorWindow
         ImGuizmo.SetOrthographic(false);
         ImGuizmo.SetRect(ImGui.GetWindowPos().X, ImGui.GetWindowPos().Y, windowSize.X, windowSize.Y);
 
-        var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Position, Cam.GameObject.Forward, Cam.GameObject.Up).ToFloat();
+        var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Transform!.Position, Cam.GameObject.Transform!.Forward, Cam.GameObject.Transform!.Up).ToFloat();
         var projection = Cam.GetProjectionMatrix(renderSize.X, renderSize.Y).ToFloat();
 
         if (DrawGrid)
@@ -170,22 +171,24 @@ public class ViewportWindow : EditorWindow
     private void HandleDragnDrop()
     {
         // GameObject from Assets
-        if (DragnDrop.ReceiveAsset<GameObject>(out var original))
-        {
+        if (DragnDrop.ReceiveAsset<GameObject>(out var original)) {
             GameObject clone = (GameObject)EngineObject.Instantiate(original.Res!, true);
             clone.AssetID = Guid.Empty; // Remove AssetID so it's not a Prefab - These are just GameObjects like Models
-            clone.Position = Cam.GameObject.GlobalPosition + Cam.GameObject.Forward * 10;
-            clone.Orientation = original.Res!.Orientation;
-            clone.Recalculate();
+            var t = clone.Transform;
+            if (t != null) {
+                t.Position = Cam.GameObject.Transform!.GlobalPosition + Cam.GameObject.Transform!.Forward * 10;
+                t.Recalculate();
+            }
             HierarchyWindow.SelectHandler.SetSelection(clone);
         }
         // Prefab from Assets
-        if (DragnDrop.ReceiveAsset<Prefab>(out var prefab))
-        {
+        if (DragnDrop.ReceiveAsset<Prefab>(out var prefab)) {
             var go = prefab.Res.Instantiate();
-            go.Position = Cam.GameObject.GlobalPosition + Cam.GameObject.Forward * 10;
-            go.Orientation = original.Res!.Orientation;
-            go.Recalculate();
+            var t = go.Transform;
+            if (t != null) {
+                t.Position = Cam.GameObject.Transform!.GlobalPosition + Cam.GameObject.Transform!.Forward * 10;
+                t.Recalculate();
+            }
             HierarchyWindow.SelectHandler.SetSelection(go);
         }
         // Scene from Assets
@@ -203,41 +206,41 @@ public class ViewportWindow : EditorWindow
         {
             Vector3 moveDir = Vector3.Zero;
             if (Input.IsKeyDown(Key.W))
-                moveDir += Cam.GameObject.Forward;
+                moveDir += Cam.GameObject.Transform!.Forward;
             if (Input.IsKeyDown(Key.S))
-                moveDir -= Cam.GameObject.Forward;
+                moveDir -= Cam.GameObject.Transform!.Forward;
             if (Input.IsKeyDown(Key.A))
-                moveDir -= Cam.GameObject.Right;
+                moveDir -= Cam.GameObject.Transform!.Right;
             if (Input.IsKeyDown(Key.D))
-                moveDir += Cam.GameObject.Right;
+                moveDir += Cam.GameObject.Transform!.Right;
             if (Input.IsKeyDown(Key.E))
-                moveDir += Cam.GameObject.Up;
+                moveDir += Cam.GameObject.Transform!.Up;
             if (Input.IsKeyDown(Key.Q))
-                moveDir -= Cam.GameObject.Up;
+                moveDir -= Cam.GameObject.Transform!.Up;
             if (moveDir != Vector3.Zero)
             {
                 moveDir = Vector3.Normalize(moveDir);
                 if (Input.IsKeyDown(Key.ShiftLeft))
                     moveDir *= 2.0f;
-                Cam.GameObject.Position += moveDir * (Time.deltaTimeF * 10f);
+                Cam.GameObject.Transform!.Position += moveDir * (Time.deltaTimeF * 10f);
             }
 
             // Version with fixed gimbal lock
             var mouseDelta = Input.MouseDelta;
-            var rot = Cam.GameObject.Rotation;
+            var rot = Cam.GameObject.Transform!.Rotation;
             rot.X += mouseDelta.X * (Time.deltaTimeF * 5f * Settings.LookSensitivity);
             rot.Y += mouseDelta.Y * (Time.deltaTimeF * 5f * Settings.LookSensitivity);
-            Cam.GameObject.Rotation = rot;
+            Cam.GameObject.Transform!.Rotation = rot;
 
             Input.MousePosition = WindowCenter.ToFloat().ToGeneric();
         }
         else if (Input.IsMouseDown(MouseButton.Middle) && IsHovered)
         {
             var mouseDelta = Input.MouseDelta;
-            var pos = Cam.GameObject.Position;
-            pos -= Cam.GameObject.Right * mouseDelta.X * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
-            pos += Cam.GameObject.Up * mouseDelta.Y * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
-            Cam.GameObject.Position = pos;
+            var pos = Cam.GameObject.Transform!.Position;
+            pos -= Cam.GameObject.Transform!.Right * mouseDelta.X * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
+            pos += Cam.GameObject.Transform!.Up * mouseDelta.Y * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
+            Cam.GameObject.Transform!.Position = pos;
         }
         else
         {

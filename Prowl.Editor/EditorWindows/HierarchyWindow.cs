@@ -190,10 +190,7 @@ public class HierarchyWindow : EditorWindow
         if (DragnDrop.ReceiveAsset<GameObject>(out var original)) {
             GameObject clone = (GameObject)EngineObject.Instantiate(original.Res!, true);
             clone.AssetID = Guid.Empty; // Remove AssetID so it's not a Prefab - These are just GameObjects like Models
-            clone.Position = original.Res!.Position;
-            clone.Orientation = original.Res!.Orientation;
             clone.SetParent(entity); // null is root
-            clone.Recalculate();
             SelectHandler.SetSelection(clone);
         }
 
@@ -258,9 +255,6 @@ public class HierarchyWindow : EditorWindow
             GameObject go = new GameObject("New Gameobject");
             if (context != null)
                 go.SetParent(context);
-            go.Position = System.Numerics.Vector3.Zero;
-            go.Orientation = Prowl.Runtime.Quaternion.Identity;
-            go.Scale = System.Numerics.Vector3.One;
             SelectHandler.SetSelection(go);
             ImGui.CloseCurrentPopup();
         }
@@ -301,18 +295,23 @@ public class HierarchyWindow : EditorWindow
 
             ImGui.Separator();
 
-            if (SelectHandler.Count > 0 && ImGui.MenuItem("Align With View")) {
-                SelectHandler.Foreach((go) => {
-                    Camera cam = ViewportWindow.LastFocusedCamera;
-                    go.GlobalPosition = cam.GameObject.GlobalPosition;
-                    go.GlobalOrientation = cam.GameObject.GlobalOrientation;
-                });
-            }
+            if (ViewportWindow.LastFocusedCamera.GameObject.Transform != null) {
+                if (SelectHandler.Count > 0 && ImGui.MenuItem("Align With View")) {
+                    SelectHandler.Foreach((go) => {
+                        var t = go.Transform;
+                        if (t != null) {
+                            Camera cam = ViewportWindow.LastFocusedCamera;
+                            t.GlobalPosition = cam.GameObject.Transform!.GlobalPosition;
+                            t.GlobalOrientation = cam.GameObject.Transform!.GlobalOrientation;
+                        }
+                    });
+                }
 
-            if (SelectHandler.Count == 1 && ImGui.MenuItem("Align View With")) {
-                Camera cam = ViewportWindow.LastFocusedCamera;
-                cam.GameObject.GlobalPosition = entity.GlobalPosition;
-                cam.GameObject.GlobalOrientation = entity.GlobalOrientation;
+                if (SelectHandler.Count == 1 && ImGui.MenuItem("Align View With")) {
+                    Camera cam = ViewportWindow.LastFocusedCamera;
+                    cam.GameObject.Transform!.GlobalPosition = entity.Transform?.GlobalPosition ?? Vector3.Zero;
+                    cam.GameObject.Transform!.GlobalOrientation = entity.Transform?.GlobalOrientation ?? Quaternion.Identity;
+                }
             }
 
             ImGui.EndPopup();

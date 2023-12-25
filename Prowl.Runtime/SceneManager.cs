@@ -31,16 +31,17 @@ public static class SceneManager
     public static void InstantiateNewScene()
     {
         var go = new GameObject("Directional Light");
-        go.Rotation = new System.Numerics.Vector3(130, 45, 0);
-        go.AddComponent<DirectionalLight>();
+        go.AddComponent<DirectionalLight>(); // Will auto add Transform as DirectionLight requires it
+        go.Transform!.Rotation = new System.Numerics.Vector3(130, 45, 0);
         var alGo = new GameObject("Ambient Light");
         var al = alGo.AddComponent<AmbientLight>();
         al.skyIntensity = 0.4f;
         al.groundIntensity = 0.1f;
 
         var cam = new GameObject("Main Camera");
+        var t = cam.AddComponent<Transform>();
         cam.tag = "Main Camera";
-        cam.Position = new(0, 0, -10);
+        t.Position = new(0, 0, -10);
         cam.AddComponent<Camera>();
     }
 

@@ -2,6 +2,7 @@
 
 namespace Prowl.Runtime;
 
+[RequireComponent(typeof(Transform))]
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Spot Light")]
 public class SpotLight : MonoBehaviour
 {
@@ -36,8 +37,8 @@ public class SpotLight : MonoBehaviour
                 lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
             }
 
-            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.GlobalPosition - Camera.Current.GameObject.GlobalPosition, Graphics.MatView));
-            lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.Forward, Graphics.MatView));
+            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.Transform!.GlobalPosition - Camera.Current.GameObject.Transform!.GlobalPosition, Graphics.MatView));
+            lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.Transform!.Forward, Graphics.MatView));
             //lightMat.SetVector("LightDirection",this.GameObject.Forward);
 
             lightMat.SetFloat("LightDistance", distance);
@@ -52,14 +53,14 @@ public class SpotLight : MonoBehaviour
             //Camera.Current.DrawFullScreenTexture(Camera.Current.gBuffer.depth);
             //Raylib.DrawRectangle(0, 0, 9999, 9999, Color.white);
             // set matrix scale to radius
-            var mat = Matrix4x4.CreateScale(distance) * GameObject.GlobalCamRelative;
+            var mat = Matrix4x4.CreateScale(distance) * GameObject.Transform!.GlobalCamRelative;
             Graphics.DrawMeshNow(mesh, mat, lightMat);
             lightMat.EndPass();
             //Camera.Current.Start3D();
 
 
-            var r = Matrix4x4.CreateFromQuaternion(GameObject.GlobalOrientation);
-            var t = Matrix4x4.CreateTranslation(GameObject.GlobalPosition);
+            var r = Matrix4x4.CreateFromQuaternion(GameObject.Transform!.GlobalOrientation);
+            var t = Matrix4x4.CreateTranslation(GameObject.Transform!.GlobalPosition);
             Gizmos.Matrix = r * t;
             Gizmos.Spotlight(distance, (1.0f - angle) * 5f, Color.yellow, 2f);
             var b = Color.blue;

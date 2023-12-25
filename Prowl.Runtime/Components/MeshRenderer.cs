@@ -1,11 +1,11 @@
 ﻿using Prowl.Icons;
-using System;
 using System.Collections.Generic;
 using Material = Prowl.Runtime.Material;
 using Mesh = Prowl.Runtime.Mesh;
 
 namespace Prowl.Runtime;
 
+[RequireComponent(typeof(Transform))]
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Shapes}  Mesh Renderer")]
 public class MeshRenderer : MonoBehaviour, ISerializable
 {
@@ -21,9 +21,9 @@ public class MeshRenderer : MonoBehaviour, ISerializable
 
     public void OnRenderObject()
     {
-        var mat = GameObject.GlobalCamRelative;
+        var mat = GameObject.Transform!.GlobalCamRelative;
         int camID = Camera.Current.InstanceID;
-        if (!prevMats.ContainsKey(camID)) prevMats[camID] = GameObject.GlobalCamRelative;
+        if (!prevMats.ContainsKey(camID)) prevMats[camID] = GameObject.Transform!.GlobalCamRelative;
         var prevMat = prevMats[camID];
 
         var material = Material.Res;
@@ -51,7 +51,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable
     {
         if (Mesh.IsAvailable && Material.IsAvailable) {
             var mvp = Matrix4x4.Identity;
-            mvp = Matrix4x4.Multiply(mvp, GameObject.GlobalCamRelative);
+            mvp = Matrix4x4.Multiply(mvp, GameObject.Transform!.GlobalCamRelative);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthProjection);
             Material.Res!.SetMatrix("mvp", mvp);

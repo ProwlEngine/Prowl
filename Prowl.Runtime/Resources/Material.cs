@@ -243,6 +243,7 @@ namespace Prowl.Runtime
             passVariants ??= new();
 
             string keywords = string.Join("-", allKeywords);
+#warning TODO: AssetID isnt reliable, especially if the shader is generated at runtime since then there wont be an asset ID 
             string key = Shader.AssetID.ToString() + "-" + keywords + "-" + Runtime.Shader.globalKeywords;
             if (passVariants.TryGetValue(key, out var s)) return s;
 

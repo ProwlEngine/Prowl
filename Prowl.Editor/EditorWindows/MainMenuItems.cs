@@ -124,14 +124,16 @@ namespace Prowl.Editor.EditorWindows
             // Last Focused Editor camera
             var cam = ViewportWindow.LastFocusedCamera;
             // get position 10 units infront
-            return cam.GameObject.GlobalPosition + cam.GameObject.Forward * 10;
+            var t = cam.GameObject.Transform;
+            if(t != null)
+                return t.GlobalPosition + t.Forward * 10;
+            return Vector3.Zero;
         }
 
         [MenuItem("Template/Lights/Ambient Light")]
         public static void TemplateAmbientLight()
         {
             var go = new GameObject("Ambient Light");
-            go.GlobalPosition = GetPosition();
             go.AddComponent<AmbientLight>();
             HierarchyWindow.SelectHandler.SetSelection(go);
         }
@@ -140,9 +142,9 @@ namespace Prowl.Editor.EditorWindows
         public static void TemplateDirectionalLight()
         {
             var go = new GameObject("Directional Light");
-            go.GlobalPosition = GetPosition();
             go.AddComponent<DirectionalLight>();
-            go.Rotation = new System.Numerics.Vector3(45, 70, 0);
+            go.Transform!.GlobalPosition = GetPosition();
+            go.Transform!.Rotation = new System.Numerics.Vector3(45, 70, 0);
             HierarchyWindow.SelectHandler.SetSelection(go);
         }
 
@@ -150,8 +152,8 @@ namespace Prowl.Editor.EditorWindows
         public static void TemplatePointLight()
         {
             var go = new GameObject("Point Light");
-            go.GlobalPosition = GetPosition();
             go.AddComponent<PointLight>();
+            go.Transform!.GlobalPosition = GetPosition();
             HierarchyWindow.SelectHandler.SetSelection(go);
         }
 
@@ -159,8 +161,8 @@ namespace Prowl.Editor.EditorWindows
         public static void TemplateSpotLight()
         {
             var go = new GameObject("Spot Light");
-            go.GlobalPosition = GetPosition();
             go.AddComponent<SpotLight>();
+            go.Transform!.GlobalPosition = GetPosition();
             HierarchyWindow.SelectHandler.SetSelection(go);
         }
 

@@ -157,7 +157,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             // Find DirectionalLight
             DirectionalLight? light = EngineObject.FindObjectOfType<DirectionalLight>();
             if (light != null)
-                Mat.SetVector("uSunPos", -light.GameObject.Forward);
+                Mat.SetVector("uSunPos", -light.GameObject.Transform!.Forward);
             else // Fallback to a reasonable default
                 Mat.SetVector("uSunPos", new Vector3(0.5f, 0.5f, 0.5f));
 

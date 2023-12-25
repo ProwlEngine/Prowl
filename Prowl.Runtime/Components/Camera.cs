@@ -88,7 +88,7 @@ public class Camera : MonoBehaviour
     Matrix4x4? oldView = null;
     Matrix4x4? oldProjection = null;
 
-    public Matrix4x4 View => Matrix4x4.CreateLookToLeftHanded(Vector3.Zero, GameObject.Forward, GameObject.Up);
+    public Matrix4x4 View => Matrix4x4.CreateLookToLeftHanded(Vector3.Zero, GameObject.Transform?.Forward ?? Vector3.UnitZ, GameObject.Transform?.Up ?? Vector3.UnitY);
 
     public void Render(int width, int height)
     {

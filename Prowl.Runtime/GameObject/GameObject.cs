@@ -45,20 +45,12 @@ public class GameObject : EngineObject, ISerializable
         set => layerIndex = TagLayerManager.GetLayerIndex(value);
     }
 
+    private Transform? _transform;
+    public Transform? Transform => _transform ??= GetComponent<Transform>();
+
     #region Transform
 
 
-    protected Vector3 position;
-    protected Vector3 rotation;
-    protected Vector3 scale = Vector3.One;
-    protected Vector3 globalPosition;
-    protected Vector3 globalPreviousPosition;
-    protected Vector3 velocity, oldpos;
-    protected Vector3 globalScale;
-    protected Quaternion orientation = Quaternion.Identity, globalOrientation;
-    protected Vector3 forward, backward, left, right, up, down;
-    protected Matrix4x4 globalPrevious, global, globalInverse;
-    protected Matrix4x4 local, localInverse;
 
     // We dont serialize parent, since if we want to serialize X object who is a child to Y object, we dont want to serialize Y object as well.
     // The parent is reconstructed when the object is deserialized for all children.
@@ -68,135 +60,7 @@ public class GameObject : EngineObject, ISerializable
 
     public GameObject? Parent => parent;
 
-    /// <summary>Gets or sets the local position.</summary>
-    public Vector3 Position
-    {
-        get => position;
-        set
-        {
-            if (position == value) return;
-            oldpos = position;
-            position = value;
-            velocity = position - oldpos;
-            Recalculate();
-        }
-    }
-
-    /// <summary>Gets or sets the local rotation.</summary>
-    /// <remarks>The rotation is in space euler from 0° to 360°(359°)</remarks>
-    public Vector3 Rotation
-    {
-        get => rotation;
-        set
-        {
-            if (rotation == value) return;
-            rotation = value;
-            orientation = value.NormalizeEulerAngleDegrees().ToRad().GetQuaternion();
-            Recalculate();
-        }
-    }
-
-    /// <summary>Gets or sets the local scale.</summary>
-    public Vector3 Scale
-    {
-        get => scale;
-        set
-        {
-            if (scale == value) return;
-            scale = value;
-            Recalculate();
-        }
-    }
-
-    /// <summary>Gets or sets the local orientation.</summary>
-    public Quaternion Orientation
-    {
-        get => orientation;
-        set
-        {
-            if (orientation == value) return;
-            orientation = value;
-            rotation = value.GetRotation().ToDeg().NormalizeEulerAngleDegrees();
-            Recalculate();
-        }
-    }
-
-    /// <summary>Gets or sets the global (world space) position.</summary>
-    public Vector3 GlobalPosition
-    {
-        get => globalPosition;
-        set
-        {
-            if (globalPosition == value)return;
-            if (parent == null)
-                position = value;
-            else // Transform because the rotation could modify the position of the child.
-                position = Vector3.Transform(value, parent.globalInverse);
-            Recalculate();
-        }
-    }
-
-    /// <summary>Gets or sets the global (world space) orientation.</summary>
-    public Quaternion GlobalOrientation
-    {
-        get => globalOrientation;
-        set
-        {
-            if (globalOrientation == value) return;
-            if (parent == null)
-                orientation = value;
-            else // Divide because quaternions are like matrices.
-                orientation = value / parent.globalOrientation;
-            Recalculate();
-        }
-    }
-
-    /// <summary>The forward vector in global orientation space</summary>
-     public Vector3 Forward => forward;
-
-    /// <summary>The backward vector in global orientation space</summary>
-     public Vector3 Backward => backward;
-
-    /// <summary>The left vector in global orientation space</summary>
-     public Vector3 Left => left;
-
-    /// <summary>The right vector in global orientation space</summary>
-     public Vector3 Right => right;
-
-    /// <summary>The up vector in global orientation space</summary>
-     public Vector3 Up => up;
-
-    /// <summary>The down vector in global orientation space</summary>
-     public Vector3 Down => down;
-
-    /// <summary>The global transformation matrix of the previous frame.</summary>
-     public Matrix4x4 GlobalPrevious => globalPrevious;
-
-    /// <summary>The global transformation matrix</summary>
-     public Matrix4x4 Global { get => global; }
-
-    /// <summary>The inverse global transformation matrix</summary>
-     public Matrix4x4 GlobalInverse => globalInverse;
-
-     /// <summary>Returns a matrix relative/local to the currently rendering camera, Will throw an error if used outside rendering method</summary>
-     public Matrix4x4 GlobalCamRelative
-     {
-         get
-         {
-             Matrix4x4 matrix = Global;
-             matrix.Translation -= Camera.Current.GameObject.GlobalPosition;
-             return matrix;
-         }
-     }
-
-    /// <summary>The local transformation matrix</summary>
-    public Matrix4x4 Local { get => local; set => SetMatrix(value); }
-
-    /// <summary>The local inverse transformation matrix</summary>
-     public Matrix4x4 LocalInverse => localInverse;
-
-    /// <summary>The velocity of the object only useful for 3d sound.</summary>
-     public Vector3 Velocity => velocity;
+    
 
     public void SetParent(GameObject? newParent)
     {
@@ -243,54 +107,9 @@ public class GameObject : EngineObject, ISerializable
         parent = newParent;
         newParent?.Children.Add(this);
 
-        Recalculate();
+        Transform?.Recalculate();
         HierarchyStateChanged();
     }
-
-    /// <summary>Recalculates all values of the <see cref="Transform"/>.</summary>
-    public void Recalculate()
-    {
-        globalPrevious = global;
-
-        var s = Matrix4x4.CreateScale(scale);
-        var r = Matrix4x4.CreateFromQuaternion(orientation);
-        var t = Matrix4x4.CreateTranslation(position);
-        local = s * r * t;
-        //local = Matrix4.CreateScale(scale) * Matrix4.CreateFromQuaternion(orientation) * Matrix4.CreateTranslation(position);
-        Matrix4x4.Invert(local, out localInverse);
-        if (parent == null)
-            global = local;
-        else
-            global = local * parent.global;
-
-        Matrix4x4.Invert(global, out globalInverse);
-
-        Matrix4x4.Decompose(global, out globalScale, out globalOrientation, out globalPosition);
-        forward = Vector3.Transform(Vector3.UnitZ, globalOrientation);
-        backward = Vector3.Transform(-Vector3.UnitZ, globalOrientation);
-        right = Vector3.Transform(Vector3.UnitX, globalOrientation);
-        left = Vector3.Transform(-Vector3.UnitX, globalOrientation);
-        up = Vector3.Transform(Vector3.UnitY, globalOrientation);
-        down = Vector3.Transform(-Vector3.UnitY, globalOrientation);
-
-        foreach (var child in Children)
-            child.Recalculate();
-    }
-
-    /// <summary>
-    /// Reverse calculates the local params from a local matrix.
-    /// </summary>
-    /// <param name="matrix">Local space matrix</param>
-    private void SetMatrix(Matrix4x4 matrix)
-    {
-        local = matrix;
-        Matrix4x4.Invert(local, out localInverse);
-        Matrix4x4.Decompose(local, out scale, out orientation, out position);
-        rotation = orientation.GetRotation().ToDeg();
-        Recalculate();
-    }
-
-    public static implicit operator Matrix4x4(GameObject go) => go.global;
 
     #endregion
 
@@ -309,12 +128,11 @@ public class GameObject : EngineObject, ISerializable
     /// A Special constructed used internally for the <see cref="GameObject.CreateSilently"/>() method, this prevents the GameObject from being added to the scene.
     /// </summary>
     /// <param name="dummy">Does nothing.</param>
-    private GameObject(int dummy) : base("New GameObject") { Recalculate(); }
+    private GameObject(int dummy) : base("New GameObject") { }
 
     /// <summary>Creates a new gameobject with tbe name 'New GameObject'.</summary>
     public GameObject() : base("New GameObject")
     {
-        Recalculate();
         Internal_Constructed?.Invoke(this);
     }
 
@@ -322,7 +140,6 @@ public class GameObject : EngineObject, ISerializable
     /// <param name="name">The name of the gameobject.</param>
     public GameObject(string name = "New GameObject") : base(name)
     {
-        Recalculate();
         Internal_Constructed?.Invoke(this);
     }
 
@@ -364,7 +181,7 @@ public class GameObject : EngineObject, ISerializable
 
         if (type.GetCustomAttribute<DisallowMultipleComponentAttribute>() != null && GetComponent(type) != null)
         {
-            Debug.LogError("Can't Add the Same Component Multiple Times" + "The component of type " + type.Name + " does not allow multiple instances");
+            Debug.LogError("Can't Add the Same Component Multiple Times The component of type " + type.Name + " does not allow multiple instances");
             return null;
         }
 
@@ -576,38 +393,37 @@ public class GameObject : EngineObject, ISerializable
 
     public void DrawGizmos(System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection, bool isSelected)
     {
-        if (hideFlags.HasFlag(HideFlags.NoGizmos)) return;
+        if (hideFlags.HasFlag(HideFlags.NoGizmos) || Transform == null) return;
 
         if (isSelected)
         {
             System.Numerics.Matrix4x4 goMatrix;
 
             if (SceneManager.GizmosSpace == ImGuizmoMode.Local)
-                goMatrix = Local.ToFloat();
+                goMatrix = Transform.Local.ToFloat();
             else
-                goMatrix = Global.ToFloat();
+                goMatrix = Transform.Global.ToFloat();
             // Convert position to be relative to Camera
             //goMatrix *= System.Numerics.Matrix4x4.CreateTranslation(-Camera.Current.GameObject.GlobalPosition.ToFloat());
-            goMatrix.Translation -= Camera.Current.GameObject.GlobalPosition.ToFloat();
+            goMatrix.Translation -= Camera.Current.GameObject.Transform?.GlobalPosition.ToFloat() ?? Vector3.Zero;
 
             // Perform ImGuizmo manipulation
             if (ImGuizmo.Manipulate(ref view, ref projection, SceneManager.GizmosOperation, SceneManager.GizmosSpace, ref goMatrix))
             {
                 // Convert back to world space
                 //goMatrix *= System.Numerics.Matrix4x4.CreateTranslation(Camera.Current.GameObject.GlobalPosition.ToFloat());
-                goMatrix.Translation += Camera.Current.GameObject.GlobalPosition.ToFloat();
+                goMatrix.Translation += Camera.Current.GameObject.Transform?.GlobalPosition.ToFloat() ?? Vector3.Zero;
                 if (SceneManager.GizmosSpace == ImGuizmoMode.Local)
                 {
-                    Local = goMatrix.ToDouble();
+                    Transform.Local = goMatrix.ToDouble();
                 }
                 else
                 {
-                    global = goMatrix.ToDouble();
-                    Matrix4x4.Decompose(global, out globalScale, out globalOrientation, out globalPosition);
-                    scale = globalScale;
-                    orientation = globalOrientation;
-                    position = globalPosition;
-                    Recalculate();
+                    var global = goMatrix.ToDouble();
+                    Matrix4x4.Decompose(global, out var globalScale, out var globalOrientation, out var globalPosition);
+                    Transform.Scale = globalScale;
+                    Transform.GlobalOrientation = globalOrientation;
+                    Transform.GlobalPosition = globalPosition;
                 }
             }
         }
@@ -619,14 +435,20 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
-    public static GameObject Instantiate(GameObject original) => Instantiate(original, original.position, original.orientation, null);
-    public static GameObject Instantiate(GameObject original, GameObject? parent) => Instantiate(original, original.position, original.orientation, parent);
+    public static GameObject Instantiate(GameObject original) => Instantiate(original, null);
+    public static GameObject Instantiate(GameObject original, GameObject? parent)
+    {
+        GameObject clone = (GameObject)EngineObject.Instantiate(original, false);
+        clone.SetParent(parent);
+        return clone;
+    }
     public static GameObject Instantiate(GameObject original, GameObject? parent, Vector3 position, Quaternion rotation) => Instantiate(original, position, rotation, parent);
     public static GameObject Instantiate(GameObject original, Vector3 position, Quaternion rotation, GameObject? parent) 
     {
         GameObject clone = (GameObject)EngineObject.Instantiate(original, false);
-        clone.position = position;
-        clone.orientation = rotation;
+        var t = clone.AddComponent<Transform>();
+        t.GlobalPosition = position;
+        t.GlobalOrientation = rotation;
         clone.SetParent(parent);
         return clone;
     }
@@ -715,7 +537,7 @@ public class GameObject : EngineObject, ISerializable
             _componentCache.Add(component.GetType(), component);
         }
 
-        Recalculate();
+        Transform?.Recalculate();
     }
 
     public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
@@ -733,19 +555,6 @@ public class GameObject : EngineObject, ISerializable
 
         if(AssetID != Guid.Empty)
             compoundTag.Add("AssetID", new StringTag(AssetID.ToString()));
-
-        compoundTag.Add("PosX", new DoubleTag(position.X));
-        compoundTag.Add("PosY", new DoubleTag(position.Y));
-        compoundTag.Add("PosZ", new DoubleTag(position.Z));
-
-        compoundTag.Add("RotX", new DoubleTag(orientation.X));
-        compoundTag.Add("RotY", new DoubleTag(orientation.Y));
-        compoundTag.Add("RotZ", new DoubleTag(orientation.Z));
-        compoundTag.Add("RotW", new DoubleTag(orientation.W));
-
-        compoundTag.Add("ScalX", new DoubleTag(scale.X));
-        compoundTag.Add("ScalY", new DoubleTag(scale.Y));
-        compoundTag.Add("ScalZ", new DoubleTag(scale.Z));
 
         ListTag components = new ListTag();
         foreach (var comp in _components)
@@ -770,12 +579,10 @@ public class GameObject : EngineObject, ISerializable
         hideFlags = (HideFlags)value["HideFlags"].IntValue;
         if(value.TryGet("AssetID", out StringTag guid))
             AssetID = Guid.Parse(guid.Value);
-        position = new Vector3(value["PosX"].DoubleValue, value["PosY"].DoubleValue, value["PosZ"].DoubleValue);
-        orientation = new Quaternion(value["RotX"].DoubleValue, value["RotY"].DoubleValue, value["RotZ"].DoubleValue, value["RotW"].DoubleValue);
-        scale = new Vector3(value["ScalX"].DoubleValue, value["ScalY"].DoubleValue, value["ScalZ"].DoubleValue);
 
         ListTag comps = (ListTag)value["Components"];
         _components = new();
+        Transform? transform = null;
         foreach (CompoundTag compTag in comps.Tags)
         {
             MonoBehaviour? component = TagSerializer.Deserialize<MonoBehaviour>(compTag, ctx);
@@ -783,6 +590,9 @@ public class GameObject : EngineObject, ISerializable
             component.AttachToGameObject(this);
             _components.Add(component);
             _componentCache.Add(component.GetType(), component);
+
+            if (component is Transform t)
+                transform = t;
         }
 
         ListTag children = (ListTag)value["Children"];
@@ -795,6 +605,6 @@ public class GameObject : EngineObject, ISerializable
             Children.Add(child);
         }
 
-        Recalculate();
+        transform?.Recalculate();
     }
 }

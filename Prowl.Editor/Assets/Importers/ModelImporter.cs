@@ -319,6 +319,7 @@ namespace Prowl.Editor.Assets
                             foreach (var mIdx in node.MeshIndices) {
                                 var uMeshAndMat = meshMats[mIdx];
                                 GameObject uSubOb = GameObject.CreateSilently();
+                                uSubOb.AddComponent<Transform>();
                                 uSubOb.Name = uMeshAndMat.MeshName;
                                 AddMeshComponent(GOs, uSubOb, uMeshAndMat);
                                 uSubOb.SetParent(go);
@@ -329,13 +330,13 @@ namespace Prowl.Editor.Assets
                     // Transform
                     node.Transform.Decompose(out var aScale, out var aQuat, out var aTranslation);
 
-                    go.Scale = new Vector3(aScale.X, aScale.Y, aScale.Z);
-                    go.Position = new Vector3(aTranslation.X, aTranslation.Y, aTranslation.Z);
-                    go.Orientation = new Prowl.Runtime.Quaternion(aQuat.X, aQuat.Y, aQuat.Z, aQuat.W);
+                    go.Transform!.Scale = new Vector3(aScale.X, aScale.Y, aScale.Z);
+                    go.Transform!.Position = new Vector3(aTranslation.X, aTranslation.Y, aTranslation.Z);
+                    go.Transform!.Orientation = new Prowl.Runtime.Quaternion(aQuat.X, aQuat.Y, aQuat.Z, aQuat.W);
                 }
 
                 GameObject rootNode = GOs[0].Item1;
-                rootNode.Scale = Vector3.One * UnitScale;
+                rootNode.Transform!.Scale = Vector3.One * UnitScale;
                 ctx.SetMainObject(rootNode);
 
                 ImGuiNotify.InsertNotification("Model Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), AssetDatabase.FileToRelative(assetPath));
@@ -383,6 +384,7 @@ namespace Prowl.Editor.Assets
         GameObject GetNodes(Node node, ref List<(GameObject, Node)> GOs, ref Dictionary<string, int> nameToIndex)
         {
             GameObject uOb = GameObject.CreateSilently();
+            var t = uOb.AddComponent<Transform>();
             nameToIndex.Add(node.Name, GOs.Count);
             GOs.Add((uOb, node));
             uOb.Name = node.Name;
@@ -390,9 +392,9 @@ namespace Prowl.Editor.Assets
             // Transform
             node.Transform.Decompose(out var aScale, out var aQuat, out var aTranslation);
 
-            uOb.Scale = new Vector3(aScale.X, aScale.Y, aScale.Z);
-            uOb.Position = new Vector3(aTranslation.X, aTranslation.Y, aTranslation.Z);
-            uOb.Orientation = new Prowl.Runtime.Quaternion(aQuat.X, aQuat.Y, aQuat.Z, aQuat.W);
+            t.Scale = new Vector3(aScale.X, aScale.Y, aScale.Z);
+            t.Position = new Vector3(aTranslation.X, aTranslation.Y, aTranslation.Z);
+            t.Orientation = new Prowl.Runtime.Quaternion(aQuat.X, aQuat.Y, aQuat.Z, aQuat.W);
 
             if (node.HasChildren) foreach (var cn in node.Children) GetNodes(cn, ref GOs, ref nameToIndex).SetParent(uOb);
 

@@ -5,6 +5,7 @@ using System;
 
 namespace Prowl.Runtime;
 
+[RequireComponent(typeof(Transform))]
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Directional Light")]
 [ExecuteAlways]
 public class DirectionalLight : MonoBehaviour
@@ -42,7 +43,7 @@ public class DirectionalLight : MonoBehaviour
     public void OnRenderObject()
     {
         lightMat ??= new Material(Shader.Find("Defaults/Directionallight.shader"));
-        lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.Forward, Graphics.MatView));
+        lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.Transform!.Forward, Graphics.MatView));
         lightMat.SetColor("LightColor", color);
         lightMat.SetFloat("LightIntensity", intensity);
 
@@ -66,8 +67,8 @@ public class DirectionalLight : MonoBehaviour
         Graphics.Blit(lightMat);
 
         var s = Matrix4x4.CreateScale(0.5f);
-        var r = Matrix4x4.CreateFromQuaternion(GameObject.GlobalOrientation);
-        var t = Matrix4x4.CreateTranslation(GameObject.GlobalPosition);
+        var r = Matrix4x4.CreateFromQuaternion(GameObject.Transform!.GlobalOrientation);
+        var t = Matrix4x4.CreateTranslation(GameObject.Transform!.GlobalPosition);
         Gizmos.Matrix = s * r * t;
         Gizmos.DirectionalLight(Color.yellow, 2f);
         Gizmos.Matrix = Matrix4x4.Identity;
@@ -83,7 +84,8 @@ public class DirectionalLight : MonoBehaviour
             //Graphics.MatDepthProjection = Matrix4x4.CreateOrthographicOffCenter(-25, 25, -25, 25, 1, 256);
             Graphics.MatDepthProjection = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, 0, 100);
 
-            Graphics.MatDepthView = Matrix4x4.CreateLookToLeftHanded(-GameObject.Forward * 50, -GameObject.Forward, GameObject.Up);
+            var forward = GameObject.Transform!.Forward;
+            Graphics.MatDepthView = Matrix4x4.CreateLookToLeftHanded(-forward * 50, -forward, GameObject.Transform!.Up);
 
             depthMVP = Matrix4x4.Identity;
             depthMVP = Matrix4x4.Multiply(depthMVP, Graphics.MatDepthView);

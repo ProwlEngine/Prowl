@@ -5,6 +5,7 @@ using Shader = Prowl.Runtime.Shader;
 
 namespace Prowl.Runtime;
 
+[RequireComponent(typeof(Transform))]
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Point Light")]
 public class PointLight : MonoBehaviour
 {
@@ -37,7 +38,7 @@ public class PointLight : MonoBehaviour
                 lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
             }
 
-            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.GlobalPosition - Camera.Current.GameObject.GlobalPosition, Graphics.MatView));
+            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.Transform!.GlobalPosition - Camera.Current.GameObject.Transform!.GlobalPosition, Graphics.MatView));
             lightMat.SetColor("LightColor", color);
             lightMat.SetFloat("LightRadius", radius);
             lightMat.SetFloat("LightIntensity", intensity);
@@ -47,14 +48,14 @@ public class PointLight : MonoBehaviour
             //Camera.Current.DrawFullScreenTexture(Camera.Current.gBuffer.depth);
             //Raylib.DrawRectangle(0, 0, 9999, 9999, Color.white);
             // set matrix scale to radius
-            var mat = Matrix4x4.CreateScale(radius) * GameObject.GlobalCamRelative;
+            var mat = Matrix4x4.CreateScale(radius) * GameObject.Transform!.GlobalCamRelative;
             Graphics.DrawMeshNow(mesh, mat, lightMat);
             lightMat.EndPass();
             //Camera.Current.Start3D();
         }
 
         var s = Matrix4x4.CreateScale(radius);
-        var t = Matrix4x4.CreateTranslation(GameObject.GlobalPosition);
+        var t = Matrix4x4.CreateTranslation(GameObject.Transform!.GlobalPosition);
         Gizmos.Matrix = s * t;
         Gizmos.Sphere(Color.yellow, 2f);
         Gizmos.Matrix = Matrix4x4.Identity;

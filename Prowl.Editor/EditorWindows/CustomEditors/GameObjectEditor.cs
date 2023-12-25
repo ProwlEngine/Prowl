@@ -15,33 +15,9 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
     {
         private string _searchText = string.Empty;
         private MenuItemInfo rootMenuItem;
-        private Dictionary<int, ScriptedEditor> compEditors;
+        private Dictionary<int, ScriptedEditor> compEditors = new();
 
         private void Space() => ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
-
-        public override void OnEnable()
-        {
-            var go = target as GameObject;
-
-            // Create all the editors for all the types
-            var comps = go.GetComponents<MonoBehaviour>();
-            compEditors = new();
-            for (int i = 0; i < comps.Count(); i++)
-            {
-                var comp = comps.ElementAt(i);
-                var editorType = CustomEditorAttribute.GetEditor(comp.GetType());
-                if (editorType != null)
-                {
-                    var editor = (ScriptedEditor)Activator.CreateInstance(editorType);
-                    editor.target = comp;
-                    if (editor != null)
-                    {
-                        compEditors[comp.InstanceID] = editor;
-                        compEditors[comp.InstanceID].OnEnable();
-                    }
-                }
-            }
-        }
 
         public override void OnDisable()
         {
@@ -89,13 +65,6 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             //
             //ImGui.Separator();
 
-            if (ImGui.CollapsingHeader(FontAwesome6.LocationArrow + " Transform", ImGuiTreeNodeFlags.DefaultOpen))
-            {
-                PropertyDrawer.Draw(go, typeof(GameObject).GetProperty("Position")!);
-                PropertyDrawer.Draw(go, typeof(GameObject).GetProperty("Rotation")!);
-                PropertyDrawer.Draw(go, typeof(GameObject).GetProperty("Scale")!);
-            }
-
             // Draw Components
             HashSet<int> editorsNeeded = new();
             var components = go.GetComponents<MonoBehaviour>().ToList();
@@ -131,6 +100,17 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     {
                         editor.OnInspectorGUI();
                         continue;
+                    } else {
+                        var editorType = CustomEditorAttribute.GetEditor(comp.GetType());
+                        if (editorType != null) {
+                            editor = (ScriptedEditor)Activator.CreateInstance(editorType);
+                            editor.target = comp;
+                            if (editor != null) {
+                                compEditors[comp.InstanceID] = editor;
+                                editor.OnEnable();
+                                editor.OnInspectorGUI();
+                            }
+                        }
                     }
 
                     FieldInfo[] fields = comp.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
