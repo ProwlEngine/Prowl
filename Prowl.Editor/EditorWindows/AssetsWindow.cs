@@ -109,7 +109,6 @@ public class AssetsWindow : EditorWindow {
 
     private void DrawDirectory(DirectoryInfo directory)
     {
-        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
         // Folders
         foreach (DirectoryInfo subDirectory in directory.EnumerateDirectories())
         {
