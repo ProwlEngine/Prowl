@@ -207,7 +207,7 @@ namespace Prowl.Runtime
             // Make sure we have a valid pass
             if (pass < 0 || pass >= shader.Item1.Length) return;
 
-            if (current == shader.Item1[pass]) {
+            if (current != shader.Item1[pass]) {
                 // Set the shader
                 current = shader.Item1[pass];
                 Graphics.GL.UseProgram(shader.Item1[pass]);
