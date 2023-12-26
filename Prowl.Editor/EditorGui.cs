@@ -9,7 +9,7 @@ public static class EditorGui {
     public static void Initialize() {
         // todo: make windows stay docked https://github.com/mellinoe/ImGui.NET/issues/202
         ImGui.GetIO().ConfigFlags = ImGuiConfigFlags.DockingEnable;
-        ImGui.GetIO().BackendFlags = ImGuiBackendFlags.HasMouseCursors;
+        ImGui.GetIO().BackendFlags = ImGuiBackendFlags.HasMouseCursors | ImGuiBackendFlags.RendererHasVtxOffset;
         ImGui.GetIO().ConfigInputTextCursorBlink = true;
         ImGui.GetIO().ConfigWindowsResizeFromEdges = true;
         ImGui.GetIO().ConfigWindowsMoveFromTitleBarOnly = true;
