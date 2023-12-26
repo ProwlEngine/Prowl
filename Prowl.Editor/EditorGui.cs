@@ -1,10 +1,14 @@
 using HexaEngine.ImGuiNET;
+using HexaEngine.ImPlotNET;
 using Prowl.Editor.EditorWindows;
 using Prowl.Runtime;
 
 namespace Prowl.Editor;
 
 public static class EditorGui {
+
+    public static System.Numerics.Vector4 HoveredColor => new System.Numerics.Vector4(0.19f, 0.37f, 0.55f, 1.00f);
+    public static System.Numerics.Vector4 SelectedColor => new System.Numerics.Vector4(0.06f, 0.53f, 0.98f, 1.00f);
 
     public static void Initialize() {
         // todo: make windows stay docked https://github.com/mellinoe/ImGui.NET/issues/202
@@ -40,6 +44,7 @@ public static class EditorGui {
         // Fork of Rounded Visual Studio style from ImThemes
         var style = ImGui.GetStyle();
 
+
         style.Colors[(int)ImGuiCol.Text] = new(1.00f, 1.00f, 1.00f, 1.00f);
         style.Colors[(int)ImGuiCol.TextDisabled] = new(0.50f, 0.50f, 0.50f, 1.00f);
         style.Colors[(int)ImGuiCol.WindowBg] = new(0.17f, 0.17f, 0.18f, 1f);
@@ -48,7 +53,7 @@ public static class EditorGui {
         style.Colors[(int)ImGuiCol.Border] = new(0.15f, 0.16f, 0.17f, 1.00f);
         style.Colors[(int)ImGuiCol.BorderShadow] = new(0.10f, 0.11f, 0.11f, 1.00f);
         style.Colors[(int)ImGuiCol.FrameBg] = new(0.10f, 0.11f, 0.11f, 1.00f);
-        style.Colors[(int)ImGuiCol.FrameBgHovered] = new(0.10f, 0.11f, 0.11f, 1.00f);
+        style.Colors[(int)ImGuiCol.FrameBgHovered] = HoveredColor;
         style.Colors[(int)ImGuiCol.FrameBgActive] = new(0.10f, 0.11f, 0.11f, 1.00f);
         style.Colors[(int)ImGuiCol.TitleBg] = new(0.08f, 0.08f, 0.09f, 1.00f);
         style.Colors[(int)ImGuiCol.TitleBgActive] = new(0.08f, 0.08f, 0.09f, 1.00f);
@@ -56,34 +61,34 @@ public static class EditorGui {
         style.Colors[(int)ImGuiCol.MenuBarBg] = new(0.08f, 0.08f, 0.09f, 1.00f);
         style.Colors[(int)ImGuiCol.ScrollbarBg] = new(0.10f, 0.11f, 0.11f, 1.00f);
         style.Colors[(int)ImGuiCol.ScrollbarGrab] = new(0.31f, 0.31f, 0.31f, 1.00f);
-        style.Colors[(int)ImGuiCol.ScrollbarGrabHovered] = new(0.41f, 0.41f, 0.41f, 1.00f);
-        style.Colors[(int)ImGuiCol.ScrollbarGrabActive] = new(0.51f, 0.51f, 0.51f, 1.00f);
+        style.Colors[(int)ImGuiCol.ScrollbarGrabHovered] = HoveredColor;
+        style.Colors[(int)ImGuiCol.ScrollbarGrabActive] = SelectedColor;
         style.Colors[(int)ImGuiCol.CheckMark] = new(0.26f, 0.59f, 0.98f, 1.00f);
         style.Colors[(int)ImGuiCol.SliderGrab] = new(0.24f, 0.24f, 0.25f, 1.00f);
-        style.Colors[(int)ImGuiCol.SliderGrabActive] = new(0.26f, 0.59f, 0.98f, 1.00f);
+        style.Colors[(int)ImGuiCol.SliderGrabActive] = SelectedColor;
         style.Colors[(int)ImGuiCol.Button] = new(0.24f, 0.24f, 0.25f, 1.00f);
-        style.Colors[(int)ImGuiCol.ButtonHovered] = new(0.19f, 0.37f, 0.55f, 1.00f);
-        style.Colors[(int)ImGuiCol.ButtonActive] = new(0.06f, 0.53f, 0.98f, 1.00f);
+        style.Colors[(int)ImGuiCol.ButtonHovered] = HoveredColor;
+        style.Colors[(int)ImGuiCol.ButtonActive] = SelectedColor;
         style.Colors[(int)ImGuiCol.Header] = new(0.10f, 0.11f, 0.11f, 1.00f);
-        style.Colors[(int)ImGuiCol.HeaderHovered] = new(0.26f, 0.59f, 0.98f, 0.80f);
-        style.Colors[(int)ImGuiCol.HeaderActive] = new(0.26f, 0.59f, 0.98f, 1.00f);
+        style.Colors[(int)ImGuiCol.HeaderHovered] = HoveredColor;
+        style.Colors[(int)ImGuiCol.HeaderActive] = SelectedColor;
         style.Colors[(int)ImGuiCol.Separator] = new(0.43f, 0.43f, 0.50f, 0.50f);
-        style.Colors[(int)ImGuiCol.SeparatorHovered] = new(0.10f, 0.40f, 0.75f, 0.78f);
-        style.Colors[(int)ImGuiCol.SeparatorActive] = new(0.10f, 0.40f, 0.75f, 1.00f);
+        style.Colors[(int)ImGuiCol.SeparatorHovered] = HoveredColor;
+        style.Colors[(int)ImGuiCol.SeparatorActive] = SelectedColor;
         style.Colors[(int)ImGuiCol.ResizeGrip] = new(0.26f, 0.59f, 0.98f, 0.20f);
-        style.Colors[(int)ImGuiCol.ResizeGripHovered] = new(0.26f, 0.59f, 0.98f, 0.67f);
-        style.Colors[(int)ImGuiCol.ResizeGripActive] = new(0.26f, 0.59f, 0.98f, 0.95f);
+        style.Colors[(int)ImGuiCol.ResizeGripHovered] = HoveredColor;
+        style.Colors[(int)ImGuiCol.ResizeGripActive] = SelectedColor;
         style.Colors[(int)ImGuiCol.Tab] = new(0.08f, 0.08f, 0.09f, 1.00f);
-        style.Colors[(int)ImGuiCol.TabHovered] = new(0.26f, 0.59f, 0.98f, 1.00f);
+        style.Colors[(int)ImGuiCol.TabHovered] = HoveredColor;
         style.Colors[(int)ImGuiCol.TabActive] = new(0.17f, 0.17f, 0.18f, 1.00f);
         style.Colors[(int)ImGuiCol.TabUnfocused] = new(0.08f, 0.08f, 0.09f, 1.00f);
         style.Colors[(int)ImGuiCol.TabUnfocusedActive] = new(0.17f, 0.17f, 0.18f, 1.00f);
         style.Colors[(int)ImGuiCol.DockingPreview] = new(0.26f, 0.59f, 0.98f, 0.70f);
         style.Colors[(int)ImGuiCol.DockingEmptyBg] = new(0.20f, 0.20f, 0.20f, 1.00f);
         style.Colors[(int)ImGuiCol.PlotLines] = new(0.61f, 0.61f, 0.61f, 1.00f);
-        style.Colors[(int)ImGuiCol.PlotLinesHovered] = new(1.00f, 0.43f, 0.35f, 1.00f);
+        style.Colors[(int)ImGuiCol.PlotLinesHovered] = HoveredColor;
         style.Colors[(int)ImGuiCol.PlotHistogram] = new(0.90f, 0.70f, 0.00f, 1.00f);
-        style.Colors[(int)ImGuiCol.PlotHistogramHovered] = new(1.00f, 0.60f, 0.00f, 1.00f);
+        style.Colors[(int)ImGuiCol.PlotHistogramHovered] = HoveredColor;
         style.Colors[(int)ImGuiCol.TableHeaderBg] = new(0.19f, 0.19f, 0.20f, 1.00f);
         style.Colors[(int)ImGuiCol.TableBorderStrong] = new(0.31f, 0.31f, 0.35f, 1.00f);
         style.Colors[(int)ImGuiCol.TableBorderLight] = new(0.23f, 0.23f, 0.25f, 1.00f);
@@ -102,7 +107,7 @@ public static class EditorGui {
         style.ItemSpacing = new Vector2(4.0f, 3.0f);
         style.ItemInnerSpacing = new Vector2(4.0f, 4.0f);
         style.IndentSpacing = 10.0f;
-        style.ScrollbarSize = 15.0f;
+        style.ScrollbarSize = 10.0f;
         style.GrabMinSize = 10.0f;
 
         style.WindowBorderSize = 0.0f;
