@@ -25,6 +25,8 @@ public class InspectorWindow : EditorWindow
 
     private void Selection_OnSelectObject(object n)
     {
+        if (Selected is DirectoryInfo) return; // Dont care about directories
+
         _ForwardStack.Clear();
         if(Selected != null)
             _BackStack.Push(Selected);
