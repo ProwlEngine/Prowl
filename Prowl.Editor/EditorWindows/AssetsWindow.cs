@@ -66,7 +66,7 @@ public class AssetsWindow : EditorWindow {
                 var curPos = ImGui.GetCursorPos();
                 bool opened = ImGui.TreeNodeEx($"      {Path.GetFileNameWithoutExtension(file.Name)}", flags);
                 SelectHandler.HandleSelectable(treeCounter++, file);
-                if (treeCounter % 2 == 0) GUIHelper.ItemRect(0.5f, 0.5f, 0.5f, 0.1f);
+                if (treeCounter % 2 == 0) GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
                 if (ImGui.IsItemClicked()) 
                     SelectHandler.Select(file);
 
@@ -124,7 +124,7 @@ public class AssetsWindow : EditorWindow {
             FileRightClick(subDirectory);
             GUIHelper.Tooltip(subDirectory.Name);
 
-            if (treeCounter % 2 == 0) GUIHelper.ItemRect(0.5f, 0.5f, 0.5f, 0.1f);
+            if (treeCounter % 2 == 0) GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
 
             if (opened)
             {
@@ -146,7 +146,7 @@ public class AssetsWindow : EditorWindow {
             var name = (Settings.m_HideExtensions ? Path.GetFileNameWithoutExtension(file.Name) : file.Name);
             bool opened = ImGui.TreeNodeEx($"      {name}", flags);
             SelectHandler.HandleSelectable(treeCounter++, file);
-            if (treeCounter % 2 == 0) GUIHelper.ItemRect(0.5f, 0.5f, 0.5f, 0.1f);
+            if (treeCounter % 2 == 0) GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
             FileRightClick(file);
             GUIHelper.Tooltip(file.Name);
             ImGui.PushStyleColor(ImGuiCol.Text, GetFileColor(ext));
