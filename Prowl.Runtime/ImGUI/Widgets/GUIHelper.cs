@@ -136,6 +136,8 @@ namespace Prowl.Runtime
             return opened != 0;
         }
 
+        public static void ItemRectFilled(Vector4 color, float expand = 0.0f, float roundness = 0.0f) => ItemRectFilled((float)color.X, (float)color.Y, (float)color.Z, (float)color.W, expand, roundness);
+
         public static void ItemRectFilled(float r, float g, float b, float a, float expand = 0.0f, float roundness = 0.0f)
         {
             var min = ImGui.GetItemRectMin();
