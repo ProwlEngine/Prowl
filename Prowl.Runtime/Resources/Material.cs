@@ -201,7 +201,6 @@ namespace Prowl.Runtime
         public void SetPass(int pass, bool apply = false)
         {
             if (Shader.IsAvailable == false) return;
-            if (current != null) throw new Exception("Pass already set");
             // Make sure we have a shader
             var shader = CompileKeywordVariant(keywords.ToArray());
 
@@ -219,7 +218,6 @@ namespace Prowl.Runtime
         public void SetShadowPass(bool apply = false)
         {
             if (Shader.IsAvailable == false) return;
-            if (current != null) throw new Exception("Pass already set");
             // Make sure we have a shader
             var shader = CompileKeywordVariant(keywords.ToArray());
 
@@ -229,12 +227,6 @@ namespace Prowl.Runtime
 
             if (apply)
                 MaterialPropertyBlock.Apply(PropertyBlock, current.Value);
-        }
-
-        public void EndPass()
-        {
-            Graphics.GL.UseProgram(0);
-            current = null;
         }
 
         (uint[], uint) CompileKeywordVariant(string[] allKeywords)

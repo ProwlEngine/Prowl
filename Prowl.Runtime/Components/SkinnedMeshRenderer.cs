@@ -61,7 +61,6 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
             {
                 Material.Res!.SetPass(i);
                 Graphics.DrawMeshNow(Mesh.Res!, mat, Material.Res!, prevMat);
-                Material.Res!.EndPass();
             }
             Material.Res!.DisableKeyword("SKINNED");
         }
@@ -80,7 +79,6 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
             Material.Res!.SetMatrix("mvp", mvp);
             Material.Res!.SetShadowPass(true);
             Graphics.DrawMeshNowDirect(Mesh.Res!);
-            Material.Res!.EndPass();
         }
     }
 

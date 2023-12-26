@@ -39,8 +39,6 @@ public class MeshRenderer : MonoBehaviour, ISerializable
 
                 material.SetPass(i);
                 Graphics.DrawMeshNow(Mesh.Res!, mat, material, prevMat);
-
-                material.EndPass();
             }
         }
 
@@ -57,7 +55,6 @@ public class MeshRenderer : MonoBehaviour, ISerializable
             Material.Res!.SetMatrix("mvp", mvp);
             Material.Res!.SetShadowPass(true);
             Graphics.DrawMeshNowDirect(Mesh.Res!);
-            Material.Res!.EndPass();
         }
     }
 

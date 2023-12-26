@@ -260,7 +260,6 @@ namespace Prowl.Runtime
                 using (UseCulling(false)) {
                     mat.SetPass(pass);
                     DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
-                    mat.EndPass();
                 }
             }
         }
@@ -278,7 +277,6 @@ namespace Prowl.Runtime
                         Clear(0, 0, 0, 0);
                     mat.SetPass(pass);
                     DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
-                    mat.EndPass();
                     renderTexture?.End();
                 }
             }
@@ -304,8 +302,6 @@ namespace Prowl.Runtime
                 }
             }
             Graphics.GL.DepthMask(true);
-
-            defaultMat.EndPass();
         }
 
         internal static void Dispose()

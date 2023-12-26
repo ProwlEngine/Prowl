@@ -55,7 +55,6 @@ public class SpotLight : MonoBehaviour
             // set matrix scale to radius
             var mat = Matrix4x4.CreateScale(distance) * GameObject.Transform!.GlobalCamRelative;
             Graphics.DrawMeshNow(mesh, mat, lightMat);
-            lightMat.EndPass();
             //Camera.Current.Start3D();
 
 

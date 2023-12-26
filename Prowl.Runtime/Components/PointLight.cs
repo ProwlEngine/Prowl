@@ -50,7 +50,6 @@ public class PointLight : MonoBehaviour
             // set matrix scale to radius
             var mat = Matrix4x4.CreateScale(radius) * GameObject.Transform!.GlobalCamRelative;
             Graphics.DrawMeshNow(mesh, mat, lightMat);
-            lightMat.EndPass();
             //Camera.Current.Start3D();
         }
 
