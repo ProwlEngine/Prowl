@@ -35,6 +35,7 @@ public class AssetsWindow : EditorWindow {
     {
         if (Project.HasProject == false) return;
 
+        ImGui.PushStyleColor(ImGuiCol.Header, EditorGui.SelectedColor);
         SelectHandler.StartFrame();
 
         float cPX = ImGui.GetCursorPosX();
@@ -67,8 +68,6 @@ public class AssetsWindow : EditorWindow {
                 bool opened = ImGui.TreeNodeEx($"      {Path.GetFileNameWithoutExtension(file.Name)}", flags);
                 SelectHandler.HandleSelectable(treeCounter++, file);
                 if (treeCounter % 2 == 0) GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
-                if (ImGui.IsItemClicked()) 
-                    SelectHandler.Select(file);
 
                 GUIHelper.Tooltip(file.Name);
                 ImGui.PushStyleColor(ImGuiCol.Text, GetFileColor(ext));
@@ -86,6 +85,7 @@ public class AssetsWindow : EditorWindow {
             RenderRootFolter(true, AssetDatabase.GetRootfolders()[1]); // Packages Folder
         }
         ImGui.EndChild();
+        ImGui.PopStyleColor();
     }
 
     private void RenderRootFolter(bool defaultOpen, DirectoryInfo root)
