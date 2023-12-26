@@ -207,9 +207,11 @@ namespace Prowl.Runtime
             // Make sure we have a valid pass
             if (pass < 0 || pass >= shader.Item1.Length) return;
 
-            // Set the shader
-            current = shader.Item1[pass];
-            Graphics.GL.UseProgram(shader.Item1[pass]);
+            if (current == shader.Item1[pass]) {
+                // Set the shader
+                current = shader.Item1[pass];
+                Graphics.GL.UseProgram(shader.Item1[pass]);
+            }
 
             if (apply)
                 MaterialPropertyBlock.Apply(PropertyBlock, current.Value);
@@ -221,9 +223,11 @@ namespace Prowl.Runtime
             // Make sure we have a shader
             var shader = CompileKeywordVariant(keywords.ToArray());
 
-            // Set the shader
-            current = shader.Item2;
-            Graphics.GL.UseProgram(shader.Item2);
+            if (current != shader.Item2) {
+                // Set the shader
+                current = shader.Item2;
+                Graphics.GL.UseProgram(shader.Item2);
+            }
 
             if (apply)
                 MaterialPropertyBlock.Apply(PropertyBlock, current.Value);
