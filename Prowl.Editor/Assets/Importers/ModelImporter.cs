@@ -23,7 +23,6 @@ namespace Prowl.Editor.Assets
         public bool GenerateNormals = true;
         public bool GenerateSmoothNormals = false;
         public bool CalculateTangentSpace = true;
-        public bool Triangulate = true;
         public bool MakeLeftHanded = true;
         public bool FlipUVs = false;
         public bool OptimizeMeshes = false;
@@ -49,10 +48,10 @@ namespace Prowl.Editor.Assets
             using (var importer = new AssimpContext()) {
                 importer.SetConfig(new Assimp.Configs.VertexBoneWeightLimitConfig(4));
                 var steps = PostProcessSteps.LimitBoneWeights | PostProcessSteps.GenerateUVCoords;
+                steps |= PostProcessSteps.Triangulate;
                 if (GenerateNormals && GenerateSmoothNormals) steps |= PostProcessSteps.GenerateSmoothNormals;
                 else if (GenerateNormals) steps |= PostProcessSteps.GenerateNormals;
                 if (CalculateTangentSpace) steps |= PostProcessSteps.CalculateTangentSpace;
-                if (Triangulate) steps |= PostProcessSteps.Triangulate;
                 if (MakeLeftHanded) steps |= PostProcessSteps.MakeLeftHanded;
                 if (FlipUVs) steps |= PostProcessSteps.FlipUVs;
                 if (OptimizeMeshes) steps |= PostProcessSteps.OptimizeMeshes;
@@ -435,7 +434,6 @@ namespace Prowl.Editor.Assets
             if(importer.GenerateNormals)
                 ImGui.Checkbox("Generate Smooth Normals", ref importer.GenerateSmoothNormals);
             ImGui.Checkbox("Calculate Tangent Space", ref importer.CalculateTangentSpace);
-            ImGui.Checkbox("Triangulate", ref importer.Triangulate);
             ImGui.Checkbox("Make Left Handed", ref importer.MakeLeftHanded);
             ImGui.Checkbox("Flip UVs", ref importer.FlipUVs);
             ImGui.Checkbox("Optimize Meshes", ref importer.OptimizeMeshes);
