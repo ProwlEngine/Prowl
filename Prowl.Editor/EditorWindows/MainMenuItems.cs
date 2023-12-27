@@ -2,6 +2,7 @@
 using Prowl.Runtime.Assets;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
+using System;
 using System.IO;
 using System.Reflection;
 
@@ -135,7 +136,7 @@ namespace Prowl.Editor.EditorWindows
         {
             var go = new GameObject("Ambient Light");
             go.AddComponent<AmbientLight>();
-            HierarchyWindow.SelectHandler.SetSelection(go);
+            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
         [MenuItem("Template/Lights/Directional Light")]
@@ -145,7 +146,7 @@ namespace Prowl.Editor.EditorWindows
             go.AddComponent<DirectionalLight>();
             go.Transform!.GlobalPosition = GetPosition();
             go.Transform!.Rotation = new System.Numerics.Vector3(45, 70, 0);
-            HierarchyWindow.SelectHandler.SetSelection(go);
+            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
         [MenuItem("Template/Lights/Point Light")]
@@ -154,7 +155,7 @@ namespace Prowl.Editor.EditorWindows
             var go = new GameObject("Point Light");
             go.AddComponent<PointLight>();
             go.Transform!.GlobalPosition = GetPosition();
-            HierarchyWindow.SelectHandler.SetSelection(go);
+            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
         [MenuItem("Template/Lights/Spot Light")]
@@ -163,7 +164,7 @@ namespace Prowl.Editor.EditorWindows
             var go = new GameObject("Spot Light");
             go.AddComponent<SpotLight>();
             go.Transform!.GlobalPosition = GetPosition();
-            HierarchyWindow.SelectHandler.SetSelection(go);
+            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
         #endregion

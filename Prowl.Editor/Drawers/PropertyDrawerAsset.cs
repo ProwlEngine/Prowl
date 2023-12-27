@@ -8,7 +8,7 @@ namespace Prowl.Editor.PropertyDrawers;
 
 public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
 {
-    public static SelectHandler<PropertyDrawerAsset> SelectHandler = new();
+    public static PropertyDrawerAsset Selected;
 
     public virtual string Name { get; } = FontAwesome6.Circle;
 
@@ -20,24 +20,23 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         string path;
         if (value.IsExplicitNull) {
             path = "(Null)";
-            if (ImGui.Selectable($"{Name}: {path}", SelectHandler.IsSelected(this), new System.Numerics.Vector2(width, 17))) {
-                SelectHandler.SetSelection(this);
+            if (ImGui.Selectable($"{Name}: {path}", Selected == this, new System.Numerics.Vector2(width, 17))) {
+                Selected = this;
 #warning TODO: Show a popup with a list of all assets of the type - property.Type.Name
             }
             GUIHelper.ItemRectFilled(0.9f, 0.1f, 0.1f, 0.3f);
         } else if (value.IsRuntimeResource) {
             path = "(Runtime)" + value.Name;
-            if (ImGui.Selectable($"{Name}: {path}", SelectHandler.IsSelected(this), new System.Numerics.Vector2(width, 17))) {
-                SelectHandler.SetSelection(this);
-                SelectHandler.SetSelection(this);
+            if (ImGui.Selectable($"{Name}: {path}", Selected == this, new System.Numerics.Vector2(width, 17))) {
+                Selected = this;
 #warning TODO: Show a popup with a list of all assets of the type - property.Type.Name
             }
             GUIHelper.ItemRectFilled(0.1f, 0.1f, 0.9f, 0.3f);
         } else if (AssetDatabase.Contains(value.AssetID)) {
             path = AssetDatabase.GUIDToAssetPath(value.AssetID);
-            if (ImGui.Selectable($"{Name}: {path}", SelectHandler.IsSelected(this), new System.Numerics.Vector2(width, 17))) {
+            if (ImGui.Selectable($"{Name}: {path}", Selected == this, new System.Numerics.Vector2(width, 17))) {
                 AssetDatabase.Ping(value.AssetID);
-                SelectHandler.SetSelection(this);
+                Selected = this;
             }
         }
 
@@ -51,11 +50,10 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         }
 
         // Add a button for clearing the Asset
-        if (ImGui.IsKeyPressed(ImGuiKey.Delete) && ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows)) {
-            if (SelectHandler.IsSelected(this)) {
+        if (ImGui.IsKeyPressed(ImGuiKey.Delete) && ImGui.IsWindowFocused()) {
+            if (Selected == this) {
                 value = null;
                 changed = true;
-                SelectHandler.Clear();
             }
         }
         ImGui.Columns(1);

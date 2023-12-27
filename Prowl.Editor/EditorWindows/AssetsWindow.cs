@@ -13,7 +13,8 @@ namespace Prowl.Editor.EditorWindows;
 /// Project Assets Tree Window
 /// Shows all Folder and Files in a Tree Format
 /// </summary>
-public class AssetsWindow : EditorWindow {
+public class AssetsWindow : EditorWindow
+{
 
     public static EditorSettings Settings => Project.ProjectSettings.GetSetting<EditorSettings>();
 
@@ -22,7 +23,7 @@ public class AssetsWindow : EditorWindow {
     private string _searchText = "";
     private readonly List<FileInfo> _found = [];
 
-    public readonly static SelectHandler<FileSystemInfo> SelectHandler = new();
+    public readonly static SelectHandler<FileSystemInfo> SelectHandler = new((item) => !item.Exists, (a, b) => a.FullName.Equals(b.FullName, StringComparison.OrdinalIgnoreCase));
 
     private int treeCounter = 0;
 
@@ -39,12 +40,10 @@ public class AssetsWindow : EditorWindow {
         SelectHandler.StartFrame();
 
         float cPX = ImGui.GetCursorPosX();
-        if (GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X))
-        {
+        if (GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X)) {
             SelectHandler.Clear();
             _found.Clear();
-            if (!string.IsNullOrEmpty(_searchText))
-            {
+            if (!string.IsNullOrEmpty(_searchText)) {
                 _found.AddRange(AssetDatabase.GetRootfolders()[2].EnumerateFiles("*", SearchOption.AllDirectories)); // Assets
                 _found.AddRange(AssetDatabase.GetRootfolders()[0].EnumerateFiles("*", SearchOption.AllDirectories)); // Defaults
                 _found.AddRange(AssetDatabase.GetRootfolders()[1].EnumerateFiles("*", SearchOption.AllDirectories)); // Packages Folder
@@ -55,12 +54,10 @@ public class AssetsWindow : EditorWindow {
 
         ImGui.BeginChild("Tree");
         treeCounter = 0;
-        if (!string.IsNullOrEmpty(_searchText))
-        {
-            foreach (var file in _found)
-            {
+        if (!string.IsNullOrEmpty(_searchText)) {
+            foreach (var file in _found) {
                 ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
-                if (AssetsWindow.IsSelected(file)) flags |= ImGuiTreeNodeFlags.Selected;
+                if (AssetsWindow.SelectHandler.IsSelected(file)) flags |= ImGuiTreeNodeFlags.Selected;
 
                 string ext = file.Extension.ToLower().Trim();
 
@@ -77,9 +74,7 @@ public class AssetsWindow : EditorWindow {
                 ImGui.PopStyleColor();
                 if (opened) ImGui.TreePop();
             }
-        }
-        else
-        {
+        } else {
             RenderRootFolter(true, AssetDatabase.GetRootfolders()[2]); // Assets Folder
             RenderRootFolter(false, AssetDatabase.GetRootfolders()[0]); // Defaults Folder
             RenderRootFolter(true, AssetDatabase.GetRootfolders()[1]); // Packages Folder
@@ -91,7 +86,7 @@ public class AssetsWindow : EditorWindow {
     private void RenderRootFolter(bool defaultOpen, DirectoryInfo root)
     {
         ImGuiTreeNodeFlags rootFlags = ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
-        if(defaultOpen) rootFlags |= ImGuiTreeNodeFlags.DefaultOpen;
+        if (defaultOpen) rootFlags |= ImGuiTreeNodeFlags.DefaultOpen;
 
         ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(250f / 255f, 210f / 255f, 100f / 255f, 1f));
         bool opened = ImGui.TreeNodeEx($"{FontAwesome6.FolderTree} {root.Name}", rootFlags);
@@ -100,8 +95,7 @@ public class AssetsWindow : EditorWindow {
         FileRightClick(null);
         ImGui.PopStyleColor();
 
-        if (opened)
-        {
+        if (opened) {
             DrawDirectory(root);
             ImGui.TreePop();
         }
@@ -110,13 +104,12 @@ public class AssetsWindow : EditorWindow {
     private void DrawDirectory(DirectoryInfo directory)
     {
         // Folders
-        foreach (DirectoryInfo subDirectory in directory.EnumerateDirectories())
-        {
+        foreach (DirectoryInfo subDirectory in directory.EnumerateDirectories()) {
             ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
             bool isLeaf = subDirectory.GetFiles().Length == 0 && subDirectory.GetDirectories().Length == 0;
             if (isLeaf) flags |= ImGuiTreeNodeFlags.Leaf;
 
-            if (AssetsWindow.IsSelected(subDirectory)) flags |= ImGuiTreeNodeFlags.Selected;
+            if (AssetsWindow.SelectHandler.IsSelected(subDirectory)) flags |= ImGuiTreeNodeFlags.Selected;
 
             bool opened = ImGui.TreeNodeEx($"{(isLeaf ? FontAwesome6.FolderOpen : FontAwesome6.Folder)} {subDirectory.Name}", flags);
             SelectHandler.HandleSelectable(treeCounter++, subDirectory);
@@ -125,18 +118,16 @@ public class AssetsWindow : EditorWindow {
 
             if (treeCounter % 2 == 0) GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
 
-            if (opened)
-            {
+            if (opened) {
                 DrawDirectory(subDirectory);
                 ImGui.TreePop();
             }
         }
 
         // Files
-        foreach (FileInfo file in directory.EnumerateFiles())
-        {
+        foreach (FileInfo file in directory.EnumerateFiles()) {
             ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
-            if (AssetsWindow.IsSelected(file)) flags |= ImGuiTreeNodeFlags.Selected;
+            if (AssetsWindow.SelectHandler.IsSelected(file)) flags |= ImGuiTreeNodeFlags.Selected;
 
             string ext = file.Extension.ToLower().Trim();
             if (ext.Equals(".meta", StringComparison.OrdinalIgnoreCase)) continue;
@@ -160,14 +151,11 @@ public class AssetsWindow : EditorWindow {
     public static void FileRightClick(FileSystemInfo? fileInfo)
     {
         // If still null then show a simplified context menu
-        if(fileInfo == null)
-        {
-            if (ImGui.BeginPopupContextItem())
-            {
+        if (fileInfo == null) {
+            if (ImGui.BeginPopupContextItem()) {
                 MainMenuItems.Directory = null;
                 MenuItem.DrawMenuRoot("Create");
-                if (ImGui.MenuItem("Show In Explorer"))
-                {
+                if (ImGui.MenuItem("Show In Explorer")) {
                     using Process fileopener = new Process();
                     fileopener.StartInfo.FileName = "explorer";
                     fileopener.StartInfo.Arguments = "\"" + Project.ProjectAssetDirectory + "\"";
@@ -180,19 +168,15 @@ public class AssetsWindow : EditorWindow {
                 ImGui.EndPopup();
             }
             return;
-        }
-        else if (fileInfo is FileInfo file)
-        {
-            if (ImGui.BeginPopupContextItem())
-            {
+        } else if (fileInfo is FileInfo file) {
+            if (ImGui.BeginPopupContextItem()) {
                 var relativeAssetPath = AssetDatabase.FileToRelative(file);
                 if (ImGui.MenuItem("Reimport"))
                     AssetDatabase.Reimport(relativeAssetPath);
                 ImGui.Separator();
                 MainMenuItems.Directory = file.Directory;
                 MenuItem.DrawMenuRoot("Create");
-                if (ImGui.MenuItem("Show In Explorer"))
-                {
+                if (ImGui.MenuItem("Show In Explorer")) {
                     using Process fileopener = new Process();
                     fileopener.StartInfo.FileName = "explorer";
                     fileopener.StartInfo.Arguments = "\"" + file.Directory!.FullName + "\"";
@@ -208,25 +192,20 @@ public class AssetsWindow : EditorWindow {
 
                 ImGui.EndPopup();
             }
-        }
-        else if (fileInfo is DirectoryInfo directory)
-        {
-            if (ImGui.BeginPopupContextItem())
-            {
+        } else if (fileInfo is DirectoryInfo directory) {
+            if (ImGui.BeginPopupContextItem()) {
                 if (ImGui.MenuItem("Reimport"))
                     AssetDatabase.ReimportFolder(directory);
                 ImGui.Separator();
                 MainMenuItems.Directory = directory;
                 MenuItem.DrawMenuRoot("Create");
-                if (ImGui.MenuItem("Show In Explorer"))
-                {
+                if (ImGui.MenuItem("Show In Explorer")) {
                     using Process fileopener = new Process();
                     fileopener.StartInfo.FileName = "explorer";
                     fileopener.StartInfo.Arguments = "\"" + directory.Parent!.FullName + "\"";
                     fileopener.Start();
                 }
-                if (ImGui.MenuItem("Open"))
-                {
+                if (ImGui.MenuItem("Open")) {
                     using Process fileopener = new Process();
                     fileopener.StartInfo.FileName = "explorer";
                     fileopener.StartInfo.Arguments = "\"" + directory.FullName + "\"";
@@ -245,8 +224,7 @@ public class AssetsWindow : EditorWindow {
 
     public static uint GetFileColor(string ext)
     {
-        switch (ext)
-        {
+        switch (ext) {
             case ".png":
             case ".bmp":
             case ".jpg":
@@ -289,8 +267,7 @@ public class AssetsWindow : EditorWindow {
 
     private static string GetIcon(string ext)
     {
-        switch (ext)
-        {
+        switch (ext) {
             case ".png":
             case ".bmp":
             case ".jpg":
@@ -330,21 +307,4 @@ public class AssetsWindow : EditorWindow {
                 return FontAwesome6.File;
         }
     }
-
-    public static bool IsSelected(FileSystemInfo entry)
-    {
-        if (SelectHandler.Count > 0)
-        {
-            for (int i = 0; i < SelectHandler.Count; i++)
-            {
-                var obj = SelectHandler.Selected[i];
-                if (obj.IsAlive) {
-                    if (((FileSystemInfo)obj.Target).FullName.Equals(entry.FullName, StringComparison.OrdinalIgnoreCase))
-                        return true;
-                }
-            }
-        }
-        return false;
-    }
-
 }

@@ -1,6 +1,5 @@
 ﻿using Prowl.Runtime.SceneManagement;
 using System;
-using System.Collections.Generic;
 using System.IO;
 
 namespace Prowl.Runtime.Utils

@@ -19,7 +19,7 @@ public class HierarchyWindow : EditorWindow
 
     private string _searchText = "";
     private List<GameObject> m_RenamingEntities = null;
-    public static SelectHandler<GameObject> SelectHandler { get; private set; } = new();
+    public static SelectHandler<WeakReference> SelectHandler { get; private set; } = new((item) => !item.IsAlive || (item.Target is EngineObject eObj && eObj.IsDestroyed), (a, b) => ReferenceEquals(a.Target, b.Target));
 
     protected override void Draw()
     {
@@ -118,7 +118,7 @@ public class HierarchyWindow : EditorWindow
         ImGui.TableNextColumn();
 
         bool isPrefab = entity.AssetID != Guid.Empty;
-        bool isSelected = SelectHandler.IsSelected(entity);
+        bool isSelected = SelectHandler.IsSelected(new WeakReference(entity));
 
         ImGuiTreeNodeFlags flags = CalculateFlags(entity, isSelected);
 
@@ -143,7 +143,7 @@ public class HierarchyWindow : EditorWindow
 
         // Select
         if (!ImGui.IsItemToggledOpen()) {
-            SelectHandler.HandleSelectable(index++, entity);
+            SelectHandler.HandleSelectable(index++, new WeakReference(entity));
             if (SelectHandler.Count == 1 && ImGui.IsMouseDoubleClicked(0) && ImGui.IsItemHovered()) {
                 m_RenamingEntities = [entity];
                 ImGui.OpenPopup("RenameGameObjects");
@@ -184,19 +184,19 @@ public class HierarchyWindow : EditorWindow
         // GameObject from Hierarchy
         if (DragnDrop.ReceiveReference<GameObject>(out var go)) {
             go.SetParent(entity); // null is root
-            SelectHandler.SetSelection(go);
+            SelectHandler.SetSelection(new WeakReference(go));
         }
         // GameObject from Assets
         if (DragnDrop.ReceiveAsset<GameObject>(out var original)) {
             GameObject clone = (GameObject)EngineObject.Instantiate(original.Res!, true);
             clone.AssetID = Guid.Empty; // Remove AssetID so it's not a Prefab - These are just GameObjects like Models
             clone.SetParent(entity); // null is root
-            SelectHandler.SetSelection(clone);
+            SelectHandler.SetSelection(new WeakReference(clone));
         }
 
         // Prefab from Assets
         if (DragnDrop.ReceiveAsset<Prefab>(out var prefab))
-            SelectHandler.SetSelection(prefab.Res.Instantiate());
+            SelectHandler.SetSelection(new WeakReference(prefab.Res.Instantiate()));
 
         // Scene from Assets
         if (DragnDrop.ReceiveAsset<Scene>(out var scene))
@@ -255,7 +255,7 @@ public class HierarchyWindow : EditorWindow
             GameObject go = new GameObject("New Gameobject");
             if (context != null)
                 go.SetParent(context);
-            SelectHandler.SetSelection(go);
+            SelectHandler.SetSelection(new WeakReference(go));
             ImGui.CloseCurrentPopup();
         }
 
@@ -265,7 +265,7 @@ public class HierarchyWindow : EditorWindow
     void DrawGameObjectContextMenu(GameObject entity)
     {
         if (ImGui.BeginPopupContextItem()) {
-                SelectHandler.SelectIfNot(entity);
+                SelectHandler.SelectIfNot(new WeakReference(entity));
 
             DrawContextMenu(entity);
 
@@ -274,7 +274,7 @@ public class HierarchyWindow : EditorWindow
             if (ImGui.MenuItem("Rename")) {
                 m_RenamingEntities = new();
                 SelectHandler.Foreach((go) => {
-                    m_RenamingEntities.Add(go);
+                    m_RenamingEntities.Add(go.Target as GameObject);
                 });
 #warning This rename looks like it fails because of https://github.com/ocornut/imgui/issues/6462
                 ImGui.OpenPopup("RenameGameObjects");
@@ -288,7 +288,7 @@ public class HierarchyWindow : EditorWindow
 
             if (SelectHandler.Count > 0 && ImGui.MenuItem("Delete All")) {
                 SelectHandler.Foreach((go) => {
-                    go.Destroy();
+                    (go.Target as GameObject).Destroy();
                 });
                 SelectHandler.Clear();
             }
@@ -298,7 +298,7 @@ public class HierarchyWindow : EditorWindow
             if (ViewportWindow.LastFocusedCamera.GameObject.Transform != null) {
                 if (SelectHandler.Count > 0 && ImGui.MenuItem("Align With View")) {
                     SelectHandler.Foreach((go) => {
-                        var t = go.Transform;
+                        var t = (go.Target as GameObject).Transform;
                         if (t != null) {
                             Camera cam = ViewportWindow.LastFocusedCamera;
                             t.GlobalPosition = cam.GameObject.Transform!.GlobalPosition;
@@ -320,13 +320,13 @@ public class HierarchyWindow : EditorWindow
 
     public void DuplicateSelected()
     {
-        var newGO = new List<GameObject>();
+        var newGO = new List<WeakReference>();
         SelectHandler.Foreach((go) => {
             // Duplicating, Easiest way to duplicate is to Serialize then Deserialize
             var serialized = TagSerializer.Serialize(go);
             var deserialized = TagSerializer.Deserialize<GameObject>(serialized);
-            deserialized.SetParent(go.Parent);
-            newGO.Add(deserialized);
+            deserialized.SetParent((go.Target as GameObject).Parent);
+            newGO.Add(new WeakReference(deserialized));
         });
         SelectHandler.Clear();
         SelectHandler.SetSelection(newGO.ToArray());

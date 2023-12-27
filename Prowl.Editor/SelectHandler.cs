@@ -20,23 +20,32 @@ public static class GlobalSelectHandler
 public class SelectHandler<T> where T : class
 {
     bool selectedThisFrame = false;
-    List<WeakReference> selected = new();
-    SortedList<int, WeakReference> previousFrameSorted;
-    SortedList<int, WeakReference> sorted = new();
+    List<T> selected = new();
+    SortedList<int, T> previousFrameSorted;
+    SortedList<int, T> sorted = new();
     int lastSelectedIndex = -1;
 
     public bool SelectedThisFrame => selectedThisFrame;
-    public List<WeakReference> Selected => selected;
+    public List<T> Selected => selected;
     public int Count => selected.Count;
 
     public event Action<T>? OnSelectObject;
     public event Action<T>? OnDeselectObject;
 
+    private Func<T, bool> CheckIsDestroyed;
+    private Func<T, T, bool> Equals;
+
+    public SelectHandler(Func<T, bool> checkIsDestroyed, Func<T, T, bool> equals)
+    {
+        CheckIsDestroyed = checkIsDestroyed;
+        Equals = equals;
+    }
+
     public void StartFrame()
     {
         // Clear dead references
         for (int i = 0; i < selected.Count; i++) {
-            if (!selected[i].IsAlive || (selected[i].Target is EngineObject eObj && eObj.IsDestroyed)) {
+            if (CheckIsDestroyed.Invoke(selected[i])) {
                 selected.RemoveAt(i);
                 i--;
             }
@@ -46,15 +55,15 @@ public class SelectHandler<T> where T : class
         previousFrameSorted = sorted;
         sorted = new();
 
-        if (lastSelectedIndex == -1 && selected.Count > 0 && selected[0].IsAlive) {
-            SetSelectedIndex((T)selected[0].Target);
+        if (lastSelectedIndex == -1 && selected.Count > 0) {
+            SetSelectedIndex((T)selected[0]);
         }
     }
 
     public void SetSelection(T obj)
     {
         Clear();
-        selected.Add(new WeakReference(obj));
+        selected.Add(obj);
         selectedThisFrame = true;
         OnSelectObject?.Invoke(obj);
         GlobalSelectHandler.Select(obj);
@@ -67,7 +76,7 @@ public class SelectHandler<T> where T : class
         Clear();
         selectedThisFrame = true;
         for (int i = 0; i < objs.Length; i++) {
-            selected.Add(new WeakReference(objs[i]));
+            selected.Add(objs[i]);
             OnSelectObject?.Invoke(objs[i]);
             GlobalSelectHandler.Select(objs[i]);
         }
@@ -78,7 +87,7 @@ public class SelectHandler<T> where T : class
     public bool IsSelected(T obj)
     {
         for (int i = 0; i < selected.Count; i++) {
-            if (ReferenceEquals(selected[i].Target, obj))
+            if (Equals.Invoke(selected[i], obj))
                 return true;
         }
         return false;
@@ -86,17 +95,16 @@ public class SelectHandler<T> where T : class
 
     public void Foreach(Action<T> value)
     {
-        var copy = new List<WeakReference>(selected);
+        var copy = new List<T>(selected);
         copy.ForEach((weak) => {
-            if (weak.IsAlive && weak.Target != null)
-                value?.Invoke((T)weak.Target);
+            value?.Invoke((T)weak);
         });
     }
 
     public void HandleSelectable(int index, T obj)
     {
         // This is a list of all the objects that are selectable sorted in order that their drawn in
-        sorted.Add(index, new WeakReference(obj));
+        sorted.Add(index, obj);
 
         if (ImGui.IsItemClicked(ImGuiMouseButton.Left)) {
             int prevLastIndex = lastSelectedIndex;
@@ -106,11 +114,11 @@ public class SelectHandler<T> where T : class
                     // Bulk Select
                     for (int i = Math.Min(prevLastIndex, index); i <= Math.Max(prevLastIndex, index); i++) {
                         if (previousFrameSorted.TryGetValue(i, out var o)) {
-                            if (o.IsAlive && o.Target != null) {
+                            if (CheckIsDestroyed.Invoke(o)) {
                                 // Always additive so we cant call Select(o) here as that checks if ctrl is down
                                 selected.Add(o);
                                 selectedThisFrame = true;
-                                OnSelectObject?.Invoke((T)o.Target);
+                                OnSelectObject?.Invoke(o);
                                 GlobalSelectHandler.Select(o);
                             }
                         }
@@ -134,7 +142,7 @@ public class SelectHandler<T> where T : class
             // Additive
             if (IsSelected(obj)) {
                 for (int i = 0; i < selected.Count; i++) {
-                    if (ReferenceEquals(selected[i].Target, obj)) {
+                    if (Equals.Invoke(selected[i], obj)) {
                         selected.RemoveAt(i);
                         break;
                     }
@@ -142,7 +150,7 @@ public class SelectHandler<T> where T : class
                 OnDeselectObject?.Invoke(obj);
                 GlobalSelectHandler.Deselect(obj);
             } else {
-                selected.Add(new WeakReference(obj));
+                selected.Add(obj);
                 OnSelectObject?.Invoke(obj);
                 GlobalSelectHandler.Select(obj);
             }
@@ -156,7 +164,7 @@ public class SelectHandler<T> where T : class
         if (previousFrameSorted == null) return;
         // if sorted has this value using reference equals, set lastSelectedIndex to the index of it
         for (int i = 0; i < previousFrameSorted.Count; i++) {
-            if (ReferenceEquals(previousFrameSorted.Values[i].Target, entity)) {
+            if (Equals.Invoke(previousFrameSorted.Values[i], entity)) {
                 lastSelectedIndex = previousFrameSorted.Keys[i];
                 break;
             }
@@ -166,10 +174,8 @@ public class SelectHandler<T> where T : class
     public void Clear()
     {
         foreach (var item in selected) {
-            if (item.IsAlive && item.Target != null) {
-                OnDeselectObject?.Invoke((T)item.Target);
-                GlobalSelectHandler.Deselect(item.Target);
-            }
+            OnDeselectObject?.Invoke(item);
+            GlobalSelectHandler.Deselect(item);
         }
         selected.Clear();
         lastSelectedIndex = -1;
