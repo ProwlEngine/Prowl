@@ -174,6 +174,8 @@ namespace Prowl.Runtime.Assets
 
         public static void Update()
         {
+            if (isEditing > 0) RefreshTimer = 0f;
+
             if (Window.IsFocused) {
                 // Refresh timer gets set back to 0 every time a change is detected in the file system
                 // This is an extra helper to help make sure we refresh after for example a folder is copied into the project and not during.
