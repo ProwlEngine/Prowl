@@ -3,6 +3,7 @@ using Prowl.Editor;
 using Prowl.Editor.Assets;
 using Prowl.Runtime.Utils;
 using System.Diagnostics;
+using System.IO;
 using System.IO.Compression;
 
 namespace Prowl.Runtime.Assets
@@ -123,8 +124,7 @@ namespace Prowl.Runtime.Assets
             RefreshAll();
             ReimportDirtyMeta();
 
-            var watcher = new FileSystemWatcher(info.FullName)
-            {
+            var watcher = new FileSystemWatcher(info.FullName) {
                 EnableRaisingEvents = true,
                 IncludeSubdirectories = true,
                 NotifyFilter = NotifyFilters.CreationTime | NotifyFilters.DirectoryName | NotifyFilters.FileName | NotifyFilters.Size
@@ -136,8 +136,7 @@ namespace Prowl.Runtime.Assets
                 if (!File.Exists(e.FullPath) && !Directory.Exists(e.FullPath)) return;
 
                 string? ext = Path.GetExtension(e.FullPath);
-                if (ext == null || !ext.Equals(".meta", StringComparison.OrdinalIgnoreCase))
-                {
+                if (ext == null || !ext.Equals(".meta", StringComparison.OrdinalIgnoreCase)) {
                     if (ext != null && ext.Equals(".cs", StringComparison.OrdinalIgnoreCase))
                         scriptsDirty = true;
 
@@ -146,7 +145,7 @@ namespace Prowl.Runtime.Assets
                     else
                         dirtyFiles.Push(new FileInfo(e.FullPath));
                 }
-                
+
             }
 
             static void OnDeleted(object sender, FileSystemEventArgs e)
@@ -189,11 +188,16 @@ namespace Prowl.Runtime.Assets
 
                     bool changed = false;
                     HashSet<string> allPaths = new();
+
                     while (dirtyDirectories.TryPop(out var dir))
-                        foreach (var fullAssetPath in dir.GetFiles("*", SearchOption.AllDirectories))
-                            allPaths.Add(FileToRelative(fullAssetPath));
+                        if(dir.Exists)
+                            foreach (var fullAssetPath in dir.GetFiles("*", SearchOption.AllDirectories))
+                                if (fullAssetPath.Exists)
+                                    allPaths.Add(FileToRelative(fullAssetPath));
+
                     while (dirtyFiles.TryPop(out var file))
-                        allPaths.Add(FileToRelative(file));
+                        if(file.Exists)
+                            allPaths.Add(FileToRelative(file));
 
                     for (int i = 0; i < allPaths.Count; i++) {
                         string relativeAssetPath = allPaths.ElementAt(i);
@@ -225,9 +229,9 @@ namespace Prowl.Runtime.Assets
         public static void StartEditingAsset() => isEditing++;
         public static void StopEditingAsset() => isEditing = Math.Max(0, isEditing - 1);
 
-        public static void Ping(Guid guid) 
+        public static void Ping(Guid guid)
         {
-            if (guid != Guid.Empty) 
+            if (guid != Guid.Empty)
                 Ping(GUIDToAssetPath(guid));
         }
         public static void Ping(string relativeAssetPath) => Pinged?.Invoke(relativeAssetPath);
@@ -302,8 +306,7 @@ namespace Prowl.Runtime.Assets
 
         public static void ExportAllBuildPackages(DirectoryInfo directoryInfo)
         {
-            if (!directoryInfo.Exists)
-            {
+            if (!directoryInfo.Exists) {
                 Debug.LogError("Cannot export package, Folder does not exist.");
                 return;
             }
@@ -315,8 +318,7 @@ namespace Prowl.Runtime.Assets
 
         public static void ExportBuildPackages(Guid[] assetsToExport, DirectoryInfo destination)
         {
-            if (!destination.Exists)
-            {
+            if (!destination.Exists) {
                 Debug.LogError("Cannot export package, Folder does not exist.");
                 return;
             }
@@ -329,18 +331,15 @@ namespace Prowl.Runtime.Assets
             var package = AssetBuildPackage.CreateNew(firstPackage);
             int count = 0;
             int maxCount = assetsToExport.Length;
-            foreach (var assetGuid in assetsToExport)
-            {
+            foreach (var assetGuid in assetsToExport) {
                 var asset = LoadAsset(assetGuid);
-                if (asset == null)
-                {
+                if (asset == null) {
                     Debug.LogError($"Failed to load asset {assetGuid}!");
                     continue;
                 }
 
 #warning TODO: We need to do (package.SizeInGB + SizeOfAsset > 4f) instead of just SizeInGB but for now this works
-                if (package.SizeInGB > 3f)
-                {
+                if (package.SizeInGB > 3f) {
                     Debug.Log($"Packing, Reached 4GB...");
                     package.Dispose();
                     Debug.Log($"Creating New Package {packageIndex}");
@@ -352,8 +351,7 @@ namespace Prowl.Runtime.Assets
                 package.AddAsset(relativeAssetPath, assetGuid, asset);
 
                 count++;
-                if(count % 10 == 0 || count >= maxCount - 5)
-                {
+                if (count % 10 == 0 || count >= maxCount - 5) {
                     float percentComplete = ((float)count / (float)maxCount) * 100f;
                     Debug.Log($"Exporting Assets To Stream: {count}/{maxCount} - {percentComplete}%");
                 }
@@ -367,17 +365,14 @@ namespace Prowl.Runtime.Assets
 #warning TODO: Handle Dependencies
             if (includeDependencies) throw new NotImplementedException("Dependency tracking is not implemented yet.");
 
-            ImFileDialogInfo imFileDialogInfo = new ImFileDialogInfo()
-            {
+            ImFileDialogInfo imFileDialogInfo = new ImFileDialogInfo() {
                 title = "Export Package",
                 directoryPath = new DirectoryInfo(Project.ProjectDirectory),
                 fileName = "New Package.prowlpackage",
                 type = ImGuiFileDialogType.SaveFile,
-                OnComplete = (path) =>
-                {
+                OnComplete = (path) => {
                     var file = new FileInfo(path);
-                    if (file.Exists)
-                    {
+                    if (file.Exists) {
                         Debug.LogError("Cannot export package, File already exists.");
                         return;
                     }
@@ -396,8 +391,7 @@ namespace Prowl.Runtime.Assets
 
         public static void ImportPackage(FileInfo packageFile)
         {
-            if (!packageFile.Exists)
-            {
+            if (!packageFile.Exists) {
                 Debug.LogError("Cannot import package, File does not exist.");
                 return;
             }
@@ -439,19 +433,17 @@ namespace Prowl.Runtime.Assets
 
         public static void ReimportAll()
         {
-            foreach(var root in rootFolders)
+            foreach (var root in rootFolders)
                 ReimportFolder(root);
         }
 
         public static void ReimportFolder(DirectoryInfo directory)
         {
-            if(GetRelativePath(directory.FullName) != null)
-            {
+            if (GetRelativePath(directory.FullName) != null) {
                 // It exists in one of our root folders
                 // Go over all files and reimport
                 var files = directory.GetFiles("*", SearchOption.AllDirectories);
-                foreach (var file in files)
-                {
+                foreach (var file in files) {
                     var relativeAssetPath = FileToRelative(file);
                     Reimport(relativeAssetPath);
                 }
@@ -461,13 +453,10 @@ namespace Prowl.Runtime.Assets
         public static bool Reimport(string relativeAssetPath, bool disposeExisting = true)
         {
             // Dispose if we already have it
-            if (disposeExisting)
-            {
+            if (disposeExisting) {
                 Guid assetGuid = GUIDFromAssetPath(relativeAssetPath);
-                if (assetGuid != Guid.Empty)
-                {
-                    if (guidToAssetData.ContainsKey(assetGuid))
-                    {
+                if (assetGuid != Guid.Empty) {
+                    if (guidToAssetData.ContainsKey(assetGuid)) {
                         var asset = guidToAssetData[assetGuid];
                         asset.Main.DestroyImmediate();
                         guidToAssetData.Remove(assetGuid);
@@ -491,19 +480,16 @@ namespace Prowl.Runtime.Assets
 
             // Import the asset
             SerializedAsset ctx = new();
-            try
-            {
+            try {
                 meta.importer.Import(ctx, assetFile);
-            }
-            catch (Exception e)
-            {
+            } catch (Exception e) {
                 ImGuiNotify.InsertNotification("Failed to Import Material.", new Color(0.8f, 0.1f, 0.1f, 1), "Reason: " + e.Message);
                 return false; // Import failed
             }
             if (!ctx.HasMain)
                 return false; // Import failed no Main Object
 
-            var serialized = GetSerializedFile(relativeAssetPath);
+            var serialized = GetSerializedFile(meta.guid);
             if (serialized.Exists) // Delete the old asset
                 serialized.Delete();
 
@@ -526,14 +512,13 @@ namespace Prowl.Runtime.Assets
             if (assetFile.Exists)
                 assetFile.Delete();
 
-            var serialized = GetSerializedFile(relativeAssetPath);
+            Guid assetGuid = GuidPathHolder.GetGuid(relativeAssetPath);
+
+            var serialized = GetSerializedFile(assetGuid);
             if (serialized.Exists)
                 serialized.Delete();
 
-            Guid assetGuid = GuidPathHolder.GetGuid(relativeAssetPath);
-
-            if (guidToAssetData.ContainsKey(assetGuid))
-            {
+            if (guidToAssetData.ContainsKey(assetGuid)) {
                 var asset = guidToAssetData[assetGuid];
                 asset.Main.DestroyImmediate();
             }
@@ -550,16 +535,13 @@ namespace Prowl.Runtime.Assets
 
         public static T? LoadAsset<T>(Guid assetGuid) where T : EngineObject
         {
-            try
-            {
+            try {
                 var serialized = LoadAsset(assetGuid);
                 if (serialized == null) return null;
                 if (serialized.Main is not T asset) return null;
                 asset.AssetID = assetGuid;
                 return asset;
-            }
-            catch (Exception e)
-            {
+            } catch (Exception e) {
                 Console.WriteLine(e.ToString());
                 throw new InvalidCastException($"Something went wrong loading asset.");
             }
@@ -581,21 +563,17 @@ namespace Prowl.Runtime.Assets
             if (!asset.Exists) throw null;
 
 
-            FileInfo serializedAssetPath = GetSerializedFile(relativeAssetPath);
+            FileInfo serializedAssetPath = GetSerializedFile(assetGuid);
             if (!serializedAssetPath.Exists)
-                if (!Reimport(relativeAssetPath))
-                {
+                if (!Reimport(relativeAssetPath)) {
                     Debug.LogError($"Failed to import {serializedAssetPath.FullName}!", true);
                     throw new Exception($"Failed to import {serializedAssetPath.FullName}");
                 }
-            try
-            {
+            try {
                 var serializedAsset = SerializedAsset.FromSerializedAsset(serializedAssetPath.FullName);
                 guidToAssetData[assetGuid] = serializedAsset;
                 return serializedAsset;
-            }
-            catch (Exception e)
-            {
+            } catch (Exception e) {
                 Debug.LogError($"Failed to load serialized asset {serializedAssetPath.FullName}!", true);
                 return null; // Failed file might be in use?
             }
@@ -603,11 +581,9 @@ namespace Prowl.Runtime.Assets
 
         public static string? GetRelativePath(string fullFilePath)
         {
-            foreach (var rootFolder in rootFolders)
-            {
+            foreach (var rootFolder in rootFolders) {
                 string rootFolderPath = rootFolder.FullName;
-                if (fullFilePath.StartsWith(rootFolderPath, StringComparison.OrdinalIgnoreCase))
-                {
+                if (fullFilePath.StartsWith(rootFolderPath, StringComparison.OrdinalIgnoreCase)) {
                     string relativePath = fullFilePath.Substring(rootFolderPath.Length);
 
                     // Ensure the relative path doesn't start with a directory separator
@@ -628,52 +604,39 @@ namespace Prowl.Runtime.Assets
             if (isEditing > 0) return;
             foreach (var root in rootFolders)
                 Refresh(root);
-            ReimportDirtyMeta();
         }
 
         public static void Refresh(DirectoryInfo directory)
         {
             if (isEditing > 0) return;
+            if (!directory.Exists) return;
 
             var files = directory.GetFiles("*", SearchOption.AllDirectories);
             foreach (var fullAssetPath in files)
                 Refresh(fullAssetPath);
-
-            ReimportDirtyMeta();
         }
 
         public static void Refresh(FileInfo fullAssetPath)
         {
-            if (fullAssetPath.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase))
-            {
+            if (!fullAssetPath.Exists) return;
+
+            if (fullAssetPath.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase)) {
                 // If we have no asset file, delete the meta file
                 string assetPath = Path.ChangeExtension(fullAssetPath.FullName, null);
                 if (!File.Exists(assetPath)) // Asset doesnt exist
-                {
                     fullAssetPath.Delete(); // Delete Meta
-                    // Deleted a Serialized Asset file if we have one
-                    var serialized = GetSerializedFile(FileToRelative(new FileInfo(assetPath)));
-                    if (serialized.Exists)
-                        serialized.Delete();
-                }
-            }
-            else
-            {
+            } else {
                 // Relative path to the asset
                 var relativeAssetPath = FileToRelative(fullAssetPath);
                 //string relativeAssetPath = GetAssetRelativePath(root, fullAssetPath);
                 relativeAssetPath = NormalizeString(relativeAssetPath);
-                var serialized = GetSerializedFile(relativeAssetPath);
 
                 // Make sure we have a meta file
                 var meta = LoadMeta(relativeAssetPath);
                 if (meta == null) // no meta, cannot import or handle this asset type
-                {
-                    if(serialized.Exists)
-                        serialized.Delete(); // Delete Serialized Asset as the meta file doesnt exist, this serialized asset isnt guranteed to be valid anymore
                     return;
-                }
 
+                var serialized = GetSerializedFile(meta.guid);
                 if (!serialized.Exists) // We dont have the asset, Import it
                     refreshedMeta.Enqueue(meta.guid);
             }
@@ -681,8 +644,7 @@ namespace Prowl.Runtime.Assets
 
         static void ReimportDirtyMeta()
         {
-            while (refreshedMeta.TryDequeue(out var guid))
-            {
+            while (refreshedMeta.TryDequeue(out var guid)) {
                 string relativeAssetPath = GUIDToAssetPath(guid);
                 if (!Reimport(relativeAssetPath))
                     Debug.LogError($"Failed to import {relativeAssetPath}!", true);
@@ -697,35 +659,16 @@ namespace Prowl.Runtime.Assets
             //            Console.Error.WriteLine($"Failed to import {relativeAssetPath}!");
             //    });
             //}
-
-            AssetDatabase.CleanupCache();
         }
 
         public static void CleanupCache()
         {
             // Delete all serialized assets that are no longer in the asset database
-            var files = new DirectoryInfo(TempAssetDirectory).GetFiles("*.serialized", SearchOption.AllDirectories);
-            // List of modified directories
-            var modifiedDirectories = new HashSet<DirectoryInfo>();
+            var files = new DirectoryInfo(TempAssetDirectory).GetFiles("*.serialized");
             foreach (var file in files) {
-                string relativeAssetPath = GetRelativeFromSerializedFile(file);
-                if (!Contains(relativeAssetPath)) {
+                Guid assetGuid = Guid.Parse(file.Name.Replace(".serialized", ""));
+                if (!Contains(assetGuid))
                     file.Delete();
-                    if(file.Directory != null)
-                        modifiedDirectories.Add(file.Directory);
-                }
-            }
-
-            // Ensure all empty modified directories are deleted
-            bool change = true;
-            while (change) {
-                change = false;
-                foreach (var directory in modifiedDirectories) {
-                    if (directory.Exists && directory.GetFiles().Length == 0 && directory.GetDirectories().Length == 0) {
-                        directory.Delete();
-                        change = true;
-                    }
-                }
             }
         }
 
@@ -734,18 +677,14 @@ namespace Prowl.Runtime.Assets
             relativeAssetPath = NormalizeString((string)relativeAssetPath);
             var info = RelativeToFile(relativeAssetPath);
             var meta = new FileInfo(info.FullName + ".meta");
-            if (!meta.Exists)
-            {
+            if (!meta.Exists) {
                 var newMeta = GenerateNewMetaFile(relativeAssetPath);
                 LastLoadedAssetID = newMeta?.guid ?? Guid.Empty;
                 return newMeta;
-            }
-            else
-            {
+            } else {
                 // Load meta file
                 var metaFile = MetaFile.Load(meta);
-                if(metaFile == null)
-                {
+                if (metaFile == null) {
                     Debug.LogError($"Failed to load meta file for {relativeAssetPath}, Regenerating!");
                     meta.Delete();
                     var newMeta = GenerateNewMetaFile(relativeAssetPath);
@@ -794,8 +733,7 @@ namespace Prowl.Runtime.Assets
             // Right() is 1-indexed, so include these cases
             // * Append no characters
             // * Append up to N characters, where N is ending length
-            for (int i = 0; i <= ending.Length; i++)
-            {
+            for (int i = 0; i <= ending.Length; i++) {
                 string tmp = result + ending.Right(i);
                 if (tmp.EndsWith(ending))
                     return tmp;
@@ -823,18 +761,9 @@ namespace Prowl.Runtime.Assets
 
         static string NormalizeString(string path) => path.Replace(@"\\", @"\").Replace(@"\", @"/");
 
-        static FileInfo GetSerializedFile(string relativeAssetPath)
+        static FileInfo GetSerializedFile(Guid assetGuid)
         {
-            relativeAssetPath.Replace(@"/", "_").Replace(".", "_");
-            return new FileInfo(Path.Combine(TempAssetDirectory, relativeAssetPath) + ".serialized");
-        }
-
-        static string GetRelativeFromSerializedFile(FileInfo serializedFile)
-        {
-            string relativeAssetPath = Path.GetRelativePath(TempAssetDirectory, serializedFile.FullName);
-            relativeAssetPath = relativeAssetPath.Replace("_", ".").Replace(".serialized", "");
-            relativeAssetPath = NormalizeString(relativeAssetPath);
-            return relativeAssetPath;
+            return new FileInfo(Path.Combine(TempAssetDirectory, assetGuid.ToString("D")) + ".serialized");
         }
 
         public static FileInfo RelativeToFile(string relativeAssetPath)
@@ -852,8 +781,7 @@ namespace Prowl.Runtime.Assets
             // The first part of the path is the Root folder
             var rootFolder = relativeAssetPath.Split('/')[0];
             //return new DirectoryInfo(Path.Combine(Project.ProjectDirectory, rootFolder));
-            foreach (var root in rootFolders)
-            {
+            foreach (var root in rootFolders) {
                 if (root.Name.Equals(rootFolder, StringComparison.OrdinalIgnoreCase))
                     return root;
             }
@@ -864,7 +792,7 @@ namespace Prowl.Runtime.Assets
     public class MetaFile
     {
         public FileInfo AssetPath { get; set; }
-        public Guid guid; 
+        public Guid guid;
         public DateTime lastModified;
         public ScriptedImporter importer;
 
@@ -880,7 +808,7 @@ namespace Prowl.Runtime.Assets
                 return;
 
             this.AssetPath = AssetDatabase.RelativeToFile(relativeAssetPath);
-            this.guid = Guid.NewGuid(); 
+            this.guid = Guid.NewGuid();
             this.lastModified = DateTime.UtcNow;
             this.importer = Activator.CreateInstance(importerType) as ScriptedImporter;
         }

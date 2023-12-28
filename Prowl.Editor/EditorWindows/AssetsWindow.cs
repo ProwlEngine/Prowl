@@ -3,9 +3,6 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
 using System.Diagnostics;
-using System.IO;
-using System.Numerics;
-using static Assimp.Metadata;
 
 namespace Prowl.Editor.EditorWindows;
 
