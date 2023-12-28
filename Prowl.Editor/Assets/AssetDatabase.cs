@@ -460,9 +460,8 @@ namespace Prowl.Runtime.Assets
 
         public static bool Reimport(string relativeAssetPath, bool disposeExisting = true)
         {
-
             // Dispose if we already have it
-            if (true)
+            if (disposeExisting)
             {
                 Guid assetGuid = GUIDFromAssetPath(relativeAssetPath);
                 if (assetGuid != Guid.Empty)
