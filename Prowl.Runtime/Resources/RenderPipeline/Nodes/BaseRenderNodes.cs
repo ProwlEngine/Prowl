@@ -228,8 +228,8 @@ namespace Prowl.Runtime.Resources.RenderPipeline
 
         [Input(ShowBackingValue.Never), SerializeIgnore] public RenderTexture RenderTexture;
 
-        public float Contrast = 1.1f;
-        public float Saturation = 1.2f;
+        public float Contrast = 1.05f;
+        public float Saturation = 1.15f;
         public enum Tonemapper { Melon, Aces, Reinhard, Uncharted2, Filmic, None }
         public Tonemapper UseTonemapper = Tonemapper.Melon;
         public bool UseGammaCorrection = true;
