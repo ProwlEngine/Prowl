@@ -789,6 +789,14 @@ namespace Prowl.Runtime.Assets
             return new FileInfo(Path.Combine(TempAssetDirectory, relativeAssetPath) + ".serialized");
         }
 
+        static string GetRelativeFromSerializedFile(FileInfo serializedFile)
+        {
+            string relativeAssetPath = Path.GetRelativePath(TempAssetDirectory, serializedFile.FullName);
+            relativeAssetPath = relativeAssetPath.Replace("_", ".").Replace(".serialized", "");
+            relativeAssetPath = NormalizeString(relativeAssetPath);
+            return relativeAssetPath;
+        }
+
         public static FileInfo RelativeToFile(string relativeAssetPath)
         {
             return new FileInfo(Path.Combine(Project.ProjectDirectory, relativeAssetPath));
@@ -796,7 +804,7 @@ namespace Prowl.Runtime.Assets
 
         public static string FileToRelative(FileInfo file)
         {
-            return Path.GetRelativePath(Project.ProjectDirectory, file.FullName);
+            return NormalizeString(Path.GetRelativePath(Project.ProjectDirectory, file.FullName));
         }
 
         public static DirectoryInfo GetRootFolder(string relativeAssetPath)
