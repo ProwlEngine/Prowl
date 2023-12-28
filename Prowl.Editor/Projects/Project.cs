@@ -66,6 +66,7 @@ public static class Project
         AssetDatabase.AddRootFolder("Packages");
 
         AssetDatabase.AddRootFolder("Assets");
+        AssetDatabase.CleanupCache();
 
         OnProjectChanged?.Invoke();
     }

@@ -687,6 +687,36 @@ namespace Prowl.Runtime.Assets
             //            Console.Error.WriteLine($"Failed to import {relativeAssetPath}!");
             //    });
             //}
+
+            AssetDatabase.CleanupCache();
+        }
+
+        public static void CleanupCache()
+        {
+            // Delete all serialized assets that are no longer in the asset database
+            var files = new DirectoryInfo(TempAssetDirectory).GetFiles("*.serialized", SearchOption.AllDirectories);
+            // List of modified directories
+            var modifiedDirectories = new HashSet<DirectoryInfo>();
+            foreach (var file in files) {
+                string relativeAssetPath = GetRelativeFromSerializedFile(file);
+                if (!Contains(relativeAssetPath)) {
+                    file.Delete();
+                    if(file.Directory != null)
+                        modifiedDirectories.Add(file.Directory);
+                }
+            }
+
+            // Ensure all empty modified directories are deleted
+            bool change = true;
+            while (change) {
+                change = false;
+                foreach (var directory in modifiedDirectories) {
+                    if (directory.Exists && directory.GetFiles().Length == 0 && directory.GetDirectories().Length == 0) {
+                        directory.Delete();
+                        change = true;
+                    }
+                }
+            }
         }
 
         public static MetaFile? LoadMeta(string relativeAssetPath)
