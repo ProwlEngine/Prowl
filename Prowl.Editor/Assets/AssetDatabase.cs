@@ -185,13 +185,17 @@ namespace Prowl.Runtime.Assets
                             EditorApplication.Instance.RegisterReloadOfExternalAssemblies();
                     }
 
+                    bool changed = false;
                     while (dirtyDirectories.TryPop(out var dir)) {
                         Refresh(dir);
+                        changed = true;
                     }
                     while (dirtyFiles.TryPop(out var file)) {
                         Refresh(file);
+                        changed = true;
                     }
-                    ReimportDirtyMeta();
+                    if(changed)
+                        ReimportDirtyMeta();
                 }
             }
         }
