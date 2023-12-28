@@ -186,16 +186,25 @@ namespace Prowl.Runtime.Assets
                     }
 
                     bool changed = false;
-                    while (dirtyDirectories.TryPop(out var dir)) {
-                        Refresh(dir);
-                        changed = true;
+                    HashSet<string> allPaths = new();
+                    while (dirtyDirectories.TryPop(out var dir))
+                        foreach (var fullAssetPath in dir.GetFiles("*", SearchOption.AllDirectories))
+                            allPaths.Add(FileToRelative(fullAssetPath));
+                    while (dirtyFiles.TryPop(out var file))
+                        allPaths.Add(FileToRelative(file));
+
+                    for (int i = 0; i < allPaths.Count; i++) {
+                        string relativeAssetPath = allPaths.ElementAt(i);
+                        if (relativeAssetPath == null) continue;
+                        if (Reimport(relativeAssetPath))
+                            changed = true;
                     }
-                    while (dirtyFiles.TryPop(out var file)) {
-                        Refresh(file);
-                        changed = true;
-                    }
-                    if(changed)
+
+                    if (changed) {
                         ReimportDirtyMeta();
+
+                        AssetDatabase.CleanupCache();
+                    }
                 }
             }
         }
