@@ -96,6 +96,7 @@ namespace Prowl.Runtime.Assets
         static bool scriptsDirty = false;
         static Stack<DirectoryInfo> dirtyDirectories = new();
         static Stack<FileInfo> dirtyFiles = new();
+        static double RefreshTimer = 0f;
 
         public static string TempAssetDirectory => Path.Combine(Project.ProjectDirectory, "Library/AssetDatabase");
 
@@ -131,6 +132,7 @@ namespace Prowl.Runtime.Assets
 
             static void OnChangedOrRenamed(object sender, FileSystemEventArgs e)
             {
+                RefreshTimer = 0f;
                 if (!File.Exists(e.FullPath) && !Directory.Exists(e.FullPath)) return;
 
                 string? ext = Path.GetExtension(e.FullPath);
@@ -149,6 +151,7 @@ namespace Prowl.Runtime.Assets
 
             static void OnDeleted(object sender, FileSystemEventArgs e)
             {
+                RefreshTimer = 0f;
                 string ext = Path.GetExtension(e.FullPath);
                 if (ext != null && ext.Equals(".cs", StringComparison.OrdinalIgnoreCase))
                     scriptsDirty = true;
@@ -172,19 +175,24 @@ namespace Prowl.Runtime.Assets
         public static void Update()
         {
             if (Window.IsFocused) {
-                if (scriptsDirty) {
-                    scriptsDirty = false;
-                    if (Settings.m_AutoRecompile)
-                        EditorApplication.Instance.RegisterReloadOfExternalAssemblies();
-                }
+                // Refresh timer gets set back to 0 every time a change is detected in the file system
+                // This is an extra helper to help make sure we refresh after for example a folder is copied into the project and not during.
+                RefreshTimer += Time.time;
+                if (RefreshTimer > 0.5f) {
+                    if (scriptsDirty) {
+                        scriptsDirty = false;
+                        if (Settings.m_AutoRecompile)
+                            EditorApplication.Instance.RegisterReloadOfExternalAssemblies();
+                    }
 
-                while(dirtyDirectories.TryPop(out var dir)) {
-                    Refresh(dir);
+                    while (dirtyDirectories.TryPop(out var dir)) {
+                        Refresh(dir);
+                    }
+                    while (dirtyFiles.TryPop(out var file)) {
+                        Refresh(file);
+                    }
+                    ReimportDirtyMeta();
                 }
-                while(dirtyFiles.TryPop(out var file)) {
-                    Refresh(file);
-                }
-                ReimportDirtyMeta();
             }
         }
 
