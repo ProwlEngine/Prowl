@@ -27,6 +27,8 @@ public class InspectorWindow : EditorWindow
     {
         if (n is DirectoryInfo) return; // Dont care about directories
 
+        if (n is WeakReference weak) n = weak.Target;
+
         _ForwardStack.Clear();
         if(Selected != null)
             _BackStack.Push(Selected);
