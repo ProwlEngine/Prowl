@@ -17,7 +17,7 @@ namespace Prowl.Runtime
             typeof(ScreenSpaceReflectionNode),
             typeof(DepthOfFieldNode),
             typeof(BloomNode),
-            typeof(AcesTonemappingNode),
+            typeof(TonemappingNode),
             typeof(TAANode),
             typeof(OutputNode),
             ];

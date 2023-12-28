@@ -612,7 +612,7 @@
                                                                           "Value": 77
                                                                         }
                                                                       },
-                                                                      "SerializedType": "Prowl.Runtime.Resources.RenderPipeline.AcesTonemappingNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                      "SerializedType": "Prowl.Runtime.Resources.RenderPipeline.TonemappingNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
                                                                       "SerializedID": 18
                                                                     },
                                                                     "InstanceID": {
