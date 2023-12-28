@@ -51,18 +51,24 @@ public class DirectionalLight : MonoBehaviour
         lightMat.SetTexture("gNormalMetallic", Camera.Current.gBuffer.NormalMetallic);
         lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
 
-        lightMat.SetTexture("shadowMap", shadowMap.InternalDepth);
-        lightMat.SetMatrix("matCamViewInverse", Graphics.MatViewInverse);
-        lightMat.SetMatrix("matShadowView", Graphics.MatDepthView);
-        lightMat.SetMatrix("matShadowSpace", depthMVP);
+        if (castShadows) {
+            lightMat.EnableKeyword("CASTSHADOWS");
+            lightMat.SetTexture("shadowMap", shadowMap.InternalDepth);
 
-        lightMat.SetFloat("u_Radius", shadowRadius);
-        lightMat.SetFloat("u_Penumbra", shadowPenumbra);
-        lightMat.SetFloat("u_MinimumPenumbra", shadowMinimumPenumbra);
-        lightMat.SetInt("u_QualitySamples", (int)qualitySamples);
-        lightMat.SetInt("u_BlockerSamples", (int)blockerSamples);
-        lightMat.SetFloat("u_Bias", shadowBias);
-        lightMat.SetFloat("u_NormalBias", shadowNormalBias);
+            lightMat.SetMatrix("matCamViewInverse", Graphics.MatViewInverse);
+            lightMat.SetMatrix("matShadowView", Graphics.MatDepthView);
+            lightMat.SetMatrix("matShadowSpace", depthMVP);
+
+            lightMat.SetFloat("u_Radius", shadowRadius);
+            lightMat.SetFloat("u_Penumbra", shadowPenumbra);
+            lightMat.SetFloat("u_MinimumPenumbra", shadowMinimumPenumbra);
+            lightMat.SetInt("u_QualitySamples", (int)qualitySamples);
+            lightMat.SetInt("u_BlockerSamples", (int)blockerSamples);
+            lightMat.SetFloat("u_Bias", shadowBias);
+            lightMat.SetFloat("u_NormalBias", shadowNormalBias);
+        } else {
+            lightMat.DisableKeyword("CASTSHADOWS");
+        }
 
         Graphics.Blit(lightMat);
 
@@ -105,6 +111,9 @@ public class DirectionalLight : MonoBehaviour
                             comp.Internal_OnRenderObjectDepth();
             disposable?.Dispose();
             shadowMap.End();
+        } else {
+            shadowMap?.DestroyImmediate();
+            shadowMap = null;
         }
     }
 

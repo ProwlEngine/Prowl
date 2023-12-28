@@ -128,7 +128,10 @@ Pass 0
 		
 		// ------------------------------------------------------------------
 		
-		float ShadowCalculation(vec3 p, vec3 gPos, vec3 normal, vec3 lightDir){
+		float ShadowCalculation(vec3 p, vec3 gPos, vec3 normal, vec3 lightDir) {
+#ifndef CASTSHADOWS
+			return 0.0;
+#endif
 		    //float constantBias = 0.00001;
 		    //float bias = (1 - dot(normal, lightDir)) * constantBias;
 
@@ -191,7 +194,6 @@ Pass 0
 			// shadows
 			//vec4 fragPosLightSpace = matShadowSpace * matViewInverse * vec4(gPos, 1);
 			vec4 fragPosLightSpace = matCamViewInverse * vec4(gPos + (N * u_NormalBias), 1);
-			
 			float shadow = ShadowCalculation(fragPosLightSpace.xyz, gPos, N, L);
 			    
 			// add to outgoing radiance Lo
