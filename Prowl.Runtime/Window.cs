@@ -48,6 +48,11 @@ namespace Prowl.Runtime
             get { return InternalWindow.Handle; }
         }
 
+        private static bool isFocused = true;
+        public static bool IsFocused {
+            get { return isFocused; }
+        }
+
         public static void InitWindow(string title, int width, int height, WindowState startState = WindowState.Normal, bool VSync = true)
         {
             WindowOptions options = WindowOptions.Default;
@@ -67,6 +72,8 @@ namespace Prowl.Runtime
 
             InternalWindow.StateChanged += (state) => { StateChanged?.Invoke(state); };
             InternalWindow.FileDrop += (files) => { FileDrop?.Invoke(files); };
+
+            InternalWindow.FocusChanged += (focused) => { isFocused = focused; };
         }
 
         public static void Start() => InternalWindow.Run();
