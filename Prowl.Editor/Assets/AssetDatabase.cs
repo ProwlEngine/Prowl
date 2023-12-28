@@ -93,6 +93,9 @@ namespace Prowl.Runtime.Assets
         static readonly Queue<Guid> refreshedMeta = new();
 
         static int isEditing = 0;
+        static bool scriptsDirty = false;
+        static Stack<DirectoryInfo> dirtyDirectories = new();
+        static Stack<FileInfo> dirtyFiles = new();
 
         public static string TempAssetDirectory => Path.Combine(Project.ProjectDirectory, "Library/AssetDatabase");
 
@@ -128,22 +131,18 @@ namespace Prowl.Runtime.Assets
 
             static void OnChangedOrRenamed(object sender, FileSystemEventArgs e)
             {
-                if (!File.Exists(e.FullPath)) return;
+                if (!File.Exists(e.FullPath) && !Directory.Exists(e.FullPath)) return;
 
-                string ext = Path.GetExtension(e.FullPath);
-                if (!ext.Equals(".meta", StringComparison.OrdinalIgnoreCase))
+                string? ext = Path.GetExtension(e.FullPath);
+                if (ext == null || !ext.Equals(".meta", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (ext.Equals(".cs", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (Settings.m_AutoRecompile)
-                            EditorApplication.Instance.RegisterReloadOfExternalAssemblies();
-                    }
+                    if (ext != null && ext.Equals(".cs", StringComparison.OrdinalIgnoreCase))
+                        scriptsDirty = true;
 
                     if ((File.GetAttributes(e.FullPath) & FileAttributes.Directory) == FileAttributes.Directory)
-                        Refresh(new DirectoryInfo(e.FullPath));
+                        dirtyDirectories.Push(new DirectoryInfo(e.FullPath));
                     else
-                        Refresh(new FileInfo(e.FullPath));
-                    ReimportDirtyMeta();
+                        dirtyFiles.Push(new FileInfo(e.FullPath));
                 }
                 
             }
@@ -151,24 +150,42 @@ namespace Prowl.Runtime.Assets
             static void OnDeleted(object sender, FileSystemEventArgs e)
             {
                 string ext = Path.GetExtension(e.FullPath);
-                if (ext.Equals(".cs", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (Settings.m_AutoRecompile)
-                        EditorApplication.Instance.RegisterReloadOfExternalAssemblies();
-                }
+                if (ext != null && ext.Equals(".cs", StringComparison.OrdinalIgnoreCase))
+                    scriptsDirty = true;
+
                 var parent = Directory.GetParent(e.FullPath);
                 if (parent.Exists)
-                    Refresh(parent);
+                    dirtyDirectories.Push(parent);
                 else
-                    RefreshAll();
-                ReimportDirtyMeta();
+                    foreach (var root in rootFolders)
+                        dirtyDirectories.Push(root);
             }
 
             watcher.Deleted += OnDeleted;
+            watcher.Created += OnChangedOrRenamed;
             watcher.Changed += OnChangedOrRenamed;
             watcher.Renamed += OnChangedOrRenamed;
 
             rootWatchers.Add(watcher);
+        }
+
+        public static void Update()
+        {
+            if (Window.IsFocused) {
+                if (scriptsDirty) {
+                    scriptsDirty = false;
+                    if (Settings.m_AutoRecompile)
+                        EditorApplication.Instance.RegisterReloadOfExternalAssemblies();
+                }
+
+                while(dirtyDirectories.TryPop(out var dir)) {
+                    Refresh(dir);
+                }
+                while(dirtyFiles.TryPop(out var file)) {
+                    Refresh(file);
+                }
+                ReimportDirtyMeta();
+            }
         }
 
         public static bool Contains(string relativeAssetPath) => GuidPathHolder.Contains(NormalizeString(relativeAssetPath));

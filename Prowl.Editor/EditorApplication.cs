@@ -5,6 +5,7 @@ using Prowl.Editor.EditorWindows;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Icons;
 using Prowl.Runtime;
+using Prowl.Runtime.Assets;
 using Prowl.Runtime.ImGUI;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
@@ -92,6 +93,8 @@ public unsafe class EditorApplication : Application {
 
         Window.Update += (delta) => {
             try {
+                AssetDatabase.Update();
+
                 CheckReloadingAssemblies();
 
                 Time.Update(delta);
