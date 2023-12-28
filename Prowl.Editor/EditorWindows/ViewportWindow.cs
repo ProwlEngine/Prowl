@@ -21,6 +21,9 @@ public class ViewportWindow : EditorWindow
     bool IsHovered = false;
     Vector2 WindowCenter;
     bool DrawGrid = false;
+    int frames = 0;
+    double fpsTimer = 0;
+    double fps = 0;
 
     public ViewportWindow() : base()
     {
@@ -57,6 +60,14 @@ public class ViewportWindow : EditorWindow
 
     private void DrawViewport()
     {
+        frames++;
+        fpsTimer += Time.deltaTime;
+        if (fpsTimer >= 1.0) {
+            fps = frames / fpsTimer;
+            frames = 0;
+            fpsTimer = 0;
+        }
+
         if (!Project.HasProject) return;
 
         IsFocused = ImGui.IsWindowFocused();
@@ -155,7 +166,7 @@ public class ViewportWindow : EditorWindow
         GUIHelper.Tooltip("Viewport Camera Settings");
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 25));
-        ImGui.Text("FPS: " + 1.0 / Time.deltaTime);
+        ImGui.Text("FPS: " + fps.ToString("0.00"));
 
         // Show ViewManipulation at the end
         //view *= Matrix4x4.CreateScale(1, -1, 1);
