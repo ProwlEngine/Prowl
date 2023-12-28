@@ -104,7 +104,9 @@ public class AssetsWindow : EditorWindow
     private void DrawDirectory(DirectoryInfo directory)
     {
         // Folders
-        foreach (DirectoryInfo subDirectory in directory.EnumerateDirectories()) {
+        var directories = directory.GetDirectories();
+        foreach (DirectoryInfo subDirectory in directories) {
+            if (!subDirectory.Exists) return;
             ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
             bool isLeaf = subDirectory.GetFiles().Length == 0 && subDirectory.GetDirectories().Length == 0;
             if (isLeaf) flags |= ImGuiTreeNodeFlags.Leaf;
@@ -125,7 +127,9 @@ public class AssetsWindow : EditorWindow
         }
 
         // Files
-        foreach (FileInfo file in directory.EnumerateFiles()) {
+        var files = directory.GetFiles();
+        foreach (FileInfo file in files) {
+            if (!file.Exists) return;
             ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
             if (AssetsWindow.SelectHandler.IsSelected(file)) flags |= ImGuiTreeNodeFlags.Selected;
 

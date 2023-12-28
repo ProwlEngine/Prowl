@@ -178,10 +178,14 @@ public class AssetBrowserWindow : EditorWindow {
             foreach (var entry in _found)
                 RenderEntry(rowCount, itemSize, ref curPos, ref i, entry);
         } else {
-            foreach (var folder in CurDirectory.EnumerateDirectories())
+            var directories = CurDirectory.GetDirectories();
+            foreach (var folder in directories) {
+                if (!folder.Exists) return;
                 RenderEntry(rowCount, itemSize, ref curPos, ref i, folder);
-
-            foreach (var file in CurDirectory.EnumerateFiles()) {
+            }
+            var files = CurDirectory.GetFiles();
+            foreach (var file in files) {
+                if (!file.Exists) return;
                 if (file.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase)) continue;
                 RenderEntry(rowCount, itemSize, ref curPos, ref i, file);
             }
