@@ -56,8 +56,7 @@ Pass 0
 			color = mix(color, HueShift(color), factor); // can be removed for more neutral colors
 			color = mix(color, vec3(1.0, 1.0, 1.0), factor); // shift to white for high intensities
 			
-			// clamp to [0-1] range
-		    return clamp(color, vec3(0.0, 0.0, 0.0), vec3(1.0, 1.0, 1.0));
+		    return color;
 		}
 #endif
 
@@ -92,9 +91,6 @@ Pass 0
 		    color = RRTAndODTFit(color);
 		
 		    color = color * ACESOutputMat;
-		
-		    // Clamp to [0, 1]
-		  	color = clamp(color, 0.0, 1.0);
 		
 		    return color;
 		}
@@ -157,6 +153,10 @@ Pass 0
 #ifdef FILMIC
 			color = filmicToneMapping(color);
 #endif
+		
+		    // Clamp to [0, 1]
+		  	color = clamp(color, 0.0, 1.0);
+
 			return color;
 		}
 
