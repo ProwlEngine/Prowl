@@ -80,10 +80,14 @@ namespace Prowl.Runtime.Components
         public void AddToBuilder(ref CompoundBuilder builder, bool isChild)
         {
             System.Numerics.Quaternion floatQuat;
-            floatQuat.X = (float)GameObject.Transform!.Orientation.X;
-            floatQuat.Y = (float)GameObject.Transform!.Orientation.Y;
-            floatQuat.Z = (float)GameObject.Transform!.Orientation.Z;
-            floatQuat.W = (float)GameObject.Transform!.Orientation.W;
+            if (isChild) {
+                floatQuat.X = (float)GameObject.Transform!.Orientation.X;
+                floatQuat.Y = (float)GameObject.Transform!.Orientation.Y;
+                floatQuat.Z = (float)GameObject.Transform!.Orientation.Z;
+                floatQuat.W = (float)GameObject.Transform!.Orientation.W;
+            } else {
+                floatQuat = System.Numerics.Quaternion.Identity;
+            }
 
             var pose = new BepuPhysics.RigidPose()
             {
@@ -101,11 +105,11 @@ namespace Prowl.Runtime.Components
     {
         public Vector3 size = Vector3.One;
         public override void AddShape(ref CompoundBuilder builder, RigidPose pose) => 
-            builder.Add(new Box((float)(size.X + GameObject.Transform!.Scale.X), (float)(size.Y + GameObject.Transform!.Scale.Y), (float)(size.Z + GameObject.Transform!.Scale.Z)), pose, weight);
+            builder.Add(new Box((float)(size.X * GameObject.Transform!.Scale.X), (float)(size.Y * GameObject.Transform!.Scale.Y), (float)(size.Z * GameObject.Transform!.Scale.Z)), pose, weight);
 
-        public void DrawGizmosSelected(System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection)
+        public void DrawGizmosSelected()
         {
-            Gizmos.Matrix = Matrix4x4.CreateScale(size) * GameObject.Transform!.Global;
+            Gizmos.Matrix = Matrix4x4.CreateScale(size * 1.0025f) * GameObject.Transform!.GlobalCamRelative;
             Gizmos.Cube(Color.yellow);
             Gizmos.Matrix = Matrix4x4.Identity;
         }
@@ -116,11 +120,11 @@ namespace Prowl.Runtime.Components
     {
         public float radius = 1f;
         public override void AddShape(ref CompoundBuilder builder, RigidPose pose) =>
-        builder.Add(new Sphere(radius + (float)GameObject.Transform!.Scale.X), pose, weight);
+        builder.Add(new Sphere(radius * (float)GameObject.Transform!.Scale.X), pose, weight);
 
-        public void DrawGizmosSelected(System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection)
+        public void DrawGizmosSelected()
         {
-            Gizmos.Matrix = GameObject.Transform!.Global;
+            Gizmos.Matrix = GameObject.Transform!.GlobalCamRelative;
             Gizmos.Sphere(Color.yellow);
             Gizmos.Matrix = Matrix4x4.Identity;
         }
@@ -132,7 +136,7 @@ namespace Prowl.Runtime.Components
         public float radius = 1f;
         public float height = 1f;
         public override void AddShape(ref CompoundBuilder builder, RigidPose pose) =>
-        builder.Add(new Capsule(radius + (float)GameObject.Transform!.Scale.X, height + (float)GameObject.Transform!.Scale.X), pose, weight);
+        builder.Add(new Capsule(radius * (float)GameObject.Transform!.Scale.X, height * (float)GameObject.Transform!.Scale.X), pose, weight);
     }
 
     [ExecuteAlways, AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Capsules}  Cylinder Collider")]
@@ -141,6 +145,6 @@ namespace Prowl.Runtime.Components
         public float radius = 1f;
         public float height = 1f;
         public override void AddShape(ref CompoundBuilder builder, RigidPose pose) =>
-        builder.Add(new Cylinder(radius + (float)GameObject.Transform!.Scale.X, height + (float)GameObject.Transform!.Scale.X), pose, weight);
+        builder.Add(new Cylinder(radius * (float)GameObject.Transform!.Scale.X, height * (float)GameObject.Transform!.Scale.X), pose, weight);
     }
 }
