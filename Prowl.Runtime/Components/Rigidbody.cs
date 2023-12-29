@@ -111,7 +111,6 @@ namespace Prowl.Runtime.Components
         {
             Gizmos.Matrix = Matrix4x4.CreateScale(size * 1.0025f) * GameObject.Transform!.GlobalCamRelative;
             Gizmos.Cube(Color.yellow);
-            Gizmos.Matrix = Matrix4x4.Identity;
         }
     }
 
@@ -129,7 +128,6 @@ namespace Prowl.Runtime.Components
             mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateTranslation(GameObject.Transform!.GlobalPosition - (Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.Zero)));
             Gizmos.Matrix = mat;
             Gizmos.Sphere(Color.yellow);
-            Gizmos.Matrix = Matrix4x4.Identity;
         }
     }
 

@@ -11,22 +11,27 @@ namespace Prowl.Runtime
 
         public static Matrix4x4 Matrix = Matrix4x4.Identity;
 
-        public static void Line(Vector3 pointA, Vector3 pointB, Color color) => gizmos.Add((new LineGizmo(pointA, pointB, color), Matrix));
+        public static void Line(Vector3 pointA, Vector3 pointB, Color color) => Add(new LineGizmo(pointA, pointB, color));
 
-        public static void Cube(Color color) => gizmos.Add((new CubeGizmo(color), Matrix));
+        public static void Cube(Color color) => Add(new CubeGizmo(color));
 
-        public static void Triangle(Color color) => gizmos.Add((new TriangleGizmo(color), Matrix));
+        public static void Triangle(Color color) => Add(new TriangleGizmo(color));
 
-        public static void Quad(Color color) => gizmos.Add((new QuadGizmo(color), Matrix));
+        public static void Quad(Color color) => Add(new QuadGizmo(color));
 
-        public static void Polygon(Vector3[] points, Color color, bool closed = false) => gizmos.Add((new PolygonGizmo(points, color, closed), Matrix));
+        public static void Polygon(Vector3[] points, Color color, bool closed = false) => Add(new PolygonGizmo(points, color, closed));
 
 
-        public static void Circle(Color color) => gizmos.Add((new CircleGizmo(color), Matrix));
-        public static void DirectionalLight(Color color) => gizmos.Add((new DirectionalLightGizmo(color), Matrix));
-        public static void Sphere(Color color) => gizmos.Add((new SphereGizmo(color), Matrix));
-        public static void Spotlight(float distance, float angle, Color color) => gizmos.Add((new SpotlightGizmo(distance, angle, color), Matrix));
+        public static void Circle(Color color) => Add(new CircleGizmo(color));
+        public static void DirectionalLight(Color color) => Add(new DirectionalLightGizmo(color));
+        public static void Sphere(Color color) => Add(new SphereGizmo(color));
+        public static void Spotlight(float distance, float angle, Color color) => Add(new SpotlightGizmo(distance, angle, color));
 
+        private static void Add(Gizmo gizmo)
+        {
+            gizmos.Add((gizmo, Matrix));
+            Matrix = Matrix4x4.Identity;
+        }
 
         public static void Render()
         {

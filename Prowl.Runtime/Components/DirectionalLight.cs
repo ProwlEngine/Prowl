@@ -74,7 +74,6 @@ public class DirectionalLight : MonoBehaviour
 
         Gizmos.Matrix = GameObject.Transform!.GlobalCamRelative;
         Gizmos.DirectionalLight(Color.yellow);
-        Gizmos.Matrix = Matrix4x4.Identity;
     }
 
     public void UpdateShadowmap()

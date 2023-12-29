@@ -63,7 +63,6 @@ public class SpotLight : MonoBehaviour
             var b = Color.blue;
             b.a = 0.4f;
             Gizmos.Spotlight(distance, (1.0f - falloff) * 5f, b);
-            Gizmos.Matrix = Matrix4x4.Identity;
         }
     }
 }

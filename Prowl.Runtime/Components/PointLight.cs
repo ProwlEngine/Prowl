@@ -55,6 +55,5 @@ public class PointLight : MonoBehaviour
 
         Gizmos.Matrix = mat;
         Gizmos.Sphere(Color.yellow);
-        Gizmos.Matrix = Matrix4x4.Identity;
     }
 }
