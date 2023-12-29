@@ -80,11 +80,11 @@ namespace Prowl.Runtime.Components
         public void AddToBuilder(ref CompoundBuilder builder, bool isChild)
         {
             System.Numerics.Quaternion floatQuat;
-            if (isChild) {
-                floatQuat.X = (float)GameObject.Transform!.Orientation.X;
-                floatQuat.Y = (float)GameObject.Transform!.Orientation.Y;
-                floatQuat.Z = (float)GameObject.Transform!.Orientation.Z;
-                floatQuat.W = (float)GameObject.Transform!.Orientation.W;
+            if (isChild && GameObject.Transform != null) {
+                floatQuat.X = (float)GameObject.Transform.Orientation.X;
+                floatQuat.Y = (float)GameObject.Transform.Orientation.Y;
+                floatQuat.Z = (float)GameObject.Transform.Orientation.Z;
+                floatQuat.W = (float)GameObject.Transform.Orientation.W;
             } else {
                 floatQuat = System.Numerics.Quaternion.Identity;
             }
