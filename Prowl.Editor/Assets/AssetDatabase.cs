@@ -190,10 +190,16 @@ namespace Prowl.Runtime.Assets
                     HashSet<string> allPaths = new();
 
                     while (dirtyDirectories.TryPop(out var dir))
-                        if(dir.Exists)
-                            foreach (var fullAssetPath in dir.GetFiles("*", SearchOption.AllDirectories))
-                                if (fullAssetPath.Exists)
-                                    allPaths.Add(FileToRelative(fullAssetPath));
+                        if (dir.Exists) {
+                            try {
+                                foreach (var fullAssetPath in dir.GetFiles("*", SearchOption.AllDirectories))
+                                    if (fullAssetPath.Exists)
+                                        allPaths.Add(FileToRelative(fullAssetPath));
+                            } catch 
+                            { 
+                                // When a file is deleted it becomes dirty, but the directory is gone so we get an exception
+                            }
+                        }
 
                     while (dirtyFiles.TryPop(out var file))
                         if(file.Exists)
@@ -649,10 +655,13 @@ namespace Prowl.Runtime.Assets
                 if (!Reimport(relativeAssetPath))
                     Debug.LogError($"Failed to import {relativeAssetPath}!", true);
             }
-            // Use Parallel.ForEach to process multiple items concurrently
+            // Use Parallel.ForEach to process multiple items concurrently on threads
+            // Last tested this appears to work perfectly fine, but it might be a good idea to test this more
             //if (refreshedMeta.Count > 0)
             //{
-            //    Parallel.ForEach(refreshedMeta.GetConsumingEnumerable(), guid =>
+            //    var list = refreshedMeta.ToList();
+            //
+            //    Parallel.ForEach(list, new ParallelOptions() { MaxDegreeOfParallelism = 4 }, guid =>
             //    {
             //        string relativeAssetPath = GUIDToAssetPath(guid);
             //        if (!Reimport(relativeAssetPath))
