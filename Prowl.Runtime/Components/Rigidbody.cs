@@ -100,7 +100,7 @@ namespace Prowl.Runtime.Components
         public abstract void AddShape(ref CompoundBuilder builder, RigidPose pose);
     }
 
-    [ExecuteAlways, AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Box}  Box Collider")]
+    [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Box}  Box Collider")]
     public class BoxCollider : Collider
     {
         public Vector3 size = Vector3.One;
@@ -114,7 +114,7 @@ namespace Prowl.Runtime.Components
         }
     }
 
-    [ExecuteAlways, AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Circle}  Sphere Collider")]
+    [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Circle}  Sphere Collider")]
     public class SphereCollider : Collider
     {
         public float radius = 1f;
@@ -131,7 +131,7 @@ namespace Prowl.Runtime.Components
         }
     }
 
-    [ExecuteAlways, AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Capsules}  Capsule Collider")]
+    [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Capsules}  Capsule Collider")]
     public class CapsuleCollider : Collider
     {
         public float radius = 1f;
@@ -140,7 +140,7 @@ namespace Prowl.Runtime.Components
         builder.Add(new Capsule(radius * (float)GameObject.Transform!.Scale.X, height * (float)GameObject.Transform!.Scale.X), pose, weight);
     }
 
-    [ExecuteAlways, AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Capsules}  Cylinder Collider")]
+    [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Capsules}  Cylinder Collider")]
     public class CylinderCollider : Collider
     {
         public float radius = 1f;
