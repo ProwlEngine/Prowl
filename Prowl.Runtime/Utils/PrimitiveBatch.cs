@@ -18,6 +18,8 @@ namespace Prowl.Runtime
 
         private PrimitiveType primitiveType;
 
+        public bool IsUploaded { get; private set; }
+
         public PrimitiveBatch(PrimitiveType primitiveType)
         {
             this.primitiveType = primitiveType;
@@ -35,11 +37,13 @@ namespace Prowl.Runtime
             }
             Graphics.GL.EnableVertexAttribArray(0);
             Graphics.GL.EnableVertexAttribArray(1);
+            IsUploaded = false;
         }
 
         public void Reset()
         {
             vertices.Clear();
+            IsUploaded = false;
         }
 
         public void Line(Vector3 a, Vector3 b, Vector4 colorA, Vector4 colorB)
@@ -58,6 +62,7 @@ namespace Prowl.Runtime
             Graphics.GL.BufferData(BufferTargetARB.ArrayBuffer, new ReadOnlySpan<Vertex>(vertices.ToArray()), BufferUsageARB.StaticDraw);
 
             Graphics.GL.BindVertexArray(vao);
+            IsUploaded = true;
         }
 
         public void Draw()
