@@ -1,6 +1,9 @@
 ﻿using Silk.NET.OpenGL;
 using System;
 using System.Collections.Generic;
+using static Prowl.Runtime.ActiveColorBlend;
+using static Prowl.Runtime.ActiveCullFace;
+using static Prowl.Runtime.ActiveDepthTest;
 
 namespace Prowl.Runtime
 {
@@ -32,63 +35,67 @@ namespace Prowl.Runtime
         }
     }
 
-    internal class ActiveDepthTest : StackableGraphics<bool>
+    internal class ActiveDepthTest : StackableGraphics<DepthState>
     {
-        public static bool ActiveInOGL = true;
+        internal enum DepthState : int { Enabled = 0, Disabled }
+
+        public static DepthState ActiveInOGL = DepthState.Enabled;
         public static void SetDefault()
         {
             Graphics.GL.Enable(EnableCap.DepthTest);
-            ActiveInOGL = true;
+            ActiveInOGL = DepthState.Enabled;
         }
 
-        public ActiveDepthTest(bool val) : base(val) { }
+        public ActiveDepthTest(bool val) : base(val ? DepthState.Enabled : DepthState.Disabled) { }
 
         public override void Apply()
         {
             if (ActiveInOGL != Current) {
-                if (Current) Graphics.GL.Enable(EnableCap.DepthTest);
+                if (Current == DepthState.Enabled) Graphics.GL.Enable(EnableCap.DepthTest);
                 else Graphics.GL.Disable(EnableCap.DepthTest);
                 ActiveInOGL = Current;
             }
         }
     }
 
-    internal class ActiveColorBlend : StackableGraphics<bool>
+    internal class ActiveColorBlend : StackableGraphics<ColorBlendState>
     {
-        public static bool ActiveInOGL = true;
+        internal enum ColorBlendState : int { Enabled = 0, Disabled }
+        public static ColorBlendState ActiveInOGL = ColorBlendState.Enabled;
         public static void SetDefault()
         {
             Graphics.GL.Enable(EnableCap.Blend);
-            ActiveInOGL = true;
+            ActiveInOGL = ColorBlendState.Enabled;
         }
 
-        public ActiveColorBlend(bool val) : base(val) { }
+        public ActiveColorBlend(bool val) : base(val ? ColorBlendState.Enabled : ColorBlendState.Disabled) { }
 
         public override void Apply()
         {
             if (ActiveInOGL != Current) {
-                if (Current) Graphics.GL.Enable(EnableCap.Blend);
+                if (Current == ColorBlendState.Enabled) Graphics.GL.Enable(EnableCap.Blend);
                 else Graphics.GL.Disable(EnableCap.Blend);
                 ActiveInOGL = Current;
             }
         }
     }
 
-    internal class ActiveCullFace : StackableGraphics<bool>
+    internal class ActiveCullFace : StackableGraphics<CullFaceState>
     {
-        public static bool ActiveInOGL = true;
+        internal enum CullFaceState : int { Enabled = 0, Disabled }
+        public static CullFaceState ActiveInOGL = CullFaceState.Enabled;
         public static void SetDefault()
         {
             Graphics.GL.Enable(EnableCap.CullFace);
-            ActiveInOGL = true;
+            ActiveInOGL = CullFaceState.Enabled;
         }
 
-        public ActiveCullFace(bool val) : base(val) { }
+        public ActiveCullFace(bool val) : base(val ? CullFaceState.Enabled : CullFaceState.Disabled) { }
 
         public override void Apply()
         {
             if (ActiveInOGL != Current) {
-                if (Current) Graphics.GL.Enable(EnableCap.CullFace);
+                if (Current == CullFaceState.Enabled) Graphics.GL.Enable(EnableCap.CullFace);
                 else Graphics.GL.Disable(EnableCap.CullFace);
                 ActiveInOGL = Current;
             }
