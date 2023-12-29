@@ -475,6 +475,10 @@ namespace Prowl.Runtime
             double yaw = System.Math.Atan2(2.0 * (r.Y * r.W + r.X * r.Z), 1.0 - 2.0 * (r.X * r.X + r.Y * r.Y));
             double pitch = System.Math.Asin(2.0 * (r.X * r.W - r.Y * r.Z));
             double roll = System.Math.Atan2(2.0 * (r.X * r.Y + r.Z * r.W), 1.0 - 2.0 * (r.X * r.X + r.Z * r.Z));
+            // If any nan or inf, set that value to 0
+            if (double.IsNaN(yaw) || double.IsInfinity(yaw)) yaw = 0;
+            if (double.IsNaN(pitch) || double.IsInfinity(pitch)) pitch = 0;
+            if (double.IsNaN(roll) || double.IsInfinity(roll)) roll = 0;
             return new Vector3(yaw, pitch, roll);
         }
 
