@@ -70,6 +70,9 @@ namespace Prowl.Runtime
             GL.Enable(EnableCap.DebugOutput);
             GL.Enable(EnableCap.DebugOutputSynchronous);
 
+            // Smooth lines
+            GL.Enable(EnableCap.LineSmooth);
+
             GLMajorVersion = GL.GetInteger(GLEnum.MajorVersion);
             GLMinorVersion = GL.GetInteger(GLEnum.MinorVersion);
 
@@ -307,6 +310,18 @@ namespace Prowl.Runtime
         internal static void Dispose()
         {
             GL.Dispose();
+        }
+
+        internal static void BlitDepth(RenderTexture source, RenderTexture? destination)
+        {
+            GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, source.fboId);
+            GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, destination?.fboId ?? 0);
+            Graphics.GL.BlitFramebuffer(0, 0, source.Width, source.Height,
+                                        0, 0, destination?.Width ?? (int)Graphics.Resolution.X, destination?.Height ?? (int)Graphics.Resolution.Y,
+                                        ClearBufferMask.DepthBufferBit, BlitFramebufferFilter.Nearest
+                                        );
+            GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
+            GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, 0);
         }
     }
 }
