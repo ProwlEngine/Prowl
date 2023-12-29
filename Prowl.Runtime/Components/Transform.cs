@@ -84,6 +84,7 @@ namespace Prowl.Runtime
                     orientation = value;
                 else // Divide because quaternions are like matrices.
                     orientation = value / GameObject.Parent.Transform.globalOrientation;
+                rotation = orientation.GetRotation().ToDeg().NormalizeEulerAngleDegrees();
                 Recalculate();
             }
         }
