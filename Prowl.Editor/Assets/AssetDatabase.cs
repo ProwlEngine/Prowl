@@ -127,7 +127,7 @@ namespace Prowl.Runtime.Assets
             var watcher = new FileSystemWatcher(info.FullName) {
                 EnableRaisingEvents = true,
                 IncludeSubdirectories = true,
-                NotifyFilter = NotifyFilters.CreationTime | NotifyFilters.DirectoryName | NotifyFilters.FileName | NotifyFilters.Size
+                NotifyFilter = NotifyFilters.CreationTime | NotifyFilters.DirectoryName | NotifyFilters.FileName | NotifyFilters.Size // Should we also track LastWrite? Probably?
             };
 
             static void OnChangedOrRenamed(object sender, FileSystemEventArgs e)

@@ -1,4 +1,3 @@
-using Assimp;
 using HexaEngine.ImGuiNET;
 using Prowl.Editor.Assets;
 using Prowl.Icons;
@@ -6,9 +5,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.Assets;
 using Prowl.Runtime.ImGUI.Widgets;
 using Prowl.Runtime.SceneManagement;
-using System.Numerics;
 using System.Reflection;
-using static Assimp.Metadata;
 
 namespace Prowl.Editor.EditorWindows;
 
