@@ -459,8 +459,7 @@ namespace Prowl.Runtime
 
             public class Element
             {
-
-                public VertexSemantic Semantic;
+                public uint Semantic;
                 public VertexType Type;
                 public byte Count;
                 public short Offset; // Automatically assigned in VertexFormats constructor
@@ -469,6 +468,14 @@ namespace Prowl.Runtime
                 public bool Normalized;
                 public Element() { }
                 public Element(VertexSemantic semantic, VertexType type, byte count, short divisor = 0, bool normalized = false)
+                {
+                    Semantic = (uint)semantic;
+                    Type = type;
+                    Count = count;
+                    Divisor = divisor;
+                    Normalized = normalized;
+                }
+                public Element(uint semantic, VertexType type, byte count, short divisor = 0, bool normalized = false)
                 {
                     Semantic = semantic;
                     Type = type;
