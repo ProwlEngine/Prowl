@@ -430,8 +430,8 @@ public class GameObject : EngineObject, ISerializable
 
         foreach (var component in _components)
         {
-            component.Internal_DrawGizmos(view, projection);
-            if(isSelected) component.Internal_DrawGizmosSelected(view, projection);
+            component.Internal_DrawGizmos();
+            if(isSelected) component.Internal_DrawGizmosSelected();
         }
     }
 

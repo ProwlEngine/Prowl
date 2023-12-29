@@ -211,13 +211,13 @@ public abstract class MonoBehaviour : EngineObject
     {
         if (!PauseLogic || executeAlways) onDestroy?.Invoke(this, []);
     }
-    internal void Internal_DrawGizmos(System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection)
+    internal void Internal_DrawGizmos()
     {
-        drawGizmos?.Invoke(this, [ view, projection ]);
+        drawGizmos?.Invoke(this, []);
     }
-    internal void Internal_DrawGizmosSelected(System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection)
+    internal void Internal_DrawGizmosSelected()
     {
-        drawGizmosSelected?.Invoke(this, [ view, projection ]);
+        drawGizmosSelected?.Invoke(this, []);
     }
 
     public Coroutine StartCoroutine(string methodName)

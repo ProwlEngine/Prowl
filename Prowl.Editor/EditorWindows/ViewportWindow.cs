@@ -80,6 +80,9 @@ public class ViewportWindow : EditorWindow
         if (renderSize.X != RenderTarget.Width || renderSize.Y != RenderTarget.Height)
             RefreshRenderTexture((int)renderSize.X, (int)renderSize.Y);
 
+        var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Transform!.Position, Cam.GameObject.Transform!.Forward, Cam.GameObject.Transform!.Up).ToFloat();
+        var projection = Cam.GetProjectionMatrix(renderSize.X, renderSize.Y).ToFloat();
+
         WindowCenter = ImGui.GetWindowPos() + new System.Numerics.Vector2(windowSize.X / 2, windowSize.Y / 2);
 
         // Manually Render to the RenderTexture
@@ -96,22 +99,18 @@ public class ViewportWindow : EditorWindow
         ImGuizmo.SetOrthographic(false);
         ImGuizmo.SetRect(ImGui.GetWindowPos().X, ImGui.GetWindowPos().Y, windowSize.X, windowSize.Y);
 
-        var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Transform!.Position, Cam.GameObject.Transform!.Forward, Cam.GameObject.Transform!.Up).ToFloat();
-        var projection = Cam.GetProjectionMatrix(renderSize.X, renderSize.Y).ToFloat();
+#warning TODO: Camera rendering clears Gizmos untill the rendering overhaul, so gizmos will Flicker here
+        Camera.Current = Cam;
+        foreach (var activeGO in SceneManager.AllGameObjects)
+            if (activeGO.EnabledInHierarchy)
+                activeGO.DrawGizmos(view, projection, HierarchyWindow.SelectHandler.IsSelected(new WeakReference(activeGO)));
+        Camera.Current = null;
 
         if (DrawGrid)
         {
             System.Numerics.Matrix4x4 matrix = System.Numerics.Matrix4x4.Identity;
             ImGuizmo.DrawGrid(ref view.M11, ref projection.M11, ref matrix.M11, 10);
         }
-
-        Camera.Current = Cam;
-
-        view.Translation = new System.Numerics.Vector3(0, 0, 0);
-        foreach (var activeGO in SceneManager.AllGameObjects)
-            if (activeGO.EnabledInHierarchy)
-                activeGO.DrawGizmos(view, projection, HierarchyWindow.SelectHandler.IsSelected(new WeakReference(activeGO)));
-        Camera.Current = null;
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 5));
         if (ImGui.Button($"{FontAwesome6.ArrowsUpDownLeftRight}")) SceneManager.GizmosOperation = ImGuizmoOperation.Translate;
