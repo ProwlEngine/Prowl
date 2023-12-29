@@ -173,10 +173,9 @@ namespace Prowl.Runtime
             compoundTag.Add("PosY", new DoubleTag(position.Y));
             compoundTag.Add("PosZ", new DoubleTag(position.Z));
 
-            compoundTag.Add("RotX", new DoubleTag(orientation.X));
-            compoundTag.Add("RotY", new DoubleTag(orientation.Y));
-            compoundTag.Add("RotZ", new DoubleTag(orientation.Z));
-            compoundTag.Add("RotW", new DoubleTag(orientation.W));
+            compoundTag.Add("RotX", new DoubleTag(rotation.X));
+            compoundTag.Add("RotY", new DoubleTag(rotation.Y));
+            compoundTag.Add("RotZ", new DoubleTag(rotation.Z));
 
             compoundTag.Add("ScalX", new DoubleTag(scale.X));
             compoundTag.Add("ScalY", new DoubleTag(scale.Y));
@@ -192,7 +191,8 @@ namespace Prowl.Runtime
             _enabledInHierarchy = value["EnabledInHierarchy"].ByteValue == 1;
             hideFlags = (HideFlags)value["HideFlags"].IntValue;
             position = new Vector3(value["PosX"].DoubleValue, value["PosY"].DoubleValue, value["PosZ"].DoubleValue);
-            orientation = new Quaternion(value["RotX"].DoubleValue, value["RotY"].DoubleValue, value["RotZ"].DoubleValue, value["RotW"].DoubleValue);
+            rotation = new Vector3(value["RotX"].DoubleValue, value["RotY"].DoubleValue, value["RotZ"].DoubleValue);
+            orientation = rotation.NormalizeEulerAngleDegrees().ToRad().GetQuaternion();
             scale = new Vector3(value["ScalX"].DoubleValue, value["ScalY"].DoubleValue, value["ScalZ"].DoubleValue);
         }
     }
