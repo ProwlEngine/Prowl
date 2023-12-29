@@ -19,10 +19,9 @@ public class Camera : MonoBehaviour
     public float NearClip = 0.01f;
     public float FarClip = 1000f;
 
-    public float Contrast = 1.1f;
-    public float Saturation = 1.2f;
-
     public float RenderResolution = 1f;
+
+    public bool ShowGizmos = false;
 
     public enum ProjectionType { Perspective, Orthographic }
     public ProjectionType projectionType = ProjectionType.Perspective;
@@ -170,10 +169,9 @@ public class Camera : MonoBehaviour
         //PostProcessStagePostCombine?.Invoke(gBuffer);
 
         // Draw to Screen
-
-
         if (debugDraw == DebugDraw.Off) {
             Graphics.Blit(Target.Res ?? null, result.InternalTextures[0], DoClear);
+            Graphics.BlitDepth(gBuffer.buffer, Target.Res ?? null);
         }
         else if (debugDraw == DebugDraw.Albedo)
             Graphics.Blit(Target.Res ?? null, gBuffer.AlbedoAO, DoClear);
@@ -186,11 +184,21 @@ public class Camera : MonoBehaviour
         else if (debugDraw == DebugDraw.ObjectID)
             Graphics.Blit(Target.Res ?? null, gBuffer.ObjectIDs, DoClear);
 
-        Current = null;
-        Graphics.UseJitter = false;
-
         oldView = Graphics.MatView;
         oldProjection = Graphics.MatProjection;
+
+        if (ShowGizmos) {
+            Target.Res?.Begin();
+            if (Graphics.UseJitter)
+                Graphics.MatProjection = Current.GetProjectionMatrix(width, height); // Cancel out jitter if there is any
+            Gizmos.Render();
+            Target.Res?.End();
+        }
+#warning TODO: Atm gizmos is handled in a RenderObject method, but it should all be inside Update() including rendering but that will happen over the rendering overhaul, so for now reset every render (when rendering overhaul, it should be once per frame)
+        Gizmos.Clear();
+
+        Current = null;
+        Graphics.UseJitter = false;
     }
 
     private void EarlyEndRender()

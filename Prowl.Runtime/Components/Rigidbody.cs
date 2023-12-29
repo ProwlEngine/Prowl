@@ -106,7 +106,7 @@ namespace Prowl.Runtime.Components
         public void DrawGizmosSelected(System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection)
         {
             Gizmos.Matrix = Matrix4x4.CreateScale(size) * GameObject.Transform!.Global;
-            Gizmos.Cube(Color.yellow, 2f);
+            Gizmos.Cube(Color.yellow);
             Gizmos.Matrix = Matrix4x4.Identity;
         }
     }
@@ -121,7 +121,7 @@ namespace Prowl.Runtime.Components
         public void DrawGizmosSelected(System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection)
         {
             Gizmos.Matrix = GameObject.Transform!.Global;
-            Gizmos.Sphere(Color.yellow, 2f);
+            Gizmos.Sphere(Color.yellow);
             Gizmos.Matrix = Matrix4x4.Identity;
         }
     }

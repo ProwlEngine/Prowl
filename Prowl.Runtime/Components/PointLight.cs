@@ -24,6 +24,7 @@ public class PointLight : MonoBehaviour
         if (mesh == null)
             mesh = Mesh.CreateSphere(1f, 16, 16);
 
+        var mat = Matrix4x4.CreateScale(radius) * GameObject.Transform!.GlobalCamRelative;
         if (lightMat == null)
         {
             lightMat = new Material(Shader.Find("Defaults/Pointlight.shader"));
@@ -48,15 +49,12 @@ public class PointLight : MonoBehaviour
             //Camera.Current.DrawFullScreenTexture(Camera.Current.gBuffer.depth);
             //Raylib.DrawRectangle(0, 0, 9999, 9999, Color.white);
             // set matrix scale to radius
-            var mat = Matrix4x4.CreateScale(radius) * GameObject.Transform!.GlobalCamRelative;
             Graphics.DrawMeshNow(mesh, mat, lightMat);
             //Camera.Current.Start3D();
         }
 
-        var s = Matrix4x4.CreateScale(radius);
-        var t = Matrix4x4.CreateTranslation(GameObject.Transform!.GlobalPosition);
-        Gizmos.Matrix = s * t;
-        Gizmos.Sphere(Color.yellow, 2f);
+        Gizmos.Matrix = mat;
+        Gizmos.Sphere(Color.yellow);
         Gizmos.Matrix = Matrix4x4.Identity;
     }
 }

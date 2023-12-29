@@ -35,6 +35,7 @@ public class ViewportWindow : EditorWindow
         CamObject.hideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
         t.Position = new Vector3(0, 5, -10);
         Cam = CamObject.AddComponent<Camera>();
+        Cam.ShowGizmos = true;
         LastFocusedCamera = Cam;
 
         RefreshRenderTexture(Width, Height);
@@ -105,12 +106,6 @@ public class ViewportWindow : EditorWindow
         }
 
         Camera.Current = Cam;
-        var mvp = view.ToDouble();
-        mvp *= Cam.GetProjectionMatrix(renderSize.X, renderSize.Y);
-        var drawList = ImGui.GetWindowDrawList();
-        Runtime.Gizmos.Render(drawList, mvp);
-
-        Prowl.Runtime.Gizmos.Clear();
 
         view.Translation = new System.Numerics.Vector3(0, 0, 0);
         foreach (var activeGO in SceneManager.AllGameObjects)

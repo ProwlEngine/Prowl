@@ -1,4 +1,4 @@
-﻿Shader "Default/Standard"
+﻿Shader "Default/Gizmos"
 
 Properties
 {
@@ -11,9 +11,9 @@ Pass 0
 	Vertex
 	{
 		layout (location = 0) in vec3 vertexPosition;
-		layout (location = 1) in vec3 vertexColor;
+		layout (location = 1) in vec4 vertexColor;
 
-		out vec3 VertColor;
+		out vec4 VertColor;
 		
 		uniform mat4 mvp;
 
@@ -27,13 +27,13 @@ Pass 0
 
 	Fragment
 	{
-		in vec3 VertColor;
+		in vec4 VertColor;
 
 		out vec4 finalColor;
 
 		void main()
 		{
-			finalColor = vec4(VertColor, 1.0);
+			finalColor = VertColor;
 
 		}
 	}

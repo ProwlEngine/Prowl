@@ -72,11 +72,8 @@ public class DirectionalLight : MonoBehaviour
 
         Graphics.Blit(lightMat);
 
-        var s = Matrix4x4.CreateScale(0.5f);
-        var r = Matrix4x4.CreateFromQuaternion(GameObject.Transform!.GlobalOrientation);
-        var t = Matrix4x4.CreateTranslation(GameObject.Transform!.GlobalPosition);
-        Gizmos.Matrix = s * r * t;
-        Gizmos.DirectionalLight(Color.yellow, 2f);
+        Gizmos.Matrix = GameObject.Transform!.GlobalCamRelative;
+        Gizmos.DirectionalLight(Color.yellow);
         Gizmos.Matrix = Matrix4x4.Identity;
     }
 
