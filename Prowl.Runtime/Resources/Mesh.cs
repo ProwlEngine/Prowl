@@ -59,14 +59,7 @@ namespace Prowl.Runtime
             uploadedVBOSize = vertices.Length;
 
             Graphics.CheckGL();
-            for (var i = 0; i < format.Elements.Length; i++)
-            {
-                var element = format.Elements[i];
-                var index = (uint)element.Semantic;
-                Graphics.GL.EnableVertexAttribArray(index);
-                int offset = (int)element.Offset;
-                Graphics.GL.VertexAttribPointer(index, element.Count, (GLEnum)element.Type, element.Normalized, (uint)format.Size, (void*)offset);
-            }
+            format.Bind();
 
             uploadedIBOSize = indices?.Length ?? 0;
             if (indices != null) {
@@ -488,6 +481,19 @@ namespace Prowl.Runtime
             public enum VertexSemantic { Position, TexCoord, Normal, Color, Tangent, BoneIndex, BoneWeight }
 
             public enum VertexType { Byte = 5120, UnsignedByte = 5121, Short = 5122, Int = 5124, Float = 5126, }
+
+            public void Bind()
+            {
+                for (var i = 0; i < Elements.Length; i++) {
+                    var element = Elements[i];
+                    var index = element.Semantic;
+                    Graphics.GL.EnableVertexAttribArray(index);
+                    int offset = (int)element.Offset;
+                    unsafe {
+                        Graphics.GL.VertexAttribPointer(index, element.Count, (GLEnum)element.Type, element.Normalized, (uint)Size, (void*)offset);
+                    }
+                }
+            }
         }
     }
 }
