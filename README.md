@@ -27,8 +27,6 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
 
 **Note:** The Engine is very young and far from production-ready, being developed mainly by a single developer in his spare time. **And has only been tested and compiled for Windows!**
 
-**Note:** Currently, the engine is using Raylib as a temporary base to speed up development, with plans to implement a custom-built API Agnostic backend later.
-
 ![Sponza screenshot](https://i.imgur.com/RrB7A0a.png)
 
 # Features
@@ -40,6 +38,7 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - .NET 8
     - Dear ImGUI Editor, including ImGuizmo, ImPlot, ImNodes
     - Editor with support for Editor Scripts and Custom Editors
+    - Physics (BepuPhysics v2)
     - Less than 10k lines of Executable Code for both the Editor and Engine combined!
     - Unity-like Coroutines
     - Playtest directly in Editor
@@ -115,7 +114,7 @@ Getting Prowl up and running is super easy!
   - [ ] iOS - Unknown
   - [ ] Web - Unknown
 - [ ] VR Support
-- [ ] BepuPhysics v2 - In Development Now
+  - [ ] Editor VR Support - The Entire editor should be able to function in Desktop VR
 - [ ] Navmesh and AI Agents
 - [ ] Networking Solution
 
@@ -184,9 +183,8 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 
 # Acknowledgments
 
-- Hat tip to the creators of [Raylib](https://github.com/raysan5/raylib), It has shaved off hours of development time getting the engine to a usable state.
+- Hat tip to the creators of [Raylib](https://github.com/raysan5/raylib), While we are no longer based upon it, it has shaved off hours of development time getting the engine to a usable state.
 - Some ideas/code have been taken from the amazing 2D Engine [Duality](https://github.com/AdamsLair/duality).
-- The great C++ [Arc Game Engine](https://github.com/MohitSethi99/ArcGameEngine), for some UI Inspiration
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Contributors
@@ -201,7 +199,7 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 # Dependencies
 
 ### Runtime
-- [Raylib](https://github.com/raysan5/raylib) via [Raylib-cs](https://github.com/ChrisDill/Raylib-cs) - Temporary
+- [Silk.NET](https://github.com/dotnet/Silk.NET)
 - [ImageMagick](http://www.imagemagick.org/) via [Magick.NET](https://github.com/dlemstra/Magick.NET)
 - [ImGUI](https://github.com/ocornut/imgui) via [ImGUI.NET](https://github.com/ImGuiNET/ImGui.NET)
 
