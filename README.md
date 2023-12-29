@@ -114,6 +114,7 @@ Getting Prowl up and running is super easy!
   - [ ] iOS - Unknown
   - [ ] Web - Unknown
 - [ ] VR Support
+  - [ ] Editor VR Support - The Entire editor should be able to function in Desktop VR
 - [ ] Navmesh and AI Agents
 - [ ] Networking Solution
 
