@@ -9,9 +9,9 @@ public abstract class MonoBehaviour : EngineObject
 {
     public static bool PauseLogic = false;
 
-    [SerializeField]
+    [SerializeField, HideInInspector]
     internal protected bool _enabled = true;
-    [SerializeField]
+    [SerializeField, HideInInspector]
     internal protected bool _enabledInHierarchy = true;
 
     private bool _hasBeenEnabled = false;
