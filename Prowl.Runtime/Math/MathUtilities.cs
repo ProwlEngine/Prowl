@@ -365,9 +365,21 @@ namespace Prowl.Runtime
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Matrix4x4 CreateTransform(Vector3 pos, Quaternion rotation, Vector3 scale)
+        {
+            return Matrix4x4.CreateTranslation(pos) * Matrix4x4.CreateFromQuaternion(rotation) * Matrix4x4.CreateScale(scale);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Matrix4x4 CreateTransform(Vector3 pos, Vector3 rotation, double scale)
         {
             return Matrix4x4.CreateTranslation(pos) * Matrix4x4.CreateFromYawPitchRoll(rotation.X, rotation.Y, rotation.Z) * Matrix4x4.CreateScale(scale);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Matrix4x4 CreateTransform(Vector3 pos, Quaternion rotation, double scale)
+        {
+            return Matrix4x4.CreateTranslation(pos) * Matrix4x4.CreateFromQuaternion(rotation) * Matrix4x4.CreateScale(scale);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
