@@ -124,7 +124,10 @@ namespace Prowl.Runtime.Components
 
         public void DrawGizmosSelected()
         {
-            Gizmos.Matrix = GameObject.Transform!.GlobalCamRelative;
+            var mat = Matrix4x4.Identity;
+            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateScale((radius * (float)GameObject.Transform!.Scale.X) * 1.0025f));
+            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateTranslation(GameObject.Transform!.GlobalPosition - (Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.Zero)));
+            Gizmos.Matrix = mat;
             Gizmos.Sphere(Color.yellow);
             Gizmos.Matrix = Matrix4x4.Identity;
         }
