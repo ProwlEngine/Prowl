@@ -213,7 +213,7 @@ public class AssetsWindow : EditorWindow
                     fileopener.Start();
                 }
                 if (ImGui.MenuItem("Delete"))
-                    directory.Delete(); // Will trigger the AssetDatabase file watchers
+                    directory.Delete(true); // Will trigger the AssetDatabase file watchers
                 ImGui.Separator();
                 if (ImGui.MenuItem("Reimport All"))
                     AssetDatabase.ReimportAll();
