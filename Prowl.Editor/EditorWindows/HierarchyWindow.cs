@@ -323,7 +323,7 @@ public class HierarchyWindow : EditorWindow
         var newGO = new List<WeakReference>();
         SelectHandler.Foreach((go) => {
             // Duplicating, Easiest way to duplicate is to Serialize then Deserialize
-            var serialized = TagSerializer.Serialize(go);
+            var serialized = TagSerializer.Serialize(go.Target);
             var deserialized = TagSerializer.Deserialize<GameObject>(serialized);
             deserialized.SetParent((go.Target as GameObject).Parent);
             newGO.Add(new WeakReference(deserialized));
