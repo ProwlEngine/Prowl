@@ -45,8 +45,13 @@ public class GameObject : EngineObject, ISerializable
         set => layerIndex = TagLayerManager.GetLayerIndex(value);
     }
 
-    private Transform? _transform;
-    public Transform? Transform => _transform ??= GetComponent<Transform>();
+    internal WeakReference<Transform>? _transform;
+    public Transform? Transform {
+        get {
+            _transform ??= new (GetComponentInParent<Transform>()); // Fallback to Parent transform if one exists
+            return _transform.TryGetTarget(out var t) ? t : null; 
+        }
+    }
 
     #region Transform
 
@@ -107,6 +112,7 @@ public class GameObject : EngineObject, ISerializable
         parent = newParent;
         newParent?.Children.Add(this);
 
+        _transform = null; // Reset cached Transform
         Transform?.Recalculate();
         HierarchyStateChanged();
     }
@@ -310,14 +316,17 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
-    public T GetComponentInParent<T>() where T : MonoBehaviour => (T)GetComponentInParent(typeof(T));
+    public T GetComponentInParent<T>(bool includeSelf = true) where T : MonoBehaviour => (T)GetComponentInParent(typeof(T), includeSelf);
 
-    public MonoBehaviour GetComponentInParent(Type componentType)
+    public MonoBehaviour GetComponentInParent(Type componentType, bool includeSelf = true)
     {
         // First check the current Object
-        MonoBehaviour component = GetComponent(componentType);
-        if (component != null)
-            return component;
+        MonoBehaviour component;
+        if (includeSelf) {
+            component = GetComponent(componentType);
+            if (component != null)
+                return component;
+        }
         // Now check all parents
         GameObject parent = this;
         while ((parent = parent.Parent) != null)
@@ -343,14 +352,17 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
-    public T GetComponentInChildren<T>() where T : MonoBehaviour => (T)GetComponentInChildren(typeof(T));
+    public T GetComponentInChildren<T>(bool includeSelf = true) where T : MonoBehaviour => (T)GetComponentInChildren(typeof(T), includeSelf);
 
-    public MonoBehaviour GetComponentInChildren(Type componentType)
+    public MonoBehaviour GetComponentInChildren(Type componentType, bool includeSelf = true)
     {
         // First check the current Object
-        MonoBehaviour component = GetComponent(componentType);
-        if (component != null)
-            return component;
+        MonoBehaviour component;
+        if (includeSelf) {
+            component = GetComponent(componentType);
+            if (component != null)
+                return component;
+        }
         // Now check all children
         foreach (var child in Children)
         {
@@ -397,16 +409,18 @@ public class GameObject : EngineObject, ISerializable
 
     public void DrawGizmos(System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection, bool isSelected)
     {
-        if (hideFlags.HasFlag(HideFlags.NoGizmos) || Transform == null) return;
+        Transform myTransform = GetComponent<Transform>();
+
+        if (hideFlags.HasFlag(HideFlags.NoGizmos) || myTransform == null) return;
 
         if (isSelected)
         {
             System.Numerics.Matrix4x4 goMatrix;
 
             if (SceneManager.GizmosSpace == ImGuizmoMode.Local)
-                goMatrix = Transform.Local.ToFloat();
+                goMatrix = myTransform.Local.ToFloat();
             else
-                goMatrix = Transform.Global.ToFloat();
+                goMatrix = myTransform.Global.ToFloat();
             // Convert position to be relative to Camera
             //goMatrix *= System.Numerics.Matrix4x4.CreateTranslation(-Camera.Current.GameObject.GlobalPosition.ToFloat());
             goMatrix.Translation -= Camera.Current.GameObject.Transform?.GlobalPosition.ToFloat() ?? Vector3.Zero;
@@ -419,15 +433,15 @@ public class GameObject : EngineObject, ISerializable
                 goMatrix.Translation += Camera.Current.GameObject.Transform?.GlobalPosition.ToFloat() ?? Vector3.Zero;
                 if (SceneManager.GizmosSpace == ImGuizmoMode.Local)
                 {
-                    Transform.Local = goMatrix.ToDouble();
+                    myTransform.Local = goMatrix.ToDouble();
                 }
                 else
                 {
                     var global = goMatrix.ToDouble();
                     Matrix4x4.Decompose(global, out var globalScale, out var globalOrientation, out var globalPosition);
-                    Transform.Scale = globalScale;
-                    Transform.GlobalOrientation = globalOrientation;
-                    Transform.GlobalPosition = globalPosition;
+                    myTransform.Scale = globalScale;
+                    myTransform.GlobalOrientation = globalOrientation;
+                    myTransform.GlobalPosition = globalPosition;
                 }
             }
         }
@@ -484,6 +498,8 @@ public class GameObject : EngineObject, ISerializable
 
     private void HierarchyStateChanged()
     {
+        _transform = null; // Reset cached Transform
+
         bool newState = _enabled && IsParentEnabled();
         if (_enabledInHierarchy != newState)
         {

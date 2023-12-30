@@ -83,12 +83,12 @@ public abstract class MonoBehaviour : EngineObject
     public MonoBehaviour GetComponent(Type type) => GameObject.GetComponent(type);
     public bool TryGetComponent<T>(out T component) where T : MonoBehaviour => (component = GetComponent<T>()) != null;
     public IEnumerable<T> GetComponents<T>() where T : MonoBehaviour => GameObject.GetComponents<T>();
-    public T GetComponentInParent<T>() where T : MonoBehaviour => GameObject.GetComponentInParent<T>();
-    public MonoBehaviour GetComponentInParent(Type componentType) => GameObject.GetComponentInParent(componentType);
-    public IEnumerable<T> GetComponentsInParent<T>() where T : MonoBehaviour => GameObject.GetComponentsInParent<T>();
-    public T GetComponentInChildren<T>() where T : MonoBehaviour => GameObject.GetComponentInChildren<T>();
-    public MonoBehaviour GetComponentInChildren(Type componentType) => GameObject.GetComponentInChildren(componentType);
-    public IEnumerable<T> GetComponentsInChildren<T>() where T : MonoBehaviour => GameObject.GetComponentsInChildren<T>();
+    public T GetComponentInParent<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentInParent<T>(includeSelf);
+    public MonoBehaviour GetComponentInParent(Type componentType, bool includeSelf = true) => GameObject.GetComponentInParent(componentType, includeSelf);
+    public IEnumerable<T> GetComponentsInParent<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentsInParent<T>(includeSelf);
+    public T GetComponentInChildren<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentInChildren<T>(includeSelf);
+    public MonoBehaviour GetComponentInChildren(Type componentType, bool includeSelf = true) => GameObject.GetComponentInChildren(componentType, includeSelf);
+    public IEnumerable<T> GetComponentsInChildren<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentsInChildren<T>(includeSelf);
     #endregion
 
     internal void AttachToGameObject(GameObject go)

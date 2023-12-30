@@ -5,7 +5,6 @@ using Mesh = Prowl.Runtime.Mesh;
 
 namespace Prowl.Runtime;
 
-[RequireComponent(typeof(Transform))]
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Shapes}  Mesh Renderer")]
 public class MeshRenderer : MonoBehaviour, ISerializable
 {
@@ -21,9 +20,16 @@ public class MeshRenderer : MonoBehaviour, ISerializable
 
     public void OnRenderObject()
     {
-        var mat = GameObject.Transform!.GlobalCamRelative;
+        Matrix4x4 mat;
+        if (GameObject.Transform != null)
+            mat = GameObject.Transform!.GlobalCamRelative;
+        else {
+            mat = Matrix4x4.Identity;
+            mat.Translation -= Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.Zero;
+        }
+
         int camID = Camera.Current.InstanceID;
-        if (!prevMats.ContainsKey(camID)) prevMats[camID] = GameObject.Transform!.GlobalCamRelative;
+        if (!prevMats.ContainsKey(camID)) prevMats[camID] = mat;
         var prevMat = prevMats[camID];
 
         var material = Material.Res;
@@ -48,8 +54,17 @@ public class MeshRenderer : MonoBehaviour, ISerializable
     public void OnRenderObjectDepth()
     {
         if (Mesh.IsAvailable && Material.IsAvailable) {
+
+            Matrix4x4 mat;
+            if (GameObject.Transform != null)
+                mat = GameObject.Transform!.GlobalCamRelative;
+            else {
+                mat = Matrix4x4.Identity;
+                mat.Translation -= Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.Zero;
+            }
+
             var mvp = Matrix4x4.Identity;
-            mvp = Matrix4x4.Multiply(mvp, GameObject.Transform!.GlobalCamRelative);
+            mvp = Matrix4x4.Multiply(mvp, mat);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthProjection);
             Material.Res!.SetMatrix("mvp", mvp);

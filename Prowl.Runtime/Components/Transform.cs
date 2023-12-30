@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace Prowl.Runtime
 {
-    [DisallowMultipleComponent]
+    [DisallowMultipleComponent, ExecuteAlways]
     [AddComponentMenu($"{FontAwesome6.ArrowsUpDownLeftRight}  Transform")]
     public class Transform : MonoBehaviour, ISerializable
     {
@@ -67,10 +67,11 @@ namespace Prowl.Runtime
             get => globalPosition;
             set {
                 if (globalPosition == value) return;
-                if (GameObject.Parent == null || GameObject.Parent.Transform == null)
+                var parentTransform = GetComponentInParent<Transform>(false);
+                if (parentTransform == null)
                     position = value;
                 else // Transform because the rotation could modify the position of the child.
-                    position = Vector3.Transform(value, GameObject.Parent.Transform.globalInverse);
+                    position = Vector3.Transform(value, parentTransform.globalInverse);
                 Recalculate();
             }
         }
@@ -80,10 +81,11 @@ namespace Prowl.Runtime
             get => globalOrientation;
             set {
                 if (globalOrientation == value) return;
-                if (GameObject.Parent == null || GameObject.Parent.Transform == null)
+                var parentTransform = GetComponentInParent<Transform>(false);
+                if (parentTransform == null)
                     orientation = value;
                 else // Divide because quaternions are like matrices.
-                    orientation = value / GameObject.Parent.Transform.globalOrientation;
+                    orientation = value / parentTransform.globalOrientation;
                 rotation = orientation.GetRotation().ToDeg().NormalizeEulerAngleDegrees();
                 Recalculate();
             }
@@ -122,6 +124,13 @@ namespace Prowl.Runtime
         public void Awake()
         {
             Recalculate();
+
+            GameObject._transform = new (this);
+        }
+
+        public void OnDestroy()
+        {
+            GameObject._transform = null;
         }
 
         /// <summary>Recalculates all values of the <see cref="Transform"/>.</summary>
@@ -130,10 +139,11 @@ namespace Prowl.Runtime
             globalPrevious = global;
 
             local = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(position);
-            if (GameObject.Parent == null || GameObject.Parent.Transform == null)
+            var parentTransform = GetComponentInParent<Transform>(false);
+            if (parentTransform == null)
                 global = local;
             else
-                global = local * GameObject.Parent.Transform.global;
+                global = local * parentTransform.global;
 
             Matrix4x4.Invert(global, out globalInverse);
 
