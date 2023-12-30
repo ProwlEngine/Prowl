@@ -4,6 +4,7 @@ using BepuPhysics.CollisionDetection;
 using BepuPhysics.Constraints;
 using BepuUtilities;
 using BepuUtilities.Memory;
+using ImageMagick;
 using Prowl.Runtime.SceneManagement;
 using System;
 using System.Collections.Generic;
@@ -22,13 +23,15 @@ namespace Prowl.Runtime
 
         //static BodyHandle test;
 
+        public static Vector3 Gravity = new Vector3(0, -9.81f, 0);
+
         public static void Initialize()
         {
             BufferPool = new BufferPool();
             var targetThreadCount = int.Max(1, Environment.ProcessorCount > 4 ? Environment.ProcessorCount - 2 : Environment.ProcessorCount - 1);
             ThreadDispatcher = new ThreadDispatcher(targetThreadCount);
 
-            Simulation = Simulation.Create(BufferPool, new NarrowPhaseCallbacks(), new PoseIntegratorCallbacks(new Vector3(0, -10, 0)), new SolveDescription(8, 1));
+            Simulation = Simulation.Create(BufferPool, new NarrowPhaseCallbacks(), new PoseIntegratorCallbacks(), new SolveDescription(8, 1));
         }
 
         public static void Update()
@@ -180,7 +183,7 @@ namespace Prowl.Runtime
         /// <summary>
         /// Gets how the pose integrator should handle angular velocity integration.
         /// </summary>
-        public readonly AngularIntegrationMode AngularIntegrationMode => AngularIntegrationMode.Nonconserving;
+        public readonly AngularIntegrationMode AngularIntegrationMode => AngularIntegrationMode.ConserveMomentum;
 
         /// <summary>
         /// Gets whether the integrator should use substepping for unconstrained bodies when using a substepping solver.
@@ -197,13 +200,6 @@ namespace Prowl.Runtime
         /// </summary>
         public readonly bool IntegrateVelocityForKinematics => false;
 
-        public Vector3 Gravity;
-
-        public PoseIntegratorCallbacks(Vector3 gravity) : this()
-        {
-            Gravity = gravity;
-        }
-
         //Note that velocity integration uses "wide" types. These are array-of-struct-of-arrays types that use SIMD accelerated types underneath.
         //Rather than handling a single body at a time, the callback handles up to Vector<float>.Count bodies simultaneously.
         Vector3Wide gravityWideDt;
@@ -219,7 +215,7 @@ namespace Prowl.Runtime
         public void PrepareForIntegration(float dt)
         {
             //No reason to recalculate gravity * dt for every body; just cache it ahead of time.
-            gravityWideDt = Vector3Wide.Broadcast(Gravity * dt);
+            gravityWideDt = Vector3Wide.Broadcast(Physics.Gravity * dt);
         }
 
         /// <summary>

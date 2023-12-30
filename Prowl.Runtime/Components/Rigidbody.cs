@@ -1,10 +1,32 @@
 ﻿using BepuPhysics;
 using BepuPhysics.Collidables;
 using Prowl.Icons;
+using System.Linq;
 
 namespace Prowl.Runtime.Components
 {
+    // Some TODO's for physics
+    // Layer Mask/Support
+    // Monobehaviour OnColliderEnter/Exit
+    // Make Collision shapes support changes to scale/position/rotation
+    // Mesh Collider
+    // Ensure Compound Collider work well
+    // Ensure child colliders work well
+    // Capsule Collider Gizmos
+    // Cylinder Collider Gizmos
+    // Support transform manipulations in Update() (Auto-Sync transform with Rigidbody)
+    // Physics.Raycast and other queries
 
+    // Weld Joint
+    // Hinge Joint
+    // BallSocket Joint
+    // DistanceLimit Joint
+
+    // look into joints
+    // Slider, PointOnLine, PointOnPlane, AngularServo, LinearServo, SwivelHinge, SwivelHinge2, TwistServo, UniversalJoint, UniversalJoint2D
+
+
+    /// <summary> A GameObject Component that describes a Dynamic or Static Physical Rigidbody </summary>
     [RequireComponent(typeof(Transform))]
     [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Cubes}  Rigidbody")]
     public class Rigidbody : MonoBehaviour
@@ -12,62 +34,107 @@ namespace Prowl.Runtime.Components
         CompoundBuilder builder;
         BodyHandle? bodyHandle;
         StaticHandle? staticHandle;
+        TypedIndex? shapeIndex;
 
-        public bool IsKinematic = false;
+        [SerializeField]
+        private bool isKinematic = false;
 
-        public void UpdateCompoundCollider()
-        {
-            if(builder.Pool == null)
-                builder = new CompoundBuilder(Physics.BufferPool, Physics.Simulation.Shapes, 4);
-            else
-                builder.Reset();
-            foreach (var collider in GetComponentsInChildren<Collider>())
-                collider.AddToBuilder(ref builder, collider.GameObject.InstanceID != GameObject.InstanceID);
+        /// <summary> Get or Set if this Rigidbody is Kinematic</summary>
+        public bool IsKinematic {
+            get => isKinematic;
+            set {
+                if (isKinematic == value) return;
+                isKinematic = value;
+                UpdateBepuBody();
+            }
         }
 
-        public void Awake()
+
+        public override void OnValidate()
         {
-            UpdateCompoundCollider();
+            if (!(isKinematic ? staticHandle.HasValue : bodyHandle.HasValue))
+                UpdateBepuBody();
+        }
+
+        public void UpdateBepuBody()
+        {
+            // Initialize Builder
+            if (builder.Pool == null) builder = new CompoundBuilder(Physics.BufferPool, Physics.Simulation.Shapes, 4);
+            else builder.Reset();
+
+            // Get all Colliders
+            var colliders = GetComponentsInChildren<Collider>();
+             
+            // If no colliders found, warn and return
+            if (colliders.Count() == 0) {
+                Debug.LogWarning("No Colliders found on Rigidbody, Rigidbody will not work!");
+                return;
+            }
+
+            // Add all Colliders
+            foreach (var collider in colliders)
+                collider.AddToBuilder(ref builder, collider.GameObject.InstanceID != GameObject.InstanceID);
+
+            // Calculate Compound Data
             builder.BuildDynamicCompound(out var compoundChildren, out var compoundInertia);
 
-            System.Numerics.Quaternion floatQuat;
-            floatQuat.X = (float)GameObject.Transform!.GlobalOrientation.X;
-            floatQuat.Y = (float)GameObject.Transform!.GlobalOrientation.Y;
-            floatQuat.Z = (float)GameObject.Transform!.GlobalOrientation.Z;
-            floatQuat.W = (float)GameObject.Transform!.GlobalOrientation.W;
+            // Track old shape index and add new shape
+            var oldShape = shapeIndex;
+            shapeIndex = Physics.Simulation.Shapes.Add(new Compound(compoundChildren));
 
-            var pose = new BepuPhysics.RigidPose()
-            {
-                Position = GameObject.Transform!.GlobalPosition,
-                Orientation = floatQuat
-            };
+            // If Kinematic has changed (kinematic true but body exists or vice verse)
+            if (isKinematic && bodyHandle.HasValue) {
+                Physics.Simulation.Bodies.Remove(bodyHandle.Value);
+                bodyHandle = null;
+            } else if (!isKinematic && staticHandle.HasValue) {
+                Physics.Simulation.Statics.Remove(staticHandle.Value);
+                staticHandle = null;
+            }
 
-            if (IsKinematic)
-            {
-                staticHandle = Physics.Simulation.Statics.Add(new StaticDescription(pose, Physics.Simulation.Shapes.Add(new Compound(compoundChildren))));
+            // If has body
+            if (!(isKinematic ? staticHandle.HasValue : bodyHandle.HasValue)) {
+                // Create a new Body
+                if (isKinematic)
+                    staticHandle = Physics.Simulation.Statics.Add(new StaticDescription(GetRigidPose(), shapeIndex.Value));
+                else
+                    bodyHandle = Physics.Simulation.Bodies.Add(BodyDescription.CreateDynamic(GetRigidPose(), compoundInertia, shapeIndex.Value, 0.01f));
+            } else {
+                // Body already exists so just update it
+                if (isKinematic)
+                    Physics.Simulation.Statics.SetShape(staticHandle.Value, shapeIndex.Value);
+                else
+                    Physics.Simulation.Bodies.SetShape(bodyHandle.Value, shapeIndex.Value);
             }
-            else
-            {
-                bodyHandle = Physics.Simulation.Bodies.Add(BodyDescription.CreateDynamic(pose, compoundInertia, Physics.Simulation.Shapes.Add(new Compound(compoundChildren)), 0.01f));
-            }
+
+            // Remove old shape and dispose it if we have one
+            if (oldShape != null)
+                Physics.Simulation.Shapes.RecursivelyRemoveAndDispose(oldShape.Value, Physics.BufferPool);
+        }
+
+        public void OnEnable()
+        {
+            UpdateBepuBody();
         }
 
         public void Update()
         {
-            if (IsKinematic)
-            {
+            if (!(isKinematic ? staticHandle.HasValue : bodyHandle.HasValue)) return;
+            if (isKinematic) {
                 var reference = Physics.Simulation.Statics.GetStaticReference(staticHandle.Value);
                 GameObject.Transform!.GlobalPosition = reference.Pose.Position;
                 GameObject.Transform!.GlobalOrientation = new(reference.Pose.Orientation.X, reference.Pose.Orientation.Y, reference.Pose.Orientation.Z, reference.Pose.Orientation.W);
-            }
-            else
-            {
+            } else {
                 var reference = Physics.Simulation.Bodies.GetBodyReference(bodyHandle.Value);
                 GameObject.Transform!.GlobalPosition = reference.Pose.Position;
                 GameObject.Transform!.GlobalOrientation = new(reference.Pose.Orientation.X, reference.Pose.Orientation.Y, reference.Pose.Orientation.Z, reference.Pose.Orientation.W);
             }
 
         }
+
+        private RigidPose GetRigidPose() => new() {
+            Position = GameObject.Transform!.GlobalPosition,
+            Orientation = GameObject.Transform!.GlobalOrientation.ToFloat()
+        };
 
     }
 
@@ -78,23 +145,23 @@ namespace Prowl.Runtime.Components
 
         public void AddToBuilder(ref CompoundBuilder builder, bool isChild)
         {
-            System.Numerics.Quaternion floatQuat;
-            if (isChild && GameObject.Transform != null) {
-                floatQuat.X = (float)GameObject.Transform.Orientation.X;
-                floatQuat.Y = (float)GameObject.Transform.Orientation.Y;
-                floatQuat.Z = (float)GameObject.Transform.Orientation.Z;
-                floatQuat.W = (float)GameObject.Transform.Orientation.W;
-            } else {
-                floatQuat = System.Numerics.Quaternion.Identity;
-            }
-
-            var pose = new BepuPhysics.RigidPose()
-            {
-                Position = isChild ? GameObject.Transform!.Position + offset : offset,
-                Orientation = floatQuat
-            };
-            AddShape(ref builder, pose);
+            AddShape(ref builder, GetRigidPose(isChild));
         }
+
+        public void OnEnable()
+        {
+            GetComponentInParent<Rigidbody>()?.UpdateBepuBody();
+        }
+
+        public void OnDisable()
+        {
+            GetComponentInParent<Rigidbody>()?.UpdateBepuBody();
+        }
+
+        private RigidPose GetRigidPose(bool isChild) => new() {
+            Position = isChild ? GameObject.Transform!.Position + offset : offset,
+            Orientation = (isChild && GameObject.Transform != null) ? GameObject.Transform!.Orientation.ToFloat() : System.Numerics.Quaternion.Identity
+        };
 
         public abstract void AddShape(ref CompoundBuilder builder, RigidPose pose);
     }
