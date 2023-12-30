@@ -248,19 +248,23 @@ public class GameObject : EngineObject, ISerializable
     public void RemoveComponent<T>(T component) where T : MonoBehaviour
     {
         if (component.CanDestroy() == false) return;
-        if (component.EnabledInHierarchy) component.Internal_OnDisabled();
-        if (component.HasBeenEnabled) component.Internal_OnDestroy(); // OnDestroy is only called if the component has previously been active
+
         _components.Remove(component);
         _componentCache.Remove(typeof(T), component);
+
+        if (component.EnabledInHierarchy) component.Internal_OnDisabled();
+        if (component.HasBeenEnabled) component.Internal_OnDestroy(); // OnDestroy is only called if the component has previously been active
     }
 
     public void RemoveComponent(MonoBehaviour component)
     {
         if (component.CanDestroy() == false) return;
-        if (component.EnabledInHierarchy) component.Internal_OnDisabled();
-        if (component.HasBeenEnabled) component.Internal_OnDestroy(); // OnDestroy is only called if the component has previously been active
+
         _components.Remove(component);
         _componentCache.Remove(component.GetType(), component);
+
+        if (component.EnabledInHierarchy) component.Internal_OnDisabled();
+        if (component.HasBeenEnabled) component.Internal_OnDestroy(); // OnDestroy is only called if the component has previously been active
     }
 
     public T GetComponent<T>() where T : MonoBehaviour => (T)GetComponent(typeof(T));
