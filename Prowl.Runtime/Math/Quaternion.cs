@@ -74,6 +74,11 @@ namespace Prowl.Runtime
             W = scalarPart;
         }
 
+        public System.Numerics.Quaternion ToFloat()
+        {
+            return new System.Numerics.Quaternion((float)X, (float)Y, (float)Z, (float)W);
+        }
+
         /// <summary>
         /// Calculates the length of the Quaternion.
         /// </summary>
