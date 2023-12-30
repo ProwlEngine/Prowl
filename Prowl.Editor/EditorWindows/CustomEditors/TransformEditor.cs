@@ -14,9 +14,12 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
             ImGui.PushID(t.GetHashCode());
 
-            PropertyDrawer.Draw(t, typeof(Transform).GetProperty("Position")!);
-            PropertyDrawer.Draw(t, typeof(Transform).GetProperty("Rotation")!);
-            PropertyDrawer.Draw(t, typeof(Transform).GetProperty("Scale")!);
+            bool changed = false;
+            changed |= PropertyDrawer.Draw(t, typeof(Transform).GetProperty("Position")!);
+            changed |= PropertyDrawer.Draw(t, typeof(Transform).GetProperty("Rotation")!);
+            changed |= PropertyDrawer.Draw(t, typeof(Transform).GetProperty("Scale")!);
+            if (changed)
+                t.OnValidate();
 
             ImGui.PopID();
         }

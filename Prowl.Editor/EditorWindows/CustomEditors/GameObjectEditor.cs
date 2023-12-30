@@ -140,8 +140,10 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                                     {
                                         bool isSelected = currentEnumValue.Equals(enumValue);
 
-                                        if (ImGui.Selectable(enumValue.ToString(), isSelected))
+                                        if (ImGui.Selectable(enumValue.ToString(), isSelected)) {
                                             field.SetValue(comp, enumValue);
+                                            comp.OnValidate();
+                                        }
 
                                         if (isSelected)
                                             ImGui.SetItemDefaultFocus();
@@ -153,7 +155,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                             else
                             {
                                 // Draw the field using PropertyDrawer.Draw
-                                PropertyDrawer.Draw(comp, field);
+                                if (PropertyDrawer.Draw(comp, field))
+                                    comp.OnValidate();
                             }
 
                             foreach (var imGuiAttribute in imGuiAttributes)
