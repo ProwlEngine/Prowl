@@ -1,6 +1,5 @@
 ﻿using Silk.NET.Input;
 using Silk.NET.Maths;
-using Silk.NET.SDL;
 using System.Collections.Generic;
 
 namespace Prowl.Runtime;
