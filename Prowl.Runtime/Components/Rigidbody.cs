@@ -14,17 +14,13 @@ namespace Prowl.Runtime.Components
     // Ensure child colliders work well
     // Capsule Collider Gizmos
     // Cylinder Collider Gizmos
-    // Support transform manipulations in Update() (Auto-Sync transform with Rigidbody)
     // Physics.Raycast and other queries
 
     // Weld Joint
     // Hinge Joint
     // BallSocket Joint
     // DistanceLimit Joint
-
-    // look into joints
-    // Slider, PointOnLine, PointOnPlane, AngularServo, LinearServo, SwivelHinge, SwivelHinge2, TwistServo, UniversalJoint, UniversalJoint2D
-
+    // Slider Joint
 
     /// <summary> A GameObject Component that describes a Dynamic or Static Physical Rigidbody </summary>
     [RequireComponent(typeof(Transform))]
@@ -48,7 +44,6 @@ namespace Prowl.Runtime.Components
                 UpdateBepuBody();
             }
         }
-
 
         public override void OnValidate()
         {

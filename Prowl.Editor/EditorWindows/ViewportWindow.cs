@@ -207,25 +207,25 @@ public class ViewportWindow : EditorWindow
 
         LastFocusedCamera = Cam;
 
-        if (Input.IsMouseDown(MouseButton.Right))
+        if (Input.GetMouseButtonDown(1))
         {
             Vector3 moveDir = Vector3.Zero;
-            if (Input.IsKeyDown(Key.W))
+            if (Input.GetKey(Key.W))
                 moveDir += Cam.GameObject.Transform!.Forward;
-            if (Input.IsKeyDown(Key.S))
+            if (Input.GetKey(Key.S))
                 moveDir -= Cam.GameObject.Transform!.Forward;
-            if (Input.IsKeyDown(Key.A))
+            if (Input.GetKey(Key.A))
                 moveDir -= Cam.GameObject.Transform!.Right;
-            if (Input.IsKeyDown(Key.D))
+            if (Input.GetKey(Key.D))
                 moveDir += Cam.GameObject.Transform!.Right;
-            if (Input.IsKeyDown(Key.E))
+            if (Input.GetKey(Key.E))
                 moveDir += Cam.GameObject.Transform!.Up;
-            if (Input.IsKeyDown(Key.Q))
+            if (Input.GetKey(Key.Q))
                 moveDir -= Cam.GameObject.Transform!.Up;
             if (moveDir != Vector3.Zero)
             {
                 moveDir = Vector3.Normalize(moveDir);
-                if (Input.IsKeyDown(Key.ShiftLeft))
+                if (Input.GetKey(Key.ShiftLeft))
                     moveDir *= 2.0f;
                 Cam.GameObject.Transform!.Position += moveDir * (Time.deltaTimeF * 10f);
             }
@@ -239,7 +239,7 @@ public class ViewportWindow : EditorWindow
 
             Input.MousePosition = WindowCenter.ToFloat().ToGeneric();
         }
-        else if (Input.IsMouseDown(MouseButton.Middle) && IsHovered)
+        else if (Input.GetMouseButtonDown(2) && IsHovered)
         {
             var mouseDelta = Input.MouseDelta;
             var pos = Cam.GameObject.Transform!.Position;

@@ -110,7 +110,7 @@ public class SelectHandler<T> where T : class
             int prevLastIndex = lastSelectedIndex;
             Select(obj);
             if (prevLastIndex != index) {
-                if (prevLastIndex != -1 && Input.IsKeyDown(Silk.NET.Input.Key.ShiftLeft)) {
+                if (prevLastIndex != -1 && Input.GetKey(Silk.NET.Input.Key.ShiftLeft)) {
                     // Bulk Select
                     for (int i = Math.Min(prevLastIndex, index); i <= Math.Max(prevLastIndex, index); i++) {
                         if (previousFrameSorted.TryGetValue(i, out var o)) {
@@ -138,7 +138,7 @@ public class SelectHandler<T> where T : class
     public void Select(T obj)
     {
         selectedThisFrame = true;
-        if (Input.IsKeyDown(Silk.NET.Input.Key.ControlLeft)) {
+        if (Input.GetKey(Silk.NET.Input.Key.ControlLeft)) {
             // Additive
             if (IsSelected(obj)) {
                 for (int i = 0; i < selected.Count; i++) {

@@ -1,4 +1,5 @@
-﻿using Silk.NET.OpenGL;
+﻿using BepuUtilities;
+using Silk.NET.OpenGL;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -18,8 +19,6 @@ namespace Prowl.Runtime
         // Vertex attributes data
         public Vertex[] vertices;
         public ushort[] indices;
-
-        public Matrix4x4[] bindposes;
 
         public Mesh() 
         {
@@ -495,5 +494,89 @@ namespace Prowl.Runtime
                 }
             }
         }
+    }
+
+    public interface IInstantiatable
+    {
+        void Instantiate();
+    }
+
+    public sealed class Model : EngineObject, IInstantiatable
+    {
+        public Mesh[] meshes;
+        public Material[] materials;
+        public ModelNode rootNode;        // actual model root node - base node of the model - from here we can locate any node in the chain        
+
+        public void Instantiate()
+        {
+        }
+
+        public class ModelNode
+        {
+            public string name;
+            public ModelNode parent;
+            public List<ModelNode> children = new List<ModelNode>();      
+
+            public Matrix local;
+            public Matrix combined;
+        }
+    }
+
+    public sealed class SkinModel : EngineObject, IInstantiatable
+    {
+        public Mesh[] meshes;
+        public Material[] materials;
+        public ModelNode rootNode;
+
+        public List<AnimationClip> animations = new List<AnimationClip>();
+
+        public class ModelNode
+        {
+            public string name;
+            public ModelNode parent;
+            public List<ModelNode> children = new List<ModelNode>();      
+
+            // Each mesh has a list of shader-matrices - this keeps track of which meshes these bones apply to (and the bone index)
+            public List<ModelBone> uniqueMeshBones = new List<ModelBone>();
+
+            public Matrix local;
+            public Matrix combined;
+        }
+
+        public class ModelBone
+        {
+            public string name;
+            public int meshIndex = -1;
+            public int boneIndex = -1;
+            public int numWeightedVerts = 0;
+            public Matrix offset;
+        }
+    }
+
+    /// <summary> A Animation clip with Tracks for each Bone/Node, It stores one entire animation. </summary>
+    public class AnimationClip : EngineObject
+    {
+        public double DurationInTicks;
+        public double DurationInSeconds;
+        public double DurationInSecondsAdded;
+        public double TicksPerSecond;
+
+        public bool HasMeshAnims;
+        public bool HasNodeAnims;
+        public List<AnimTrack> animatedNodes;
+    }
+
+    /// <summary> The Position/Rotation/Scale data for a single node in the model hierarchy for the entire animation clip </summary>
+    public class AnimTrack
+    {
+        public string nodePath = ""; // The path to the node in the model hierarchy
+
+        // Frames for this track/node
+        public List<double> positionTime = new List<double>();
+        public List<double> scaleTime = new List<double>();
+        public List<double> rotationTime = new List<double>();
+        public List<Vector3> position = new List<Vector3>();
+        public List<Vector3> scale = new List<Vector3>();
+        public List<Quaternion> rotation = new List<Quaternion>();
     }
 }

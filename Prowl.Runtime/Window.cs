@@ -115,7 +115,7 @@ namespace Prowl.Runtime
         {
             imguiController.Update((float)delta);
             Update?.Invoke(delta);
-            Input.Update();
+            Input.LateUpdate();
         }
 
         public static void OnClose()
