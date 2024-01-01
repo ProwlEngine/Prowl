@@ -86,20 +86,6 @@ public class GameObject : EngineObject, ISerializable
 
     #endregion
 
-    #region Static Fields/Properties
-
-
-
-    #endregion
-
-    #region Static Fields/Properties
-
-
-
-    #endregion
-
-
-
     public void SetParent(GameObject? newParent)
     {
         if (newParent == parent || newParent == this)
