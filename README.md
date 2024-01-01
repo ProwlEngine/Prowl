@@ -190,6 +190,7 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 ## Contributors
 - [Michael (AKA Wulferis)](https://twitter.com/Wulferis)
 - [Josh Davis](https://github.com/10xJosh)
+- [ReCore67](https://github.com/recore67)
  
 # License
 
