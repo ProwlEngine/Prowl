@@ -49,6 +49,10 @@ public unsafe class EditorApplication : Application {
     {
         string filePath = Path.Combine(Project.Projects_Directory, "EditorConfig.setting");
         string json = JsonSerializer.Serialize(EditorConfig);
+
+        if(!Directory.Exists(Project.Projects_Directory)) 
+            Directory.CreateDirectory(Project.Projects_Directory);
+
         File.WriteAllText(filePath, json);
     }
 
