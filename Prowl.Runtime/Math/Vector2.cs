@@ -262,15 +262,15 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector2 Transform(Vector2 value, Quaternion rotation)
         {
-            double x2 = rotation.X + rotation.X;
-            double y2 = rotation.Y + rotation.Y;
-            double z2 = rotation.Z + rotation.Z;
+            double x2 = rotation.x + rotation.x;
+            double y2 = rotation.y + rotation.y;
+            double z2 = rotation.z + rotation.z;
 
-            double wz2 = rotation.W * z2;
-            double xx2 = rotation.X * x2;
-            double xy2 = rotation.X * y2;
-            double yy2 = rotation.Y * y2;
-            double zz2 = rotation.Z * z2;
+            double wz2 = rotation.w * z2;
+            double xx2 = rotation.x * x2;
+            double xy2 = rotation.x * y2;
+            double yy2 = rotation.y * y2;
+            double zz2 = rotation.z * z2;
 
             return new Vector2(
                 value.x * (1.0 - yy2 - zz2) + value.y * (xy2 - wz2),

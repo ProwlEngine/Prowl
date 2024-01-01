@@ -16,19 +16,19 @@ namespace Prowl.Runtime
         /// <summary>
         /// Specifies the X-value of the vector component of the Quaternion.
         /// </summary>
-        public double X;
+        public double x;
         /// <summary>
         /// Specifies the Y-value of the vector component of the Quaternion.
         /// </summary>
-        public double Y;
+        public double y;
         /// <summary>
         /// Specifies the Z-value of the vector component of the Quaternion.
         /// </summary>
-        public double Z;
+        public double z;
         /// <summary>
         /// Specifies the rotation component of the Quaternion.
         /// </summary>
-        public double W;
+        public double w;
 
         /// <summary>
         /// Returns a Quaternion representing no rotation. 
@@ -43,7 +43,7 @@ namespace Prowl.Runtime
         /// </summary>
         public bool IsIdentity
         {
-            get { return X == 0 && Y == 0 && Z == 0 && W == 1; }
+            get { return x == 0 && y == 0 && z == 0 && w == 1; }
         }
 
         /// <summary>
@@ -55,10 +55,10 @@ namespace Prowl.Runtime
         /// <param name="w">The W component of the Quaternion.</param>
         public Quaternion(double x, double y, double z, double w)
         {
-            this.X = x;
-            this.Y = y;
-            this.Z = z;
-            this.W = w;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.w = w;
         }
 
         /// <summary>
@@ -68,15 +68,15 @@ namespace Prowl.Runtime
         /// <param name="scalarPart">The rotation part of the Quaternion.</param>
         public Quaternion(Vector3 vectorPart, double scalarPart)
         {
-            X = vectorPart.x;
-            Y = vectorPart.y;
-            Z = vectorPart.z;
-            W = scalarPart;
+            x = vectorPart.x;
+            y = vectorPart.y;
+            z = vectorPart.z;
+            w = scalarPart;
         }
 
         public System.Numerics.Quaternion ToFloat()
         {
-            return new System.Numerics.Quaternion((float)X, (float)Y, (float)Z, (float)W);
+            return new System.Numerics.Quaternion((float)x, (float)y, (float)z, (float)w);
         }
 
         /// <summary>
@@ -85,7 +85,7 @@ namespace Prowl.Runtime
         /// <returns>The computed length of the Quaternion.</returns>
         public double Length()
         {
-            double ls = X * X + Y * Y + Z * Z + W * W;
+            double ls = x * x + y * y + z * z + w * w;
 
             return (double)Math.Sqrt((double)ls);
         }
@@ -96,7 +96,7 @@ namespace Prowl.Runtime
         /// <returns>The length squared of the Quaternion.</returns>
         public double LengthSquared()
         {
-            return X * X + Y * Y + Z * Z + W * W;
+            return x * x + y * y + z * z + w * w;
         }
 
         /// <summary>
@@ -108,14 +108,14 @@ namespace Prowl.Runtime
         {
             Quaternion ans;
 
-            double ls = value.X * value.X + value.Y * value.Y + value.Z * value.Z + value.W * value.W;
+            double ls = value.x * value.x + value.y * value.y + value.z * value.z + value.w * value.w;
 
             double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
 
-            ans.X = value.X * invNorm;
-            ans.Y = value.Y * invNorm;
-            ans.Z = value.Z * invNorm;
-            ans.W = value.W * invNorm;
+            ans.x = value.x * invNorm;
+            ans.y = value.y * invNorm;
+            ans.z = value.z * invNorm;
+            ans.w = value.w * invNorm;
 
             return ans;
         }
@@ -129,10 +129,10 @@ namespace Prowl.Runtime
         {
             Quaternion ans;
 
-            ans.X = -value.X;
-            ans.Y = -value.Y;
-            ans.Z = -value.Z;
-            ans.W = value.W;
+            ans.x = -value.x;
+            ans.y = -value.y;
+            ans.z = -value.z;
+            ans.w = value.w;
 
             return ans;
         }
@@ -150,13 +150,13 @@ namespace Prowl.Runtime
 
             Quaternion ans;
 
-            double ls = value.X * value.X + value.Y * value.Y + value.Z * value.Z + value.W * value.W;
+            double ls = value.x * value.x + value.y * value.y + value.z * value.z + value.w * value.w;
             double invNorm = 1.0 / ls;
 
-            ans.X = -value.X * invNorm;
-            ans.Y = -value.Y * invNorm;
-            ans.Z = -value.Z * invNorm;
-            ans.W = value.W * invNorm;
+            ans.x = -value.x * invNorm;
+            ans.y = -value.y * invNorm;
+            ans.z = -value.z * invNorm;
+            ans.w = value.w * invNorm;
 
             return ans;
         }
@@ -176,10 +176,10 @@ namespace Prowl.Runtime
             double s = (double)Math.Sin(halfAngle);
             double c = (double)Math.Cos(halfAngle);
 
-            ans.X = axis.x * s;
-            ans.Y = axis.y * s;
-            ans.Z = axis.z * s;
-            ans.W = c;
+            ans.x = axis.x * s;
+            ans.y = axis.y * s;
+            ans.z = axis.z * s;
+            ans.w = c;
 
             return ans;
         }
@@ -211,10 +211,10 @@ namespace Prowl.Runtime
 
             Quaternion result;
 
-            result.X = cy * sp * cr + sy * cp * sr;
-            result.Y = sy * cp * cr - cy * sp * sr;
-            result.Z = cy * cp * sr - sy * sp * cr;
-            result.W = cy * cp * cr + sy * sp * sr;
+            result.x = cy * sp * cr + sy * cp * sr;
+            result.y = sy * cp * cr - cy * sp * sr;
+            result.z = cy * cp * sr - sy * sp * cr;
+            result.w = cy * cp * cr + sy * sp * sr;
 
             return result;
         }
@@ -233,11 +233,11 @@ namespace Prowl.Runtime
             if (trace > 0.0)
             {
                 double s = (double)Math.Sqrt(trace + 1.0);
-                q.W = s * 0.5;
+                q.w = s * 0.5;
                 s = 0.5 / s;
-                q.X = (matrix.M23 - matrix.M32) * s;
-                q.Y = (matrix.M31 - matrix.M13) * s;
-                q.Z = (matrix.M12 - matrix.M21) * s;
+                q.x = (matrix.M23 - matrix.M32) * s;
+                q.y = (matrix.M31 - matrix.M13) * s;
+                q.z = (matrix.M12 - matrix.M21) * s;
             }
             else
             {
@@ -245,28 +245,28 @@ namespace Prowl.Runtime
                 {
                     double s = (double)Math.Sqrt(1.0 + matrix.M11 - matrix.M22 - matrix.M33);
                     double invS = 0.5 / s;
-                    q.X = 0.5 * s;
-                    q.Y = (matrix.M12 + matrix.M21) * invS;
-                    q.Z = (matrix.M13 + matrix.M31) * invS;
-                    q.W = (matrix.M23 - matrix.M32) * invS;
+                    q.x = 0.5 * s;
+                    q.y = (matrix.M12 + matrix.M21) * invS;
+                    q.z = (matrix.M13 + matrix.M31) * invS;
+                    q.w = (matrix.M23 - matrix.M32) * invS;
                 }
                 else if (matrix.M22 > matrix.M33)
                 {
                     double s = (double)Math.Sqrt(1.0 + matrix.M22 - matrix.M11 - matrix.M33);
                     double invS = 0.5 / s;
-                    q.X = (matrix.M21 + matrix.M12) * invS;
-                    q.Y = 0.5 * s;
-                    q.Z = (matrix.M32 + matrix.M23) * invS;
-                    q.W = (matrix.M31 - matrix.M13) * invS;
+                    q.x = (matrix.M21 + matrix.M12) * invS;
+                    q.y = 0.5 * s;
+                    q.z = (matrix.M32 + matrix.M23) * invS;
+                    q.w = (matrix.M31 - matrix.M13) * invS;
                 }
                 else
                 {
                     double s = (double)Math.Sqrt(1.0 + matrix.M33 - matrix.M11 - matrix.M22);
                     double invS = 0.5 / s;
-                    q.X = (matrix.M31 + matrix.M13) * invS;
-                    q.Y = (matrix.M32 + matrix.M23) * invS;
-                    q.Z = 0.5 * s;
-                    q.W = (matrix.M12 - matrix.M21) * invS;
+                    q.x = (matrix.M31 + matrix.M13) * invS;
+                    q.y = (matrix.M32 + matrix.M23) * invS;
+                    q.z = 0.5 * s;
+                    q.w = (matrix.M12 - matrix.M21) * invS;
                 }
             }
 
@@ -281,10 +281,10 @@ namespace Prowl.Runtime
         /// <returns>The dot product of the Quaternions.</returns>
         public static double Dot(Quaternion quaternion1, Quaternion quaternion2)
         {
-            return quaternion1.X * quaternion2.X +
-                   quaternion1.Y * quaternion2.Y +
-                   quaternion1.Z * quaternion2.Z +
-                   quaternion1.W * quaternion2.W;
+            return quaternion1.x * quaternion2.x +
+                   quaternion1.y * quaternion2.y +
+                   quaternion1.z * quaternion2.z +
+                   quaternion1.w * quaternion2.w;
         }
 
         /// <summary>
@@ -300,8 +300,8 @@ namespace Prowl.Runtime
 
             double t = amount;
 
-            double cosOmega = quaternion1.X * quaternion2.X + quaternion1.Y * quaternion2.Y +
-                             quaternion1.Z * quaternion2.Z + quaternion1.W * quaternion2.W;
+            double cosOmega = quaternion1.x * quaternion2.x + quaternion1.y * quaternion2.y +
+                             quaternion1.z * quaternion2.z + quaternion1.w * quaternion2.w;
 
             bool flip = false;
 
@@ -332,10 +332,10 @@ namespace Prowl.Runtime
 
             Quaternion ans;
 
-            ans.X = s1 * quaternion1.X + s2 * quaternion2.X;
-            ans.Y = s1 * quaternion1.Y + s2 * quaternion2.Y;
-            ans.Z = s1 * quaternion1.Z + s2 * quaternion2.Z;
-            ans.W = s1 * quaternion1.W + s2 * quaternion2.W;
+            ans.x = s1 * quaternion1.x + s2 * quaternion2.x;
+            ans.y = s1 * quaternion1.y + s2 * quaternion2.y;
+            ans.z = s1 * quaternion1.z + s2 * quaternion2.z;
+            ans.w = s1 * quaternion1.w + s2 * quaternion2.w;
 
             return ans;
         }
@@ -354,32 +354,32 @@ namespace Prowl.Runtime
 
             Quaternion r = new Quaternion();
 
-            double dot = quaternion1.X * quaternion2.X + quaternion1.Y * quaternion2.Y +
-                        quaternion1.Z * quaternion2.Z + quaternion1.W * quaternion2.W;
+            double dot = quaternion1.x * quaternion2.x + quaternion1.y * quaternion2.y +
+                        quaternion1.z * quaternion2.z + quaternion1.w * quaternion2.w;
 
             if (dot >= 0.0)
             {
-                r.X = t1 * quaternion1.X + t * quaternion2.X;
-                r.Y = t1 * quaternion1.Y + t * quaternion2.Y;
-                r.Z = t1 * quaternion1.Z + t * quaternion2.Z;
-                r.W = t1 * quaternion1.W + t * quaternion2.W;
+                r.x = t1 * quaternion1.x + t * quaternion2.x;
+                r.y = t1 * quaternion1.y + t * quaternion2.y;
+                r.z = t1 * quaternion1.z + t * quaternion2.z;
+                r.w = t1 * quaternion1.w + t * quaternion2.w;
             }
             else
             {
-                r.X = t1 * quaternion1.X - t * quaternion2.X;
-                r.Y = t1 * quaternion1.Y - t * quaternion2.Y;
-                r.Z = t1 * quaternion1.Z - t * quaternion2.Z;
-                r.W = t1 * quaternion1.W - t * quaternion2.W;
+                r.x = t1 * quaternion1.x - t * quaternion2.x;
+                r.y = t1 * quaternion1.y - t * quaternion2.y;
+                r.z = t1 * quaternion1.z - t * quaternion2.z;
+                r.w = t1 * quaternion1.w - t * quaternion2.w;
             }
 
             // Normalize it.
-            double ls = r.X * r.X + r.Y * r.Y + r.Z * r.Z + r.W * r.W;
+            double ls = r.x * r.x + r.y * r.y + r.z * r.z + r.w * r.w;
             double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
 
-            r.X *= invNorm;
-            r.Y *= invNorm;
-            r.Z *= invNorm;
-            r.W *= invNorm;
+            r.x *= invNorm;
+            r.y *= invNorm;
+            r.z *= invNorm;
+            r.w *= invNorm;
 
             return r;
         }
@@ -396,15 +396,15 @@ namespace Prowl.Runtime
 
             // Concatenate rotation is actually q2 * q1 instead of q1 * q2.
             // So that's why value2 goes q1 and value1 goes q2.
-            double q1x = value2.X;
-            double q1y = value2.Y;
-            double q1z = value2.Z;
-            double q1w = value2.W;
+            double q1x = value2.x;
+            double q1y = value2.y;
+            double q1z = value2.z;
+            double q1w = value2.w;
 
-            double q2x = value1.X;
-            double q2y = value1.Y;
-            double q2z = value1.Z;
-            double q2w = value1.W;
+            double q2x = value1.x;
+            double q2y = value1.y;
+            double q2z = value1.z;
+            double q2w = value1.w;
 
             // cross(av, bv)
             double cx = q1y * q2z - q1z * q2y;
@@ -413,10 +413,10 @@ namespace Prowl.Runtime
 
             double dot = q1x * q2x + q1y * q2y + q1z * q2z;
 
-            ans.X = q1x * q2w + q2x * q1w + cx;
-            ans.Y = q1y * q2w + q2y * q1w + cy;
-            ans.Z = q1z * q2w + q2z * q1w + cz;
-            ans.W = q1w * q2w - dot;
+            ans.x = q1x * q2w + q2x * q1w + cx;
+            ans.y = q1y * q2w + q2y * q1w + cy;
+            ans.z = q1z * q2w + q2z * q1w + cz;
+            ans.w = q1w * q2w - dot;
 
             return ans;
         }
@@ -430,10 +430,10 @@ namespace Prowl.Runtime
         {
             Quaternion ans;
 
-            ans.X = -value.X;
-            ans.Y = -value.Y;
-            ans.Z = -value.Z;
-            ans.W = -value.W;
+            ans.x = -value.x;
+            ans.y = -value.y;
+            ans.z = -value.z;
+            ans.w = -value.w;
 
             return ans;
         }
@@ -448,10 +448,10 @@ namespace Prowl.Runtime
         {
             Quaternion ans;
 
-            ans.X = value1.X + value2.X;
-            ans.Y = value1.Y + value2.Y;
-            ans.Z = value1.Z + value2.Z;
-            ans.W = value1.W + value2.W;
+            ans.x = value1.x + value2.x;
+            ans.y = value1.y + value2.y;
+            ans.z = value1.z + value2.z;
+            ans.w = value1.w + value2.w;
 
             return ans;
         }
@@ -466,10 +466,10 @@ namespace Prowl.Runtime
         {
             Quaternion ans;
 
-            ans.X = value1.X - value2.X;
-            ans.Y = value1.Y - value2.Y;
-            ans.Z = value1.Z - value2.Z;
-            ans.W = value1.W - value2.W;
+            ans.x = value1.x - value2.x;
+            ans.y = value1.y - value2.y;
+            ans.z = value1.z - value2.z;
+            ans.w = value1.w - value2.w;
 
             return ans;
         }
@@ -484,15 +484,15 @@ namespace Prowl.Runtime
         {
             Quaternion ans;
 
-            double q1x = value1.X;
-            double q1y = value1.Y;
-            double q1z = value1.Z;
-            double q1w = value1.W;
+            double q1x = value1.x;
+            double q1y = value1.y;
+            double q1z = value1.z;
+            double q1w = value1.w;
 
-            double q2x = value2.X;
-            double q2y = value2.Y;
-            double q2z = value2.Z;
-            double q2w = value2.W;
+            double q2x = value2.x;
+            double q2y = value2.y;
+            double q2z = value2.z;
+            double q2w = value2.w;
 
             // cross(av, bv)
             double cx = q1y * q2z - q1z * q2y;
@@ -501,10 +501,10 @@ namespace Prowl.Runtime
 
             double dot = q1x * q2x + q1y * q2y + q1z * q2z;
 
-            ans.X = q1x * q2w + q2x * q1w + cx;
-            ans.Y = q1y * q2w + q2y * q1w + cy;
-            ans.Z = q1z * q2w + q2z * q1w + cz;
-            ans.W = q1w * q2w - dot;
+            ans.x = q1x * q2w + q2x * q1w + cx;
+            ans.y = q1y * q2w + q2y * q1w + cy;
+            ans.z = q1z * q2w + q2z * q1w + cz;
+            ans.w = q1w * q2w - dot;
 
             return ans;
         }
@@ -519,10 +519,10 @@ namespace Prowl.Runtime
         {
             Quaternion ans;
 
-            ans.X = value1.X * value2;
-            ans.Y = value1.Y * value2;
-            ans.Z = value1.Z * value2;
-            ans.W = value1.W * value2;
+            ans.x = value1.x * value2;
+            ans.y = value1.y * value2;
+            ans.z = value1.z * value2;
+            ans.w = value1.w * value2;
 
             return ans;
         }
@@ -537,21 +537,21 @@ namespace Prowl.Runtime
         {
             Quaternion ans;
 
-            double q1x = value1.X;
-            double q1y = value1.Y;
-            double q1z = value1.Z;
-            double q1w = value1.W;
+            double q1x = value1.x;
+            double q1y = value1.y;
+            double q1z = value1.z;
+            double q1w = value1.w;
 
             //-------------------------------------
             // Inverse part.
-            double ls = value2.X * value2.X + value2.Y * value2.Y +
-                       value2.Z * value2.Z + value2.W * value2.W;
+            double ls = value2.x * value2.x + value2.y * value2.y +
+                       value2.z * value2.z + value2.w * value2.w;
             double invNorm = 1.0 / ls;
 
-            double q2x = -value2.X * invNorm;
-            double q2y = -value2.Y * invNorm;
-            double q2z = -value2.Z * invNorm;
-            double q2w = value2.W * invNorm;
+            double q2x = -value2.x * invNorm;
+            double q2y = -value2.y * invNorm;
+            double q2z = -value2.z * invNorm;
+            double q2w = value2.w * invNorm;
 
             //-------------------------------------
             // Multiply part.
@@ -563,10 +563,10 @@ namespace Prowl.Runtime
 
             double dot = q1x * q2x + q1y * q2y + q1z * q2z;
 
-            ans.X = q1x * q2w + q2x * q1w + cx;
-            ans.Y = q1y * q2w + q2y * q1w + cy;
-            ans.Z = q1z * q2w + q2z * q1w + cz;
-            ans.W = q1w * q2w - dot;
+            ans.x = q1x * q2w + q2x * q1w + cx;
+            ans.y = q1y * q2w + q2y * q1w + cy;
+            ans.z = q1z * q2w + q2z * q1w + cz;
+            ans.w = q1w * q2w - dot;
 
             return ans;
         }
@@ -580,10 +580,10 @@ namespace Prowl.Runtime
         {
             Quaternion ans;
 
-            ans.X = -value.X;
-            ans.Y = -value.Y;
-            ans.Z = -value.Z;
-            ans.W = -value.W;
+            ans.x = -value.x;
+            ans.y = -value.y;
+            ans.z = -value.z;
+            ans.w = -value.w;
 
             return ans;
         }
@@ -598,10 +598,10 @@ namespace Prowl.Runtime
         {
             Quaternion ans;
 
-            ans.X = value1.X + value2.X;
-            ans.Y = value1.Y + value2.Y;
-            ans.Z = value1.Z + value2.Z;
-            ans.W = value1.W + value2.W;
+            ans.x = value1.x + value2.x;
+            ans.y = value1.y + value2.y;
+            ans.z = value1.z + value2.z;
+            ans.w = value1.w + value2.w;
 
             return ans;
         }
@@ -616,10 +616,10 @@ namespace Prowl.Runtime
         {
             Quaternion ans;
 
-            ans.X = value1.X - value2.X;
-            ans.Y = value1.Y - value2.Y;
-            ans.Z = value1.Z - value2.Z;
-            ans.W = value1.W - value2.W;
+            ans.x = value1.x - value2.x;
+            ans.y = value1.y - value2.y;
+            ans.z = value1.z - value2.z;
+            ans.w = value1.w - value2.w;
 
             return ans;
         }
@@ -634,15 +634,15 @@ namespace Prowl.Runtime
         {
             Quaternion ans;
 
-            double q1x = value1.X;
-            double q1y = value1.Y;
-            double q1z = value1.Z;
-            double q1w = value1.W;
+            double q1x = value1.x;
+            double q1y = value1.y;
+            double q1z = value1.z;
+            double q1w = value1.w;
 
-            double q2x = value2.X;
-            double q2y = value2.Y;
-            double q2z = value2.Z;
-            double q2w = value2.W;
+            double q2x = value2.x;
+            double q2y = value2.y;
+            double q2z = value2.z;
+            double q2w = value2.w;
 
             // cross(av, bv)
             double cx = q1y * q2z - q1z * q2y;
@@ -651,10 +651,10 @@ namespace Prowl.Runtime
 
             double dot = q1x * q2x + q1y * q2y + q1z * q2z;
 
-            ans.X = q1x * q2w + q2x * q1w + cx;
-            ans.Y = q1y * q2w + q2y * q1w + cy;
-            ans.Z = q1z * q2w + q2z * q1w + cz;
-            ans.W = q1w * q2w - dot;
+            ans.x = q1x * q2w + q2x * q1w + cx;
+            ans.y = q1y * q2w + q2y * q1w + cy;
+            ans.z = q1z * q2w + q2z * q1w + cz;
+            ans.w = q1w * q2w - dot;
 
             return ans;
         }
@@ -669,10 +669,10 @@ namespace Prowl.Runtime
         {
             Quaternion ans;
 
-            ans.X = value1.X * value2;
-            ans.Y = value1.Y * value2;
-            ans.Z = value1.Z * value2;
-            ans.W = value1.W * value2;
+            ans.x = value1.x * value2;
+            ans.y = value1.y * value2;
+            ans.z = value1.z * value2;
+            ans.w = value1.w * value2;
 
             return ans;
         }
@@ -687,21 +687,21 @@ namespace Prowl.Runtime
         {
             Quaternion ans;
 
-            double q1x = value1.X;
-            double q1y = value1.Y;
-            double q1z = value1.Z;
-            double q1w = value1.W;
+            double q1x = value1.x;
+            double q1y = value1.y;
+            double q1z = value1.z;
+            double q1w = value1.w;
 
             //-------------------------------------
             // Inverse part.
-            double ls = value2.X * value2.X + value2.Y * value2.Y +
-                       value2.Z * value2.Z + value2.W * value2.W;
+            double ls = value2.x * value2.x + value2.y * value2.y +
+                       value2.z * value2.z + value2.w * value2.w;
             double invNorm = 1.0 / ls;
 
-            double q2x = -value2.X * invNorm;
-            double q2y = -value2.Y * invNorm;
-            double q2z = -value2.Z * invNorm;
-            double q2w = value2.W * invNorm;
+            double q2x = -value2.x * invNorm;
+            double q2y = -value2.y * invNorm;
+            double q2z = -value2.z * invNorm;
+            double q2w = value2.w * invNorm;
 
             //-------------------------------------
             // Multiply part.
@@ -713,10 +713,10 @@ namespace Prowl.Runtime
 
             double dot = q1x * q2x + q1y * q2y + q1z * q2z;
 
-            ans.X = q1x * q2w + q2x * q1w + cx;
-            ans.Y = q1y * q2w + q2y * q1w + cy;
-            ans.Z = q1z * q2w + q2z * q1w + cz;
-            ans.W = q1w * q2w - dot;
+            ans.x = q1x * q2w + q2x * q1w + cx;
+            ans.y = q1y * q2w + q2y * q1w + cy;
+            ans.z = q1z * q2w + q2z * q1w + cz;
+            ans.w = q1w * q2w - dot;
 
             return ans;
         }
@@ -729,10 +729,10 @@ namespace Prowl.Runtime
         /// <returns>True if the Quaternions are equal; False otherwise.</returns>
         public static bool operator ==(Quaternion value1, Quaternion value2)
         {
-            return (value1.X == value2.X &&
-                    value1.Y == value2.Y &&
-                    value1.Z == value2.Z &&
-                    value1.W == value2.W);
+            return (value1.x == value2.x &&
+                    value1.y == value2.y &&
+                    value1.z == value2.z &&
+                    value1.w == value2.w);
         }
 
         /// <summary>
@@ -743,10 +743,10 @@ namespace Prowl.Runtime
         /// <returns>True if the Quaternions are not equal; False if they are equal.</returns>
         public static bool operator !=(Quaternion value1, Quaternion value2)
         {
-            return (value1.X != value2.X ||
-                    value1.Y != value2.Y ||
-                    value1.Z != value2.Z ||
-                    value1.W != value2.W);
+            return (value1.x != value2.x ||
+                    value1.y != value2.y ||
+                    value1.z != value2.z ||
+                    value1.w != value2.w);
         }
 
         /// <summary>
@@ -756,10 +756,10 @@ namespace Prowl.Runtime
         /// <returns>True if the other Quaternion is equal to this instance; False otherwise.</returns>
         public bool Equals(Quaternion other)
         {
-            return (X == other.X &&
-                    Y == other.Y &&
-                    Z == other.Z &&
-                    W == other.W);
+            return (x == other.x &&
+                    y == other.y &&
+                    z == other.z &&
+                    w == other.w);
         }
 
         /// <summary>
@@ -785,7 +785,7 @@ namespace Prowl.Runtime
         {
             CultureInfo ci = CultureInfo.CurrentCulture;
 
-            return String.Format(ci, "{{X:{0} Y:{1} Z:{2} W:{3}}}", X.ToString(ci), Y.ToString(ci), Z.ToString(ci), W.ToString(ci));
+            return String.Format(ci, "{{X:{0} Y:{1} Z:{2} W:{3}}}", x.ToString(ci), y.ToString(ci), z.ToString(ci), w.ToString(ci));
         }
 
         /// <summary>
@@ -794,7 +794,7 @@ namespace Prowl.Runtime
         /// <returns>The hash code.</returns>
         public override int GetHashCode()
         {
-            return X.GetHashCode() + Y.GetHashCode() + Z.GetHashCode() + W.GetHashCode();
+            return x.GetHashCode() + y.GetHashCode() + z.GetHashCode() + w.GetHashCode();
         }
     }
 }

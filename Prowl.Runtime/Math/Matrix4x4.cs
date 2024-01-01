@@ -1158,16 +1158,16 @@ namespace Prowl.Runtime
         {
             Matrix4x4 result;
 
-            double xx = quaternion.X * quaternion.X;
-            double yy = quaternion.Y * quaternion.Y;
-            double zz = quaternion.Z * quaternion.Z;
+            double xx = quaternion.x * quaternion.x;
+            double yy = quaternion.y * quaternion.y;
+            double zz = quaternion.z * quaternion.z;
 
-            double xy = quaternion.X * quaternion.Y;
-            double wz = quaternion.Z * quaternion.W;
-            double xz = quaternion.Z * quaternion.X;
-            double wy = quaternion.Y * quaternion.W;
-            double yz = quaternion.Y * quaternion.Z;
-            double wx = quaternion.X * quaternion.W;
+            double xy = quaternion.x * quaternion.y;
+            double wz = quaternion.z * quaternion.w;
+            double xz = quaternion.z * quaternion.x;
+            double wy = quaternion.y * quaternion.w;
+            double yz = quaternion.y * quaternion.z;
+            double wx = quaternion.x * quaternion.w;
 
             result.M11 = 1.0 - 2.0 * (yy + zz);
             result.M12 = 2.0 * (xy + wz);
@@ -1730,19 +1730,19 @@ namespace Prowl.Runtime
         public static Matrix4x4 Transform(Matrix4x4 value, Quaternion rotation)
         {
             // Compute rotation matrix.
-            double x2 = rotation.X + rotation.X;
-            double y2 = rotation.Y + rotation.Y;
-            double z2 = rotation.Z + rotation.Z;
+            double x2 = rotation.x + rotation.x;
+            double y2 = rotation.y + rotation.y;
+            double z2 = rotation.z + rotation.z;
 
-            double wx2 = rotation.W * x2;
-            double wy2 = rotation.W * y2;
-            double wz2 = rotation.W * z2;
-            double xx2 = rotation.X * x2;
-            double xy2 = rotation.X * y2;
-            double xz2 = rotation.X * z2;
-            double yy2 = rotation.Y * y2;
-            double yz2 = rotation.Y * z2;
-            double zz2 = rotation.Z * z2;
+            double wx2 = rotation.w * x2;
+            double wy2 = rotation.w * y2;
+            double wz2 = rotation.w * z2;
+            double xx2 = rotation.x * x2;
+            double xy2 = rotation.x * y2;
+            double xz2 = rotation.x * z2;
+            double yy2 = rotation.y * y2;
+            double yz2 = rotation.y * z2;
+            double zz2 = rotation.z * z2;
 
             double q11 = 1.0 - yy2 - zz2;
             double q21 = xy2 - wz2;

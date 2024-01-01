@@ -410,10 +410,10 @@ namespace Prowl.Runtime
 
             Quaternion result;
 
-            result.X = 0;
-            result.Y = sy;
-            result.Z = 0;
-            result.W = cy;
+            result.x = 0;
+            result.y = sy;
+            result.z = 0;
+            result.w = cy;
 
             return result;
         }
@@ -442,7 +442,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 TransformOnlyYaw(this Vector3 value, Quaternion r)
         {
-            double yaw = System.Math.Atan2(2.0f * (r.Y * r.W + r.X * r.Z), 1.0 - 2.0 * (r.X * r.X + r.Y * r.Y));
+            double yaw = System.Math.Atan2(2.0f * (r.y * r.w + r.x * r.z), 1.0 - 2.0 * (r.x * r.x + r.y * r.y));
 
             double halfYaw = yaw * 0.5;
             double sy = System.Math.Sin(halfYaw);
@@ -459,23 +459,23 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void GetYawPitchRoll(this Quaternion r, out double yaw, out double pitch, out double roll)
         {
-            yaw = System.Math.Atan2(2.0 * (r.Y * r.W + r.X * r.Z), 1.0 - 2.0 * (r.X * r.X + r.Y * r.Y));
-            pitch = System.Math.Asin(2.0 * (r.X * r.W - r.Y * r.Z));
-            roll = System.Math.Atan2(2.0 * (r.X * r.Y + r.Z * r.W), 1.0 - 2.0 * (r.X * r.X + r.Z * r.Z));
+            yaw = System.Math.Atan2(2.0 * (r.y * r.w + r.x * r.z), 1.0 - 2.0 * (r.x * r.x + r.y * r.y));
+            pitch = System.Math.Asin(2.0 * (r.x * r.w - r.y * r.z));
+            roll = System.Math.Atan2(2.0 * (r.x * r.y + r.z * r.w), 1.0 - 2.0 * (r.x * r.x + r.z * r.z));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void GetYaw(this Quaternion r, out double yaw)
         {
-            yaw = System.Math.Atan2(2.0 * (r.Y * r.W + r.X * r.Z), 1.0 - 2.0 * (r.X * r.X + r.Y * r.Y));
+            yaw = System.Math.Atan2(2.0 * (r.y * r.w + r.x * r.z), 1.0 - 2.0 * (r.x * r.x + r.y * r.y));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 GetRotation(this Quaternion r)
         {
-            double yaw = System.Math.Atan2(2.0 * (r.Y * r.W + r.X * r.Z), 1.0 - 2.0 * (r.X * r.X + r.Y * r.Y));
-            double pitch = System.Math.Asin(2.0 * (r.X * r.W - r.Y * r.Z));
-            double roll = System.Math.Atan2(2.0 * (r.X * r.Y + r.Z * r.W), 1.0 - 2.0 * (r.X * r.X + r.Z * r.Z));
+            double yaw = System.Math.Atan2(2.0 * (r.y * r.w + r.x * r.z), 1.0 - 2.0 * (r.x * r.x + r.y * r.y));
+            double pitch = System.Math.Asin(2.0 * (r.x * r.w - r.y * r.z));
+            double roll = System.Math.Atan2(2.0 * (r.x * r.y + r.z * r.w), 1.0 - 2.0 * (r.x * r.x + r.z * r.z));
             // If any nan or inf, set that value to 0
             if (double.IsNaN(yaw) || double.IsInfinity(yaw)) yaw = 0;
             if (double.IsNaN(pitch) || double.IsInfinity(pitch)) pitch = 0;
@@ -549,15 +549,15 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Matrix4x4 RotationQuaternion(Quaternion rotation)
         {
-            double xx = rotation.X * rotation.X;
-            double yy = rotation.Y * rotation.Y;
-            double zz = rotation.Z * rotation.Z;
-            double xy = rotation.X * rotation.Y;
-            double zw = rotation.Z * rotation.W;
-            double zx = rotation.Z * rotation.X;
-            double yw = rotation.Y * rotation.W;
-            double yz = rotation.Y * rotation.Z;
-            double xw = rotation.X * rotation.W;
+            double xx = rotation.x * rotation.x;
+            double yy = rotation.y * rotation.y;
+            double zz = rotation.z * rotation.z;
+            double xy = rotation.x * rotation.y;
+            double zw = rotation.z * rotation.w;
+            double zx = rotation.z * rotation.x;
+            double yw = rotation.y * rotation.w;
+            double yz = rotation.y * rotation.z;
+            double xw = rotation.x * rotation.w;
 
             Matrix4x4 result = Matrix4x4.Identity;
             result.M11 = 1.0 - 2.0 * (yy + zz);
@@ -629,9 +629,9 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LockQuaternionAxis(Quaternion r, Quaternion q, Vector3 mask)
         {
-            double x = System.Math.Atan2(2.0 * (r.Y * r.W + r.X * r.Z), 1.0 - 2.0 * (r.X * r.X + r.Y * r.Y)) * mask.x;
-            double y = System.Math.Asin(2.0 * (r.X * r.W - r.Y * r.Z)) * mask.y;
-            double z = System.Math.Atan2(2.0 * (r.X * r.Y + r.Z * r.W), 1.0 - 2.0 * (r.X * r.X + r.Z * r.Z)) * mask.z;
+            double x = System.Math.Atan2(2.0 * (r.y * r.w + r.x * r.z), 1.0 - 2.0 * (r.x * r.x + r.y * r.y)) * mask.x;
+            double y = System.Math.Asin(2.0 * (r.x * r.w - r.y * r.z)) * mask.y;
+            double z = System.Math.Atan2(2.0 * (r.x * r.y + r.z * r.w), 1.0 - 2.0 * (r.x * r.x + r.z * r.z)) * mask.z;
 
             double xHalf = x * 0.5;
             double yHalf = y * 0.5;
@@ -644,10 +644,10 @@ namespace Prowl.Runtime
             double sy = System.Math.Sin(yHalf);
             double sz = System.Math.Sin(zHalf);
 
-            q.W = (cz * cx * cy) + (sz * sx * sy);
-            q.X = (cz * sx * cy) - (sz * cx * sy);
-            q.Y = (cz * cx * sy) + (sz * sx * cy);
-            q.Z = (sz * cx * cy) - (cz * sx * sy);
+            q.w = (cz * cx * cy) + (sz * sx * sy);
+            q.x = (cz * sx * cy) - (sz * cx * sy);
+            q.y = (cz * cx * sy) + (sz * sx * cy);
+            q.z = (sz * cx * cy) - (cz * sx * sy);
         }
     }
 }
