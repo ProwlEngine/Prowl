@@ -12,6 +12,8 @@ namespace Prowl.Editor.Drawers.NodeSystem
 {
     public abstract class NodeEditor
     {
+        private static readonly Dictionary<int, ImNodesEditorContextPtr> contexts = new();
+
         protected internal abstract Type GraphType { get; }
 
         static NodeEditor()
@@ -35,9 +37,6 @@ namespace Prowl.Editor.Drawers.NodeSystem
 
             style.NodeBorderThickness = 3f;
         }
-
-
-        private Dictionary<int, ImNodesEditorContextPtr> contexts;
 
         #region Graph
 
