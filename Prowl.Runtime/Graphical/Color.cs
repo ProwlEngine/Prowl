@@ -97,7 +97,7 @@ namespace Prowl.Runtime
         public static implicit operator Vector4(Color c) => new Vector4(c.r, c.g, c.b, c.a);
         public static implicit operator System.Numerics.Vector4(Color c) => new System.Numerics.Vector4(c.r, c.g, c.b, c.a);
 
-        public static implicit operator Color(Vector4 v) => new Color((float)v.X, (float)v.Y, (float)v.Z, (float)v.W);
+        public static implicit operator Color(Vector4 v) => new Color((float)v.x, (float)v.y, (float)v.z, (float)v.w);
         public static implicit operator Color(System.Numerics.Vector4 v) => new Color(v.X, v.Y, v.Z, v.W);
 
         public static bool operator !=(Color lhs, Color rhs) => lhs != rhs;

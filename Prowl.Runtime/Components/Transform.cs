@@ -180,17 +180,17 @@ namespace Prowl.Runtime
             if (AssetID != Guid.Empty)
                 compoundTag.Add("AssetID", new StringTag(AssetID.ToString()));
 
-            compoundTag.Add("PosX", new DoubleTag(position.X));
-            compoundTag.Add("PosY", new DoubleTag(position.Y));
-            compoundTag.Add("PosZ", new DoubleTag(position.Z));
+            compoundTag.Add("PosX", new DoubleTag(position.x));
+            compoundTag.Add("PosY", new DoubleTag(position.y));
+            compoundTag.Add("PosZ", new DoubleTag(position.z));
 
-            compoundTag.Add("RotX", new DoubleTag(rotation.X));
-            compoundTag.Add("RotY", new DoubleTag(rotation.Y));
-            compoundTag.Add("RotZ", new DoubleTag(rotation.Z));
+            compoundTag.Add("RotX", new DoubleTag(rotation.x));
+            compoundTag.Add("RotY", new DoubleTag(rotation.y));
+            compoundTag.Add("RotZ", new DoubleTag(rotation.z));
 
-            compoundTag.Add("ScalX", new DoubleTag(scale.X));
-            compoundTag.Add("ScalY", new DoubleTag(scale.Y));
-            compoundTag.Add("ScalZ", new DoubleTag(scale.Z));
+            compoundTag.Add("ScalX", new DoubleTag(scale.x));
+            compoundTag.Add("ScalY", new DoubleTag(scale.y));
+            compoundTag.Add("ScalZ", new DoubleTag(scale.z));
 
             return compoundTag;
         }

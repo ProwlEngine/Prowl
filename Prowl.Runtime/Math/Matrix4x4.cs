@@ -126,9 +126,9 @@ namespace Prowl.Runtime
             }
             set
             {
-                M41 = value.X;
-                M42 = value.Y;
-                M43 = value.Z;
+                M41 = value.x;
+                M42 = value.y;
+                M43 = value.z;
             }
         }
 
@@ -199,9 +199,9 @@ namespace Prowl.Runtime
             const double epsilon = 1e-4;
 
             Vector3 zaxis = new Vector3(
-                objectPosition.X - cameraPosition.X,
-                objectPosition.Y - cameraPosition.Y,
-                objectPosition.Z - cameraPosition.Z);
+                objectPosition.x - cameraPosition.x,
+                objectPosition.y - cameraPosition.y,
+                objectPosition.z - cameraPosition.z);
 
             double norm = zaxis.LengthSquared();
 
@@ -220,22 +220,22 @@ namespace Prowl.Runtime
 
             Matrix4x4 result;
 
-            result.M11 = xaxis.X;
-            result.M12 = xaxis.Y;
-            result.M13 = xaxis.Z;
+            result.M11 = xaxis.x;
+            result.M12 = xaxis.y;
+            result.M13 = xaxis.z;
             result.M14 = 0.0;
-            result.M21 = yaxis.X;
-            result.M22 = yaxis.Y;
-            result.M23 = yaxis.Z;
+            result.M21 = yaxis.x;
+            result.M22 = yaxis.y;
+            result.M23 = yaxis.z;
             result.M24 = 0.0;
-            result.M31 = zaxis.X;
-            result.M32 = zaxis.Y;
-            result.M33 = zaxis.Z;
+            result.M31 = zaxis.x;
+            result.M32 = zaxis.y;
+            result.M33 = zaxis.z;
             result.M34 = 0.0;
 
-            result.M41 = objectPosition.X;
-            result.M42 = objectPosition.Y;
-            result.M43 = objectPosition.Z;
+            result.M41 = objectPosition.x;
+            result.M42 = objectPosition.y;
+            result.M43 = objectPosition.z;
             result.M44 = 1.0;
 
             return result;
@@ -257,9 +257,9 @@ namespace Prowl.Runtime
 
             // Treat the case when object and camera positions are too close.
             Vector3 faceDir = new Vector3(
-                objectPosition.X - cameraPosition.X,
-                objectPosition.Y - cameraPosition.Y,
-                objectPosition.Z - cameraPosition.Z);
+                objectPosition.x - cameraPosition.x,
+                objectPosition.y - cameraPosition.y,
+                objectPosition.z - cameraPosition.z);
 
             double norm = faceDir.LengthSquared();
 
@@ -288,7 +288,7 @@ namespace Prowl.Runtime
 
                 if (Math.Abs(dot) > minAngle)
                 {
-                    zaxis = (Math.Abs(rotateAxis.Z) > minAngle) ? new Vector3(1, 0, 0) : new Vector3(0, 0, -1);
+                    zaxis = (Math.Abs(rotateAxis.z) > minAngle) ? new Vector3(1, 0, 0) : new Vector3(0, 0, -1);
                 }
 
                 xaxis = Vector3.Normalize(Vector3.Cross(rotateAxis, zaxis));
@@ -302,22 +302,22 @@ namespace Prowl.Runtime
 
             Matrix4x4 result;
 
-            result.M11 = xaxis.X;
-            result.M12 = xaxis.Y;
-            result.M13 = xaxis.Z;
+            result.M11 = xaxis.x;
+            result.M12 = xaxis.y;
+            result.M13 = xaxis.z;
             result.M14 = 0.0;
-            result.M21 = yaxis.X;
-            result.M22 = yaxis.Y;
-            result.M23 = yaxis.Z;
+            result.M21 = yaxis.x;
+            result.M22 = yaxis.y;
+            result.M23 = yaxis.z;
             result.M24 = 0.0;
-            result.M31 = zaxis.X;
-            result.M32 = zaxis.Y;
-            result.M33 = zaxis.Z;
+            result.M31 = zaxis.x;
+            result.M32 = zaxis.y;
+            result.M33 = zaxis.z;
             result.M34 = 0.0;
 
-            result.M41 = objectPosition.X;
-            result.M42 = objectPosition.Y;
-            result.M43 = objectPosition.Z;
+            result.M41 = objectPosition.x;
+            result.M42 = objectPosition.y;
+            result.M43 = objectPosition.z;
             result.M44 = 1.0;
 
             return result;
@@ -345,9 +345,9 @@ namespace Prowl.Runtime
             result.M33 = 1.0;
             result.M34 = 0.0;
 
-            result.M41 = position.X;
-            result.M42 = position.Y;
-            result.M43 = position.Z;
+            result.M41 = position.x;
+            result.M42 = position.y;
+            result.M43 = position.z;
             result.M44 = 1.0;
 
             return result;
@@ -428,9 +428,9 @@ namespace Prowl.Runtime
         {
             Matrix4x4 result;
 
-            double tx = centerPoint.X * (1 - xScale);
-            double ty = centerPoint.Y * (1 - yScale);
-            double tz = centerPoint.Z * (1 - zScale);
+            double tx = centerPoint.x * (1 - xScale);
+            double ty = centerPoint.y * (1 - yScale);
+            double tz = centerPoint.z * (1 - zScale);
 
             result.M11 = xScale;
             result.M12 = 0.0;
@@ -461,17 +461,17 @@ namespace Prowl.Runtime
         {
             Matrix4x4 result;
 
-            result.M11 = scales.X;
+            result.M11 = scales.x;
             result.M12 = 0.0;
             result.M13 = 0.0;
             result.M14 = 0.0;
             result.M21 = 0.0;
-            result.M22 = scales.Y;
+            result.M22 = scales.y;
             result.M23 = 0.0;
             result.M24 = 0.0;
             result.M31 = 0.0;
             result.M32 = 0.0;
-            result.M33 = scales.Z;
+            result.M33 = scales.z;
             result.M34 = 0.0;
             result.M41 = 0.0;
             result.M42 = 0.0;
@@ -491,21 +491,21 @@ namespace Prowl.Runtime
         {
             Matrix4x4 result;
 
-            double tx = centerPoint.X * (1 - scales.X);
-            double ty = centerPoint.Y * (1 - scales.Y);
-            double tz = centerPoint.Z * (1 - scales.Z);
+            double tx = centerPoint.x * (1 - scales.x);
+            double ty = centerPoint.y * (1 - scales.y);
+            double tz = centerPoint.z * (1 - scales.z);
 
-            result.M11 = scales.X;
+            result.M11 = scales.x;
             result.M12 = 0.0;
             result.M13 = 0.0;
             result.M14 = 0.0;
             result.M21 = 0.0;
-            result.M22 = scales.Y;
+            result.M22 = scales.y;
             result.M23 = 0.0;
             result.M24 = 0.0;
             result.M31 = 0.0;
             result.M32 = 0.0;
-            result.M33 = scales.Z;
+            result.M33 = scales.z;
             result.M34 = 0.0;
             result.M41 = tx;
             result.M42 = ty;
@@ -554,9 +554,9 @@ namespace Prowl.Runtime
         {
             Matrix4x4 result;
 
-            double tx = centerPoint.X * (1 - scale);
-            double ty = centerPoint.Y * (1 - scale);
-            double tz = centerPoint.Z * (1 - scale);
+            double tx = centerPoint.x * (1 - scale);
+            double ty = centerPoint.y * (1 - scale);
+            double tz = centerPoint.z * (1 - scale);
 
             result.M11 = scale;
             result.M12 = 0.0;
@@ -627,8 +627,8 @@ namespace Prowl.Runtime
             double c = (double)Math.Cos(radians);
             double s = (double)Math.Sin(radians);
 
-            double y = centerPoint.Y * (1 - c) + centerPoint.Z * s;
-            double z = centerPoint.Z * (1 - c) - centerPoint.Y * s;
+            double y = centerPoint.y * (1 - c) + centerPoint.z * s;
+            double z = centerPoint.z * (1 - c) - centerPoint.y * s;
 
             // [  1  0  0  0 ]
             // [  0  c  s  0 ]
@@ -703,8 +703,8 @@ namespace Prowl.Runtime
             double c = (double)Math.Cos(radians);
             double s = (double)Math.Sin(radians);
 
-            double x = centerPoint.X * (1 - c) - centerPoint.Z * s;
-            double z = centerPoint.Z * (1 - c) + centerPoint.X * s;
+            double x = centerPoint.x * (1 - c) - centerPoint.z * s;
+            double z = centerPoint.z * (1 - c) + centerPoint.x * s;
 
             // [  c  0 -s  0 ]
             // [  0  1  0  0 ]
@@ -779,8 +779,8 @@ namespace Prowl.Runtime
             double c = (double)Math.Cos(radians);
             double s = (double)Math.Sin(radians);
 
-            double x = centerPoint.X * (1 - c) + centerPoint.Y * s;
-            double y = centerPoint.Y * (1 - c) - centerPoint.X * s;
+            double x = centerPoint.x * (1 - c) + centerPoint.y * s;
+            double y = centerPoint.y * (1 - c) - centerPoint.x * s;
 
             // [  c  s  0  0 ]
             // [ -s  c  0  0 ]
@@ -839,7 +839,7 @@ namespace Prowl.Runtime
             // M = [ xy-cosa*yx+sina*z    yy+cosa(1-yy)  yz-cosa*yz-sina*x ]
             //     [ zx-cosa*zx-sina*y zy-cosa*zy+sina*x   zz+cosa*(1-zz)  ]
             //
-            double x = axis.X, y = axis.Y, z = axis.Z;
+            double x = axis.x, y = axis.y, z = axis.z;
             double sa = (double)Math.Sin(angle), ca = (double)Math.Cos(angle);
             double xx = x * x, yy = y * y, zz = z * z;
             double xy = x * y, xz = x * z, yz = y * z;
@@ -1056,19 +1056,19 @@ namespace Prowl.Runtime
 
             Matrix4x4 result;
 
-            result.M11 = axisX.X;
-            result.M12 = axisY.X;
-            result.M13 = axisZ.X;
+            result.M11 = axisX.x;
+            result.M12 = axisY.x;
+            result.M13 = axisZ.x;
             result.M14 = 0.0;
 
-            result.M21 = axisX.Y;
-            result.M22 = axisY.Y;
-            result.M23 = axisZ.Y;
+            result.M21 = axisX.y;
+            result.M22 = axisY.y;
+            result.M23 = axisZ.y;
             result.M24 = 0.0;
 
-            result.M31 = axisX.Z;
-            result.M32 = axisY.Z;
-            result.M33 = axisZ.Z;
+            result.M31 = axisX.z;
+            result.M32 = axisY.z;
+            result.M33 = axisZ.z;
             result.M34 = 0.0;
 
             result.M41 = Vector3.Dot(axisX, negativeCameraPosition);
@@ -1094,17 +1094,17 @@ namespace Prowl.Runtime
 
             Matrix4x4 result;
 
-            result.M11 = xaxis.X;
-            result.M12 = yaxis.X;
-            result.M13 = zaxis.X;
+            result.M11 = xaxis.x;
+            result.M12 = yaxis.x;
+            result.M13 = zaxis.x;
             result.M14 = 0.0;
-            result.M21 = xaxis.Y;
-            result.M22 = yaxis.Y;
-            result.M23 = zaxis.Y;
+            result.M21 = xaxis.y;
+            result.M22 = yaxis.y;
+            result.M23 = zaxis.y;
             result.M24 = 0.0;
-            result.M31 = xaxis.Z;
-            result.M32 = yaxis.Z;
-            result.M33 = zaxis.Z;
+            result.M31 = xaxis.z;
+            result.M32 = yaxis.z;
+            result.M33 = zaxis.z;
             result.M34 = 0.0;
             result.M41 = -Vector3.Dot(xaxis, cameraPosition);
             result.M42 = -Vector3.Dot(yaxis, cameraPosition);
@@ -1129,21 +1129,21 @@ namespace Prowl.Runtime
 
             Matrix4x4 result;
 
-            result.M11 = xaxis.X;
-            result.M12 = xaxis.Y;
-            result.M13 = xaxis.Z;
+            result.M11 = xaxis.x;
+            result.M12 = xaxis.y;
+            result.M13 = xaxis.z;
             result.M14 = 0.0;
-            result.M21 = yaxis.X;
-            result.M22 = yaxis.Y;
-            result.M23 = yaxis.Z;
+            result.M21 = yaxis.x;
+            result.M22 = yaxis.y;
+            result.M23 = yaxis.z;
             result.M24 = 0.0;
-            result.M31 = zaxis.X;
-            result.M32 = zaxis.Y;
-            result.M33 = zaxis.Z;
+            result.M31 = zaxis.x;
+            result.M32 = zaxis.y;
+            result.M33 = zaxis.z;
             result.M34 = 0.0;
-            result.M41 = position.X;
-            result.M42 = position.Y;
-            result.M43 = position.Z;
+            result.M41 = position.x;
+            result.M42 = position.y;
+            result.M43 = position.z;
             result.M44 = 1.0;
 
             return result;
@@ -1213,28 +1213,28 @@ namespace Prowl.Runtime
         {
             Plane p = Plane.Normalize(plane);
 
-            double dot = p.Normal.X * lightDirection.X + p.Normal.Y * lightDirection.Y + p.Normal.Z * lightDirection.Z;
-            double a = -p.Normal.X;
-            double b = -p.Normal.Y;
-            double c = -p.Normal.Z;
+            double dot = p.Normal.x * lightDirection.x + p.Normal.y * lightDirection.y + p.Normal.z * lightDirection.z;
+            double a = -p.Normal.x;
+            double b = -p.Normal.y;
+            double c = -p.Normal.z;
             double d = -p.D;
 
             Matrix4x4 result;
 
-            result.M11 = a * lightDirection.X + dot;
-            result.M21 = b * lightDirection.X;
-            result.M31 = c * lightDirection.X;
-            result.M41 = d * lightDirection.X;
+            result.M11 = a * lightDirection.x + dot;
+            result.M21 = b * lightDirection.x;
+            result.M31 = c * lightDirection.x;
+            result.M41 = d * lightDirection.x;
 
-            result.M12 = a * lightDirection.Y;
-            result.M22 = b * lightDirection.Y + dot;
-            result.M32 = c * lightDirection.Y;
-            result.M42 = d * lightDirection.Y;
+            result.M12 = a * lightDirection.y;
+            result.M22 = b * lightDirection.y + dot;
+            result.M32 = c * lightDirection.y;
+            result.M42 = d * lightDirection.y;
 
-            result.M13 = a * lightDirection.Z;
-            result.M23 = b * lightDirection.Z;
-            result.M33 = c * lightDirection.Z + dot;
-            result.M43 = d * lightDirection.Z;
+            result.M13 = a * lightDirection.z;
+            result.M23 = b * lightDirection.z;
+            result.M33 = c * lightDirection.z + dot;
+            result.M43 = d * lightDirection.z;
 
             result.M14 = 0.0;
             result.M24 = 0.0;
@@ -1253,9 +1253,9 @@ namespace Prowl.Runtime
         {
             value = Plane.Normalize(value);
 
-            double a = value.Normal.X;
-            double b = value.Normal.Y;
-            double c = value.Normal.Z;
+            double a = value.Normal.x;
+            double b = value.Normal.y;
+            double c = value.Normal.z;
 
             double fa = -2.0 * a;
             double fb = -2.0 * b;
@@ -1565,9 +1565,9 @@ namespace Prowl.Runtime
                     *(pVectorBasis[1]) = new Vector3(matrix.M21, matrix.M22, matrix.M23);
                     *(pVectorBasis[2]) = new Vector3(matrix.M31, matrix.M32, matrix.M33);
 
-                    scale.X = pVectorBasis[0]->Length();
-                    scale.Y = pVectorBasis[1]->Length();
-                    scale.Z = pVectorBasis[2]->Length();
+                    scale.x = pVectorBasis[0]->Length();
+                    scale.y = pVectorBasis[1]->Length();
+                    scale.z = pVectorBasis[2]->Length();
 
                     uint a, b, c;
                     #region Ranking
@@ -1634,9 +1634,9 @@ namespace Prowl.Runtime
                         uint cc;
                         double fAbsX, fAbsY, fAbsZ;
 
-                        fAbsX = (double)Math.Abs(pVectorBasis[a]->X);
-                        fAbsY = (double)Math.Abs(pVectorBasis[a]->Y);
-                        fAbsZ = (double)Math.Abs(pVectorBasis[a]->Z);
+                        fAbsX = (double)Math.Abs(pVectorBasis[a]->x);
+                        fAbsY = (double)Math.Abs(pVectorBasis[a]->y);
+                        fAbsZ = (double)Math.Abs(pVectorBasis[a]->z);
 
                         #region Ranking
                         if (fAbsX < fAbsY)

@@ -43,7 +43,7 @@ namespace Prowl.Runtime
 
         #region Public instance methods
 
-        public System.Numerics.Vector4 ToFloat() => new System.Numerics.Vector4((float)X, (float)Y, (float)Z, (float)W);
+        public System.Numerics.Vector4 ToFloat() => new System.Numerics.Vector4((float)x, (float)y, (float)z, (float)w);
 
         /// <summary>
         /// Returns the hash code for this instance.
@@ -51,10 +51,10 @@ namespace Prowl.Runtime
         /// <returns>The hash code.</returns>
         public override int GetHashCode()
         {
-            int hash = this.X.GetHashCode();
-            hash = HashCode.Combine(hash, this.Y.GetHashCode());
-            hash = HashCode.Combine(hash, this.Z.GetHashCode());
-            hash = HashCode.Combine(hash, this.W.GetHashCode());
+            int hash = this.x.GetHashCode();
+            hash = HashCode.Combine(hash, this.y.GetHashCode());
+            hash = HashCode.Combine(hash, this.z.GetHashCode());
+            hash = HashCode.Combine(hash, this.w.GetHashCode());
             return hash;
         }
 
@@ -102,16 +102,16 @@ namespace Prowl.Runtime
             StringBuilder sb = new StringBuilder();
             string separator = NumberFormatInfo.GetInstance(formatProvider).NumberGroupSeparator;
             sb.Append('<');
-            sb.Append(this.X.ToString(format, formatProvider));
+            sb.Append(this.x.ToString(format, formatProvider));
             sb.Append(separator);
             sb.Append(' ');
-            sb.Append(this.Y.ToString(format, formatProvider));
+            sb.Append(this.y.ToString(format, formatProvider));
             sb.Append(separator);
             sb.Append(' ');
-            sb.Append(this.Z.ToString(format, formatProvider));
+            sb.Append(this.z.ToString(format, formatProvider));
             sb.Append(separator);
             sb.Append(' ');
-            sb.Append(this.W.ToString(format, formatProvider));
+            sb.Append(this.w.ToString(format, formatProvider));
             sb.Append('>');
             return sb.ToString();
         }
@@ -123,7 +123,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public double Length()
         {
-            double ls = X * X + Y * Y + Z * Z + W * W;
+            double ls = x * x + y * y + z * z + w * w;
 
                 return (double)Math.Sqrt((double)ls);
         }
@@ -135,7 +135,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public double LengthSquared()
         {
-            return X * X + Y * Y + Z * Z + W * W;
+            return x * x + y * y + z * z + w * w;
         }
         #endregion Public Instance Methods
 
@@ -149,10 +149,10 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static double Distance(Vector4 value1, Vector4 value2)
         {
-            double dx = value1.X - value2.X;
-                double dy = value1.Y - value2.Y;
-                double dz = value1.Z - value2.Z;
-                double dw = value1.W - value2.W;
+            double dx = value1.x - value2.x;
+                double dy = value1.y - value2.y;
+                double dz = value1.z - value2.z;
+                double dw = value1.w - value2.w;
 
                 double ls = dx * dx + dy * dy + dz * dz + dw * dw;
 
@@ -168,10 +168,10 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static double DistanceSquared(Vector4 value1, Vector4 value2)
         {
-            double dx = value1.X - value2.X;
-                double dy = value1.Y - value2.Y;
-                double dz = value1.Z - value2.Z;
-                double dw = value1.W - value2.W;
+            double dx = value1.x - value2.x;
+                double dy = value1.y - value2.y;
+                double dz = value1.z - value2.z;
+                double dw = value1.w - value2.w;
 
                 return dx * dx + dy * dy + dz * dz + dw * dw;
         }
@@ -184,14 +184,14 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector4 Normalize(Vector4 vector)
         {
-            double ls = vector.X * vector.X + vector.Y * vector.Y + vector.Z * vector.Z + vector.W * vector.W;
+            double ls = vector.x * vector.x + vector.y * vector.y + vector.z * vector.z + vector.w * vector.w;
                 double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
 
                 return new Vector4(
-                    vector.X * invNorm,
-                    vector.Y * invNorm,
-                    vector.Z * invNorm,
-                    vector.W * invNorm);
+                    vector.x * invNorm,
+                    vector.y * invNorm,
+                    vector.z * invNorm,
+                    vector.w * invNorm);
         }
 
         /// <summary>
@@ -207,21 +207,21 @@ namespace Prowl.Runtime
             // This compare order is very important!!!
             // We must follow HLSL behavior in the case user specified min value is bigger than max value.
 
-            double x = value1.X;
-            x = (x > max.X) ? max.X : x;
-            x = (x < min.X) ? min.X : x;
+            double x = value1.x;
+            x = (x > max.x) ? max.x : x;
+            x = (x < min.x) ? min.x : x;
 
-            double y = value1.Y;
-            y = (y > max.Y) ? max.Y : y;
-            y = (y < min.Y) ? min.Y : y;
+            double y = value1.y;
+            y = (y > max.y) ? max.y : y;
+            y = (y < min.y) ? min.y : y;
 
-            double z = value1.Z;
-            z = (z > max.Z) ? max.Z : z;
-            z = (z < min.Z) ? min.Z : z;
+            double z = value1.z;
+            z = (z > max.z) ? max.z : z;
+            z = (z < min.z) ? min.z : z;
 
-            double w = value1.W;
-            w = (w > max.W) ? max.W : w;
-            w = (w < min.W) ? min.W : w;
+            double w = value1.w;
+            w = (w > max.w) ? max.w : w;
+            w = (w < min.w) ? min.w : w;
 
             return new Vector4(x, y, z, w);
         }
@@ -237,10 +237,10 @@ namespace Prowl.Runtime
         public static Vector4 Lerp(Vector4 value1, Vector4 value2, double amount)
         {
             return new Vector4(
-                value1.X + (value2.X - value1.X) * amount,
-                value1.Y + (value2.Y - value1.Y) * amount,
-                value1.Z + (value2.Z - value1.Z) * amount,
-                value1.W + (value2.W - value1.W) * amount);
+                value1.x + (value2.x - value1.x) * amount,
+                value1.y + (value2.y - value1.y) * amount,
+                value1.z + (value2.z - value1.z) * amount,
+                value1.w + (value2.w - value1.w) * amount);
         }
 
         /// <summary>
@@ -253,10 +253,10 @@ namespace Prowl.Runtime
         public static Vector4 Transform(Vector2 position, Matrix4x4 matrix)
         {
             return new Vector4(
-                position.X * matrix.M11 + position.Y * matrix.M21 + matrix.M41,
-                position.X * matrix.M12 + position.Y * matrix.M22 + matrix.M42,
-                position.X * matrix.M13 + position.Y * matrix.M23 + matrix.M43,
-                position.X * matrix.M14 + position.Y * matrix.M24 + matrix.M44);
+                position.x * matrix.M11 + position.y * matrix.M21 + matrix.M41,
+                position.x * matrix.M12 + position.y * matrix.M22 + matrix.M42,
+                position.x * matrix.M13 + position.y * matrix.M23 + matrix.M43,
+                position.x * matrix.M14 + position.y * matrix.M24 + matrix.M44);
         }
 
         /// <summary>
@@ -269,10 +269,10 @@ namespace Prowl.Runtime
         public static Vector4 Transform(Vector3 position, Matrix4x4 matrix)
         {
             return new Vector4(
-                position.X * matrix.M11 + position.Y * matrix.M21 + position.Z * matrix.M31 + matrix.M41,
-                position.X * matrix.M12 + position.Y * matrix.M22 + position.Z * matrix.M32 + matrix.M42,
-                position.X * matrix.M13 + position.Y * matrix.M23 + position.Z * matrix.M33 + matrix.M43,
-                position.X * matrix.M14 + position.Y * matrix.M24 + position.Z * matrix.M34 + matrix.M44);
+                position.x * matrix.M11 + position.y * matrix.M21 + position.z * matrix.M31 + matrix.M41,
+                position.x * matrix.M12 + position.y * matrix.M22 + position.z * matrix.M32 + matrix.M42,
+                position.x * matrix.M13 + position.y * matrix.M23 + position.z * matrix.M33 + matrix.M43,
+                position.x * matrix.M14 + position.y * matrix.M24 + position.z * matrix.M34 + matrix.M44);
         }
 
         /// <summary>
@@ -285,10 +285,10 @@ namespace Prowl.Runtime
         public static Vector4 Transform(Vector4 vector, Matrix4x4 matrix)
         {
             return new Vector4(
-                vector.X * matrix.M11 + vector.Y * matrix.M21 + vector.Z * matrix.M31 + vector.W * matrix.M41,
-                vector.X * matrix.M12 + vector.Y * matrix.M22 + vector.Z * matrix.M32 + vector.W * matrix.M42,
-                vector.X * matrix.M13 + vector.Y * matrix.M23 + vector.Z * matrix.M33 + vector.W * matrix.M43,
-                vector.X * matrix.M14 + vector.Y * matrix.M24 + vector.Z * matrix.M34 + vector.W * matrix.M44);
+                vector.x * matrix.M11 + vector.y * matrix.M21 + vector.z * matrix.M31 + vector.w * matrix.M41,
+                vector.x * matrix.M12 + vector.y * matrix.M22 + vector.z * matrix.M32 + vector.w * matrix.M42,
+                vector.x * matrix.M13 + vector.y * matrix.M23 + vector.z * matrix.M33 + vector.w * matrix.M43,
+                vector.x * matrix.M14 + vector.y * matrix.M24 + vector.z * matrix.M34 + vector.w * matrix.M44);
         }
 
         /// <summary>
@@ -315,9 +315,9 @@ namespace Prowl.Runtime
             double zz2 = rotation.Z * z2;
 
             return new Vector4(
-                value.X * (1.0 - yy2 - zz2) + value.Y * (xy2 - wz2),
-                value.X * (xy2 + wz2) + value.Y * (1.0 - xx2 - zz2),
-                value.X * (xz2 - wy2) + value.Y * (yz2 + wx2),
+                value.x * (1.0 - yy2 - zz2) + value.y * (xy2 - wz2),
+                value.x * (xy2 + wz2) + value.y * (1.0 - xx2 - zz2),
+                value.x * (xz2 - wy2) + value.y * (yz2 + wx2),
                 1.0);
         }
 
@@ -345,9 +345,9 @@ namespace Prowl.Runtime
             double zz2 = rotation.Z * z2;
 
             return new Vector4(
-                value.X * (1.0 - yy2 - zz2) + value.Y * (xy2 - wz2) + value.Z * (xz2 + wy2),
-                value.X * (xy2 + wz2) + value.Y * (1.0 - xx2 - zz2) + value.Z * (yz2 - wx2),
-                value.X * (xz2 - wy2) + value.Y * (yz2 + wx2) + value.Z * (1.0 - xx2 - yy2),
+                value.x * (1.0 - yy2 - zz2) + value.y * (xy2 - wz2) + value.z * (xz2 + wy2),
+                value.x * (xy2 + wz2) + value.y * (1.0 - xx2 - zz2) + value.z * (yz2 - wx2),
+                value.x * (xz2 - wy2) + value.y * (yz2 + wx2) + value.z * (1.0 - xx2 - yy2),
                 1.0);
         }
 
@@ -375,10 +375,10 @@ namespace Prowl.Runtime
             double zz2 = rotation.Z * z2;
 
             return new Vector4(
-                value.X * (1.0 - yy2 - zz2) + value.Y * (xy2 - wz2) + value.Z * (xz2 + wy2),
-                value.X * (xy2 + wz2) + value.Y * (1.0 - xx2 - zz2) + value.Z * (yz2 - wx2),
-                value.X * (xz2 - wy2) + value.Y * (yz2 + wx2) + value.Z * (1.0 - xx2 - yy2),
-                value.W);
+                value.x * (1.0 - yy2 - zz2) + value.y * (xy2 - wz2) + value.z * (xz2 + wy2),
+                value.x * (xy2 + wz2) + value.y * (1.0 - xx2 - zz2) + value.z * (yz2 - wx2),
+                value.x * (xz2 - wy2) + value.y * (yz2 + wx2) + value.z * (1.0 - xx2 - yy2),
+                value.w);
         }
         #endregion Public Static Methods
 

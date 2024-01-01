@@ -57,13 +57,13 @@ public class Camera : MonoBehaviour
         Vector2 size = GetRenderTargetSize() * RenderResolution;
         if (gBuffer == null)
         {
-            gBuffer = new GBuffer((int)size.X, (int)size.Y);
+            gBuffer = new GBuffer((int)size.x, (int)size.y);
             Resize?.Invoke(gBuffer.Width, gBuffer.Height);
         }
-        else if (gBuffer.Width != (int)size.X || gBuffer.Height != (int)size.Y)
+        else if (gBuffer.Width != (int)size.x || gBuffer.Height != (int)size.y)
         {
             gBuffer.UnloadGBuffer();
-            gBuffer = new GBuffer((int)size.X, (int)size.Y);
+            gBuffer = new GBuffer((int)size.x, (int)size.y);
             Resize?.Invoke(gBuffer.Width, gBuffer.Height);
         }
     }

@@ -80,15 +80,15 @@ namespace Prowl.Runtime
 
             double? tMin = null, tMax = null;
 
-            if (Math.Abs(Direction.X) < Epsilon)
+            if (Math.Abs(Direction.x) < Epsilon)
             {
-                if (Position.X < box.Min.X || Position.X > box.Max.X)
+                if (Position.x < box.Min.x || Position.x > box.Max.x)
                     return null;
             }
             else
             {
-                tMin = (box.Min.X - Position.X) / Direction.X;
-                tMax = (box.Max.X - Position.X) / Direction.X;
+                tMin = (box.Min.x - Position.x) / Direction.x;
+                tMax = (box.Max.x - Position.x) / Direction.x;
 
                 if (tMin > tMax)
                 {
@@ -98,15 +98,15 @@ namespace Prowl.Runtime
                 }
             }
 
-            if (Math.Abs(Direction.Y) < Epsilon)
+            if (Math.Abs(Direction.y) < Epsilon)
             {
-                if (Position.Y < box.Min.Y || Position.Y > box.Max.Y)
+                if (Position.y < box.Min.y || Position.y > box.Max.y)
                     return null;
             }
             else
             {
-                var tMinY = (box.Min.Y - Position.Y) / Direction.Y;
-                var tMaxY = (box.Max.Y - Position.Y) / Direction.Y;
+                var tMinY = (box.Min.y - Position.y) / Direction.y;
+                var tMaxY = (box.Max.y - Position.y) / Direction.y;
 
                 if (tMinY > tMaxY)
                 {
@@ -122,15 +122,15 @@ namespace Prowl.Runtime
                 if (!tMax.HasValue || tMaxY < tMax) tMax = tMaxY;
             }
 
-            if (Math.Abs(Direction.Z) < Epsilon)
+            if (Math.Abs(Direction.z) < Epsilon)
             {
-                if (Position.Z < box.Min.Z || Position.Z > box.Max.Z)
+                if (Position.z < box.Min.z || Position.z > box.Max.z)
                     return null;
             }
             else
             {
-                var tMinZ = (box.Min.Z - Position.Z) / Direction.Z;
-                var tMaxZ = (box.Max.Z - Position.Z) / Direction.Z;
+                var tMinZ = (box.Min.z - Position.z) / Direction.z;
+                var tMaxZ = (box.Max.z - Position.z) / Direction.z;
 
                 if (tMinZ > tMaxZ)
                 {

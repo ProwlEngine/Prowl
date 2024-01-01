@@ -68,9 +68,9 @@ namespace Prowl.Runtime
         /// <param name="scalarPart">The rotation part of the Quaternion.</param>
         public Quaternion(Vector3 vectorPart, double scalarPart)
         {
-            X = vectorPart.X;
-            Y = vectorPart.Y;
-            Z = vectorPart.Z;
+            X = vectorPart.x;
+            Y = vectorPart.y;
+            Z = vectorPart.z;
             W = scalarPart;
         }
 
@@ -176,9 +176,9 @@ namespace Prowl.Runtime
             double s = (double)Math.Sin(halfAngle);
             double c = (double)Math.Cos(halfAngle);
 
-            ans.X = axis.X * s;
-            ans.Y = axis.Y * s;
-            ans.Z = axis.Z * s;
+            ans.X = axis.x * s;
+            ans.Y = axis.y * s;
+            ans.Z = axis.z * s;
             ans.W = c;
 
             return ans;

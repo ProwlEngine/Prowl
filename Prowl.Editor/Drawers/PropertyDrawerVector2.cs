@@ -36,11 +36,11 @@ public class PropertyDrawerVector2 : PropertyDrawer<Vector2> {
         ImGui.PushItemWidth(width / 2 - 13.5f);
         ImGui.Text("X");
         ImGui.SameLine();
-        changed |= GUIHelper.DragDouble("##X", ref v2.X, 0.01f);
+        changed |= GUIHelper.DragDouble("##X", ref v2.x, 0.01f);
         ImGui.SameLine();
         ImGui.Text("Y");
         ImGui.SameLine();
-        changed |= GUIHelper.DragDouble("##Y", ref v2.Y, 0.01f);
+        changed |= GUIHelper.DragDouble("##Y", ref v2.y, 0.01f);
 
         ImGui.PopItemWidth();
         ImGui.Columns(1);

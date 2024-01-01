@@ -17,19 +17,19 @@ namespace Prowl.Runtime
         /// <summary>
         /// The X component of the vector.
         /// </summary>
-        public Double X;
+        public Double x;
         /// <summary>
         /// The Y component of the vector.
         /// </summary>
-        public Double Y;
+        public Double y;
         /// <summary>
         /// The Z component of the vector.
         /// </summary>
-        public Double Z;
+        public Double z;
         /// <summary>
         /// The W component of the vector.
         /// </summary>
-        public Double W;
+        public Double w;
 
         #region Constructors
 
@@ -50,10 +50,10 @@ namespace Prowl.Runtime
         /// <param name="z">Z component.</param>
         public Vector4(Double x, Double y, Double z, Double w)
         {
-            W = w;
-            X = x;
-            Y = y;
-            Z = z;
+            this.w = w;
+            this.x = x;
+            this.y = y;
+            this.z = z;
         }
 
         /// <summary>
@@ -64,10 +64,10 @@ namespace Prowl.Runtime
         /// <param name="w">The W component.</param>
         public Vector4(Vector2 value, Double z, Double w)
         {
-            X = value.X;
-            Y = value.Y;
-            Z = z;
-            W = w;
+            x = value.x;
+            y = value.y;
+            this.z = z;
+            this.w = w;
         }
 
         /// <summary>
@@ -77,10 +77,10 @@ namespace Prowl.Runtime
         /// <param name="w">The W component.</param>
         public Vector4(Vector3 value, Double w)
         {
-            X = value.X;
-            Y = value.Y;
-            Z = value.Z;
-            W = w;
+            x = value.x;
+            y = value.y;
+            z = value.z;
+            this.w = w;
         }
         #endregion Constructors
 
@@ -117,10 +117,10 @@ namespace Prowl.Runtime
             {
                 throw new ArgumentException();
             }
-            array[index] = X;
-            array[index + 1] = Y;
-            array[index + 2] = Z;
-            array[index + 3] = W;
+            array[index] = x;
+            array[index + 1] = y;
+            array[index + 2] = z;
+            array[index + 3] = w;
         }
 
         /// <summary>
@@ -130,10 +130,10 @@ namespace Prowl.Runtime
         /// <returns>True if the other Vector4 is equal to this instance; False otherwise.</returns>
         public bool Equals(Vector4 other)
         {
-            return this.X == other.X
-                && this.Y == other.Y
-                && this.Z == other.Z
-                && this.W == other.W;
+            return this.x == other.x
+                && this.y == other.y
+                && this.z == other.z
+                && this.w == other.w;
         }
         #endregion Public Instance Methods
 
@@ -147,10 +147,10 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static double Dot(Vector4 vector1, Vector4 vector2)
         {
-            return vector1.X * vector2.X +
-                   vector1.Y * vector2.Y +
-                   vector1.Z * vector2.Z +
-                   vector1.W * vector2.W;
+            return vector1.x * vector2.x +
+                   vector1.y * vector2.y +
+                   vector1.z * vector2.z +
+                   vector1.w * vector2.w;
         }
 
         /// <summary>
@@ -163,10 +163,10 @@ namespace Prowl.Runtime
         public static Vector4 Min(Vector4 value1, Vector4 value2)
         {
             return new Vector4(
-                (value1.X < value2.X) ? value1.X : value2.X,
-                (value1.Y < value2.Y) ? value1.Y : value2.Y,
-                (value1.Z < value2.Z) ? value1.Z : value2.Z,
-                (value1.W < value2.W) ? value1.W : value2.W);
+                (value1.x < value2.x) ? value1.x : value2.x,
+                (value1.y < value2.y) ? value1.y : value2.y,
+                (value1.z < value2.z) ? value1.z : value2.z,
+                (value1.w < value2.w) ? value1.w : value2.w);
         }
 
         /// <summary>
@@ -179,10 +179,10 @@ namespace Prowl.Runtime
         public static Vector4 Max(Vector4 value1, Vector4 value2)
         {
             return new Vector4(
-                (value1.X > value2.X) ? value1.X : value2.X,
-                (value1.Y > value2.Y) ? value1.Y : value2.Y,
-                (value1.Z > value2.Z) ? value1.Z : value2.Z,
-                (value1.W > value2.W) ? value1.W : value2.W);
+                (value1.x > value2.x) ? value1.x : value2.x,
+                (value1.y > value2.y) ? value1.y : value2.y,
+                (value1.z > value2.z) ? value1.z : value2.z,
+                (value1.w > value2.w) ? value1.w : value2.w);
         }
 
         /// <summary>
@@ -193,7 +193,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector4 Abs(Vector4 value)
         {
-            return new Vector4(Math.Abs(value.X), Math.Abs(value.Y), Math.Abs(value.Z), Math.Abs(value.W));
+            return new Vector4(Math.Abs(value.x), Math.Abs(value.y), Math.Abs(value.z), Math.Abs(value.w));
         }
 
         /// <summary>
@@ -204,7 +204,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector4 SquareRoot(Vector4 value)
         {
-            return new Vector4((Double)Math.Sqrt(value.X), (Double)Math.Sqrt(value.Y), (Double)Math.Sqrt(value.Z), (Double)Math.Sqrt(value.W));
+            return new Vector4((Double)Math.Sqrt(value.x), (Double)Math.Sqrt(value.y), (Double)Math.Sqrt(value.z), (Double)Math.Sqrt(value.w));
         }
         #endregion Public Static Methods
 
@@ -218,7 +218,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector4 operator +(Vector4 left, Vector4 right)
         {
-            return new Vector4(left.X + right.X, left.Y + right.Y, left.Z + right.Z, left.W + right.W);
+            return new Vector4(left.x + right.x, left.y + right.y, left.z + right.z, left.w + right.w);
         }
 
         /// <summary>
@@ -230,7 +230,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector4 operator -(Vector4 left, Vector4 right)
         {
-            return new Vector4(left.X - right.X, left.Y - right.Y, left.Z - right.Z, left.W - right.W);
+            return new Vector4(left.x - right.x, left.y - right.y, left.z - right.z, left.w - right.w);
         }
 
         /// <summary>
@@ -242,7 +242,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector4 operator *(Vector4 left, Vector4 right)
         {
-            return new Vector4(left.X * right.X, left.Y * right.Y, left.Z * right.Z, left.W * right.W);
+            return new Vector4(left.x * right.x, left.y * right.y, left.z * right.z, left.w * right.w);
         }
 
         /// <summary>
@@ -278,7 +278,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector4 operator /(Vector4 left, Vector4 right)
         {
-            return new Vector4(left.X / right.X, left.Y / right.Y, left.Z / right.Z, left.W / right.W);
+            return new Vector4(left.x / right.x, left.y / right.y, left.z / right.z, left.w / right.w);
         }
 
         /// <summary>
@@ -293,10 +293,10 @@ namespace Prowl.Runtime
             double invDiv = 1.0 / value2;
 
             return new Vector4(
-                value1.X * invDiv,
-                value1.Y * invDiv,
-                value1.Z * invDiv,
-                value1.W * invDiv);
+                value1.x * invDiv,
+                value1.y * invDiv,
+                value1.z * invDiv,
+                value1.w * invDiv);
         }
 
         /// <summary>
@@ -337,7 +337,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static implicit operator System.Numerics.Vector4(Vector4 value)
         {
-            return new System.Numerics.Vector4((float)value.X, (float)value.Y, (float)value.Z, (float)value.W);
+            return new System.Numerics.Vector4((float)value.x, (float)value.y, (float)value.z, (float)value.w);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

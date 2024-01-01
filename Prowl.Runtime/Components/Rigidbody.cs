@@ -166,7 +166,7 @@ namespace Prowl.Runtime.Components
     {
         public Vector3 size = Vector3.One;
         public override void AddShape(ref CompoundBuilder builder, RigidPose pose) => 
-            builder.Add(new Box((float)(size.X * GameObject.Transform!.Scale.X), (float)(size.Y * GameObject.Transform!.Scale.Y), (float)(size.Z * GameObject.Transform!.Scale.Z)), pose, weight);
+            builder.Add(new Box((float)(size.x * GameObject.Transform!.Scale.x), (float)(size.y * GameObject.Transform!.Scale.y), (float)(size.z * GameObject.Transform!.Scale.z)), pose, weight);
 
         public void DrawGizmosSelected()
         {
@@ -180,12 +180,12 @@ namespace Prowl.Runtime.Components
     {
         public float radius = 1f;
         public override void AddShape(ref CompoundBuilder builder, RigidPose pose) =>
-        builder.Add(new Sphere(radius * (float)GameObject.Transform!.Scale.X), pose, weight);
+        builder.Add(new Sphere(radius * (float)GameObject.Transform!.Scale.x), pose, weight);
 
         public void DrawGizmosSelected()
         {
             var mat = Matrix4x4.Identity;
-            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateScale((radius * (float)GameObject.Transform!.Scale.X) * 1.0025f));
+            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateScale((radius * (float)GameObject.Transform!.Scale.x) * 1.0025f));
             mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateTranslation(GameObject.Transform!.GlobalPosition - (Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.Zero)));
             Gizmos.Matrix = mat;
             Gizmos.Sphere(Color.yellow);
@@ -198,7 +198,7 @@ namespace Prowl.Runtime.Components
         public float radius = 1f;
         public float height = 1f;
         public override void AddShape(ref CompoundBuilder builder, RigidPose pose) =>
-        builder.Add(new Capsule(radius * (float)GameObject.Transform!.Scale.X, height * (float)GameObject.Transform!.Scale.X), pose, weight);
+        builder.Add(new Capsule(radius * (float)GameObject.Transform!.Scale.x, height * (float)GameObject.Transform!.Scale.x), pose, weight);
     }
 
     [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Capsules}  Cylinder Collider")]
@@ -207,6 +207,6 @@ namespace Prowl.Runtime.Components
         public float radius = 1f;
         public float height = 1f;
         public override void AddShape(ref CompoundBuilder builder, RigidPose pose) =>
-        builder.Add(new Cylinder(radius * (float)GameObject.Transform!.Scale.X, height * (float)GameObject.Transform!.Scale.X), pose, weight);
+        builder.Add(new Cylinder(radius * (float)GameObject.Transform!.Scale.x, height * (float)GameObject.Transform!.Scale.x), pose, weight);
     }
 }

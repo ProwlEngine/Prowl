@@ -1,6 +1,5 @@
 ﻿using Prowl.Runtime.NodeSystem;
 using Silk.NET.OpenGL;
-using Silk.NET.Vulkan;
 using System;
 using static Prowl.Runtime.MonoBehaviour;
 
@@ -341,12 +340,12 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             long n = Time.frameCount % 16;
             var halton = Halton16[n];
             PreviousJitter = Jitter;
-            Jitter = new Vector2((halton.X - 0.5f), (halton.Y - 0.5f)) * 2.0;
+            Jitter = new Vector2((halton.x - 0.5f), (halton.y - 0.5f)) * 2.0;
             if (Jitter2X)
                 Jitter *= 2.0;
 
-            Graphics.MatProjection.M31 += Jitter.X / width;
-            Graphics.MatProjection.M32 += Jitter.Y / height;
+            Graphics.MatProjection.M31 += Jitter.x / width;
+            Graphics.MatProjection.M32 += Jitter.y / height;
 
             Graphics.UseJitter = true; // This applies the jitter to the Velocity Buffer/Motion Vectors
             Graphics.Jitter = Jitter / new Vector2(width, height);

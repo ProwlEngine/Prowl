@@ -317,7 +317,7 @@ namespace Prowl.Runtime
             GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, source.fboId);
             GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, destination?.fboId ?? 0);
             Graphics.GL.BlitFramebuffer(0, 0, source.Width, source.Height,
-                                        0, 0, destination?.Width ?? (int)Graphics.Resolution.X, destination?.Height ?? (int)Graphics.Resolution.Y,
+                                        0, 0, destination?.Width ?? (int)Graphics.Resolution.x, destination?.Height ?? (int)Graphics.Resolution.y,
                                         ClearBufferMask.DepthBufferBit, BlitFramebufferFilter.Nearest
                                         );
             GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);

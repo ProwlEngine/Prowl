@@ -74,21 +74,21 @@ namespace Prowl.Runtime
         public ContainmentType Contains(Bounds box)
         {
             //test if all corner is in the same side of a face by just checking min and max
-            if (box.Max.X < Min.X
-                || box.Min.X > Max.X
-                || box.Max.Y < Min.Y
-                || box.Min.Y > Max.Y
-                || box.Max.Z < Min.Z
-                || box.Min.Z > Max.Z)
+            if (box.Max.x < Min.x
+                || box.Min.x > Max.x
+                || box.Max.y < Min.y
+                || box.Min.y > Max.y
+                || box.Max.z < Min.z
+                || box.Min.z > Max.z)
                 return ContainmentType.Disjoint;
 
 
-            if (box.Min.X >= Min.X
-                && box.Max.X <= Max.X
-                && box.Min.Y >= Min.Y
-                && box.Max.Y <= Max.Y
-                && box.Min.Z >= Min.Z
-                && box.Max.Z <= Max.Z)
+            if (box.Min.x >= Min.x
+                && box.Max.x <= Max.x
+                && box.Min.y >= Min.y
+                && box.Max.y <= Max.y
+                && box.Min.z >= Min.z
+                && box.Max.z <= Max.z)
                 return ContainmentType.Contains;
 
             return ContainmentType.Intersects;
@@ -148,21 +148,21 @@ namespace Prowl.Runtime
         public void Contains(ref Vector3 point, out ContainmentType result)
         {
             //first we get if point is out of box
-            if (point.X < this.Min.X
-                || point.X > this.Max.X
-                || point.Y < this.Min.Y
-                || point.Y > this.Max.Y
-                || point.Z < this.Min.Z
-                || point.Z > this.Max.Z)
+            if (point.x < this.Min.x
+                || point.x > this.Max.x
+                || point.y < this.Min.y
+                || point.y > this.Max.y
+                || point.z < this.Min.z
+                || point.z > this.Max.z)
             {
                 result = ContainmentType.Disjoint;
             }//or if point is on box because coordonate of point is lesser or equal
-            else if (point.X == this.Min.X
-                || point.X == this.Max.X
-                || point.Y == this.Min.Y
-                || point.Y == this.Max.Y
-                || point.Z == this.Min.Z
-                || point.Z == this.Max.Z)
+            else if (point.x == this.Min.x
+                || point.x == this.Max.x
+                || point.y == this.Min.y
+                || point.y == this.Max.y
+                || point.z == this.Min.z
+                || point.z == this.Max.z)
                 result = ContainmentType.Intersects;
             else
                 result = ContainmentType.Contains;
@@ -187,13 +187,13 @@ namespace Prowl.Runtime
             var maxVec = MinVector3;
             foreach (var ptVector in points)
             {
-                minVec.X = (minVec.X < ptVector.X) ? minVec.X : ptVector.X;
-                minVec.Y = (minVec.Y < ptVector.Y) ? minVec.Y : ptVector.Y;
-                minVec.Z = (minVec.Z < ptVector.Z) ? minVec.Z : ptVector.Z;
+                minVec.x = (minVec.x < ptVector.x) ? minVec.x : ptVector.x;
+                minVec.y = (minVec.y < ptVector.y) ? minVec.y : ptVector.y;
+                minVec.z = (minVec.z < ptVector.z) ? minVec.z : ptVector.z;
 
-                maxVec.X = (maxVec.X > ptVector.X) ? maxVec.X : ptVector.X;
-                maxVec.Y = (maxVec.Y > ptVector.Y) ? maxVec.Y : ptVector.Y;
-                maxVec.Z = (maxVec.Z > ptVector.Z) ? maxVec.Z : ptVector.Z;
+                maxVec.x = (maxVec.x > ptVector.x) ? maxVec.x : ptVector.x;
+                maxVec.y = (maxVec.y > ptVector.y) ? maxVec.y : ptVector.y;
+                maxVec.z = (maxVec.z > ptVector.z) ? maxVec.z : ptVector.z;
 
                 empty = false;
             }
@@ -212,12 +212,12 @@ namespace Prowl.Runtime
 
         public static void CreateMerged(ref Bounds original, ref Bounds additional, out Bounds result)
         {
-            result.Min.X = Math.Min(original.Min.X, additional.Min.X);
-            result.Min.Y = Math.Min(original.Min.Y, additional.Min.Y);
-            result.Min.Z = Math.Min(original.Min.Z, additional.Min.Z);
-            result.Max.X = Math.Max(original.Max.X, additional.Max.X);
-            result.Max.Y = Math.Max(original.Max.Y, additional.Max.Y);
-            result.Max.Z = Math.Max(original.Max.Z, additional.Max.Z);
+            result.Min.x = Math.Min(original.Min.x, additional.Min.x);
+            result.Min.y = Math.Min(original.Min.y, additional.Min.y);
+            result.Min.z = Math.Min(original.Min.z, additional.Min.z);
+            result.Max.x = Math.Max(original.Max.x, additional.Max.x);
+            result.Max.y = Math.Max(original.Max.y, additional.Max.y);
+            result.Max.z = Math.Max(original.Max.z, additional.Max.z);
         }
 
         public bool Equals(Bounds other)
@@ -233,14 +233,14 @@ namespace Prowl.Runtime
         public Vector3[] GetCorners()
         {
             return new Vector3[] {
-                new Vector3(this.Min.X, this.Max.Y, this.Max.Z),
-                new Vector3(this.Max.X, this.Max.Y, this.Max.Z),
-                new Vector3(this.Max.X, this.Min.Y, this.Max.Z),
-                new Vector3(this.Min.X, this.Min.Y, this.Max.Z),
-                new Vector3(this.Min.X, this.Max.Y, this.Min.Z),
-                new Vector3(this.Max.X, this.Max.Y, this.Min.Z),
-                new Vector3(this.Max.X, this.Min.Y, this.Min.Z),
-                new Vector3(this.Min.X, this.Min.Y, this.Min.Z)
+                new Vector3(this.Min.x, this.Max.y, this.Max.z),
+                new Vector3(this.Max.x, this.Max.y, this.Max.z),
+                new Vector3(this.Max.x, this.Min.y, this.Max.z),
+                new Vector3(this.Min.x, this.Min.y, this.Max.z),
+                new Vector3(this.Min.x, this.Max.y, this.Min.z),
+                new Vector3(this.Max.x, this.Max.y, this.Min.z),
+                new Vector3(this.Max.x, this.Min.y, this.Min.z),
+                new Vector3(this.Min.x, this.Min.y, this.Min.z)
             };
         }
 
@@ -254,30 +254,30 @@ namespace Prowl.Runtime
             {
                 throw new ArgumentOutOfRangeException("corners", "Not Enought Corners");
             }
-            corners[0].X = this.Min.X;
-            corners[0].Y = this.Max.Y;
-            corners[0].Z = this.Max.Z;
-            corners[1].X = this.Max.X;
-            corners[1].Y = this.Max.Y;
-            corners[1].Z = this.Max.Z;
-            corners[2].X = this.Max.X;
-            corners[2].Y = this.Min.Y;
-            corners[2].Z = this.Max.Z;
-            corners[3].X = this.Min.X;
-            corners[3].Y = this.Min.Y;
-            corners[3].Z = this.Max.Z;
-            corners[4].X = this.Min.X;
-            corners[4].Y = this.Max.Y;
-            corners[4].Z = this.Min.Z;
-            corners[5].X = this.Max.X;
-            corners[5].Y = this.Max.Y;
-            corners[5].Z = this.Min.Z;
-            corners[6].X = this.Max.X;
-            corners[6].Y = this.Min.Y;
-            corners[6].Z = this.Min.Z;
-            corners[7].X = this.Min.X;
-            corners[7].Y = this.Min.Y;
-            corners[7].Z = this.Min.Z;
+            corners[0].x = this.Min.x;
+            corners[0].y = this.Max.y;
+            corners[0].z = this.Max.z;
+            corners[1].x = this.Max.x;
+            corners[1].y = this.Max.y;
+            corners[1].z = this.Max.z;
+            corners[2].x = this.Max.x;
+            corners[2].y = this.Min.y;
+            corners[2].z = this.Max.z;
+            corners[3].x = this.Min.x;
+            corners[3].y = this.Min.y;
+            corners[3].z = this.Max.z;
+            corners[4].x = this.Min.x;
+            corners[4].y = this.Max.y;
+            corners[4].z = this.Min.z;
+            corners[5].x = this.Max.x;
+            corners[5].y = this.Max.y;
+            corners[5].z = this.Min.z;
+            corners[6].x = this.Max.x;
+            corners[6].y = this.Min.y;
+            corners[6].z = this.Min.z;
+            corners[7].x = this.Min.x;
+            corners[7].y = this.Min.y;
+            corners[7].z = this.Min.z;
         }
 
         public override int GetHashCode()
@@ -294,15 +294,15 @@ namespace Prowl.Runtime
 
         public void Intersects(ref Bounds box, out bool result)
         {
-            if ((this.Max.X >= box.Min.X) && (this.Min.X <= box.Max.X))
+            if ((this.Max.x >= box.Min.x) && (this.Min.x <= box.Max.x))
             {
-                if ((this.Max.Y < box.Min.Y) || (this.Min.Y > box.Max.Y))
+                if ((this.Max.y < box.Min.y) || (this.Min.y > box.Max.y))
                 {
                     result = false;
                     return;
                 }
 
-                result = (this.Max.Z >= box.Min.Z) && (this.Min.Z <= box.Max.Z);
+                result = (this.Max.z >= box.Min.z) && (this.Min.z <= box.Max.z);
                 return;
             }
 
@@ -329,41 +329,41 @@ namespace Prowl.Runtime
             Vector3 positiveVertex;
             Vector3 negativeVertex;
 
-            if (plane.Normal.X >= 0)
+            if (plane.Normal.x >= 0)
             {
-                positiveVertex.X = Max.X;
-                negativeVertex.X = Min.X;
+                positiveVertex.x = Max.x;
+                negativeVertex.x = Min.x;
             }
             else
             {
-                positiveVertex.X = Min.X;
-                negativeVertex.X = Max.X;
+                positiveVertex.x = Min.x;
+                negativeVertex.x = Max.x;
             }
 
-            if (plane.Normal.Y >= 0)
+            if (plane.Normal.y >= 0)
             {
-                positiveVertex.Y = Max.Y;
-                negativeVertex.Y = Min.Y;
+                positiveVertex.y = Max.y;
+                negativeVertex.y = Min.y;
             }
             else
             {
-                positiveVertex.Y = Min.Y;
-                negativeVertex.Y = Max.Y;
+                positiveVertex.y = Min.y;
+                negativeVertex.y = Max.y;
             }
 
-            if (plane.Normal.Z >= 0)
+            if (plane.Normal.z >= 0)
             {
-                positiveVertex.Z = Max.Z;
-                negativeVertex.Z = Min.Z;
+                positiveVertex.z = Max.z;
+                negativeVertex.z = Min.z;
             }
             else
             {
-                positiveVertex.Z = Min.Z;
-                negativeVertex.Z = Max.Z;
+                positiveVertex.z = Min.z;
+                negativeVertex.z = Max.z;
             }
 
             // Inline Vector3.Dot(plane.Normal, negativeVertex) + plane.D;
-            var distance = plane.Normal.X * negativeVertex.X + plane.Normal.Y * negativeVertex.Y + plane.Normal.Z * negativeVertex.Z + plane.D;
+            var distance = plane.Normal.x * negativeVertex.x + plane.Normal.y * negativeVertex.y + plane.Normal.z * negativeVertex.z + plane.D;
             if (distance > 0)
             {
                 result = PlaneIntersectionType.Front;
@@ -371,7 +371,7 @@ namespace Prowl.Runtime
             }
 
             // Inline Vector3.Dot(plane.Normal, positiveVertex) + plane.D;
-            distance = plane.Normal.X * positiveVertex.X + plane.Normal.Y * positiveVertex.Y + plane.Normal.Z * positiveVertex.Z + plane.D;
+            distance = plane.Normal.x * positiveVertex.x + plane.Normal.y * positiveVertex.y + plane.Normal.z * positiveVertex.z + plane.D;
             if (distance < 0)
             {
                 result = PlaneIntersectionType.Back;
@@ -756,17 +756,17 @@ namespace Prowl.Runtime
             v3 = Vector3.Multiply(cross, c.D);
             //v3 = (c.D * (Vector3.Cross(a.Normal, b.Normal)));
 
-            result.X = (v1.X + v2.X + v3.X) / f;
-            result.Y = (v1.Y + v2.Y + v3.Y) / f;
-            result.Z = (v1.Z + v2.Z + v3.Z) / f;
+            result.x = (v1.x + v2.x + v3.x) / f;
+            result.y = (v1.y + v2.y + v3.y) / f;
+            result.z = (v1.z + v2.z + v3.z) / f;
         }
 
         private void NormalizePlane(ref Plane p)
         {
             double factor = 1 / p.Normal.Length();
-            p.Normal.X *= factor;
-            p.Normal.Y *= factor;
-            p.Normal.Z *= factor;
+            p.Normal.x *= factor;
+            p.Normal.y *= factor;
+            p.Normal.z *= factor;
             p.D *= factor;
         }
 

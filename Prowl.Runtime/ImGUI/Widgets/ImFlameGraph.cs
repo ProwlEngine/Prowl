@@ -39,10 +39,10 @@ namespace Prowl.Runtime.ImGUI.Widgets
 
                 float blockHeight = ImGui.GetTextLineHeight() + (style.FramePadding.Y * 2);
                 System.Numerics.Vector2 labelSize = ImGui.CalcTextSize(label);
-                if (graphSize.X == 0.0f)
-                    graphSize.X = ImGui.CalcItemWidth();
-                if (graphSize.Y == 0.0f)
-                    graphSize.Y = labelSize.Y + (style.FramePadding.Y * 3) + blockHeight * (maxDepth + 1);
+                if (graphSize.x == 0.0f)
+                    graphSize.x = ImGui.CalcItemWidth();
+                if (graphSize.y == 0.0f)
+                    graphSize.y = labelSize.Y + (style.FramePadding.Y * 3) + blockHeight * (maxDepth + 1);
 
                 ImRect frameBB = new ImRect() { Min = window.DC.CursorPos, Max = window.DC.CursorPos + graphSize.ToFloat() };
                 ImRect innerBB = new ImRect() { Min = frameBB.Min + style.FramePadding, Max = frameBB.Max - style.FramePadding };
@@ -128,7 +128,7 @@ namespace Prowl.Runtime.ImGUI.Widgets
                         Vector2 textSize = ImGui.CalcTextSize(caption);
                         Vector2 boxSize = pos1 - pos0;
                         Vector2 textOffset = new Vector2(0.0f, 0.0f);
-                        if (textSize.X < boxSize.X)
+                        if (textSize.x < boxSize.x)
                         {
                             textOffset = new Vector2(0.5f, 0.5f) * (boxSize - textSize);
                             ImGui.RenderText(pos0 + textOffset, caption, "", false);

@@ -85,8 +85,8 @@ namespace Prowl.Runtime
         {
             Vector3 angle = new Vector3();
             Vector3 v3 = Vector3.Normalize(location - from);
-            angle.X = (double)Math.Asin(v3.Y);
-            angle.Y = ArcTanAngle(-v3.Z, -v3.X);
+            angle.x = (double)Math.Asin(v3.y);
+            angle.y = ArcTanAngle(-v3.z, -v3.x);
             return angle;
         }
 
@@ -362,7 +362,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Matrix4x4 CreateTransform(Vector3 pos, Vector3 rotation, Vector3 scale)
         {
-            return Matrix4x4.CreateTranslation(pos) * Matrix4x4.CreateFromYawPitchRoll(rotation.X, rotation.Y, rotation.Z) * Matrix4x4.CreateScale(scale);
+            return Matrix4x4.CreateTranslation(pos) * Matrix4x4.CreateFromYawPitchRoll(rotation.x, rotation.y, rotation.z) * Matrix4x4.CreateScale(scale);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -374,7 +374,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Matrix4x4 CreateTransform(Vector3 pos, Vector3 rotation, double scale)
         {
-            return Matrix4x4.CreateTranslation(pos) * Matrix4x4.CreateFromYawPitchRoll(rotation.X, rotation.Y, rotation.Z) * Matrix4x4.CreateScale(scale);
+            return Matrix4x4.CreateTranslation(pos) * Matrix4x4.CreateFromYawPitchRoll(rotation.x, rotation.y, rotation.z) * Matrix4x4.CreateScale(scale);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -433,9 +433,9 @@ namespace Prowl.Runtime
             double yy2 = sy * y2;
 
             return new Vector3(
-                value.X * (1.0 - yy2) + value.Z * wy2,
-                value.Y,
-                value.X * wy2 + value.Z * (1.0 - yy2)
+                value.x * (1.0 - yy2) + value.z * wy2,
+                value.y,
+                value.x * wy2 + value.z * (1.0 - yy2)
             );
         }
 
@@ -453,7 +453,7 @@ namespace Prowl.Runtime
             double wy2 = cy * y2;
             double yy2 = sy * y2;
 
-            return new Vector3(value.X * (1.0 - yy2) + value.Z * wy2, value.Y, value.X * wy2 + value.Z * (1.0 - yy2));
+            return new Vector3(value.x * (1.0 - yy2) + value.z * wy2, value.y, value.x * wy2 + value.z * (1.0 - yy2));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -487,10 +487,10 @@ namespace Prowl.Runtime
         public static Vector4 ApplyMatrix(this Vector4 self, Matrix4x4 matrix)
         {
             return new Vector4(
-                matrix.M11 * self.X + matrix.M12 * self.Y + matrix.M13 * self.Z + matrix.M14 * self.W,
-                matrix.M21 * self.X + matrix.M22 * self.Y + matrix.M23 * self.Z + matrix.M24 * self.W,
-                matrix.M31 * self.X + matrix.M32 * self.Y + matrix.M33 * self.Z + matrix.M34 * self.W,
-                matrix.M41 * self.X + matrix.M42 * self.Y + matrix.M43 * self.Z + matrix.M44 * self.W
+                matrix.M11 * self.x + matrix.M12 * self.y + matrix.M13 * self.z + matrix.M14 * self.w,
+                matrix.M21 * self.x + matrix.M22 * self.y + matrix.M23 * self.z + matrix.M24 * self.w,
+                matrix.M31 * self.x + matrix.M32 * self.y + matrix.M33 * self.z + matrix.M34 * self.w,
+                matrix.M41 * self.x + matrix.M42 * self.y + matrix.M43 * self.z + matrix.M44 * self.w
             );
         }
 
@@ -498,22 +498,22 @@ namespace Prowl.Runtime
         public static Vector3 ApplyMatrix(this Vector3 self, Matrix4x4 matrix)
         {
             return new Vector3(
-                matrix.M11 * self.X + matrix.M12 * self.Y + matrix.M13 * self.Z + matrix.M14,
-                matrix.M21 * self.X + matrix.M22 * self.Y + matrix.M23 * self.Z + matrix.M24,
-                matrix.M31 * self.X + matrix.M32 * self.Y + matrix.M33 * self.Z + matrix.M34
+                matrix.M11 * self.x + matrix.M12 * self.y + matrix.M13 * self.z + matrix.M14,
+                matrix.M21 * self.x + matrix.M22 * self.y + matrix.M23 * self.z + matrix.M24,
+                matrix.M31 * self.x + matrix.M32 * self.y + matrix.M33 * self.z + matrix.M34
             );
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 ToDeg(this Vector3 v)
         {
-            return new Vector3((double)(v.X * RadToDefFactor), (double)(v.Y * RadToDefFactor), (double)(v.Z * RadToDefFactor));
+            return new Vector3((double)(v.x * RadToDefFactor), (double)(v.y * RadToDefFactor), (double)(v.z * RadToDefFactor));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 ToRad(this Vector3 v)
         {
-            return new Vector3((double)(v.X * DegToRadFactor), (double)(v.Y * DegToRadFactor), (double)(v.Z * DegToRadFactor));
+            return new Vector3((double)(v.x * DegToRadFactor), (double)(v.y * DegToRadFactor), (double)(v.z * DegToRadFactor));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -543,7 +543,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Quaternion GetQuaternion(this Vector3 vector)
         {
-            return Quaternion.CreateFromYawPitchRoll(vector.X, vector.Y, vector.Z);
+            return Quaternion.CreateFromYawPitchRoll(vector.x, vector.y, vector.z);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -575,9 +575,9 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 NormalizeEulerAngleDegrees(this Vector3 angle)
         {
-            double normalizedX = angle.X % 360;
-            double normalizedY = angle.Y % 360;
-            double normalizedZ = angle.Z % 360;
+            double normalizedX = angle.x % 360;
+            double normalizedY = angle.y % 360;
+            double normalizedZ = angle.z % 360;
             if (normalizedX < 0)
             {
                 normalizedX += 360;
@@ -599,8 +599,8 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector2 NormalizeEulerAngleDegrees(this Vector2 angle)
         {
-            double normalizedX = angle.X % 360;
-            double normalizedY = angle.Y % 360;
+            double normalizedX = angle.x % 360;
+            double normalizedY = angle.y % 360;
             if (normalizedX < 0)
             {
                 normalizedX += 360;
@@ -617,7 +617,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static uint Pack(this Vector4 color)
         {
-            return Pack((uint)(color.W * 255), (uint)(color.X * 255), (uint)(color.Y * 255), (uint)(color.Z * 255));
+            return Pack((uint)(color.w * 255), (uint)(color.x * 255), (uint)(color.y * 255), (uint)(color.z * 255));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -629,9 +629,9 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void LockQuaternionAxis(Quaternion r, Quaternion q, Vector3 mask)
         {
-            double x = System.Math.Atan2(2.0 * (r.Y * r.W + r.X * r.Z), 1.0 - 2.0 * (r.X * r.X + r.Y * r.Y)) * mask.X;
-            double y = System.Math.Asin(2.0 * (r.X * r.W - r.Y * r.Z)) * mask.Y;
-            double z = System.Math.Atan2(2.0 * (r.X * r.Y + r.Z * r.W), 1.0 - 2.0 * (r.X * r.X + r.Z * r.Z)) * mask.Z;
+            double x = System.Math.Atan2(2.0 * (r.Y * r.W + r.X * r.Z), 1.0 - 2.0 * (r.X * r.X + r.Y * r.Y)) * mask.x;
+            double y = System.Math.Asin(2.0 * (r.X * r.W - r.Y * r.Z)) * mask.y;
+            double z = System.Math.Atan2(2.0 * (r.X * r.Y + r.Z * r.W), 1.0 - 2.0 * (r.X * r.X + r.Z * r.Z)) * mask.z;
 
             double xHalf = x * 0.5;
             double yHalf = y * 0.5;

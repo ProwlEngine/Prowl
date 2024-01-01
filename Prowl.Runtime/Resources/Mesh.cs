@@ -163,50 +163,50 @@ namespace Prowl.Runtime
 
             // Front Face (Z+) - 0
             if (faces[0].enabled) {
-                vertices.Add(new Vertex { Position = new Vector3(-size.X, -size.Y, size.Z), TexCoord = faces[0].texCoords[0] });
-                vertices.Add(new Vertex { Position = new Vector3(size.X, -size.Y, size.Z), TexCoord = faces[0].texCoords[1] });
-                vertices.Add(new Vertex { Position = new Vector3(size.X, size.Y, size.Z), TexCoord = faces[0].texCoords[2] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.X, size.Y, size.Z), TexCoord = faces[0].texCoords[3] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.x, -size.y, size.z), TexCoord = faces[0].texCoords[0] });
+                vertices.Add(new Vertex { Position = new Vector3(size.x, -size.y, size.z), TexCoord = faces[0].texCoords[1] });
+                vertices.Add(new Vertex { Position = new Vector3(size.x, size.y, size.z), TexCoord = faces[0].texCoords[2] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.x, size.y, size.z), TexCoord = faces[0].texCoords[3] });
                 indices.AddRange(new ushort[] { 0, 1, 2, 0, 2, 3 });
             }
             // Back Face (Z-) - 1
             if (faces[1].enabled) {
-                vertices.Add(new Vertex { Position = new Vector3(size.X, -size.Y, -size.Z), TexCoord = faces[1].texCoords[0] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.X, -size.Y, -size.Z), TexCoord = faces[1].texCoords[1] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.X, size.Y, -size.Z), TexCoord = faces[1].texCoords[2] });
-                vertices.Add(new Vertex { Position = new Vector3(size.X, size.Y, -size.Z), TexCoord = faces[1].texCoords[3] });
+                vertices.Add(new Vertex { Position = new Vector3(size.x, -size.y, -size.z), TexCoord = faces[1].texCoords[0] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.x, -size.y, -size.z), TexCoord = faces[1].texCoords[1] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.x, size.y, -size.z), TexCoord = faces[1].texCoords[2] });
+                vertices.Add(new Vertex { Position = new Vector3(size.x, size.y, -size.z), TexCoord = faces[1].texCoords[3] });
                 indices.AddRange(new ushort[] { 4, 5, 6, 4, 6, 7 });
             }
             // Top Face (Y+) - 2
             if (faces[2].enabled) {
-                vertices.Add(new Vertex { Position = new Vector3(-size.X, size.Y, -size.Z), TexCoord = faces[2].texCoords[0] });
-                vertices.Add(new Vertex { Position = new Vector3(size.X, size.Y, -size.Z), TexCoord = faces[2].texCoords[1] });
-                vertices.Add(new Vertex { Position = new Vector3(size.X, size.Y, size.Z), TexCoord = faces[2].texCoords[2] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.X, size.Y, size.Z), TexCoord = faces[2].texCoords[3] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.x, size.y, -size.z), TexCoord = faces[2].texCoords[0] });
+                vertices.Add(new Vertex { Position = new Vector3(size.x, size.y, -size.z), TexCoord = faces[2].texCoords[1] });
+                vertices.Add(new Vertex { Position = new Vector3(size.x, size.y, size.z), TexCoord = faces[2].texCoords[2] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.x, size.y, size.z), TexCoord = faces[2].texCoords[3] });
                 indices.AddRange(new ushort[] { 8, 9, 10, 8, 10, 11 });
             }
             // Bottom Face (Y-) - 3
             if (faces[3].enabled) {
-                vertices.Add(new Vertex { Position = new Vector3(size.X, -size.Y, -size.Z), TexCoord = faces[3].texCoords[0] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.X, -size.Y, -size.Z), TexCoord = faces[3].texCoords[1] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.X, -size.Y, size.Z), TexCoord = faces[3].texCoords[2] });
-                vertices.Add(new Vertex { Position = new Vector3(size.X, -size.Y, size.Z), TexCoord = faces[3].texCoords[3] });
+                vertices.Add(new Vertex { Position = new Vector3(size.x, -size.y, -size.z), TexCoord = faces[3].texCoords[0] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.x, -size.y, -size.z), TexCoord = faces[3].texCoords[1] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.x, -size.y, size.z), TexCoord = faces[3].texCoords[2] });
+                vertices.Add(new Vertex { Position = new Vector3(size.x, -size.y, size.z), TexCoord = faces[3].texCoords[3] });
                 indices.AddRange(new ushort[] { 12, 13, 14, 12, 14, 15 });
             }
             // Right Face (X+) - 4
             if (faces[4].enabled) {
-                vertices.Add(new Vertex { Position = new Vector3(size.X, -size.Y, size.Z), TexCoord = faces[4].texCoords[0] });
-                vertices.Add(new Vertex { Position = new Vector3(size.X, -size.Y, -size.Z), TexCoord = faces[4].texCoords[1] });
-                vertices.Add(new Vertex { Position = new Vector3(size.X, size.Y, -size.Z), TexCoord = faces[4].texCoords[2] });
-                vertices.Add(new Vertex { Position = new Vector3(size.X, size.Y, size.Z), TexCoord = faces[4].texCoords[3] });
+                vertices.Add(new Vertex { Position = new Vector3(size.x, -size.y, size.z), TexCoord = faces[4].texCoords[0] });
+                vertices.Add(new Vertex { Position = new Vector3(size.x, -size.y, -size.z), TexCoord = faces[4].texCoords[1] });
+                vertices.Add(new Vertex { Position = new Vector3(size.x, size.y, -size.z), TexCoord = faces[4].texCoords[2] });
+                vertices.Add(new Vertex { Position = new Vector3(size.x, size.y, size.z), TexCoord = faces[4].texCoords[3] });
                 indices.AddRange(new ushort[] { 16, 17, 18, 16, 18, 19 });
             }
             // Left Face (X-) - 5
             if (faces[5].enabled) {
-                vertices.Add(new Vertex { Position = new Vector3(-size.X, -size.Y, -size.Z), TexCoord = faces[5].texCoords[0] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.X, -size.Y, size.Z), TexCoord = faces[5].texCoords[1] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.X, size.Y, size.Z), TexCoord = faces[5].texCoords[2] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.X, size.Y, -size.Z), TexCoord = faces[5].texCoords[3] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.x, -size.y, -size.z), TexCoord = faces[5].texCoords[0] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.x, -size.y, size.z), TexCoord = faces[5].texCoords[1] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.x, size.y, size.z), TexCoord = faces[5].texCoords[2] });
+                vertices.Add(new Vertex { Position = new Vector3(-size.x, size.y, -size.z), TexCoord = faces[5].texCoords[3] });
                 indices.AddRange(new ushort[] { 20, 21, 22, 20, 22, 23 });
             }
 

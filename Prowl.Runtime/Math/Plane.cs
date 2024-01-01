@@ -44,7 +44,7 @@ namespace Prowl.Runtime
         /// <returns>Greater than zero if on the positive side, less than zero if on the negative size, 0 otherwise</returns>
         public static double ClassifyPoint(ref Vector3 point, ref Plane plane)
         {
-            return point.X * plane.Normal.X + point.Y * plane.Normal.Y + point.Z * plane.Normal.Z + plane.D;
+            return point.x * plane.Normal.x + point.y * plane.Normal.y + point.z * plane.Normal.z + plane.D;
         }
 
         /// <summary>
@@ -56,8 +56,8 @@ namespace Prowl.Runtime
         public static double PerpendicularDistance(ref Vector3 point, ref Plane plane)
         {
             // dist = (ax + by + cz + d) / sqrt(a*a + b*b + c*c)
-            return (double)Math.Abs((plane.Normal.X * point.X + plane.Normal.Y * point.Y + plane.Normal.Z * point.Z)
-                                    / Math.Sqrt(plane.Normal.X * plane.Normal.X + plane.Normal.Y * plane.Normal.Y + plane.Normal.Z * plane.Normal.Z));
+            return (double)Math.Abs((plane.Normal.x * point.x + plane.Normal.y * point.y + plane.Normal.z * point.z)
+                                    / Math.Sqrt(plane.Normal.x * plane.Normal.x + plane.Normal.y * plane.Normal.y + plane.Normal.z * plane.Normal.z));
         }
     }
 
@@ -82,7 +82,7 @@ namespace Prowl.Runtime
         #region Constructors
 
         public Plane(Vector4 value)
-            : this(new Vector3(value.X, value.Y, value.Z), value.W)
+            : this(new Vector3(value.x, value.y, value.z), value.w)
         {
 
         }
@@ -116,32 +116,32 @@ namespace Prowl.Runtime
 
         public double Dot(Vector4 value)
         {
-            return ((((this.Normal.X * value.X) + (this.Normal.Y * value.Y)) + (this.Normal.Z * value.Z)) + (this.D * value.W));
+            return ((((this.Normal.x * value.x) + (this.Normal.y * value.y)) + (this.Normal.z * value.z)) + (this.D * value.w));
         }
 
         public void Dot(ref Vector4 value, out double result)
         {
-            result = (((this.Normal.X * value.X) + (this.Normal.Y * value.Y)) + (this.Normal.Z * value.Z)) + (this.D * value.W);
+            result = (((this.Normal.x * value.x) + (this.Normal.y * value.y)) + (this.Normal.z * value.z)) + (this.D * value.w);
         }
 
         public double DotCoordinate(Vector3 value)
         {
-            return ((((this.Normal.X * value.X) + (this.Normal.Y * value.Y)) + (this.Normal.Z * value.Z)) + this.D);
+            return ((((this.Normal.x * value.x) + (this.Normal.y * value.y)) + (this.Normal.z * value.z)) + this.D);
         }
 
         public void DotCoordinate(ref Vector3 value, out double result)
         {
-            result = (((this.Normal.X * value.X) + (this.Normal.Y * value.Y)) + (this.Normal.Z * value.Z)) + this.D;
+            result = (((this.Normal.x * value.x) + (this.Normal.y * value.y)) + (this.Normal.z * value.z)) + this.D;
         }
 
         public double DotNormal(Vector3 value)
         {
-            return (((this.Normal.X * value.X) + (this.Normal.Y * value.Y)) + (this.Normal.Z * value.Z));
+            return (((this.Normal.x * value.x) + (this.Normal.y * value.y)) + (this.Normal.z * value.z));
         }
 
         public void DotNormal(ref Vector3 value, out double result)
         {
-            result = ((this.Normal.X * value.X) + (this.Normal.Y * value.Y)) + (this.Normal.Z * value.Z);
+            result = ((this.Normal.x * value.x) + (this.Normal.y * value.y)) + (this.Normal.z * value.z);
         }
 
         public void Normalize()
@@ -149,8 +149,8 @@ namespace Prowl.Runtime
             double factor;
             Vector3 normal = Normal;
             Normal = Vector3.Normalize(Normal);
-            factor = (double)Math.Sqrt(Normal.X * Normal.X + Normal.Y * Normal.Y + Normal.Z * Normal.Z) /
-                    (double)Math.Sqrt(normal.X * normal.X + normal.Y * normal.Y + normal.Z * normal.Z);
+            factor = (double)Math.Sqrt(Normal.x * Normal.x + Normal.y * Normal.y + Normal.z * Normal.z) /
+                    (double)Math.Sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
             D = D * factor;
         }
 
@@ -165,8 +165,8 @@ namespace Prowl.Runtime
         {
             double factor;
             result.Normal = Vector3.Normalize(value.Normal);
-            factor = (double)Math.Sqrt(result.Normal.X * result.Normal.X + result.Normal.Y * result.Normal.Y + result.Normal.Z * result.Normal.Z) /
-                    (double)Math.Sqrt(value.Normal.X * value.Normal.X + value.Normal.Y * value.Normal.Y + value.Normal.Z * value.Normal.Z);
+            factor = (double)Math.Sqrt(result.Normal.x * result.Normal.x + result.Normal.y * result.Normal.y + result.Normal.z * result.Normal.z) /
+                    (double)Math.Sqrt(value.Normal.x * value.Normal.x + value.Normal.y * value.Normal.y + value.Normal.z * value.Normal.z);
             result.D = value.D * factor;
         }
 

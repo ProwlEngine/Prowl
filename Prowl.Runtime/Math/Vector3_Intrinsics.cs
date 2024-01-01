@@ -18,15 +18,15 @@ namespace Prowl.Runtime
         /// <summary>
         /// The X component of the vector.
         /// </summary>
-        public Double X;
+        public Double x;
         /// <summary>
         /// The Y component of the vector.
         /// </summary>
-        public Double Y;
+        public Double y;
         /// <summary>
         /// The Z component of the vector.
         /// </summary>
-        public Double Z;
+        public Double z;
 
         #region Constructors
         /// <summary>
@@ -40,7 +40,7 @@ namespace Prowl.Runtime
         /// </summary>
         /// <param name="value">The Vector to extract X and Y components from.</param>
         /// <param name="z">The Z component.</param>
-        public Vector3(Vector2 value, double z) : this(value.X, value.Y, z) { }
+        public Vector3(Vector2 value, double z) : this(value.x, value.y, z) { }
 
         /// <summary>
         /// Constructs a vector with the given individual elements.
@@ -50,9 +50,9 @@ namespace Prowl.Runtime
         /// <param name="z">The Z component.</param>
         public Vector3(Double x, Double y, Double z)
         {
-            X = x;
-            Y = y;
-            Z = z;
+            this.x = x;
+            this.y = y;
+            this.z = z;
         }
         #endregion Constructors
 
@@ -89,9 +89,9 @@ namespace Prowl.Runtime
             {
                 throw new ArgumentException();
             }
-            array[index] = X;
-            array[index + 1] = Y;
-            array[index + 2] = Z;
+            array[index] = x;
+            array[index + 1] = y;
+            array[index + 2] = z;
         }
 
         /// <summary>
@@ -101,9 +101,9 @@ namespace Prowl.Runtime
         /// <returns>True if the other Vector3 is equal to this instance; False otherwise.</returns>
         public bool Equals(Vector3 other)
         {
-            return X == other.X &&
-                   Y == other.Y &&
-                   Z == other.Z;
+            return x == other.x &&
+                   y == other.y &&
+                   z == other.z;
         }
         #endregion Public Instance Methods
 
@@ -117,9 +117,9 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static double Dot(Vector3 vector1, Vector3 vector2)
         {
-            return vector1.X * vector2.X +
-                   vector1.Y * vector2.Y +
-                   vector1.Z * vector2.Z;
+            return vector1.x * vector2.x +
+                   vector1.y * vector2.y +
+                   vector1.z * vector2.z;
         }
 
         /// <summary>
@@ -131,9 +131,9 @@ namespace Prowl.Runtime
         public static Vector3 Min(Vector3 value1, Vector3 value2)
         {
             return new Vector3(
-                (value1.X < value2.X) ? value1.X : value2.X,
-                (value1.Y < value2.Y) ? value1.Y : value2.Y,
-                (value1.Z < value2.Z) ? value1.Z : value2.Z);
+                (value1.x < value2.x) ? value1.x : value2.x,
+                (value1.y < value2.y) ? value1.y : value2.y,
+                (value1.z < value2.z) ? value1.z : value2.z);
         }
 
         /// <summary>
@@ -146,9 +146,9 @@ namespace Prowl.Runtime
         public static Vector3 Max(Vector3 value1, Vector3 value2)
         {
             return new Vector3(
-                (value1.X > value2.X) ? value1.X : value2.X,
-                (value1.Y > value2.Y) ? value1.Y : value2.Y,
-                (value1.Z > value2.Z) ? value1.Z : value2.Z);
+                (value1.x > value2.x) ? value1.x : value2.x,
+                (value1.y > value2.y) ? value1.y : value2.y,
+                (value1.z > value2.z) ? value1.z : value2.z);
         }
 
         /// <summary>
@@ -159,7 +159,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 Abs(Vector3 value)
         {
-            return new Vector3(Math.Abs(value.X), Math.Abs(value.Y), Math.Abs(value.Z));
+            return new Vector3(Math.Abs(value.x), Math.Abs(value.y), Math.Abs(value.z));
         }
 
         /// <summary>
@@ -170,7 +170,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 SquareRoot(Vector3 value)
         {
-            return new Vector3((Double)Math.Sqrt(value.X), (Double)Math.Sqrt(value.Y), (Double)Math.Sqrt(value.Z));
+            return new Vector3((Double)Math.Sqrt(value.x), (Double)Math.Sqrt(value.y), (Double)Math.Sqrt(value.z));
         }
         #endregion Public Static Methods
 
@@ -184,7 +184,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 operator +(Vector3 left, Vector3 right)
         {
-            return new Vector3(left.X + right.X, left.Y + right.Y, left.Z + right.Z);
+            return new Vector3(left.x + right.x, left.y + right.y, left.z + right.z);
         }
 
         /// <summary>
@@ -196,7 +196,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 operator -(Vector3 left, Vector3 right)
         {
-            return new Vector3(left.X - right.X, left.Y - right.Y, left.Z - right.Z);
+            return new Vector3(left.x - right.x, left.y - right.y, left.z - right.z);
         }
 
         /// <summary>
@@ -208,7 +208,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 operator *(Vector3 left, Vector3 right)
         {
-            return new Vector3(left.X * right.X, left.Y * right.Y, left.Z * right.Z);
+            return new Vector3(left.x * right.x, left.y * right.y, left.z * right.z);
         }
 
         /// <summary>
@@ -244,7 +244,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 operator /(Vector3 left, Vector3 right)
         {
-            return new Vector3(left.X / right.X, left.Y / right.Y, left.Z / right.Z);
+            return new Vector3(left.x / right.x, left.y / right.y, left.z / right.z);
         }
 
         /// <summary>
@@ -259,9 +259,9 @@ namespace Prowl.Runtime
             double invDiv = 1.0 / value2;
 
             return new Vector3(
-                value1.X * invDiv,
-                value1.Y * invDiv,
-                value1.Z * invDiv);
+                value1.x * invDiv,
+                value1.y * invDiv,
+                value1.z * invDiv);
         }
 
         /// <summary>
@@ -284,9 +284,9 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool operator ==(Vector3 left, Vector3 right)
         {
-            return (left.X == right.X &&
-                    left.Y == right.Y &&
-                    left.Z == right.Z);
+            return (left.x == right.x &&
+                    left.y == right.y &&
+                    left.z == right.z);
         }
 
         /// <summary>
@@ -298,15 +298,15 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool operator !=(Vector3 left, Vector3 right)
         {
-            return (left.X != right.X ||
-                    left.Y != right.Y ||
-                    left.Z != right.Z);
+            return (left.x != right.x ||
+                    left.y != right.y ||
+                    left.z != right.z);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static implicit operator System.Numerics.Vector3(Vector3 value)
         {
-            return new System.Numerics.Vector3((float)value.X, (float)value.Y, (float)value.Z);
+            return new System.Numerics.Vector3((float)value.x, (float)value.y, (float)value.z);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

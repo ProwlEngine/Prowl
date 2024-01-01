@@ -421,14 +421,14 @@ namespace Prowl.Runtime.ImGUI
                         throw new NotImplementedException();
                     } else {
                         Vector4 clipRect;
-                        clipRect.X = (cmdPtr.ClipRect.X - clipOff.X) * clipScale.X;
-                        clipRect.Y = (cmdPtr.ClipRect.Y - clipOff.Y) * clipScale.Y;
-                        clipRect.Z = (cmdPtr.ClipRect.Z - clipOff.X) * clipScale.X;
-                        clipRect.W = (cmdPtr.ClipRect.W - clipOff.Y) * clipScale.Y;
+                        clipRect.x = (cmdPtr.ClipRect.X - clipOff.x) * clipScale.x;
+                        clipRect.y = (cmdPtr.ClipRect.Y - clipOff.y) * clipScale.y;
+                        clipRect.z = (cmdPtr.ClipRect.Z - clipOff.x) * clipScale.x;
+                        clipRect.w = (cmdPtr.ClipRect.W - clipOff.y) * clipScale.y;
 
-                        if (clipRect.X < framebufferWidth && clipRect.Y < framebufferHeight && clipRect.Z >= 0.0f && clipRect.W >= 0.0f) {
+                        if (clipRect.x < framebufferWidth && clipRect.y < framebufferHeight && clipRect.z >= 0.0f && clipRect.w >= 0.0f) {
                             // Apply scissor/clipping rectangle
-                            _gl.Scissor((int)clipRect.X, (int)(framebufferHeight - clipRect.W), (uint)(clipRect.Z - clipRect.X), (uint)(clipRect.W - clipRect.Y));
+                            _gl.Scissor((int)clipRect.x, (int)(framebufferHeight - clipRect.w), (uint)(clipRect.z - clipRect.x), (uint)(clipRect.w - clipRect.y));
                             Graphics.CheckGL();
 
                             // Bind texture, Draw

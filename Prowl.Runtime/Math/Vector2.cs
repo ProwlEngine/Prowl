@@ -35,7 +35,7 @@ namespace Prowl.Runtime
 
         #region Public instance methods
 
-        public System.Numerics.Vector2 ToFloat() => new System.Numerics.Vector2((float)X, (float)Y);
+        public System.Numerics.Vector2 ToFloat() => new System.Numerics.Vector2((float)x, (float)y);
 
         /// <summary>
         /// Returns the hash code for this instance.
@@ -43,8 +43,8 @@ namespace Prowl.Runtime
         /// <returns>The hash code.</returns>
         public override int GetHashCode()
         {
-            int hash = this.X.GetHashCode();
-            hash = HashCode.Combine(hash, this.Y.GetHashCode());
+            int hash = this.x.GetHashCode();
+            hash = HashCode.Combine(hash, this.y.GetHashCode());
             return hash;
         }
 
@@ -93,10 +93,10 @@ namespace Prowl.Runtime
             StringBuilder sb = new StringBuilder();
             string separator = NumberFormatInfo.GetInstance(formatProvider).NumberGroupSeparator;
             sb.Append('<');
-            sb.Append(this.X.ToString(format, formatProvider));
+            sb.Append(this.x.ToString(format, formatProvider));
             sb.Append(separator);
             sb.Append(' ');
-            sb.Append(this.Y.ToString(format, formatProvider));
+            sb.Append(this.y.ToString(format, formatProvider));
             sb.Append('>');
             return sb.ToString();
         }
@@ -108,7 +108,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public double Length()
         {
-            double ls = X * X + Y * Y;
+            double ls = x * x + y * y;
                 return (double)Math.Sqrt((double)ls);
         }
 
@@ -119,7 +119,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public double LengthSquared()
         {
-            return X * X + Y * Y;
+            return x * x + y * y;
         }
         #endregion Public Instance Methods
 
@@ -133,8 +133,8 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static double Distance(Vector2 value1, Vector2 value2)
         {
-            double dx = value1.X - value2.X;
-                double dy = value1.Y - value2.Y;
+            double dx = value1.x - value2.x;
+                double dy = value1.y - value2.y;
 
                 double ls = dx * dx + dy * dy;
 
@@ -150,8 +150,8 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static double DistanceSquared(Vector2 value1, Vector2 value2)
         {
-            double dx = value1.X - value2.X;
-                double dy = value1.Y - value2.Y;
+            double dx = value1.x - value2.x;
+                double dy = value1.y - value2.y;
 
                 return dx * dx + dy * dy;
         }
@@ -164,12 +164,12 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector2 Normalize(Vector2 value)
         {
-            double ls = value.X * value.X + value.Y * value.Y;
+            double ls = value.x * value.x + value.y * value.y;
                 double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
 
                 return new Vector2(
-                    value.X * invNorm,
-                    value.Y * invNorm);
+                    value.x * invNorm,
+                    value.y * invNorm);
         }
 
         /// <summary>
@@ -181,11 +181,11 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector2 Reflect(Vector2 vector, Vector2 normal)
         {
-            double dot = vector.X * normal.X + vector.Y * normal.Y;
+            double dot = vector.x * normal.x + vector.y * normal.y;
 
                 return new Vector2(
-                    vector.X - 2.0 * dot * normal.X,
-                    vector.Y - 2.0 * dot * normal.Y);
+                    vector.x - 2.0 * dot * normal.x,
+                    vector.y - 2.0 * dot * normal.y);
         }
 
         /// <summary>
@@ -199,13 +199,13 @@ namespace Prowl.Runtime
         {
             // This compare order is very important!!!
             // We must follow HLSL behavior in the case user specified min value is bigger than max value.
-            double x = value1.X;
-            x = (x > max.X) ? max.X : x;
-            x = (x < min.X) ? min.X : x;
+            double x = value1.x;
+            x = (x > max.x) ? max.x : x;
+            x = (x < min.x) ? min.x : x;
 
-            double y = value1.Y;
-            y = (y > max.Y) ? max.Y : y;
-            y = (y < min.Y) ? min.Y : y;
+            double y = value1.y;
+            y = (y > max.y) ? max.y : y;
+            y = (y < min.y) ? min.y : y;
 
             return new Vector2(x, y);
         }
@@ -221,8 +221,8 @@ namespace Prowl.Runtime
         public static Vector2 Lerp(Vector2 value1, Vector2 value2, double amount)
         {
             return new Vector2(
-                value1.X + (value2.X - value1.X) * amount,
-                value1.Y + (value2.Y - value1.Y) * amount);
+                value1.x + (value2.x - value1.x) * amount,
+                value1.y + (value2.y - value1.y) * amount);
         }
 
         /// <summary>
@@ -235,8 +235,8 @@ namespace Prowl.Runtime
         public static Vector2 Transform(Vector2 position, Matrix4x4 matrix)
         {
             return new Vector2(
-                position.X * matrix.M11 + position.Y * matrix.M21 + matrix.M41,
-                position.X * matrix.M12 + position.Y * matrix.M22 + matrix.M42);
+                position.x * matrix.M11 + position.y * matrix.M21 + matrix.M41,
+                position.x * matrix.M12 + position.y * matrix.M22 + matrix.M42);
         }
 
         /// <summary>
@@ -249,8 +249,8 @@ namespace Prowl.Runtime
         public static Vector2 TransformNormal(Vector2 normal, Matrix4x4 matrix)
         {
             return new Vector2(
-                normal.X * matrix.M11 + normal.Y * matrix.M21,
-                normal.X * matrix.M12 + normal.Y * matrix.M22);
+                normal.x * matrix.M11 + normal.y * matrix.M21,
+                normal.x * matrix.M12 + normal.y * matrix.M22);
         }
 
         /// <summary>
@@ -273,8 +273,8 @@ namespace Prowl.Runtime
             double zz2 = rotation.Z * z2;
 
             return new Vector2(
-                value.X * (1.0 - yy2 - zz2) + value.Y * (xy2 - wz2),
-                value.X * (xy2 + wz2) + value.Y * (1.0 - xx2 - zz2));
+                value.x * (1.0 - yy2 - zz2) + value.y * (xy2 - wz2),
+                value.x * (xy2 + wz2) + value.y * (1.0 - xx2 - zz2));
         }
         #endregion Public Static Methods
 

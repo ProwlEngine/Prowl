@@ -17,11 +17,11 @@ namespace Prowl.Runtime
         /// <summary>
         /// The X component of the vector.
         /// </summary>
-        public Double X;
+        public Double x;
         /// <summary>
         /// The Y component of the vector.
         /// </summary>
-        public Double Y;
+        public Double y;
 
         #region Constructors
         /// <summary>
@@ -37,8 +37,8 @@ namespace Prowl.Runtime
         /// <param name="y">The Y component.</param>
         public Vector2(Double x, Double y)
         {
-            X = x;
-            Y = y;
+            this.x = x;
+            this.y = y;
         }
         #endregion Constructors
 
@@ -76,8 +76,8 @@ namespace Prowl.Runtime
             {
                 throw new ArgumentException();
             }
-            array[index] = X;
-            array[index + 1] = Y;
+            array[index] = x;
+            array[index + 1] = y;
         }
 
         /// <summary>
@@ -87,7 +87,7 @@ namespace Prowl.Runtime
         /// <returns>True if the other Vector2 is equal to this instance; False otherwise.</returns>
         public bool Equals(Vector2 other)
         {
-            return this.X == other.X && this.Y == other.Y;
+            return this.x == other.x && this.y == other.y;
         }
         #endregion Public Instance Methods
 
@@ -101,8 +101,8 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static double Dot(Vector2 value1, Vector2 value2)
         {
-            return value1.X * value2.X +
-                   value1.Y * value2.Y;
+            return value1.x * value2.x +
+                   value1.y * value2.y;
         }
 
         /// <summary>
@@ -115,8 +115,8 @@ namespace Prowl.Runtime
         public static Vector2 Min(Vector2 value1, Vector2 value2)
         {
             return new Vector2(
-                (value1.X < value2.X) ? value1.X : value2.X,
-                (value1.Y < value2.Y) ? value1.Y : value2.Y);
+                (value1.x < value2.x) ? value1.x : value2.x,
+                (value1.y < value2.y) ? value1.y : value2.y);
         }
 
         /// <summary>
@@ -129,8 +129,8 @@ namespace Prowl.Runtime
         public static Vector2 Max(Vector2 value1, Vector2 value2)
         {
             return new Vector2(
-                (value1.X > value2.X) ? value1.X : value2.X,
-                (value1.Y > value2.Y) ? value1.Y : value2.Y);
+                (value1.x > value2.x) ? value1.x : value2.x,
+                (value1.y > value2.y) ? value1.y : value2.y);
         }
 
         /// <summary>
@@ -141,7 +141,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector2 Abs(Vector2 value)
         {
-            return new Vector2(Math.Abs(value.X), Math.Abs(value.Y));
+            return new Vector2(Math.Abs(value.x), Math.Abs(value.y));
         }
 
         /// <summary>
@@ -152,7 +152,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector2 SquareRoot(Vector2 value)
         {
-            return new Vector2((Double)Math.Sqrt(value.X), (Double)Math.Sqrt(value.Y));
+            return new Vector2((Double)Math.Sqrt(value.x), (Double)Math.Sqrt(value.y));
         }
         #endregion Public Static Methods
 
@@ -166,7 +166,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector2 operator +(Vector2 left, Vector2 right)
         {
-            return new Vector2(left.X + right.X, left.Y + right.Y);
+            return new Vector2(left.x + right.x, left.y + right.y);
         }
 
         /// <summary>
@@ -178,7 +178,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector2 operator -(Vector2 left, Vector2 right)
         {
-            return new Vector2(left.X - right.X, left.Y - right.Y);
+            return new Vector2(left.x - right.x, left.y - right.y);
         }
 
         /// <summary>
@@ -190,7 +190,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector2 operator *(Vector2 left, Vector2 right)
         {
-            return new Vector2(left.X * right.X, left.Y * right.Y);
+            return new Vector2(left.x * right.x, left.y * right.y);
         }
 
         /// <summary>
@@ -226,7 +226,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector2 operator /(Vector2 left, Vector2 right)
         {
-            return new Vector2(left.X / right.X, left.Y / right.Y);
+            return new Vector2(left.x / right.x, left.y / right.y);
         }
 
         /// <summary>
@@ -240,8 +240,8 @@ namespace Prowl.Runtime
         {
             double invDiv = 1.0 / value2;
             return new Vector2(
-                value1.X * invDiv,
-                value1.Y * invDiv);
+                value1.x * invDiv,
+                value1.y * invDiv);
         }
 
         /// <summary>
@@ -282,7 +282,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static implicit operator System.Numerics.Vector2(Vector2 value)
         {
-            return new System.Numerics.Vector2((float)value.X, (float)value.Y);
+            return new System.Numerics.Vector2((float)value.x, (float)value.y);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
