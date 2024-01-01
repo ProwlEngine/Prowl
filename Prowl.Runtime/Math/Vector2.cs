@@ -35,6 +35,8 @@ namespace Prowl.Runtime
 
         #region Public instance methods
 
+        public double magnitude => Length();
+
         public System.Numerics.Vector2 ToFloat() => new System.Numerics.Vector2((float)x, (float)y);
 
         /// <summary>

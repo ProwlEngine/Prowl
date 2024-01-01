@@ -259,7 +259,7 @@ namespace Prowl.Editor.Drawers.NodeSystem
                 int hash = 17;
                 foreach (byte element in arr)
                     hash = hash * 31 + element;
-                var ran = new Random(hash+5);
+                var ran = new System.Random(hash+5);
                 float r = 0;
                 float g = 0;
                 float b = 0;

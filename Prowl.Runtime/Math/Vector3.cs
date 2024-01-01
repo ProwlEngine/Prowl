@@ -35,9 +35,12 @@ namespace Prowl.Runtime
         /// Returns the vector (0,0,1).
         /// </summary>
         public static Vector3 UnitZ { get { return new Vector3(0.0, 0.0, 1.0); } }
+
         #endregion Public Static Properties
 
         #region Public Instance Methods
+
+        public double magnitude => Length();
 
         public System.Numerics.Vector3 ToFloat() => new System.Numerics.Vector3((float)x, (float)y, (float)z);
 
