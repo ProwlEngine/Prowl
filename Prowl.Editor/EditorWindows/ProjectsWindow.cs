@@ -35,8 +35,6 @@ public class ProjectsWindow : EditorWindow
         ImGui.PushStyleColor(ImGuiCol.ChildBg, ImGui.GetStyle().Colors[(int)ImGuiCol.FrameBg]);
         ImGui.BeginChild("projectList", new System.Numerics.Vector2(ImGui.GetWindowWidth(), ImGui.GetWindowHeight() - 75));
 
-        Directory.CreateDirectory(Project.Projects_Directory); // Ensure the Project directory exists
-
         var folders = new DirectoryInfo(Project.Projects_Directory).EnumerateDirectories();
         // sort by modified date
         folders = folders.OrderByDescending((x) => x.LastWriteTimeUtc);
