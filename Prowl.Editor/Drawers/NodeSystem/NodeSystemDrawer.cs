@@ -3,7 +3,6 @@ using HexaEngine.ImNodesNET;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
 using Prowl.Runtime.NodeSystem;
-using Silk.NET.OpenAL;
 using System.Reflection;
 using System.Text;
 using static Prowl.Runtime.NodeSystem.Node;

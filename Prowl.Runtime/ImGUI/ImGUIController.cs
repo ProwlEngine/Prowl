@@ -5,7 +5,6 @@ using HexaEngine.ImPlotNET;
 using Prowl.Icons;
 using Silk.NET.Input;
 using Silk.NET.Maths;
-using Silk.NET.OpenAL;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 using System;

@@ -2,6 +2,7 @@
 
 namespace Prowl.Runtime
 {
+    /// <summary> A Utility class with a bunch of Random types/values - Based on System.Random.Shared </summary>
     public static class Random
     {
 
@@ -29,14 +30,13 @@ namespace Prowl.Runtime
             }
         }
 
-        /// <summary>Returns a random point inside the unit circle </summary>
+        /// <summary> Returns a random point inside the unit circle </summary>
         public static Vector2 InUnitCircle => OnUnitCircle * Value;
 
-        /// <summary>Returns a random point inside the unit square [0-1] </summary>
+        /// <summary> Returns a random point inside the unit square [0-1] </summary>
         public static Vector2 InUnitSquare => new(Value, Value);
 
-        // 3D
-        /// <summary>Returns a random point on the unit sphere </summary>
+        /// <summary> Returns a random point on the unit sphere </summary>
         public static Vector3 OnUnitSphere {
             get {
                 double a = (double)(Value * 6.283185307179586476925286766559);
@@ -46,22 +46,22 @@ namespace Prowl.Runtime
             }
         }
 
-        /// <summary>Returns a random point inside the unit sphere </summary>
+        /// <summary> Returns a random point inside the unit sphere </summary>
         public static Vector3 InUnitSphere => OnUnitSphere * Value;
 
-        /// <summary>Returns a random point inside the unit cube [0-1] </summary>
+        /// <summary> Returns a random point inside the unit cube [0-1] </summary>
         public static Vector3 InUnitCube => new(Value, Value, Value);
 
-        // 2D orientation
-        /// <summary>Returns a random angle in radians from 0 to TAU </summary>
+        /// <summary> Returns a random angle in radians from 0 to TAU </summary>
         public static double Angle => Value * Mathf.TAU;
 
-        // 3D Orientation
-        /// <summary>Returns a random uniformly distributed rotation </summary>
+        /// <summary> Returns a random uniformly distributed rotation </summary>
         public static Quaternion Rotation => new(OnUnitSphere, Value * Mathf.TAU); // Will this work? TODO: Test
 
+        /// <summary> Returns a random Boolean value </summary>
         public static bool Boolean => Value > 0.5f;
 
+        /// <summary> Returns a random uniformly distributed color </summary>
         public static Color Color {
             get {
                 unchecked {
@@ -71,6 +71,7 @@ namespace Prowl.Runtime
             }
         }
 
+        /// <summary> Returns a random uniformly distributed color with an alpha of 1.0 </summary>
         public static Color ColorFullAlpha {
             get {
                 unchecked {

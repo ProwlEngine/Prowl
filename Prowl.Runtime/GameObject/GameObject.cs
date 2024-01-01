@@ -8,64 +8,97 @@ using System.Runtime.Serialization;
 
 namespace Prowl.Runtime;
 
+/// <summary>
+/// The Base Class for all Object/Entities in a Scene.
+/// Holds a collection of Components that contain the logic for this Object/Entity
+/// </summary>
 public class GameObject : EngineObject, ISerializable
 {
+    #region Static Fields/Properties
+
     internal static event Action<GameObject>? Internal_Constructed;
     internal static event Action<GameObject>? Internal_DestroyCommitted;
-    
+
+    #endregion
+
+    #region Private Fields/Properties
+
     private List<MonoBehaviour> _components = new();
 
     private MultiValueDictionary<Type, MonoBehaviour> _componentCache = new();
 
     private bool _enabled = true;
     private bool _enabledInHierarchy = true;
-     
-    public bool Enabled
-    {
-        get { return _enabled; }
-        set { if (value != _enabled) { SetEnabled(value); } }
-    }
-
-    public bool EnabledInHierarchy => _enabledInHierarchy;
-
-    public int tagIndex;
-    public int layerIndex;
-
-    public HideFlags hideFlags = HideFlags.None;
-
-    public string tag
-    {
-        get => TagLayerManager.tags[tagIndex];
-        set => tagIndex = TagLayerManager.GetTagIndex(value);
-    }
-
-    public string layer
-    {
-        get => TagLayerManager.layers[layerIndex];
-        set => layerIndex = TagLayerManager.GetLayerIndex(value);
-    }
 
     internal WeakReference<Transform>? _transform;
-    public Transform? Transform {
-        get {
-            _transform ??= new (GetComponentInParent<Transform>()); // Fallback to Parent transform if one exists
-            return _transform.TryGetTarget(out var t) ? t : null; 
-        }
-    }
-
-    #region Transform
-
-
 
     // We dont serialize parent, since if we want to serialize X object who is a child to Y object, we dont want to serialize Y object as well.
     // The parent is reconstructed when the object is deserialized for all children.
     internal GameObject? parent;
 
-    public List<GameObject> Children = new List<GameObject>();
+    #endregion
 
+    #region Public Fields/Properties
+
+    /// <summary> The Tag Index of this GameObject </summary>
+    public int tagIndex;
+
+    /// <summary> The Layer Index of this GameObject </summary>
+    public int layerIndex;
+
+    /// <summary> The Hide Flags of this GameObject, Used to hide the GameObject from a variety of places like Serializing, Inspector or Hierarchy </summary>
+    public HideFlags hideFlags = HideFlags.None;
+
+    /// <summary> Gets whether or not this gameobject is enabled explicitly </summary>
+    public bool Enabled {
+        get { return _enabled; }
+        set { if (value != _enabled) { SetEnabled(value); } }
+    }
+
+    /// <summary> Gets whether this gameobejct is enabled in the hierarchy, so if its parent is disabled this will return false </summary>
+    public bool EnabledInHierarchy => _enabledInHierarchy;
+
+    /// <summary> The Tag of this GameObject </summary>
+    public string tag {
+        get => TagLayerManager.tags[tagIndex];
+        set => tagIndex = TagLayerManager.GetTagIndex(value);
+    }
+
+    /// <summary> The Layer of this GameObject </summary>
+    public string layer {
+        get => TagLayerManager.layers[layerIndex];
+        set => layerIndex = TagLayerManager.GetLayerIndex(value);
+    }
+
+    /// <summary> The Parent of this GameObject, Can be null </summary>
     public GameObject? Parent => parent;
 
-    
+    /// <summary> The Transform of this GameObject, If this GameObject has no Transform it will fallback to one in a parent, Can be null </summary>
+    public Transform? Transform {
+        get {
+            _transform ??= new(GetComponentInParent<Transform>()); // Fallback to Parent transform if one exists
+            return _transform.TryGetTarget(out var t) ? t : null;
+        }
+    }
+
+    /// <summary> A List of all children of this GameObject </summary>
+    public List<GameObject> Children = new List<GameObject>();
+
+    #endregion
+
+    #region Static Fields/Properties
+
+
+
+    #endregion
+
+    #region Static Fields/Properties
+
+
+
+    #endregion
+
+
 
     public void SetParent(GameObject? newParent)
     {
@@ -117,7 +150,7 @@ public class GameObject : EngineObject, ISerializable
         HierarchyStateChanged();
     }
 
-    #endregion
+    #region Constructors
 
     /// <summary>
     /// A special method to create a new GameObject without triggering the global Constructed event.
@@ -148,6 +181,8 @@ public class GameObject : EngineObject, ISerializable
     {
         Internal_Constructed?.Invoke(this);
     }
+
+    #endregion
 
     /// <summary>
     /// 

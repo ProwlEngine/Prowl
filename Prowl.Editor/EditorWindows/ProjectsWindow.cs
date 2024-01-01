@@ -1,6 +1,5 @@
-﻿using Prowl.Icons;
-using HexaEngine.ImGuiNET;
-using System.Numerics;
+﻿using HexaEngine.ImGuiNET;
+using Prowl.Icons;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.EditorWindows;

@@ -6,11 +6,8 @@ using Prowl.Editor.PropertyDrawers;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
-using Prowl.Runtime.ImGUI;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
-using System;
-using System.Diagnostics;
 using System.Text.Json;
 using static Prowl.Editor.EditorConfiguration;
 
