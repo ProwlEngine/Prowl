@@ -3,6 +3,7 @@ using HexaEngine.ImNodesNET;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
 using Prowl.Runtime.NodeSystem;
+using Silk.NET.OpenAL;
 using System.Reflection;
 using System.Text;
 using static Prowl.Runtime.NodeSystem.Node;
@@ -35,13 +36,22 @@ namespace Prowl.Editor.Drawers.NodeSystem
             style.NodeBorderThickness = 3f;
         }
 
+
+        private Dictionary<int, ImNodesEditorContextPtr> contexts;
+
         #region Graph
 
         public virtual bool Draw(NodeGraph graph)
         {
-            bool changed = false;
-            graph.SetContext();
+            // Set or Create the ImGuizmo context
+            ImNodesEditorContextPtr context;
+            if (!contexts.TryGetValue(graph.InstanceID, out context)) {
+                context = ImNodes.EditorContextCreate();
+                contexts[graph.InstanceID] = context;
+            }
+            ImNodes.EditorContextSet(context);
 
+            bool changed = false;
             ImNodes.BeginNodeEditor();
             var drawlist = ImGui.GetWindowDrawList();
             foreach (var node in graph.nodes)

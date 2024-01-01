@@ -1,5 +1,4 @@
-﻿using HexaEngine.ImNodesNET;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -14,8 +13,6 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> All nodes in the graph. <para/>
         /// See: <see cref="AddNode{T}"/> </summary>
         public List<Node> nodes = new List<Node>();
-
-        private ImNodesEditorContextPtr context;
 
         public abstract Type[] NodeTypes { get; }
 
@@ -107,14 +104,6 @@ namespace Prowl.Runtime.NodeSystem
             }
         
             return graph;
-        }
-
-        /// <summary> Set the ImNodes Context </summary>
-        public void SetContext()
-        {
-            if (context.IsNull)
-                context = ImNodes.EditorContextCreate();
-            ImNodes.EditorContextSet(context);
         }
 
         protected virtual void OnDestroy()
