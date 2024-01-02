@@ -188,6 +188,10 @@ namespace Prowl.Runtime
 
         #region Extensions
 
+        public static Vector2 ToDouble(this System.Numerics.Vector2 v) => new(v.X, v.Y);
+        public static Vector3 ToDouble(this System.Numerics.Vector3 v) => new(v.X, v.Y, v.Z);
+        public static Vector4 ToDouble(this System.Numerics.Vector4 v) => new(v.X, v.Y, v.Z, v.W);
+
         public static Matrix4x4 ToDouble(this System.Numerics.Matrix4x4 m)
         {
             Matrix4x4 result;
