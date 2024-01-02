@@ -170,10 +170,13 @@ public abstract class MonoBehaviour : EngineObject
             executeAlways = this.GetType().GetCustomAttribute<ExecuteAlwaysAttribute>() != null;
         }
 
-        if (!PauseLogic || executeAlways)
-        {
+        if (!PauseLogic || executeAlways) {
             awake?.Invoke(this, []);
-            onEnable?.Invoke(this, []);
+            try {
+                onEnable?.Invoke(this, []);
+            } catch (Exception e) {
+                Debug.LogError($"Error in {GetType().Name}.OnEnable of {GameObject.Name}: {e.Message} \n StackTrace: {e.StackTrace}");
+            }
             return true;
         }
         return false;
