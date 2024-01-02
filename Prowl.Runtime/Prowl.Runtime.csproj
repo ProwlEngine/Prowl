@@ -40,12 +40,12 @@
     </ItemGroup>
     
     <ItemGroup>
-      <PackageReference Include="BepuPhysics" Version="2.5.0-beta.17" />
       <PackageReference Include="HexaEngine.ImGui" Version="2.0.17" />
       <PackageReference Include="HexaEngine.ImGuizmo" Version="2.0.17" />
       <PackageReference Include="HexaEngine.ImNodes" Version="2.0.17" />
       <PackageReference Include="HexaEngine.ImPlot" Version="2.0.17" />
       <PackageReference Include="JetBrains.Annotations" Version="2022.1.0" />
+      <PackageReference Include="Jitter2" Version="2.1.1" />
       <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="13.5.0" />
       <PackageReference Include="Silk.NET" Version="2.20.0" />
       <PackageReference Include="System.Collections.Specialized" Version="4.3.0" />

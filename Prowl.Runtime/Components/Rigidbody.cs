@@ -1,172 +1,233 @@
-﻿using BepuPhysics;
-using BepuPhysics.Collidables;
+﻿using Jitter2.Collision.Shapes;
+using Jitter2.Dynamics;
+using Jitter2.LinearMath;
 using Prowl.Icons;
+using System;
+using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 
 namespace Prowl.Runtime.Components
 {
-    // Some TODO's for physics
-    // Layer Mask/Support
-    // Monobehaviour OnColliderEnter/Exit
-    // Make Collision shapes support changes to scale/position/rotation
-    // Mesh Collider
-    // Ensure Compound Collider work well
-    // Ensure child colliders work well
-    // Capsule Collider Gizmos
-    // Cylinder Collider Gizmos
-    // Physics.Raycast and other queries
-
-    // Weld Joint
-    // Hinge Joint
-    // BallSocket Joint
-    // DistanceLimit Joint
-    // Slider Joint
-
     /// <summary> A GameObject Component that describes a Dynamic or Static Physical Rigidbody </summary>
     [RequireComponent(typeof(Transform))]
     [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Cubes}  Rigidbody")]
     public class Rigidbody : MonoBehaviour
     {
-        CompoundBuilder builder;
-        BodyHandle? bodyHandle;
-        StaticHandle? staticHandle;
-        TypedIndex? shapeIndex;
+        private PhysicalSpace space;
+        public PhysicalSpace Space {
+            get => space ??= Physics.DefaultSpace;
+            set {
+                space = value;
+                if (Body != null) {
+                    space.world.Remove(Body);
+                    Body = null;
+                }
+            }
+        }
 
-        [SerializeField]
-        private bool isKinematic = false;
 
-        /// <summary> Get or Set if this Rigidbody is Kinematic</summary>
+
+        internal Jitter2.Dynamics.RigidBody Body { get; private set; }
+
+        private List<Shape> shapes;
+        private List<Shape> Shapes => shapes ??= CreateShapes();
+
+        [SerializeField] private bool affectedByGravity = true;
+        public bool AffectedByGravity {
+            get => affectedByGravity;
+            set {
+                affectedByGravity = value;
+                Body.AffectedByGravity = value;
+            }
+        }
+
+        [SerializeField] private bool isStatic;
+        public bool IsStatic {
+            get => isStatic;
+            set {
+                isStatic = value;
+                Body.IsStatic = value;
+            }
+        }
+
+        [SerializeField] private bool isKinematic;
         public bool IsKinematic {
             get => isKinematic;
+            set => isKinematic = value;
+        }
+
+        public bool IsActive {
+            get => Body.IsActive;
+            set => Body.SetActivationState(value);
+        }
+
+        [SerializeField] private bool speculativeContacts;
+        public bool SpeculativeContacts {
+            get => speculativeContacts;
             set {
-                if (isKinematic == value) return;
-                isKinematic = value;
-                UpdateBepuBody();
+                speculativeContacts = value;
+                Body.EnableSpeculativeContacts = value;
             }
         }
 
-        public override void OnValidate()
-        {
-            if (!(isKinematic ? staticHandle.HasValue : bodyHandle.HasValue))
-                UpdateBepuBody();
+        [SerializeField]
+        private float mass;
+        public float Mass {
+            get => mass;
+            set {
+                mass = value;
+                Body.SetMassInertia(mass);
+            }
         }
 
-        public void UpdateBepuBody()
-        {
-            // Initialize Builder
-            if (builder.Pool == null) builder = new CompoundBuilder(Physics.BufferPool, Physics.Simulation.Shapes, 4);
-            else builder.Reset();
+        public Vector3 Torque => new Vector3(Body.Torque.X, Body.Torque.Y, Body.Torque.Z);
 
-            // Get all Colliders
-            var colliders = GetComponentsInChildren<Collider>();
-             
-            // If no colliders found, warn and return
-            if (colliders.Count() == 0) {
-                Debug.LogWarning("No Colliders found on Rigidbody, Rigidbody will not work!");
-                return;
-            }
-
-            // Add all Colliders
-            foreach (var collider in colliders)
-                collider.AddToBuilder(ref builder, collider.GameObject.InstanceID != GameObject.InstanceID);
-
-            // Calculate Compound Data
-            builder.BuildDynamicCompound(out var compoundChildren, out var compoundInertia);
-
-            // Track old shape index and add new shape
-            var oldShape = shapeIndex;
-            shapeIndex = Physics.Simulation.Shapes.Add(new Compound(compoundChildren));
-
-            // If Kinematic has changed (kinematic true but body exists or vice verse)
-            if (isKinematic && bodyHandle.HasValue) {
-                Physics.Simulation.Bodies.Remove(bodyHandle.Value);
-                bodyHandle = null;
-            } else if (!isKinematic && staticHandle.HasValue) {
-                Physics.Simulation.Statics.Remove(staticHandle.Value);
-                staticHandle = null;
-            }
-
-            // If has body
-            if (!(isKinematic ? staticHandle.HasValue : bodyHandle.HasValue)) {
-                // Create a new Body
-                if (isKinematic)
-                    staticHandle = Physics.Simulation.Statics.Add(new StaticDescription(GetRigidPose(), shapeIndex.Value));
-                else
-                    bodyHandle = Physics.Simulation.Bodies.Add(BodyDescription.CreateDynamic(GetRigidPose(), compoundInertia, shapeIndex.Value, 0.01f));
-            } else {
-                // Body already exists so just update it
-                if (isKinematic)
-                    Physics.Simulation.Statics.SetShape(staticHandle.Value, shapeIndex.Value);
-                else
-                    Physics.Simulation.Bodies.SetShape(bodyHandle.Value, shapeIndex.Value);
-            }
-
-            // Remove old shape and dispose it if we have one
-            if (oldShape != null)
-                Physics.Simulation.Shapes.RecursivelyRemoveAndDispose(oldShape.Value, Physics.BufferPool);
+        public Vector3 Force {
+            get => new Vector3(Body.Force.X, Body.Force.Y, Body.Force.Z);
+            set => Body.Force = value;
         }
 
-        public void OnEnable()
-        {
-            UpdateBepuBody();
+        public Vector3 Velocity {
+            get => new Vector3(Body.Velocity.X, Body.Velocity.Y, Body.Velocity.Z);
+            set => Body.Velocity = value;
         }
 
-        public void Update()
+        public Vector3 AngularVelocity {
+            get => new Vector3(Body.AngularVelocity.X, Body.AngularVelocity.Y, Body.AngularVelocity.Z);
+            set => Body.AngularVelocity = value;
+        }
+
+        public void AddForce(Vector3 force)
         {
-            if (!(isKinematic ? staticHandle.HasValue : bodyHandle.HasValue)) return;
+            Body.AddForce(force);
+        }
+
+        public void AddForceAtPosition(Vector3 force, Vector3 position)
+        {
+            Body.AddForce(force, position);
+        }
+
+        public Vector3 GetPointVelocity(Vector3 point)
+        {
+            var velocity = Body.Velocity + JVector.Cross(Body.AngularVelocity, point - Body.Position);
+            return new Vector3(velocity.X, velocity.Y, velocity.Z);
+        }
+
+        public void SetTransform(Vector3 position, Quaternion rotation)
+        {
+            SetPosition(position);
+            SetRotation(rotation);
+        }
+
+        public void SetPosition(Vector3 position) => Body.Position = position;
+
+        public void SetRotation(Quaternion rotation) => Body.Orientation = JMatrix.CreateFromQuaternion(rotation);
+
+        public void Refresh()
+        {
+            Mass = isKinematic ? 1e6f : mass;
+            IsStatic = isStatic;
+            AffectedByGravity = isKinematic ? false : affectedByGravity;
+            SpeculativeContacts = speculativeContacts;
+            shapes = CreateShapes();
+
+            SetPosition(GameObject.Transform.GlobalPosition);
+            SetRotation(GameObject.Transform.GlobalOrientation);
+        }
+
+        public void RefreshShape()
+        {
+            // TODO: Causes Crash, AddShape in particular crashes for some reason
+            //Body.ClearShapes(false);
+            //shapes = CreateShapes();
+            //Body.AddShape(Shapes);
+        }
+
+        private List<Shape> CreateShapes()
+        {
+            //var terrain = GetComponent<TerrainCollider>();
+            //if (terrain != null) return terrain.Shape;
+
+            var colliders = GetComponentsInChildren<Collider>().ToList();
+            if (colliders.Count == 1 && colliders[0].GameObject.InstanceID == GameObject.InstanceID)
+                return [colliders[0].Shape];
+
+            return colliders.Select(collider => {
+                // If this collider inherits the transform of the Rigidbody then it does not need to be transformed
+                // Transform should never be null here, since a Collider must be on or under a Rigidbody which requires a Transform
+                if (collider.GameObject.Transform!.InstanceID == GameObject.Transform!.InstanceID)
+                    return collider.Shape;
+                return collider.CreateTransformedShape(this);
+            }).ToList();
+        }
+
+        #region Prowl Methods
+        public override void OnValidate() { if(Application.isPlaying) Refresh(); }
+
+        private void OnEnable()
+        {
+            Body = Space.world.CreateRigidBody();
+            Body.AddShape(Shapes);
+            Body.Tag = this;
+            Body.AffectedByGravity = AffectedByGravity;
+            Body.IsStatic = IsStatic;
+
             if (isKinematic) {
-                var reference = Physics.Simulation.Statics.GetStaticReference(staticHandle.Value);
-                GameObject.Transform!.GlobalPosition = reference.Pose.Position;
-                GameObject.Transform!.GlobalOrientation = new(reference.Pose.Orientation.X, reference.Pose.Orientation.Y, reference.Pose.Orientation.Z, reference.Pose.Orientation.W);
-            } else {
-                var reference = Physics.Simulation.Bodies.GetBodyReference(bodyHandle.Value);
-                GameObject.Transform!.GlobalPosition = reference.Pose.Position;
-                GameObject.Transform!.GlobalOrientation = new(reference.Pose.Orientation.X, reference.Pose.Orientation.Y, reference.Pose.Orientation.Z, reference.Pose.Orientation.W);
-            }
+                Body.AffectedByGravity = false;
+                Body.SetMassInertia(1e6f);
+            } else if (Mass > 0) Body.SetMassInertia(Mass);
+            else Body.SetMassInertia();
 
+            SetPosition(GameObject.Transform.GlobalPosition);
+            SetRotation(GameObject.Transform.GlobalOrientation);
         }
 
-        private RigidPose GetRigidPose() => new() {
-            Position = GameObject.Transform!.GlobalPosition,
-            Orientation = GameObject.Transform!.GlobalOrientation.ToFloat()
-        };
+        private void OnDisable()
+        {
+            Space.world.Remove(Body);
+            Body = null;
+        }
 
+        private void LateUpdate()
+        {
+            GameObject.Transform.GlobalPosition = Body.Position;
+            GameObject.Transform.GlobalOrientation = JQuaternion.CreateFromMatrix(Body.Orientation);
+        }
+
+        #endregion
     }
 
     public abstract class Collider : MonoBehaviour
     {
-        public Vector3 offset = Vector3.Zero;
-        public float weight = 1f;
-
-        public void AddToBuilder(ref CompoundBuilder builder, bool isChild)
+        private Shape shape;
+        public Shape Shape => shape ??= CreateShape();
+        public void OnEnable() => GetComponentInParent<Rigidbody>()?.RefreshShape();
+        public void OnDisable() => GetComponentInParent<Rigidbody>()?.RefreshShape();
+        public abstract Shape CreateShape();
+        public virtual TransformedShape CreateTransformedShape(Rigidbody body)
         {
-            AddShape(ref builder, GetRigidPose(isChild));
+            // Transform is guranteed to exist, since a Collider must be On or under a Rigidbody which requires a Transform
+            // COllider is on a child without a transform the Parent transform of the Rigidbody is used via Inheritance
+            // This is fine since we use Global positions here, since the Body and Collider share a transform their global positions are identical
+            // Results in no offsets being applied to the shape
+            var position = GameObject.Transform!.GlobalPosition - body.GameObject.Transform!.GlobalPosition;
+            var rotation = Quaternion.RotateTowards(body.GameObject.Transform!.GlobalOrientation, GameObject.Transform!.GlobalOrientation, 360);
+
+            var invRotation = Quaternion.Inverse(body.GameObject.Transform!.GlobalOrientation);
+            rotation = invRotation * rotation;
+            position = Vector3.Transform(position, invRotation);
+
+            return new TransformedShape(Shape, position, JMatrix.CreateFromQuaternion(rotation));
         }
-
-        public void OnEnable()
-        {
-            GetComponentInParent<Rigidbody>()?.UpdateBepuBody();
-        }
-
-        public void OnDisable()
-        {
-            GetComponentInParent<Rigidbody>()?.UpdateBepuBody();
-        }
-
-        private RigidPose GetRigidPose(bool isChild) => new() {
-            Position = isChild ? GameObject.Transform!.Position + offset : offset,
-            Orientation = (isChild && GameObject.Transform != null) ? GameObject.Transform!.Orientation.ToFloat() : System.Numerics.Quaternion.Identity
-        };
-
-        public abstract void AddShape(ref CompoundBuilder builder, RigidPose pose);
     }
 
     [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Box}  Box Collider")]
     public class BoxCollider : Collider
     {
         public Vector3 size = Vector3.One;
-        public override void AddShape(ref CompoundBuilder builder, RigidPose pose) => 
-            builder.Add(new Box((float)(size.x * GameObject.Transform!.Scale.x), (float)(size.y * GameObject.Transform!.Scale.y), (float)(size.z * GameObject.Transform!.Scale.z)), pose, weight);
+
+        public override Shape CreateShape() => new BoxShape(size * GameObject.Transform!.Scale);
 
         public void DrawGizmosSelected()
         {
@@ -179,8 +240,7 @@ namespace Prowl.Runtime.Components
     public class SphereCollider : Collider
     {
         public float radius = 1f;
-        public override void AddShape(ref CompoundBuilder builder, RigidPose pose) =>
-        builder.Add(new Sphere(radius * (float)GameObject.Transform!.Scale.x), pose, weight);
+        public override Shape CreateShape() => new SphereShape(radius * (float)GameObject.Transform!.Scale.x);
 
         public void DrawGizmosSelected()
         {
@@ -197,8 +257,7 @@ namespace Prowl.Runtime.Components
     {
         public float radius = 1f;
         public float height = 1f;
-        public override void AddShape(ref CompoundBuilder builder, RigidPose pose) =>
-        builder.Add(new Capsule(radius * (float)GameObject.Transform!.Scale.x, height * (float)GameObject.Transform!.Scale.x), pose, weight);
+        public override Shape CreateShape() => new CapsuleShape(radius, height);
     }
 
     [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Capsules}  Cylinder Collider")]
@@ -206,7 +265,6 @@ namespace Prowl.Runtime.Components
     {
         public float radius = 1f;
         public float height = 1f;
-        public override void AddShape(ref CompoundBuilder builder, RigidPose pose) =>
-        builder.Add(new Cylinder(radius * (float)GameObject.Transform!.Scale.x, height * (float)GameObject.Transform!.Scale.x), pose, weight);
+        public override Shape CreateShape() => new CylinderShape(radius, height);
     }
 }
