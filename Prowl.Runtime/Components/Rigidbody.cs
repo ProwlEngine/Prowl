@@ -1,9 +1,13 @@
-﻿using Jitter2.Collision;
+﻿using HexaEngine.ImPlotNET;
+using Jitter2.Collision;
 using Jitter2.Collision.Shapes;
+using Jitter2.Dynamics;
 using Jitter2.LinearMath;
+using Microsoft.VisualBasic;
 using Prowl.Icons;
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 
 
@@ -27,7 +31,6 @@ namespace Prowl.Runtime.Components
                 }
             }
         }
-
 
 
         internal Jitter2.Dynamics.RigidBody Body { get; private set; }
@@ -83,38 +86,32 @@ namespace Prowl.Runtime.Components
             }
         }
 
-        public Vector3 Torque => new Vector3(Body.Torque.X, Body.Torque.Y, Body.Torque.Z);
+        public Vector3 Torque => new(Body.Torque.X, Body.Torque.Y, Body.Torque.Z);
 
         public Vector3 Force {
-            get => new Vector3(Body.Force.X, Body.Force.Y, Body.Force.Z);
+            get => new(Body.Force.X, Body.Force.Y, Body.Force.Z);
             set => Body.Force = value;
         }
 
         public Vector3 Velocity {
-            get => new Vector3(Body.Velocity.X, Body.Velocity.Y, Body.Velocity.Z);
+            get => new(Body.Velocity.X, Body.Velocity.Y, Body.Velocity.Z);
             set => Body.Velocity = value;
         }
 
         public Vector3 AngularVelocity {
-            get => new Vector3(Body.AngularVelocity.X, Body.AngularVelocity.Y, Body.AngularVelocity.Z);
+            get => new(Body.AngularVelocity.X, Body.AngularVelocity.Y, Body.AngularVelocity.Z);
             set => Body.AngularVelocity = value;
         }
 
-        public void AddForce(Vector3 force)
-        {
-            Body.AddForce(force);
-        }
+        public List<Collision> Contacts => Body.Contacts.Select(x => new Collision(this, x)).ToList();
+        public List<Rigidbody> TouchingBodies => Body.Connections.Select(x => (x.Tag as Rigidbody)!).ToList();
 
-        public void AddForceAtPosition(Vector3 force, Vector3 position)
-        {
-            Body.AddForce(force, position);
-        }
 
-        public Vector3 GetPointVelocity(Vector3 point)
-        {
-            var velocity = Body.Velocity + JVector.Cross(Body.AngularVelocity, point - Body.Position);
-            return new Vector3(velocity.X, velocity.Y, velocity.Z);
-        }
+        public void AddForce(Vector3 force) => Body.AddForce(force);
+
+        public void AddForceAtPosition(Vector3 force, Vector3 position) => Body.AddForce(force, position);
+
+        public Vector3 GetPointVelocity(Vector3 point) => Body.Velocity + JVector.Cross(Body.AngularVelocity, point - Body.Position);
 
         public void SetTransform(Vector3 position, Quaternion rotation)
         {
@@ -128,11 +125,14 @@ namespace Prowl.Runtime.Components
 
         public void Refresh()
         {
-            Mass = isKinematic ? 1e6f : mass;
+            if(isKinematic || mass > 0)
+                Mass = isKinematic ? 1e6f : mass;
             IsStatic = isStatic;
             AffectedByGravity = isKinematic ? false : affectedByGravity;
             SpeculativeContacts = speculativeContacts;
             shapes = CreateShapes();
+
+            IsActive = true;
 
             SetPosition(GameObject.Transform.GlobalPosition);
             SetRotation(GameObject.Transform.GlobalOrientation);
@@ -140,7 +140,7 @@ namespace Prowl.Runtime.Components
 
         public void RefreshShape()
         {
-            // TODO: Causes Crash, AddShape in particular crashes for some reason
+            // TODO: Causes Crash, Shapes get cached and dont appear to support being registered/attached to a body a second time
             //Body.ClearShapes(false);
             //shapes = CreateShapes();
             //Body.AddShape(Shapes);
@@ -148,24 +148,21 @@ namespace Prowl.Runtime.Components
 
         private List<Shape> CreateShapes()
         {
-            //var terrain = GetComponent<TerrainCollider>();
-            //if (terrain != null) return terrain.Shape;
-
             var colliders = GetComponentsInChildren<Collider>().ToList();
-            if (colliders.Count == 1 && colliders[0].GameObject.InstanceID == GameObject.InstanceID)
-                return [colliders[0].Shape];
 
-            return colliders.Select(collider => {
-                // If this collider inherits the transform of the Rigidbody then it does not need to be transformed
-                // Transform should never be null here, since a Collider must be on or under a Rigidbody which requires a Transform
+            List<Shape> allShapes = new();
+            foreach (var collider in colliders) {
                 if (collider.GameObject.Transform!.InstanceID == GameObject.Transform!.InstanceID)
-                    return collider.Shape;
-                return collider.CreateTransformedShape(this);
-            }).ToList();
+                    allShapes.AddRange(collider.Shape);
+                else
+                    allShapes.AddRange(collider.CreateTransformedShape(this));
+            }
+
+            return allShapes;
         }
 
         #region Prowl Methods
-        public override void OnValidate() { if(Application.isPlaying) Refresh(); }
+        public override void OnValidate() { if (Application.isPlaying) Refresh(); }
 
         private void OnEnable()
         {
@@ -202,12 +199,12 @@ namespace Prowl.Runtime.Components
 
     public abstract class Collider : MonoBehaviour
     {
-        private Shape shape;
-        public Shape Shape => shape ??= CreateShape();
+        private List<Shape> shape;
+        public List<Shape> Shape => shape ??= CreateShapes();
         public void OnEnable() => GetComponentInParent<Rigidbody>()?.RefreshShape();
         public void OnDisable() => GetComponentInParent<Rigidbody>()?.RefreshShape();
-        public abstract Shape CreateShape();
-        public virtual TransformedShape CreateTransformedShape(Rigidbody body)
+        public abstract List<Shape> CreateShapes();
+        public virtual List<TransformedShape> CreateTransformedShape(Rigidbody body)
         {
             // Transform is guranteed to exist, since a Collider must be On or under a Rigidbody which requires a Transform
             // COllider is on a child without a transform the Parent transform of the Rigidbody is used via Inheritance
@@ -219,8 +216,9 @@ namespace Prowl.Runtime.Components
             var invRotation = Quaternion.Inverse(body.GameObject.Transform!.GlobalOrientation);
             rotation = invRotation * rotation;
             position = Vector3.Transform(position, invRotation);
+            var jRot = JMatrix.CreateFromQuaternion(rotation);
 
-            return new TransformedShape(Shape, position, JMatrix.CreateFromQuaternion(rotation));
+            return Shape.Select(x => new TransformedShape(x, position, jRot)).ToList();
         }
     }
 
@@ -229,7 +227,13 @@ namespace Prowl.Runtime.Components
     {
         public Vector3 size = Vector3.One;
 
-        public override Shape CreateShape() => new BoxShape(size * GameObject.Transform!.Scale);
+        public override List<Shape> CreateShapes() => [ new BoxShape(size * GameObject.Transform!.Scale) ];
+        public override void OnValidate()
+        {
+            (Shape[0] as BoxShape).Size = size * GameObject.Transform!.Scale;
+            Shape[0].UpdateShape();
+            GetComponentInParent<Rigidbody>().IsActive = true;
+        }
 
         public void DrawGizmosSelected()
         {
@@ -242,7 +246,13 @@ namespace Prowl.Runtime.Components
     public class SphereCollider : Collider
     {
         public float radius = 1f;
-        public override Shape CreateShape() => new SphereShape(radius * (float)GameObject.Transform!.Scale.x);
+        public override List<Shape> CreateShapes() => [ new SphereShape(radius * (float)GameObject.Transform!.Scale.x) ];
+        public override void OnValidate()
+        {
+            (Shape[0] as SphereShape).Radius = radius * (float)GameObject.Transform!.Scale.x;
+            Shape[0].UpdateShape();
+            GetComponentInParent<Rigidbody>().IsActive = true;
+        }
 
         public void DrawGizmosSelected()
         {
@@ -259,7 +269,14 @@ namespace Prowl.Runtime.Components
     {
         public float radius = 1f;
         public float height = 1f;
-        public override Shape CreateShape() => new CapsuleShape(radius, height);
+        public override List<Shape> CreateShapes() => [ new CapsuleShape(radius, height) ];
+        public override void OnValidate()
+        {
+            (Shape[0] as CapsuleShape).Radius = radius;
+            (Shape[0] as CapsuleShape).Length = height;
+            Shape[0].UpdateShape();
+            GetComponentInParent<Rigidbody>().IsActive = true;
+        }
     }
 
     [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Capsules}  Cylinder Collider")]
@@ -267,14 +284,22 @@ namespace Prowl.Runtime.Components
     {
         public float radius = 1f;
         public float height = 1f;
-        public override Shape CreateShape() => new CylinderShape(radius, height);
+        public override List<Shape> CreateShapes() => [ new CylinderShape(radius, height) ];
+        public override void OnValidate()
+        {
+            (Shape[0] as CapsuleShape).Radius = radius;
+            (Shape[0] as CapsuleShape).Length = height;
+            Shape[0].UpdateShape();
+            GetComponentInParent<Rigidbody>().IsActive = true;
+        }
     }
 
     [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Capsules}  Mesh Collider")]
     public class MeshCollider : Collider
     {
-        [Header("At the moment Mesh Collider only handle Convex physics! This component is also Experimental!")]
         public AssetRef<Mesh> mesh;
+
+        public bool convex = false;
 
         public enum Approximation
         {
@@ -294,12 +319,36 @@ namespace Prowl.Runtime.Components
 
         public Approximation convexApprox = Approximation.Level5;
 
-        public override Shape CreateShape()
+        public override List<Shape> CreateShapes()
         {
-            if (mesh.IsAvailable == false) return new SphereShape(0); // Mesh is missing so we create a sphere with no radius to prevent errors
+            if (mesh.IsAvailable == false) return [new SphereShape(0.001f)]; // Mesh is missing so we create a sphere with a tiny radius to prevent errors
 
-            var points = mesh.Res.vertices.Select(x => (JVector)x.Position.ToDouble());
-            return new PointCloudShape(BuildConvexCloud(points.ToList()));
+            if (!convex) {
+                var indices = mesh.Res.indices;
+                var vertices = mesh.Res.vertices;
+
+                List<JTriangle> triangles = new();
+
+                for (int i = 0; i < mesh.Res.triangleCount; i += 3) {
+                    JVector v1 = vertices[i + 0].Position.ToDouble();
+                    JVector v2 = vertices[i + 1].Position.ToDouble();
+                    JVector v3 = vertices[i + 2].Position.ToDouble();
+                    triangles.Add(new JTriangle(v1, v2, v3));
+                }
+
+                var jtm = new TriangleMesh(triangles);
+                List<Shape> shapesToAdd = new();
+
+                for (int i = 0; i < jtm.Indices.Length; i++) {
+                    TriangleShape ts = new TriangleShape(jtm, i);
+                    shapesToAdd.Add(ts);
+                }
+                return shapesToAdd;
+            } else {
+                var points = mesh.Res.vertices.Select(x => (JVector)x.Position.ToDouble());
+                return [new PointCloudShape(BuildConvexCloud(points.ToList()))];
+            }
+
         }
 
         private List<JVector> BuildConvexCloud(List<JVector> pointCloud)

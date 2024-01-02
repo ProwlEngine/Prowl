@@ -36,9 +36,9 @@ namespace Prowl.Runtime
     {
         #region Public Fields
 
-        public Vector3 Direction;
+        public Vector3 direction;
 
-        public Vector3 Position;
+        public Vector3 origin;
 
         #endregion
 
@@ -47,8 +47,8 @@ namespace Prowl.Runtime
 
         public Ray(Vector3 position, Vector3 direction)
         {
-            this.Position = position;
-            this.Direction = direction;
+            this.origin = position;
+            this.direction = direction;
         }
 
         #endregion
@@ -64,13 +64,13 @@ namespace Prowl.Runtime
 
         public bool Equals(Ray other)
         {
-            return this.Position.Equals(other.Position) && this.Direction.Equals(other.Direction);
+            return this.origin.Equals(other.origin) && this.direction.Equals(other.direction);
         }
 
 
         public override int GetHashCode()
         {
-            return Position.GetHashCode() ^ Direction.GetHashCode();
+            return origin.GetHashCode() ^ direction.GetHashCode();
         }
 
         // adapted from http://www.scratchapixel.com/lessons/3d-basic-lessons/lesson-7-intersecting-simple-shapes/ray-box-intersection/
@@ -80,15 +80,15 @@ namespace Prowl.Runtime
 
             double? tMin = null, tMax = null;
 
-            if (Math.Abs(Direction.x) < Epsilon)
+            if (Math.Abs(direction.x) < Epsilon)
             {
-                if (Position.x < box.Min.x || Position.x > box.Max.x)
+                if (origin.x < box.Min.x || origin.x > box.Max.x)
                     return null;
             }
             else
             {
-                tMin = (box.Min.x - Position.x) / Direction.x;
-                tMax = (box.Max.x - Position.x) / Direction.x;
+                tMin = (box.Min.x - origin.x) / direction.x;
+                tMax = (box.Max.x - origin.x) / direction.x;
 
                 if (tMin > tMax)
                 {
@@ -98,15 +98,15 @@ namespace Prowl.Runtime
                 }
             }
 
-            if (Math.Abs(Direction.y) < Epsilon)
+            if (Math.Abs(direction.y) < Epsilon)
             {
-                if (Position.y < box.Min.y || Position.y > box.Max.y)
+                if (origin.y < box.Min.y || origin.y > box.Max.y)
                     return null;
             }
             else
             {
-                var tMinY = (box.Min.y - Position.y) / Direction.y;
-                var tMaxY = (box.Max.y - Position.y) / Direction.y;
+                var tMinY = (box.Min.y - origin.y) / direction.y;
+                var tMaxY = (box.Max.y - origin.y) / direction.y;
 
                 if (tMinY > tMaxY)
                 {
@@ -122,15 +122,15 @@ namespace Prowl.Runtime
                 if (!tMax.HasValue || tMaxY < tMax) tMax = tMaxY;
             }
 
-            if (Math.Abs(Direction.z) < Epsilon)
+            if (Math.Abs(direction.z) < Epsilon)
             {
-                if (Position.z < box.Min.z || Position.z > box.Max.z)
+                if (origin.z < box.Min.z || origin.z > box.Max.z)
                     return null;
             }
             else
             {
-                var tMinZ = (box.Min.z - Position.z) / Direction.z;
-                var tMaxZ = (box.Max.z - Position.z) / Direction.z;
+                var tMinZ = (box.Min.z - origin.z) / direction.z;
+                var tMaxZ = (box.Max.z - origin.z) / direction.z;
 
                 if (tMinZ > tMaxZ)
                 {
@@ -172,14 +172,14 @@ namespace Prowl.Runtime
 
         public void Intersects(ref Plane plane, out double? result)
         {
-            var den = Vector3.Dot(Direction, plane.Normal);
+            var den = Vector3.Dot(direction, plane.Normal);
             if (Math.Abs(den) < 0.00001)
             {
                 result = null;
                 return;
             }
 
-            result = (-plane.D - Vector3.Dot(plane.Normal, Position)) / den;
+            result = (-plane.D - Vector3.Dot(plane.Normal, origin)) / den;
 
             if (result < 0.0)
             {
@@ -207,7 +207,7 @@ namespace Prowl.Runtime
 
         public override string ToString()
         {
-            return string.Format("{{Position:{0} Direction:{1}}}", Position.ToString(), Direction.ToString());
+            return string.Format("{{Position:{0} Direction:{1}}}", origin.ToString(), direction.ToString());
         }
 
         #endregion

@@ -1,4 +1,8 @@
 ﻿using Jitter2;
+using Jitter2.Collision.Shapes;
+using Jitter2.Dynamics;
+using Jitter2.LinearMath;
+using Prowl.Runtime.Components;
 using System.Collections.Generic;
 
 namespace Prowl.Runtime
@@ -74,6 +78,37 @@ namespace Prowl.Runtime
             PhysicalSpaces.Clear();
         }
     }
+
+    public class Collision
+    {
+        public Rigidbody body;
+        public GameObject gameObject;
+
+        public Arbiter arbiter;
+
+        // index returns the contact point arbiter.Handle.Data.Contact0, Contact1, Contact2
+        public ContactData.Contact this[int index] {
+            get {
+                return index switch {
+                    0 => arbiter.Handle.Data.Contact0,
+                    1 => arbiter.Handle.Data.Contact1,
+                    2 => arbiter.Handle.Data.Contact2,
+                    3 => arbiter.Handle.Data.Contact3,
+                    _ => throw new System.NotImplementedException(),
+                };
+            }
+        }
+
+        public Collision(Rigidbody from, Arbiter arbiter)
+        {
+            var other = object.ReferenceEquals(arbiter.Body1.Tag, from) ? arbiter.Body2 : arbiter.Body1;
+            this.body = other.Tag as Rigidbody;
+            this.gameObject = this.body.GameObject;
+
+            this.arbiter = arbiter;
+        }
+    }
+
     public class RaycastHit
     {
         public Rigidbody Rigidbody { get; private set; }
