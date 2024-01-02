@@ -385,6 +385,17 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
+        /// Returns the angle in degrees between two rotations.</para>
+        /// </summary>
+        public static double Angle(Quaternion a, Quaternion b) => Mathf.Acos(Mathf.Min(Mathf.Abs(Dot(a, b)), 1.0)) * 2.0 * Mathf.Rad2Deg;
+
+        public static Quaternion RotateTowards(Quaternion from, Quaternion to, float maxDegreesDelta)
+        {
+            double angle = Angle(from, to);
+            return angle == 0.0 ? to : Slerp(from, to, Mathf.Min(1.0, maxDegreesDelta / angle));
+        }
+
+        /// <summary>
         /// Concatenates two Quaternions; the result represents the value1 rotation followed by the value2 rotation.
         /// </summary>
         /// <param name="value1">The first Quaternion rotation in the series.</param>
