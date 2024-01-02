@@ -84,7 +84,13 @@ public static class SceneManager
                     try
                     {
 #warning TODO: Awake should be called immediately after the creation of the component/gameobject not in the first frame
-                        comp.HasStarted |= comp.Internal_Awake();
+                        try {
+                            comp.HasStarted |= comp.Internal_Awake();
+                        }
+                        catch (Exception e) {
+                            Debug.LogError($"Error in {comp.GetType().Name}.Awake of {_gameObjects[i].Name}: {e.Message} \n StackTrace: {e.StackTrace}");
+                            comp.HasStarted = true; // An error counts as started
+                        }
                         if(comp.HasStarted)
                             comp.Internal_Start();
                     }
