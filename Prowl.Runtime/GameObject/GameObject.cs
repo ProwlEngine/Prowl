@@ -432,9 +432,8 @@ public class GameObject : EngineObject, ISerializable
     {
         if (hideFlags.HasFlag(HideFlags.NoGizmos)) return;
 
-        if (isSelected) {
-            Transform myTransform = GetComponent<Transform>();
-            if (myTransform == null) return;
+        Transform myTransform = GetComponent<Transform>();
+        if (isSelected && myTransform != null) {
             System.Numerics.Matrix4x4 goMatrix;
 
             if (SceneManager.GizmosSpace == ImGuizmoMode.Local)
