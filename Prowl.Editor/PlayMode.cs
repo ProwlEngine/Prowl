@@ -8,6 +8,7 @@ public static class PlayMode {
 
     public static Mode Current { get; private set; }
     private static Tag PreviousScene;
+    private static Guid PreviousSceneID;
 
     public static void Start() {
 
@@ -15,6 +16,7 @@ public static class PlayMode {
         // exclude objects with the DontSave hideFlag
         GameObject[] GameObjects = SceneManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
         PreviousScene = TagSerializer.Serialize(GameObjects);
+        PreviousSceneID = SceneManager.MainScene.AssetID;
 
         Current = Mode.Playing;
         MonoBehaviour.PauseLogic = false;
@@ -53,6 +55,7 @@ public static class PlayMode {
         ////GameObjectManager.LoadScene(s, false);
         SceneManager.Clear();
         var deserialized = TagSerializer.Deserialize<GameObject[]>(PreviousScene);
+        SceneManager.MainScene.AssetID = PreviousSceneID;
 
         ImGuiNotify.InsertNotification(new ImGuiToast()
         {
