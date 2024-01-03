@@ -16,6 +16,9 @@ public static class SceneManager
 
     public static bool AllowGameObjectConstruction = true;
 
+    public static event Action PreFixedUpdate;
+    public static event Action PostFixedUpdate;
+
     // Not a fan of these being here, their for the Editor but since they are used in Runtime and Runtime doesnt reference the Editor
     // It needs to be here :( need a better solution
     public static ImGuizmoOperation GizmosOperation = ImGuizmoOperation.Translate;
@@ -140,6 +143,7 @@ public static class SceneManager
 
     public static void PhysicsUpdate()
     {
+        PreFixedUpdate?.Invoke();
         for (int i = 0; i < _gameObjects.Count; i++)
             foreach (var comp in _gameObjects[i].GetComponents<MonoBehaviour>())
             {
@@ -152,6 +156,7 @@ public static class SceneManager
                     Debug.LogError($"Error in {comp.GetType().Name}.FixedUpdate of {_gameObjects[i].Name}: {e.Message} \n StackTrace: {e.StackTrace}");
                 }
             }
+        PostFixedUpdate?.Invoke();
     }
 
     public static void Draw() {

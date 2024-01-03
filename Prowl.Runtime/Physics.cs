@@ -3,6 +3,7 @@ using Jitter2.Collision.Shapes;
 using Jitter2.Dynamics;
 using Jitter2.LinearMath;
 using Prowl.Runtime.Components;
+using Prowl.Runtime.SceneManagement;
 using System.Collections.Generic;
 
 namespace Prowl.Runtime
@@ -28,6 +29,7 @@ namespace Prowl.Runtime
             timer += delta;
             while (timer >= Time.fixedDeltaTime) {
                 world.Step((float)Time.fixedDeltaTime);
+                SceneManager.PhysicsUpdate();
                 timer -= Time.fixedDeltaTime;
             }
         }
@@ -59,7 +61,7 @@ namespace Prowl.Runtime
             }
         }
 
-        public static RaycastHit Raycast(Ray ray, double maxDistance = 10.0, World.RaycastFilterPre? preFilter = null, World.RaycastFilterPost? postFilter = null)
+        public static RaycastHit? Raycast(Ray ray, double maxDistance = 10.0, World.RaycastFilterPre? preFilter = null, World.RaycastFilterPost? postFilter = null)
         {
             ray.direction *= maxDistance;
             if (DefaultSpace.world.Raycast(ray.origin, ray.direction, preFilter, postFilter, out Shape hitShape, out JVector hitNormal, out float hitFraction)) {
