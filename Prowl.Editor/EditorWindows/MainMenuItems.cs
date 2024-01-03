@@ -72,7 +72,7 @@ namespace Prowl.Editor.EditorWindows
             AssetDatabase.Remove(relativeAssetPath);
             var file = AssetDatabase.RelativeToFile(relativeAssetPath);
 
-            var allGameObjects = SceneManager.AllGameObjects.ToArray();
+            var allGameObjects = SceneManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
             scene.GameObjects = (ListTag)TagSerializer.Serialize(allGameObjects);
             StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(scene), file);
             var r = AssetDatabase.FileToRelative(file);
@@ -103,7 +103,7 @@ namespace Prowl.Editor.EditorWindows
                     if (!file.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase))
                         file = new FileInfo(file.FullName + ".scene");
 
-                    var allGameObjects = SceneManager.AllGameObjects.ToArray();
+                    var allGameObjects = SceneManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
                     Scene scene = new Scene();
                     scene.GameObjects = (ListTag)TagSerializer.Serialize(allGameObjects);
                     var tag = (CompoundTag)TagSerializer.Serialize(scene);
