@@ -430,12 +430,11 @@ public class GameObject : EngineObject, ISerializable
 
     public void DrawGizmos(System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection, bool isSelected)
     {
-        Transform myTransform = GetComponent<Transform>();
+        if (hideFlags.HasFlag(HideFlags.NoGizmos)) return;
 
-        if (hideFlags.HasFlag(HideFlags.NoGizmos) || myTransform == null) return;
-
-        if (isSelected)
-        {
+        if (isSelected) {
+            Transform myTransform = GetComponent<Transform>();
+            if (myTransform == null) return;
             System.Numerics.Matrix4x4 goMatrix;
 
             if (SceneManager.GizmosSpace == ImGuizmoMode.Local)
