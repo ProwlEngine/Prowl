@@ -103,7 +103,7 @@ public class ViewportWindow : EditorWindow
             var instanceID = Cam.gBuffer.GetObjectIDAt(mouseUV);
             // find InstanceID Object
             var go = EngineObject.FindObjectByID<GameObject>(instanceID);
-            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+            HierarchyWindow.SelectHandler.Select(new WeakReference(go));
         }
 
         ImGuizmo.SetDrawlist();
