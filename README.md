@@ -39,7 +39,7 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - Dear ImGUI Editor, including ImGuizmo, ImPlot, ImNodes
     - Editor with support for Editor Scripts and Custom Editors
     - Physics ([Jitter Physics 2](https://github.com/notgiven688/jitterphysics2))
-      - Colliders: Box, Sphere, Capsule, Cylinder, Mesh Collider
+      - Colliders: Box, Sphere, Capsule, Cylinder, Mesh Collider, Wheel Collider
     - Less than 10k lines of Executable Code for both the Editor and Engine combined!
     - Unity-like Coroutines
     - Playtest directly in Editor
