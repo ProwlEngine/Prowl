@@ -2,7 +2,6 @@
 using Jitter2.Collision.Shapes;
 using Jitter2.Dynamics;
 using Jitter2.LinearMath;
-using Prowl.Runtime.Components;
 using Prowl.Runtime.SceneManagement;
 using System.Collections.Generic;
 
@@ -14,7 +13,7 @@ namespace Prowl.Runtime
 
         private static double timer = 0;
 
-        public PhysicalSpace(int iterations = 1, int substeps = 8)
+        public PhysicalSpace(int iterations = 2, int substeps = 8)
         {
             world = new();
             world.SolverIterations = iterations;
