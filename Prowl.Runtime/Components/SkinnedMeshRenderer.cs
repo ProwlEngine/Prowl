@@ -55,7 +55,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         if (Mesh.IsAvailable && Material.IsAvailable)
         {
             Material.Res!.EnableKeyword("SKINNED");
-            Material.Res!.SetInt("ObjectID", InstanceID);
+            Material.Res!.SetInt("ObjectID", GameObject.InstanceID);
             //Material.Res!.SetMatrices("bindposes", GetBoneMatrices());
             for (int i = 0; i < Material.Res!.PassCount; i++)
             {

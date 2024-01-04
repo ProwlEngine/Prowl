@@ -1,4 +1,6 @@
 ﻿using Silk.NET.OpenGL;
+using System.Reflection.Metadata;
+using System;
 
 namespace Prowl.Runtime;
 
@@ -50,6 +52,18 @@ public class GBuffer
     {
         Graphics.GL.Enable(GLEnum.Blend);
         Graphics.GL.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, 0);
+    }
+
+    public int GetObjectIDAt(Vector2 uv)
+    {
+        int x = (int)(uv.x * Width);
+        int y = (int)(uv.y * Height);
+        Graphics.GL.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, fbo);
+        Graphics.GL.ReadBuffer(ReadBufferMode.ColorAttachment5);
+        float result = Graphics.GL.ReadPixels<float>(x, Height - y, 1, 1, PixelFormat.Red, PixelType.Float);
+        Graphics.CheckGL();
+        Console.WriteLine(result);
+        return (int)result;
     }
 
     public void UnloadGBuffer()

@@ -115,7 +115,6 @@ namespace Prowl.Runtime
         {
             if (data.Length < Width * Height)
                 throw new ArgumentException("Insufficient space to store the requested pixel data", nameof(data));
-
             Graphics.GL.BindTexture((TextureTarget)Type, Handle);
             fixed (void* ptr = data.Span)
                 Graphics.GL.GetTexImage((TextureTarget)Type, 0, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);

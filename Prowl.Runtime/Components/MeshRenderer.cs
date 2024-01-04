@@ -40,7 +40,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable
 
         if (Mesh.IsAvailable && material != null) {
             material.SetColor("_MainColor", mainColor);
-            material.SetInt("ObjectID", InstanceID);
+            material.SetInt("ObjectID", GameObject.InstanceID);
             for (int i = 0; i < material.PassCount; i++) {
 
                 material.SetPass(i);
