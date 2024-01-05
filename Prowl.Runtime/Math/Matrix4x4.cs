@@ -2,6 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using Silk.NET.Input;
+using Silk.NET.Maths;
+using Silk.NET.SDL;
 using System;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -84,6 +87,22 @@ namespace Prowl.Runtime
         public double M44;
         #endregion Public Fields
 
+        public Vector4 M1 {
+            get => new Vector4(M11, M12, M13, M14); set { M11 = value.x; M12 = value.y; M13 = value.z; M14 = value.w; }
+        }
+
+        public Vector4 M2 {
+            get => new Vector4(M21, M22, M23, M24); set { M21 = value.x; M22 = value.y; M23 = value.z; M24 = value.w; }
+        }
+
+        public Vector4 M3 {
+            get => new Vector4(M31, M32, M33, M34); set { M31 = value.x; M32 = value.y; M33 = value.z; M34 = value.w; }
+        }
+
+        public Vector4 M4 {
+            get => new Vector4(M41, M42, M43, M44); set { M41 = value.x; M42 = value.y; M43 = value.z; M44 = value.w; }
+        }
+
         private static readonly Matrix4x4 _identity = new Matrix4x4
         (
             1, 0, 0, 0,
@@ -95,37 +114,23 @@ namespace Prowl.Runtime
         /// <summary>
         /// Returns the multiplicative identity matrix.
         /// </summary>
-        public static Matrix4x4 Identity
-        {
-            get { return _identity; }
-        }
+        public static Matrix4x4 Identity => _identity;
 
         /// <summary>
         /// Returns whether the matrix is the identity matrix.
         /// </summary>
-        public bool IsIdentity
-        {
-            get
-            {
-                return M11 == 1 && M22 == 1 && M33 == 1 && M44 == 1 && // Check diagonal element first for early out.
+        public bool IsIdentity => M11 == 1 && M22 == 1 && M33 == 1 && M44 == 1 && // Check diagonal element first for early out.
                                     M12 == 0 && M13 == 0 && M14 == 0 &&
                        M21 == 0 && M23 == 0 && M24 == 0 &&
                        M31 == 0 && M32 == 0 && M34 == 0 &&
                        M41 == 0 && M42 == 0 && M43 == 0;
-            }
-        }
 
         /// <summary>
         /// Gets or sets the translation component of this matrix.
         /// </summary>
-        public Vector3 Translation
-        {
-            get
-            {
-                return new Vector3(M41, M42, M43);
-            }
-            set
-            {
+        public Vector3 Translation {
+            get => new Vector3(M41, M42, M43);
+            set {
                 M41 = value.x;
                 M42 = value.y;
                 M43 = value.z;
@@ -140,25 +145,10 @@ namespace Prowl.Runtime
                          double m31, double m32, double m33, double m34,
                          double m41, double m42, double m43, double m44)
         {
-            this.M11 = m11;
-            this.M12 = m12;
-            this.M13 = m13;
-            this.M14 = m14;
-
-            this.M21 = m21;
-            this.M22 = m22;
-            this.M23 = m23;
-            this.M24 = m24;
-
-            this.M31 = m31;
-            this.M32 = m32;
-            this.M33 = m33;
-            this.M34 = m34;
-
-            this.M41 = m41;
-            this.M42 = m42;
-            this.M43 = m43;
-            this.M44 = m44;
+            this.M1 = new(m11, m12, m13, m14);
+            this.M2 = new(m21, m22, m23, m24);
+            this.M3 = new(m31, m32, m33, m34);
+            this.M4 = new(m41, m42, m43, m44);
         }
 
         public System.Numerics.Matrix4x4 ToFloat()
@@ -215,29 +205,13 @@ namespace Prowl.Runtime
             }
 
             Vector3 xaxis = Vector3.Normalize(Vector3.Cross(cameraUpVector, zaxis));
-
             Vector3 yaxis = Vector3.Cross(zaxis, xaxis);
 
-            Matrix4x4 result;
-
-            result.M11 = xaxis.x;
-            result.M12 = xaxis.y;
-            result.M13 = xaxis.z;
-            result.M14 = 0.0;
-            result.M21 = yaxis.x;
-            result.M22 = yaxis.y;
-            result.M23 = yaxis.z;
-            result.M24 = 0.0;
-            result.M31 = zaxis.x;
-            result.M32 = zaxis.y;
-            result.M33 = zaxis.z;
-            result.M34 = 0.0;
-
-            result.M41 = objectPosition.x;
-            result.M42 = objectPosition.y;
-            result.M43 = objectPosition.z;
-            result.M44 = 1.0;
-
+            Matrix4x4 result = new();
+            result.M1 = new(xaxis.x, xaxis.y, xaxis.z, 0.0);
+            result.M2 = new(yaxis.x, yaxis.y, yaxis.z, 0.0);
+            result.M3 = new(zaxis.x, zaxis.y, zaxis.z, 0.0);
+            result.M4 = new(objectPosition.x, objectPosition.y, objectPosition.z, 1.0);
             return result;
         }
 
@@ -300,25 +274,11 @@ namespace Prowl.Runtime
                 zaxis = Vector3.Normalize(Vector3.Cross(xaxis, yaxis));
             }
 
-            Matrix4x4 result;
-
-            result.M11 = xaxis.x;
-            result.M12 = xaxis.y;
-            result.M13 = xaxis.z;
-            result.M14 = 0.0;
-            result.M21 = yaxis.x;
-            result.M22 = yaxis.y;
-            result.M23 = yaxis.z;
-            result.M24 = 0.0;
-            result.M31 = zaxis.x;
-            result.M32 = zaxis.y;
-            result.M33 = zaxis.z;
-            result.M34 = 0.0;
-
-            result.M41 = objectPosition.x;
-            result.M42 = objectPosition.y;
-            result.M43 = objectPosition.z;
-            result.M44 = 1.0;
+            Matrix4x4 result = new();
+            result.M1 = new(xaxis.x, xaxis.y, xaxis.z, 0.0);
+            result.M2 = new(yaxis.x, yaxis.y, yaxis.z, 0.0);
+            result.M3 = new(zaxis.x, zaxis.y, zaxis.z, 0.0);
+            result.M4 = new(objectPosition.x, objectPosition.y, objectPosition.z, 1.0);
 
             return result;
         }
@@ -330,26 +290,11 @@ namespace Prowl.Runtime
         /// <returns>The translation matrix.</returns>
         public static Matrix4x4 CreateTranslation(Vector3 position)
         {
-            Matrix4x4 result;
-
-            result.M11 = 1.0;
-            result.M12 = 0.0;
-            result.M13 = 0.0;
-            result.M14 = 0.0;
-            result.M21 = 0.0;
-            result.M22 = 1.0;
-            result.M23 = 0.0;
-            result.M24 = 0.0;
-            result.M31 = 0.0;
-            result.M32 = 0.0;
-            result.M33 = 1.0;
-            result.M34 = 0.0;
-
-            result.M41 = position.x;
-            result.M42 = position.y;
-            result.M43 = position.z;
-            result.M44 = 1.0;
-
+            Matrix4x4 result = new();
+            result.M1 = new(1f, 0, 0, 0);
+            result.M2 = new(0, 1f, 0, 0);
+            result.M3 = new(0, 0, 1f, 0);
+            result.M4 = new(position.x, position.y, position.z, 1f);
             return result;
         }
 
@@ -362,25 +307,12 @@ namespace Prowl.Runtime
         /// <returns>The translation matrix.</returns>
         public static Matrix4x4 CreateTranslation(double xPosition, double yPosition, double zPosition)
         {
-            Matrix4x4 result;
+            Matrix4x4 result = new();
 
-            result.M11 = 1.0;
-            result.M12 = 0.0;
-            result.M13 = 0.0;
-            result.M14 = 0.0;
-            result.M21 = 0.0;
-            result.M22 = 1.0;
-            result.M23 = 0.0;
-            result.M24 = 0.0;
-            result.M31 = 0.0;
-            result.M32 = 0.0;
-            result.M33 = 1.0;
-            result.M34 = 0.0;
-
-            result.M41 = xPosition;
-            result.M42 = yPosition;
-            result.M43 = zPosition;
-            result.M44 = 1.0;
+            result.M1 = new(1f, 0, 0, 0);
+            result.M2 = new(0, 1f, 0, 0);
+            result.M3 = new(0, 0, 1f, 0);
+            result.M4 = new(xPosition, yPosition, zPosition, 1f);
 
             return result;
         }
@@ -394,25 +326,11 @@ namespace Prowl.Runtime
         /// <returns>The scaling matrix.</returns>
         public static Matrix4x4 CreateScale(double xScale, double yScale, double zScale)
         {
-            Matrix4x4 result;
-
-            result.M11 = xScale;
-            result.M12 = 0.0;
-            result.M13 = 0.0;
-            result.M14 = 0.0;
-            result.M21 = 0.0;
-            result.M22 = yScale;
-            result.M23 = 0.0;
-            result.M24 = 0.0;
-            result.M31 = 0.0;
-            result.M32 = 0.0;
-            result.M33 = zScale;
-            result.M34 = 0.0;
-            result.M41 = 0.0;
-            result.M42 = 0.0;
-            result.M43 = 0.0;
-            result.M44 = 1.0;
-
+            Matrix4x4 result = new();
+            result.M1 = new(xScale, 0, 0, 0);
+            result.M2 = new(0, yScale, 0, 0);
+            result.M3 = new(0, 0, zScale, 0);
+            result.M4 = new(0, 0, 0, 1);
             return result;
         }
 
@@ -426,28 +344,16 @@ namespace Prowl.Runtime
         /// <returns>The scaling matrix.</returns>
         public static Matrix4x4 CreateScale(double xScale, double yScale, double zScale, Vector3 centerPoint)
         {
-            Matrix4x4 result;
+            Matrix4x4 result = new();
 
             double tx = centerPoint.x * (1 - xScale);
             double ty = centerPoint.y * (1 - yScale);
             double tz = centerPoint.z * (1 - zScale);
 
-            result.M11 = xScale;
-            result.M12 = 0.0;
-            result.M13 = 0.0;
-            result.M14 = 0.0;
-            result.M21 = 0.0;
-            result.M22 = yScale;
-            result.M23 = 0.0;
-            result.M24 = 0.0;
-            result.M31 = 0.0;
-            result.M32 = 0.0;
-            result.M33 = zScale;
-            result.M34 = 0.0;
-            result.M41 = tx;
-            result.M42 = ty;
-            result.M43 = tz;
-            result.M44 = 1.0;
+            result.M1 = new(xScale, 0, 0, 0);
+            result.M2 = new(0, yScale, 0, 0);
+            result.M3 = new(0, 0, zScale, 0);
+            result.M4 = new(tx, ty, tz, 1);
 
             return result;
         }
@@ -459,25 +365,11 @@ namespace Prowl.Runtime
         /// <returns>The scaling matrix.</returns>
         public static Matrix4x4 CreateScale(Vector3 scales)
         {
-            Matrix4x4 result;
-
-            result.M11 = scales.x;
-            result.M12 = 0.0;
-            result.M13 = 0.0;
-            result.M14 = 0.0;
-            result.M21 = 0.0;
-            result.M22 = scales.y;
-            result.M23 = 0.0;
-            result.M24 = 0.0;
-            result.M31 = 0.0;
-            result.M32 = 0.0;
-            result.M33 = scales.z;
-            result.M34 = 0.0;
-            result.M41 = 0.0;
-            result.M42 = 0.0;
-            result.M43 = 0.0;
-            result.M44 = 1.0;
-
+            Matrix4x4 result = new();
+            result.M1 = new(scales.x, 0, 0, 0);
+            result.M2 = new(0, scales.y, 0, 0);
+            result.M3 = new(0, 0, scales.z, 0);
+            result.M4 = new(0, 0, 0, 1);
             return result;
         }
 
@@ -489,28 +381,16 @@ namespace Prowl.Runtime
         /// <returns>The scaling matrix.</returns>
         public static Matrix4x4 CreateScale(Vector3 scales, Vector3 centerPoint)
         {
-            Matrix4x4 result;
+            Matrix4x4 result = new();
 
             double tx = centerPoint.x * (1 - scales.x);
             double ty = centerPoint.y * (1 - scales.y);
             double tz = centerPoint.z * (1 - scales.z);
 
-            result.M11 = scales.x;
-            result.M12 = 0.0;
-            result.M13 = 0.0;
-            result.M14 = 0.0;
-            result.M21 = 0.0;
-            result.M22 = scales.y;
-            result.M23 = 0.0;
-            result.M24 = 0.0;
-            result.M31 = 0.0;
-            result.M32 = 0.0;
-            result.M33 = scales.z;
-            result.M34 = 0.0;
-            result.M41 = tx;
-            result.M42 = ty;
-            result.M43 = tz;
-            result.M44 = 1.0;
+            result.M1 = new(scales.x, 0, 0, 0);
+            result.M2 = new(0, scales.y, 0, 0);
+            result.M3 = new(0, 0, scales.z, 0);
+            result.M4 = new(tx, ty, tz, 1);
 
             return result;
         }
@@ -522,24 +402,11 @@ namespace Prowl.Runtime
         /// <returns>The scaling matrix.</returns>
         public static Matrix4x4 CreateScale(double scale)
         {
-            Matrix4x4 result;
-
-            result.M11 = scale;
-            result.M12 = 0.0;
-            result.M13 = 0.0;
-            result.M14 = 0.0;
-            result.M21 = 0.0;
-            result.M22 = scale;
-            result.M23 = 0.0;
-            result.M24 = 0.0;
-            result.M31 = 0.0;
-            result.M32 = 0.0;
-            result.M33 = scale;
-            result.M34 = 0.0;
-            result.M41 = 0.0;
-            result.M42 = 0.0;
-            result.M43 = 0.0;
-            result.M44 = 1.0;
+            Matrix4x4 result = new();
+            result.M1 = new(scale, 0, 0, 0);
+            result.M2 = new(0, scale, 0, 0);
+            result.M3 = new(0, 0, scale, 0);
+            result.M4 = new(0, 0, 0, 1);
 
             return result;
         }
@@ -552,29 +419,14 @@ namespace Prowl.Runtime
         /// <returns>The scaling matrix.</returns>
         public static Matrix4x4 CreateScale(double scale, Vector3 centerPoint)
         {
-            Matrix4x4 result;
-
+            Matrix4x4 result = new();
             double tx = centerPoint.x * (1 - scale);
             double ty = centerPoint.y * (1 - scale);
             double tz = centerPoint.z * (1 - scale);
-
-            result.M11 = scale;
-            result.M12 = 0.0;
-            result.M13 = 0.0;
-            result.M14 = 0.0;
-            result.M21 = 0.0;
-            result.M22 = scale;
-            result.M23 = 0.0;
-            result.M24 = 0.0;
-            result.M31 = 0.0;
-            result.M32 = 0.0;
-            result.M33 = scale;
-            result.M34 = 0.0;
-            result.M41 = tx;
-            result.M42 = ty;
-            result.M43 = tz;
-            result.M44 = 1.0;
-
+            result.M1 = new(scale, 0, 0, 0);
+            result.M2 = new(0, scale, 0, 0);
+            result.M3 = new(0, 0, scale, 0);
+            result.M4 = new(tx, ty, tz, 1);
             return result;
         }
 
@@ -585,7 +437,7 @@ namespace Prowl.Runtime
         /// <returns>The rotation matrix.</returns>
         public static Matrix4x4 CreateRotationX(double radians)
         {
-            Matrix4x4 result;
+            Matrix4x4 result = new();
 
             double c = (double)Math.Cos(radians);
             double s = (double)Math.Sin(radians);
@@ -594,22 +446,10 @@ namespace Prowl.Runtime
             // [  0  c  s  0 ]
             // [  0 -s  c  0 ]
             // [  0  0  0  1 ]
-            result.M11 = 1.0;
-            result.M12 = 0.0;
-            result.M13 = 0.0;
-            result.M14 = 0.0;
-            result.M21 = 0.0;
-            result.M22 = c;
-            result.M23 = s;
-            result.M24 = 0.0;
-            result.M31 = 0.0;
-            result.M32 = -s;
-            result.M33 = c;
-            result.M34 = 0.0;
-            result.M41 = 0.0;
-            result.M42 = 0.0;
-            result.M43 = 0.0;
-            result.M44 = 1.0;
+            result.M1 = new Vector4(1.0, 0.0, 0.0, 0.0);
+            result.M2 = new Vector4(0.0, c, s, 0.0);
+            result.M3 = new Vector4(0.0, -s, c, 0.0);
+            result.M4 = new Vector4(0.0, 0.0, 0.0, 1.0);
 
             return result;
         }
@@ -622,7 +462,7 @@ namespace Prowl.Runtime
         /// <returns>The rotation matrix.</returns>
         public static Matrix4x4 CreateRotationX(double radians, Vector3 centerPoint)
         {
-            Matrix4x4 result;
+            Matrix4x4 result = new();
 
             double c = (double)Math.Cos(radians);
             double s = (double)Math.Sin(radians);
@@ -634,22 +474,10 @@ namespace Prowl.Runtime
             // [  0  c  s  0 ]
             // [  0 -s  c  0 ]
             // [  0  y  z  1 ]
-            result.M11 = 1.0;
-            result.M12 = 0.0;
-            result.M13 = 0.0;
-            result.M14 = 0.0;
-            result.M21 = 0.0;
-            result.M22 = c;
-            result.M23 = s;
-            result.M24 = 0.0;
-            result.M31 = 0.0;
-            result.M32 = -s;
-            result.M33 = c;
-            result.M34 = 0.0;
-            result.M41 = 0.0;
-            result.M42 = y;
-            result.M43 = z;
-            result.M44 = 1.0;
+            result.M1 = new Vector4(1.0, 0.0, 0.0, 0.0);
+            result.M2 = new Vector4(0.0, c, s, 0.0);
+            result.M3 = new Vector4(0.0, -s, c, 0.0);
+            result.M4 = new Vector4(0.0, y, z, 1.0);
 
             return result;
         }
@@ -661,7 +489,7 @@ namespace Prowl.Runtime
         /// <returns>The rotation matrix.</returns>
         public static Matrix4x4 CreateRotationY(double radians)
         {
-            Matrix4x4 result;
+            Matrix4x4 result = new();
 
             double c = (double)Math.Cos(radians);
             double s = (double)Math.Sin(radians);
@@ -670,22 +498,10 @@ namespace Prowl.Runtime
             // [  0  1  0  0 ]
             // [  s  0  c  0 ]
             // [  0  0  0  1 ]
-            result.M11 = c;
-            result.M12 = 0.0;
-            result.M13 = -s;
-            result.M14 = 0.0;
-            result.M21 = 0.0;
-            result.M22 = 1.0;
-            result.M23 = 0.0;
-            result.M24 = 0.0;
-            result.M31 = s;
-            result.M32 = 0.0;
-            result.M33 = c;
-            result.M34 = 0.0;
-            result.M41 = 0.0;
-            result.M42 = 0.0;
-            result.M43 = 0.0;
-            result.M44 = 1.0;
+            result.M1 = new Vector4(c, 0.0, -s, 0.0);
+            result.M2 = new Vector4(0.0, 1.0, 0.0, 0.0);
+            result.M3 = new Vector4(s, 0.0, c, 0.0);
+            result.M4 = new Vector4(0.0, 0.0, 0.0, 1.0);
 
             return result;
         }
@@ -698,7 +514,7 @@ namespace Prowl.Runtime
         /// <returns>The rotation matrix.</returns>
         public static Matrix4x4 CreateRotationY(double radians, Vector3 centerPoint)
         {
-            Matrix4x4 result;
+            Matrix4x4 result = new();
 
             double c = (double)Math.Cos(radians);
             double s = (double)Math.Sin(radians);
@@ -710,22 +526,10 @@ namespace Prowl.Runtime
             // [  0  1  0  0 ]
             // [  s  0  c  0 ]
             // [  x  0  z  1 ]
-            result.M11 = c;
-            result.M12 = 0.0;
-            result.M13 = -s;
-            result.M14 = 0.0;
-            result.M21 = 0.0;
-            result.M22 = 1.0;
-            result.M23 = 0.0;
-            result.M24 = 0.0;
-            result.M31 = s;
-            result.M32 = 0.0;
-            result.M33 = c;
-            result.M34 = 0.0;
-            result.M41 = x;
-            result.M42 = 0.0;
-            result.M43 = z;
-            result.M44 = 1.0;
+            result.M1 = new Vector4(c, 0.0, -s, 0.0);
+            result.M2 = new Vector4(0.0, 1.0, 0.0, 0.0);
+            result.M3 = new Vector4(s, 0.0, c, 0.0);
+            result.M4 = new Vector4(x, 0.0, z, 1.0);
 
             return result;
         }
@@ -737,7 +541,7 @@ namespace Prowl.Runtime
         /// <returns>The rotation matrix.</returns>
         public static Matrix4x4 CreateRotationZ(double radians)
         {
-            Matrix4x4 result;
+            Matrix4x4 result = new();
 
             double c = (double)Math.Cos(radians);
             double s = (double)Math.Sin(radians);
@@ -746,22 +550,10 @@ namespace Prowl.Runtime
             // [ -s  c  0  0 ]
             // [  0  0  1  0 ]
             // [  0  0  0  1 ]
-            result.M11 = c;
-            result.M12 = s;
-            result.M13 = 0.0;
-            result.M14 = 0.0;
-            result.M21 = -s;
-            result.M22 = c;
-            result.M23 = 0.0;
-            result.M24 = 0.0;
-            result.M31 = 0.0;
-            result.M32 = 0.0;
-            result.M33 = 1.0;
-            result.M34 = 0.0;
-            result.M41 = 0.0;
-            result.M42 = 0.0;
-            result.M43 = 0.0;
-            result.M44 = 1.0;
+            result.M1 = new Vector4(c, s, 0.0, 0.0);
+            result.M2 = new Vector4(-s, c, 0.0, 0.0);
+            result.M3 = new Vector4(0.0, 0.0, 1.0, 0.0);
+            result.M4 = new Vector4(0.0, 0.0, 0.0, 1.0);
 
             return result;
         }
@@ -774,7 +566,7 @@ namespace Prowl.Runtime
         /// <returns>The rotation matrix.</returns>
         public static Matrix4x4 CreateRotationZ(double radians, Vector3 centerPoint)
         {
-            Matrix4x4 result;
+            Matrix4x4 result = new();
 
             double c = (double)Math.Cos(radians);
             double s = (double)Math.Sin(radians);
@@ -786,22 +578,10 @@ namespace Prowl.Runtime
             // [ -s  c  0  0 ]
             // [  0  0  1  0 ]
             // [  x  y  0  1 ]
-            result.M11 = c;
-            result.M12 = s;
-            result.M13 = 0.0;
-            result.M14 = 0.0;
-            result.M21 = -s;
-            result.M22 = c;
-            result.M23 = 0.0;
-            result.M24 = 0.0;
-            result.M31 = 0.0;
-            result.M32 = 0.0;
-            result.M33 = 1.0;
-            result.M34 = 0.0;
-            result.M41 = x;
-            result.M42 = y;
-            result.M43 = 0.0;
-            result.M44 = 1.0;
+            result.M1 = new Vector4(c, s, 0.0, 0.0);
+            result.M2 = new Vector4(-s, c, 0.0, 0.0);
+            result.M3 = new Vector4(0.0, 0.0, 1.0, 0.0);
+            result.M4 = new Vector4(x, y, 0.0, 1.0);
 
             return result;
         }
@@ -844,7 +624,7 @@ namespace Prowl.Runtime
             double xx = x * x, yy = y * y, zz = z * z;
             double xy = x * y, xz = x * z, yz = y * z;
 
-            Matrix4x4 result;
+            Matrix4x4 result = new();
 
             result.M11 = xx + ca * (1.0 - xx);
             result.M12 = xy - ca * xy + sa * z;
@@ -858,10 +638,8 @@ namespace Prowl.Runtime
             result.M32 = yz - ca * yz - sa * x;
             result.M33 = zz + ca * (1.0 - zz);
             result.M34 = 0.0;
-            result.M41 = 0.0;
-            result.M42 = 0.0;
-            result.M43 = 0.0;
-            result.M44 = 1.0;
+
+            result.M4 = new Vector4(0.0, 0.0, 0.0, 1.0);
 
             return result;
         }
@@ -1054,22 +832,11 @@ namespace Prowl.Runtime
             Vector3 axisY = Vector3.Cross(axisZ, axisX);
             Vector3 negativeCameraPosition = -cameraPosition;
 
-            Matrix4x4 result;
+            Matrix4x4 result = new();
 
-            result.M11 = axisX.x;
-            result.M12 = axisY.x;
-            result.M13 = axisZ.x;
-            result.M14 = 0.0;
-
-            result.M21 = axisX.y;
-            result.M22 = axisY.y;
-            result.M23 = axisZ.y;
-            result.M24 = 0.0;
-
-            result.M31 = axisX.z;
-            result.M32 = axisY.z;
-            result.M33 = axisZ.z;
-            result.M34 = 0.0;
+            result.M1 = new Vector4(axisX.x, axisY.x, axisZ.x, 0.0);
+            result.M2 = new Vector4(axisX.y, axisY.y, axisZ.y, 0.0);
+            result.M3 = new Vector4(axisX.z, axisY.z, axisZ.z, 0.0);
 
             result.M41 = Vector3.Dot(axisX, negativeCameraPosition);
             result.M42 = Vector3.Dot(axisY, negativeCameraPosition);
@@ -1092,20 +859,12 @@ namespace Prowl.Runtime
             Vector3 xaxis = Vector3.Normalize(Vector3.Cross(cameraUpVector, zaxis));
             Vector3 yaxis = Vector3.Cross(zaxis, xaxis);
 
-            Matrix4x4 result;
+            Matrix4x4 result = new();
 
-            result.M11 = xaxis.x;
-            result.M12 = yaxis.x;
-            result.M13 = zaxis.x;
-            result.M14 = 0.0;
-            result.M21 = xaxis.y;
-            result.M22 = yaxis.y;
-            result.M23 = zaxis.y;
-            result.M24 = 0.0;
-            result.M31 = xaxis.z;
-            result.M32 = yaxis.z;
-            result.M33 = zaxis.z;
-            result.M34 = 0.0;
+            result.M1 = new Vector4(xaxis.x, yaxis.x, zaxis.x, 0.0);
+            result.M2 = new Vector4(xaxis.y, yaxis.y, zaxis.y, 0.0);
+            result.M3 = new Vector4(xaxis.z, yaxis.z, zaxis.z, 0.0);
+
             result.M41 = -Vector3.Dot(xaxis, cameraPosition);
             result.M42 = -Vector3.Dot(yaxis, cameraPosition);
             result.M43 = -Vector3.Dot(zaxis, cameraPosition);
@@ -1127,24 +886,12 @@ namespace Prowl.Runtime
             Vector3 xaxis = Vector3.Normalize(Vector3.Cross(up, zaxis));
             Vector3 yaxis = Vector3.Cross(zaxis, xaxis);
 
-            Matrix4x4 result;
+            Matrix4x4 result = new();
 
-            result.M11 = xaxis.x;
-            result.M12 = xaxis.y;
-            result.M13 = xaxis.z;
-            result.M14 = 0.0;
-            result.M21 = yaxis.x;
-            result.M22 = yaxis.y;
-            result.M23 = yaxis.z;
-            result.M24 = 0.0;
-            result.M31 = zaxis.x;
-            result.M32 = zaxis.y;
-            result.M33 = zaxis.z;
-            result.M34 = 0.0;
-            result.M41 = position.x;
-            result.M42 = position.y;
-            result.M43 = position.z;
-            result.M44 = 1.0;
+            result.M1 = new Vector4(xaxis.x, xaxis.y, xaxis.z, 0.0);
+            result.M2 = new Vector4(yaxis.x, yaxis.y, yaxis.z, 0.0);
+            result.M3 = new Vector4(zaxis.x, zaxis.y, zaxis.z, 0.0);
+            result.M4 = new Vector4(position.x, position.y, position.z, 1.0);
 
             return result;
         }
@@ -1156,7 +903,7 @@ namespace Prowl.Runtime
         /// <returns>The rotation matrix.</returns>
         public static Matrix4x4 CreateFromQuaternion(Quaternion quaternion)
         {
-            Matrix4x4 result;
+            Matrix4x4 result = new();
 
             double xx = quaternion.x * quaternion.x;
             double yy = quaternion.y * quaternion.y;
@@ -1181,10 +928,8 @@ namespace Prowl.Runtime
             result.M32 = 2.0 * (yz - wx);
             result.M33 = 1.0 - 2.0 * (yy + xx);
             result.M34 = 0.0;
-            result.M41 = 0.0;
-            result.M42 = 0.0;
-            result.M43 = 0.0;
-            result.M44 = 1.0;
+
+            result.M4 = new Vector4(0.0, 0.0, 0.0, 1.0);
 
             return result;
         }
@@ -1219,7 +964,7 @@ namespace Prowl.Runtime
             double c = -p.Normal.z;
             double d = -p.D;
 
-            Matrix4x4 result;
+            Matrix4x4 result = new();
 
             result.M11 = a * lightDirection.x + dot;
             result.M21 = b * lightDirection.x;
@@ -1236,10 +981,7 @@ namespace Prowl.Runtime
             result.M33 = c * lightDirection.z + dot;
             result.M43 = d * lightDirection.z;
 
-            result.M14 = 0.0;
-            result.M24 = 0.0;
-            result.M34 = 0.0;
-            result.M44 = dot;
+            result.M4 = new Vector4(0.0, 0.0, 0.0, dot);
 
             return result;
         }
@@ -1792,24 +1534,11 @@ namespace Prowl.Runtime
         /// <returns>The transposed matrix.</returns>
         public static Matrix4x4 Transpose(Matrix4x4 matrix)
         {
-            Matrix4x4 result;
-
-            result.M11 = matrix.M11;
-            result.M12 = matrix.M21;
-            result.M13 = matrix.M31;
-            result.M14 = matrix.M41;
-            result.M21 = matrix.M12;
-            result.M22 = matrix.M22;
-            result.M23 = matrix.M32;
-            result.M24 = matrix.M42;
-            result.M31 = matrix.M13;
-            result.M32 = matrix.M23;
-            result.M33 = matrix.M33;
-            result.M34 = matrix.M43;
-            result.M41 = matrix.M14;
-            result.M42 = matrix.M24;
-            result.M43 = matrix.M34;
-            result.M44 = matrix.M44;
+            Matrix4x4 result = new();
+            result.M1 = new Vector4(matrix.M1.x, matrix.M2.x, matrix.M3.x, matrix.M4.x);
+            result.M2 = new Vector4(matrix.M1.y, matrix.M2.y, matrix.M3.y, matrix.M4.y);
+            result.M3 = new Vector4(matrix.M1.z, matrix.M2.z, matrix.M3.z, matrix.M4.z);
+            result.M4 = new Vector4(matrix.M1.w, matrix.M2.w, matrix.M3.w, matrix.M4.w);
 
             return result;
         }
@@ -1859,25 +1588,11 @@ namespace Prowl.Runtime
         /// <returns>The negated matrix.</returns>
         public static Matrix4x4 Negate(Matrix4x4 value)
         {
-            Matrix4x4 result;
-
-            result.M11 = -value.M11;
-            result.M12 = -value.M12;
-            result.M13 = -value.M13;
-            result.M14 = -value.M14;
-            result.M21 = -value.M21;
-            result.M22 = -value.M22;
-            result.M23 = -value.M23;
-            result.M24 = -value.M24;
-            result.M31 = -value.M31;
-            result.M32 = -value.M32;
-            result.M33 = -value.M33;
-            result.M34 = -value.M34;
-            result.M41 = -value.M41;
-            result.M42 = -value.M42;
-            result.M43 = -value.M43;
-            result.M44 = -value.M44;
-
+            Matrix4x4 result = new();
+            result.M1 = -value.M1;
+            result.M2 = -value.M2;
+            result.M3 = -value.M3;
+            result.M4 = -value.M4;
             return result;
         }
 
@@ -1889,26 +1604,11 @@ namespace Prowl.Runtime
         /// <returns>The resulting matrix.</returns>
         public static Matrix4x4 Add(Matrix4x4 value1, Matrix4x4 value2)
         {
-            Matrix4x4 result;
-
-            result.M11 = value1.M11 + value2.M11;
-            result.M12 = value1.M12 + value2.M12;
-            result.M13 = value1.M13 + value2.M13;
-            result.M14 = value1.M14 + value2.M14;
-            result.M21 = value1.M21 + value2.M21;
-            result.M22 = value1.M22 + value2.M22;
-            result.M23 = value1.M23 + value2.M23;
-            result.M24 = value1.M24 + value2.M24;
-            result.M31 = value1.M31 + value2.M31;
-            result.M32 = value1.M32 + value2.M32;
-            result.M33 = value1.M33 + value2.M33;
-            result.M34 = value1.M34 + value2.M34;
-            result.M41 = value1.M41 + value2.M41;
-            result.M42 = value1.M42 + value2.M42;
-            result.M43 = value1.M43 + value2.M43;
-            result.M44 = value1.M44 + value2.M44;
-
-            return result;
+            value1.M1 += value2.M1;
+            value1.M2 += value2.M2;
+            value1.M3 += value2.M3;
+            value1.M4 += value2.M4;
+            return value1;
         }
 
         /// <summary>
@@ -1919,26 +1619,11 @@ namespace Prowl.Runtime
         /// <returns>The result of the subtraction.</returns>
         public static Matrix4x4 Subtract(Matrix4x4 value1, Matrix4x4 value2)
         {
-            Matrix4x4 result;
-
-            result.M11 = value1.M11 - value2.M11;
-            result.M12 = value1.M12 - value2.M12;
-            result.M13 = value1.M13 - value2.M13;
-            result.M14 = value1.M14 - value2.M14;
-            result.M21 = value1.M21 - value2.M21;
-            result.M22 = value1.M22 - value2.M22;
-            result.M23 = value1.M23 - value2.M23;
-            result.M24 = value1.M24 - value2.M24;
-            result.M31 = value1.M31 - value2.M31;
-            result.M32 = value1.M32 - value2.M32;
-            result.M33 = value1.M33 - value2.M33;
-            result.M34 = value1.M34 - value2.M34;
-            result.M41 = value1.M41 - value2.M41;
-            result.M42 = value1.M42 - value2.M42;
-            result.M43 = value1.M43 - value2.M43;
-            result.M44 = value1.M44 - value2.M44;
-
-            return result;
+            value1.M1 -= value2.M1;
+            value1.M2 -= value2.M2;
+            value1.M3 -= value2.M3;
+            value1.M4 -= value2.M4;
+            return value1;
         }
 
         /// <summary>
@@ -1986,26 +1671,11 @@ namespace Prowl.Runtime
         /// <returns>The scaled matrix.</returns>
         public static Matrix4x4 Multiply(Matrix4x4 value1, double value2)
         {
-            Matrix4x4 result;
-
-            result.M11 = value1.M11 * value2;
-            result.M12 = value1.M12 * value2;
-            result.M13 = value1.M13 * value2;
-            result.M14 = value1.M14 * value2;
-            result.M21 = value1.M21 * value2;
-            result.M22 = value1.M22 * value2;
-            result.M23 = value1.M23 * value2;
-            result.M24 = value1.M24 * value2;
-            result.M31 = value1.M31 * value2;
-            result.M32 = value1.M32 * value2;
-            result.M33 = value1.M33 * value2;
-            result.M34 = value1.M34 * value2;
-            result.M41 = value1.M41 * value2;
-            result.M42 = value1.M42 * value2;
-            result.M43 = value1.M43 * value2;
-            result.M44 = value1.M44 * value2;
-
-            return result;
+            value1.M1 *= value2;
+            value1.M2 *= value2;
+            value1.M3 *= value2;
+            value1.M4 *= value2;
+            return value1;
         }
 
         /// <summary>
@@ -2013,29 +1683,7 @@ namespace Prowl.Runtime
         /// </summary>
         /// <param name="value">The source matrix.</param>
         /// <returns>The negated matrix.</returns>
-        public static Matrix4x4 operator -(Matrix4x4 value)
-        {
-            Matrix4x4 m;
-
-            m.M11 = -value.M11;
-            m.M12 = -value.M12;
-            m.M13 = -value.M13;
-            m.M14 = -value.M14;
-            m.M21 = -value.M21;
-            m.M22 = -value.M22;
-            m.M23 = -value.M23;
-            m.M24 = -value.M24;
-            m.M31 = -value.M31;
-            m.M32 = -value.M32;
-            m.M33 = -value.M33;
-            m.M34 = -value.M34;
-            m.M41 = -value.M41;
-            m.M42 = -value.M42;
-            m.M43 = -value.M43;
-            m.M44 = -value.M44;
-
-            return m;
-        }
+        public static Matrix4x4 operator -(Matrix4x4 value) => Negate(value);
 
         /// <summary>
         /// Adds two matrices together.
@@ -2043,29 +1691,7 @@ namespace Prowl.Runtime
         /// <param name="value1">The first source matrix.</param>
         /// <param name="value2">The second source matrix.</param>
         /// <returns>The resulting matrix.</returns>
-        public static Matrix4x4 operator +(Matrix4x4 value1, Matrix4x4 value2)
-        {
-            Matrix4x4 m;
-
-            m.M11 = value1.M11 + value2.M11;
-            m.M12 = value1.M12 + value2.M12;
-            m.M13 = value1.M13 + value2.M13;
-            m.M14 = value1.M14 + value2.M14;
-            m.M21 = value1.M21 + value2.M21;
-            m.M22 = value1.M22 + value2.M22;
-            m.M23 = value1.M23 + value2.M23;
-            m.M24 = value1.M24 + value2.M24;
-            m.M31 = value1.M31 + value2.M31;
-            m.M32 = value1.M32 + value2.M32;
-            m.M33 = value1.M33 + value2.M33;
-            m.M34 = value1.M34 + value2.M34;
-            m.M41 = value1.M41 + value2.M41;
-            m.M42 = value1.M42 + value2.M42;
-            m.M43 = value1.M43 + value2.M43;
-            m.M44 = value1.M44 + value2.M44;
-
-            return m;
-        }
+        public static Matrix4x4 operator +(Matrix4x4 value1, Matrix4x4 value2) => Add(value1, value2);
 
         /// <summary>
         /// Subtracts the second matrix from the first.
@@ -2073,29 +1699,7 @@ namespace Prowl.Runtime
         /// <param name="value1">The first source matrix.</param>
         /// <param name="value2">The second source matrix.</param>
         /// <returns>The result of the subtraction.</returns>
-        public static Matrix4x4 operator -(Matrix4x4 value1, Matrix4x4 value2)
-        {
-            Matrix4x4 m;
-
-            m.M11 = value1.M11 - value2.M11;
-            m.M12 = value1.M12 - value2.M12;
-            m.M13 = value1.M13 - value2.M13;
-            m.M14 = value1.M14 - value2.M14;
-            m.M21 = value1.M21 - value2.M21;
-            m.M22 = value1.M22 - value2.M22;
-            m.M23 = value1.M23 - value2.M23;
-            m.M24 = value1.M24 - value2.M24;
-            m.M31 = value1.M31 - value2.M31;
-            m.M32 = value1.M32 - value2.M32;
-            m.M33 = value1.M33 - value2.M33;
-            m.M34 = value1.M34 - value2.M34;
-            m.M41 = value1.M41 - value2.M41;
-            m.M42 = value1.M42 - value2.M42;
-            m.M43 = value1.M43 - value2.M43;
-            m.M44 = value1.M44 - value2.M44;
-
-            return m;
-        }
+        public static Matrix4x4 operator -(Matrix4x4 value1, Matrix4x4 value2) => Subtract(value1, value2);
 
         /// <summary>
         /// Multiplies a matrix by another matrix.
@@ -2140,28 +1744,7 @@ namespace Prowl.Runtime
         /// <param name="value1">The source matrix.</param>
         /// <param name="value2">The scaling factor.</param>
         /// <returns>The scaled matrix.</returns>
-        public static Matrix4x4 operator *(Matrix4x4 value1, double value2)
-        {
-            Matrix4x4 m;
-
-            m.M11 = value1.M11 * value2;
-            m.M12 = value1.M12 * value2;
-            m.M13 = value1.M13 * value2;
-            m.M14 = value1.M14 * value2;
-            m.M21 = value1.M21 * value2;
-            m.M22 = value1.M22 * value2;
-            m.M23 = value1.M23 * value2;
-            m.M24 = value1.M24 * value2;
-            m.M31 = value1.M31 * value2;
-            m.M32 = value1.M32 * value2;
-            m.M33 = value1.M33 * value2;
-            m.M34 = value1.M34 * value2;
-            m.M41 = value1.M41 * value2;
-            m.M42 = value1.M42 * value2;
-            m.M43 = value1.M43 * value2;
-            m.M44 = value1.M44 * value2;
-            return m;
-        }
+        public static Matrix4x4 operator *(Matrix4x4 value1, double value2) => Multiply(value1, value2);
 
         /// <summary>
         /// Returns a boolean indicating whether the given two matrices are equal.
