@@ -47,6 +47,12 @@ namespace Prowl.Runtime
 
         #region Operations/Methods
 
+        [MethodImpl(IN)]
+        public static bool IsValid(double x)
+        {
+            return !double.IsNaN(x) && !double.IsInfinity(x);
+        }
+
         /// <inheritdoc cref="Math.Sin(double)"/>
         [MethodImpl(IN)] public static double Sin(double value) => Math.Sin(value);
 

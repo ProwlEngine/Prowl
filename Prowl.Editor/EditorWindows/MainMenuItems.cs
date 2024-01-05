@@ -128,7 +128,7 @@ namespace Prowl.Editor.EditorWindows
             var t = cam.GameObject.Transform;
             if(t != null)
                 return t.GlobalPosition + t.Forward * 10;
-            return Vector3.Zero;
+            return Vector3.zero;
         }
 
         [MenuItem("Template/Lights/Ambient Light")]

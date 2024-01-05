@@ -356,17 +356,17 @@ namespace Prowl.Runtime
             f *= -1.0f;
 
             cross = Vector3.Cross(b.Normal, c.Normal );
-            v1 = Vector3.Multiply(cross, a.D);
+            v1 = cross * a.D;
             //v1 = (a.D * (Vector3.Cross(b.Normal, c.Normal)));
 
 
             cross = Vector3.Cross(c.Normal, a.Normal);
-            v2 = Vector3.Multiply(cross, b.D);
+            v2 = cross * b.D;
             //v2 = (b.D * (Vector3.Cross(c.Normal, a.Normal)));
 
 
             cross = Vector3.Cross(a.Normal, b.Normal);
-            v3 = Vector3.Multiply(cross, c.D);
+            v3 = cross * c.D;
             //v3 = (c.D * (Vector3.Cross(a.Normal, b.Normal)));
 
             result.x = (v1.x + v2.x + v3.x) / f;
@@ -376,7 +376,7 @@ namespace Prowl.Runtime
 
         private void NormalizePlane(ref Plane p)
         {
-            double factor = 1 / p.Normal.Length();
+            double factor = 1 / p.Normal.magnitude;
             p.Normal.x *= factor;
             p.Normal.y *= factor;
             p.Normal.z *= factor;

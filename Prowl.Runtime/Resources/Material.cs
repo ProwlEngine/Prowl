@@ -41,11 +41,11 @@ namespace Prowl.Runtime
         public Color GetColor(string name) => colors.ContainsKey(name) ? colors[name] : Color.white;
 
         public void SetVector(string name, Vector2 value) => vectors2[name] = value;
-        public Vector2 GetVector2(string name) => vectors2.ContainsKey(name) ? vectors2[name] : Vector2.Zero;
+        public Vector2 GetVector2(string name) => vectors2.ContainsKey(name) ? vectors2[name] : Vector2.zero;
         public void SetVector(string name, Vector3 value) => vectors3[name] = value;
-        public Vector3 GetVector3(string name) => vectors3.ContainsKey(name) ? vectors3[name] : Vector3.Zero;
+        public Vector3 GetVector3(string name) => vectors3.ContainsKey(name) ? vectors3[name] : Vector3.zero;
         public void SetVector(string name, Vector4 value) => vectors4[name] = value;
-        public Vector4 GetVector4(string name) => vectors4.ContainsKey(name) ? vectors4[name] : Vector4.Zero;
+        public Vector4 GetVector4(string name) => vectors4.ContainsKey(name) ? vectors4[name] : Vector4.zero;
         public void SetFloat(string name, float value) => floats[name] = value;
         public float GetFloat(string name) => floats.ContainsKey(name) ? floats[name] : 0;
         public void SetInt(string name, int value) => ints[name] = value;

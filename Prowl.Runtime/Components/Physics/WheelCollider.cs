@@ -58,7 +58,7 @@ namespace Prowl.Runtime
         public float MaximumAngularVelocity = 200;
 
         /// <summary> The position of the wheel in body space. </summary>
-        public Vector3 Position = Vector3.Zero;
+        public Vector3 Position = Vector3.zero;
 
         public float AngularVelocity => angVel;
 
@@ -120,7 +120,7 @@ namespace Prowl.Runtime
             if (car == null) return;
 
             Vector3 worldPos = car.GameObject.Transform!.GlobalPosition + Vector3.Transform(Position, car.GameObject.Transform!.GlobalOrientation);
-            worldPos -= (Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.Zero);
+            worldPos -= (Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.zero);
             Vector3 worldAxis = Vector3.Transform(JVector.UnitY, car.GameObject.Transform!.GlobalOrientation);
 
             Matrix4x4 wheelMatrix = Matrix4x4.Identity;

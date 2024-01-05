@@ -159,7 +159,7 @@ namespace Prowl.Runtime
                 Vector3 point1 = 0.5f * new Vector3(MathF.Cos(angle), MathF.Sin(angle), 0f);
                 Vector3 point2 = 0.5f * new Vector3(MathF.Cos(angle2), MathF.Sin(angle2), 0f);
 
-                batch.Line(Pos(point1), Pos(point1 + Vector3.UnitZ), color, color);
+                batch.Line(Pos(point1), Pos(point1 + Vector3.forward), color, color);
                 batch.Line(Pos(point1), Pos(point2), color, color);
             }
         }
@@ -220,22 +220,22 @@ namespace Prowl.Runtime
 
             // Calculate the cone vertices
             //Vector3 coneTip = Vector3.UnitZ * Distance;
-            Vector3 coneBaseLeft = Vector3.Transform(Vector3.UnitZ * distance, Matrix4x4.CreateRotationY(-(angle / 2)));
-            Vector3 coneBaseRight = Vector3.Transform(Vector3.UnitZ * distance, Matrix4x4.CreateRotationY((angle / 2)));
-            Vector3 coneBaseTop = Vector3.Transform(Vector3.UnitZ * distance, Matrix4x4.CreateRotationX(-(angle / 2)));
-            Vector3 coneBaseBottom = Vector3.Transform(Vector3.UnitZ * distance, Matrix4x4.CreateRotationX((angle / 2)));
+            Vector3 coneBaseLeft = Vector3.Transform(Vector3.forward * distance, Matrix4x4.CreateRotationY(-(angle / 2)));
+            Vector3 coneBaseRight = Vector3.Transform(Vector3.forward * distance, Matrix4x4.CreateRotationY((angle / 2)));
+            Vector3 coneBaseTop = Vector3.Transform(Vector3.forward * distance, Matrix4x4.CreateRotationX(-(angle / 2)));
+            Vector3 coneBaseBottom = Vector3.Transform(Vector3.forward * distance, Matrix4x4.CreateRotationX((angle / 2)));
             float coneBaseRadius = MathF.Tan(angle / 2) * distance;
             float coneBaseDistance = MathF.Sqrt((coneBaseRadius * coneBaseRadius) + (distance * distance));
 
             // Draw cone lines
             //batch.Line(Pos(Vector3.Zero), Pos(coneTip), ImGui.GetColorU32(Color));
-            batch.Line(Pos(Vector3.Zero), Pos(coneBaseLeft), color, color);
-            batch.Line(Pos(Vector3.Zero), Pos(coneBaseRight), color, color);
-            batch.Line(Pos(Vector3.Zero), Pos(coneBaseTop), color, color);
-            batch.Line(Pos(Vector3.Zero), Pos(coneBaseBottom), color, color);
+            batch.Line(Pos(Vector3.zero), Pos(coneBaseLeft), color, color);
+            batch.Line(Pos(Vector3.zero), Pos(coneBaseRight), color, color);
+            batch.Line(Pos(Vector3.zero), Pos(coneBaseTop), color, color);
+            batch.Line(Pos(Vector3.zero), Pos(coneBaseBottom), color, color);
 
             // Use 3 Circle3D gizmo's
-            m = Matrix4x4.CreateTranslation(Vector3.UnitZ * coneBaseDistance) * m;
+            m = Matrix4x4.CreateTranslation(Vector3.forward * coneBaseDistance) * m;
             m = Matrix4x4.CreateScale(coneBaseRadius) * m;
             new CircleGizmo(color).Render(batch, m);
         }

@@ -190,8 +190,8 @@ namespace Prowl.Runtime
                 material.SetVector("Jitter", Jitter);
                 material.SetVector("PreviousJitter", PreviousJitter);
             } else {
-                material.SetVector("Jitter", Vector2.Zero);
-                material.SetVector("PreviousJitter", Vector2.Zero);
+                material.SetVector("Jitter", Vector2.zero);
+                material.SetVector("PreviousJitter", Vector2.zero);
             }
 
             material.SetVector("Resolution", Graphics.Resolution);
@@ -201,7 +201,7 @@ namespace Prowl.Runtime
             //material.SetFloat("DeltaTime", Time.deltaTimeF);
             //material.SetInt("RandomSeed", Random.Shared.Next());
             //material.SetInt("ObjectID", mesh.InstanceID);
-            material.SetVector("Camera_WorldPosition", Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.Zero);
+            material.SetVector("Camera_WorldPosition", Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.zero);
             //material.SetVector("Camera_NearFarFOV", new Vector3(Camera.Current.NearClip, Camera.Current.FarClip, Camera.Current.FieldOfView));
 
             // Upload view and projection matrices(if locations available)

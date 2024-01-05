@@ -20,7 +20,7 @@ namespace Prowl.Runtime
         {
             var mat = Matrix4x4.Identity;
             mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateScale((radius * (float)GameObject.Transform!.Scale.x) * 1.0025f));
-            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateTranslation(GameObject.Transform!.GlobalPosition - (Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.Zero)));
+            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateTranslation(GameObject.Transform!.GlobalPosition - (Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.zero)));
             Gizmos.Matrix = mat;
             Gizmos.Sphere(Color.yellow);
         }

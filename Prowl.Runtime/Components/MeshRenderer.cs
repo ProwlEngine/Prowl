@@ -25,7 +25,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable
             mat = GameObject.Transform!.GlobalCamRelative;
         else {
             mat = Matrix4x4.Identity;
-            mat.Translation -= Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.Zero;
+            mat.Translation -= Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.zero;
         }
 
         int camID = Camera.Current.InstanceID;
@@ -60,7 +60,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable
                 mat = GameObject.Transform!.GlobalCamRelative;
             else {
                 mat = Matrix4x4.Identity;
-                mat.Translation -= Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.Zero;
+                mat.Translation -= Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.zero;
             }
 
             var mvp = Matrix4x4.Identity;

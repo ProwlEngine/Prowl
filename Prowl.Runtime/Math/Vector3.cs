@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using Jitter2.LinearMath;
 using System;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -12,35 +13,58 @@ namespace Prowl.Runtime
     /// <summary>
     /// A structure encapsulating three single precision floating point values and provides hardware accelerated methods.
     /// </summary>
-    public partial struct Vector3 : IEquatable<Vector3>, IFormattable
+    public struct Vector3 : IEquatable<Vector3>, IFormattable
     {
-        #region Public Static Properties
-        /// <summary>
-        /// Returns the vector (0,0,0).
-        /// </summary>
-        public static Vector3 Zero { get { return new Vector3(); } }
-        /// <summary>
-        /// Returns the vector (1,1,1).
-        /// </summary>
-        public static Vector3 One { get { return new Vector3(1.0, 1.0, 1.0); } }
-        /// <summary>
-        /// Returns the vector (1,0,0).
-        /// </summary>
-        public static Vector3 UnitX { get { return new Vector3(1.0, 0.0, 0.0); } }
-        /// <summary>
-        /// Returns the vector (0,1,0).
-        /// </summary>
-        public static Vector3 UnitY { get { return new Vector3(0.0, 1.0, 0.0); } }
-        /// <summary>
-        /// Returns the vector (0,0,1).
-        /// </summary>
-        public static Vector3 UnitZ { get { return new Vector3(0.0, 0.0, 1.0); } }
+        public Double x, y, z;
 
-        #endregion Public Static Properties
+        #region Constructors
+        /// <summary> Constructs a vector whose elements are all the single specified value. </summary>
+        public Vector3(Double value) : this(value, value, value) { }
+
+        /// <summary> Constructs a Vector3 from the given Vector2 and a third value. </summary>
+        public Vector3(Vector2 value, double z = 0f) : this(value.x, value.y, z) { }
+
+        /// <summary> Constructs a vector with the given individual elements. </summary>
+        public Vector3(Double x, Double y, Double z)
+        {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+        #endregion Constructors
+
+        #region Public Instance Properties
+        public Vector3 normalized { get { return Normalize(this); } }
+
+        public double magnitude { get { return Mathf.Sqrt(x * x + y * y + z * z); } }
+
+        public double sqrMagnitude { get { return x * x + y * y + z * z; } }
+
+        public double this[int index] {
+            get {
+                switch (index) {
+                    case 0: return x;
+                    case 1: return y;
+                    case 2: return z;
+                    default:
+                        throw new IndexOutOfRangeException("Invalid Vector3 index!");
+                }
+            }
+
+            set {
+                switch (index) {
+                    case 0: x = value; break;
+                    case 1: y = value; break;
+                    case 2: z = value; break;
+                    default:
+                        throw new IndexOutOfRangeException("Invalid Vector3 index!");
+                }
+            }
+        }
+
+        #endregion
 
         #region Public Instance Methods
-
-        public double magnitude => Length();
 
         public System.Numerics.Vector3 ToFloat() => new System.Numerics.Vector3((float)x, (float)y, (float)z);
 
@@ -67,6 +91,18 @@ namespace Prowl.Runtime
             if (!(obj is Vector3))
                 return false;
             return Equals((Vector3)obj);
+        }
+
+        /// <summary>
+        /// Returns a boolean indicating whether the given Vector3 is equal to this Vector3 instance.
+        /// </summary>
+        /// <param name="other">The Vector3 to compare this instance to.</param>
+        /// <returns>True if the other Vector3 is equal to this instance; False otherwise.</returns>
+        public bool Equals(Vector3 other)
+        {
+            return x == other.x &&
+                   y == other.y &&
+                   z == other.z;
         }
 
         /// <summary>
@@ -111,35 +147,30 @@ namespace Prowl.Runtime
             return sb.ToString();
         }
 
-        /// <summary>
-        /// Returns the length of the vector.
-        /// </summary>
-        /// <returns>The vector's length.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double Length()
-        {
-            double ls = x * x + y * y + z * z;
-                return (double)global::System.Math.Sqrt(ls);
-        }
+        public bool IsFinate() => Mathf.IsValid(x) && Mathf.IsValid(y) && Mathf.IsValid(z);
 
-        /// <summary>
-        /// Returns the length of the vector squared. This operation is cheaper than Length().
-        /// </summary>
-        /// <returns>The vector's length squared.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double LengthSquared()
-        {
-            return x * x + y * y + z * z;
-        }
         #endregion Public Instance Methods
 
+        #region Public Static Properties
+        public static Vector3 zero { get { return new Vector3(); } }
+        public static Vector3 one { get { return new Vector3(1.0, 1.0, 1.0); } }
+        public static Vector3 right { get { return new Vector3(1.0, 0.0, 0.0); } }
+        public static Vector3 left { get { return new Vector3(-1.0, 0.0, 0.0); } }
+        public static Vector3 up { get { return new Vector3(0.0, 1.0, 0.0); } }
+        public static Vector3 down { get { return new Vector3(0.0, -1.0, 0.0); } }
+        public static Vector3 forward { get { return new Vector3(0.0, 0.0, 1.0); } }
+        public static Vector3 backward { get { return new Vector3(0.0, 0.0, -1.0); } }
+
+        public static Vector3 infinity = new Vector3(Mathf.Infinity, Mathf.Infinity, Mathf.Infinity);
+
+        #endregion Public Static Properties
+
         #region Public Static Methods
-        /// <summary>
-        /// Returns the Euclidean distance between the two given points.
-        /// </summary>
-        /// <param name="value1">The first point.</param>
-        /// <param name="value2">The second point.</param>
-        /// <returns>The distance.</returns>
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static double AngleBetween(Vector3 from, Vector3 to) => Mathf.Acos(Mathf.Clamp(Dot(from.normalized, to.normalized), -1f, 1f));
+
+        /// <summary> Returns the Euclidean distance between the two given points. </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static double Distance(Vector3 value1, Vector3 value2)
         {
@@ -152,33 +183,59 @@ namespace Prowl.Runtime
                 return (double)global::System.Math.Sqrt((double)ls);
         }
 
-        /// <summary>
-        /// Returns the Euclidean distance squared between the two given points.
-        /// </summary>
-        /// <param name="value1">The first point.</param>
-        /// <param name="value2">The second point.</param>
-        /// <returns>The distance squared.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static double DistanceSquared(Vector3 value1, Vector3 value2)
+        public static Vector3 MoveTowards(Vector3 current, Vector3 target, float maxDistanceDelta)
         {
-            double dx = value1.x - value2.x;
-                double dy = value1.y - value2.y;
-                double dz = value1.z - value2.z;
-
-                return dx * dx + dy * dy + dz * dz;
+            Vector3 toVector = target - current;
+            double dist = toVector.magnitude;
+            if (dist <= maxDistanceDelta || dist == 0) return target;
+            return current + toVector / dist * maxDistanceDelta;
         }
 
-        /// <summary>
-        /// Returns a vector with the same direction as the given vector, but with a length of 1.
-        /// </summary>
-        /// <param name="value">The vector to normalize.</param>
-        /// <returns>The normalized vector.</returns>
+        public static Vector3 SmoothDamp(Vector3 current, Vector3 target, ref Vector3 currentVelocity, double smoothTime, double maxSpeed = Mathf.Infinity, double deltaTime = 0.02)
+        {
+            // Based on Game Programming Gems 4 Chapter 1.10
+            smoothTime = Mathf.Max(0.0001F, smoothTime);
+            double omega = 2 / smoothTime;
+
+            double x = omega * deltaTime;
+            double exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+            Vector3 change = current - target;
+            Vector3 originalTo = target;
+
+            // Clamp maximum speed
+            double maxChange = maxSpeed * smoothTime;
+            change = ClampMagnitude(change, maxChange);
+            target = current - change;
+
+            Vector3 temp = (currentVelocity + omega * change) * deltaTime;
+            currentVelocity = (currentVelocity - omega * temp) * exp;
+            Vector3 output = target + (change + temp) * exp;
+
+            // Prevent overshooting
+            if (Dot(originalTo - current, output - originalTo) > 0) {
+                output = originalTo;
+                currentVelocity = (output - originalTo) / deltaTime;
+            }
+
+            return output;
+        }
+
+        /// <summary> Returns a vector with the same direction as the given vector, but with a length of 1. </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 Normalize(Vector3 value)
         {
             double ls = value.x * value.x + value.y * value.y + value.z * value.z;
                 double length = (double)global::System.Math.Sqrt(ls);
                 return new Vector3(value.x / length, value.y / length, value.z / length);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector3 ClampMagnitude(Vector3 vector, double maxLength)
+        {
+            if (vector.sqrMagnitude > maxLength * maxLength)
+                return vector.normalized * maxLength;
+            return vector;
         }
 
         /// <summary>
@@ -314,13 +371,74 @@ namespace Prowl.Runtime
                 value.x * (xy2 + wz2) + value.y * (1.0 - xx2 - zz2) + value.z * (yz2 - wx2),
                 value.x * (xz2 - wy2) + value.y * (yz2 + wx2) + value.z * (1.0 - xx2 - yy2));
         }
+
+        /// <summary>
+        /// Returns the dot product of two vectors.
+        /// </summary>
+        /// <param name="vector1">The first vector.</param>
+        /// <param name="vector2">The second vector.</param>
+        /// <returns>The dot product.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static double Dot(Vector3 vector1, Vector3 vector2)
+        {
+            return vector1.x * vector2.x +
+                   vector1.y * vector2.y +
+                   vector1.z * vector2.z;
+        }
+
+        /// <summary>
+        /// Returns a vector whose elements are the minimum of each of the pairs of elements in the two source vectors.
+        /// </summary>
+        /// <param name="value1">The first source vector.</param>
+        /// <param name="value2">The second source vector.</param>
+        /// <returns>The minimized vector.</returns>
+        public static Vector3 Min(Vector3 value1, Vector3 value2)
+        {
+            return new Vector3(
+                (value1.x < value2.x) ? value1.x : value2.x,
+                (value1.y < value2.y) ? value1.y : value2.y,
+                (value1.z < value2.z) ? value1.z : value2.z);
+        }
+
+        /// <summary>
+        /// Returns a vector whose elements are the maximum of each of the pairs of elements in the two source vectors.
+        /// </summary>
+        /// <param name="value1">The first source vector.</param>
+        /// <param name="value2">The second source vector.</param>
+        /// <returns>The maximized vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector3 Max(Vector3 value1, Vector3 value2)
+        {
+            return new Vector3(
+                (value1.x > value2.x) ? value1.x : value2.x,
+                (value1.y > value2.y) ? value1.y : value2.y,
+                (value1.z > value2.z) ? value1.z : value2.z);
+        }
+
+        /// <summary>
+        /// Returns a vector whose elements are the absolute values of each of the source vector's elements.
+        /// </summary>
+        /// <param name="value">The source vector.</param>
+        /// <returns>The absolute value vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector3 Abs(Vector3 value)
+        {
+            return new Vector3(Math.Abs(value.x), Math.Abs(value.y), Math.Abs(value.z));
+        }
+
+        /// <summary>
+        /// Returns a vector whose elements are the square root of each of the source vector's elements.
+        /// </summary>
+        /// <param name="value">The source vector.</param>
+        /// <returns>The square root vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector3 SquareRoot(Vector3 value)
+        {
+            return new Vector3((Double)Math.Sqrt(value.x), (Double)Math.Sqrt(value.y), (Double)Math.Sqrt(value.z));
+        }
         #endregion Public Static Methods
 
-        #region Public operator methods
-
-        // All these methods should be inlined as they are implemented
-        // over JIT intrinsics
-
+        #region Public Static Operators
         /// <summary>
         /// Adds two vectors together.
         /// </summary>
@@ -328,9 +446,9 @@ namespace Prowl.Runtime
         /// <param name="right">The second source vector.</param>
         /// <returns>The summed vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector3 Add(Vector3 left, Vector3 right)
+        public static Vector3 operator +(Vector3 left, Vector3 right)
         {
-            return left + right;
+            return new Vector3(left.x + right.x, left.y + right.y, left.z + right.z);
         }
 
         /// <summary>
@@ -340,9 +458,9 @@ namespace Prowl.Runtime
         /// <param name="right">The second source vector.</param>
         /// <returns>The difference vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector3 Subtract(Vector3 left, Vector3 right)
+        public static Vector3 operator -(Vector3 left, Vector3 right)
         {
-            return left - right;
+            return new Vector3(left.x - right.x, left.y - right.y, left.z - right.z);
         }
 
         /// <summary>
@@ -352,9 +470,9 @@ namespace Prowl.Runtime
         /// <param name="right">The second source vector.</param>
         /// <returns>The product vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector3 Multiply(Vector3 left, Vector3 right)
+        public static Vector3 operator *(Vector3 left, Vector3 right)
         {
-            return left * right;
+            return new Vector3(left.x * right.x, left.y * right.y, left.z * right.z);
         }
 
         /// <summary>
@@ -364,9 +482,9 @@ namespace Prowl.Runtime
         /// <param name="right">The scalar value.</param>
         /// <returns>The scaled vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector3 Multiply(Vector3 left, Double right)
+        public static Vector3 operator *(Vector3 left, Double right)
         {
-            return left * right;
+            return left * new Vector3(right);
         }
 
         /// <summary>
@@ -376,9 +494,9 @@ namespace Prowl.Runtime
         /// <param name="right">The source vector.</param>
         /// <returns>The scaled vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector3 Multiply(Double left, Vector3 right)
+        public static Vector3 operator *(Double left, Vector3 right)
         {
-            return left * right;
+            return new Vector3(left) * right;
         }
 
         /// <summary>
@@ -388,21 +506,26 @@ namespace Prowl.Runtime
         /// <param name="right">The second source vector.</param>
         /// <returns>The vector resulting from the division.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector3 Divide(Vector3 left, Vector3 right)
+        public static Vector3 operator /(Vector3 left, Vector3 right)
         {
-            return left / right;
+            return new Vector3(left.x / right.x, left.y / right.y, left.z / right.z);
         }
 
         /// <summary>
         /// Divides the vector by the given scalar.
         /// </summary>
-        /// <param name="left">The source vector.</param>
-        /// <param name="divisor">The scalar value.</param>
+        /// <param name="value1">The source vector.</param>
+        /// <param name="value2">The scalar value.</param>
         /// <returns>The result of the division.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector3 Divide(Vector3 left, Double divisor)
+        public static Vector3 operator /(Vector3 value1, double value2)
         {
-            return left / divisor;
+            double invDiv = 1.0 / value2;
+
+            return new Vector3(
+                value1.x * invDiv,
+                value1.y * invDiv,
+                value1.z * invDiv);
         }
 
         /// <summary>
@@ -411,9 +534,61 @@ namespace Prowl.Runtime
         /// <param name="value">The source vector.</param>
         /// <returns>The negated vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector3 Negate(Vector3 value)
+        public static Vector3 operator -(Vector3 value)
         {
-            return -value;
+            return zero - value;
+        }
+
+        /// <summary>
+        /// Returns a boolean indicating whether the two given vectors are equal.
+        /// </summary>
+        /// <param name="left">The first vector to compare.</param>
+        /// <param name="right">The second vector to compare.</param>
+        /// <returns>True if the vectors are equal; False otherwise.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator ==(Vector3 left, Vector3 right)
+        {
+            return (left.x == right.x &&
+                    left.y == right.y &&
+                    left.z == right.z);
+        }
+
+        /// <summary>
+        /// Returns a boolean indicating whether the two given vectors are not equal.
+        /// </summary>
+        /// <param name="left">The first vector to compare.</param>
+        /// <param name="right">The second vector to compare.</param>
+        /// <returns>True if the vectors are not equal; False if they are equal.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator !=(Vector3 left, Vector3 right)
+        {
+            return (left.x != right.x ||
+                    left.y != right.y ||
+                    left.z != right.z);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static implicit operator System.Numerics.Vector3(Vector3 value)
+        {
+            return new System.Numerics.Vector3((float)value.x, (float)value.y, (float)value.z);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static implicit operator Vector3(System.Numerics.Vector3 value)
+        {
+            return new Vector3(value.X, value.Y, value.Z);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static implicit operator JVector(Vector3 value)
+        {
+            return new JVector((float)value.x, (float)value.y, (float)value.z);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static implicit operator Vector3(JVector value)
+        {
+            return new Vector3(value.X, value.Y, value.Z);
         }
         #endregion Public operator methods
     }

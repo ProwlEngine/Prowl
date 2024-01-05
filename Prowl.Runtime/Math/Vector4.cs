@@ -12,38 +12,87 @@ namespace Prowl.Runtime
     /// <summary>
     /// A structure encapsulating four single precision floating point values and provides hardware accelerated methods.
     /// </summary>
-    public partial struct Vector4 : IEquatable<Vector4>, IFormattable
+    public struct Vector4 : IEquatable<Vector4>, IFormattable
     {
+        public Double x, y, z, w;
+
+        #region Constructors
+
+        /// <summary> Constructs a vector whose elements are all the single specified value. </summary>
+        public Vector4(Double value) : this(value, value, value, value) { }
+        /// <summary> Constructs a vector with the given individual elements. </summary>
+        public Vector4(Double x, Double y, Double z, Double w)
+        {
+            this.w = w;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+
+        /// <summary> Constructs a Vector4 from the given Vector2 and a Z and W component. </summary>
+        public Vector4(Vector2 value, Double z = 0.0, Double w = 0.0)
+        {
+            x = value.x;
+            y = value.y;
+            this.z = z;
+            this.w = w;
+        }
+
+        /// <summary> Constructs a Vector4 from the given Vector3 and a W component. </summary>
+        public Vector4(Vector3 value, Double w = 0.0)
+        {
+            x = value.x;
+            y = value.y;
+            z = value.z;
+            this.w = w;
+        }
+        #endregion Constructors
+
+        #region Public Instance Properties
+        public Vector4 normalized { get { return Normalize(this); } }
+
+        public double magnitude { get { return Mathf.Sqrt(x * x + y * y + z * z + w * w); } }
+
+        public double sqrMagnitude { get { return x * x + y * y + z * z + w * w; } }
+
+        public double this[int index] {
+            get {
+                switch (index) {
+                    case 0: return x;
+                    case 1: return y;
+                    case 2: return z;
+                    case 3: return w;
+                    default:
+                        throw new IndexOutOfRangeException("Invalid Vector4 index!");
+                }
+            }
+
+            set {
+                switch (index) {
+                    case 0: x = value; break;
+                    case 1: y = value; break;
+                    case 2: z = value; break;
+                    case 3: w = value; break;
+                    default:
+                        throw new IndexOutOfRangeException("Invalid Vector4 index!");
+                }
+            }
+        }
+
+        #endregion
+
         #region Public Static Properties
-        /// <summary>
-        /// Returns the vector (0,0,0,0).
-        /// </summary>
-        public static Vector4 Zero { get { return new Vector4(); } }
-        /// <summary>
-        /// Returns the vector (1,1,1,1).
-        /// </summary>
-        public static Vector4 One { get { return new Vector4(1.0, 1.0, 1.0, 1.0); } }
-        /// <summary>
-        /// Returns the vector (1,0,0,0).
-        /// </summary>
-        public static Vector4 UnitX { get { return new Vector4(1.0, 0.0, 0.0, 0.0); } }
-        /// <summary>
-        /// Returns the vector (0,1,0,0).
-        /// </summary>
-        public static Vector4 UnitY { get { return new Vector4(0.0, 1.0, 0.0, 0.0); } }
-        /// <summary>
-        /// Returns the vector (0,0,1,0).
-        /// </summary>
-        public static Vector4 UnitZ { get { return new Vector4(0.0, 0.0, 1.0, 0.0); } }
-        /// <summary>
-        /// Returns the vector (0,0,0,1).
-        /// </summary>
-        public static Vector4 UnitW { get { return new Vector4(0.0, 0.0, 0.0, 1.0); } }
+        public static Vector4 zero { get { return new Vector4(); } }
+        public static Vector4 one { get { return new Vector4(1.0, 1.0, 1.0, 1.0); } }
+        public static Vector4 right { get { return new Vector4(1.0, 0.0, 0.0, 0.0); } }
+        public static Vector4 up { get { return new Vector4(0.0, 1.0, 0.0, 0.0); } }
+        public static Vector4 forward { get { return new Vector4(0.0, 0.0, 1.0, 0.0); } }
+        public static Vector4 unitw { get { return new Vector4(0.0, 0.0, 0.0, 1.0); } }
+
+        public static Vector4 infinity = new Vector4(Mathf.Infinity, Mathf.Infinity, Mathf.Infinity, Mathf.Infinity);
         #endregion Public Static Properties
 
-        #region Public instance methods
-
-        public double magnitude => Length();
+        #region Public Instance methods
 
         public System.Numerics.Vector4 ToFloat() => new System.Numerics.Vector4((float)x, (float)y, (float)z, (float)w);
 
@@ -71,6 +120,19 @@ namespace Prowl.Runtime
             if (!(obj is Vector4))
                 return false;
             return Equals((Vector4)obj);
+        }
+
+        /// <summary>
+        /// Returns a boolean indicating whether the given Vector4 is equal to this Vector4 instance.
+        /// </summary>
+        /// <param name="other">The Vector4 to compare this instance to.</param>
+        /// <returns>True if the other Vector4 is equal to this instance; False otherwise.</returns>
+        public bool Equals(Vector4 other)
+        {
+            return this.x == other.x
+                && this.y == other.y
+                && this.z == other.z
+                && this.w == other.w;
         }
 
         /// <summary>
@@ -117,31 +179,21 @@ namespace Prowl.Runtime
             sb.Append('>');
             return sb.ToString();
         }
-
-        /// <summary>
-        /// Returns the length of the vector. This operation is cheaper than Length().
-        /// </summary>
-        /// <returns>The vector's length.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double Length()
-        {
-            double ls = x * x + y * y + z * z + w * w;
-
-                return (double)Math.Sqrt((double)ls);
-        }
-
-        /// <summary>
-        /// Returns the length of the vector squared.
-        /// </summary>
-        /// <returns>The vector's length squared.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double LengthSquared()
-        {
-            return x * x + y * y + z * z + w * w;
-        }
+        public bool IsFinate() => Mathf.IsValid(x) && Mathf.IsValid(y) && Mathf.IsValid(z) && Mathf.IsValid(w);
         #endregion Public Instance Methods
 
         #region Public Static Methods
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector4 MoveTowards(Vector4 current, Vector4 target, float maxDistanceDelta)
+        {
+            Vector4 toVector = target - current;
+            double dist = toVector.magnitude;
+            if (dist <= maxDistanceDelta || dist == 0) return target;
+            return current + toVector / dist * maxDistanceDelta;
+        }
+
         /// <summary>
         /// Returns the Euclidean distance between the two given points.
         /// </summary>
@@ -382,12 +434,78 @@ namespace Prowl.Runtime
                 value.x * (xz2 - wy2) + value.y * (yz2 + wx2) + value.z * (1.0 - xx2 - yy2),
                 value.w);
         }
+
+        /// <summary>
+        /// Returns the dot product of two vectors.
+        /// </summary>
+        /// <param name="vector1">The first vector.</param>
+        /// <param name="vector2">The second vector.</param>
+        /// <returns>The dot product.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static double Dot(Vector4 vector1, Vector4 vector2)
+        {
+            return vector1.x * vector2.x +
+                   vector1.y * vector2.y +
+                   vector1.z * vector2.z +
+                   vector1.w * vector2.w;
+        }
+
+        /// <summary>
+        /// Returns a vector whose elements are the minimum of each of the pairs of elements in the two source vectors.
+        /// </summary>
+        /// <param name="value1">The first source vector.</param>
+        /// <param name="value2">The second source vector.</param>
+        /// <returns>The minimized vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector4 Min(Vector4 value1, Vector4 value2)
+        {
+            return new Vector4(
+                (value1.x < value2.x) ? value1.x : value2.x,
+                (value1.y < value2.y) ? value1.y : value2.y,
+                (value1.z < value2.z) ? value1.z : value2.z,
+                (value1.w < value2.w) ? value1.w : value2.w);
+        }
+
+        /// <summary>
+        /// Returns a vector whose elements are the maximum of each of the pairs of elements in the two source vectors.
+        /// </summary>
+        /// <param name="value1">The first source vector.</param>
+        /// <param name="value2">The second source vector.</param>
+        /// <returns>The maximized vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector4 Max(Vector4 value1, Vector4 value2)
+        {
+            return new Vector4(
+                (value1.x > value2.x) ? value1.x : value2.x,
+                (value1.y > value2.y) ? value1.y : value2.y,
+                (value1.z > value2.z) ? value1.z : value2.z,
+                (value1.w > value2.w) ? value1.w : value2.w);
+        }
+
+        /// <summary>
+        /// Returns a vector whose elements are the absolute values of each of the source vector's elements.
+        /// </summary>
+        /// <param name="value">The source vector.</param>
+        /// <returns>The absolute value vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector4 Abs(Vector4 value)
+        {
+            return new Vector4(Math.Abs(value.x), Math.Abs(value.y), Math.Abs(value.z), Math.Abs(value.w));
+        }
+
+        /// <summary>
+        /// Returns a vector whose elements are the square root of each of the source vector's elements.
+        /// </summary>
+        /// <param name="value">The source vector.</param>
+        /// <returns>The square root vector.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector4 SquareRoot(Vector4 value)
+        {
+            return new Vector4((Double)Math.Sqrt(value.x), (Double)Math.Sqrt(value.y), (Double)Math.Sqrt(value.z), (Double)Math.Sqrt(value.w));
+        }
         #endregion Public Static Methods
 
-        #region Public operator methods
-        // All these methods should be inlines as they are implemented
-        // over JIT intrinsics
-
+        #region Public static operators
         /// <summary>
         /// Adds two vectors together.
         /// </summary>
@@ -395,9 +513,9 @@ namespace Prowl.Runtime
         /// <param name="right">The second source vector.</param>
         /// <returns>The summed vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector4 Add(Vector4 left, Vector4 right)
+        public static Vector4 operator +(Vector4 left, Vector4 right)
         {
-            return left + right;
+            return new Vector4(left.x + right.x, left.y + right.y, left.z + right.z, left.w + right.w);
         }
 
         /// <summary>
@@ -407,9 +525,9 @@ namespace Prowl.Runtime
         /// <param name="right">The second source vector.</param>
         /// <returns>The difference vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector4 Subtract(Vector4 left, Vector4 right)
+        public static Vector4 operator -(Vector4 left, Vector4 right)
         {
-            return left - right;
+            return new Vector4(left.x - right.x, left.y - right.y, left.z - right.z, left.w - right.w);
         }
 
         /// <summary>
@@ -419,9 +537,9 @@ namespace Prowl.Runtime
         /// <param name="right">The second source vector.</param>
         /// <returns>The product vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector4 Multiply(Vector4 left, Vector4 right)
+        public static Vector4 operator *(Vector4 left, Vector4 right)
         {
-            return left * right;
+            return new Vector4(left.x * right.x, left.y * right.y, left.z * right.z, left.w * right.w);
         }
 
         /// <summary>
@@ -431,9 +549,9 @@ namespace Prowl.Runtime
         /// <param name="right">The scalar value.</param>
         /// <returns>The scaled vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector4 Multiply(Vector4 left, Double right)
+        public static Vector4 operator *(Vector4 left, Double right)
         {
-            return left * new Vector4(right, right, right, right);
+            return left * new Vector4(right);
         }
 
         /// <summary>
@@ -443,9 +561,9 @@ namespace Prowl.Runtime
         /// <param name="right">The source vector.</param>
         /// <returns>The scaled vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector4 Multiply(Double left, Vector4 right)
+        public static Vector4 operator *(Double left, Vector4 right)
         {
-            return new Vector4(left, left, left, left) * right;
+            return new Vector4(left) * right;
         }
 
         /// <summary>
@@ -455,21 +573,27 @@ namespace Prowl.Runtime
         /// <param name="right">The second source vector.</param>
         /// <returns>The vector resulting from the division.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector4 Divide(Vector4 left, Vector4 right)
+        public static Vector4 operator /(Vector4 left, Vector4 right)
         {
-            return left / right;
+            return new Vector4(left.x / right.x, left.y / right.y, left.z / right.z, left.w / right.w);
         }
 
         /// <summary>
         /// Divides the vector by the given scalar.
         /// </summary>
-        /// <param name="left">The source vector.</param>
-        /// <param name="divisor">The scalar value.</param>
+        /// <param name="value1">The source vector.</param>
+        /// <param name="value2">The scalar value.</param>
         /// <returns>The result of the division.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector4 Divide(Vector4 left, Double divisor)
+        public static Vector4 operator /(Vector4 value1, double value2)
         {
-            return left / divisor;
+            double invDiv = 1.0 / value2;
+
+            return new Vector4(
+                value1.x * invDiv,
+                value1.y * invDiv,
+                value1.z * invDiv,
+                value1.w * invDiv);
         }
 
         /// <summary>
@@ -478,10 +602,46 @@ namespace Prowl.Runtime
         /// <param name="value">The source vector.</param>
         /// <returns>The negated vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector4 Negate(Vector4 value)
+        public static Vector4 operator -(Vector4 value)
         {
-            return -value;
+            return zero - value;
         }
-        #endregion Public operator methods
+
+        /// <summary>
+        /// Returns a boolean indicating whether the two given vectors are equal.
+        /// </summary>
+        /// <param name="left">The first vector to compare.</param>
+        /// <param name="right">The second vector to compare.</param>
+        /// <returns>True if the vectors are equal; False otherwise.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator ==(Vector4 left, Vector4 right)
+        {
+            return left.Equals(right);
+        }
+
+        /// <summary>
+        /// Returns a boolean indicating whether the two given vectors are not equal.
+        /// </summary>
+        /// <param name="left">The first vector to compare.</param>
+        /// <param name="right">The second vector to compare.</param>
+        /// <returns>True if the vectors are not equal; False if they are equal.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool operator !=(Vector4 left, Vector4 right)
+        {
+            return !(left == right);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static implicit operator System.Numerics.Vector4(Vector4 value)
+        {
+            return new System.Numerics.Vector4((float)value.x, (float)value.y, (float)value.z, (float)value.w);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static implicit operator Vector4(System.Numerics.Vector4 value)
+        {
+            return new Vector4(value.X, value.Y, value.Z, value.W);
+        }
+        #endregion Public static operators
     }
 }

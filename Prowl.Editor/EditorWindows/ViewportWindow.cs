@@ -220,7 +220,7 @@ public class ViewportWindow : EditorWindow
 
         if (Input.GetMouseButton(1))
         {
-            Vector3 moveDir = Vector3.Zero;
+            Vector3 moveDir = Vector3.zero;
             if (Input.GetKey(Key.W))
                 moveDir += Cam.GameObject.Transform!.Forward;
             if (Input.GetKey(Key.S))
@@ -233,7 +233,7 @@ public class ViewportWindow : EditorWindow
                 moveDir += Cam.GameObject.Transform!.Up;
             if (Input.GetKey(Key.Q))
                 moveDir -= Cam.GameObject.Transform!.Up;
-            if (moveDir != Vector3.Zero)
+            if (moveDir != Vector3.zero)
             {
                 moveDir = Vector3.Normalize(moveDir);
                 if (Input.GetKey(Key.ShiftLeft))

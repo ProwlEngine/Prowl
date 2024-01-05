@@ -193,7 +193,7 @@ namespace Prowl.Runtime
                 objectPosition.y - cameraPosition.y,
                 objectPosition.z - cameraPosition.z);
 
-            double norm = zaxis.LengthSquared();
+            double norm = zaxis.sqrMagnitude;
 
             if (norm < epsilon)
             {
@@ -201,7 +201,7 @@ namespace Prowl.Runtime
             }
             else
             {
-                zaxis = Vector3.Multiply(zaxis, 1.0 / (double)Math.Sqrt(norm));
+                zaxis = zaxis * (1.0 / (double)Math.Sqrt(norm));
             }
 
             Vector3 xaxis = Vector3.Normalize(Vector3.Cross(cameraUpVector, zaxis));
@@ -235,7 +235,7 @@ namespace Prowl.Runtime
                 objectPosition.y - cameraPosition.y,
                 objectPosition.z - cameraPosition.z);
 
-            double norm = faceDir.LengthSquared();
+            double norm = faceDir.sqrMagnitude;
 
             if (norm < epsilon)
             {
@@ -243,7 +243,7 @@ namespace Prowl.Runtime
             }
             else
             {
-                faceDir = Vector3.Multiply(faceDir, (1.0 / (double)Math.Sqrt(norm)));
+                faceDir = faceDir * ((1.0 / (double)Math.Sqrt(norm)));
             }
 
             Vector3 yaxis = rotateAxis;
@@ -1307,9 +1307,9 @@ namespace Prowl.Runtime
                     *(pVectorBasis[1]) = new Vector3(matrix.M21, matrix.M22, matrix.M23);
                     *(pVectorBasis[2]) = new Vector3(matrix.M31, matrix.M32, matrix.M33);
 
-                    scale.x = pVectorBasis[0]->Length();
-                    scale.y = pVectorBasis[1]->Length();
-                    scale.z = pVectorBasis[2]->Length();
+                    scale.x = pVectorBasis[0]->magnitude;
+                    scale.y = pVectorBasis[1]->magnitude;
+                    scale.z = pVectorBasis[2]->magnitude;
 
                     uint a, b, c;
                     #region Ranking

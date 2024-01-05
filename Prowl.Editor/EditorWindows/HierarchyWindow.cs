@@ -309,7 +309,7 @@ public class HierarchyWindow : EditorWindow
 
                 if (SelectHandler.Count == 1 && ImGui.MenuItem("Align View With")) {
                     Camera cam = ViewportWindow.LastFocusedCamera;
-                    cam.GameObject.Transform!.GlobalPosition = entity.Transform?.GlobalPosition ?? Vector3.Zero;
+                    cam.GameObject.Transform!.GlobalPosition = entity.Transform?.GlobalPosition ?? Vector3.zero;
                     cam.GameObject.Transform!.GlobalOrientation = entity.Transform?.GlobalOrientation ?? Quaternion.Identity;
                 }
             }

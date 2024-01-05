@@ -1,9 +1,5 @@
 ﻿using Prowl.Icons;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Prowl.Runtime
 {
@@ -13,7 +9,7 @@ namespace Prowl.Runtime
     {
         protected Vector3 position;
         protected Vector3 rotation;
-        protected Vector3 scale = Vector3.One;
+        protected Vector3 scale = Vector3.one;
         protected Vector3 globalPosition;
         protected Quaternion orientation = Quaternion.Identity, globalOrientation;
         protected Matrix4x4 globalPrevious, global, globalInverse;
@@ -92,13 +88,13 @@ namespace Prowl.Runtime
         }
 
         /// <summary>The forward vector in global orientation space</summary>
-        public Vector3 Forward => Vector3.Transform(Vector3.UnitZ, globalOrientation);
+        public Vector3 Forward => Vector3.Transform(Vector3.forward, globalOrientation);
 
         /// <summary>The right vector in global orientation space</summary>
-        public Vector3 Right => Vector3.Transform(Vector3.UnitX, globalOrientation);
+        public Vector3 Right => Vector3.Transform(Vector3.right, globalOrientation);
 
         /// <summary>The up vector in global orientation space</summary>
-        public Vector3 Up => Vector3.Transform(Vector3.UnitY, globalOrientation);
+        public Vector3 Up => Vector3.Transform(Vector3.up, globalOrientation);
 
         /// <summary>The global transformation matrix of the previous frame.</summary>
         public Matrix4x4 GlobalPrevious => globalPrevious;
@@ -113,7 +109,7 @@ namespace Prowl.Runtime
         public Matrix4x4 GlobalCamRelative {
             get {
                 Matrix4x4 matrix = Global;
-                matrix.Translation -= Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.Zero;
+                matrix.Translation -= Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.zero;
                 return matrix;
             }
         }

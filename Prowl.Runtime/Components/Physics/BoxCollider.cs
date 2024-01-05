@@ -7,7 +7,7 @@ namespace Prowl.Runtime
     [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Box}  Box Collider")]
     public class BoxCollider : Collider
     {
-        public Vector3 size = Vector3.One;
+        public Vector3 size = Vector3.one;
 
         public override List<Shape> CreateShapes() => [ new BoxShape(size * GameObject.Transform!.Scale) ];
         public override void OnValidate()

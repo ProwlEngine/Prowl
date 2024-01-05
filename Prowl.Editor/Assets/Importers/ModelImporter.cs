@@ -250,7 +250,7 @@ namespace Prowl.Editor.Assets
                                 var c = m.VertexColorChannels[0][i];
                                 vert.Color = new Vector3(c.R, c.G, c.B);
                             } else {
-                                vert.Color = Vector3.One;
+                                vert.Color = Vector3.one;
                             }
                             vert.Tangent = new Vector3(t.X, t.Y, t.Z);
 
@@ -335,7 +335,7 @@ namespace Prowl.Editor.Assets
                 }
 
                 GameObject rootNode = GOs[0].Item1;
-                rootNode.Transform!.Scale = Vector3.One * UnitScale;
+                rootNode.Transform!.Scale = Vector3.one * UnitScale;
                 ctx.SetMainObject(rootNode);
 
                 ImGuiNotify.InsertNotification("Model Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), AssetDatabase.FileToRelative(assetPath));
