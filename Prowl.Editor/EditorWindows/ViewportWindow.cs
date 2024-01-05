@@ -94,12 +94,11 @@ public class ViewportWindow : EditorWindow
 
         var imagePos = ImGui.GetCursorScreenPos();
         var imageSize = ImGui.GetContentRegionAvail();
-        ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].Handle, ImGui.GetContentRegionAvail(), new Vector2(0, 1), new Vector2(1, 0));
+        ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].Handle, imageSize, new Vector2(0, 1), new Vector2(1, 0));
         HandleDragnDrop();
 
-        if (ImGui.IsItemClicked()) {
-            var mousePos = ImGui.GetMousePos();
-            var mouseUV = new Vector2((mousePos.X - imagePos.X) / imageSize.X, (mousePos.Y - imagePos.Y) / imageSize.Y);
+        if (ImGui.IsItemClicked() && !ImGuizmo.IsOver()) {
+            var mouseUV = (ImGui.GetMousePos() - imagePos) / imageSize;
             var instanceID = Cam.gBuffer.GetObjectIDAt(mouseUV);
             // find InstanceID Object
             var go = EngineObject.FindObjectByID<GameObject>(instanceID);
