@@ -160,6 +160,7 @@ public unsafe class EditorApplication : Application {
                 }
 
                 OnUpdateEditor?.Invoke();
+                OnDrawEditor?.Invoke();
             } catch (Exception e) {
                 Console.WriteLine(e.ToString());
             }
@@ -168,7 +169,6 @@ public unsafe class EditorApplication : Application {
         Window.Render += (delta) => {
             Graphics.StartFrame();
 
-            OnDrawEditor?.Invoke();
             EditorGui.Update();
 
             Graphics.EndFrame();
