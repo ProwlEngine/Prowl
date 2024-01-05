@@ -218,7 +218,7 @@ public class ViewportWindow : EditorWindow
 
         LastFocusedCamera = Cam;
 
-        if (Input.GetMouseButtonDown(1))
+        if (Input.GetMouseButton(1))
         {
             Vector3 moveDir = Vector3.Zero;
             if (Input.GetKey(Key.W))
@@ -250,7 +250,7 @@ public class ViewportWindow : EditorWindow
 
             Input.MousePosition = WindowCenter.ToFloat().ToGeneric();
         }
-        else if (Input.GetMouseButtonDown(2) && IsHovered)
+        else if (Input.GetMouseButton(2) && IsHovered)
         {
             var mouseDelta = Input.MouseDelta;
             var pos = Cam.GameObject.Transform!.Position;
@@ -261,22 +261,22 @@ public class ViewportWindow : EditorWindow
         else
         {
             // If not looking around Viewport Keybinds are used instead
-            //if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_Q))
-            //{
-            //    SceneManager.GizmosOperation = ImGuizmoOperation.Translate;
-            //}
-            //else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_W))
-            //{
-            //    SceneManager.GizmosOperation = ImGuizmoOperation.Rotate;
-            //}
-            //else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_E))
-            //{
-            //    SceneManager.GizmosOperation = ImGuizmoOperation.Scale;
-            //}
-            //else if (Input.IsKeyPressed(Raylib_cs.KeyboardKey.KEY_R))
-            //{
-            //    SceneManager.GizmosOperation = ImGuizmoOperation.Universal;
-            //}
+            if (Input.GetKeyDown(Key.Q))
+            {
+                SceneManager.GizmosOperation = ImGuizmoOperation.Translate;
+            }
+            else if (Input.GetKeyDown(Key.W))
+            {
+                SceneManager.GizmosOperation = ImGuizmoOperation.Rotate;
+            }
+            else if (Input.GetKeyDown(Key.E))
+            {
+                SceneManager.GizmosOperation = ImGuizmoOperation.Scale;
+            }
+            else if (Input.GetKeyDown(Key.R))
+            {
+                SceneManager.GizmosOperation = ImGuizmoOperation.Universal;
+            }
         }
     }
 

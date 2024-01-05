@@ -55,15 +55,22 @@ public unsafe class EditorApplication : Application {
 
     public static bool IsHotkeyDown(string name, Hotkey defaultKey)
     {
-        //if (EditorConfig.hotkeys.TryGetValue(name, out var hotkey))
-        //{
-        //    return Input.IsKeyPressed(hotkey.Key) && Input.IsKeyDown(Key.ControlLeft) == hotkey.Ctrl && Input.IsKeyDown(Key.AltLeft) == hotkey.Alt && Input.IsKeyDown(Key.ShiftLeft) == hotkey.Shift;
-        //}
-        //else
-        //{
-        //    EditorConfig.hotkeys.Add(name, defaultKey);
-        //    SaveConfig();
-        //}
+        if (EditorConfig.hotkeys.TryGetValue(name, out var hotkey))
+        {
+            if (Input.GetKeyDown(hotkey.Key)) {
+                bool ctrl = Input.GetKey(Key.ControlLeft) == hotkey.Ctrl;
+                bool alt = Input.GetKey(Key.AltLeft) == hotkey.Alt;
+                bool shift = Input.GetKey(Key.ShiftLeft) == hotkey.Shift;
+                if (ctrl && alt && shift)
+                    return true;
+            }
+            return Input.GetKeyDown(hotkey.Key) && Input.GetKey(Key.ControlLeft) == hotkey.Ctrl && Input.GetKey(Key.AltLeft) == hotkey.Alt && Input.GetKey(Key.ShiftLeft) == hotkey.Shift;
+        }
+        else
+        {
+            EditorConfig.hotkeys.Add(name, defaultKey);
+            SaveConfig();
+        }
         return false;
     }
 
