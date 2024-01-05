@@ -434,34 +434,13 @@ public class GameObject : EngineObject, ISerializable
 
         Transform myTransform = GetComponent<Transform>();
         if (isSelected && myTransform != null) {
-            System.Numerics.Matrix4x4 goMatrix;
-
-            if (SceneManager.GizmosSpace == ImGuizmoMode.Local)
-                goMatrix = myTransform.Local.ToFloat();
-            else
-                goMatrix = myTransform.Global.ToFloat();
-            // Convert position to be relative to Camera
-            //goMatrix *= System.Numerics.Matrix4x4.CreateTranslation(-Camera.Current.GameObject.GlobalPosition.ToFloat());
-            goMatrix.Translation -= Camera.Current.GameObject.Transform?.GlobalPosition.ToFloat() ?? Vector3.Zero;
+            var goMatrix = myTransform.Local;
 
             // Perform ImGuizmo manipulation
-            if (ImGuizmo.Manipulate(ref view, ref projection, SceneManager.GizmosOperation, SceneManager.GizmosSpace, ref goMatrix))
-            {
-                // Convert back to world space
-                //goMatrix *= System.Numerics.Matrix4x4.CreateTranslation(Camera.Current.GameObject.GlobalPosition.ToFloat());
-                goMatrix.Translation += Camera.Current.GameObject.Transform?.GlobalPosition.ToFloat() ?? Vector3.Zero;
-                if (SceneManager.GizmosSpace == ImGuizmoMode.Local)
-                {
-                    myTransform.Local = goMatrix.ToDouble();
-                }
-                else
-                {
-                    var global = goMatrix.ToDouble();
-                    Matrix4x4.Decompose(global, out var globalScale, out var globalOrientation, out var globalPosition);
-                    myTransform.Scale = globalScale;
-                    myTransform.GlobalOrientation = globalOrientation;
-                    myTransform.GlobalPosition = globalPosition;
-                }
+            var fmat = goMatrix.ToFloat();
+            if (ImGuizmo.Manipulate(ref view, ref projection, SceneManager.GizmosOperation, SceneManager.GizmosSpace, ref fmat)) {
+                goMatrix = fmat.ToDouble();
+                myTransform.Local = goMatrix;
             }
         }
 
