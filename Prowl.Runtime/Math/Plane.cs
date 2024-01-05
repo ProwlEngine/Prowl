@@ -29,38 +29,10 @@ SOFTWARE.
 #endregion License
 
 using System;
-using System.Diagnostics;
-using System.Runtime.Serialization;
+using System.Runtime.CompilerServices;
 
 namespace Prowl.Runtime
 {
-    internal class PlaneHelper
-    {
-        /// <summary>
-        /// Returns a value indicating what side (positive/negative) of a plane a point is
-        /// </summary>
-        /// <param name="point">The point to check with</param>
-        /// <param name="plane">The plane to check against</param>
-        /// <returns>Greater than zero if on the positive side, less than zero if on the negative size, 0 otherwise</returns>
-        public static double ClassifyPoint(ref Vector3 point, ref Plane plane)
-        {
-            return point.x * plane.Normal.x + point.y * plane.Normal.y + point.z * plane.Normal.z + plane.D;
-        }
-
-        /// <summary>
-        /// Returns the perpendicular distance from a point to a plane
-        /// </summary>
-        /// <param name="point">The point to check</param>
-        /// <param name="plane">The place to check</param>
-        /// <returns>The perpendicular distance from the point to the plane</returns>
-        public static double PerpendicularDistance(ref Vector3 point, ref Plane plane)
-        {
-            // dist = (ax + by + cz + d) / sqrt(a*a + b*b + c*c)
-            return (double)Math.Abs((plane.Normal.x * point.x + plane.Normal.y * point.y + plane.Normal.z * point.z)
-                                    / Math.Sqrt(plane.Normal.x * plane.Normal.x + plane.Normal.y * plane.Normal.y + plane.Normal.z * plane.Normal.z));
-        }
-    }
-
     public enum PlaneIntersectionType
     {
         Front,
@@ -72,9 +44,9 @@ namespace Prowl.Runtime
     {
         #region Public Fields
 
-        public double D;
+        public double distance;
 
-        public Vector3 Normal;
+        public Vector3 normal;
 
         #endregion Public Fields
 
@@ -89,8 +61,8 @@ namespace Prowl.Runtime
 
         public Plane(Vector3 normal, double d)
         {
-            Normal = normal;
-            D = d;
+            this.normal = normal;
+            distance = d;
         }
 
         public Plane(Vector3 a, Vector3 b, Vector3 c)
@@ -99,8 +71,8 @@ namespace Prowl.Runtime
             Vector3 ac = c - a;
 
             Vector3 cross = Vector3.Cross(ab, ac);
-            Normal = Vector3.Normalize(cross);
-            D = -(Vector3.Dot(Normal, a));
+            normal = Vector3.Normalize(cross);
+            distance = -(Vector3.Dot(normal, a));
         }
 
         public Plane(double a, double b, double c, double d)
@@ -114,44 +86,44 @@ namespace Prowl.Runtime
 
         #region Public Methods
 
-        public double Dot(Vector4 value)
-        {
-            return ((((this.Normal.x * value.x) + (this.Normal.y * value.y)) + (this.Normal.z * value.z)) + (this.D * value.w));
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public double Dot(Vector4 value) => ((((this.normal.x * value.x) + (this.normal.y * value.y)) + (this.normal.z * value.z)) + (this.distance * value.w));
 
-        public void Dot(ref Vector4 value, out double result)
-        {
-            result = (((this.Normal.x * value.x) + (this.Normal.y * value.y)) + (this.Normal.z * value.z)) + (this.D * value.w);
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Dot(ref Vector4 value, out double result) => result = (((this.normal.x * value.x) + (this.normal.y * value.y)) + (this.normal.z * value.z)) + (this.distance * value.w);
 
-        public double DotCoordinate(Vector3 value)
-        {
-            return ((((this.Normal.x * value.x) + (this.Normal.y * value.y)) + (this.Normal.z * value.z)) + this.D);
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public double DotCoordinate(Vector3 value) => ((((this.normal.x * value.x) + (this.normal.y * value.y)) + (this.normal.z * value.z)) + this.distance);
 
-        public void DotCoordinate(ref Vector3 value, out double result)
-        {
-            result = (((this.Normal.x * value.x) + (this.Normal.y * value.y)) + (this.Normal.z * value.z)) + this.D;
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DotCoordinate(ref Vector3 value, out double result) => result = (((this.normal.x * value.x) + (this.normal.y * value.y)) + (this.normal.z * value.z)) + this.distance;
 
-        public double DotNormal(Vector3 value)
-        {
-            return (((this.Normal.x * value.x) + (this.Normal.y * value.y)) + (this.Normal.z * value.z));
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public double DotNormal(Vector3 value) => (((this.normal.x * value.x) + (this.normal.y * value.y)) + (this.normal.z * value.z));
 
-        public void DotNormal(ref Vector3 value, out double result)
-        {
-            result = ((this.Normal.x * value.x) + (this.Normal.y * value.y)) + (this.Normal.z * value.z);
-        }
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DotNormal(ref Vector3 value, out double result) => result = ((this.normal.x * value.x) + (this.normal.y * value.y)) + (this.normal.z * value.z);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool GetSide(Vector3 inPt) => Vector3.Dot(normal, inPt) + distance > 0.0;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public double GetDistanceToPoint(Vector3 inPt) => Vector3.Dot(normal, inPt) + distance;
 
         public void Normalize()
         {
             double factor;
-            Vector3 normal = Normal;
-            Normal = Vector3.Normalize(Normal);
-            factor = (double)Math.Sqrt(Normal.x * Normal.x + Normal.y * Normal.y + Normal.z * Normal.z) /
+            Vector3 normal = this.normal;
+            this.normal = Vector3.Normalize(this.normal);
+            factor = (double)Math.Sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z) /
                     (double)Math.Sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
-            D = D * factor;
+            distance = distance * factor;
+        }
+
+        public void Set3Points(Vector3 a, Vector3 b, Vector3 c)
+        {
+            normal = Vector3.Normalize(Vector3.Cross(b - a, c - a));
+            distance = -Vector3.Dot(normal, a);
         }
 
         public static Plane Normalize(Plane value)
@@ -164,46 +136,25 @@ namespace Prowl.Runtime
         public static void Normalize(ref Plane value, out Plane result)
         {
             double factor;
-            result.Normal = Vector3.Normalize(value.Normal);
-            factor = (double)Math.Sqrt(result.Normal.x * result.Normal.x + result.Normal.y * result.Normal.y + result.Normal.z * result.Normal.z) /
-                    (double)Math.Sqrt(value.Normal.x * value.Normal.x + value.Normal.y * value.Normal.y + value.Normal.z * value.Normal.z);
-            result.D = value.D * factor;
+            result.normal = Vector3.Normalize(value.normal);
+            factor = (double)Math.Sqrt(result.normal.x * result.normal.x + result.normal.y * result.normal.y + result.normal.z * result.normal.z) /
+                    (double)Math.Sqrt(value.normal.x * value.normal.x + value.normal.y * value.normal.y + value.normal.z * value.normal.z);
+            result.distance = value.distance * factor;
         }
 
-        public static bool operator !=(Plane plane1, Plane plane2)
-        {
-            return !plane1.Equals(plane2);
-        }
+        public static bool operator !=(Plane plane1, Plane plane2) => !plane1.Equals(plane2);
 
-        public static bool operator ==(Plane plane1, Plane plane2)
-        {
-            return plane1.Equals(plane2);
-        }
+        public static bool operator ==(Plane plane1, Plane plane2) => plane1.Equals(plane2);
 
-        public override bool Equals(object other)
-        {
-            return (other is Plane) ? this.Equals((Plane)other) : false;
-        }
+        public override bool Equals(object other) => (other is Plane) ? this.Equals((Plane)other) : false;
 
-        public bool Equals(Plane other)
-        {
-            return ((Normal == other.Normal) && (D == other.D));
-        }
+        public bool Equals(Plane other) => ((normal == other.normal) && (distance == other.distance));
 
-        public override int GetHashCode()
-        {
-            return Normal.GetHashCode() ^ D.GetHashCode();
-        }
+        public override int GetHashCode() => normal.GetHashCode() ^ distance.GetHashCode();
 
-        public PlaneIntersectionType Intersects(Bounds box)
-        {
-            return box.Intersects(this);
-        }
+        public PlaneIntersectionType Intersects(Bounds box) => box.Intersects(this);
 
-        public void Intersects(ref Bounds box, out PlaneIntersectionType result)
-        {
-            box.Intersects(ref this, out result);
-        }
+        public void Intersects(ref Bounds box, out PlaneIntersectionType result) => box.Intersects(ref this, out result);
 
         internal PlaneIntersectionType Intersects(ref Vector3 point)
         {
@@ -219,21 +170,9 @@ namespace Prowl.Runtime
             return PlaneIntersectionType.Intersecting;
         }
 
-        internal string DebugDisplayString
-        {
-            get
-            {
-                return string.Concat(
-                    this.Normal.ToString(), "  ",
-                    this.D.ToString()
-                    );
-            }
-        }
+        internal string DebugDisplayString => string.Concat(this.normal.ToString(), "  ", this.distance.ToString());
 
-        public override string ToString()
-        {
-            return "{Normal:" + Normal + " D:" + D + "}";
-        }
+        public override string ToString() => "{Normal:" + normal + " Distance:" + distance + "}";
 
         #endregion
     }

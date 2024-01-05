@@ -82,13 +82,13 @@ namespace Prowl.Runtime
 
             if (Math.Abs(direction.x) < Epsilon)
             {
-                if (origin.x < box.Min.x || origin.x > box.Max.x)
+                if (origin.x < box.min.x || origin.x > box.max.x)
                     return null;
             }
             else
             {
-                tMin = (box.Min.x - origin.x) / direction.x;
-                tMax = (box.Max.x - origin.x) / direction.x;
+                tMin = (box.min.x - origin.x) / direction.x;
+                tMax = (box.max.x - origin.x) / direction.x;
 
                 if (tMin > tMax)
                 {
@@ -100,13 +100,13 @@ namespace Prowl.Runtime
 
             if (Math.Abs(direction.y) < Epsilon)
             {
-                if (origin.y < box.Min.y || origin.y > box.Max.y)
+                if (origin.y < box.min.y || origin.y > box.max.y)
                     return null;
             }
             else
             {
-                var tMinY = (box.Min.y - origin.y) / direction.y;
-                var tMaxY = (box.Max.y - origin.y) / direction.y;
+                var tMinY = (box.min.y - origin.y) / direction.y;
+                var tMaxY = (box.max.y - origin.y) / direction.y;
 
                 if (tMinY > tMaxY)
                 {
@@ -124,13 +124,13 @@ namespace Prowl.Runtime
 
             if (Math.Abs(direction.z) < Epsilon)
             {
-                if (origin.z < box.Min.z || origin.z > box.Max.z)
+                if (origin.z < box.min.z || origin.z > box.max.z)
                     return null;
             }
             else
             {
-                var tMinZ = (box.Min.z - origin.z) / direction.z;
-                var tMaxZ = (box.Max.z - origin.z) / direction.z;
+                var tMinZ = (box.min.z - origin.z) / direction.z;
+                var tMaxZ = (box.max.z - origin.z) / direction.z;
 
                 if (tMinZ > tMaxZ)
                 {
@@ -172,14 +172,14 @@ namespace Prowl.Runtime
 
         public void Intersects(ref Plane plane, out double? result)
         {
-            var den = Vector3.Dot(direction, plane.Normal);
+            var den = Vector3.Dot(direction, plane.normal);
             if (Math.Abs(den) < 0.00001)
             {
                 result = null;
                 return;
             }
 
-            result = (-plane.D - Vector3.Dot(plane.Normal, origin)) / den;
+            result = (-plane.distance - Vector3.Dot(plane.normal, origin)) / den;
 
             if (result < 0.0)
             {

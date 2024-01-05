@@ -186,7 +186,7 @@ namespace Prowl.Runtime
             for (var i = 0; i < PlaneCount; ++i)
             {
                 // TODO: we might want to inline this for performance reasons
-                if (PlaneHelper.ClassifyPoint(ref point, ref this.planes[i]) > 0)
+                if (this.planes[i].GetSide(point))
                 {
                     result = ContainmentType.Disjoint;
                     return;
@@ -350,23 +350,23 @@ namespace Prowl.Runtime
             Vector3 v1, v2, v3;
             Vector3 cross;
 
-            cross = Vector3.Cross(b.Normal, c.Normal);
+            cross = Vector3.Cross(b.normal, c.normal);
 
-            double f = Vector3.Dot(a.Normal, cross);
+            double f = Vector3.Dot(a.normal, cross);
             f *= -1.0f;
 
-            cross = Vector3.Cross(b.Normal, c.Normal );
-            v1 = cross * a.D;
+            cross = Vector3.Cross(b.normal, c.normal );
+            v1 = cross * a.distance;
             //v1 = (a.D * (Vector3.Cross(b.Normal, c.Normal)));
 
 
-            cross = Vector3.Cross(c.Normal, a.Normal);
-            v2 = cross * b.D;
+            cross = Vector3.Cross(c.normal, a.normal);
+            v2 = cross * b.distance;
             //v2 = (b.D * (Vector3.Cross(c.Normal, a.Normal)));
 
 
-            cross = Vector3.Cross(a.Normal, b.Normal);
-            v3 = cross * c.D;
+            cross = Vector3.Cross(a.normal, b.normal);
+            v3 = cross * c.distance;
             //v3 = (c.D * (Vector3.Cross(a.Normal, b.Normal)));
 
             result.x = (v1.x + v2.x + v3.x) / f;
@@ -376,11 +376,11 @@ namespace Prowl.Runtime
 
         private void NormalizePlane(ref Plane p)
         {
-            double factor = 1 / p.Normal.magnitude;
-            p.Normal.x *= factor;
-            p.Normal.y *= factor;
-            p.Normal.z *= factor;
-            p.D *= factor;
+            double factor = 1 / p.normal.magnitude;
+            p.normal.x *= factor;
+            p.normal.y *= factor;
+            p.normal.z *= factor;
+            p.distance *= factor;
         }
 
         #endregion

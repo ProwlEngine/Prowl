@@ -120,7 +120,7 @@ namespace Prowl.Runtime
         /// Returns whether the matrix is the identity matrix.
         /// </summary>
         public bool IsIdentity => M11 == 1 && M22 == 1 && M33 == 1 && M44 == 1 && // Check diagonal element first for early out.
-                                    M12 == 0 && M13 == 0 && M14 == 0 &&
+                       M12 == 0 && M13 == 0 && M14 == 0 &&
                        M21 == 0 && M23 == 0 && M24 == 0 &&
                        M31 == 0 && M32 == 0 && M34 == 0 &&
                        M41 == 0 && M42 == 0 && M43 == 0;
@@ -958,11 +958,11 @@ namespace Prowl.Runtime
         {
             Plane p = Plane.Normalize(plane);
 
-            double dot = p.Normal.x * lightDirection.x + p.Normal.y * lightDirection.y + p.Normal.z * lightDirection.z;
-            double a = -p.Normal.x;
-            double b = -p.Normal.y;
-            double c = -p.Normal.z;
-            double d = -p.D;
+            double dot = p.normal.x * lightDirection.x + p.normal.y * lightDirection.y + p.normal.z * lightDirection.z;
+            double a = -p.normal.x;
+            double b = -p.normal.y;
+            double c = -p.normal.z;
+            double d = -p.distance;
 
             Matrix4x4 result = new();
 
@@ -995,9 +995,9 @@ namespace Prowl.Runtime
         {
             value = Plane.Normalize(value);
 
-            double a = value.Normal.x;
-            double b = value.Normal.y;
-            double c = value.Normal.z;
+            double a = value.normal.x;
+            double b = value.normal.y;
+            double c = value.normal.z;
 
             double fa = -2.0 * a;
             double fb = -2.0 * b;
@@ -1020,9 +1020,9 @@ namespace Prowl.Runtime
             result.M33 = fc * c + 1.0;
             result.M34 = 0.0;
 
-            result.M41 = fa * value.D;
-            result.M42 = fb * value.D;
-            result.M43 = fc * value.D;
+            result.M41 = fa * value.distance;
+            result.M42 = fb * value.distance;
+            result.M43 = fc * value.distance;
             result.M44 = 1.0;
 
             return result;

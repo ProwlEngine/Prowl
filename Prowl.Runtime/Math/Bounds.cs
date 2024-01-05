@@ -47,22 +47,29 @@ namespace Prowl.Runtime
         #region Public Fields
 
         [DataMember]
-        public Vector3 Min;
+        public Vector3 min;
 
         [DataMember]
-        public Vector3 Max;
+        public Vector3 max;
 
         public const int CornerCount = 8;
 
         #endregion Public Fields
 
+        #region Public Properties
+        public Vector3 center { get { return (this.min + this.max) * 0.5f; } set { var s = this.size * 0.5f; this.min = value - s; this.max = value + s; } }
+        public Vector3 extents { get { return (this.max - this.min) * 0.5f; } set { var c = this.center; this.min = c - value; this.max = c + value; } }
+        public Vector3 size { get { return this.max - this.min; } set { var c = this.center; var s = value * 0.5f; this.min = c - s; this.max = c + s; } }
+        #endregion
+
 
         #region Public Constructors
 
-        public Bounds(Vector3 min, Vector3 max)
+        public Bounds(Vector3 center, Vector3 size)
         {
-            this.Min = min;
-            this.Max = max;
+            var hs = size * 0.5f;
+            min = center - hs;
+            max = center + hs;
         }
 
         #endregion Public Constructors
@@ -73,21 +80,21 @@ namespace Prowl.Runtime
         public ContainmentType Contains(Bounds box)
         {
             //test if all corner is in the same side of a face by just checking min and max
-            if (box.Max.x < Min.x
-                || box.Min.x > Max.x
-                || box.Max.y < Min.y
-                || box.Min.y > Max.y
-                || box.Max.z < Min.z
-                || box.Min.z > Max.z)
+            if (box.max.x < min.x
+                || box.min.x > max.x
+                || box.max.y < min.y
+                || box.min.y > max.y
+                || box.max.z < min.z
+                || box.min.z > max.z)
                 return ContainmentType.Disjoint;
 
 
-            if (box.Min.x >= Min.x
-                && box.Max.x <= Max.x
-                && box.Min.y >= Min.y
-                && box.Max.y <= Max.y
-                && box.Min.z >= Min.z
-                && box.Max.z <= Max.z)
+            if (box.min.x >= min.x
+                && box.max.x <= max.x
+                && box.min.y >= min.y
+                && box.max.y <= max.y
+                && box.min.z >= min.z
+                && box.max.z <= max.z)
                 return ContainmentType.Contains;
 
             return ContainmentType.Intersects;
@@ -147,28 +154,28 @@ namespace Prowl.Runtime
         public void Contains(ref Vector3 point, out ContainmentType result)
         {
             //first we get if point is out of box
-            if (point.x < this.Min.x
-                || point.x > this.Max.x
-                || point.y < this.Min.y
-                || point.y > this.Max.y
-                || point.z < this.Min.z
-                || point.z > this.Max.z)
+            if (point.x < this.min.x
+                || point.x > this.max.x
+                || point.y < this.min.y
+                || point.y > this.max.y
+                || point.z < this.min.z
+                || point.z > this.max.z)
             {
                 result = ContainmentType.Disjoint;
             }//or if point is on box because coordonate of point is lesser or equal
-            else if (point.x == this.Min.x
-                || point.x == this.Max.x
-                || point.y == this.Min.y
-                || point.y == this.Max.y
-                || point.z == this.Min.z
-                || point.z == this.Max.z)
+            else if (point.x == this.min.x
+                || point.x == this.max.x
+                || point.y == this.min.y
+                || point.y == this.max.y
+                || point.z == this.min.z
+                || point.z == this.max.z)
                 result = ContainmentType.Intersects;
             else
                 result = ContainmentType.Contains;
         }
 
-        private static readonly Vector3 MaxVector3 = new Vector3(float.MaxValue);
-        private static readonly Vector3 MinVector3 = new Vector3(float.MinValue);
+        private static readonly Vector3 MaxVector3 = new Vector3(double.MaxValue);
+        private static readonly Vector3 MinVector3 = new Vector3(double.MinValue);
 
         /// <summary>
         /// Create a bounding box from the given list of points.
@@ -202,6 +209,29 @@ namespace Prowl.Runtime
             return new Bounds(minVec, maxVec);
         }
 
+
+        public void Encapsulate(Vector3 point)
+        {
+            min = Vector3.Min(min, point);
+            max = Vector3.Max(max, point);
+        }
+
+        public void Encapsulate(Bounds bounds)
+        {
+            Encapsulate(bounds.center - bounds.extents);
+            Encapsulate(bounds.center + bounds.extents);
+        }
+
+        public void Expand(double amount)
+        {
+            extents += new Vector3(amount, amount, amount) * .5;
+        }
+
+        public void Expand(Vector3 amount)
+        {
+            extents += amount * .5;
+        }
+
         public static Bounds CreateMerged(Bounds original, Bounds additional)
         {
             Bounds result;
@@ -211,17 +241,17 @@ namespace Prowl.Runtime
 
         public static void CreateMerged(ref Bounds original, ref Bounds additional, out Bounds result)
         {
-            result.Min.x = Math.Min(original.Min.x, additional.Min.x);
-            result.Min.y = Math.Min(original.Min.y, additional.Min.y);
-            result.Min.z = Math.Min(original.Min.z, additional.Min.z);
-            result.Max.x = Math.Max(original.Max.x, additional.Max.x);
-            result.Max.y = Math.Max(original.Max.y, additional.Max.y);
-            result.Max.z = Math.Max(original.Max.z, additional.Max.z);
+            result.min.x = Math.Min(original.min.x, additional.min.x);
+            result.min.y = Math.Min(original.min.y, additional.min.y);
+            result.min.z = Math.Min(original.min.z, additional.min.z);
+            result.max.x = Math.Max(original.max.x, additional.max.x);
+            result.max.y = Math.Max(original.max.y, additional.max.y);
+            result.max.z = Math.Max(original.max.z, additional.max.z);
         }
 
         public bool Equals(Bounds other)
         {
-            return (this.Min == other.Min) && (this.Max == other.Max);
+            return (this.min == other.min) && (this.max == other.max);
         }
 
         public override bool Equals(object obj)
@@ -232,14 +262,14 @@ namespace Prowl.Runtime
         public Vector3[] GetCorners()
         {
             return new Vector3[] {
-                new Vector3(this.Min.x, this.Max.y, this.Max.z),
-                new Vector3(this.Max.x, this.Max.y, this.Max.z),
-                new Vector3(this.Max.x, this.Min.y, this.Max.z),
-                new Vector3(this.Min.x, this.Min.y, this.Max.z),
-                new Vector3(this.Min.x, this.Max.y, this.Min.z),
-                new Vector3(this.Max.x, this.Max.y, this.Min.z),
-                new Vector3(this.Max.x, this.Min.y, this.Min.z),
-                new Vector3(this.Min.x, this.Min.y, this.Min.z)
+                new Vector3(this.min.x, this.max.y, this.max.z),
+                new Vector3(this.max.x, this.max.y, this.max.z),
+                new Vector3(this.max.x, this.min.y, this.max.z),
+                new Vector3(this.min.x, this.min.y, this.max.z),
+                new Vector3(this.min.x, this.max.y, this.min.z),
+                new Vector3(this.max.x, this.max.y, this.min.z),
+                new Vector3(this.max.x, this.min.y, this.min.z),
+                new Vector3(this.min.x, this.min.y, this.min.z)
             };
         }
 
@@ -253,35 +283,35 @@ namespace Prowl.Runtime
             {
                 throw new ArgumentOutOfRangeException("corners", "Not Enought Corners");
             }
-            corners[0].x = this.Min.x;
-            corners[0].y = this.Max.y;
-            corners[0].z = this.Max.z;
-            corners[1].x = this.Max.x;
-            corners[1].y = this.Max.y;
-            corners[1].z = this.Max.z;
-            corners[2].x = this.Max.x;
-            corners[2].y = this.Min.y;
-            corners[2].z = this.Max.z;
-            corners[3].x = this.Min.x;
-            corners[3].y = this.Min.y;
-            corners[3].z = this.Max.z;
-            corners[4].x = this.Min.x;
-            corners[4].y = this.Max.y;
-            corners[4].z = this.Min.z;
-            corners[5].x = this.Max.x;
-            corners[5].y = this.Max.y;
-            corners[5].z = this.Min.z;
-            corners[6].x = this.Max.x;
-            corners[6].y = this.Min.y;
-            corners[6].z = this.Min.z;
-            corners[7].x = this.Min.x;
-            corners[7].y = this.Min.y;
-            corners[7].z = this.Min.z;
+            corners[0].x = this.min.x;
+            corners[0].y = this.max.y;
+            corners[0].z = this.max.z;
+            corners[1].x = this.max.x;
+            corners[1].y = this.max.y;
+            corners[1].z = this.max.z;
+            corners[2].x = this.max.x;
+            corners[2].y = this.min.y;
+            corners[2].z = this.max.z;
+            corners[3].x = this.min.x;
+            corners[3].y = this.min.y;
+            corners[3].z = this.max.z;
+            corners[4].x = this.min.x;
+            corners[4].y = this.max.y;
+            corners[4].z = this.min.z;
+            corners[5].x = this.max.x;
+            corners[5].y = this.max.y;
+            corners[5].z = this.min.z;
+            corners[6].x = this.max.x;
+            corners[6].y = this.min.y;
+            corners[6].z = this.min.z;
+            corners[7].x = this.min.x;
+            corners[7].y = this.min.y;
+            corners[7].z = this.min.z;
         }
 
         public override int GetHashCode()
         {
-            return this.Min.GetHashCode() + this.Max.GetHashCode();
+            return this.min.GetHashCode() + this.max.GetHashCode();
         }
 
         public bool Intersects(Bounds box)
@@ -293,15 +323,15 @@ namespace Prowl.Runtime
 
         public void Intersects(ref Bounds box, out bool result)
         {
-            if ((this.Max.x >= box.Min.x) && (this.Min.x <= box.Max.x))
+            if ((this.max.x >= box.min.x) && (this.min.x <= box.max.x))
             {
-                if ((this.Max.y < box.Min.y) || (this.Min.y > box.Max.y))
+                if ((this.max.y < box.min.y) || (this.min.y > box.max.y))
                 {
                     result = false;
                     return;
                 }
 
-                result = (this.Max.z >= box.Min.z) && (this.Min.z <= box.Max.z);
+                result = (this.max.z >= box.min.z) && (this.min.z <= box.max.z);
                 return;
             }
 
@@ -328,41 +358,41 @@ namespace Prowl.Runtime
             Vector3 positiveVertex;
             Vector3 negativeVertex;
 
-            if (plane.Normal.x >= 0)
+            if (plane.normal.x >= 0)
             {
-                positiveVertex.x = Max.x;
-                negativeVertex.x = Min.x;
+                positiveVertex.x = max.x;
+                negativeVertex.x = min.x;
             }
             else
             {
-                positiveVertex.x = Min.x;
-                negativeVertex.x = Max.x;
+                positiveVertex.x = min.x;
+                negativeVertex.x = max.x;
             }
 
-            if (plane.Normal.y >= 0)
+            if (plane.normal.y >= 0)
             {
-                positiveVertex.y = Max.y;
-                negativeVertex.y = Min.y;
+                positiveVertex.y = max.y;
+                negativeVertex.y = min.y;
             }
             else
             {
-                positiveVertex.y = Min.y;
-                negativeVertex.y = Max.y;
+                positiveVertex.y = min.y;
+                negativeVertex.y = max.y;
             }
 
-            if (plane.Normal.z >= 0)
+            if (plane.normal.z >= 0)
             {
-                positiveVertex.z = Max.z;
-                negativeVertex.z = Min.z;
+                positiveVertex.z = max.z;
+                negativeVertex.z = min.z;
             }
             else
             {
-                positiveVertex.z = Min.z;
-                negativeVertex.z = Max.z;
+                positiveVertex.z = min.z;
+                negativeVertex.z = max.z;
             }
 
             // Inline Vector3.Dot(plane.Normal, negativeVertex) + plane.D;
-            var distance = plane.Normal.x * negativeVertex.x + plane.Normal.y * negativeVertex.y + plane.Normal.z * negativeVertex.z + plane.D;
+            var distance = plane.normal.x * negativeVertex.x + plane.normal.y * negativeVertex.y + plane.normal.z * negativeVertex.z + plane.distance;
             if (distance > 0)
             {
                 result = PlaneIntersectionType.Front;
@@ -370,7 +400,7 @@ namespace Prowl.Runtime
             }
 
             // Inline Vector3.Dot(plane.Normal, positiveVertex) + plane.D;
-            distance = plane.Normal.x * positiveVertex.x + plane.Normal.y * positiveVertex.y + plane.Normal.z * positiveVertex.z + plane.D;
+            distance = plane.normal.x * positiveVertex.x + plane.normal.y * positiveVertex.y + plane.normal.z * positiveVertex.z + plane.distance;
             if (distance < 0)
             {
                 result = PlaneIntersectionType.Back;
@@ -405,15 +435,15 @@ namespace Prowl.Runtime
             get
             {
                 return string.Concat(
-                    "Min( ", this.Min.ToString(), " )  \r\n",
-                    "Max( ", this.Max.ToString(), " )"
+                    "Min( ", this.min.ToString(), " )  \r\n",
+                    "Max( ", this.max.ToString(), " )"
                     );
             }
         }
 
         public override string ToString()
         {
-            return "{{Min:" + this.Min.ToString() + " Max:" + this.Max.ToString() + "}}";
+            return "{{Min:" + this.min.ToString() + " Max:" + this.max.ToString() + "}}";
         }
 
         #endregion Public Methods
