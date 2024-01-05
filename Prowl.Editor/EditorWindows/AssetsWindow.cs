@@ -1,8 +1,12 @@
 using HexaEngine.ImGuiNET;
+using Prowl.Editor.Assets;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
+using Prowl.Runtime.ImGUI.Widgets;
+using Prowl.Runtime.SceneManagement;
 using System.Diagnostics;
+using static Assimp.Metadata;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -89,7 +93,7 @@ public class AssetsWindow : EditorWindow
         bool opened = ImGui.TreeNodeEx($"{FontAwesome6.FolderTree} {root.Name}", rootFlags);
         SelectHandler.HandleSelectable(treeCounter++, root);
         GUIHelper.ItemRectFilled(1f, 1f, 1f, 0.2f);
-        FileRightClick(null);
+        HandleFileContextMenu(null);
         ImGui.PopStyleColor();
 
         if (opened) {
@@ -112,7 +116,7 @@ public class AssetsWindow : EditorWindow
 
             bool opened = ImGui.TreeNodeEx($"{(isLeaf ? FontAwesome6.FolderOpen : FontAwesome6.Folder)} {subDirectory.Name}", flags);
             SelectHandler.HandleSelectable(treeCounter++, subDirectory);
-            FileRightClick(subDirectory);
+            HandleFileContextMenu(subDirectory);
             GUIHelper.Tooltip(subDirectory.Name);
 
             if (treeCounter % 2 == 0) GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
@@ -136,9 +140,10 @@ public class AssetsWindow : EditorWindow
             var curPos = ImGui.GetCursorPos();
             var name = (Settings.m_HideExtensions ? Path.GetFileNameWithoutExtension(file.Name) : file.Name);
             bool opened = ImGui.TreeNodeEx($"      {name}", flags);
-            SelectHandler.HandleSelectable(treeCounter++, file);
             if (treeCounter % 2 == 0) GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
-            FileRightClick(file);
+            if (ImGui.IsItemHovered())
+                HandleFileClick(file);
+            HandleFileContextMenu(file);
             GUIHelper.Tooltip(file.Name);
             ImGui.PushStyleColor(ImGuiCol.Text, GetFileColor(ext));
             // Display icon behind text
@@ -149,7 +154,34 @@ public class AssetsWindow : EditorWindow
         }
     }
 
-    public static void FileRightClick(FileSystemInfo? fileInfo)
+    public static void HandleFileClick(FileInfo entry)
+    {
+        // Drag and Drop Payload
+        if (ImporterAttribute.SupportsExtension(entry.Extension)) {
+            Type type = ImporterAttribute.GetGeneralType(entry.Extension);
+            if (type != null) {
+                var guid = AssetDatabase.GUIDFromAssetPath(Path.GetRelativePath(Project.ProjectDirectory, entry.FullName));
+                if (DragnDrop.OfferAsset(guid, type.Name))
+                    return; // Dont do Selection/Open stuff
+            }
+        }
+
+        if (ImGui.IsMouseReleased(0))
+            AssetsWindow.SelectHandler.Select(entry);
+
+        string relativeAssetPath = Path.GetRelativePath(Project.ProjectDirectory, entry.FullName);
+        bool isAsset = AssetDatabase.Contains(relativeAssetPath);
+        if (isAsset && ImGui.IsMouseDoubleClicked(0)) {
+            if (entry.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase)) {
+                var guid = AssetDatabase.GUIDFromAssetPath(relativeAssetPath);
+                SceneManager.LoadScene(new AssetRef<Runtime.Scene>(guid));
+            } else {
+                AssetDatabase.OpenAsset(relativeAssetPath);
+            }
+        }
+    }
+
+    public static void HandleFileContextMenu(FileSystemInfo? fileInfo)
     {
         // If still null then show a simplified context menu
         if (fileInfo == null) {

@@ -68,7 +68,7 @@ public class AssetBrowserWindow : EditorWindow {
         ImGui.BeginChild("Body");
         RenderBody();
         ImGui.EndChild();
-        AssetsWindow.FileRightClick(null);
+        AssetsWindow.HandleFileContextMenu(null);
         if (DragnDrop.ReceiveReference<GameObject>(out var go)) {
             // Create Prefab
             var prefab = new Prefab();
@@ -209,7 +209,7 @@ public class AssetBrowserWindow : EditorWindow {
             GUIHelper.ItemRect(1f, 0.8f, 0.0f, 0.8f, MathF.Sin(pingTimer) * 6f, 3f, 2.5f);
         }
 
-        AssetsWindow.FileRightClick(entry);
+        AssetsWindow.HandleFileContextMenu(entry);
         ImGui.PopID();
 
         curPos.X = 5 + ((i + 1) % rowCount) * itemSize;
@@ -233,30 +233,8 @@ public class AssetBrowserWindow : EditorWindow {
         GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
 
         if (ImGui.IsItemHovered()) {
-            if (entry is FileInfo) {
-                // Drag and Drop Payload
-                if (ImporterAttribute.SupportsExtension(entry.Extension)) {
-                    Type type = ImporterAttribute.GetGeneralType(entry.Extension);
-                    if (type != null) {
-                        var guid = AssetDatabase.GUIDFromAssetPath(Path.GetRelativePath(Project.ProjectDirectory, entry.FullName));
-                        if (DragnDrop.OfferAsset(guid, type.Name))
-                            goto end; // Dont do Selection/Open stuff
-                    }
-                }
-
-                if (ImGui.IsMouseReleased(0))
-                    AssetsWindow.SelectHandler.Select(entry);
-
-                string relativeAssetPath = Path.GetRelativePath(Project.ProjectDirectory, entry.FullName);
-                bool isAsset = AssetDatabase.Contains(relativeAssetPath);
-                if (isAsset && ImGui.IsMouseDoubleClicked(0)) {
-                    if (entry.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase)) {
-                        var guid = AssetDatabase.GUIDFromAssetPath(relativeAssetPath);
-                        SceneManager.LoadScene(new AssetRef<Runtime.Scene>(guid));
-                    } else {
-                        AssetDatabase.OpenAsset(relativeAssetPath);
-                    }
-                }
+            if (entry is FileInfo fileInfo) {
+                AssetsWindow.HandleFileClick(fileInfo);
             } else {
                 // Folder selection is a bit differant, just clicking will select but keep the same directory
                 // Double clicking will select and change the directory to the one clicked
@@ -269,7 +247,6 @@ public class AssetBrowserWindow : EditorWindow {
                     CurDirectory = new DirectoryInfo(entry.FullName);
             }
         }
-        end:;
         GUIHelper.Tooltip(entry.Name);
 
         ImGui.PopStyleVar(2);
