@@ -18,7 +18,7 @@ namespace Prowl.Runtime.ImGUI.Widgets
             public string Caption;
         }
 
-        public static void PlotFlame(string label, int valuesCount, int valuesOffset, string overlayText, float scaleMin, float scaleMax, Vector2 graphSize, Func<int, FlameGraphValue> valuesGetter)
+        public static void PlotFlame(string label, Func<int, FlameGraphValue> valuesGetter, int valuesCount, ref int selected, bool flip = false, int valuesOffset = 0, string? overlayText = null, float scaleMin = float.MaxValue, float scaleMax = float.MaxValue, Vector2 graphSize = default)
         {
             unsafe
             {
@@ -110,14 +110,24 @@ namespace Prowl.Runtime.ImGUI.Widgets
                         float endX = end / duration;
 
                         float width = innerBB.Max.X - innerBB.Min.X;
-                        float height = blockHeight * (maxDepth - depth + 1) - style.FramePadding.Y;
+                        float height;
+                        if (flip) {
+                            height = blockHeight * (maxDepth - depth + 1) - style.FramePadding.Y;
+                        } else {
+                            height = blockHeight * (depth + 1) - style.FramePadding.Y;
+                        }
 
                         Vector2 pos0 = innerBB.Min + new System.Numerics.Vector2(startX * width, height);
                         Vector2 pos1 = innerBB.Min + new System.Numerics.Vector2(endX * width, height + blockHeight);
 
                         bool vHovered = false;
-                        if (ImGui.IsMouseHoveringRect(pos0, pos1))
-                        {
+                        if (ImGui.IsMouseHoveringRect(pos0, pos1)) {
+                            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left)) {
+                                if (selected == i)
+                                    selected = -1;
+                                else
+                                    selected = i;
+                            }
                             ImGui.SetTooltip($"{caption}: {stageEnd - stageStart:0.####}");
                             vHovered = true;
                             anyHovered = vHovered;
@@ -127,10 +137,9 @@ namespace Prowl.Runtime.ImGUI.Widgets
                         window.DrawList.AddRect(pos0, pos1, vHovered ? colOutlineHovered : colOutlineBase);
                         Vector2 textSize = ImGui.CalcTextSize(caption);
                         Vector2 boxSize = pos1 - pos0;
-                        Vector2 textOffset = new Vector2(0.0f, 0.0f);
                         if (textSize.x < boxSize.x)
                         {
-                            textOffset = new Vector2(0.5f, 0.5f) * (boxSize - textSize);
+                            Vector2 textOffset = new Vector2(0.5f, 0.5f) * (boxSize - textSize);
                             ImGui.RenderText(pos0 + textOffset, caption, "", false);
                         }
                     }
