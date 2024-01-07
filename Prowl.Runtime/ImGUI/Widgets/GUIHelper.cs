@@ -2,16 +2,14 @@
 using Prowl.Icons;
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
-using System.Numerics;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Prowl.Runtime
 {
     public class GUIHelper
     {
+        public static void Space(int amount = 1) => ImGui.SetCursorPosY(ImGui.GetCursorPosY() + (5 * amount));
+
         /// <summary>
         /// Creates a tooltip for the hovered item drawn before this is called.
         /// </summary>
