@@ -176,7 +176,7 @@ public class AssetsWindow : EditorWindow
                 var guid = AssetDatabase.GUIDFromAssetPath(relativeAssetPath);
                 SceneManager.LoadScene(new AssetRef<Runtime.Scene>(guid));
             } else {
-                AssetDatabase.OpenAsset(relativeAssetPath);
+                AssetDatabase.OpenRelativeAsset(relativeAssetPath);
             }
         }
     }
@@ -188,12 +188,8 @@ public class AssetsWindow : EditorWindow
             if (ImGui.BeginPopupContextItem()) {
                 MainMenuItems.Directory = null;
                 MenuItem.DrawMenuRoot("Create");
-                if (ImGui.MenuItem("Show In Explorer")) {
-                    using Process fileopener = new Process();
-                    fileopener.StartInfo.FileName = "explorer";
-                    fileopener.StartInfo.Arguments = "\"" + Project.ProjectAssetDirectory + "\"";
-                    fileopener.Start();
-                }
+                if (ImGui.MenuItem("Show In Explorer"))
+                    AssetDatabase.OpenPath(Project.ProjectAssetDirectory);
                 ImGui.Separator();
                 if (ImGui.MenuItem("Reimport All"))
                     AssetDatabase.ReimportAll();
@@ -209,14 +205,10 @@ public class AssetsWindow : EditorWindow
                 ImGui.Separator();
                 MainMenuItems.Directory = file.Directory;
                 MenuItem.DrawMenuRoot("Create");
-                if (ImGui.MenuItem("Show In Explorer")) {
-                    using Process fileopener = new Process();
-                    fileopener.StartInfo.FileName = "explorer";
-                    fileopener.StartInfo.Arguments = "\"" + file.Directory!.FullName + "\"";
-                    fileopener.Start();
-                }
+                if (ImGui.MenuItem("Show In Explorer"))
+                    AssetDatabase.OpenPath(file.Directory!.FullName);
                 if (ImGui.MenuItem("Open"))
-                    AssetDatabase.OpenAsset(relativeAssetPath);
+                    AssetDatabase.OpenRelativeAsset(relativeAssetPath);
                 if (ImGui.MenuItem("Delete"))
                     file.Delete(); // Will trigger the AssetDatabase file watchers
                 ImGui.Separator();
@@ -232,18 +224,10 @@ public class AssetsWindow : EditorWindow
                 ImGui.Separator();
                 MainMenuItems.Directory = directory;
                 MenuItem.DrawMenuRoot("Create");
-                if (ImGui.MenuItem("Show In Explorer")) {
-                    using Process fileopener = new Process();
-                    fileopener.StartInfo.FileName = "explorer";
-                    fileopener.StartInfo.Arguments = "\"" + directory.Parent!.FullName + "\"";
-                    fileopener.Start();
-                }
-                if (ImGui.MenuItem("Open")) {
-                    using Process fileopener = new Process();
-                    fileopener.StartInfo.FileName = "explorer";
-                    fileopener.StartInfo.Arguments = "\"" + directory.FullName + "\"";
-                    fileopener.Start();
-                }
+                if (ImGui.MenuItem("Show In Explorer"))
+                    AssetDatabase.OpenPath(directory.Parent!.FullName);
+                if (ImGui.MenuItem("Open"))
+                    AssetDatabase.OpenPath(directory.FullName);
                 if (ImGui.MenuItem("Delete"))
                     directory.Delete(true); // Will trigger the AssetDatabase file watchers
                 ImGui.Separator();

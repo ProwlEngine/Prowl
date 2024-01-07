@@ -416,16 +416,22 @@ namespace Prowl.Runtime.Assets
         /// <summary>
         /// Opens the asset with the operating systems Default Program
         /// </summary>
-        /// <param name="relativeAssetPath"></param>
-        public static void OpenAsset(string relativeAssetPath)
+        public static void OpenRelativeAsset(string relativeAssetPath)
         {
-            using Process fileopener = new();
+            OpenPath(RelativeToFile(relativeAssetPath).FullName);
+        }
 
-            FileInfo info = RelativeToFile(relativeAssetPath);
-
-            fileopener.StartInfo.FileName = "explorer";
-            fileopener.StartInfo.Arguments = "\"" + info.FullName + "\"";
-            fileopener.Start();
+        /// <summary>
+        /// Opens the asset with the operating systems Default Program
+        /// </summary>
+        public static void OpenPath(string fullPath)
+        {
+            if (OperatingSystem.IsWindows())
+                Process.Start("explorer.exe", fullPath);
+            else if (OperatingSystem.IsLinux())
+                Process.Start("xdg-open", fullPath);
+            else if (OperatingSystem.IsMacOS())
+                Process.Start("open", fullPath);
         }
 
         public static void Clear()

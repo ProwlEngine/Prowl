@@ -5,6 +5,7 @@ using System.Reflection;
 using Prowl.Editor.EditorWindows;
 using System.IO.Compression;
 using Prowl.Runtime;
+using System.IO;
 
 namespace Prowl.Editor;
 
@@ -237,10 +238,7 @@ public static class Project
         Runtime.Debug.Log($"Successfully built project!");
 
         // Open the Build folder
-        using Process fileopener = new();
-        fileopener.StartInfo.FileName = "explorer";
-        fileopener.StartInfo.Arguments = "\"" + BuildPath + "\"";
-        fileopener.Start();
+        AssetDatabase.OpenPath(BuildPath);
 
         return true;
     }
