@@ -1,23 +1,20 @@
-﻿using Prowl.Runtime;
+﻿using HexaEngine.ImGuiNET;
 using Prowl.Editor.Assets;
 using Prowl.Editor.PropertyDrawers;
-using Prowl.Icons;
-using HexaEngine.ImGuiNET;
-using System.Globalization;
-using System.Numerics;
+using Prowl.Runtime;
 using System.Reflection;
-using Prowl.Runtime.Assets;
 
 namespace Prowl.Editor.EditorWindows.CustomEditors
 {
+    /// <summary>
+    /// GameObject Custom Editor for the Inspector Window
+    /// </summary>
     [CustomEditor(typeof(GameObject))]
     public class GameObjectEditor : ScriptedEditor
     {
         private string _searchText = string.Empty;
         private MenuItemInfo rootMenuItem;
         private Dictionary<int, ScriptedEditor> compEditors = new();
-
-        private void Space() => ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
 
         public override void OnDisable()
         {
@@ -30,11 +27,10 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             var go = target as GameObject;
 
             ImGui.PushID(go.GetHashCode());
-            // GameObject's Drawer is Hardcoded
+            if (go.hideFlags.HasFlag(HideFlags.NotEditable)) ImGui.BeginDisabled();
 
             // position cursor back to window start
-            ImGui.SetCursorPosX(56);
-            ImGui.SetCursorPosY(24);
+            ImGui.SetCursorPos(new(56, 24));
 
             ImGui.SetNextItemWidth(ImGui.GetWindowWidth() - 100);
             ImGui.InputText("##GOName", ref go.Name, 0x100);
@@ -42,12 +38,11 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
             bool isEnabled = go.Enabled;
             ImGui.Checkbox("##GOActive", ref isEnabled);
-            if (isEnabled != go.Enabled)
-                go.Enabled = isEnabled;
+            if (isEnabled != go.Enabled) go.Enabled = isEnabled;
             GUIHelper.Tooltip("Is Enabled");
 
             ImGui.SetCursorPosY(52);
-            
+
             //float widthToWorkWith = ImGui.GetWindowWidth() - 24f;
             //ImGui.SetNextItemWidth((widthToWorkWith / 2) - (13));
             //ImGui.Combo("##Tag", ref go.tagIndex, TagLayerManager.tags.ToArray(), TagLayerManager.tags.Count);
@@ -67,260 +62,165 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
             // Draw Components
             HashSet<int> editorsNeeded = new();
-            var components = go.GetComponents<MonoBehaviour>().ToList();
-            for (int i = 0; i < components.Count; i++)
-            {
-                var comp = components[i];
+            foreach (var comp in go.GetComponents<MonoBehaviour>()) {
                 editorsNeeded.Add(comp.InstanceID);
 
-                if (comp.hideFlags.HasFlag(HideFlags.Hide) || comp.hideFlags.HasFlag(HideFlags.HideAndDontSave)) continue;
+                if (comp.hideFlags.HasFlag(HideFlags.Hide) || comp.hideFlags.HasFlag(HideFlags.HideAndDontSave))
+                    continue;
 
-                if (comp.hideFlags.HasFlag(HideFlags.NotEditable)) ImGui.BeginDisabled();
+                bool isCompEditable = !comp.hideFlags.HasFlag(HideFlags.NotEditable);
+                if (!isCompEditable) ImGui.BeginDisabled();
+                ImGui.PushID(comp.InstanceID);
 
-                ImGui.PushID(comp.GetHashCode() + i);
-                // if has a AddComponentMenu then name is the path name
-                var t = comp.GetType();
-                var addToMenuAttribute = t.GetCustomAttribute<AddComponentMenuAttribute>();
-                string compName = addToMenuAttribute != null ? Path.GetFileName(addToMenuAttribute.Path) : t.Name;
-                if (ImGui.CollapsingHeader(compName, ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.OpenOnArrow))
-                {
-                    if (ImGui.BeginPopupContextItem())
-                    {
-                        if (ImGui.MenuItem("Duplicate"))
-                        {
-                            var serialized = TagSerializer.Serialize(comp);
-                            var copy = TagSerializer.Deserialize<MonoBehaviour>(serialized);
-                            go.AddComponentDirectly(copy);
-                        }
-                        if (ImGui.MenuItem("Delete")) go.RemoveComponent(comp);
-                        ImGui.EndPopup();
-                    }
+                var cType = comp.GetType();
+                if (ImGui.CollapsingHeader(GetComponentDisplayName(cType), ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.OpenOnArrow)) {
 
-                    if (compEditors.TryGetValue(comp.InstanceID, out var editor))
-                    {
+                    HandleComponentContextMenu(go, comp);
+
+                    if (compEditors.TryGetValue(comp.InstanceID, out var editor)) {
                         editor.OnInspectorGUI();
-                        continue;
+                        goto EndComponent;
                     } else {
-                        var editorType = CustomEditorAttribute.GetEditor(comp.GetType());
+                        var editorType = CustomEditorAttribute.GetEditor(cType);
                         if (editorType != null) {
-                            editor = (ScriptedEditor)Activator.CreateInstance(editorType);
-                            editor.target = comp;
+                            editor = Activator.CreateInstance(editorType) as ScriptedEditor;
                             if (editor != null) {
                                 compEditors[comp.InstanceID] = editor;
+                                editor.target = comp;
                                 editor.OnEnable();
                                 editor.OnInspectorGUI();
+                                goto EndComponent;
                             }
                         }
                     }
 
-                    FieldInfo[] fields = comp.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-                    // Private fields need to have the SerializeField attribute
-                    fields = fields.Where(field => field.IsPublic || Attribute.IsDefined(field, typeof(SerializeFieldAttribute))).ToArray();
-
-                    foreach (var field in fields)
-                    {
-                        // Dont render if the field has the Hide attribute
+                    FieldInfo[] fields = cType.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    foreach (var field in fields.Where(field => field.IsPublic || Attribute.IsDefined(field, typeof(SerializeFieldAttribute))))
                         if (!Attribute.IsDefined(field, typeof(HideInInspectorAttribute)))
-                        {
-                            var attributes = field.GetCustomAttributes(true);
-                            var imGuiAttributes = attributes.Where(attr => attr is IImGUIAttri).Cast<IImGUIAttri>();
-
-                            foreach (var imGuiAttribute in imGuiAttributes)
-                                imGuiAttribute.Draw();
-
-                            // enums are a special case
-                            if (field.FieldType.IsEnum)
-                            {
-                                var currentEnumValue = (Enum)field.GetValue(comp);
-
-                                if (ImGui.BeginCombo(field.FieldType.Name, currentEnumValue.ToString()))
-                                {
-                                    foreach (var enumValue in Enum.GetValues(field.FieldType))
-                                    {
-                                        bool isSelected = currentEnumValue.Equals(enumValue);
-
-                                        if (ImGui.Selectable(enumValue.ToString(), isSelected)) {
-                                            field.SetValue(comp, enumValue);
-                                            comp.OnValidate();
-                                        }
-
-                                        if (isSelected)
-                                            ImGui.SetItemDefaultFocus();
-                                    }
-
-                                    ImGui.EndCombo();
-                                }
-                            }
-                            else
-                            {
-                                // Draw the field using PropertyDrawer.Draw
-                                if (PropertyDrawer.Draw(comp, field))
-                                    comp.OnValidate();
-                            }
-
-                            foreach (var imGuiAttribute in imGuiAttributes)
-                                imGuiAttribute.End();
-                        }
-                    }
+                            HandleComponentField(comp, field);
 
                     // Draw any Buttons
                     ImGUIButtonAttribute.DrawButtons(comp);
                 }
+
+                EndComponent:;
+
                 ImGui.PopID();
+                if (!isCompEditable) ImGui.EndDisabled();
 
-                if (comp.hideFlags.HasFlag(HideFlags.NotEditable)) ImGui.EndDisabled();
-
-                Space();
+                GUIHelper.Space();
             }
 
             // Remove any editors that are no longer needed
-            var keys = compEditors.Keys.ToList();
-            for (int i = 0; i < keys.Count; i++)
-            {
-                var key = keys[i];
-                if (!editorsNeeded.Contains(key))
-                {
-                    compEditors[key].OnDisable();
-                    compEditors.Remove(key);
-                }
-            }
+            HandleUnusedEditors(editorsNeeded);
 
+            GUIHelper.Space(4);
 
-            Space();Space();
-            Space();Space();
+            HandleAddComponentButton(go);
 
+            if (go.hideFlags.HasFlag(HideFlags.NotEditable)) ImGui.EndDisabled();
+            ImGui.PopID();
+        }
+
+        private static string GetComponentDisplayName(Type cType)
+        {
+            var addToMenuAttribute = cType.GetCustomAttribute<AddComponentMenuAttribute>();
+            return addToMenuAttribute != null ? Path.GetFileName(addToMenuAttribute.Path) : cType.Name;
+        }
+
+        private void HandleAddComponentButton(GameObject? go)
+        {
             if (ImGui.Button("Add Component", new System.Numerics.Vector2(ImGui.GetWindowWidth() - 15f, 25f)))
                 ImGui.OpenPopup("AddComponentContextMenu");
 
-            if (ImGui.BeginPopup("AddComponentContextMenu"))
-            {
-                float cursorPosX = ImGui.GetCursorPosX();
+            ImGui.PushStyleColor(ImGuiCol.PopupBg, new System.Numerics.Vector4(0.1f, 0.1f, 0.1f, 0.6f));
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new System.Numerics.Vector2(6, 6));
+            if (ImGui.BeginPopup("AddComponentContextMenu")) {
                 GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X);
 
-                if (rootMenuItem == null)
-                    rootMenuItem = GetAddComponentMenuItems();
+                ImGui.Separator();
+
+                rootMenuItem ??= GetAddComponentMenuItems();
 
                 DrawMenuItems(rootMenuItem, go);
 
                 ImGui.EndPopup();
             }
-            ImGui.PopID();
+            ImGui.PopStyleColor();
+            ImGui.PopStyleVar();
         }
 
-        public struct XBounds
+        private void HandleUnusedEditors(HashSet<int> editorsNeeded)
         {
-            public float start;
-            public float end;
+            foreach (var key in compEditors.Keys)
+                if (!editorsNeeded.Contains(key)) {
+                    compEditors[key].OnDisable();
+                    compEditors.Remove(key);
+                }
         }
 
-        public static XBounds CalculateSectionBoundsX(float padding)
+        private static void HandleComponentField(MonoBehaviour comp, FieldInfo field)
         {
-            float windowStart = ImGui.GetWindowSize().X;
-            float windowPadding = ImGui.GetStyle().WindowPadding.X;
+            var attributes = field.GetCustomAttributes(true);
+            var imGuiAttributes = attributes.Where(attr => attr is IImGUIAttri).Cast<IImGUIAttri>();
+            foreach (var imGuiAttribute in imGuiAttributes)
+                imGuiAttribute.Draw();
 
-            return new XBounds
-            {
-                start = windowStart + windowPadding + padding,
-                end = windowStart + windowStart - windowPadding - padding
-            };
-        }
+            // enums are a special case
+            if (field.FieldType.IsEnum) {
+                var currentEnumValue = (Enum)field.GetValue(comp);
 
-        public static bool BeginSection(string title)
-        {
-            ImGui.GetWindowDrawList().ChannelsSplit(2);
+                if (ImGui.BeginCombo(field.FieldType.Name, currentEnumValue.ToString())) {
+                    foreach (var enumValue in Enum.GetValues(field.FieldType)) {
+                        bool isSelected = currentEnumValue.Equals(enumValue);
 
-            // Draw content above the rectangle
-            ImGui.GetWindowDrawList().ChannelsSetCurrent(1);
+                        if (ImGui.Selectable(enumValue.ToString(), isSelected)) {
+                            field.SetValue(comp, enumValue);
+                            comp.OnValidate();
+                        }
 
-            var padding = ImGui.GetStyle().WindowPadding;
+                        if (isSelected)
+                            ImGui.SetItemDefaultFocus();
+                    }
 
-            float windowWidth = ImGui.GetWindowSize().X;
-
-            var boundsX = CalculateSectionBoundsX(padding.X);
-
-            // Title will be clipped till the middle
-            // because I am going to have a collapsing
-            // header there
-            float midPoint = boundsX.start + (boundsX.end - boundsX.start) / 2.0f;
-
-            // Start from padding position
-            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + padding.Y);
-            ImGui.BeginGroup();
-            if (padding.X > 0)
-            {
-                ImGui.Indent(padding.X);
+                    ImGui.EndCombo();
+                }
+            } else {
+                // Draw the field using PropertyDrawer.Draw
+                if (PropertyDrawer.Draw(comp, field))
+                    comp.OnValidate();
             }
 
-            //ImGui.PushClipRect(new Vector2(boundsX.start, window.ClipRect.Min.Y),
-            //                   new Vector2(midPoint, window.ClipRect.Max.Y), false);
-            ImGui.TextUnformatted(title);
-            ImGui.PopClipRect();
-
-            // Setting clip rectangle for the group contents;
-            // so, that text does not overflow outside this widget
-            // the parent window is resized
-            //ImGui.PushClipRect(new Vector2(boundsX.start, window.ClipRect.Min.Y),
-            //                   new Vector2(boundsX.end, window.ClipRect.Max.Y), false);
-            //
-            return true;
+            foreach (var imGuiAttribute in imGuiAttributes)
+                imGuiAttribute.End();
         }
 
-        public static void EndSection()
+        private static void HandleComponentContextMenu(GameObject? go, MonoBehaviour comp)
         {
-            var padding = ImGui.GetStyle().WindowPadding;
-
-            ImGui.PopClipRect();
-            if (padding.X > 0)
-            {
-                ImGui.Unindent(padding.X);
+            if (ImGui.BeginPopupContextItem()) {
+                if (ImGui.MenuItem("Duplicate")) {
+                    var serialized = TagSerializer.Serialize(comp);
+                    var copy = TagSerializer.Deserialize<MonoBehaviour>(serialized);
+                    go.AddComponentDirectly(copy);
+                }
+                if (ImGui.MenuItem("Delete")) go.RemoveComponent(comp);
+                ImGui.EndPopup();
             }
-            ImGui.EndGroup();
-
-            // Essentially, the content is drawn with padding
-            // while the rectangle is drawn without padding
-            var boundsX = CalculateSectionBoundsX(0.0f);
-
-            // GetItemRectMin is going to include the padding
-            // as well; so, remove it
-            var panelMin = new System.Numerics.Vector2(boundsX.start, ImGui.GetItemRectMin().Y - padding.Y);
-            var panelMax = new System.Numerics.Vector2(boundsX.end, ImGui.GetItemRectMax().Y + padding.Y);
-
-            // Draw rectangle below
-            ImGui.GetWindowDrawList().ChannelsSetCurrent(0);
-            ImGui.GetWindowDrawList().AddRectFilled(panelMin, panelMax,
-                ImGui.GetColorU32(ImGuiCol.ChildBg),
-                ImGui.GetStyle().ChildRounding);
-            ImGui.GetWindowDrawList().ChannelsMerge();
-
-            // Since the rectangle is bigger than the box, move the cursor;
-            // so, it starts outside the box
-            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + padding.Y);
-
-            // Then, add default spacing
-            ImGui.Spacing();
         }
 
-        public void DrawMenuItems(MenuItemInfo menuItem, GameObject go)
+        private void DrawMenuItems(MenuItemInfo menuItem, GameObject go)
         {
-            foreach (var item in menuItem.Children)
-            {
-                if (string.IsNullOrEmpty(_searchText) == false && (item.Name.Contains(_searchText, StringComparison.CurrentCultureIgnoreCase) == false || item.Type == null))
-                {
+            foreach (var item in menuItem.Children) {
+                if (string.IsNullOrEmpty(_searchText) == false && (item.Name.Contains(_searchText, StringComparison.CurrentCultureIgnoreCase) == false || item.Type == null)) {
                     DrawMenuItems(item, go);
                     continue;
                 }
 
-
-                if (item.Type != null)
-                {
+                if (item.Type != null) {
                     if (ImGui.MenuItem(item.Name))
                         go.AddComponent(item.Type);
-                }
-                else
-                {
-                    if (ImGui.BeginMenu(item.Name, true))
-                    {
+                } else {
+                    if (ImGui.BeginMenu(item.Name, true)) {
                         DrawMenuItems(item, go);
                         ImGui.EndMenu();
                     }
@@ -335,8 +235,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 .Where(type => type.IsSubclassOf(typeof(MonoBehaviour)) && !type.IsAbstract)
                 .ToArray();
 
-            var items = componentTypes.Select(type =>
-            {
+            var items = componentTypes.Select(type => {
                 string Name = type.Name;
                 var addToMenuAttribute = type.GetCustomAttribute<AddComponentMenuAttribute>();
                 if (addToMenuAttribute != null)
@@ -346,37 +245,26 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
 
             // Create a root MenuItemInfo object to serve as the starting point of the tree
-            MenuItemInfo root = new MenuItemInfo
-            {
-                Name = "Root"
-            };
+            MenuItemInfo root = new MenuItemInfo { Name = "Root" };
 
-            foreach (var (path, type) in items)
-            {
+            foreach (var (path, type) in items) {
                 string[] parts = path.Split('/');
                 MenuItemInfo currentNode = root;
 
                 for (int i = 0; i < parts.Length - 1; i++)  // Skip the last part
                 {
                     string part = parts[i];
-
                     MenuItemInfo childNode = currentNode.Children.Find(c => c.Name == part);
 
-                    if (childNode == null)
-                    {
-                        childNode = new MenuItemInfo
-                        {
-                            Name = part
-                        };
-
+                    if (childNode == null) {
+                        childNode = new MenuItemInfo { Name = part };
                         currentNode.Children.Add(childNode);
                     }
 
                     currentNode = childNode;
                 }
 
-                MenuItemInfo leafNode = new MenuItemInfo
-                {
+                MenuItemInfo leafNode = new MenuItemInfo {
                     Name = parts[^1],  // Get the last part
                     Type = type
                 };
@@ -396,7 +284,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 SortChildren(child);
         }
 
-        public class MenuItemInfo
+        private class MenuItemInfo
         {
             public string Name;
             public Type Type;
