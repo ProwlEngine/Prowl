@@ -139,6 +139,12 @@ public static class EditorGui
 
     }
 
+    public static void Notify(string title, string content = "", ImGuiToastType type = ImGuiToastType.None) => Notify(title, content, Color.white, type);
+    public static void Notify(string title, string content, Color color, ImGuiToastType type = ImGuiToastType.None)
+    {
+        ImGuiNotify.InsertNotification(new ImGuiToast() { Title = title, Content = content, Color = color, Type = type });
+    }
+
 
     #region ImGUI attributes
 
