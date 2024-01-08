@@ -34,8 +34,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         var attributes = field.GetCustomAttributes(true);
                         var imGuiAttributes = attributes.Where(attr => attr is IImGUIAttri).Cast<IImGUIAttri>();
 
-                        foreach (var imGuiAttribute in imGuiAttributes)
-                            imGuiAttribute.Draw();
+                        EditorGui.HandleBeginImGUIAttributes(imGuiAttributes);
 
                         // enums are a special case
                         if (field.FieldType.IsEnum)
@@ -64,13 +63,12 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                             changed |= PropertyDrawer.Draw(scriptObject, field);
                         }
 
-                        foreach (var imGuiAttribute in imGuiAttributes)
-                            imGuiAttribute.End();
+                        EditorGui.HandleEndImGUIAttributes(imGuiAttributes);
                     }
                 }
 
                 // Draw any Buttons
-                changed |= ImGUIButtonAttribute.DrawButtons(scriptObject);
+                changed |= EditorGui.HandleAttributeButtons(scriptObject);
 
                 if (changed)
                 {

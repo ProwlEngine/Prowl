@@ -67,19 +67,17 @@ public class ProjectSettingsWindow : EditorWindow {
                 var attributes = field.GetCustomAttributes(true);
                 var imGuiAttributes = attributes.Where(attr => attr is IImGUIAttri).Cast<IImGUIAttri>();
 
-                foreach (var imGuiAttribute in imGuiAttributes)
-                    imGuiAttribute.Draw();
+                EditorGui.HandleBeginImGUIAttributes(imGuiAttributes);
 
                 // Draw the field using PropertyDrawer.Draw
                 if (PropertyDrawer.Draw(setting, field))
                     Project.ProjectSettings.Save();
 
-                foreach (var imGuiAttribute in imGuiAttributes)
-                    imGuiAttribute.End();
+                EditorGui.HandleEndImGUIAttributes(imGuiAttributes);
             }
         }
 
         // Draw any Buttons
-        ImGUIButtonAttribute.DrawButtons(setting);
+        EditorGui.HandleAttributeButtons(setting);
     }
 }

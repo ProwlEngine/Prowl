@@ -1,8 +1,12 @@
-﻿using HexaEngine.ImGuiNET;
+﻿using Assimp;
+using HexaEngine.ImGuiNET;
 using Prowl.Editor.Assets;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
+using Silk.NET.Vulkan;
 using System.Reflection;
+using System.Xml.Linq;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace Prowl.Editor.EditorWindows.CustomEditors
 {
@@ -100,7 +104,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                             HandleComponentField(comp, field);
 
                     // Draw any Buttons
-                    ImGUIButtonAttribute.DrawButtons(comp);
+                    EditorGui.HandleAttributeButtons(comp);
                 }
 
                 EndComponent:;
@@ -128,28 +132,6 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             return addToMenuAttribute != null ? Path.GetFileName(addToMenuAttribute.Path) : cType.Name;
         }
 
-        private void HandleAddComponentButton(GameObject? go)
-        {
-            if (ImGui.Button("Add Component", new System.Numerics.Vector2(ImGui.GetWindowWidth() - 15f, 25f)))
-                ImGui.OpenPopup("AddComponentContextMenu");
-
-            ImGui.PushStyleColor(ImGuiCol.PopupBg, new System.Numerics.Vector4(0.1f, 0.1f, 0.1f, 0.6f));
-            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new System.Numerics.Vector2(6, 6));
-            if (ImGui.BeginPopup("AddComponentContextMenu")) {
-                GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X);
-
-                ImGui.Separator();
-
-                rootMenuItem ??= GetAddComponentMenuItems();
-
-                DrawMenuItems(rootMenuItem, go);
-
-                ImGui.EndPopup();
-            }
-            ImGui.PopStyleColor();
-            ImGui.PopStyleVar();
-        }
-
         private void HandleUnusedEditors(HashSet<int> editorsNeeded)
         {
             foreach (var key in compEditors.Keys)
@@ -163,8 +145,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
         {
             var attributes = field.GetCustomAttributes(true);
             var imGuiAttributes = attributes.Where(attr => attr is IImGUIAttri).Cast<IImGUIAttri>();
-            foreach (var imGuiAttribute in imGuiAttributes)
-                imGuiAttribute.Draw();
+            EditorGui.HandleBeginImGUIAttributes(imGuiAttributes);
 
             // enums are a special case
             if (field.FieldType.IsEnum) {
@@ -191,8 +172,31 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     comp.OnValidate();
             }
 
-            foreach (var imGuiAttribute in imGuiAttributes)
-                imGuiAttribute.End();
+            EditorGui.HandleEndImGUIAttributes(imGuiAttributes);
+        }
+
+        #region Add Component Popup
+
+        private void HandleAddComponentButton(GameObject? go)
+        {
+            if (ImGui.Button("Add Component", new System.Numerics.Vector2(ImGui.GetWindowWidth() - 15f, 25f)))
+                ImGui.OpenPopup("AddComponentContextMenu");
+
+            ImGui.PushStyleColor(ImGuiCol.PopupBg, new System.Numerics.Vector4(0.1f, 0.1f, 0.1f, 0.6f));
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new System.Numerics.Vector2(6, 6));
+            if (ImGui.BeginPopup("AddComponentContextMenu")) {
+                GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X);
+
+                ImGui.Separator();
+
+                rootMenuItem ??= GetAddComponentMenuItems();
+
+                DrawMenuItems(rootMenuItem, go);
+
+                ImGui.EndPopup();
+            }
+            ImGui.PopStyleColor();
+            ImGui.PopStyleVar();
         }
 
         private static void HandleComponentContextMenu(GameObject? go, MonoBehaviour comp)
@@ -301,6 +305,9 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     Name = addToMenuAttribute.Path;
             }
         }
+
+        #endregion
+
 
     }
 }

@@ -1,110 +1,95 @@
-﻿using HexaEngine.ImGuiNET;
-using System;
-using System.Collections.Generic;
-using System.Reflection;
+﻿using System;
+using T = System.AttributeTargets;
 
 namespace Prowl.Runtime
 {
+    public enum GuiAttribType { Space, Text, Separator, Sameline, Disabled, Header, StartGroup, EndGroup, Tooltip, Button }
+
     public interface IImGUIAttri
     {
-        public void Draw();
-        public void End();
+        public GuiAttribType AttribType();
     }
 
-    [AttributeUsage(AttributeTargets.Field, AllowMultiple = true)]
+    [AttributeUsage(T.Field, AllowMultiple = true)]
     public class SpaceAttribute : Attribute, IImGUIAttri
     {
-        public void Draw() => ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
-        public void End(){}
+        public GuiAttribType AttribType() => GuiAttribType.Space;
     }
 
-    [AttributeUsage(AttributeTargets.Field, AllowMultiple = true)]
-    public class TextAttribute(string text) : Attribute, IImGUIAttri
+    [AttributeUsage(T.Field, AllowMultiple = true)]
+    public class TextAttribute : Attribute, IImGUIAttri
     {
-        public void Draw() => ImGui.Text(text);
-        public void End() { }
+        public string text;
+        public TextAttribute(string text) { this.text = text; }
+        public GuiAttribType AttribType() => GuiAttribType.Text;
     }
 
-    [AttributeUsage(AttributeTargets.Field, AllowMultiple = true)]
-    public class SeperatorAttribute : Attribute, IImGUIAttri
+    [AttributeUsage(T.Field, AllowMultiple = true)]
+    public class SeparatorAttribute : Attribute, IImGUIAttri
     {
-        public void Draw() => ImGui.Separator();
-        public void End() { }
+        public GuiAttribType AttribType() => GuiAttribType.Separator;
     }
 
-    [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
+    [AttributeUsage(T.Field, AllowMultiple = false)]
     public class SameLineAttribute : Attribute, IImGUIAttri
     {
-        public void Draw() => ImGui.SameLine();
-        public void End() { }
+        public GuiAttribType AttribType() => GuiAttribType.Sameline;
     }
 
-    [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
+    [AttributeUsage(T.Field, AllowMultiple = false)]
     public class DisabledAttribute : Attribute, IImGUIAttri
     {
-        public void Draw() => ImGui.BeginDisabled();
-        public void End() => ImGui.EndDisabled();
+        public GuiAttribType AttribType() => GuiAttribType.Disabled;
     }
 
-    [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
-    public class HeaderAttribute(string name) : Attribute, IImGUIAttri
+    [AttributeUsage(T.Field, AllowMultiple = false)]
+    public class HeaderAttribute : Attribute, IImGUIAttri
     {
-        public void Draw()
-        {
-            ImGui.CollapsingHeader(name, ImGuiTreeNodeFlags.Leaf);
-        }
-        public void End() { }
+        public string name;
+        public HeaderAttribute(string name) { this.name = name; }
+        public GuiAttribType AttribType() => GuiAttribType.Header;
     }
 
-    [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
-    public class StartGroupAttribute(string name, float height = 100f, float headerSize = 1f, bool collapsable = true) : Attribute, IImGUIAttri
+    [AttributeUsage(T.Field, AllowMultiple = false)]
+    public class StartGroupAttribute : Attribute, IImGUIAttri
     {
-        public void Draw()
+        public string name;
+        public float height;
+        public float headerSize;
+        public bool collapsable;
+
+        public StartGroupAttribute(string name, float height = 100f, float headerSize = 1f, bool collapsable = true)
         {
-            GUIHelper.TextCenter(name, headerSize);
-            ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 2);
-            ImGui.BeginChild(name, new System.Numerics.Vector2(-1, height), true, collapsable ? ImGuiWindowFlags.None : ImGuiWindowFlags.NoCollapse);
+            this.name = name;
+            this.height = height;
+            this.headerSize = headerSize;
+            this.collapsable = collapsable;
         }
-        public void End() { }
+
+        public GuiAttribType AttribType() => GuiAttribType.StartGroup;
     }
 
-    [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
+    [AttributeUsage(T.Field, AllowMultiple = false)]
     public class EndGroupAttribute : Attribute, IImGUIAttri
     {
-        public void Draw() { }
-        public void End() => ImGui.EndChild();
+        public GuiAttribType AttribType() => GuiAttribType.EndGroup;
     }
 
-    [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
-    public class TooltipAttribute(string tooltip) : Attribute, IImGUIAttri
+    [AttributeUsage(T.Field, AllowMultiple = false)]
+    public class TooltipAttribute : Attribute, IImGUIAttri
     {
-        public void Draw() { }
-        public void End() => GUIHelper.Tooltip(tooltip);
+        public string tooltip;
+        public TooltipAttribute(string text) => tooltip = text;
+        public GuiAttribType AttribType() => GuiAttribType.Tooltip;
     }
 
-    [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
-    public class ImGUIButtonAttribute(string buttonText) : Attribute
-    {
-        internal string buttonText = buttonText;
-
-        public static bool DrawButtons(object target)
-        {
-            foreach (MethodInfo method in target.GetType().GetMethods())
-            {
-                var attribute = method.GetCustomAttribute<ImGUIButtonAttribute>();
-                if (attribute != null)
-                    if (ImGui.Button(attribute.buttonText))
-                    {
-                        method.Invoke(target, null);
-                        return true;
-                    }
-            }
-            return false;
-        }
+    [AttributeUsage(T.Method, AllowMultiple = false)]
+    public class ImGUIButtonAttribute : Attribute 
+    { 
+        public string buttonText;
+        public ImGUIButtonAttribute(string text) => buttonText = text;
     }
 
-    [AttributeUsage(AttributeTargets.Field, AllowMultiple = false)]
-    public class HideInInspectorAttribute : Attribute
-    {
-    }
+    [AttributeUsage(T.Field, AllowMultiple = false)]
+    public class HideInInspectorAttribute : Attribute { }
 }

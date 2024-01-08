@@ -1,16 +1,18 @@
 using HexaEngine.ImGuiNET;
-using HexaEngine.ImPlotNET;
 using Prowl.Editor.EditorWindows;
 using Prowl.Runtime;
+using System.Reflection;
 
 namespace Prowl.Editor;
 
-public static class EditorGui {
+public static class EditorGui
+{
 
     public static System.Numerics.Vector4 HoveredColor => new System.Numerics.Vector4(0.19f, 0.37f, 0.55f, 1.00f);
     public static System.Numerics.Vector4 SelectedColor => new System.Numerics.Vector4(0.06f, 0.53f, 0.98f, 1.00f);
 
-    public static void Initialize() {
+    public static void Initialize()
+    {
         // todo: make windows stay docked https://github.com/mellinoe/ImGui.NET/issues/202
         ImGui.GetIO().ConfigFlags = ImGuiConfigFlags.DockingEnable;
         ImGui.GetIO().BackendFlags = ImGuiBackendFlags.HasMouseCursors | ImGuiBackendFlags.RendererHasVtxOffset;
@@ -18,7 +20,7 @@ public static class EditorGui {
         ImGui.GetIO().ConfigWindowsResizeFromEdges = true;
         ImGui.GetIO().ConfigWindowsMoveFromTitleBarOnly = true;
         ImGui.GetIO().MouseDrawCursor = true;
-        
+
         new EditorMainMenubar();
         new HierarchyWindow();
         new ViewportWindow();
@@ -137,4 +139,80 @@ public static class EditorGui {
 
     }
 
+
+    #region ImGUI attributes
+
+    public static void HandleBeginImGUIAttributes(IEnumerable<IImGUIAttri> attribs)
+    {
+        foreach (IImGUIAttri imGuiAttribute in attribs)
+            switch (imGuiAttribute.AttribType()) {
+
+                case GuiAttribType.Space:
+                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
+                    break;
+
+                case GuiAttribType.Text:
+                    ImGui.Text((imGuiAttribute as TextAttribute).text);
+                    break;
+
+                case GuiAttribType.Separator:
+                    ImGui.Separator();
+                    break;
+
+                case GuiAttribType.Sameline:
+                    ImGui.SameLine();
+                    break;
+
+                case GuiAttribType.Disabled:
+                    ImGui.BeginDisabled();
+                    break;
+
+                case GuiAttribType.Header:
+                    ImGui.CollapsingHeader((imGuiAttribute as HeaderAttribute).name, ImGuiTreeNodeFlags.Leaf);
+                    break;
+
+                case GuiAttribType.StartGroup:
+                    var group = (imGuiAttribute as StartGroupAttribute);
+                    GUIHelper.TextCenter(group.name, group.headerSize);
+                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 2);
+                    ImGui.BeginChild(group.name, new System.Numerics.Vector2(-1, group.height), true, group.collapsable ? ImGuiWindowFlags.None : ImGuiWindowFlags.NoCollapse);
+                    break;
+
+            }
+    }
+
+    public static void HandleEndImGUIAttributes(IEnumerable<IImGUIAttri> attribs)
+    {
+        foreach (IImGUIAttri imGuiAttribute in attribs)
+            switch (imGuiAttribute.AttribType()) {
+
+                case GuiAttribType.Disabled:
+                    ImGui.EndDisabled();
+                    break;
+
+                case GuiAttribType.EndGroup:
+                    ImGui.EndChild();
+                    break;
+
+                case GuiAttribType.Tooltip:
+                    GUIHelper.Tooltip((imGuiAttribute as TooltipAttribute).tooltip);
+                    break;
+
+            }
+    }
+
+    public static bool HandleAttributeButtons(object target)
+    {
+        foreach (MethodInfo method in target.GetType().GetMethods()) {
+            var attribute = method.GetCustomAttribute<ImGUIButtonAttribute>();
+            if (attribute != null)
+                if (ImGui.Button(attribute.buttonText)) {
+                    method.Invoke(target, null);
+                    return true;
+                }
+        }
+        return false;
+    }
+
+    #endregion
 }

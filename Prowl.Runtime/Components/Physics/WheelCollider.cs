@@ -69,7 +69,7 @@ namespace Prowl.Runtime
         public float WheelRotation { get; private set; }
 
         [Space()]
-        [Seperator()]
+        [Separator()]
         [Space()]
         [Header("Calculate default forces based on Mass, Radius and Wheel Count.")]
         [NonSerialized] public int WheelCount = 4;
