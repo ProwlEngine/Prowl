@@ -1,10 +1,8 @@
 ﻿using HexaEngine.ImGuiNET;
 using Prowl.Icons;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using Prowl.Runtime;
 
-namespace Prowl.Runtime
+namespace Prowl.Editor
 {
     public class GUIHelper
     {

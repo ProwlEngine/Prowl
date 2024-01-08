@@ -1,5 +1,4 @@
-﻿using HexaEngine.ImGuizmoNET;
-using Prowl.Runtime.SceneManagement;
+﻿using Prowl.Runtime.SceneManagement;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -426,29 +425,6 @@ public class GameObject : EngineObject, ISerializable
         }
         dependentType = null;
         return false;
-    }
-
-    public void DrawGizmos(System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection, bool isSelected)
-    {
-        if (hideFlags.HasFlag(HideFlags.NoGizmos)) return;
-
-        Transform myTransform = GetComponent<Transform>();
-        if (isSelected && myTransform != null) {
-            var goMatrix = myTransform.Local;
-
-            // Perform ImGuizmo manipulation
-            var fmat = goMatrix.ToFloat();
-            if (ImGuizmo.Manipulate(ref view, ref projection, SceneManager.GizmosOperation, SceneManager.GizmosSpace, ref fmat)) {
-                goMatrix = fmat.ToDouble();
-                myTransform.Local = goMatrix;
-            }
-        }
-
-        foreach (var component in _components)
-        {
-            component.Internal_DrawGizmos();
-            if(isSelected) component.Internal_DrawGizmosSelected();
-        }
     }
 
     public static GameObject Instantiate(GameObject original) => Instantiate(original, null);

@@ -31,19 +31,8 @@
       <None Remove="Resources\ShaderIcon.png" />
       <None Remove="Resources\standard.glsl" />
     </ItemGroup>
-
-    <ItemGroup>
-      <EmbeddedResource Include="EmbeddedResources\fa-solid-900.ttf" />
-      <EmbeddedResource Include="EmbeddedResources\fa-regular-400.ttf" />
-      <EmbeddedResource Include="EmbeddedResources\fontawesome-webfont.ttf" />
-      <EmbeddedResource Include="EmbeddedResources\font.ttf" />
-    </ItemGroup>
     
     <ItemGroup>
-      <PackageReference Include="HexaEngine.ImGui" Version="2.0.17" />
-      <PackageReference Include="HexaEngine.ImGuizmo" Version="2.0.17" />
-      <PackageReference Include="HexaEngine.ImNodes" Version="2.0.17" />
-      <PackageReference Include="HexaEngine.ImPlot" Version="2.0.17" />
       <PackageReference Include="JetBrains.Annotations" Version="2022.1.0" />
       <PackageReference Include="Jitter2" Version="2.1.1" />
       <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="13.5.0" />

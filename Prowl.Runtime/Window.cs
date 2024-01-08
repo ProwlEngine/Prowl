@@ -1,5 +1,4 @@
-﻿using Prowl.Runtime.ImGUI;
-using Silk.NET.Maths;
+﻿using Silk.NET.Maths;
 using Silk.NET.Windowing;
 using System;
 
@@ -9,7 +8,6 @@ namespace Prowl.Runtime
     {
 
         public static IWindow InternalWindow { get; internal set; }
-        public static ImGUIController imguiController { get; internal set; }
 
         public static event Action? Load;
         public static event Action<double>? Update;
@@ -85,7 +83,6 @@ namespace Prowl.Runtime
             Graphics.Initialize();
             //Audio.Initialize();
 
-            imguiController = new ImGUIController(Graphics.GL, InternalWindow, Input.Context);
             Load?.Invoke();
         }
 
@@ -93,7 +90,6 @@ namespace Prowl.Runtime
         {
             Render?.Invoke(delta);
             PostRender?.Invoke(delta);
-            imguiController.Render();
         }
 
         public static void OnFocusChanged(bool focused)
@@ -113,7 +109,6 @@ namespace Prowl.Runtime
 
         public static void OnUpdate(double delta)
         {
-            imguiController.Update((float)delta);
             Update?.Invoke(delta);
             Input.LateUpdate();
         }
@@ -121,7 +116,6 @@ namespace Prowl.Runtime
         public static void OnClose()
         {
             Closing?.Invoke();
-            imguiController.Dispose();
             Input.Dispose();
             Graphics.Dispose();
         }

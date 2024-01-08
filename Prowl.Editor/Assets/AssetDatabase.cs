@@ -260,8 +260,10 @@ namespace Prowl.Runtime.Assets
                 oldMeta.MoveTo(newMeta.FullName, overwrite);
 
             Remove(oldRelativeAssetPath);
-            if (!Reimport(newRelativeAssetPath))
-                Debug.LogError($"Failed to import {newRelativeAssetPath}!", true);
+            if (!Reimport(newRelativeAssetPath)) {
+                Debug.LogError($"Failed to import {newRelativeAssetPath}!");
+                EditorGui.Notify("Failed to Import Asset", "Reason: Failed to import asset.", new Color(0.8f, 0.1f, 0.1f, 1), ImGuiToastType.Error);
+            }
             StopEditingAsset();
         }
 
@@ -578,7 +580,8 @@ namespace Prowl.Runtime.Assets
             FileInfo serializedAssetPath = GetSerializedFile(assetGuid);
             if (!serializedAssetPath.Exists)
                 if (!Reimport(relativeAssetPath)) {
-                    Debug.LogError($"Failed to import {serializedAssetPath.FullName}!", true);
+                    Debug.LogError($"Failed to import {serializedAssetPath.FullName}!");
+                    EditorGui.Notify($"Failed to Import {serializedAssetPath.FullName}", "Reason: Failed to import asset.", new Color(0.8f, 0.1f, 0.1f, 1), ImGuiToastType.Error);
                     throw new Exception($"Failed to import {serializedAssetPath.FullName}");
                 }
             try {
@@ -586,7 +589,8 @@ namespace Prowl.Runtime.Assets
                 guidToAssetData[assetGuid] = serializedAsset;
                 return serializedAsset;
             } catch (Exception e) {
-                Debug.LogError($"Failed to load serialized asset {serializedAssetPath.FullName}!", true);
+                Debug.LogError($"Failed to load serialized asset {serializedAssetPath.FullName}!");
+                EditorGui.Notify($"Failed to load serialized asset {serializedAssetPath.FullName}", "", new Color(0.8f, 0.1f, 0.1f, 1), ImGuiToastType.Error);
                 return null; // Failed file might be in use?
             }
         }
@@ -659,7 +663,8 @@ namespace Prowl.Runtime.Assets
             while (refreshedMeta.TryDequeue(out var guid)) {
                 string relativeAssetPath = GUIDToAssetPath(guid);
                 if (!Reimport(relativeAssetPath))
-                    Debug.LogError($"Failed to import {relativeAssetPath}!", true);
+                    Debug.LogError($"Failed to import {relativeAssetPath}!");
+                EditorGui.Notify($"Failed to import {relativeAssetPath}", "", new Color(0.8f, 0.1f, 0.1f, 1), ImGuiToastType.Error);
             }
             // Use Parallel.ForEach to process multiple items concurrently on threads
             // Last tested this appears to work perfectly fine, but it might be a good idea to test this more

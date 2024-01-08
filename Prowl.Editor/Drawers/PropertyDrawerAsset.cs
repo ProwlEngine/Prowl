@@ -2,7 +2,7 @@
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
-using Prowl.Runtime.ImGUI.Widgets;
+using Prowl.Editor.ImGUI.Widgets;
 
 namespace Prowl.Editor.PropertyDrawers;
 

@@ -1,7 +1,7 @@
 using HexaEngine.ImGuiNET;
 using Prowl.Icons;
 using Prowl.Runtime;
-using Prowl.Runtime.ImGUI.Widgets;
+using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
 using static Prowl.Editor.EditorConfiguration;

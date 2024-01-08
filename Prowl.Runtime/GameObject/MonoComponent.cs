@@ -214,11 +214,11 @@ public abstract class MonoBehaviour : EngineObject
     {
         if (!PauseLogic || executeAlways) onDestroy?.Invoke(this, []);
     }
-    internal void Internal_DrawGizmos()
+    public void CallDrawGizmos()
     {
         drawGizmos?.Invoke(this, []);
     }
-    internal void Internal_DrawGizmosSelected()
+    public void CallDrawGizmosSelected()
     {
         drawGizmosSelected?.Invoke(this, []);
     }

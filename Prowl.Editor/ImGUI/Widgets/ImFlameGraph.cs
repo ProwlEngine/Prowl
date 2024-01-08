@@ -1,12 +1,9 @@
 ﻿using HexaEngine.ImGuiNET;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Numerics;
-using System.Text;
-using System.Threading.Tasks;
+using Prowl.Runtime;
+using Vector2 = Prowl.Runtime.Vector2;
 
-namespace Prowl.Runtime.ImGUI.Widgets
+namespace Prowl.Editor.ImGUI.Widgets
 {
     public class ImFlameGraph
     {

@@ -2,7 +2,7 @@ using HexaEngine.ImGuiNET;
 using HexaEngine.ImGuizmoNET;
 using Prowl.Icons;
 using Prowl.Runtime;
-using Prowl.Runtime.ImGUI.Widgets;
+using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
 using Silk.NET.Maths;
@@ -14,6 +14,9 @@ public class ViewportWindow : EditorWindow
     public EditorSettings Settings => Project.ProjectSettings.GetSetting<EditorSettings>();
 
     public static Camera LastFocusedCamera;
+
+    public static ImGuizmoOperation GizmosOperation = ImGuizmoOperation.Translate;
+    public static ImGuizmoMode GizmosSpace = ImGuizmoMode.Local;
 
     Camera Cam;
     RenderTexture RenderTarget;
@@ -114,7 +117,7 @@ public class ViewportWindow : EditorWindow
         Camera.Current = Cam;
         foreach (var activeGO in SceneManager.AllGameObjects)
             if (activeGO.EnabledInHierarchy)
-                activeGO.DrawGizmos(view, projection, HierarchyWindow.SelectHandler.IsSelected(new WeakReference(activeGO)));
+                DrawGizmos(activeGO, view, projection, HierarchyWindow.SelectHandler.IsSelected(new WeakReference(activeGO)));
         Camera.Current = null;
 
         if (DrawGrid)
@@ -124,22 +127,22 @@ public class ViewportWindow : EditorWindow
         }
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 5));
-        if (ImGui.Button($"{FontAwesome6.ArrowsUpDownLeftRight}")) SceneManager.GizmosOperation = ImGuizmoOperation.Translate;
+        if (ImGui.Button($"{FontAwesome6.ArrowsUpDownLeftRight}")) GizmosOperation = ImGuizmoOperation.Translate;
         GUIHelper.Tooltip("Translate");
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (27), 5));
-        if (ImGui.Button($"{FontAwesome6.ArrowsSpin}")) SceneManager.GizmosOperation = ImGuizmoOperation.Rotate;
+        if (ImGui.Button($"{FontAwesome6.ArrowsSpin}")) GizmosOperation = ImGuizmoOperation.Rotate;
         GUIHelper.Tooltip("Rotate");
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (54), 5));
-        if (ImGui.Button($"{FontAwesome6.GroupArrowsRotate}")) SceneManager.GizmosOperation = ImGuizmoOperation.Scale;
+        if (ImGui.Button($"{FontAwesome6.GroupArrowsRotate}")) GizmosOperation = ImGuizmoOperation.Scale;
         GUIHelper.Tooltip("Scale");
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (81), 5));
 
-        if (SceneManager.GizmosSpace == ImGuizmoMode.World && ImGui.Button($"{FontAwesome6.Globe}"))
-            SceneManager.GizmosSpace = ImGuizmoMode.Local;
-        else if (SceneManager.GizmosSpace == ImGuizmoMode.Local && ImGui.Button($"{FontAwesome6.Cube}"))
-            SceneManager.GizmosSpace = ImGuizmoMode.World;
-        GUIHelper.Tooltip(SceneManager.GizmosSpace.ToString());
+        if (GizmosSpace == ImGuizmoMode.World && ImGui.Button($"{FontAwesome6.Globe}"))
+            GizmosSpace = ImGuizmoMode.Local;
+        else if (GizmosSpace == ImGuizmoMode.Local && ImGui.Button($"{FontAwesome6.Cube}"))
+            GizmosSpace = ImGuizmoMode.World;
+        GUIHelper.Tooltip(GizmosSpace.ToString());
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (115), 5));
         ImGui.SetNextItemWidth(20);
@@ -181,6 +184,28 @@ public class ViewportWindow : EditorWindow
             //view *= Matrix4x4.CreateScale(1, -1, 1); // invert back
             Matrix4x4.Invert(view.ToDouble(), out var iview);
             //Cam.GameObject.Local = iview;
+        }
+    }
+
+    private void DrawGizmos(GameObject go, System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection, bool isSelected)
+    {
+        if (go.hideFlags.HasFlag(HideFlags.NoGizmos)) return;
+
+        Transform myTransform = go.GetComponent<Transform>();
+        if (isSelected && myTransform != null) {
+            var goMatrix = myTransform.Local;
+
+            // Perform ImGuizmo manipulation
+            var fmat = goMatrix.ToFloat();
+            if (ImGuizmo.Manipulate(ref view, ref projection, GizmosOperation, GizmosSpace, ref fmat)) {
+                goMatrix = fmat.ToDouble();
+                myTransform.Local = goMatrix;
+            }
+        }
+
+        foreach (var component in go.GetComponents()) {
+            component.CallDrawGizmos();
+            if (isSelected) component.CallDrawGizmosSelected();
         }
     }
 
@@ -263,19 +288,19 @@ public class ViewportWindow : EditorWindow
             // If not looking around Viewport Keybinds are used instead
             if (Input.GetKeyDown(Key.Q))
             {
-                SceneManager.GizmosOperation = ImGuizmoOperation.Translate;
+                GizmosOperation = ImGuizmoOperation.Translate;
             }
             else if (Input.GetKeyDown(Key.W))
             {
-                SceneManager.GizmosOperation = ImGuizmoOperation.Rotate;
+                GizmosOperation = ImGuizmoOperation.Rotate;
             }
             else if (Input.GetKeyDown(Key.E))
             {
-                SceneManager.GizmosOperation = ImGuizmoOperation.Scale;
+                GizmosOperation = ImGuizmoOperation.Scale;
             }
             else if (Input.GetKeyDown(Key.R))
             {
-                SceneManager.GizmosOperation = ImGuizmoOperation.Universal;
+                GizmosOperation = ImGuizmoOperation.Universal;
             }
         }
     }

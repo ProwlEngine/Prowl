@@ -1,12 +1,11 @@
-﻿using Prowl.Icons;
-using HexaEngine.ImGuiNET;
-using System;
-using System.Collections.Generic;
+﻿using HexaEngine.ImGuiNET;
+using Prowl.Icons;
+using Prowl.Runtime;
 using System.Numerics;
 
 // Ported and modified from: https://github.com/patrickcjk/imgui-notify - MIT License
 
-namespace Prowl.Runtime
+namespace Prowl.Editor
 {
     public enum ImGuiToastType
     {
@@ -157,7 +156,7 @@ namespace Prowl.Runtime
 
                 ImGui.PushStyleColor(ImGuiCol.Text, textColor);
                 ImGui.SetNextWindowBgAlpha(opacity);
-                ImGui.SetNextWindowPos(new Vector2(vp_size.X - NOTIFY_PADDING_X, vp_size.Y - NOTIFY_PADDING_Y - height), ImGuiCond.Always, new Vector2(1.0f, 1.0f));
+                ImGui.SetNextWindowPos(new System.Numerics.Vector2(vp_size.X - NOTIFY_PADDING_X, vp_size.Y - NOTIFY_PADDING_Y - height), ImGuiCond.Always, new System.Numerics.Vector2(1.0f, 1.0f));
                 ImGui.Begin(windowName, 
                     ImGuiWindowFlags.AlwaysAutoResize | 
                     ImGuiWindowFlags.NoDecoration | 

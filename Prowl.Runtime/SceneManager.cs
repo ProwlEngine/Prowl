@@ -1,4 +1,3 @@
-using HexaEngine.ImGuizmoNET;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,11 +17,6 @@ public static class SceneManager
 
     public static event Action PreFixedUpdate;
     public static event Action PostFixedUpdate;
-
-    // Not a fan of these being here, their for the Editor but since they are used in Runtime and Runtime doesnt reference the Editor
-    // It needs to be here :( need a better solution
-    public static ImGuizmoOperation GizmosOperation = ImGuizmoOperation.Translate;
-    public static ImGuizmoMode GizmosSpace = ImGuizmoMode.Local;
 
     public static void Initialize()
     {

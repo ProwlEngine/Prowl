@@ -1,5 +1,4 @@
-﻿using Prowl.Runtime.ImGUI;
-using Prowl.Runtime.SceneManagement;
+﻿using Prowl.Runtime.SceneManagement;
 using System;
 using System.Collections;
 using System.Collections.Generic;

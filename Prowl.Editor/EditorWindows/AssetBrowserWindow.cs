@@ -1,10 +1,9 @@
 using HexaEngine.ImGuiNET;
 using Prowl.Editor.Assets;
+using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
-using Prowl.Runtime.ImGUI.Widgets;
-using Prowl.Runtime.SceneManagement;
 using System.Reflection;
 
 namespace Prowl.Editor.EditorWindows;

@@ -3,16 +3,14 @@ using HexaEngine.ImGuizmoNET;
 using HexaEngine.ImNodesNET;
 using HexaEngine.ImPlotNET;
 using Prowl.Icons;
+using Prowl.Runtime;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Reflection;
 
-namespace Prowl.Runtime.ImGUI
+namespace Prowl.Editor.ImGUI
 {
     public class ImGUIController : IDisposable
     {
@@ -59,7 +57,7 @@ namespace Prowl.Runtime.ImGUI
 
             var io = ImGui.GetIO(); 
 
-            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Prowl.Runtime.EmbeddedResources.font.ttf")) {
+            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Prowl.Editor.EmbeddedResources.font.ttf")) {
                 string tempFilePath = Path.Combine(Path.GetTempPath(), "font.ttf");
                 using (FileStream fileStream = File.Create(tempFilePath))
                     stream.CopyTo(fileStream);
@@ -132,7 +130,7 @@ namespace Prowl.Runtime.ImGUI
 
         unsafe void AddEmbeddedFont(string name, ushort min, ushort max, float fontSize = 17 * 2.0f / 3.0f)
         {
-            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Runtime.EmbeddedResources.{name}")) {
+            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.{name}")) {
                 if (stream != null) {
                     string tempFilePath = Path.Combine(Path.GetTempPath(), "tempfont.ttf");
                     using (FileStream fileStream = File.Create(tempFilePath))
@@ -571,7 +569,7 @@ namespace Prowl.Runtime.ImGUI
             // Upload texture to graphics system
             _gl.GetInteger(GLEnum.TextureBinding2D, out int lastTexture);
 
-            _fontTexture = new Texture2D((uint)width, (uint)height, false, Texture.TextureImageFormat.Float4);
+            _fontTexture = new Texture2D((uint)width, (uint)height, false, Runtime.Texture.TextureImageFormat.Float4);
             Graphics.GL.BindTexture(TextureTarget.Texture2D, _fontTexture.Handle);
             Graphics.GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, (uint)width, (uint)height, Silk.NET.OpenGL.PixelFormat.Rgba, Silk.NET.OpenGL.PixelType.UnsignedByte, pixels);
             Graphics.CheckGL();

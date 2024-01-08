@@ -1,13 +1,9 @@
 ﻿using HexaEngine.ImGuiNET;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Numerics;
 
 // Ported to c#: https://github.com/Limeoats/L2DFileDialog - Apache-2.0 license
 
-namespace Prowl.Runtime
+namespace Prowl.Editor
 {
     public enum ImGuiFileDialogType
     {
