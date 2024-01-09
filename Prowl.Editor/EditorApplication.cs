@@ -117,13 +117,9 @@ public unsafe class EditorApplication : Application {
 
                     int dock_id_main_right = 0;
                     int dock_id_main_left = 0;
-                    ImGui.DockBuilderSplitNode(dockspaceID, ImGuiDir.Right, 0.2f, ref dock_id_main_right, ref dock_id_main_left);
-                    int dock_id_main_right_top = 0;
-                    int dock_id_main_right_bottom = 0;
-                    ImGui.DockBuilderSplitNode(dock_id_main_right, ImGuiDir.Up, 0.35f, ref dock_id_main_right_top, ref dock_id_main_right_bottom);
+                    ImGui.DockBuilderSplitNode(dockspaceID, ImGuiDir.Right, 0.17f, ref dock_id_main_right, ref dock_id_main_left);
 
-                    ImGui.DockBuilderDockWindow(FontAwesome6.FolderTree + " Hierarchy", dock_id_main_right_top);
-                    ImGui.DockBuilderDockWindow(FontAwesome6.BookOpen + " Inspector", dock_id_main_right_bottom);
+                    ImGui.DockBuilderDockWindow(FontAwesome6.BookOpen + " Inspector", dock_id_main_right);
 
                     int dock_id_main_left_top = 0;
                     int dock_id_main_left_bottom = 0;
@@ -131,9 +127,14 @@ public unsafe class EditorApplication : Application {
                     ImGui.DockBuilderDockWindow(FontAwesome6.Gamepad + " Game", dock_id_main_left_top);
                     ImGui.DockBuilderDockWindow(FontAwesome6.Camera + " Viewport", dock_id_main_left_top);
 
+                    int dock_id_main_left_top_left = 0;
+                    int dock_id_main_left_top_right = 0;
+                    ImGui.DockBuilderSplitNode(dock_id_main_left_top, ImGuiDir.Left, 0.2f, ref dock_id_main_left_top_left, ref dock_id_main_left_top_right);
+                    ImGui.DockBuilderDockWindow(FontAwesome6.FolderTree + " Hierarchy", dock_id_main_left_top_left);
+
                     int dock_id_main_left_bottom_left = 0;
                     int dock_id_main_left_bottom_right = 0;
-                    ImGui.DockBuilderSplitNode(dock_id_main_left_bottom, ImGuiDir.Left, 0.25f, ref dock_id_main_left_bottom_left, ref dock_id_main_left_bottom_right);
+                    ImGui.DockBuilderSplitNode(dock_id_main_left_bottom, ImGuiDir.Left, 0.2f, ref dock_id_main_left_bottom_left, ref dock_id_main_left_bottom_right);
                     ImGui.DockBuilderDockWindow(FontAwesome6.BoxOpen + " Asset Browser", dock_id_main_left_bottom_right);
                     ImGui.DockBuilderDockWindow(FontAwesome6.Terminal + " Console", dock_id_main_left_bottom_right);
                     ImGui.DockBuilderDockWindow(FontAwesome6.FolderTree + " Assets", dock_id_main_left_bottom_left);
