@@ -199,6 +199,9 @@ namespace Prowl.Runtime
 
         #region Deserialize
 
+        // TODO: Dont hard ever Crash on deserialization, instead return default and log an error
+        // TODO: make a CopyInto method to copy a tag into an instance of an object use that for deserialization, Then we can use that for things like Copy/Paste
+
         public static T? Deserialize<T>(Tag value) => (T?)Deserialize(value, typeof(T));
 
         public static object? Deserialize(Tag value, Type type) => Deserialize(value, type, new SerializationContext());
