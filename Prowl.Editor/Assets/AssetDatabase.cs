@@ -1,9 +1,7 @@
-﻿using JetBrains.Annotations;
-using Prowl.Editor;
+﻿using Prowl.Editor;
 using Prowl.Editor.Assets;
 using Prowl.Runtime.Utils;
 using System.Diagnostics;
-using System.IO;
 using System.IO.Compression;
 
 namespace Prowl.Runtime.Assets
@@ -745,7 +743,7 @@ namespace Prowl.Runtime.Assets
             return normalizedPath.StartsWith(normalizedBaseDirPath, StringComparison.OrdinalIgnoreCase);
         }
 
-        static string WithEnding([CanBeNull] this string str, string ending)
+        static string WithEnding(this string str, string ending)
         {
             if (str == null) return ending;
             string result = str;
@@ -762,7 +760,7 @@ namespace Prowl.Runtime.Assets
             return result;
         }
 
-        static string Right([NotNull] this string value, int length)
+        static string Right(this string value, int length)
         {
             if (value == null) throw new ArgumentNullException("value");
             if (length < 0) throw new ArgumentOutOfRangeException("length", length, "Length is less than zero");

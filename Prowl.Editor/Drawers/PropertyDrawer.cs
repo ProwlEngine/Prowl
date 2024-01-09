@@ -1,12 +1,9 @@
-using System.Reflection;
-using Prowl.Runtime;
-using JetBrains.Annotations;
 using HexaEngine.ImGuiNET;
-using System.Runtime.InteropServices;
+using Prowl.Runtime;
+using System.Reflection;
 using System.Text;
 namespace Prowl.Editor.PropertyDrawers;
 
-[UsedImplicitly(ImplicitUseTargetFlags.WithInheritors)]
 public abstract class PropertyDrawer {
     
     private static readonly Dictionary<Type, PropertyDrawer> _propertyDrawerLookup = new();
