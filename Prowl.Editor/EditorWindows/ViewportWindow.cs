@@ -239,12 +239,14 @@ public class ViewportWindow : EditorWindow
 
     protected override void Update()
     {
-        if (!IsFocused) return;
+        if (!IsHovered) return;
 
         LastFocusedCamera = Cam;
 
         if (Input.GetMouseButton(1))
         {
+            ImGui.FocusWindow(ImGUIWindow, ImGuiFocusRequestFlags.None);
+            
             Vector3 moveDir = Vector3.zero;
             if (Input.GetKey(Key.W))
                 moveDir += Cam.GameObject.Transform!.Forward;
@@ -275,7 +277,7 @@ public class ViewportWindow : EditorWindow
 
             Input.MousePosition = WindowCenter.ToFloat().ToGeneric();
         }
-        else if (Input.GetMouseButton(2) && IsHovered)
+        else if (Input.GetMouseButton(2))
         {
             var mouseDelta = Input.MouseDelta;
             var pos = Cam.GameObject.Transform!.Position;
@@ -283,7 +285,7 @@ public class ViewportWindow : EditorWindow
             pos += Cam.GameObject.Transform!.Up * mouseDelta.Y * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
             Cam.GameObject.Transform!.Position = pos;
         }
-        else
+        else if (IsFocused)
         {
             // If not looking around Viewport Keybinds are used instead
             if (Input.GetKeyDown(Key.Q))

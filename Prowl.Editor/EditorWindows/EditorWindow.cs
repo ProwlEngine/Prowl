@@ -17,6 +17,8 @@ public class EditorWindow {
     protected virtual bool LockSize { get; } = false;
     protected virtual bool BackgroundFade { get; } = false;
 
+    protected ImGuiWindowPtr ImGUIWindow { get; private set; }
+
     protected bool isOpened = true;
 
     public EditorWindow() : base()
@@ -76,6 +78,8 @@ public class EditorWindow {
             ImGui.Begin(Title + " " + _windowCount, ref isOpened, Flags);
         else
             ImGui.Begin(Title, ref isOpened, Flags);
+
+        ImGUIWindow = ImGui.GetCurrentWindow();
 
         DrawToolbar();
         
