@@ -27,6 +27,7 @@ public class ViewportWindow : EditorWindow
     int frames = 0;
     double fpsTimer = 0;
     double fps = 0;
+    double moveSpeed = 1;
 
     public ViewportWindow() : base()
     {
@@ -266,6 +267,15 @@ public class ViewportWindow : EditorWindow
                 if (Input.GetKey(Key.ShiftLeft))
                     moveDir *= 2.0f;
                 Cam.GameObject.Transform!.Position += moveDir * (Time.deltaTimeF * 10f);
+                Cam.GameObject.Transform!.Position += moveDir * (Time.deltaTimeF * 10f) * moveSpeed;
+
+                // Get Exponentially faster
+                moveSpeed += Time.deltaTimeF * 0.0001;
+                moveSpeed *= 1.0025;
+                moveSpeed = Math.Clamp(moveSpeed, 1, 1000);
+                Debug.Log(moveSpeed.ToString());
+            } else {
+                moveSpeed = 1;
             }
 
             // Version with fixed gimbal lock
@@ -303,6 +313,7 @@ public class ViewportWindow : EditorWindow
             else if (Input.GetKeyDown(Key.R))
             {
                 GizmosOperation = ImGuizmoOperation.Universal;
+            moveSpeed = 1;
             }
         }
     }
