@@ -105,6 +105,43 @@ public unsafe class EditorApplication : Application {
 
         Window.Update += (delta) => {
             try {
+
+                imguiController.Update((float)delta);
+
+                int dockspaceID = ImGui.DockSpaceOverViewport();
+
+                if (hasDockSetup == false) {
+                    ImGui.DockBuilderRemoveNode(dockspaceID);
+                    ImGui.DockBuilderAddNode(dockspaceID, ImGuiDockNodeFlags.None);
+                    ImGui.DockBuilderSetNodeSize(dockspaceID, ImGui.GetMainViewport().Size);
+
+                    int dock_id_main_right = 0;
+                    int dock_id_main_left = 0;
+                    ImGui.DockBuilderSplitNode(dockspaceID, ImGuiDir.Right, 0.2f, ref dock_id_main_right, ref dock_id_main_left);
+                    int dock_id_main_right_top = 0;
+                    int dock_id_main_right_bottom = 0;
+                    ImGui.DockBuilderSplitNode(dock_id_main_right, ImGuiDir.Up, 0.35f, ref dock_id_main_right_top, ref dock_id_main_right_bottom);
+
+                    ImGui.DockBuilderDockWindow(FontAwesome6.FolderTree + " Hierarchy", dock_id_main_right_top);
+                    ImGui.DockBuilderDockWindow(FontAwesome6.BookOpen + " Inspector", dock_id_main_right_bottom);
+
+                    int dock_id_main_left_top = 0;
+                    int dock_id_main_left_bottom = 0;
+                    ImGui.DockBuilderSplitNode(dock_id_main_left, ImGuiDir.Down, 0.3f, ref dock_id_main_left_bottom, ref dock_id_main_left_top);
+                    ImGui.DockBuilderDockWindow(FontAwesome6.Gamepad + " Game", dock_id_main_left_top);
+                    ImGui.DockBuilderDockWindow(FontAwesome6.Camera + " Viewport", dock_id_main_left_top);
+
+                    int dock_id_main_left_bottom_left = 0;
+                    int dock_id_main_left_bottom_right = 0;
+                    ImGui.DockBuilderSplitNode(dock_id_main_left_bottom, ImGuiDir.Left, 0.25f, ref dock_id_main_left_bottom_left, ref dock_id_main_left_bottom_right);
+                    ImGui.DockBuilderDockWindow(FontAwesome6.BoxOpen + " Asset Browser", dock_id_main_left_bottom_right);
+                    ImGui.DockBuilderDockWindow(FontAwesome6.Terminal + " Console", dock_id_main_left_bottom_right);
+                    ImGui.DockBuilderDockWindow(FontAwesome6.FolderTree + " Assets", dock_id_main_left_bottom_left);
+
+                    ImGui.DockBuilderFinish(dockspaceID);
+                    hasDockSetup = true;
+                }
+
                 AssetDatabase.Update();
 
                 CheckReloadingAssemblies();
@@ -135,6 +172,9 @@ public unsafe class EditorApplication : Application {
                     if (isActivelyPlaying)
                         Physics.Update();
                 }
+
+                OnUpdateEditor?.Invoke();
+                OnDrawEditor?.Invoke();
             } catch (Exception e) {
                 Console.WriteLine(e.ToString());
             }
@@ -142,45 +182,6 @@ public unsafe class EditorApplication : Application {
         };
 
         Window.Render += (delta) => {
-            imguiController.Update((float)delta);
-
-            int dockspaceID = ImGui.DockSpaceOverViewport();
-
-            if (hasDockSetup == false) {
-                ImGui.DockBuilderRemoveNode(dockspaceID);
-                ImGui.DockBuilderAddNode(dockspaceID, ImGuiDockNodeFlags.None);
-                ImGui.DockBuilderSetNodeSize(dockspaceID, ImGui.GetMainViewport().Size);
-
-                int dock_id_main_right = 0;
-                int dock_id_main_left = 0;
-                ImGui.DockBuilderSplitNode(dockspaceID, ImGuiDir.Right, 0.2f, ref dock_id_main_right, ref dock_id_main_left);
-                int dock_id_main_right_top = 0;
-                int dock_id_main_right_bottom = 0;
-                ImGui.DockBuilderSplitNode(dock_id_main_right, ImGuiDir.Up, 0.35f, ref dock_id_main_right_top, ref dock_id_main_right_bottom);
-
-                ImGui.DockBuilderDockWindow(FontAwesome6.FolderTree + " Hierarchy", dock_id_main_right_top);
-                ImGui.DockBuilderDockWindow(FontAwesome6.BookOpen + " Inspector", dock_id_main_right_bottom);
-
-                int dock_id_main_left_top = 0;
-                int dock_id_main_left_bottom = 0;
-                ImGui.DockBuilderSplitNode(dock_id_main_left, ImGuiDir.Down, 0.3f, ref dock_id_main_left_bottom, ref dock_id_main_left_top);
-                ImGui.DockBuilderDockWindow(FontAwesome6.Gamepad + " Game", dock_id_main_left_top);
-                ImGui.DockBuilderDockWindow(FontAwesome6.Camera + " Viewport", dock_id_main_left_top);
-
-                int dock_id_main_left_bottom_left = 0;
-                int dock_id_main_left_bottom_right = 0;
-                ImGui.DockBuilderSplitNode(dock_id_main_left_bottom, ImGuiDir.Left, 0.25f, ref dock_id_main_left_bottom_left, ref dock_id_main_left_bottom_right);
-                ImGui.DockBuilderDockWindow(FontAwesome6.BoxOpen + " Asset Browser", dock_id_main_left_bottom_right);
-                ImGui.DockBuilderDockWindow(FontAwesome6.Terminal + " Console", dock_id_main_left_bottom_right);
-                ImGui.DockBuilderDockWindow(FontAwesome6.FolderTree + " Assets", dock_id_main_left_bottom_left);
-
-                ImGui.DockBuilderFinish(dockspaceID);
-                hasDockSetup = true;
-            }
-
-            OnUpdateEditor?.Invoke();
-            OnDrawEditor?.Invoke();
-
             Graphics.StartFrame();
 
             EditorGui.Update();
