@@ -1,12 +1,10 @@
 using HexaEngine.ImGuiNET;
 using Prowl.Editor.Assets;
+using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
-using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Runtime.SceneManagement;
-using System.Diagnostics;
-using static Assimp.Metadata;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -16,7 +14,6 @@ namespace Prowl.Editor.EditorWindows;
 /// </summary>
 public class AssetsWindow : EditorWindow
 {
-
     public static EditorSettings Settings => Project.ProjectSettings.GetSetting<EditorSettings>();
 
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse;
@@ -140,6 +137,7 @@ public class AssetsWindow : EditorWindow
             var curPos = ImGui.GetCursorPos();
             var name = (Settings.m_HideExtensions ? Path.GetFileNameWithoutExtension(file.Name) : file.Name);
             bool opened = ImGui.TreeNodeEx($"      {name}", flags);
+            SelectHandler.HandleSelectable(treeCounter++, file);
             if (treeCounter % 2 == 0) GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
             if (ImGui.IsItemHovered())
                 HandleFileClick(file);
