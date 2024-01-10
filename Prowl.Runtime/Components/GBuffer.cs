@@ -1,6 +1,7 @@
 ﻿using Silk.NET.OpenGL;
 using System.Reflection.Metadata;
 using System;
+using System.Numerics;
 
 namespace Prowl.Runtime;
 
@@ -62,8 +63,18 @@ public class GBuffer
         Graphics.GL.ReadBuffer(ReadBufferMode.ColorAttachment5);
         float result = Graphics.GL.ReadPixels<float>(x, Height - y, 1, 1, PixelFormat.Red, PixelType.Float);
         Graphics.CheckGL();
-        Console.WriteLine(result);
         return (int)result;
+    }
+
+    public Vector3 GetViewPositionAt(Vector2 uv)
+    {
+        int x = (int)(uv.x * Width);
+        int y = (int)(uv.y * Height);
+        Graphics.GL.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, fbo);
+        Graphics.GL.ReadBuffer(ReadBufferMode.ColorAttachment2);
+        Vector4 result = Graphics.GL.ReadPixels<Vector4>(x, Height - y, 1, 1, PixelFormat.Rgba, PixelType.Float);
+        Graphics.CheckGL();
+        return new Vector3(result.x, result.y, result.z);
     }
 
     public void UnloadGBuffer()
