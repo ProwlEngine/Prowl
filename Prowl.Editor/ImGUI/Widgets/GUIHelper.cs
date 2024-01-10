@@ -21,14 +21,20 @@ namespace Prowl.Editor
             }
         }
 
-        public static void TextCenter(string text, float size = 1f)
+        public static void TextCenter(string text, float size = 1f, bool vertically = false)
         {
             float oldX = ImGui.GetCursorPosX();
+            float oldY = ImGui.GetCursorPosY();
             ImGui.SetWindowFontScale(size);
-            ImGui.SetCursorPosX((ImGui.GetWindowWidth() - ImGui.CalcTextSize(text).X) / 2f);
+            var ts = ImGui.CalcTextSize(text);
+            ImGui.SetCursorPosX((ImGui.GetWindowWidth() - ts.X) / 2f);
+            if (vertically)
+                ImGui.SetCursorPosY((ImGui.GetWindowHeight() - ts.Y) / 2f);
             ImGui.Text(text);
             ImGui.SetWindowFontScale(1.0f);
             ImGui.SetCursorPosX(oldX);
+            if (vertically)
+                ImGui.SetCursorPosY(oldY);
         }
 
         public static bool MenuItemTooltip(string name, string tooltip, string shortcut = "")
