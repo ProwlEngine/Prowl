@@ -61,7 +61,7 @@ public class GBuffer
         int y = (int)(uv.y * Height);
         Graphics.GL.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, fbo);
         Graphics.GL.ReadBuffer(ReadBufferMode.ColorAttachment5);
-        float result = Graphics.GL.ReadPixels<float>(x, Height - y, 1, 1, PixelFormat.Red, PixelType.Float);
+        float result = Graphics.GL.ReadPixels<float>(x, y, 1, 1, PixelFormat.Red, PixelType.Float);
         Graphics.CheckGL();
         return (int)result;
     }
@@ -72,9 +72,14 @@ public class GBuffer
         int y = (int)(uv.y * Height);
         Graphics.GL.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, fbo);
         Graphics.GL.ReadBuffer(ReadBufferMode.ColorAttachment2);
-        Vector4 result = Graphics.GL.ReadPixels<Vector4>(x, Height - y, 1, 1, PixelFormat.Rgba, PixelType.Float);
+        float[] result = new float[4];
+        unsafe {
+            fixed (float* ptr = result) {
+                Graphics.GL.ReadPixels(x, y, 1, 1, PixelFormat.Rgba, PixelType.Float, ptr);
+            }
+        }
         Graphics.CheckGL();
-        return new Vector3(result.x, result.y, result.z);
+        return new Vector3(result[0], result[1], result[2]);
     }
 
     public void UnloadGBuffer()

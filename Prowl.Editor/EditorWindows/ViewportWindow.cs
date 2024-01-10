@@ -102,7 +102,9 @@ public class ViewportWindow : EditorWindow
         HandleDragnDrop();
 
         if (ImGui.IsItemClicked() && !ImGuizmo.IsOver()) {
-            var mouseUV = (ImGui.GetMousePos() - imagePos) / imageSize;
+            mouseUV = (ImGui.GetMousePos() - imagePos) / imageSize;
+            // Flip Y
+            mouseUV.y = 1.0 - mouseUV.y;
             var instanceID = Cam.gBuffer.GetObjectIDAt(mouseUV);
             // find InstanceID Object
             var go = EngineObject.FindObjectByID<GameObject>(instanceID);
