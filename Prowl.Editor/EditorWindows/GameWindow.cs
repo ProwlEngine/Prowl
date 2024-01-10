@@ -10,6 +10,7 @@ public class GameWindow : EditorWindow
     public EditorSettings Settings => Project.ProjectSettings.GetSetting<EditorSettings>();
 
     RenderTexture RenderTarget;
+    bool previouslyPlaying = false;
 
     public GameWindow() : base()
     {
@@ -35,6 +36,13 @@ public class GameWindow : EditorWindow
 
         var cStart = ImGui.GetCursorPos();
         var windowSize = ImGui.GetWindowSize();
+        if(!previouslyPlaying && Application.isPlaying) {
+            previouslyPlaying = true;
+            ImGui.SetWindowFocus();
+        } else if(previouslyPlaying && !Application.isPlaying) {
+            previouslyPlaying = false;
+        }
+
         var renderSize = ImGui.GetContentRegionAvail();
         if (renderSize.X != RenderTarget.Width || renderSize.Y != RenderTarget.Height)
             RefreshRenderTexture((int)renderSize.X, (int)renderSize.Y);
