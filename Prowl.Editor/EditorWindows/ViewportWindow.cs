@@ -29,6 +29,7 @@ public class ViewportWindow : EditorWindow
     double fpsTimer = 0;
     double fps = 0;
     double moveSpeed = 1;
+    bool hasStarted = false;
 
     public ViewportWindow() : base()
     {
@@ -75,6 +76,11 @@ public class ViewportWindow : EditorWindow
         }
 
         if (!Project.HasProject) return;
+
+        if (!hasStarted) {
+            hasStarted = true;
+            ImGui.SetWindowFocus();
+        }
 
         IsFocused = ImGui.IsWindowFocused();
         IsHovered = ImGui.IsWindowHovered();
