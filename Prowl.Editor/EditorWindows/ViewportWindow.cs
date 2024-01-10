@@ -128,8 +128,7 @@ public class ViewportWindow : EditorWindow
                 DrawGizmos(activeGO, view, projection, HierarchyWindow.SelectHandler.IsSelected(new WeakReference(activeGO)));
         Camera.Current = null;
 
-        if (DrawGrid)
-        {
+        if (DrawGrid) {
             System.Numerics.Matrix4x4 matrix = System.Numerics.Matrix4x4.Identity;
             ImGuizmo.DrawGrid(ref view.M11, ref projection.M11, ref matrix.M11, 10);
         }
@@ -155,8 +154,7 @@ public class ViewportWindow : EditorWindow
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (115), 5));
         ImGui.SetNextItemWidth(20);
         // Dropdown to pick Camera DebugDraw mode
-        if (ImGui.BeginCombo($"##DebugDraw", $"{FontAwesome6.Eye}", ImGuiComboFlags.NoArrowButton))
-        {
+        if (ImGui.BeginCombo($"##DebugDraw", $"{FontAwesome6.Eye}", ImGuiComboFlags.NoArrowButton)) {
             if (ImGui.Selectable($"Off", Cam.debugDraw == Camera.DebugDraw.Off))
                 Cam.debugDraw = Camera.DebugDraw.Off;
             if (ImGui.Selectable($"Diffuse", Cam.debugDraw == Camera.DebugDraw.Albedo))
@@ -184,15 +182,9 @@ public class ViewportWindow : EditorWindow
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 25));
         ImGui.Text("FPS: " + fps.ToString("0.00"));
 
-        // Show ViewManipulation at the end
-        //view *= Matrix4x4.CreateScale(1, -1, 1);
-        unsafe
-        {
-            ImGuizmo.ViewManipulate(ref view, 2, new Vector2(ImGui.GetWindowPos().X + windowSize.X - 75, ImGui.GetWindowPos().Y + 15), new Vector2(75, 75), 0x10101010);
-            //view *= Matrix4x4.CreateScale(1, -1, 1); // invert back
-            Matrix4x4.Invert(view.ToDouble(), out var iview);
-            //Cam.GameObject.Local = iview;
-        }
+        ImGuizmo.ViewManipulate(ref view, 1, new Vector2(ImGui.GetWindowPos().X + windowSize.X - 75, ImGui.GetWindowPos().Y + 15 + 75), new Vector2(75, -75), 0x10101010);
+        System.Numerics.Matrix4x4.Invert(view, out var iview);
+        Cam.GameObject.Transform!.Local = iview.ToDouble();
     }
 
     private void DrawGizmos(GameObject go, System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection, bool isSelected)
