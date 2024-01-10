@@ -23,6 +23,7 @@ public class ViewportWindow : EditorWindow
     bool IsFocused = false;
     bool IsHovered = false;
     Vector2 WindowCenter;
+    Vector2 mouseUV;
     bool DrawGrid = false;
     int frames = 0;
     double fpsTimer = 0;
@@ -101,10 +102,11 @@ public class ViewportWindow : EditorWindow
         ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].Handle, imageSize, new Vector2(0, 1), new Vector2(1, 0));
         HandleDragnDrop();
 
+        mouseUV = (ImGui.GetMousePos() - imagePos) / imageSize;
+        // Flip Y
+        mouseUV.y = 1.0 - mouseUV.y;
+
         if (ImGui.IsItemClicked() && !ImGuizmo.IsOver()) {
-            mouseUV = (ImGui.GetMousePos() - imagePos) / imageSize;
-            // Flip Y
-            mouseUV.y = 1.0 - mouseUV.y;
             var instanceID = Cam.gBuffer.GetObjectIDAt(mouseUV);
             // find InstanceID Object
             var go = EngineObject.FindObjectByID<GameObject>(instanceID);
@@ -246,36 +248,27 @@ public class ViewportWindow : EditorWindow
 
         LastFocusedCamera = Cam;
 
-        if (Input.GetMouseButton(1))
-        {
+        if (Input.GetMouseButton(1)) {
             ImGui.FocusWindow(ImGUIWindow, ImGuiFocusRequestFlags.None);
-            
+
             Vector3 moveDir = Vector3.zero;
-            if (Input.GetKey(Key.W))
-                moveDir += Cam.GameObject.Transform!.Forward;
-            if (Input.GetKey(Key.S))
-                moveDir -= Cam.GameObject.Transform!.Forward;
-            if (Input.GetKey(Key.A))
-                moveDir -= Cam.GameObject.Transform!.Right;
-            if (Input.GetKey(Key.D))
-                moveDir += Cam.GameObject.Transform!.Right;
-            if (Input.GetKey(Key.E))
-                moveDir += Cam.GameObject.Transform!.Up;
-            if (Input.GetKey(Key.Q))
-                moveDir -= Cam.GameObject.Transform!.Up;
-            if (moveDir != Vector3.zero)
-            {
+            if (Input.GetKey(Key.W)) moveDir += Cam.GameObject.Transform!.Forward;
+            if (Input.GetKey(Key.S)) moveDir -= Cam.GameObject.Transform!.Forward;
+            if (Input.GetKey(Key.A)) moveDir -= Cam.GameObject.Transform!.Right;
+            if (Input.GetKey(Key.D)) moveDir += Cam.GameObject.Transform!.Right;
+            if (Input.GetKey(Key.E)) moveDir += Cam.GameObject.Transform!.Up;
+            if (Input.GetKey(Key.Q)) moveDir -= Cam.GameObject.Transform!.Up;
+
+            if (moveDir != Vector3.zero) {
                 moveDir = Vector3.Normalize(moveDir);
                 if (Input.GetKey(Key.ShiftLeft))
                     moveDir *= 2.0f;
-                Cam.GameObject.Transform!.Position += moveDir * (Time.deltaTimeF * 10f);
                 Cam.GameObject.Transform!.Position += moveDir * (Time.deltaTimeF * 10f) * moveSpeed;
 
                 // Get Exponentially faster
                 moveSpeed += Time.deltaTimeF * 0.0001;
                 moveSpeed *= 1.0025;
                 moveSpeed = Math.Clamp(moveSpeed, 1, 1000);
-                Debug.Log(moveSpeed.ToString());
             } else {
                 moveSpeed = 1;
             }
@@ -286,36 +279,41 @@ public class ViewportWindow : EditorWindow
             rot.x += mouseDelta.X * (Time.deltaTimeF * 5f * Settings.LookSensitivity);
             rot.y += mouseDelta.Y * (Time.deltaTimeF * 5f * Settings.LookSensitivity);
             Cam.GameObject.Transform!.Rotation = rot;
-
+             
             Input.MousePosition = WindowCenter.ToFloat().ToGeneric();
-        }
-        else if (Input.GetMouseButton(2))
-        {
-            var mouseDelta = Input.MouseDelta;
-            var pos = Cam.GameObject.Transform!.Position;
-            pos -= Cam.GameObject.Transform!.Right * mouseDelta.X * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
-            pos += Cam.GameObject.Transform!.Up * mouseDelta.Y * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
-            Cam.GameObject.Transform!.Position = pos;
-        }
-        else if (IsFocused)
-        {
-            // If not looking around Viewport Keybinds are used instead
-            if (Input.GetKeyDown(Key.Q))
-            {
-                GizmosOperation = ImGuizmoOperation.Translate;
-            }
-            else if (Input.GetKeyDown(Key.W))
-            {
-                GizmosOperation = ImGuizmoOperation.Rotate;
-            }
-            else if (Input.GetKeyDown(Key.E))
-            {
-                GizmosOperation = ImGuizmoOperation.Scale;
-            }
-            else if (Input.GetKeyDown(Key.R))
-            {
-                GizmosOperation = ImGuizmoOperation.Universal;
+        } else {
             moveSpeed = 1;
+            if (Input.GetMouseButton(2)) {
+
+                var mouseDelta = Input.MouseDelta;
+                var pos = Cam.GameObject.Transform!.Position;
+                pos -= Cam.GameObject.Transform!.Right * mouseDelta.X * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
+                pos += Cam.GameObject.Transform!.Up * mouseDelta.Y * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
+                Cam.GameObject.Transform!.Position = pos;
+
+            } else if (Input.MouseWheelDelta != 0) {
+
+                Matrix4x4.Invert(Cam.View, out var viewInv);
+                var dir = Vector3.Transform(Cam.gBuffer.GetViewPositionAt(mouseUV), viewInv);
+                // Larger distance more zoom, but clamped
+                double amount = dir.magnitude * 0.1 * Settings.ZoomSensitivity;
+                if (amount > dir.magnitude * .9) amount = dir.magnitude * .9;
+                if (amount < Cam.NearClip) amount = Cam.NearClip;
+                amount *= Input.MouseWheelDelta;
+
+                if (dir.sqrMagnitude > 0)
+                    Cam.GameObject.Transform!.GlobalPosition += Vector3.Normalize(dir) * amount;
+                else
+                    Cam.GameObject.Transform!.GlobalPosition += Cam.GameObject.Transform!.Forward * amount;
+
+            } else if (IsFocused) {
+
+                // If not looking around Viewport Keybinds are used instead
+                if      (Input.GetKeyDown(Key.Q)) GizmosOperation = ImGuizmoOperation.Translate;
+                else if (Input.GetKeyDown(Key.W)) GizmosOperation = ImGuizmoOperation.Rotate;
+                else if (Input.GetKeyDown(Key.E)) GizmosOperation = ImGuizmoOperation.Scale;
+                else if (Input.GetKeyDown(Key.R)) GizmosOperation = ImGuizmoOperation.Universal;
+
             }
         }
     }
