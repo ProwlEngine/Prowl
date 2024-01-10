@@ -145,7 +145,7 @@ public class ViewportWindow : EditorWindow
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (81), 5));
 
-        if (GizmosSpace == ImGuizmoMode.World && ImGui.Button($"{FontAwesome6.Globe}"))
+        if      (GizmosSpace == ImGuizmoMode.World && ImGui.Button($"{FontAwesome6.Globe}"))
             GizmosSpace = ImGuizmoMode.Local;
         else if (GizmosSpace == ImGuizmoMode.Local && ImGui.Button($"{FontAwesome6.Cube}"))
             GizmosSpace = ImGuizmoMode.World;
