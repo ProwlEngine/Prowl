@@ -118,7 +118,10 @@ public class ViewportWindow : EditorWindow
                 // find InstanceID Object
                 var go = EngineObject.FindObjectByID<GameObject>(instanceID);
                 if (go != null)
+                {
                     HierarchyWindow.SelectHandler.Select(new WeakReference(go));
+                    HierarchyWindow.Ping(go);
+                }
             }
         }
 

@@ -15,14 +15,32 @@ public class HierarchyWindow : EditorWindow
     public HierarchyWindow() : base()
     {
         Title = FontAwesome6.FolderTree + " Hierarchy";
+        SelectHandler.OnSelectObject += (obj) => {
+            // Reset ping timer on selection changed
+            pingTimer = 0;
+            pingedGO = null;
+        };
     }
 
     private string _searchText = "";
     private List<GameObject> m_RenamingEntities = null;
     public static SelectHandler<WeakReference> SelectHandler { get; private set; } = new((item) => !item.IsAlive || (item.Target is EngineObject eObj && eObj.IsDestroyed), (a, b) => ReferenceEquals(a.Target, b.Target));
 
+    private const float PingDuration = 3f;
+    private static float pingTimer = 0;
+    private static WeakReference pingedGO;
+
+    public static void Ping(GameObject go)
+    {
+        pingTimer = PingDuration;
+        pingedGO = new WeakReference(go);
+    }
+
     protected override void Draw()
     {
+        pingTimer -= Time.deltaTimeF;
+        if (pingTimer < 0) pingTimer = 0;
+
         SelectHandler.StartFrame();
 
         ImGuiTableFlags tableFlags = ImGuiTableFlags.RowBg | ImGuiTableFlags.ContextMenuInBody | ImGuiTableFlags.BordersInner | ImGuiTableFlags.ScrollY;
@@ -138,13 +156,33 @@ public class HierarchyWindow : EditorWindow
             colPushCount += 1;
         }
 
+        // if were pinging we need to open the tree to the pinged object
+        bool isPingedEntity = false;
+        if (pingTimer > 0 && pingedGO != null && pingedGO.Target is GameObject go)
+        {
+            if (entity.IsParentOf(go))
+                ImGui.SetNextItemOpen(true); // Open down to the pinged object
+            else if (entity.InstanceID == go.InstanceID)
+                isPingedEntity = true; // This is the pinged entity
+        }
+
         var opened = ImGui.TreeNodeEx(entity.Name + "##" + entity.InstanceID, flags);
         ImGui.PopStyleColor(colPushCount);
 
+        if (isPingedEntity)
+        {
+            if (pingTimer > PingDuration - 1f)
+                ImGui.ScrollToItem(ImGuiScrollFlags.None);
+            GUIHelper.ItemRect(1f, 0.8f, 0.0f, 0.8f, MathF.Sin(pingTimer) * 1f, 3f, 2.5f);
+            GUIHelper.ItemRect(1f, 0.8f, 0.0f, 0.8f, MathF.Sin(pingTimer) * 6f, 3f, 2.5f);
+        }
+
         // Select
-        if (!ImGui.IsItemToggledOpen()) {
+        if (!ImGui.IsItemToggledOpen())
+        {
             SelectHandler.HandleSelectable(index++, new WeakReference(entity));
-            if (SelectHandler.Count == 1 && ImGui.IsMouseDoubleClicked(0) && ImGui.IsItemHovered()) {
+            if (SelectHandler.Count == 1 && ImGui.IsMouseDoubleClicked(0) && ImGui.IsItemHovered())
+            {
                 m_RenamingEntities = [entity];
                 ImGui.OpenPopup("RenameGameObjects");
             }
@@ -163,7 +201,8 @@ public class HierarchyWindow : EditorWindow
         DrawVisibilityToggle(entity);
 
         // Open
-        if (opened) {
+        if (opened)
+        {
             for (int i = 0; i < entity.Children.Count; i++)
                 DrawEntityNode(ref index, entity.Children[i], depth + 1, isPartOfPrefab || isPrefab);
 
@@ -265,7 +304,7 @@ public class HierarchyWindow : EditorWindow
     void DrawGameObjectContextMenu(GameObject entity)
     {
         if (ImGui.BeginPopupContextItem()) {
-                SelectHandler.SelectIfNot(new WeakReference(entity));
+            SelectHandler.SelectIfNot(new WeakReference(entity));
 
             DrawContextMenu(entity);
 
@@ -280,7 +319,7 @@ public class HierarchyWindow : EditorWindow
                 ImGui.OpenPopup("RenameGameObjects");
             }
 
-                if (ImGui.MenuItem("Duplicate"))
+            if (ImGui.MenuItem("Duplicate"))
                 DuplicateSelected();
 
             if (ImGui.MenuItem("Delete", "Del"))
