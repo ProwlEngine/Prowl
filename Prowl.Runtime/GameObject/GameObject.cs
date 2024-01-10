@@ -169,11 +169,20 @@ public class GameObject : EngineObject, ISerializable
 
     #endregion
 
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="otherTag"></param>
-    /// <returns></returns>
+
+    /// <summary> Recursive function to check if this GameObject is a parent of another GameObject </summary>
+    public bool IsParentOf(GameObject go)
+    {
+        if (go.Parent?.InstanceID == this.InstanceID)
+            return true;
+
+        foreach (var child in Children)
+            if (child.IsParentOf(go))
+                return true;
+
+        return false;
+    }
+
     public bool CompareTag(string otherTag) => tagIndex == TagLayerManager.GetTagIndex(otherTag);
 
     public static GameObject Find(string otherName) => FindObjectsOfType<GameObject>().FirstOrDefault(gameObject => gameObject.Name == otherName);
