@@ -29,7 +29,7 @@ public class GameWindow : EditorWindow
     }
     Resolutions curResolution = Resolutions.fit;
 
-    const int HeaderHeight = 30;
+    const int HeaderHeight = 27;
 
     RenderTexture RenderTarget;
     bool previouslyPlaying = false;
@@ -61,10 +61,10 @@ public class GameWindow : EditorWindow
     {
         if (!Project.HasProject) return;
 
-        if(!previouslyPlaying && Application.isPlaying) {
+        if (!previouslyPlaying && Application.isPlaying) {
             previouslyPlaying = true;
             ImGui.SetWindowFocus();
-        } else if(previouslyPlaying && !Application.isPlaying) {
+        } else if (previouslyPlaying && !Application.isPlaying) {
             previouslyPlaying = false;
         }
 
@@ -103,6 +103,21 @@ public class GameWindow : EditorWindow
 
         var renderSize = ImGui.GetContentRegionAvail();
 
+        var min = ImGui.GetCursorScreenPos();
+        var max = new System.Numerics.Vector2(min.X + renderSize.X, min.Y + renderSize.Y);
+        ImGui.GetWindowDrawList().AddRectFilled(min, max, ImGui.GetColorU32(new System.Numerics.Vector4(0, 0, 0, 1)));
+
+        // Find Camera to render
+        var allCameras = EngineObject.FindObjectsOfType<Camera>();
+        // Remove disabled ones
+        allCameras = allCameras.Where(c => c.EnabledInHierarchy && !c.GameObject.Name.Equals("Editor-Camera", StringComparison.OrdinalIgnoreCase)).ToArray();
+        // Find MainCamera
+        var mainCam = allCameras.FirstOrDefault(c => c.GameObject.CompareTag("Main Camera") && c.Target.IsExplicitNull, allCameras.Length > 0 ? allCameras[0] : null);
+
+        if (mainCam == null) {
+            GUIHelper.TextCenter("No Camera found", 2f, true);
+            return;
+        }
         if (curResolution == Resolutions.fit) {
             if (renderSize.X != RenderTarget.Width || renderSize.Y != RenderTarget.Height) {
                 rtWidth = (int)renderSize.X;
@@ -111,51 +126,26 @@ public class GameWindow : EditorWindow
             }
         }
 
-        // Find Camera to render
-        var allCameras = EngineObject.FindObjectsOfType<Camera>();
-        // Remove disabled ones
-        allCameras = allCameras.Where(c => c.EnabledInHierarchy && !c.GameObject.Name.Equals("Editor-Camera", StringComparison.OrdinalIgnoreCase)).ToArray();
-        // Find MainCamera
-        var mainCam = allCameras.FirstOrDefault(c => c.GameObject.CompareTag("Main Camera") && c.Target.IsExplicitNull, allCameras.Length > 0 ? allCameras[0] : null);
-        
-        if(mainCam == null)
-        {
-            GUIHelper.TextCenter("No Camera found");
-            return;
+        // We got a camera to visualize
+        if (Application.isPlaying || Time.frameCount % 8 == 0) {
+            mainCam.Target = RenderTarget;
+            mainCam.Render((int)renderSize.X, (int)renderSize.Y);
+            mainCam.Target = null;
         }
-        else
-        {
-            // We got a camera to visualize
-            if (Application.isPlaying || Time.frameCount % 8 == 0)
-            {
-                mainCam.Target = RenderTarget;
-                mainCam.Render((int)renderSize.X, (int)renderSize.Y);
-                mainCam.Target = null;
-            }
 
-            //ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].Handle, renderSize, new System.Numerics.Vector2(0, 1), new System.Numerics.Vector2(1, 0));
-            // Draw a Black background covering the full render size
-            var min = ImGui.GetCursorScreenPos();
-            var max = new System.Numerics.Vector2(min.X + renderSize.X, min.Y + renderSize.Y);
-            ImGui.GetWindowDrawList().AddRectFilled(min, max, ImGui.GetColorU32(new System.Numerics.Vector4(0, 0, 0, 1)));
-            // Letter box the image into the render size
-            float aspect = (float)RenderTarget.Width / (float)RenderTarget.Height;
-            float renderAspect = renderSize.X / renderSize.Y;
-            if (aspect > renderAspect) {
-                float width = renderSize.X;
-                float height = width / aspect;
-                ImGui.SetCursorPosY(ImGui.GetCursorPosY() + ((renderSize.Y - height) / 2f));
-                ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].Handle, new System.Numerics.Vector2(width, height), new System.Numerics.Vector2(0, 1), new System.Numerics.Vector2(1, 0));
-            }
-            else {
-                float height = renderSize.Y;
-                float width = height * aspect;
-                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((renderSize.X - width) / 2f));
-                ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].Handle, new System.Numerics.Vector2(width, height), new System.Numerics.Vector2(0, 1), new System.Numerics.Vector2(1, 0));
-            }
-
-
-        
+        // Letter box the image into the render size
+        float aspect = (float)RenderTarget.Width / (float)RenderTarget.Height;
+        float renderAspect = renderSize.X / renderSize.Y;
+        if (aspect > renderAspect) {
+            float width = renderSize.X;
+            float height = width / aspect;
+            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + ((renderSize.Y - height) / 2f));
+            ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].Handle, new System.Numerics.Vector2(width, height), new System.Numerics.Vector2(0, 1), new System.Numerics.Vector2(1, 0));
+        } else {
+            float height = renderSize.Y;
+            float width = height * aspect;
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((renderSize.X - width) / 2f));
+            ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].Handle, new System.Numerics.Vector2(width, height), new System.Numerics.Vector2(0, 1), new System.Numerics.Vector2(1, 0));
         }
     }
 
