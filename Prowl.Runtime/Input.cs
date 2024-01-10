@@ -23,6 +23,7 @@ public static class Input
             Mice[0].Position = value.ToSystem();
         }
     }
+    public static float MouseWheelDelta => Mice[0].ScrollWheels[0].Y;
 
     private static Dictionary<Key, bool> previousKeyStates = new Dictionary<Key, bool>();
     private static Dictionary<MouseButton, bool> previousMouseStates = new Dictionary<MouseButton, bool>();
