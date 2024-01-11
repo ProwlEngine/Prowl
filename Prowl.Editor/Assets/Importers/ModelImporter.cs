@@ -3,9 +3,11 @@ using HexaEngine.ImGuiNET;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
 using Prowl.Runtime.Utils;
+using Silk.NET.Input;
 using System;
 using System.ComponentModel.Design;
 using System.Linq;
+using System.Xml.Linq;
 using static Prowl.Runtime.Mesh;
 using Material = Prowl.Runtime.Material;
 using Mesh = Prowl.Runtime.Mesh;
@@ -147,9 +149,8 @@ namespace Prowl.Editor.Assets
 
                         // Texture
                         if (m.HasTextureDiffuse) {
-                            var file = new FileInfo(Path.Combine(parentDir.FullName, m.TextureDiffuse.FilePath));
-                            name ??= Path.GetFileNameWithoutExtension(file.Name);
-                            if (file.Exists)
+                            name ??= Path.GetFileNameWithoutExtension(m.TextureDiffuse.FilePath);
+                            if (FindTextureFromPath(m.TextureDiffuse.FilePath, parentDir, out var file))
                                 LoadTextureIntoMesh("_MainTex", ctx, file, mat);
                             else
                                 mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/grid.png")));
@@ -157,10 +158,10 @@ namespace Prowl.Editor.Assets
                             mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/grid.png")));
 
                         // Normal Texture
-                        if (m.HasTextureNormal) {
-                            var file = new FileInfo(Path.Combine(parentDir.FullName, m.TextureNormal.FilePath));
-                            name ??= Path.GetFileNameWithoutExtension(file.Name);
-                            if (file.Exists)
+                        if (m.HasTextureNormal)
+                        {
+                            name ??= Path.GetFileNameWithoutExtension(m.TextureNormal.FilePath);
+                            if (FindTextureFromPath(m.TextureNormal.FilePath, parentDir, out var file))
                                 LoadTextureIntoMesh("_NormalTex", ctx, file, mat);
                             else
                                 mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_normal.png")));
@@ -169,9 +170,8 @@ namespace Prowl.Editor.Assets
 
                         //AO, Roughness, Metallic Texture
                         if (m.GetMaterialTexture(TextureType.Unknown, 0, out var surface)) {
-                            var file = new FileInfo(Path.Combine(parentDir.FullName, surface.FilePath));
-                            name ??= Path.GetFileNameWithoutExtension(file.Name);
-                            if (file.Exists)
+                            name ??= Path.GetFileNameWithoutExtension(surface.FilePath);
+                            if (FindTextureFromPath(surface.FilePath, parentDir, out var file))
                                 LoadTextureIntoMesh("_SurfaceTex", ctx, file, mat);
                             else
                                 mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_surface.png")));
@@ -180,9 +180,8 @@ namespace Prowl.Editor.Assets
 
                         // Emissive Texture
                         if (m.HasTextureEmissive) {
-                            var file = new FileInfo(Path.Combine(parentDir.FullName, m.TextureEmissive.FilePath));
-                            name ??= Path.GetFileNameWithoutExtension(file.Name);
-                            if (file.Exists) {
+                            name ??= Path.GetFileNameWithoutExtension(m.TextureEmissive.FilePath);
+                            if (FindTextureFromPath(m.TextureEmissive.FilePath, parentDir, out var file)) {
                                 mat.SetFloat("_EmissionIntensity", 1f);
                                 LoadTextureIntoMesh("_EmissionTex", ctx, file, mat);
                             } else
@@ -354,6 +353,26 @@ namespace Prowl.Editor.Assets
                     mr.Material = uMeshAndMat.Material;
                 }
             }
+        }
+
+        private bool FindTextureFromPath(string filePath, DirectoryInfo parentDir, out FileInfo file)
+        {
+            // If the filePath is stored in the model relative to the file this will exist
+            file = new FileInfo(Path.Combine(parentDir.FullName, filePath));
+            if (file.Exists) return true;
+            // If not the filePath is probably a Full path, so lets loop over each node in the path starting from the end
+            // so first check if the File name exists inside parentDir, if so return, if not then check the file with its parent exists so like
+            // if the file is at C:\Users\Me\Documents\MyModel\Textures\MyTexture.png
+            // we first check if Path.Combine(parentDir, MyTexture.png) exists, if not we check if Path.Combine(parentDir, Textures\MyTexture.png) exists and so on
+            var nodes = filePath.Split(Path.DirectorySeparatorChar);
+            for (int i = nodes.Length - 1; i >= 0; i--)
+            {
+                var path = Path.Combine(parentDir.FullName, string.Join(Path.DirectorySeparatorChar, nodes.Skip(i)));
+                file = new FileInfo(path);
+                if (file.Exists) return true;
+            }
+            // If we get here we have failed to find the texture
+            return false;
         }
 
         private static void LoadTextureIntoMesh(string name, SerializedAsset ctx, FileInfo file, Material mat)
