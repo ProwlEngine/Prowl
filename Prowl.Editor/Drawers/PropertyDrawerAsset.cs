@@ -3,6 +3,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
 using Prowl.Editor.ImGUI.Widgets;
+using Prowl.Editor.EditorWindows;
 
 namespace Prowl.Editor.PropertyDrawers;
 
@@ -39,6 +40,9 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
                 Selected = this;
             }
         }
+
+        if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+            GlobalSelectHandler.Select(value.GetInstance());
 
         // DragDrop code
         string payloadName = value.InstanceType.Name;
