@@ -227,6 +227,9 @@ public class GameObject : EngineObject, ISerializable
         _components.Add(newComponent);
         _componentCache.Add(type, newComponent);
 
+        if (newComponent is Transform t)
+            _transform = new(t);
+
         return newComponent;
     }
 
