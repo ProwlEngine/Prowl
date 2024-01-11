@@ -65,8 +65,10 @@ namespace Prowl.Runtime
         {
             GL = GL.GetApi(Window.InternalWindow);
 
-            unsafe {
-                GL.DebugMessageCallback(DebugCallback, null);
+            unsafe
+            {
+                if (OperatingSystem.IsWindows())
+                    GL.DebugMessageCallback(DebugCallback, null);
             }
             GL.Enable(EnableCap.DebugOutput);
             GL.Enable(EnableCap.DebugOutputSynchronous);
