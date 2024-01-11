@@ -140,6 +140,11 @@ namespace Prowl.Runtime
             fileID = res != null ? res.FileID : (short)0;
         }
 
+        public object? GetInstance()
+        {
+            return Res;
+        }
+
         /// <summary>
         /// Loads the associated content as if it was accessed now.
         /// You don't usually need to call this method. It is invoked implicitly by trying to 

@@ -12,5 +12,7 @@ namespace Prowl.Runtime
         bool IsLoaded { get; }
         bool IsExplicitNull { get; }
         Type InstanceType { get; }
+
+        object? GetInstance();
     }
 }
