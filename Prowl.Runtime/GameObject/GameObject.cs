@@ -85,7 +85,7 @@ public class GameObject : EngineObject, ISerializable
 
     #endregion
 
-    public void SetParent(GameObject? newParent)
+    public void SetParent(GameObject? newParent, bool recalculate = true)
     {
         if (newParent == parent || newParent == this)
             return;
@@ -131,7 +131,7 @@ public class GameObject : EngineObject, ISerializable
         newParent?.Children.Add(this);
 
         _transform = null; // Reset cached Transform
-        Transform?.Recalculate();
+        if(recalculate) Transform?.Recalculate();
         HierarchyStateChanged();
     }
 
