@@ -145,8 +145,11 @@ namespace Prowl.Runtime
 
             Matrix4x4.Decompose(global, out var globalScale, out globalOrientation, out globalPosition);
 
-            foreach (var child in GameObject.GetComponentsInChildren<Transform>(false))
-                child.Recalculate();
+            foreach (var child in GameObject.Children)
+            {
+                var t = child.GetComponent<Transform>();
+                t?.Recalculate();
+            }
         }
 
         /// <summary>
@@ -201,6 +204,14 @@ namespace Prowl.Runtime
             rotation = new Vector3(value["RotX"].DoubleValue, value["RotY"].DoubleValue, value["RotZ"].DoubleValue);
             orientation = rotation.NormalizeEulerAngleDegrees().ToRad().GetQuaternion();
             scale = new Vector3(value["ScalX"].DoubleValue, value["ScalY"].DoubleValue, value["ScalZ"].DoubleValue);
+        }
+
+        public void SetUnsafe(Vector3 vector31, Quaternion quaternion, Vector3 vector32)
+        {
+            position = vector31;
+            rotation = quaternion.GetRotation().ToDeg().NormalizeEulerAngleDegrees();
+            orientation = quaternion;
+            scale = vector32;
         }
     }
 }

@@ -64,9 +64,6 @@ namespace Prowl.Editor.Assets
                 if (scene == null) Failed("Assimp returned null object.");
 
                 DirectoryInfo? parentDir = assetPath.Directory;
-                // SubAssetDataPath is a folder next to the asset file with the same name and a _Data added to the end
-                DirectoryInfo subAssetPath = new DirectoryInfo(Path.Combine(assetPath.Directory.FullName, Path.GetFileNameWithoutExtension(assetPath.Name) + "_Data"));
-                subAssetPath.Create();
 
                 if (!scene.HasMeshes) Failed("Model has no Meshes.");
 
@@ -190,14 +187,8 @@ namespace Prowl.Editor.Assets
                             mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_emission.png")));
 
                         name ??= "StandardMat";
-                        FileInfo matFilePath = new FileInfo(Path.Combine(subAssetPath.FullName, $"{name}.mat"));
-                        // If it already exists it gets overwritten
-#warning TODO: Decide, Should we overwrite, or is it better to re-use the existing one incase they modified it?
-                        AssetDatabase.Remove(AssetDatabase.FileToRelative(matFilePath));
-                        StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), matFilePath);
-                        AssetDatabase.Refresh(matFilePath);
-                        mat.AssetID = AssetDatabase.LastLoadedAssetID;
-
+                        mat.Name = name;
+                        ctx.AddSubObject(mat);
                         mats.Add(mat);
                     }
 
@@ -293,14 +284,7 @@ namespace Prowl.Editor.Assets
                         mesh.vertices = vertices;
                         mesh.indices = m.GetShortIndices().Cast<ushort>().ToArray();
 
-                        FileInfo meshFilePath = new FileInfo(Path.Combine(subAssetPath.FullName, $"{m.Name}.mesh"));
-                        // If it already exists it gets overwritten
-#warning TODO: Decide, Should we overwrite, or is it better to re-use the existing one incase they modified it?
-                        AssetDatabase.Remove(AssetDatabase.FileToRelative(meshFilePath));
-                        StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mesh), meshFilePath);
-                        AssetDatabase.Refresh(meshFilePath);
-                        mesh.AssetID = AssetDatabase.LastLoadedAssetID;
-
+                        ctx.AddSubObject(mesh);
                         meshMats.Add(new MeshMaterialBinding(m.Name, m.HasBones, mesh, mats[m.MaterialIndex]));
                     }
 
@@ -317,24 +301,19 @@ namespace Prowl.Editor.Assets
                             foreach (var mIdx in node.MeshIndices) {
                                 var uMeshAndMat = meshMats[mIdx];
                                 GameObject uSubOb = GameObject.CreateSilently();
-                                uSubOb.AddComponent<Transform>();
+                                //uSubOb.AddComponent<Transform>();
                                 uSubOb.Name = uMeshAndMat.MeshName;
                                 AddMeshComponent(GOs, uSubOb, uMeshAndMat);
-                                uSubOb.SetParent(go);
+                                uSubOb.SetParent(go, false);
                             }
                         }
                     }
-
-                    // Transform
-                    node.Transform.Decompose(out var aScale, out var aQuat, out var aTranslation);
-
-                    go.Transform!.Scale = new Vector3(aScale.X, aScale.Y, aScale.Z);
-                    go.Transform!.Position = new Vector3(aTranslation.X, aTranslation.Y, aTranslation.Z);
-                    go.Transform!.Orientation = new Prowl.Runtime.Quaternion(aQuat.X, aQuat.Y, aQuat.Z, aQuat.W);
                 }
 
                 GameObject rootNode = GOs[0].Item1;
-                rootNode.Transform!.Scale = Vector3.one * UnitScale;
+                if(UnitScale != 1f)
+                    rootNode.Transform!.Scale = Vector3.one * UnitScale;
+                rootNode.Transform!.Recalculate();
                 ctx.SetMainObject(rootNode);
 
                 ImGuiNotify.InsertNotification("Model Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), AssetDatabase.FileToRelative(assetPath));
@@ -408,13 +387,17 @@ namespace Prowl.Editor.Assets
             uOb.Name = node.Name;
 
             // Transform
-            node.Transform.Decompose(out var aScale, out var aQuat, out var aTranslation);
+            // convert to Matrix4x4
+            node.Transform.Decompose(out var aSca, out var aRot, out var aPos);
 
-            t.Scale = new Vector3(aScale.X, aScale.Y, aScale.Z);
-            t.Position = new Vector3(aTranslation.X, aTranslation.Y, aTranslation.Z);
-            t.Orientation = new Prowl.Runtime.Quaternion(aQuat.X, aQuat.Y, aQuat.Z, aQuat.W);
+            t.SetUnsafe(new Vector3(aPos.X, aPos.Y, aPos.Z), new Runtime.Quaternion(aRot.X, aRot.Y, aRot.Z, aRot.W), new Vector3(aSca.X, aSca.Y, aSca.Z));
 
-            if (node.HasChildren) foreach (var cn in node.Children) GetNodes(cn, ref GOs, ref nameToIndex).SetParent(uOb);
+            if (node.HasChildren) 
+                foreach (var cn in node.Children)
+                {
+                    var go = GetNodes(cn, ref GOs, ref nameToIndex);
+                    go.SetParent(uOb, false);
+                }
 
             return uOb;
         }

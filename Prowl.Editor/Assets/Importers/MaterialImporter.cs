@@ -125,7 +125,7 @@ namespace Prowl.Editor.Assets
                                 else if (AssetDatabase.Contains(tex.AssetID))
                                 {
                                     path = AssetDatabase.GUIDToAssetPath(tex.AssetID);
-                                    var thumbnail = Application.AssetProvider.LoadAsset<Texture2D>(tex.AssetID);
+                                    var thumbnail = Application.AssetProvider.LoadAsset<Texture2D>(tex);
                                     var cPos = ImGui.GetCursorScreenPos();
                                     ImGui.SetCursorScreenPos(new System.Numerics.Vector2(cPos.X, cPos.Y + 50));
                                     ImGui.Image(new ImTextureID((nint)thumbnail.Handle), new System.Numerics.Vector2(50, -50));

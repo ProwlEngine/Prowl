@@ -508,6 +508,11 @@ namespace Prowl.Runtime.Assets
             // Save the asset
             StartEditingAsset();
             meta.lastModified = DateTime.UtcNow;
+
+            meta.assetTypes = new string[ctx.SubAssets.Count];
+            for (int i = 0; i < ctx.SubAssets.Count; i++)
+                meta.assetTypes[i] = ctx.SubAssets[i].GetType().AssemblyQualifiedName!;
+
             SaveMeta(meta, relativeAssetPath);
             ctx.SaveToFile(serialized);
             StopEditingAsset();
@@ -543,16 +548,29 @@ namespace Prowl.Runtime.Assets
             StopEditingAsset();
         }
 
-        public static T? LoadAsset<T>(string relativeAssetPath) where T : EngineObject => LoadAsset<T>(GuidPathHolder.GetGuid(relativeAssetPath));
+        public static T? LoadAsset<T>(string relativeAssetPath, int fileID) where T : EngineObject => LoadAsset<T>(GuidPathHolder.GetGuid(relativeAssetPath), fileID);
 
-        public static T? LoadAsset<T>(Guid assetGuid) where T : EngineObject
+        public static T? LoadAsset<T>(Guid assetGuid, int fileID) where T : EngineObject
         {
             try {
                 var serialized = LoadAsset(assetGuid);
                 if (serialized == null) return null;
-                if (serialized.Main is not T asset) return null;
-                asset.AssetID = assetGuid;
-                return asset;
+                if (fileID == 0)
+                { 
+                    // Main Asset
+                    if (serialized.Main is not T asset) return null;
+                    asset.AssetID = assetGuid;
+                    asset.FileID = (short)fileID;
+                    return asset;
+                }
+                else
+                {
+                    // Sub Asset
+                    if (serialized.SubAssets[fileID - 1] is not T asset) return null;
+                    asset.AssetID = assetGuid;
+                    asset.FileID = (short)fileID;
+                    return asset;
+                }
             } catch (Exception e) {
                 Console.WriteLine(e.ToString());
                 throw new InvalidCastException($"Something went wrong loading asset.");
@@ -811,6 +829,9 @@ namespace Prowl.Runtime.Assets
     {
         public FileInfo AssetPath { get; set; }
         public Guid guid;
+
+        public string[] assetTypes;
+
         public DateTime lastModified;
         public ScriptedImporter importer;
 

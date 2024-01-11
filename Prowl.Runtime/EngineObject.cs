@@ -20,6 +20,10 @@ namespace Prowl.Runtime
         [HideInInspector]
         public Guid AssetID = Guid.Empty;
 
+        // Asset path if we have one
+        [HideInInspector]
+        public short FileID = 0;
+
         [HideInInspector]
         public string Name;
         

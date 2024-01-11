@@ -136,11 +136,8 @@ namespace Prowl.Runtime
                         if (TryGetLoc(shader, item.Key, mpb, out var loc)) {
                             texSlot++;
                             Graphics.GL.ActiveTexture((TextureUnit)((uint)TextureUnit.Texture0 + texSlot));
-                            Graphics.CheckGL();
                             Graphics.GL.BindTexture((TextureTarget)tex.Res!.Type, tex.Res!.Handle);
-                            Graphics.CheckGL();
                             Graphics.GL.Uniform1(loc, (int)texSlot);
-                            Graphics.CheckGL();
                         }
                     }
 

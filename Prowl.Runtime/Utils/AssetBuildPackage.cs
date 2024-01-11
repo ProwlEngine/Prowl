@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Silk.NET.Core.Native;
+using Silk.NET.SDL;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -248,7 +250,12 @@ namespace Prowl.Runtime.Utils
             {
                 using var entryStream = entry.Open();
                 asset = SerializedAsset.FromStream(entryStream);
-                asset.Main.AssetID = guid;
+                asset.Main!.AssetID = guid;
+                for (int i = 0; i < asset.SubAssets.Count; i++)
+                {
+                    asset.SubAssets[i].AssetID = guid;
+                    asset.SubAssets[i].FileID = (short)i;
+                }
                 return true;
             }
             asset = null;
@@ -262,7 +269,12 @@ namespace Prowl.Runtime.Utils
             {
                 using var entryStream = entry.Open();
                 asset = SerializedAsset.FromStream(entryStream);
-                asset.Main.AssetID = _pathToGuid[assetPath];
+                asset.Main!.AssetID = _pathToGuid[assetPath];
+                for (int i = 0; i < asset.SubAssets.Count; i++)
+                {
+                    asset.SubAssets[i].AssetID = asset.Main!.AssetID;
+                    asset.SubAssets[i].FileID = (short)i;
+                }
                 return true;
             }
             asset = null;

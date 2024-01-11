@@ -553,8 +553,12 @@ public class GameObject : EngineObject, ISerializable
 
         compoundTag.Add("HideFlags", new IntTag((int)hideFlags));
 
-        if(AssetID != Guid.Empty)
+        if (AssetID != Guid.Empty)
+        {
             compoundTag.Add("AssetID", new StringTag(AssetID.ToString()));
+            if(FileID != 0)
+                compoundTag.Add("FileID", new ShortTag(FileID));
+        }
 
         ListTag components = new ListTag();
         foreach (var comp in _components)
@@ -579,6 +583,8 @@ public class GameObject : EngineObject, ISerializable
         hideFlags = (HideFlags)value["HideFlags"].IntValue;
         if(value.TryGet("AssetID", out StringTag guid))
             AssetID = Guid.Parse(guid.Value);
+        if (value.TryGet("FileID", out ShortTag fileID))
+            FileID = fileID.Value;
 
         ListTag comps = (ListTag)value["Components"];
         _components = new();

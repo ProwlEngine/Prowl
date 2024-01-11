@@ -10,9 +10,10 @@ namespace Prowl.Runtime
     {
         private T? instance;
         private Guid assetID = Guid.Empty;
+        private short fileID = 0;
 
         /// <summary>
-		/// [GET / SET] The actual <see cref="EngineObject"/>. If currently unavailable, it is loaded and then returned.
+		/// The actual <see cref="EngineObject"/>. If currently unavailable, it is loaded and then returned.
 		/// Because of that, this Property is only null if the references Resource is missing, invalid, or
 		/// this content reference has been explicitly set to null. Never returns disposed Resources.
 		/// </summary>
@@ -26,12 +27,13 @@ namespace Prowl.Runtime
             set
             {
                 assetID = value == null ? Guid.Empty : value.AssetID;
+                fileID = value == null ? (short)0 : value.FileID;
                 instance = value;
             }
         }
 
         /// <summary>
-        /// [GET] Returns the current reference to the Resource that is stored locally. No attemp is made to load or reload
+        /// Returns the current reference to the Resource that is stored locally. No attemp is made to load or reload
         /// the Resource if currently unavailable.
         /// </summary>
         public T? ResWeak
@@ -40,7 +42,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// [GET / SET] The path where to look for the Resource, if it is currently unavailable.
+        /// The path where to look for the Resource, if it is currently unavailable.
         /// </summary>
         public Guid AssetID
         {
@@ -54,7 +56,16 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// [GET] Returns whether this content reference has been explicitly set to null.
+        /// The Asset index inside the asset file. 0 is the Main Asset
+        /// </summary>
+        public short FileID {
+            get => fileID;
+            set => fileID = value;
+        }
+
+
+        /// <summary>
+        /// Returns whether this content reference has been explicitly set to null.
         /// </summary>
         public bool IsExplicitNull
         {
@@ -65,7 +76,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// [GET] Returns whether this content reference is available in general. This may trigger loading it, if currently unavailable.
+        /// Returns whether this content reference is available in general. This may trigger loading it, if currently unavailable.
         /// </summary>
         public bool IsAvailable
         {
@@ -78,7 +89,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// [GET] Returns whether the referenced Resource is currently loaded.
+        /// Returns whether the referenced Resource is currently loaded.
         /// </summary>
         public bool IsLoaded
         {
@@ -90,7 +101,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// [GET] Returns whether the Resource has been generated at runtime and cannot be retrieved via content path.
+        /// Returns whether the Resource has been generated at runtime and cannot be retrieved via content path.
         /// </summary>
         public bool IsRuntimeResource
         {
@@ -108,24 +119,6 @@ namespace Prowl.Runtime
 
         public Type InstanceType => typeof(T);
 
-
-        /// <summary>
-        /// Creates a ContentRef pointing to the specified <see cref="Resource"/>, assuming the
-        /// specified path as its origin, if the Resource itsself is either null or doesn't
-        /// provide a valid <see cref="Resource.Path"/>.
-        /// </summary>
-        /// <param name="res">The Resource to reference.</param>
-        /// <param name="requestID">The referenced Resource's file path.</param>
-        public AssetRef(T res, Guid requestID)
-        {
-            instance = res;
-            if (requestID != Guid.Empty)
-                assetID = requestID;
-            else if (res != null && res.AssetID != Guid.Empty)
-                assetID = res.AssetID;
-            else
-                assetID = requestID;
-        }
         /// <summary>
         /// Creates a ContentRef pointing to the <see cref="Resource"/> at the specified id / using 
         /// the specified alias.
@@ -144,6 +137,7 @@ namespace Prowl.Runtime
         {
             instance = res;
             assetID = res != null ? res.AssetID : Guid.Empty;
+            fileID = res != null ? res.FileID : (short)0;
         }
 
         /// <summary>
@@ -168,9 +162,9 @@ namespace Prowl.Runtime
         private void RetrieveInstance()
         {
             if (assetID != Guid.Empty)
-                instance = Application.AssetProvider.LoadAsset<T>(assetID);
+                instance = Application.AssetProvider.LoadAsset<T>(this);
             else if (instance != null && instance.AssetID != Guid.Empty)
-                instance = Application.AssetProvider.LoadAsset<T>(instance.AssetID);
+                instance = Application.AssetProvider.LoadAsset<T>(instance.AssetID, instance.FileID);
             else
                 instance = null;
         }
@@ -202,7 +196,7 @@ namespace Prowl.Runtime
 
         public override int GetHashCode()
         {
-            if (assetID != Guid.Empty) return assetID.GetHashCode();
+            if (assetID != Guid.Empty) return assetID.GetHashCode() + fileID.GetHashCode();
             else if (instance != null) return instance.GetHashCode();
             else return 0;
         }
@@ -252,7 +246,7 @@ namespace Prowl.Runtime
             {
                 Guid? firstPath = first.instance != null ? first.instance.AssetID : first.assetID;
                 Guid? secondPath = second.instance != null ? second.instance.AssetID : second.assetID;
-                return firstPath == secondPath;
+                return firstPath == secondPath && first.fileID == second.fileID;
             }
         }
         /// <summary>
@@ -270,6 +264,8 @@ namespace Prowl.Runtime
         {
             CompoundTag compoundTag = new CompoundTag();
             compoundTag.Add("AssetID", new StringTag(assetID.ToString()));
+            if(fileID != 0)
+                compoundTag.Add("FileID", new ShortTag(fileID));
             if (IsRuntimeResource)
                 compoundTag.Add("Instance", TagSerializer.Serialize(instance, ctx));
             return compoundTag;
@@ -278,6 +274,7 @@ namespace Prowl.Runtime
         public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
         {
             assetID = Guid.Parse(value["AssetID"].StringValue);
+            fileID = value.TryGet("FileID", out ShortTag fileTag) ? fileTag.ShortValue : (short)0;
             if (assetID == Guid.Empty && value.TryGet("Instance", out CompoundTag tag))
                 instance = TagSerializer.Deserialize<T?>(tag, ctx);
         }
