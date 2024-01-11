@@ -35,6 +35,7 @@ namespace Prowl.Runtime
         private static Material defaultMat;
         private static AssetRef<Texture2D> defaultNoise;
         internal static Vector2D<int> FrameBufferSize;
+        private static uint activeProgram;
 
         static readonly GLEnum[] buffers =
         {
@@ -99,6 +100,15 @@ namespace Prowl.Runtime
         public static IDisposable UseDepthTest(bool doTest) => new ActiveDepthTest(doTest);
         public static IDisposable UseColorBlend(bool doBlend) => new ActiveColorBlend(doBlend);
         public static IDisposable UseCulling(bool doCulling) => new ActiveCullFace(doCulling);
+
+        public static void UseProgram(uint program)
+        {
+            if (activeProgram != program)
+            {
+                GL.UseProgram(program);
+                activeProgram = program;
+            }
+        }
 
         public static void Viewport(int width, int height)
         {

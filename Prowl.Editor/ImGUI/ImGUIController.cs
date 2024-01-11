@@ -323,7 +323,7 @@ namespace Prowl.Editor.ImGUI
                 (R + L) / (L - R), (T + B) / (B - T), 0.0f, 1.0f,
             };
 
-            _gl.UseProgram(_shader);
+            Graphics.UseProgram(_shader);
             _gl.Uniform1(_attribLocationTex, 0);
             _gl.UniformMatrix4(_attribLocationProjMtx, 1, false, orthoProjection);
             Graphics.CheckGL();
@@ -444,7 +444,7 @@ namespace Prowl.Editor.ImGUI
             _vertexArrayObject = 0;
 
             // Restore modified GL state
-            _gl.UseProgram((uint)lastProgram);
+            Graphics.UseProgram((uint)lastProgram);
             _gl.BindTexture(GLEnum.Texture2D, (uint)lastTexture);
 
             _gl.BindSampler(0, (uint)lastSampler);

@@ -90,7 +90,7 @@ namespace Prowl.Runtime
 
         public static void Apply(MaterialPropertyBlock mpb, uint shader)
         {
-            Graphics.GL.UseProgram(shader);
+            Graphics.UseProgram(shader);
 
             foreach (var item in mpb.floats)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
@@ -210,7 +210,7 @@ namespace Prowl.Runtime
             if (current != shader.Item1[pass]) {
                 // Set the shader
                 current = shader.Item1[pass];
-                Graphics.GL.UseProgram(shader.Item1[pass]);
+                Graphics.UseProgram(shader.Item1[pass]);
             }
 
             if (apply)
@@ -226,7 +226,7 @@ namespace Prowl.Runtime
             if (current != shader.Item2) {
                 // Set the shader
                 current = shader.Item2;
-                Graphics.GL.UseProgram(shader.Item2);
+                Graphics.UseProgram(shader.Item2);
             }
 
             if (apply)
