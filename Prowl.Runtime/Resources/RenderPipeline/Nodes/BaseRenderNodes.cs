@@ -234,6 +234,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         public bool UseGammaCorrection = true;
 
         Material? AcesMat = null;
+        Tonemapper? prevTonemapper = null;
 
         public override void Render()
         {
@@ -245,22 +246,29 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             AcesMat.SetFloat("Contrast", Math.Clamp(Contrast, 0, 2));
             AcesMat.SetFloat("Saturation", Math.Clamp(Saturation, 0, 2));
 
-            AcesMat.DisableKeyword("MELON");
-            AcesMat.DisableKeyword("ACES");
-            AcesMat.DisableKeyword("REINHARD");
-            AcesMat.DisableKeyword("UNCHARTED");
-            AcesMat.DisableKeyword("FILMIC");
+            // Because we always Reset the tonemappers to disabled then re0enable them
+            // this will trigger a Uniform Location Cache clear every single frame
+            // As the shader could be changing, so we do a previous check to see if we need to do this
+            if (prevTonemapper != UseTonemapper)
+            {
+                prevTonemapper = UseTonemapper;
+                AcesMat.DisableKeyword("MELON");
+                AcesMat.DisableKeyword("ACES");
+                AcesMat.DisableKeyword("REINHARD");
+                AcesMat.DisableKeyword("UNCHARTED");
+                AcesMat.DisableKeyword("FILMIC");
 
-            if (UseTonemapper == Tonemapper.Melon)
-                AcesMat.EnableKeyword("MELON");
-            else if (UseTonemapper == Tonemapper.Aces)
-                AcesMat.EnableKeyword("ACES");
-            else if (UseTonemapper == Tonemapper.Reinhard)
-                AcesMat.EnableKeyword("REINHARD");
-            else if (UseTonemapper == Tonemapper.Uncharted2)
-                AcesMat.EnableKeyword("UNCHARTED");
-            else if (UseTonemapper == Tonemapper.Filmic)
-                AcesMat.EnableKeyword("FILMIC");
+                if (UseTonemapper == Tonemapper.Melon)
+                    AcesMat.EnableKeyword("MELON");
+                else if (UseTonemapper == Tonemapper.Aces)
+                    AcesMat.EnableKeyword("ACES");
+                else if (UseTonemapper == Tonemapper.Reinhard)
+                    AcesMat.EnableKeyword("REINHARD");
+                else if (UseTonemapper == Tonemapper.Uncharted2)
+                    AcesMat.EnableKeyword("UNCHARTED");
+                else if (UseTonemapper == Tonemapper.Filmic)
+                    AcesMat.EnableKeyword("FILMIC");
+            }
 
             if (UseGammaCorrection) AcesMat.EnableKeyword("GAMMACORRECTION");
             else AcesMat.DisableKeyword("GAMMACORRECTION");
