@@ -6,6 +6,7 @@ using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
 using Silk.NET.Maths;
+using System.Runtime.CompilerServices;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -36,10 +37,9 @@ public class ViewportWindow : EditorWindow
         Title = FontAwesome6.Camera + " Viewport";
 
         var CamObject = GameObject.CreateSilently();
-        var t = CamObject.AddComponent<Transform>();
         CamObject.Name = "Editor-Camera";
         CamObject.hideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
-        t.Position = new Vector3(0, 5, -10);
+        CamObject.Position = new Vector3(0, 5, -10);
         Cam = CamObject.AddComponent<Camera>();
         Cam.ShowGizmos = true;
         LastFocusedCamera = Cam;
@@ -91,7 +91,7 @@ public class ViewportWindow : EditorWindow
         if (renderSize.X != RenderTarget.Width || renderSize.Y != RenderTarget.Height)
             RefreshRenderTexture((int)renderSize.X, (int)renderSize.Y);
 
-        var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Transform!.Position, Cam.GameObject.Transform!.Forward, Cam.GameObject.Transform!.Up).ToFloat();
+        var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Position, Cam.GameObject.Forward, Cam.GameObject.Up).ToFloat();
         var projection = Cam.GetProjectionMatrix(renderSize.X, renderSize.Y).ToFloat();
 
         WindowCenter = ImGui.GetWindowPos() + new System.Numerics.Vector2(windowSize.X / 2, windowSize.Y / 2);
@@ -193,22 +193,33 @@ public class ViewportWindow : EditorWindow
 
         ImGuizmo.ViewManipulate(ref view, 1, new Vector2(ImGui.GetWindowPos().X + windowSize.X - 75, ImGui.GetWindowPos().Y + 15 + 75), new Vector2(75, -75), 0x10101010);
         System.Numerics.Matrix4x4.Invert(view, out var iview);
-        Cam.GameObject.Transform!.Local = iview.ToDouble();
+        Cam.GameObject.Local = iview.ToDouble();
     }
 
     private void DrawGizmos(GameObject go, System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection, bool isSelected)
     {
         if (go.hideFlags.HasFlag(HideFlags.NoGizmos)) return;
 
-        Transform myTransform = go.GetComponent<Transform>();
-        if (isSelected && myTransform != null) {
-            var goMatrix = myTransform.Local;
+        if (isSelected)
+        {
+            var goMatrix = go.Global;
 
-            // Perform ImGuizmo manipulation
-            var fmat = goMatrix.ToFloat();
-            if (ImGuizmo.Manipulate(ref view, ref projection, GizmosOperation, GizmosSpace, ref fmat)) {
-                goMatrix = fmat.ToDouble();
-                myTransform.Local = goMatrix;
+            unsafe
+            {
+                float* snap = null;
+                if (ImGui.GetIO().KeyCtrl)
+                {
+                    float[] snaps = { 1, 1, 1 };
+                    snap = (float*)Unsafe.AsPointer(ref snaps[0]);
+                }
+
+                // Perform ImGuizmo manipulation
+                var fmat = goMatrix.ToFloat();
+                if (ImGuizmo.Manipulate(ref view, ref projection, GizmosOperation, GizmosSpace, ref fmat, snap))
+                {
+                    goMatrix = fmat.ToDouble();
+                    go.Local = goMatrix;
+                }
             }
         }
 
@@ -224,9 +235,9 @@ public class ViewportWindow : EditorWindow
         if (DragnDrop.ReceiveAsset<GameObject>(out var original)) {
             GameObject clone = (GameObject)EngineObject.Instantiate(original.Res!, true);
             clone.AssetID = Guid.Empty; // Remove AssetID so it's not a Prefab - These are just GameObjects like Models
-            var t = clone.Transform;
+            var t = clone;
             if (t != null) {
-                t.Position = Cam.GameObject.Transform!.GlobalPosition + Cam.GameObject.Transform!.Forward * 10;
+                t.Position = Cam.GameObject.GlobalPosition + Cam.GameObject.Forward * 10;
                 t.Recalculate();
             }
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(clone));
@@ -234,9 +245,9 @@ public class ViewportWindow : EditorWindow
         // Prefab from Assets
         if (DragnDrop.ReceiveAsset<Prefab>(out var prefab)) {
             var go = prefab.Res.Instantiate();
-            var t = go.Transform;
+            var t = go;
             if (t != null) {
-                t.Position = Cam.GameObject.Transform!.GlobalPosition + Cam.GameObject.Transform!.Forward * 10;
+                t.Position = Cam.GameObject.GlobalPosition + Cam.GameObject.Forward * 10;
                 t.Recalculate();
             }
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
@@ -256,18 +267,18 @@ public class ViewportWindow : EditorWindow
             ImGui.FocusWindow(ImGUIWindow, ImGuiFocusRequestFlags.None);
 
             Vector3 moveDir = Vector3.zero;
-            if (Input.GetKey(Key.W)) moveDir += Cam.GameObject.Transform!.Forward;
-            if (Input.GetKey(Key.S)) moveDir -= Cam.GameObject.Transform!.Forward;
-            if (Input.GetKey(Key.A)) moveDir -= Cam.GameObject.Transform!.Right;
-            if (Input.GetKey(Key.D)) moveDir += Cam.GameObject.Transform!.Right;
-            if (Input.GetKey(Key.E)) moveDir += Cam.GameObject.Transform!.Up;
-            if (Input.GetKey(Key.Q)) moveDir -= Cam.GameObject.Transform!.Up;
+            if (Input.GetKey(Key.W)) moveDir += Cam.GameObject.Forward;
+            if (Input.GetKey(Key.S)) moveDir -= Cam.GameObject.Forward;
+            if (Input.GetKey(Key.A)) moveDir -= Cam.GameObject.Right;
+            if (Input.GetKey(Key.D)) moveDir += Cam.GameObject.Right;
+            if (Input.GetKey(Key.E)) moveDir += Cam.GameObject.Up;
+            if (Input.GetKey(Key.Q)) moveDir -= Cam.GameObject.Up;
 
             if (moveDir != Vector3.zero) {
                 moveDir = Vector3.Normalize(moveDir);
                 if (Input.GetKey(Key.ShiftLeft))
                     moveDir *= 2.0f;
-                Cam.GameObject.Transform!.Position += moveDir * (Time.deltaTimeF * 10f) * moveSpeed;
+                Cam.GameObject.Position += moveDir * (Time.deltaTimeF * 10f) * moveSpeed;
 
                 // Get Exponentially faster
                 moveSpeed += Time.deltaTimeF * 0.0001;
@@ -279,10 +290,10 @@ public class ViewportWindow : EditorWindow
 
             // Version with fixed gimbal lock
             var mouseDelta = Input.MouseDelta;
-            var rot = Cam.GameObject.Transform!.Rotation;
+            var rot = Cam.GameObject.Rotation;
             rot.x += mouseDelta.X * (Time.deltaTimeF * 5f * Settings.LookSensitivity);
             rot.y += mouseDelta.Y * (Time.deltaTimeF * 5f * Settings.LookSensitivity);
-            Cam.GameObject.Transform!.Rotation = rot;
+            Cam.GameObject.Rotation = rot;
              
             Input.MousePosition = WindowCenter.ToFloat().ToGeneric();
         } else {
@@ -290,10 +301,10 @@ public class ViewportWindow : EditorWindow
             if (Input.GetMouseButton(2)) {
 
                 var mouseDelta = Input.MouseDelta;
-                var pos = Cam.GameObject.Transform!.Position;
-                pos -= Cam.GameObject.Transform!.Right * mouseDelta.X * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
-                pos += Cam.GameObject.Transform!.Up * mouseDelta.Y * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
-                Cam.GameObject.Transform!.Position = pos;
+                var pos = Cam.GameObject.Position;
+                pos -= Cam.GameObject.Right * mouseDelta.X * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
+                pos += Cam.GameObject.Up * mouseDelta.Y * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
+                Cam.GameObject.Position = pos;
 
             } else if (Input.MouseWheelDelta != 0) {
 
@@ -305,9 +316,9 @@ public class ViewportWindow : EditorWindow
                 if (amount < Cam.NearClip * 2) amount = Cam.NearClip * 2;
 
                 if (dir.sqrMagnitude > 0)
-                    Cam.GameObject.Transform!.GlobalPosition += Vector3.Normalize(dir) * amount * Input.MouseWheelDelta;
+                    Cam.GameObject.GlobalPosition += Vector3.Normalize(dir) * amount * Input.MouseWheelDelta;
                 else
-                    Cam.GameObject.Transform!.GlobalPosition += Cam.GameObject.Transform!.Forward * 1f * Input.MouseWheelDelta;
+                    Cam.GameObject.GlobalPosition += Cam.GameObject.Forward * 1f * Input.MouseWheelDelta;
 
             } else if (IsFocused) {
 

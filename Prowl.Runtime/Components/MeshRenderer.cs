@@ -20,13 +20,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable
 
     public void OnRenderObject()
     {
-        Matrix4x4 mat;
-        if (GameObject.Transform != null)
-            mat = GameObject.Transform!.GlobalCamRelative;
-        else {
-            mat = Matrix4x4.Identity;
-            mat.Translation -= Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.zero;
-        }
+        Matrix4x4 mat = GameObject.GlobalCamRelative;
 
         int camID = Camera.Current.InstanceID;
         if (!prevMats.ContainsKey(camID)) prevMats[camID] = mat;
@@ -55,13 +49,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable
     {
         if (Mesh.IsAvailable && Material.IsAvailable) {
 
-            Matrix4x4 mat;
-            if (GameObject.Transform != null)
-                mat = GameObject.Transform!.GlobalCamRelative;
-            else {
-                mat = Matrix4x4.Identity;
-                mat.Translation -= Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.zero;
-            }
+            Matrix4x4 mat = GameObject.GlobalCamRelative;
 
             var mvp = Matrix4x4.Identity;
             mvp = Matrix4x4.Multiply(mvp, mat);

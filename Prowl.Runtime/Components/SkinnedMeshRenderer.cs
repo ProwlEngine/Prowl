@@ -5,7 +5,6 @@ using Mesh = Prowl.Runtime.Mesh;
 
 namespace Prowl.Runtime;
 
-[RequireComponent(typeof(Transform))]
 [ExecuteAlways, AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Shapes}  Skinned Mesh Renderer")]
 public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
 {
@@ -40,16 +39,16 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         ProcessBoneTree();
         System.Numerics.Matrix4x4[] matrices = new System.Numerics.Matrix4x4[bones.Length];
         for (int i = 0; i < bones.Length; i++)
-            matrices[i] = bones[i].Transform!.Local.ToFloat();
+            matrices[i] = bones[i].Local.ToFloat();
         return matrices;
     }
 
     private Dictionary<int, Matrix4x4> prevMats = new();
     public void OnRenderObject()
     {
-        var mat = GameObject.Transform!.GlobalCamRelative;
+        var mat = GameObject.GlobalCamRelative;
         int camID = Camera.Current.InstanceID;
-        if (!prevMats.ContainsKey(camID)) prevMats[camID] = GameObject.Transform!.GlobalCamRelative;
+        if (!prevMats.ContainsKey(camID)) prevMats[camID] = GameObject.GlobalCamRelative;
         var prevMat = prevMats[camID];
         
         if (Mesh.IsAvailable && Material.IsAvailable)
@@ -73,7 +72,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         if (Mesh.IsAvailable && Material.IsAvailable)
         {
             var mvp = Matrix4x4.Identity;
-            mvp = Matrix4x4.Multiply(mvp, GameObject.Transform!.GlobalCamRelative);
+            mvp = Matrix4x4.Multiply(mvp, GameObject.GlobalCamRelative);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthProjection);
             Material.Res!.SetMatrix("mvp", mvp);

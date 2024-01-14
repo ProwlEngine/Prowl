@@ -5,7 +5,6 @@ using System;
 
 namespace Prowl.Runtime;
 
-[RequireComponent(typeof(Transform))]
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Directional Light")]
 [ExecuteAlways]
 public class DirectionalLight : MonoBehaviour
@@ -43,7 +42,7 @@ public class DirectionalLight : MonoBehaviour
     public void OnRenderObject()
     {
         lightMat ??= new Material(Shader.Find("Defaults/Directionallight.shader"));
-        lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.Transform!.Forward, Graphics.MatView));
+        lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.Forward, Graphics.MatView));
         lightMat.SetColor("LightColor", color);
         lightMat.SetFloat("LightIntensity", intensity);
 
@@ -72,7 +71,7 @@ public class DirectionalLight : MonoBehaviour
 
         Graphics.Blit(lightMat);
 
-        Gizmos.Matrix = GameObject.Transform!.GlobalCamRelative;
+        Gizmos.Matrix = GameObject.GlobalCamRelative;
         Gizmos.DirectionalLight(Color.yellow);
     }
 
@@ -86,8 +85,8 @@ public class DirectionalLight : MonoBehaviour
             //Graphics.MatDepthProjection = Matrix4x4.CreateOrthographicOffCenter(-25, 25, -25, 25, 1, 256);
             Graphics.MatDepthProjection = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, 0, 100);
 
-            var forward = GameObject.Transform!.Forward;
-            Graphics.MatDepthView = Matrix4x4.CreateLookToLeftHanded(-forward * 50, -forward, GameObject.Transform!.Up);
+            var forward = GameObject.Forward;
+            Graphics.MatDepthView = Matrix4x4.CreateLookToLeftHanded(-forward * 50, -forward, GameObject.Up);
 
             depthMVP = Matrix4x4.Identity;
             depthMVP = Matrix4x4.Multiply(depthMVP, Graphics.MatDepthView);

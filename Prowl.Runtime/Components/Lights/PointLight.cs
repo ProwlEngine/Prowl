@@ -5,7 +5,6 @@ using Shader = Prowl.Runtime.Shader;
 
 namespace Prowl.Runtime;
 
-[RequireComponent(typeof(Transform))]
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Point Light")]
 public class PointLight : MonoBehaviour
 {
@@ -24,7 +23,7 @@ public class PointLight : MonoBehaviour
         if (mesh == null)
             mesh = Mesh.CreateSphere(1f, 16, 16);
 
-        var mat = Matrix4x4.CreateScale(radius) * GameObject.Transform!.GlobalCamRelative;
+        var mat = Matrix4x4.CreateScale(radius) * GameObject.GlobalCamRelative;
         if (lightMat == null)
         {
             lightMat = new Material(Shader.Find("Defaults/Pointlight.shader"));
@@ -39,7 +38,7 @@ public class PointLight : MonoBehaviour
                 lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
             }
 
-            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.Transform!.GlobalPosition - Camera.Current.GameObject.Transform!.GlobalPosition, Graphics.MatView));
+            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.GlobalPosition - Camera.Current.GameObject.GlobalPosition, Graphics.MatView));
             lightMat.SetColor("LightColor", color);
             lightMat.SetFloat("LightRadius", radius);
             lightMat.SetFloat("LightIntensity", intensity);

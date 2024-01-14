@@ -29,8 +29,6 @@ public class GameObject : EngineObject, ISerializable
     private bool _enabled = true;
     private bool _enabledInHierarchy = true;
 
-    internal WeakReference<Transform>? _transform;
-
     // We dont serialize parent, since if we want to serialize X object who is a child to Y object, we dont want to serialize Y object as well.
     // The parent is reconstructed when the object is deserialized for all children.
     internal GameObject? parent;
@@ -72,18 +70,158 @@ public class GameObject : EngineObject, ISerializable
     /// <summary> The Parent of this GameObject, Can be null </summary>
     public GameObject? Parent => parent;
 
-    /// <summary> The Transform of this GameObject, If this GameObject has no Transform it will fallback to one in a parent, Can be null </summary>
-    public Transform? Transform {
-        get {
-            _transform ??= new(GetComponentInParent<Transform>()); // Fallback to Parent transform if one exists
-            return _transform.TryGetTarget(out var t) ? t : null;
-        }
-    }
-
     /// <summary> A List of all children of this GameObject </summary>
     public List<GameObject> Children = new List<GameObject>();
 
     #endregion
+
+
+    protected Vector3 position;
+    protected Vector3 rotation;
+    protected Vector3 scale = Vector3.one;
+    protected Vector3 globalPosition;
+    protected Quaternion orientation = Quaternion.Identity, globalOrientation;
+    protected Matrix4x4 globalPrevious, global, globalInverse;
+    protected Matrix4x4 local;
+
+    /// <summary>Gets or sets the local position.</summary>
+    public Vector3 Position {
+        get => position;
+        set {
+            if (position == value) return;
+            position = value;
+            Recalculate();
+        }
+    }
+
+    /// <summary>Gets or sets the local rotation.</summary>
+    /// <remarks>The rotation is in space euler from 0° to 360°(359°)</remarks>
+    public Vector3 Rotation {
+        get => rotation;
+        set {
+            if (rotation == value) return;
+            rotation = value;
+            orientation = value.NormalizeEulerAngleDegrees().ToRad().GetQuaternion();
+            Recalculate();
+        }
+    }
+
+    /// <summary>Gets or sets the local scale.</summary>
+    public Vector3 Scale {
+        get => scale;
+        set {
+            if (scale == value) return;
+            scale = value;
+            Recalculate();
+        }
+    }
+
+    /// <summary>Gets or sets the local orientation.</summary>
+    public Quaternion Orientation {
+        get => orientation;
+        set {
+            if (orientation == value) return;
+            orientation = value;
+            rotation = value.GetRotation().ToDeg().NormalizeEulerAngleDegrees();
+            Recalculate();
+        }
+    }
+
+    /// <summary>Gets or sets the global (world space) position.</summary>
+    public Vector3 GlobalPosition {
+        get => globalPosition;
+        set {
+            if (globalPosition == value) return;
+            if (parent == null)
+                position = value;
+            else // Transform because the rotation could modify the position of the child.
+                position = Vector3.Transform(value, parent.globalInverse);
+            Recalculate();
+        }
+    }
+
+    /// <summary>Gets or sets the global (world space) orientation.</summary>
+    public Quaternion GlobalOrientation {
+        get => globalOrientation;
+        set {
+            if (globalOrientation == value) return;
+            if (parent == null)
+                orientation = value;
+            else // Divide because quaternions are like matrices.
+                orientation = value / parent.globalOrientation;
+            rotation = orientation.GetRotation().ToDeg().NormalizeEulerAngleDegrees();
+            Recalculate();
+        }
+    }
+
+    /// <summary>The forward vector in global orientation space</summary>
+    public Vector3 Forward => Vector3.Transform(Vector3.forward, globalOrientation);
+
+    /// <summary>The right vector in global orientation space</summary>
+    public Vector3 Right => Vector3.Transform(Vector3.right, globalOrientation);
+
+    /// <summary>The up vector in global orientation space</summary>
+    public Vector3 Up => Vector3.Transform(Vector3.up, globalOrientation);
+
+    /// <summary>The global transformation matrix of the previous frame.</summary>
+    public Matrix4x4 GlobalPrevious => globalPrevious;
+
+    /// <summary>The global transformation matrix</summary>
+    public Matrix4x4 Global => global;
+
+    /// <summary>The inverse global transformation matrix</summary>
+    public Matrix4x4 GlobalInverse => globalInverse;
+
+    /// <summary>Returns a matrix relative/local to the currently rendering camera, Will throw an error if used outside rendering method</summary>
+    public Matrix4x4 GlobalCamRelative {
+        get {
+            Matrix4x4 matrix = Global;
+            matrix.Translation -= Camera.Current.GameObject.GlobalPosition;
+            return matrix;
+        }
+    }
+
+    /// <summary>The local transformation matrix</summary>
+    public Matrix4x4 Local { get => local; set => SetMatrix(value); }
+
+    /// <summary>Recalculates all values of the <see cref="Transform"/>.</summary>
+    public void Recalculate()
+    {
+        globalPrevious = global;
+
+        local = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(position);
+        if (parent == null)
+            global = local;
+        else
+            global = local * parent.global;
+
+        Matrix4x4.Invert(global, out globalInverse);
+
+        Matrix4x4.Decompose(global, out var globalScale, out globalOrientation, out globalPosition);
+
+        foreach (var child in Children)
+            child.Recalculate();
+    }
+
+    /// <summary>
+    /// Reverse calculates the local params from a local matrix.
+    /// </summary>
+    /// <param name="matrix">Local space matrix</param>
+    private void SetMatrix(Matrix4x4 matrix)
+    {
+        local = matrix;
+        Matrix4x4.Decompose(local, out scale, out orientation, out position);
+        rotation = orientation.GetRotation().ToDeg();
+        Recalculate();
+    }
+
+    public void SetUnsafe(Vector3 vector31, Quaternion quaternion, Vector3 vector32)
+    {
+        position = vector31;
+        rotation = quaternion.GetRotation().ToDeg().NormalizeEulerAngleDegrees();
+        orientation = quaternion;
+        scale = vector32;
+    }
 
     public void SetParent(GameObject? newParent, bool recalculate = true)
     {
@@ -130,8 +268,7 @@ public class GameObject : EngineObject, ISerializable
         parent = newParent;
         newParent?.Children.Add(this);
 
-        _transform = null; // Reset cached Transform
-        if(recalculate) Transform?.Recalculate();
+        if(recalculate) Recalculate();
         HierarchyStateChanged();
     }
 
@@ -226,9 +363,6 @@ public class GameObject : EngineObject, ISerializable
         newComponent.AttachToGameObject(this);
         _components.Add(newComponent);
         _componentCache.Add(type, newComponent);
-
-        if (newComponent is Transform t)
-            _transform = new(t);
 
         return newComponent;
     }
@@ -450,9 +584,8 @@ public class GameObject : EngineObject, ISerializable
     public static GameObject Instantiate(GameObject original, Vector3 position, Quaternion rotation, GameObject? parent) 
     {
         GameObject clone = (GameObject)EngineObject.Instantiate(original, false);
-        var t = clone.AddComponent<Transform>();
-        t.GlobalPosition = position;
-        t.GlobalOrientation = rotation;
+        clone.GlobalPosition = position;
+        clone.GlobalOrientation = rotation;
         clone.SetParent(parent);
         return clone;
     }
@@ -484,8 +617,6 @@ public class GameObject : EngineObject, ISerializable
 
     private void HierarchyStateChanged()
     {
-        _transform = null; // Reset cached Transform
-
         bool newState = _enabled && IsParentEnabled();
         if (_enabledInHierarchy != newState)
         {
@@ -537,7 +668,7 @@ public class GameObject : EngineObject, ISerializable
             _componentCache.Add(component.GetType(), component);
         }
 
-        Transform?.Recalculate();
+        Recalculate();
     }
 
     public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
@@ -552,6 +683,18 @@ public class GameObject : EngineObject, ISerializable
         compoundTag.Add("LayerIndex", new IntTag(layerIndex));
 
         compoundTag.Add("HideFlags", new IntTag((int)hideFlags));
+
+        compoundTag.Add("PosX", new DoubleTag(position.x));
+        compoundTag.Add("PosY", new DoubleTag(position.y));
+        compoundTag.Add("PosZ", new DoubleTag(position.z));
+
+        compoundTag.Add("RotX", new DoubleTag(rotation.x));
+        compoundTag.Add("RotY", new DoubleTag(rotation.y));
+        compoundTag.Add("RotZ", new DoubleTag(rotation.z));
+
+        compoundTag.Add("ScalX", new DoubleTag(scale.x));
+        compoundTag.Add("ScalY", new DoubleTag(scale.y));
+        compoundTag.Add("ScalZ", new DoubleTag(scale.z));
 
         if (AssetID != Guid.Empty)
         {
@@ -581,14 +724,19 @@ public class GameObject : EngineObject, ISerializable
         tagIndex = value["TagIndex"].IntValue;
         layerIndex = value["LayerIndex"].IntValue;
         hideFlags = (HideFlags)value["HideFlags"].IntValue;
-        if(value.TryGet("AssetID", out StringTag guid))
+
+        position = new Vector3(value["PosX"].DoubleValue, value["PosY"].DoubleValue, value["PosZ"].DoubleValue);
+        rotation = new Vector3(value["RotX"].DoubleValue, value["RotY"].DoubleValue, value["RotZ"].DoubleValue);
+        orientation = rotation.NormalizeEulerAngleDegrees().ToRad().GetQuaternion();
+        scale = new Vector3(value["ScalX"].DoubleValue, value["ScalY"].DoubleValue, value["ScalZ"].DoubleValue);
+
+        if (value.TryGet("AssetID", out StringTag guid))
             AssetID = Guid.Parse(guid.Value);
         if (value.TryGet("FileID", out ShortTag fileID))
             FileID = fileID.Value;
 
         ListTag comps = (ListTag)value["Components"];
         _components = new();
-        Transform? transform = null;
         foreach (CompoundTag compTag in comps.Tags)
         {
             MonoBehaviour? component = TagSerializer.Deserialize<MonoBehaviour>(compTag, ctx);
@@ -596,9 +744,6 @@ public class GameObject : EngineObject, ISerializable
             component.AttachToGameObject(this);
             _components.Add(component);
             _componentCache.Add(component.GetType(), component);
-
-            if (component is Transform t)
-                transform = t;
         }
 
         ListTag children = (ListTag)value["Children"];
@@ -611,6 +756,6 @@ public class GameObject : EngineObject, ISerializable
             Children.Add(child);
         }
 
-        transform?.Recalculate();
+        Recalculate();
     }
 }

@@ -10,7 +10,6 @@ using System.Linq;
 namespace Prowl.Runtime
 {
     /// <summary> A GameObject Component that describes a Dynamic or Static Physical Rigidbody </summary>
-    [RequireComponent(typeof(Transform))]
     [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Cubes}  Rigidbody")]
     public class Rigidbody : MonoBehaviour
     {
@@ -128,8 +127,8 @@ namespace Prowl.Runtime
 
             IsActive = true;
 
-            SetPosition(GameObject.Transform.GlobalPosition);
-            SetRotation(GameObject.Transform.GlobalOrientation);
+            SetPosition(GameObject.GlobalPosition);
+            SetRotation(GameObject.GlobalOrientation);
         }
 
         public void RefreshShape()
@@ -146,7 +145,7 @@ namespace Prowl.Runtime
 
             List<Shape> allShapes = new();
             foreach (var collider in colliders) {
-                if (collider.GameObject.Transform!.InstanceID == GameObject.Transform!.InstanceID)
+                if (collider.GameObject.InstanceID == GameObject.InstanceID)
                     allShapes.AddRange(collider.Shape);
                 else
                     allShapes.AddRange(collider.CreateTransformedShape(this));
@@ -172,8 +171,8 @@ namespace Prowl.Runtime
             } else if (Mass > 0) Body.SetMassInertia(Mass);
             else Body.SetMassInertia();
 
-            SetPosition(GameObject.Transform.GlobalPosition);
-            SetRotation(GameObject.Transform.GlobalOrientation);
+            SetPosition(GameObject.GlobalPosition);
+            SetRotation(GameObject.GlobalOrientation);
         }
 
         private void OnDisable()
@@ -184,8 +183,8 @@ namespace Prowl.Runtime
 
         private void LateUpdate()
         {
-            GameObject.Transform.GlobalPosition = Body.Position;
-            GameObject.Transform.GlobalOrientation = JQuaternion.CreateFromMatrix(Body.Orientation);
+            GameObject.GlobalPosition = Body.Position;
+            GameObject.GlobalOrientation = JQuaternion.CreateFromMatrix(Body.Orientation);
         }
 
         #endregion

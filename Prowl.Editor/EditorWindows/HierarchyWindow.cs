@@ -334,23 +334,18 @@ public class HierarchyWindow : EditorWindow
 
             ImGui.Separator();
 
-            if (ViewportWindow.LastFocusedCamera.GameObject.Transform != null) {
-                if (SelectHandler.Count > 0 && ImGui.MenuItem("Align With View")) {
-                    SelectHandler.Foreach((go) => {
-                        var t = (go.Target as GameObject).Transform;
-                        if (t != null) {
-                            Camera cam = ViewportWindow.LastFocusedCamera;
-                            t.GlobalPosition = cam.GameObject.Transform!.GlobalPosition;
-                            t.GlobalOrientation = cam.GameObject.Transform!.GlobalOrientation;
-                        }
-                    });
-                }
-
-                if (SelectHandler.Count == 1 && ImGui.MenuItem("Align View With")) {
+            if (SelectHandler.Count > 0 && ImGui.MenuItem("Align With View")) {
+                SelectHandler.Foreach((go) => {
                     Camera cam = ViewportWindow.LastFocusedCamera;
-                    cam.GameObject.Transform!.GlobalPosition = entity.Transform?.GlobalPosition ?? Vector3.zero;
-                    cam.GameObject.Transform!.GlobalOrientation = entity.Transform?.GlobalOrientation ?? Quaternion.Identity;
-                }
+                    (go.Target as GameObject).GlobalPosition = cam.GameObject.GlobalPosition;
+                    (go.Target as GameObject).GlobalOrientation = cam.GameObject.GlobalOrientation;
+                });
+            }
+
+            if (SelectHandler.Count == 1 && ImGui.MenuItem("Align View With")) {
+                Camera cam = ViewportWindow.LastFocusedCamera;
+                cam.GameObject.GlobalPosition = entity.GlobalPosition;
+                cam.GameObject.GlobalOrientation = entity.GlobalOrientation;
             }
 
             ImGui.EndPopup();

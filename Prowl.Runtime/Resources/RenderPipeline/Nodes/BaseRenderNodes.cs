@@ -156,7 +156,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             // Find DirectionalLight
             DirectionalLight? light = EngineObject.FindObjectOfType<DirectionalLight>();
             if (light != null)
-                Mat.SetVector("uSunPos", -light.GameObject.Transform!.Forward);
+                Mat.SetVector("uSunPos", -light.GameObject.Forward);
             else // Fallback to a reasonable default
                 Mat.SetVector("uSunPos", new Vector3(0.5f, 0.5f, 0.5f));
 
@@ -246,7 +246,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             AcesMat.SetFloat("Contrast", Math.Clamp(Contrast, 0, 2));
             AcesMat.SetFloat("Saturation", Math.Clamp(Saturation, 0, 2));
 
-            // Because we always Reset the tonemappers to disabled then re0enable them
+            // Because we always Reset the tonemappers to disabled then re-enable them
             // this will trigger a Uniform Location Cache clear every single frame
             // As the shader could be changing, so we do a previous check to see if we need to do this
             if (prevTonemapper != UseTonemapper)

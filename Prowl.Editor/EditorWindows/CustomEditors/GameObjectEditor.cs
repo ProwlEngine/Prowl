@@ -64,6 +64,11 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             //
             //ImGui.Separator();
 
+
+            PropertyDrawer.Draw(go, typeof(GameObject).GetProperty("Position")!);
+            PropertyDrawer.Draw(go, typeof(GameObject).GetProperty("Rotation")!);
+            PropertyDrawer.Draw(go, typeof(GameObject).GetProperty("Scale")!);
+
             // Draw Components
             HashSet<int> editorsNeeded = new();
             foreach (var comp in go.GetComponents<MonoBehaviour>()) {

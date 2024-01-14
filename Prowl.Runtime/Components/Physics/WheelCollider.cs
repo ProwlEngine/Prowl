@@ -119,20 +119,20 @@ namespace Prowl.Runtime
             car = GetComponentInParent<Rigidbody>();
             if (car == null) return;
 
-            Vector3 worldPos = car.GameObject.Transform!.GlobalPosition + Vector3.Transform(Position, car.GameObject.Transform!.GlobalOrientation);
-            worldPos -= (Camera.Current.GameObject.Transform?.GlobalPosition ?? Vector3.zero);
-            Vector3 worldAxis = Vector3.Transform(JVector.UnitY, car.GameObject.Transform!.GlobalOrientation);
+            Vector3 worldPos = car.GameObject.GlobalPosition + Vector3.Transform(Position, car.GameObject.GlobalOrientation);
+            worldPos -= Camera.Current.GameObject.GlobalPosition;
+            Vector3 worldAxis = Vector3.Transform(JVector.UnitY, car.GameObject.GlobalOrientation);
 
             Matrix4x4 wheelMatrix = Matrix4x4.Identity;
             wheelMatrix = Matrix4x4.Multiply(wheelMatrix, Matrix4x4.CreateScale(Radius * 2f));
             wheelMatrix = Matrix4x4.Multiply(wheelMatrix, Matrix4x4.CreateRotationY((steerAngle + 90) * MathF.PI / 180));
-            wheelMatrix = Matrix4x4.Multiply(wheelMatrix, Matrix4x4.CreateFromQuaternion(car.GameObject.Transform!.GlobalOrientation));
+            wheelMatrix = Matrix4x4.Multiply(wheelMatrix, Matrix4x4.CreateFromQuaternion(car.GameObject.GlobalOrientation));
             wheelMatrix = Matrix4x4.Multiply(wheelMatrix, Matrix4x4.CreateTranslation(worldPos + (worldAxis * displacement)));
 
             Matrix4x4 centerMatrix = Matrix4x4.Identity;
             centerMatrix = Matrix4x4.Multiply(centerMatrix, Matrix4x4.CreateScale(0.02f));
             centerMatrix = Matrix4x4.Multiply(centerMatrix, Matrix4x4.CreateRotationY((steerAngle + 90) * MathF.PI / 180));
-            centerMatrix = Matrix4x4.Multiply(centerMatrix, Matrix4x4.CreateFromQuaternion(car.GameObject.Transform!.GlobalOrientation));
+            centerMatrix = Matrix4x4.Multiply(centerMatrix, Matrix4x4.CreateFromQuaternion(car.GameObject.GlobalOrientation));
             centerMatrix = Matrix4x4.Multiply(centerMatrix, Matrix4x4.CreateTranslation(worldPos));
 
             Gizmos.Matrix = wheelMatrix;
