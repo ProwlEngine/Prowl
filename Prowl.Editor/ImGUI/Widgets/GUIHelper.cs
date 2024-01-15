@@ -21,6 +21,34 @@ namespace Prowl.Editor
             }
         }
 
+        public static void EnumComboBox<T>(string label, ref T value, bool showLabel = true) where T : Enum
+        {
+            if (showLabel) ImGui.Text(label);
+            if (ImGui.BeginCombo($"##{label}", value.ToString(), ImGuiComboFlags.NoArrowButton))
+            {
+                foreach (var v in Enum.GetValues(typeof(T)))
+                {
+                    if (ImGui.Selectable(v.ToString(), v.Equals(value)))
+                        value = (T)v;
+                }
+                ImGui.EndCombo();
+            }
+        }
+
+        public static void EnumComboBox<T>(string label, string preview, ref T value, bool showLabel = true) where T : Enum
+        {
+            if (showLabel) ImGui.Text(label);
+            if (ImGui.BeginCombo($"##{label}", preview, ImGuiComboFlags.NoArrowButton))
+            {
+                foreach (var v in Enum.GetValues(typeof(T)))
+                {
+                    if (ImGui.Selectable(v.ToString(), v.Equals(value)))
+                        value = (T)v;
+                }
+                ImGui.EndCombo();
+            }
+        }
+
         public static void TextCenter(string text, float size = 1f, bool vertically = false)
         {
             float oldX = ImGui.GetCursorPosX();

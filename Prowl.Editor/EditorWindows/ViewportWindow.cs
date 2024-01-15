@@ -159,20 +159,7 @@ public class ViewportWindow : EditorWindow
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (115), 5));
         ImGui.SetNextItemWidth(23);
-        // Dropdown to pick Camera DebugDraw mode
-        if (ImGui.BeginCombo($"##DebugDraw", $"{FontAwesome6.Eye}", ImGuiComboFlags.NoArrowButton)) {
-            if (ImGui.Selectable($"Off", Cam.debugDraw == Camera.DebugDraw.Off))
-                Cam.debugDraw = Camera.DebugDraw.Off;
-            if (ImGui.Selectable($"Diffuse", Cam.debugDraw == Camera.DebugDraw.Albedo))
-                Cam.debugDraw = Camera.DebugDraw.Albedo;
-            if (ImGui.Selectable($"Normals", Cam.debugDraw == Camera.DebugDraw.Normals))
-                Cam.debugDraw = Camera.DebugDraw.Normals;
-            if (ImGui.Selectable($"Depth", Cam.debugDraw == Camera.DebugDraw.Depth))
-                Cam.debugDraw = Camera.DebugDraw.Depth;
-            if (ImGui.Selectable($"Velocity", Cam.debugDraw == Camera.DebugDraw.Velocity))
-                Cam.debugDraw = Camera.DebugDraw.Velocity;
-            ImGui.EndCombo();
-        }
+        GUIHelper.EnumComboBox("##DebugDraw", $"{FontAwesome6.Eye}", ref Cam.debugDraw, false);
         GUIHelper.Tooltip("Debug Visualization: " + Cam.debugDraw.ToString());
 
 
