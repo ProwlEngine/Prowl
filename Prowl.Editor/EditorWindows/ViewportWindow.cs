@@ -8,6 +8,7 @@ using Silk.NET.Input;
 using Silk.NET.Maths;
 using System.Runtime.CompilerServices;
 using Silk.NET.SDL;
+using Jitter2.Collision.Shapes;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -20,13 +21,13 @@ public class ViewportWindow : EditorWindow
     public static ImGuizmoOperation GizmosOperation = ImGuizmoOperation.Translate;
     public static ImGuizmoMode GizmosSpace = ImGuizmoMode.Local;
 
+
     Camera Cam;
     RenderTexture RenderTarget;
     bool IsFocused = false;
     bool IsHovered = false;
     Vector2 WindowCenter;
     Vector2 mouseUV;
-    bool DrawGrid = false;
     int frames = 0;
     double fpsTimer = 0;
     double fps = 0;
@@ -138,11 +139,6 @@ public class ViewportWindow : EditorWindow
                 DrawGizmos(activeGO, view, projection, HierarchyWindow.SelectHandler.IsSelected(new WeakReference(activeGO)));
         Camera.Current = null;
 
-        if (DrawGrid) {
-            System.Numerics.Matrix4x4 matrix = System.Numerics.Matrix4x4.Identity;
-            ImGuizmo.DrawGrid(ref view.M11, ref projection.M11, ref matrix.M11, 10);
-        }
-
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 5));
         if (ImGui.Button($"{FontAwesome6.ArrowsUpDownLeftRight}")) GizmosOperation = ImGuizmoOperation.Translate;
         GUIHelper.Tooltip("Translate");
@@ -162,7 +158,7 @@ public class ViewportWindow : EditorWindow
         GUIHelper.Tooltip(GizmosSpace.ToString());
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (115), 5));
-        ImGui.SetNextItemWidth(20);
+        ImGui.SetNextItemWidth(23);
         // Dropdown to pick Camera DebugDraw mode
         if (ImGui.BeginCombo($"##DebugDraw", $"{FontAwesome6.Eye}", ImGuiComboFlags.NoArrowButton)) {
             if (ImGui.Selectable($"Off", Cam.debugDraw == Camera.DebugDraw.Off))
@@ -179,12 +175,8 @@ public class ViewportWindow : EditorWindow
         }
         GUIHelper.Tooltip("Debug Visualization: " + Cam.debugDraw.ToString());
 
-        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (140), 5));
-        if (ImGui.Button($"{FontAwesome6.TableCells}"))
-            DrawGrid = !DrawGrid;
-        GUIHelper.Tooltip("Show Grid: " + DrawGrid.ToString());
 
-        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (172), 5));
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (142), 5));
         if (ImGui.Button($"{FontAwesome6.Camera}"))
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(Cam.GameObject));
         GUIHelper.Tooltip("Viewport Camera Settings");
@@ -209,6 +201,9 @@ public class ViewportWindow : EditorWindow
             unsafe
             {
                 float* snap = null;
+                float* localBound = null;
+                //float[] localBounds = { -0.5f, -0.5f, -0.5f, 0.5f, 0.5f, 0.5f };
+                //localBound = (float*)Unsafe.AsPointer(ref localBounds[0]);
                 if (ImGui.GetIO().KeyCtrl)
                 {
                     float[] snaps = { 1, 1, 1 };
@@ -217,13 +212,13 @@ public class ViewportWindow : EditorWindow
 
                 // Perform ImGuizmo manipulation
                 var fmat = goMatrix.ToFloat();
-                if (ImGuizmo.Manipulate(ref view, ref projection, GizmosOperation, GizmosSpace, ref fmat, snap))
+                if (ImGuizmo.Manipulate(ref view, ref projection, GizmosOperation, GizmosSpace, ref fmat, null, snap, localBound, snap))
                 {
                     goMatrix = fmat.ToDouble();
                     // decompose
                     Matrix4x4.Decompose(goMatrix, out var scale, out var rot, out var pos);
                     go.Position = pos;
-                    //go.Rotation = rot;
+                    go.Rotation = rot;
                     go.LocalScale = scale;
 
                     //go.Global = goMatrix;
@@ -335,6 +330,7 @@ public class ViewportWindow : EditorWindow
                 else if (Input.GetKeyDown(Key.W)) GizmosOperation = ImGuizmoOperation.Rotate;
                 else if (Input.GetKeyDown(Key.E)) GizmosOperation = ImGuizmoOperation.Scale;
                 else if (Input.GetKeyDown(Key.R)) GizmosOperation = ImGuizmoOperation.Universal;
+                else if (Input.GetKeyDown(Key.T)) GizmosOperation = ImGuizmoOperation.Bounds;
 
             }
         }
