@@ -203,7 +203,8 @@ public class ViewportWindow : EditorWindow
 
         if (isSelected)
         {
-            var goMatrix = go.Global;
+            //var goMatrix = go.Global;
+            var goMatrix = Matrix4x4.CreateScale(go.LocalScale) * Matrix4x4.CreateFromQuaternion(go.Rotation) * Matrix4x4.CreateTranslation(go.Position);
 
             unsafe
             {
@@ -219,7 +220,13 @@ public class ViewportWindow : EditorWindow
                 if (ImGuizmo.Manipulate(ref view, ref projection, GizmosOperation, GizmosSpace, ref fmat, snap))
                 {
                     goMatrix = fmat.ToDouble();
-                    go.Local = goMatrix;
+                    // decompose
+                    Matrix4x4.Decompose(goMatrix, out var scale, out var rot, out var pos);
+                    go.Position = pos;
+                    //go.Rotation = rot;
+                    go.LocalScale = scale;
+
+                    //go.Global = goMatrix;
                 }
             }
         }
