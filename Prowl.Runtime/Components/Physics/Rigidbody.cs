@@ -127,8 +127,8 @@ namespace Prowl.Runtime
 
             IsActive = true;
 
-            SetPosition(GameObject.GlobalPosition);
-            SetRotation(GameObject.GlobalOrientation);
+            SetPosition(GameObject.Position);
+            SetRotation(GameObject.Rotation);
         }
 
         public void RefreshShape()
@@ -171,8 +171,8 @@ namespace Prowl.Runtime
             } else if (Mass > 0) Body.SetMassInertia(Mass);
             else Body.SetMassInertia();
 
-            SetPosition(GameObject.GlobalPosition);
-            SetRotation(GameObject.GlobalOrientation);
+            SetPosition(GameObject.Position);
+            SetRotation(GameObject.Rotation);
         }
 
         private void OnDisable()
@@ -183,8 +183,8 @@ namespace Prowl.Runtime
 
         private void LateUpdate()
         {
-            GameObject.GlobalPosition = Body.Position;
-            GameObject.GlobalOrientation = JQuaternion.CreateFromMatrix(Body.Orientation);
+            GameObject.Position = Body.Position;
+            GameObject.Rotation = JQuaternion.CreateFromMatrix(Body.Orientation);
         }
 
         #endregion

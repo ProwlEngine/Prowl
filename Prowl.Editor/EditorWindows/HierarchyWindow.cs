@@ -337,15 +337,15 @@ public class HierarchyWindow : EditorWindow
             if (SelectHandler.Count > 0 && ImGui.MenuItem("Align With View")) {
                 SelectHandler.Foreach((go) => {
                     Camera cam = ViewportWindow.LastFocusedCamera;
-                    (go.Target as GameObject).GlobalPosition = cam.GameObject.GlobalPosition;
-                    (go.Target as GameObject).GlobalOrientation = cam.GameObject.GlobalOrientation;
+                    (go.Target as GameObject).Position = cam.GameObject.Position;
+                    (go.Target as GameObject).Rotation = cam.GameObject.Rotation;
                 });
             }
 
             if (SelectHandler.Count == 1 && ImGui.MenuItem("Align View With")) {
                 Camera cam = ViewportWindow.LastFocusedCamera;
-                cam.GameObject.GlobalPosition = entity.GlobalPosition;
-                cam.GameObject.GlobalOrientation = entity.GlobalOrientation;
+                cam.GameObject.Position = entity.Position;
+                cam.GameObject.Rotation = entity.Rotation;
             }
 
             ImGui.EndPopup();

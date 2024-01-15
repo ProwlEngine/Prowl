@@ -8,10 +8,10 @@ namespace Prowl.Runtime
     public class SphereCollider : Collider
     {
         public float radius = 1f;
-        public override List<Shape> CreateShapes() => [ new SphereShape(radius * (float)GameObject.Scale.x) ];
+        public override List<Shape> CreateShapes() => [ new SphereShape(radius * (float)GameObject.LocalScale.x) ];
         public override void OnValidate()
         {
-            (Shape[0] as SphereShape).Radius = radius * (float)GameObject.Scale.x;
+            (Shape[0] as SphereShape).Radius = radius * (float)GameObject.LocalScale.x;
             Shape[0].UpdateShape();
             GetComponentInParent<Rigidbody>().IsActive = true;
         }
@@ -19,8 +19,8 @@ namespace Prowl.Runtime
         public void DrawGizmosSelected()
         {
             var mat = Matrix4x4.Identity;
-            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateScale((radius * (float)GameObject.Scale.x) * 1.0025f));
-            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateTranslation(GameObject.GlobalPosition - Camera.Current.GameObject.GlobalPosition));
+            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateScale((radius * (float)GameObject.LocalScale.x) * 1.0025f));
+            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateTranslation(GameObject.Position - Camera.Current.GameObject.Position));
             Gizmos.Matrix = mat;
             Gizmos.Sphere(Color.yellow);
         }

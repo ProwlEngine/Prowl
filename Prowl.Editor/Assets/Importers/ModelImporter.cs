@@ -312,7 +312,7 @@ namespace Prowl.Editor.Assets
 
                 GameObject rootNode = GOs[0].Item1;
                 if(UnitScale != 1f)
-                    rootNode.Scale = Vector3.one * UnitScale;
+                    rootNode.LocalScale = Vector3.one * UnitScale;
                 rootNode.Recalculate();
                 ctx.SetMainObject(rootNode);
 

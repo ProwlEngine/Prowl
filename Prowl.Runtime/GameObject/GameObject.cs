@@ -85,7 +85,7 @@ public class GameObject : EngineObject, ISerializable
     protected Matrix4x4 local;
 
     /// <summary>Gets or sets the local position.</summary>
-    public Vector3 Position {
+    public Vector3 LocalPosition {
         get => position;
         set {
             if (position == value) return;
@@ -96,7 +96,7 @@ public class GameObject : EngineObject, ISerializable
 
     /// <summary>Gets or sets the local rotation.</summary>
     /// <remarks>The rotation is in space euler from 0° to 360°(359°)</remarks>
-    public Vector3 Rotation {
+    public Vector3 LocalEularAngles {
         get => rotation;
         set {
             if (rotation == value) return;
@@ -107,7 +107,7 @@ public class GameObject : EngineObject, ISerializable
     }
 
     /// <summary>Gets or sets the local scale.</summary>
-    public Vector3 Scale {
+    public Vector3 LocalScale {
         get => scale;
         set {
             if (scale == value) return;
@@ -117,7 +117,7 @@ public class GameObject : EngineObject, ISerializable
     }
 
     /// <summary>Gets or sets the local orientation.</summary>
-    public Quaternion Orientation {
+    public Quaternion LocalRotation {
         get => orientation;
         set {
             if (orientation == value) return;
@@ -128,7 +128,7 @@ public class GameObject : EngineObject, ISerializable
     }
 
     /// <summary>Gets or sets the global (world space) position.</summary>
-    public Vector3 GlobalPosition {
+    public Vector3 Position {
         get => globalPosition;
         set {
             if (globalPosition == value) return;
@@ -141,7 +141,7 @@ public class GameObject : EngineObject, ISerializable
     }
 
     /// <summary>Gets or sets the global (world space) orientation.</summary>
-    public Quaternion GlobalOrientation {
+    public Quaternion Rotation {
         get => globalOrientation;
         set {
             if (globalOrientation == value) return;
@@ -176,7 +176,7 @@ public class GameObject : EngineObject, ISerializable
     public Matrix4x4 GlobalCamRelative {
         get {
             Matrix4x4 matrix = Global;
-            matrix.Translation -= Camera.Current.GameObject.GlobalPosition;
+            matrix.Translation -= Camera.Current.GameObject.Position;
             return matrix;
         }
     }
@@ -584,8 +584,8 @@ public class GameObject : EngineObject, ISerializable
     public static GameObject Instantiate(GameObject original, Vector3 position, Quaternion rotation, GameObject? parent) 
     {
         GameObject clone = (GameObject)EngineObject.Instantiate(original, false);
-        clone.GlobalPosition = position;
-        clone.GlobalOrientation = rotation;
+        clone.Position = position;
+        clone.Rotation = rotation;
         clone.SetParent(parent);
         return clone;
     }

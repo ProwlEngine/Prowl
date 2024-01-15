@@ -9,10 +9,10 @@ namespace Prowl.Runtime
     {
         public Vector3 size = Vector3.one;
 
-        public override List<Shape> CreateShapes() => [ new BoxShape(size * GameObject.Scale) ];
+        public override List<Shape> CreateShapes() => [ new BoxShape(size * GameObject.LocalScale) ];
         public override void OnValidate()
         {
-            (Shape[0] as BoxShape).Size = size * GameObject.Scale;
+            (Shape[0] as BoxShape).Size = size * GameObject.LocalScale;
             Shape[0].UpdateShape();
             GetComponentInParent<Rigidbody>().IsActive = true;
         }
