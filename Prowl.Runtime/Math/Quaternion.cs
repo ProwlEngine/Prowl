@@ -55,21 +55,12 @@ namespace Prowl.Runtime
             }
         }
 
+        public Vector3 eulerAngles { get => this.GetRotation().ToDeg().NormalizeEulerAngleDegrees(); set => this = value.NormalizeEulerAngleDegrees().ToRad().GetQuaternion(); }
+
         /// <summary>
         /// Returns a Quaternion representing no rotation. 
         /// </summary>
-        public static Quaternion Identity
-        {
-            get { return new Quaternion(0, 0, 0, 1); }
-        }
-
-        /// <summary>
-        /// Returns whether the Quaternion is the identity Quaternion.
-        /// </summary>
-        public bool IsIdentity
-        {
-            get { return x == 0 && y == 0 && z == 0 && w == 1; }
-        }
+        public static Quaternion identity => new(0, 0, 0, 1);
 
         /// <summary>
         /// Constructs a Quaternion from the given components.
@@ -99,19 +90,15 @@ namespace Prowl.Runtime
             w = scalarPart;
         }
 
-        public System.Numerics.Quaternion ToFloat()
-        {
-            return new System.Numerics.Quaternion((float)x, (float)y, (float)z, (float)w);
-        }
+        public System.Numerics.Quaternion Todouble() => new((float)x, (float)y, (float)z, (float)w);
 
         /// <summary>
         /// Calculates the length of the Quaternion.
         /// </summary>
         /// <returns>The computed length of the Quaternion.</returns>
-        public double Length()
+        public double Magnitude()
         {
             double ls = x * x + y * y + z * z + w * w;
-
             return (double)Math.Sqrt((double)ls);
         }
 
@@ -119,9 +106,15 @@ namespace Prowl.Runtime
         /// Calculates the length squared of the Quaternion. This operation is cheaper than Length().
         /// </summary>
         /// <returns>The length squared of the Quaternion.</returns>
-        public double LengthSquared()
+        public double SqrMagnitude() => x * x + y * y + z * z + w * w;
+
+        public static Quaternion NormalizeSafe(Quaternion q)
         {
-            return x * x + y * y + z * z + w * w;
+            double mag = q.Magnitude();
+            if (mag < Mathf.Epsilon)
+                return Quaternion.identity;
+            else
+                return q / mag;
         }
 
         /// <summary>
@@ -186,6 +179,10 @@ namespace Prowl.Runtime
             return ans;
         }
 
+        public static Quaternion Euler(double x, double y, double z) => Euler(new Vector3(x, y, z));
+        public static Quaternion Euler(Vector3 euler) => euler.NormalizeEulerAngleDegrees().ToRad().GetQuaternion();
+        public Vector3 ToEuler() => this.GetRotation().ToDeg().NormalizeEulerAngleDegrees();
+
         /// <summary>
         /// Creates a Quaternion from a normalized vector axis and an angle to rotate about the vector.
         /// </summary>
@@ -193,7 +190,7 @@ namespace Prowl.Runtime
         /// This vector must be normalized before calling this function or the resulting Quaternion will be incorrect.</param>
         /// <param name="angle">The angle, in radians, to rotate around the vector.</param>
         /// <returns>The created Quaternion.</returns>
-        public static Quaternion CreateFromAxisAngle(Vector3 axis, double angle)
+        public static Quaternion AngleAxis(double angle, Vector3 axis)
         {
             Quaternion ans;
 
@@ -249,7 +246,7 @@ namespace Prowl.Runtime
         /// </summary>
         /// <param name="matrix">The rotation matrix.</param>
         /// <returns>The created Quaternion.</returns>
-        public static Quaternion CreateFromRotationMatrix(Matrix4x4 matrix)
+        public static Quaternion MatrixToQuaternion(Matrix4x4 matrix)
         {
             double trace = matrix.M11 + matrix.M22 + matrix.M33;
 
@@ -414,7 +411,7 @@ namespace Prowl.Runtime
         /// </summary>
         public static double Angle(Quaternion a, Quaternion b) => Mathf.Acos(Mathf.Min(Mathf.Abs(Dot(a, b)), 1.0)) * 2.0 * Mathf.Rad2Deg;
 
-        public static Quaternion RotateTowards(Quaternion from, Quaternion to, float maxDegreesDelta)
+        public static Quaternion RotateTowards(Quaternion from, Quaternion to, double maxDegreesDelta)
         {
             double angle = Angle(from, to);
             return angle == 0.0 ? to : Slerp(from, to, Mathf.Min(1.0, maxDegreesDelta / angle));
@@ -713,6 +710,28 @@ namespace Prowl.Runtime
             return ans;
         }
 
+        public static Vector3 operator *(Quaternion rotation, Vector3 point)
+        {
+            double x = rotation.x * 2.0;
+            double y = rotation.y * 2.0;
+            double z = rotation.z * 2.0;
+            double xx = rotation.x * x;
+            double yy = rotation.y * y;
+            double zz = rotation.z * z;
+            double xy = rotation.x * y;
+            double xz = rotation.x * z;
+            double yz = rotation.y * z;
+            double wx = rotation.w * x;
+            double wy = rotation.w * y;
+            double wz = rotation.w * z;
+
+            Vector3 res;
+            res.x = (1.0 - (yy + zz)) * point.x + (xy - wz) * point.y + (xz + wy) * point.z;
+            res.y = (xy + wz) * point.x + (1.0 - (xx + zz)) * point.y + (yz - wx) * point.z;
+            res.z = (xz - wy) * point.x + (yz + wx) * point.y + (1.0 - (xx + yy)) * point.z;
+            return res;
+        }
+
         /// <summary>
         /// Divides a Quaternion by another Quaternion.
         /// </summary>
@@ -755,6 +774,11 @@ namespace Prowl.Runtime
             ans.w = q1w * q2w - dot;
 
             return ans;
+        }
+
+        public static Quaternion operator /(Quaternion q, double v)
+        {
+            return new Quaternion(q.x / v, q.y / v, q.z / v, q.w / v);
         }
 
         /// <summary>

@@ -61,6 +61,18 @@ namespace Prowl.Runtime
 
         public System.Numerics.Vector2 ToFloat() => new System.Numerics.Vector2((float)x, (float)y);
 
+        public void Scale(Vector2 scale) { x *= scale.x; y *= scale.y; }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Normalize()
+        {
+            double ls = x * x + y * y;
+            double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
+            x *= invNorm;
+            y *= invNorm;
+        }
+
+
         /// <summary>
         /// Returns the hash code for this instance.
         /// </summary>

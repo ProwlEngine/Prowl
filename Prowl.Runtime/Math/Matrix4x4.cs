@@ -18,72 +18,24 @@ namespace Prowl.Runtime
     public struct Matrix4x4 : IEquatable<Matrix4x4>
     {
         #region Public Fields
-        /// <summary>
-        /// Value at row 1, column 1 of the matrix.
-        /// </summary>
         public double M11;
-        /// <summary>
-        /// Value at row 1, column 2 of the matrix.
-        /// </summary>
         public double M12;
-        /// <summary>
-        /// Value at row 1, column 3 of the matrix.
-        /// </summary>
         public double M13;
-        /// <summary>
-        /// Value at row 1, column 4 of the matrix.
-        /// </summary>
         public double M14;
 
-        /// <summary>
-        /// Value at row 2, column 1 of the matrix.
-        /// </summary>
         public double M21;
-        /// <summary>
-        /// Value at row 2, column 2 of the matrix.
-        /// </summary>
         public double M22;
-        /// <summary>
-        /// Value at row 2, column 3 of the matrix.
-        /// </summary>
         public double M23;
-        /// <summary>
-        /// Value at row 2, column 4 of the matrix.
-        /// </summary>
         public double M24;
 
-        /// <summary>
-        /// Value at row 3, column 1 of the matrix.
-        /// </summary>
         public double M31;
-        /// <summary>
-        /// Value at row 3, column 2 of the matrix.
-        /// </summary>
         public double M32;
-        /// <summary>
-        /// Value at row 3, column 3 of the matrix.
-        /// </summary>
         public double M33;
-        /// <summary>
-        /// Value at row 3, column 4 of the matrix.
-        /// </summary>
         public double M34;
 
-        /// <summary>
-        /// Value at row 4, column 1 of the matrix.
-        /// </summary>
         public double M41;
-        /// <summary>
-        /// Value at row 4, column 2 of the matrix.
-        /// </summary>
         public double M42;
-        /// <summary>
-        /// Value at row 4, column 3 of the matrix.
-        /// </summary>
         public double M43;
-        /// <summary>
-        /// Value at row 4, column 4 of the matrix.
-        /// </summary>
         public double M44;
         #endregion Public Fields
 
@@ -124,6 +76,49 @@ namespace Prowl.Runtime
                        M21 == 0 && M23 == 0 && M24 == 0 &&
                        M31 == 0 && M32 == 0 && M34 == 0 &&
                        M41 == 0 && M42 == 0 && M43 == 0;
+
+        // Access element at [row, column].
+        public double this[int row, int column] {
+            get => this[row + column * 4];
+
+            set => this[row + column * 4] = value;
+        }
+
+        // Access element at sequential index (0..15 inclusive).
+        public double this[int index] {
+            get => index switch {
+                0 => M11, 1 => M21, 2 => M31, 3 => M41,
+                4 => M12, 5 => M22, 6 => M32, 7 => M42,
+                8 => M13, 9 => M23, 10 => M33, 11 => M43,
+                12 => M14, 13 => M24, 14 => M34, 15 => M44,
+                _ => throw new IndexOutOfRangeException("Invalid matrix index!"),
+            };
+
+            set {
+                switch (index)
+                {
+                    case 0: M11 = value; break;
+                    case 1: M21 = value; break;
+                    case 2: M31 = value; break;
+                    case 3: M41 = value; break;
+                    case 4: M12 = value; break;
+                    case 5: M22 = value; break;
+                    case 6: M32 = value; break;
+                    case 7: M42 = value; break;
+                    case 8: M13 = value; break;
+                    case 9: M23 = value; break;
+                    case 10: M33 = value; break;
+                    case 11: M43 = value; break;
+                    case 12: M14 = value; break;
+                    case 13: M24 = value; break;
+                    case 14: M34 = value; break;
+                    case 15: M44 = value; break;
+
+                    default:
+                        throw new IndexOutOfRangeException("Invalid matrix index!");
+                }
+            }
+        }
 
         /// <summary>
         /// Gets or sets the translation component of this matrix.
@@ -175,6 +170,12 @@ namespace Prowl.Runtime
             result.M44 = (float)M44;
             return result;
         }
+
+        public static Matrix4x4 TRS(Vector3 m_LocalPosition, Quaternion m_LocalRotation, Vector3 m_LocalScale)
+            => Matrix4x4.CreateScale(m_LocalScale) * Matrix4x4.CreateFromQuaternion(m_LocalRotation) * Matrix4x4.CreateTranslation(m_LocalPosition);
+
+        public Vector3 MultiplyPoint(Vector3 v) => Vector3.Transform(v, this);
+        
 
         /// <summary>
         /// Creates a spherical billboard that rotates around a specified object position.
@@ -358,7 +359,7 @@ namespace Prowl.Runtime
             return result;
         }
 
-        /// <summary>
+        /// <summary>f
         /// Creates a scaling matrix.
         /// </summary>
         /// <param name="scales">The vector containing the amount to scale by on each axis.</param>
@@ -1079,6 +1080,12 @@ namespace Prowl.Runtime
                    d * (e * jo_kn - f * io_km + g * in_jm);
         }
 
+        public Matrix4x4 Invert()
+        {
+            Invert(this, out Matrix4x4 result);
+            return result;
+        }
+
         /// <summary>
         /// Attempts to calculate the inverse of the given matrix. If successful, result will contain the inverted matrix.
         /// </summary>
@@ -1449,13 +1456,13 @@ namespace Prowl.Runtime
                     if ((EPSILON < det))
                     {
                         // Non-SRT matrix encountered
-                        rotation = Quaternion.Identity;
+                        rotation = Quaternion.identity;
                         result = false;
                     }
                     else
                     {
                         // generate the quaternion from the matrix
-                        rotation = Quaternion.CreateFromRotationMatrix(matTemp);
+                        rotation = Quaternion.MatrixToQuaternion(matTemp);
                     }
                 }
             }

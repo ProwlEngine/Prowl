@@ -96,6 +96,20 @@ namespace Prowl.Runtime
 
         public System.Numerics.Vector4 ToFloat() => new System.Numerics.Vector4((float)x, (float)y, (float)z, (float)w);
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Scale(Vector4 scale) { x *= scale.x; y *= scale.y; z *= scale.z; w *= scale.w; }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Normalize()
+        {
+            double ls = x * x + y * y + z * z + w * w;
+            double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
+            x *= invNorm;
+            y *= invNorm;
+            z *= invNorm;
+            w *= invNorm;
+        }
+
         /// <summary>
         /// Returns the hash code for this instance.
         /// </summary>
