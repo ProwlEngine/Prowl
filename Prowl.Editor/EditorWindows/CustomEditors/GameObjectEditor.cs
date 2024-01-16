@@ -252,6 +252,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     FileInfo file = new FileInfo(Project.ProjectAssetDirectory + $"/{_searchText}.cs");
                     if (file.Exists)
                         return;
+                    AssetDatabase.IgnoreFiles.Add(file);
                     using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
                     using StreamReader reader = new StreamReader(stream);
                     string script = reader.ReadToEnd();
@@ -262,10 +263,12 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                     EditorApplication.ForceRecompile();
 
-                    Type? type = Type.GetType(Utilities.FilterAlpha(_searchText));
+                    Type? type = Type.GetType($"{Utilities.FilterAlpha(_searchText)}, CSharp, Version=1.0.0.0, Culture=neutral");
                     if(type != null && type.IsAssignableTo(typeof(MonoBehaviour)))
                         go.AddComponent(type);
                     ImGui.EndMenu();
+
+                    AssetDatabase.IgnoreFiles.Clear();
                 }
             }
         }
