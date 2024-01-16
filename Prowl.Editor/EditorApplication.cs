@@ -226,63 +226,75 @@ public unsafe class EditorApplication : Application {
 
             if (Project.HasProject)
             {
-                // Serialize the Scene manually to save its state
-                //var gos = GameObjectManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
-                //var s = JsonUtility.Serialize(gos);
+                SceneManager.StoreScene();
 
-                // Unload External Assemblies
-                _AssemblyManager.Unload();
-
-                // Delete everything under Temp\Bin
-                if (Directory.Exists(Path.Combine(Project.TempDirectory, "bin")))
-                    Directory.Delete(Path.Combine(Project.TempDirectory, "bin"), true);
-                Directory.CreateDirectory(Path.Combine(Project.TempDirectory, "bin"));
-
-                // Compile the Projects
-                Project.Compile(Project.Assembly_Proj);
-                Project.Compile(Project.Editor_Assembly_Proj);
-
-                // Reload the External Assemblies
-                _AssemblyManager.LoadExternalAssembly(Project.Editor_Assembly_DLL, true);
-                _AssemblyManager.LoadExternalAssembly(Project.Assembly_DLL, true);
-
-                _AssemblyManager.AddUnloadTask(() =>
+                try
                 {
+                    // Destroy all GameObjects
                     foreach (var go in SceneManager.AllGameObjects)
                         go.Destroy();
                     EngineObject.HandleDestroyed();
 
+                    // Clear the Scene
                     SceneManager.Clear();
 
+                    // Clear the Lookups
                     PropertyDrawer.ClearLookUp();
                     ImporterAttribute.ClearLookUp();
                     CustomEditorAttribute.ClearLookUp();
                     NodeSystemDrawer.ClearLookUp();
                     MenuItem.ClearMenus();
 
+                    // Clear internal .Net Type Cache
                     ClearTypeDescriptorCache();
-                    //PhysicsEngine.World = null;
-                    return true;
-                });
 
-                // Update Property Drawers - Editor project can add them so this goes after
-                PropertyDrawer.GenerateLookUp();
-                ImporterAttribute.GenerateLookUp();
-                CustomEditorAttribute.GenerateLookUp();
-                NodeSystemDrawer.GenerateLookUp();
-                MenuItem.FindAllMenus();
-                CreateAssetMenuHandler.FindAllMenus(); // Injects into Menuitem so doesnt need to Unload
+                    // Unload External Assemblies
+                    AssemblyManager.Unload();
 
-                // Just deserializing should be enough
-                //JsonUtility.Deserialize<GameObject[]?>(s);
+                    // Delete everything under Temp\Bin
+                    if (Directory.Exists(Path.Combine(Project.TempDirectory, "bin")))
+                        Directory.Delete(Path.Combine(Project.TempDirectory, "bin"), true);
+                    Directory.CreateDirectory(Path.Combine(Project.TempDirectory, "bin"));
 
-                ImGuiNotify.InsertNotification(new ImGuiToast()
+                    // Compile the Projects
+                    Project.Compile(Project.Assembly_Proj);
+                    Project.Compile(Project.Editor_Assembly_Proj);
+
+                    // Reload the External Assemblies
+                    AssemblyManager.LoadExternalAssembly(Project.Editor_Assembly_DLL, true);
+                    AssemblyManager.LoadExternalAssembly(Project.Assembly_DLL, true);
+
+                    ImGuiNotify.InsertNotification(new ImGuiToast() {
+                        Title = "Project Recompiled!",
+                        Content = "Successfully recompiled project scripts.",
+                        Color = new Vector4(1f),
+                        Type = ImGuiToastType.Success
+                    });
+                }
+                catch (Exception e)
                 {
-                    Title = "Project Recompiled!",
-                    Content = "Successfully recompiled project scripts.",
-                    Color = new Vector4(1f),
-                    Type = ImGuiToastType.Success
-                });
+                    Runtime.Debug.LogError($"Error reloading assemblies: {e.Message}");
+                    Runtime.Debug.LogError(e.StackTrace);
+
+                    ImGuiNotify.InsertNotification(new ImGuiToast() {
+                        Title = "Project Failed to Recompiled!",
+                        Content = e.Message,
+                        Color = new Vector4(1f),
+                        Type = ImGuiToastType.Error
+                    });
+                }
+                finally
+                {
+                    // Update Property Drawers - Editor project can add them so this goes after
+                    PropertyDrawer.GenerateLookUp();
+                    ImporterAttribute.GenerateLookUp();
+                    CustomEditorAttribute.GenerateLookUp();
+                    NodeSystemDrawer.GenerateLookUp();
+                    MenuItem.FindAllMenus();
+                    CreateAssetMenuHandler.FindAllMenus(); // Injects into Menuitem so doesnt need to Unload
+
+                    SceneManager.RestoreScene();
+                }
             }
             else
             {
