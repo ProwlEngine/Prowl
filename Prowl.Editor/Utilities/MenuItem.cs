@@ -37,7 +37,7 @@ namespace Prowl.Editor
             }
         }
 
-        public static Dictionary<string, MenuPath> Menus;
+        public static Dictionary<string, MenuPath> Menus = new();
 
         public static void ClearMenus()
         {
