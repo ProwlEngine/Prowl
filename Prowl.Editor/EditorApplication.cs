@@ -145,7 +145,8 @@ public unsafe class EditorApplication : Application {
 
                 AssetDatabase.Update();
 
-                CheckReloadingAssemblies();
+                if(PlayMode.Current == PlayMode.Mode.Editing) // Dont recompile scripts unless were in editor mode
+                    CheckReloadingAssemblies();
 
                 Time.Update(delta);
 
