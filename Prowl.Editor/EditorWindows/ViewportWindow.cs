@@ -119,8 +119,16 @@ public class ViewportWindow : EditorWindow
                 var go = EngineObject.FindObjectByID<GameObject>(instanceID);
                 if (go != null)
                 {
-                    HierarchyWindow.SelectHandler.Select(new WeakReference(go));
-                    HierarchyWindow.Ping(go);
+                    if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                    {
+                        HierarchyWindow.SelectHandler.Select(new WeakReference(go));
+                        HierarchyWindow.Ping(go);
+                    }
+                    else
+                    {
+                        HierarchyWindow.SelectHandler.Select(new WeakReference(go.transform.root.gameObject));
+                        HierarchyWindow.Ping(go.transform.root.gameObject);
+                    }
                 }
             }
         }
