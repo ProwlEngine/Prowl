@@ -322,12 +322,14 @@ public static class Project
                         <HintPath>{gameEditorAssembly.Location}</HintPath>
                         <Private>false</Private>
                     </Reference>
-                    <Reference Include=""ExampleGame"">
-                        <HintPath>$(ProjectRoot)\Temp\bin\Debug\net8.0\ExampleGame.dll</HintPath>
+                    <Reference Include=""Prowl.Runtime"">
+                        <HintPath>{gameEngineAssembly.Location}</HintPath>
                         <Private>false</Private>
                     </Reference>
-
-                    <PackageReference Include=""ImGui.NET"" Version=""1.78.0"" />
+                    <Reference Include=""CSharp"">
+                        <HintPath>{Assembly_Proj}</HintPath>
+                        <Private>false</Private>
+                    </Reference>
                 </ItemGroup>
             </Project>";
 
