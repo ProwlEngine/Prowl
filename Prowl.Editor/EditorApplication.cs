@@ -218,6 +218,12 @@ public unsafe class EditorApplication : Application {
         isRunning = true;
     }
 
+    public static void ForceRecompile()
+    {
+        Instance.IsReloadingExternalAssemblies = true;
+        Instance.CheckReloadingAssemblies();
+    }
+
     public void CheckReloadingAssemblies()
     {
         if (IsReloadingExternalAssemblies)
