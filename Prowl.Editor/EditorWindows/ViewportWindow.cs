@@ -1,14 +1,12 @@
 using HexaEngine.ImGuiNET;
 using HexaEngine.ImGuizmoNET;
+using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
-using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using System.Runtime.CompilerServices;
-using Silk.NET.SDL;
-using Jitter2.Collision.Shapes;
 
 namespace Prowl.Editor.EditorWindows;
 

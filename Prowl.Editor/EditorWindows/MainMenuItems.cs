@@ -41,7 +41,9 @@ namespace Prowl.Editor.EditorWindows
             }
             using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
             using StreamReader reader = new StreamReader(stream);
-            File.WriteAllText(file.FullName, reader.ReadToEnd());
+            string script = reader.ReadToEnd();
+            script = script.Replace("%SCRIPTNAME%", Utilities.FilterAlpha(Path.GetFileNameWithoutExtension(file.Name)));
+            File.WriteAllText(file.FullName, script);
             var r = AssetDatabase.FileToRelative(file);
             AssetDatabase.Reimport(r);
             AssetDatabase.Ping(r);
