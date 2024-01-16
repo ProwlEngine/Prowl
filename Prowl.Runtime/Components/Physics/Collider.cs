@@ -21,10 +21,10 @@ namespace Prowl.Runtime
             // COllider is on a child without a transform the Parent transform of the Rigidbody is used via Inheritance
             // This is fine since we use Global positions here, since the Body and Collider share a transform their global positions are identical
             // Results in no offsets being applied to the shape
-            var position = GameObject.Position - body.GameObject.Position;
-            var rotation = Quaternion.RotateTowards(body.GameObject.Rotation, GameObject.Rotation, 360);
+            var position = GameObject.transform.position - body.GameObject.transform.position;
+            var rotation = Quaternion.RotateTowards(body.GameObject.transform.rotation, GameObject.transform.rotation, 360);
 
-            var invRotation = Quaternion.Inverse(body.GameObject.Rotation);
+            var invRotation = Quaternion.Inverse(body.GameObject.transform.rotation);
             rotation = invRotation * rotation;
             position = Vector3.Transform(position, invRotation);
             var jRot = JMatrix.CreateFromQuaternion(rotation);

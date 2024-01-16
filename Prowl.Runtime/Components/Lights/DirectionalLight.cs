@@ -42,7 +42,7 @@ public class DirectionalLight : MonoBehaviour
     public void OnRenderObject()
     {
         lightMat ??= new Material(Shader.Find("Defaults/Directionallight.shader"));
-        lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.Forward, Graphics.MatView));
+        lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.transform.forward, Graphics.MatView));
         lightMat.SetColor("LightColor", color);
         lightMat.SetFloat("LightIntensity", intensity);
 
@@ -85,8 +85,8 @@ public class DirectionalLight : MonoBehaviour
             //Graphics.MatDepthProjection = Matrix4x4.CreateOrthographicOffCenter(-25, 25, -25, 25, 1, 256);
             Graphics.MatDepthProjection = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, 0, 100);
 
-            var forward = GameObject.Forward;
-            Graphics.MatDepthView = Matrix4x4.CreateLookToLeftHanded(-forward * 50, -forward, GameObject.Up);
+            var forward = GameObject.transform.forward;
+            Graphics.MatDepthView = Matrix4x4.CreateLookToLeftHanded(-forward * 50, -forward, GameObject.transform.up);
 
             depthMVP = Matrix4x4.Identity;
             depthMVP = Matrix4x4.Multiply(depthMVP, Graphics.MatDepthView);
@@ -100,7 +100,7 @@ public class DirectionalLight : MonoBehaviour
             if (useFrontFaceCulling)
                 disposable = Graphics.UseFaceCull(TriangleFace.Front);
             foreach (var go in SceneManager.AllGameObjects)
-                if (go.EnabledInHierarchy)
+                if (go.enabledInHierarchy)
                     foreach (var comp in go.GetComponents())
                         if (comp.Enabled && comp.RenderOrder == RenderingOrder.Opaque)
                             comp.Internal_OnRenderObjectDepth();

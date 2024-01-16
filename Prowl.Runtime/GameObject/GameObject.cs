@@ -1,4 +1,5 @@
 ﻿using Prowl.Runtime.SceneManagement;
+using Silk.NET.Input;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,7 +32,10 @@ public class GameObject : EngineObject, ISerializable
 
     // We dont serialize parent, since if we want to serialize X object who is a child to Y object, we dont want to serialize Y object as well.
     // The parent is reconstructed when the object is deserialized for all children.
-    internal GameObject? parent;
+    internal GameObject? _parent;
+
+    [SerializeField]
+    private Transform? _transform;
 
     #endregion
 
@@ -47,13 +51,13 @@ public class GameObject : EngineObject, ISerializable
     public HideFlags hideFlags = HideFlags.None;
 
     /// <summary> Gets whether or not this gameobject is enabled explicitly </summary>
-    public bool Enabled {
+    public bool enabled {
         get { return _enabled; }
         set { if (value != _enabled) { SetEnabled(value); } }
     }
 
     /// <summary> Gets whether this gameobejct is enabled in the hierarchy, so if its parent is disabled this will return false </summary>
-    public bool EnabledInHierarchy => _enabledInHierarchy;
+    public bool enabledInHierarchy => _enabledInHierarchy;
 
     /// <summary> The Tag of this GameObject </summary>
     public string tag {
@@ -68,208 +72,102 @@ public class GameObject : EngineObject, ISerializable
     }
 
     /// <summary> The Parent of this GameObject, Can be null </summary>
-    public GameObject? Parent => parent;
+    public GameObject? parent => _parent;
 
     /// <summary> A List of all children of this GameObject </summary>
-    public List<GameObject> Children = new List<GameObject>();
+    public List<GameObject> children = new List<GameObject>();
+
+    public int childCount => children.Count;
 
     #endregion
 
-
-    protected Vector3 position;
-    protected Vector3 rotation;
-    protected Vector3 scale = Vector3.one;
-    protected Vector3 globalPosition;
-    protected Quaternion orientation = Quaternion.Identity, globalOrientation;
-    protected Matrix4x4 globalPrevious, global, globalInverse;
-    protected Matrix4x4 local;
-
-    /// <summary>Gets or sets the local position.</summary>
-    public Vector3 LocalPosition {
-        get => position;
-        set {
-            if (position == value) return;
-            position = value;
-            Recalculate();
+    public Transform transform {
+        get {
+            _transform ??= new Transform();
+            _transform.gameObject = this; // ensure gameobject is this
+            return _transform;
         }
     }
 
-    /// <summary>Gets or sets the local rotation.</summary>
-    /// <remarks>The rotation is in space euler from 0° to 360°(359°)</remarks>
-    public Vector3 LocalEularAngles {
-        get => rotation;
-        set {
-            if (rotation == value) return;
-            rotation = value;
-            orientation = value.NormalizeEulerAngleDegrees().ToRad().GetQuaternion();
-            Recalculate();
-        }
-    }
-
-    /// <summary>Gets or sets the local scale.</summary>
-    public Vector3 LocalScale {
-        get => scale;
-        set {
-            if (scale == value) return;
-            scale = value;
-            Recalculate();
-        }
-    }
-
-    /// <summary>Gets or sets the local orientation.</summary>
-    public Quaternion LocalRotation {
-        get => orientation;
-        set {
-            if (orientation == value) return;
-            orientation = value;
-            rotation = value.GetRotation().ToDeg().NormalizeEulerAngleDegrees();
-            Recalculate();
-        }
-    }
-
-    /// <summary>Gets or sets the global (world space) position.</summary>
-    public Vector3 Position {
-        get => globalPosition;
-        set {
-            if (globalPosition == value) return;
-            if (parent == null)
-                position = value;
-            else // Transform because the rotation could modify the position of the child.
-                position = Vector3.Transform(value, parent.globalInverse);
-            Recalculate();
-        }
-    }
-
-    /// <summary>Gets or sets the global (world space) orientation.</summary>
-    public Quaternion Rotation {
-        get => globalOrientation;
-        set {
-            if (globalOrientation == value) return;
-            if (parent == null)
-                orientation = value;
-            else // Divide because quaternions are like matrices.
-                orientation = value / parent.globalOrientation;
-            rotation = orientation.GetRotation().ToDeg().NormalizeEulerAngleDegrees();
-            Recalculate();
-        }
-    }
-
-    /// <summary>The forward vector in global orientation space</summary>
-    public Vector3 Forward => Vector3.Transform(Vector3.forward, globalOrientation);
-
-    /// <summary>The right vector in global orientation space</summary>
-    public Vector3 Right => Vector3.Transform(Vector3.right, globalOrientation);
-
-    /// <summary>The up vector in global orientation space</summary>
-    public Vector3 Up => Vector3.Transform(Vector3.up, globalOrientation);
-
-    /// <summary>The global transformation matrix of the previous frame.</summary>
-    public Matrix4x4 GlobalPrevious => globalPrevious;
-
-    /// <summary>The global transformation matrix</summary>
-    public Matrix4x4 Global => global;
-
-    /// <summary>The inverse global transformation matrix</summary>
-    public Matrix4x4 GlobalInverse => globalInverse;
 
     /// <summary>Returns a matrix relative/local to the currently rendering camera, Will throw an error if used outside rendering method</summary>
     public Matrix4x4 GlobalCamRelative {
         get {
-            Matrix4x4 matrix = Global;
-            matrix.Translation -= Camera.Current.GameObject.Position;
-            return matrix;
+            Matrix4x4 t = Matrix4x4.TRS(this.transform.localPosition, this.transform.localRotation, this.transform.localScale);
+            if (parent != null)
+                t = parent.transform.localToWorldMatrix * t;
+            t.Translation -= Camera.Current.GameObject.transform.position;
+            return t;
         }
     }
 
-    /// <summary>The local transformation matrix</summary>
-    public Matrix4x4 Local { get => local; set => SetMatrix(value); }
 
-    /// <summary>Recalculates all values of the <see cref="Transform"/>.</summary>
-    public void Recalculate()
+    public bool IsChildOrSameTransform(GameObject transform, GameObject inParent)
     {
-        globalPrevious = global;
-
-        local = Matrix4x4.CreateScale(scale) * Matrix4x4.CreateFromQuaternion(orientation) * Matrix4x4.CreateTranslation(position);
-        if (parent == null)
-            global = local;
-        else
-            global = local * parent.global;
-
-        Matrix4x4.Invert(global, out globalInverse);
-
-        Matrix4x4.Decompose(global, out var globalScale, out globalOrientation, out globalPosition);
-
-        foreach (var child in Children)
-            child.Recalculate();
-    }
-
-    /// <summary>
-    /// Reverse calculates the local params from a local matrix.
-    /// </summary>
-    /// <param name="matrix">Local space matrix</param>
-    private void SetMatrix(Matrix4x4 matrix)
-    {
-        local = matrix;
-        Matrix4x4.Decompose(local, out scale, out orientation, out position);
-        rotation = orientation.GetRotation().ToDeg();
-        Recalculate();
-    }
-
-    public void SetUnsafe(Vector3 vector31, Quaternion quaternion, Vector3 vector32)
-    {
-        position = vector31;
-        rotation = quaternion.GetRotation().ToDeg().NormalizeEulerAngleDegrees();
-        orientation = quaternion;
-        scale = vector32;
-    }
-
-    public void SetParent(GameObject? newParent, bool recalculate = true)
-    {
-        if (newParent == parent || newParent == this)
-            return;
-
-        parent?.Children.Remove(this);
-
-        var parentToChild = false;
-        if (Children.Count > 0)
+        GameObject child = transform;
+        while (child != null)
         {
-            var gameobjects = new Stack<GameObject>();
-            gameobjects.Push(this);
+            if (child == inParent)
+                return true;
+            child = child._parent;
+        }
+        return false;
+    }
 
-            var currentTransform = gameobjects.Peek();
-            while (gameobjects.Count > 0)
+    public bool SetParent(GameObject NewParent, bool worldPositionStays = true)
+    {
+        if (NewParent == _parent)
+            return true;
+
+        // Make sure that the new father is not a child of this transform.
+        if (IsChildOrSameTransform(NewParent, this))
+            return false;
+
+        // Save the old position in worldspace
+        Vector3 worldPosition = new Vector3();
+        Quaternion worldRotation = new Quaternion();
+        Matrix4x4 worldScale = new Matrix4x4();
+
+        if (worldPositionStays)
+        {
+            worldPosition = this.transform.position;
+            worldRotation = this.transform.rotation;
+            worldScale = this.transform.GetWorldRotationAndScale();
+        }
+
+        if (NewParent != _parent)
+        {
+            // If it already has an father, remove this from fathers children
+            if (_parent != null)
+                _parent.children.Remove(this);
+
+            if (NewParent != null)
+                NewParent.children.Add(this);
+
+            _parent = NewParent;
+        }
+
+        if (worldPositionStays)
+        {
+            if (_parent != null)
             {
-                foreach (var child in currentTransform.Children)
-                {
-                    if (child == newParent)
-                    {
-                        parentToChild = true;
-                        break;
-                    }
-
-                    gameobjects.Push(child);
-                }
-                if (parentToChild)
-                    break;
-
-                currentTransform = gameobjects.Pop();
+                this.transform.localPosition = _parent.transform.InverseTransformPoint(worldPosition);
+                this.transform.localRotation = Quaternion.NormalizeSafe(Quaternion.Inverse(_parent.transform.rotation) * worldRotation);
             }
+            else
+            {
+                this.transform.localPosition = worldPosition;
+                this.transform.localRotation = Quaternion.NormalizeSafe(worldRotation);
+            }
+
+            this.transform.localScale = Vector3.one;
+            Matrix4x4 inverseRS = this.transform.GetWorldRotationAndScale().Invert() * worldScale;
+            this.transform.localScale = new Vector3(inverseRS[0, 0], inverseRS[1, 1], inverseRS[2, 2]);
         }
 
-        if (parentToChild)
-        {
-            var tempList = Children.ToList();
-            foreach (var child in tempList)
-                child.SetParent(parent);
-
-            Children.Clear();
-        }
-
-        parent = newParent;
-        newParent?.Children.Add(this);
-
-        if(recalculate) Recalculate();
         HierarchyStateChanged();
+
+        return true;
     }
 
     #region Constructors
@@ -310,10 +208,10 @@ public class GameObject : EngineObject, ISerializable
     /// <summary> Recursive function to check if this GameObject is a parent of another GameObject </summary>
     public bool IsParentOf(GameObject go)
     {
-        if (go.Parent?.InstanceID == this.InstanceID)
+        if (go.parent?.InstanceID == this.InstanceID)
             return true;
 
-        foreach (var child in Children)
+        foreach (var child in children)
             if (child.IsParentOf(go))
                 return true;
 
@@ -495,7 +393,7 @@ public class GameObject : EngineObject, ISerializable
         }
         // Now check all parents
         GameObject parent = this;
-        while ((parent = parent.Parent) != null)
+        while ((parent = parent.parent) != null)
         {
             component = parent.GetComponent(componentType);
             if (component != null)
@@ -512,7 +410,7 @@ public class GameObject : EngineObject, ISerializable
                 yield return component;
         // Now check all parents
         GameObject parent = this;
-        while ((parent = parent.Parent) != null) {
+        while ((parent = parent.parent) != null) {
             foreach (var component in parent.GetComponents<T>())
                 yield return component;
         }
@@ -530,7 +428,7 @@ public class GameObject : EngineObject, ISerializable
                 return component;
         }
         // Now check all children
-        foreach (var child in Children)
+        foreach (var child in children)
         {
             component = child.GetComponent(componentType) ?? child.GetComponentInChildren(componentType);
             if (component != null)
@@ -547,7 +445,7 @@ public class GameObject : EngineObject, ISerializable
             foreach (var component in GetComponents<T>())
                 yield return component;
         // Now check all children
-        foreach (var child in Children) {
+        foreach (var child in children) {
             foreach (var component in child.GetComponentsInChildren<T>())
                 yield return component;
         }
@@ -584,9 +482,9 @@ public class GameObject : EngineObject, ISerializable
     public static GameObject Instantiate(GameObject original, Vector3 position, Quaternion rotation, GameObject? parent) 
     {
         GameObject clone = (GameObject)EngineObject.Instantiate(original, false);
-        clone.Position = position;
-        clone.Rotation = rotation;
-        clone.SetParent(parent);
+        clone.transform.position = position;
+        clone.transform.rotation = rotation;
+        clone.SetParent(parent, true);
         return clone;
     }
 
@@ -594,8 +492,8 @@ public class GameObject : EngineObject, ISerializable
     {
         // Internal_DestroyCommitted removes the child from the parent
         // Hense why we do a while loop on the first element instead of a foreach/for
-        while(Children.Count > 0)
-            Children[0].Dispose();
+        while(children.Count > 0)
+            children[0].Dispose();
 
         foreach (var component in _components)
         {
@@ -625,11 +523,11 @@ public class GameObject : EngineObject, ISerializable
                 component.HierarchyStateChanged();
         }
 
-		foreach (var child in Children)
+		foreach (var child in children)
 			child.HierarchyStateChanged();
 	}
 
-    private bool IsParentEnabled() => Parent == null || Parent.EnabledInHierarchy;
+    private bool IsParentEnabled() => parent == null || parent.enabledInHierarchy;
 
     public void DontDestroyOnLoad() => SceneManager._dontDestroyOnLoad.Add(InstanceID);
 
@@ -639,7 +537,7 @@ public class GameObject : EngineObject, ISerializable
         foreach (var component in GetComponents<MonoBehaviour>())
             component.SendMessage(methodName, objs);
 
-        foreach (var child in Children)
+        foreach (var child in children)
             child.BroadcastMessage(methodName, objs);
     }
 
@@ -657,8 +555,8 @@ public class GameObject : EngineObject, ISerializable
     [OnDeserialized]
     internal void OnDeserializedMethod(StreamingContext context)
     {
-        foreach (var child in Children)
-            child.parent = this;
+        foreach (var child in children)
+            child._parent = this;
 
         // Update Component Cache
         _componentCache = new MultiValueDictionary<Type, MonoBehaviour>();
@@ -667,8 +565,6 @@ public class GameObject : EngineObject, ISerializable
             component.AttachToGameObject(this);
             _componentCache.Add(component.GetType(), component);
         }
-
-        Recalculate();
     }
 
     public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
@@ -684,17 +580,12 @@ public class GameObject : EngineObject, ISerializable
 
         compoundTag.Add("HideFlags", new IntTag((int)hideFlags));
 
-        compoundTag.Add("PosX", new DoubleTag(position.x));
-        compoundTag.Add("PosY", new DoubleTag(position.y));
-        compoundTag.Add("PosZ", new DoubleTag(position.z));
-
-        compoundTag.Add("RotX", new DoubleTag(rotation.x));
-        compoundTag.Add("RotY", new DoubleTag(rotation.y));
-        compoundTag.Add("RotZ", new DoubleTag(rotation.z));
-
-        compoundTag.Add("ScalX", new DoubleTag(scale.x));
-        compoundTag.Add("ScalY", new DoubleTag(scale.y));
-        compoundTag.Add("ScalZ", new DoubleTag(scale.z));
+        if (_transform != null)
+        {
+            // If the transforms position, rotation and scale are all default we dont need to serialize it
+            if (_transform.localPosition != Vector3.zero || _transform.localRotation != Quaternion.identity || _transform.localScale != Vector3.one)
+                compoundTag.Add("Transform", TagSerializer.Serialize(_transform, ctx));
+        }
 
         if (AssetID != Guid.Empty)
         {
@@ -709,7 +600,7 @@ public class GameObject : EngineObject, ISerializable
         compoundTag.Add("Components", components);
 
         ListTag children = new ListTag();
-        foreach (var child in Children)
+        foreach (var child in this.children)
             children.Add(TagSerializer.Serialize(child, ctx));
         compoundTag.Add("Children", children);
 
@@ -725,10 +616,8 @@ public class GameObject : EngineObject, ISerializable
         layerIndex = value["LayerIndex"].IntValue;
         hideFlags = (HideFlags)value["HideFlags"].IntValue;
 
-        position = new Vector3(value["PosX"].DoubleValue, value["PosY"].DoubleValue, value["PosZ"].DoubleValue);
-        rotation = new Vector3(value["RotX"].DoubleValue, value["RotY"].DoubleValue, value["RotZ"].DoubleValue);
-        orientation = rotation.NormalizeEulerAngleDegrees().ToRad().GetQuaternion();
-        scale = new Vector3(value["ScalX"].DoubleValue, value["ScalY"].DoubleValue, value["ScalZ"].DoubleValue);
+        if (value.TryGet("Transform", out CompoundTag transformTag))
+            _transform = TagSerializer.Deserialize<Transform>(transformTag, ctx);
 
         if (value.TryGet("AssetID", out StringTag guid))
             AssetID = Guid.Parse(guid.Value);
@@ -747,15 +636,13 @@ public class GameObject : EngineObject, ISerializable
         }
 
         ListTag children = (ListTag)value["Children"];
-        Children = new();
+        this.children = new();
         foreach (CompoundTag childTag in children.Tags)
         {
             GameObject? child = TagSerializer.Deserialize<GameObject>(childTag, ctx);
             if (child == null) continue;
-            child.parent = this;
-            Children.Add(child);
+            child._parent = this;
+            this.children.Add(child);
         }
-
-        Recalculate();
     }
 }

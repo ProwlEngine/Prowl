@@ -93,7 +93,7 @@ public class HierarchyWindow : EditorWindow
             int id = 0;
             for (int i = 0; i < SceneManager.AllGameObjects.Count; i++) {
                 var go = SceneManager.AllGameObjects[i];
-                if (go.Parent == null)
+                if (go.parent == null)
                     DrawEntityNode(ref id, go, 0, false);
             }
             ImGui.PopStyleVar(2);
@@ -127,8 +127,8 @@ public class HierarchyWindow : EditorWindow
         if (entity.hideFlags.HasFlag(HideFlags.Hide) || entity.hideFlags.HasFlag(HideFlags.HideAndDontSave)) return;
 
         if (!string.IsNullOrEmpty(_searchText) && !entity.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)) {
-            for (int i = 0; i < entity.Children.Count; i++)
-                DrawEntityNode(ref index, entity.Children[i], depth, isPartOfPrefab);
+            for (int i = 0; i < entity.children.Count; i++)
+                DrawEntityNode(ref index, entity.children[i], depth, isPartOfPrefab);
             return;
         }
 
@@ -151,7 +151,7 @@ public class HierarchyWindow : EditorWindow
         else if (isPartOfPrefab)
             ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new System.Numerics.Vector4(0.3f, 0.0f, 0.3f, 0.5f)));
 
-        if (entity.EnabledInHierarchy == false) {
+        if (entity.enabledInHierarchy == false) {
             ImGui.PushStyleColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled));
             colPushCount += 1;
         }
@@ -203,10 +203,10 @@ public class HierarchyWindow : EditorWindow
         // Open
         if (opened)
         {
-            for (int i = 0; i < entity.Children.Count; i++)
-                DrawEntityNode(ref index, entity.Children[i], depth + 1, isPartOfPrefab || isPrefab);
+            for (int i = 0; i < entity.children.Count; i++)
+                DrawEntityNode(ref index, entity.children[i], depth + 1, isPartOfPrefab || isPrefab);
 
-            if (opened && entity.Children.Count > 0)
+            if (opened && entity.children.Count > 0)
                 ImGui.TreePop();
         }
     }
@@ -215,7 +215,7 @@ public class HierarchyWindow : EditorWindow
     {
         return (isSelected ? ImGuiTreeNodeFlags.Selected : ImGuiTreeNodeFlags.None)
             | ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding
-            | (entity.Children.Count == 0 ? ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.NoTreePushOnOpen : 0);
+            | (entity.children.Count == 0 ? ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.NoTreePushOnOpen : 0);
     }
 
     private void HandleDragnDrop(GameObject? entity)
@@ -279,13 +279,13 @@ public class HierarchyWindow : EditorWindow
 
     private static void DrawVisibilityToggle(GameObject entity)
     {
-        ImGui.Text(" " + (entity.Enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash));
+        ImGui.Text(" " + (entity.enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash));
         if (ImGui.IsItemHovered()) {
             GUIHelper.ItemRectFilled(1f, 1f, 1f, 0.25f);
             if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
-                entity.Enabled = !entity.Enabled;
+                entity.enabled = !entity.enabled;
         }
-        GUIHelper.Tooltip("Visibility: " + (entity.Enabled ? "Visible" : "Hidden"));
+        GUIHelper.Tooltip("Visibility: " + (entity.enabled ? "Visible" : "Hidden"));
     }
 
     void DrawContextMenu(GameObject context = null)
@@ -337,15 +337,15 @@ public class HierarchyWindow : EditorWindow
             if (SelectHandler.Count > 0 && ImGui.MenuItem("Align With View")) {
                 SelectHandler.Foreach((go) => {
                     Camera cam = ViewportWindow.LastFocusedCamera;
-                    (go.Target as GameObject).Position = cam.GameObject.Position;
-                    (go.Target as GameObject).Rotation = cam.GameObject.Rotation;
+                    (go.Target as GameObject).transform.position = cam.GameObject.transform.position;
+                    (go.Target as GameObject).transform.rotation = cam.GameObject.transform.rotation;
                 });
             }
 
             if (SelectHandler.Count == 1 && ImGui.MenuItem("Align View With")) {
                 Camera cam = ViewportWindow.LastFocusedCamera;
-                cam.GameObject.Position = entity.Position;
-                cam.GameObject.Rotation = entity.Rotation;
+                cam.GameObject.transform.position = entity.transform.position;
+                cam.GameObject.transform.rotation = entity.transform.rotation;
             }
 
             ImGui.EndPopup();
@@ -359,7 +359,7 @@ public class HierarchyWindow : EditorWindow
             // Duplicating, Easiest way to duplicate is to Serialize then Deserialize
             var serialized = TagSerializer.Serialize(go.Target);
             var deserialized = TagSerializer.Deserialize<GameObject>(serialized);
-            deserialized.SetParent((go.Target as GameObject).Parent);
+            deserialized.SetParent((go.Target as GameObject).parent);
             newGO.Add(new WeakReference(deserialized));
         });
         SelectHandler.Clear();

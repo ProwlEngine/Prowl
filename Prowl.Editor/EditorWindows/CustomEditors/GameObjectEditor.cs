@@ -42,9 +42,9 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             ImGui.InputText("##GOName", ref go.Name, 0x100);
             ImGui.SameLine();
 
-            bool isEnabled = go.Enabled;
+            bool isEnabled = go.enabled;
             ImGui.Checkbox("##GOActive", ref isEnabled);
-            if (isEnabled != go.Enabled) go.Enabled = isEnabled;
+            if (isEnabled != go.enabled) go.enabled = isEnabled;
             GUIHelper.Tooltip("Is Enabled");
 
             ImGui.SetCursorPosY(52);
@@ -67,9 +67,9 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             //ImGui.Separator();
 
 
-            PropertyDrawer.Draw(go, typeof(GameObject).GetProperty("LocalPosition")!);
-            PropertyDrawer.Draw(go, typeof(GameObject).GetProperty("LocalEularAngles")!);
-            PropertyDrawer.Draw(go, typeof(GameObject).GetProperty("LocalScale")!);
+            PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("position")!);
+            PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("eulerAngles")!);
+            PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localScale")!);
 
             // Draw Components
             HashSet<int> editorsNeeded = new();

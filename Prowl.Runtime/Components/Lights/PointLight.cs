@@ -38,7 +38,7 @@ public class PointLight : MonoBehaviour
                 lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
             }
 
-            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.Position - Camera.Current.GameObject.Position, Graphics.MatView));
+            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.transform.position - Camera.Current.GameObject.transform.position, Graphics.MatView));
             lightMat.SetColor("LightColor", color);
             lightMat.SetFloat("LightRadius", radius);
             lightMat.SetFloat("LightIntensity", intensity);

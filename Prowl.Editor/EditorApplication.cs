@@ -221,7 +221,6 @@ public unsafe class EditorApplication : Application {
 
     public static void ForceRecompile()
     {
-        AssetDatabase.MakeScriptsNotDirty(); // We dont need the asset database to trigger a recompile since we are forcing it now
         Instance.IsReloadingExternalAssemblies = true;
         Instance.CheckReloadingAssemblies();
     }

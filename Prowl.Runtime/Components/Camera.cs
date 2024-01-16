@@ -71,7 +71,7 @@ public class Camera : MonoBehaviour
     internal void RenderAllOfOrder(RenderingOrder order)
     {
         foreach (var go in SceneManager.AllGameObjects)
-            if (go.EnabledInHierarchy)
+            if (go.enabledInHierarchy)
                 foreach (var comp in go.GetComponents())
                     if (comp.Enabled && comp.RenderOrder == order)
                         comp.Internal_OnRenderObject();
@@ -87,7 +87,7 @@ public class Camera : MonoBehaviour
     Matrix4x4? oldView = null;
     Matrix4x4? oldProjection = null;
 
-    public Matrix4x4 View => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, GameObject.Forward, GameObject.Up);
+    public Matrix4x4 View => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, GameObject.transform.forward, GameObject.transform.up);
 
     public void Render(int width, int height)
     {

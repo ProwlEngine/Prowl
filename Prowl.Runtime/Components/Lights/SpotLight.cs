@@ -36,8 +36,8 @@ public class SpotLight : MonoBehaviour
                 lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
             }
 
-            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.Position - Camera.Current.GameObject.Position, Graphics.MatView));
-            lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.Forward, Graphics.MatView));
+            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.transform.position - Camera.Current.GameObject.transform.position, Graphics.MatView));
+            lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.transform.forward, Graphics.MatView));
             //lightMat.SetVector("LightDirection",this.GameObject.Forward);
 
             lightMat.SetFloat("LightDistance", distance);

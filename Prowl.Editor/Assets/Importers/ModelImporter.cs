@@ -312,8 +312,7 @@ namespace Prowl.Editor.Assets
 
                 GameObject rootNode = GOs[0].Item1;
                 if(UnitScale != 1f)
-                    rootNode.LocalScale = Vector3.one * UnitScale;
-                rootNode.Recalculate();
+                    rootNode.transform.localScale = Vector3.one * UnitScale;
                 ctx.SetMainObject(rootNode);
 
                 ImGuiNotify.InsertNotification("Model Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), AssetDatabase.FileToRelative(assetPath));
@@ -389,7 +388,9 @@ namespace Prowl.Editor.Assets
             // convert to Matrix4x4
             node.Transform.Decompose(out var aSca, out var aRot, out var aPos);
 
-            uOb.SetUnsafe(new Vector3(aPos.X, aPos.Y, aPos.Z), new Runtime.Quaternion(aRot.X, aRot.Y, aRot.Z, aRot.W), new Vector3(aSca.X, aSca.Y, aSca.Z));
+            uOb.transform.localPosition = new Vector3(aPos.X, aPos.Y, aPos.Z);
+            uOb.transform.localRotation = new Runtime.Quaternion(aRot.X, aRot.Y, aRot.Z, aRot.W);
+            uOb.transform.localScale = new Vector3(aSca.X, aSca.Y, aSca.Z);
 
             if (node.HasChildren) 
                 foreach (var cn in node.Children)

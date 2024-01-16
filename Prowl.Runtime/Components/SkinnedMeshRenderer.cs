@@ -29,8 +29,8 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
     void GetNodes(GameObject obj, ref List<GameObject> bones)
     {
         bones.Add(obj);
-        if (obj.Children.Count > 0) 
-            foreach (var c in obj.Children) 
+        if (obj.children.Count > 0) 
+            foreach (var c in obj.children) 
                 GetNodes(c, ref bones);
     }
 
@@ -39,7 +39,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         ProcessBoneTree();
         System.Numerics.Matrix4x4[] matrices = new System.Numerics.Matrix4x4[bones.Length];
         for (int i = 0; i < bones.Length; i++)
-            matrices[i] = bones[i].Local.ToFloat();
+            matrices[i] = bones[i].transform.localToWorldMatrix.ToFloat();
         return matrices;
     }
 

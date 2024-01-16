@@ -128,7 +128,7 @@ namespace Prowl.Editor.EditorWindows
             var cam = ViewportWindow.LastFocusedCamera;
             // get position 10 units infront
             var t = cam.GameObject;
-            return t.Position + t.Forward * 10;
+            return t.transform.position + t.transform.forward * 10;
         }
 
         [MenuItem("Template/Lights/Ambient Light")]
@@ -144,8 +144,8 @@ namespace Prowl.Editor.EditorWindows
         {
             var go = new GameObject("Directional Light");
             go.AddComponent<DirectionalLight>();
-            go.Position = GetPosition();
-            go.LocalEularAngles = new System.Numerics.Vector3(45, 70, 0);
+            go.transform.position = GetPosition();
+            go.transform.localEulerAngles = new System.Numerics.Vector3(45, 70, 0);
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
@@ -154,7 +154,7 @@ namespace Prowl.Editor.EditorWindows
         {
             var go = new GameObject("Point Light");
             go.AddComponent<PointLight>();
-            go.Position = GetPosition();
+            go.transform.position = GetPosition();
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
@@ -163,7 +163,7 @@ namespace Prowl.Editor.EditorWindows
         {
             var go = new GameObject("Spot Light");
             go.AddComponent<SpotLight>();
-            go.Position = GetPosition();
+            go.transform.position = GetPosition();
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
