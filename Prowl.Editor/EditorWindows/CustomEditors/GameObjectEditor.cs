@@ -67,9 +67,9 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             //ImGui.Separator();
 
 
-            PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("position")!);
-            PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("eulerAngles")!);
-            PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localScale")!);
+            PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("position")!, -1, "Position");
+            PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("eulerAngles")!, -1, "Rotation");
+            PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localScale")!, -1, "Scale");
 
             // Draw Components
             HashSet<int> editorsNeeded = new();
