@@ -1,6 +1,7 @@
 ﻿using Prowl.Editor;
 using Prowl.Editor.Assets;
 using Prowl.Runtime.Utils;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO.Compression;
 
@@ -102,6 +103,8 @@ namespace Prowl.Runtime.Assets
         public static event Action<Guid, string>? AssetRemoved;
         public static event Action<string>? Pinged;
 
+        public readonly static List<FileSystemInfo> IgnoreFiles = new();
+
         public static List<DirectoryInfo> GetRootfolders() => rootFolders;
 
         public static void AddRootFolder(string rootFolder)
@@ -133,6 +136,9 @@ namespace Prowl.Runtime.Assets
                 RefreshTimer = 0f;
                 if (!File.Exists(e.FullPath) && !Directory.Exists(e.FullPath)) return;
 
+                if (IgnoreFiles.Any(x => x.FullName.Equals(e.FullPath, StringComparison.OrdinalIgnoreCase)))
+                    return;
+
                 string? ext = Path.GetExtension(e.FullPath);
                 if (ext == null || !ext.Equals(".meta", StringComparison.OrdinalIgnoreCase)) {
                     if (ext != null && ext.Equals(".cs", StringComparison.OrdinalIgnoreCase))
@@ -149,6 +155,10 @@ namespace Prowl.Runtime.Assets
             static void OnDeleted(object sender, FileSystemEventArgs e)
             {
                 RefreshTimer = 0f;
+
+                if (IgnoreFiles.Any(x => x.FullName.Equals(e.FullPath, StringComparison.OrdinalIgnoreCase)))
+                    return;
+
                 string ext = Path.GetExtension(e.FullPath);
                 if (ext != null && ext.Equals(".cs", StringComparison.OrdinalIgnoreCase))
                     scriptsDirty = true;
@@ -822,11 +832,6 @@ namespace Prowl.Runtime.Assets
                     return root;
             }
             return null;
-        }
-
-        public static void MakeScriptsNotDirty()
-        {
-            scriptsDirty = false;
         }
     }
 
