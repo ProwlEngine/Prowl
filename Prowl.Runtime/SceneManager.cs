@@ -18,11 +18,33 @@ public static class SceneManager
     public static event Action PreFixedUpdate;
     public static event Action PostFixedUpdate;
 
+    private static Tag? StoredScene;
+    private static Guid StoredSceneID;
+
     public static void Initialize()
     {
         GameObject.Internal_Constructed += OnGameObjectConstructed;
         GameObject.Internal_DestroyCommitted += OnGameObjectDestroyCommitted;
         InstantiateNewScene();
+    }
+
+    public static void StoreScene()
+    {
+        Debug.If(StoredScene != null, "Scene is already stored.");
+        // Serialize the Scene manually to save its state
+        // exclude objects with the DontSave hideFlag
+        GameObject[] GameObjects = AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
+        StoredScene = TagSerializer.Serialize(GameObjects);
+        StoredSceneID = MainScene.AssetID;
+    }
+
+    public static void RestoreScene()
+    {
+        Debug.IfNull(StoredScene, "Scene is not stored.");
+        Clear();
+        var deserialized = TagSerializer.Deserialize<GameObject[]>(StoredScene);
+        MainScene.AssetID = StoredSceneID;
+        StoredScene = null;
     }
 
     public static void InstantiateNewScene()
@@ -180,6 +202,5 @@ public static class SceneManager
             foreach (var comp in _gameObjects[i].GetComponents<MonoBehaviour>())
                 comp.Internal_OnSceneLoaded();
     }
-
 }
 
