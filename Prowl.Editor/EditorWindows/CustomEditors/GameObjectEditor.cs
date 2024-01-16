@@ -3,6 +3,8 @@ using HexaEngine.ImGuiNET;
 using Prowl.Editor.Assets;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
+using Prowl.Runtime.Assets;
+using Prowl.Runtime.SceneManagement;
 using Silk.NET.Vulkan;
 using System.Reflection;
 using System.Xml.Linq;
@@ -219,9 +221,13 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
         private void DrawMenuItems(MenuItemInfo menuItem, GameObject go)
         {
+            bool foundName = false;
+            bool hasSearch = string.IsNullOrEmpty(_searchText) == false;
             foreach (var item in menuItem.Children) {
-                if (string.IsNullOrEmpty(_searchText) == false && (item.Name.Contains(_searchText, StringComparison.CurrentCultureIgnoreCase) == false || item.Type == null)) {
+                if (hasSearch && (item.Name.Contains(_searchText, StringComparison.CurrentCultureIgnoreCase) == false || item.Type == null)) {
                     DrawMenuItems(item, go);
+                    if (hasSearch && item.Name.Equals(_searchText, StringComparison.CurrentCultureIgnoreCase))
+                        foundName = true;
                     continue;
                 }
 
@@ -233,6 +239,33 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         DrawMenuItems(item, go);
                         ImGui.EndMenu();
                     }
+                }
+            }
+
+            if (PlayMode.Current != PlayMode.Mode.Editing) return; // Cannot create scripts during playmode
+             
+            // is first and found no component and were searching, lets create a new script
+            if (hasSearch && !foundName && menuItem == rootMenuItem)
+            {
+                if (ImGui.MenuItem("Create Script " + _searchText))
+                {
+                    FileInfo file = new FileInfo(Project.ProjectAssetDirectory + $"/{_searchText}.cs");
+                    if (file.Exists)
+                        return;
+                    using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
+                    using StreamReader reader = new StreamReader(stream);
+                    string script = reader.ReadToEnd();
+                    script = script.Replace("%SCRIPTNAME%", Utilities.FilterAlpha(_searchText));
+                    File.WriteAllText(file.FullName, script);
+                    var r = AssetDatabase.FileToRelative(file);
+                    AssetDatabase.Ping(r);
+
+                    EditorApplication.ForceRecompile();
+
+                    Type? type = Type.GetType(Utilities.FilterAlpha(_searchText));
+                    if(type != null && type.IsAssignableTo(typeof(MonoBehaviour)))
+                        go.AddComponent(type);
+                    ImGui.EndMenu();
                 }
             }
         }
