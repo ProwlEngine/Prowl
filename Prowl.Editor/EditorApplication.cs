@@ -256,7 +256,7 @@ public unsafe class EditorApplication : Application {
                     ClearTypeDescriptorCache();
 
                     // Unload External Assemblies
-                    AssemblyManager.Unload();
+                    _AssemblyManager.Unload();
 
                     // Delete everything under Temp\Bin
                     if (Directory.Exists(Path.Combine(Project.TempDirectory, "bin")))
@@ -268,8 +268,8 @@ public unsafe class EditorApplication : Application {
                     Project.Compile(Project.Editor_Assembly_Proj);
 
                     // Reload the External Assemblies
-                    AssemblyManager.LoadExternalAssembly(Project.Editor_Assembly_DLL, true);
-                    AssemblyManager.LoadExternalAssembly(Project.Assembly_DLL, true);
+                    _AssemblyManager.LoadExternalAssembly(Project.Editor_Assembly_DLL, true);
+                    _AssemblyManager.LoadExternalAssembly(Project.Assembly_DLL, true);
 
                     ImGuiNotify.InsertNotification(new ImGuiToast() {
                         Title = "Project Recompiled!",

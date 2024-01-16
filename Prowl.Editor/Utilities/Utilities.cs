@@ -9,6 +9,9 @@ namespace Prowl.Editor
 {
     public static class Utilities
     {
+
+        public static string FilterAlpha(string input) => new string(input.Where(char.IsLetter).ToArray());
+
         public static List<Type> GetDerivedTypes(Type baseType, Assembly assembly)
         {
             // Get all types from the given assembly
