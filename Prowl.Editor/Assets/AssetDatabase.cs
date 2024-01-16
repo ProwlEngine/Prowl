@@ -823,6 +823,11 @@ namespace Prowl.Runtime.Assets
             }
             return null;
         }
+
+        public static void MakeScriptsNotDirty()
+        {
+            scriptsDirty = false;
+        }
     }
 
     public class MetaFile
