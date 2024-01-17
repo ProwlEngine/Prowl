@@ -551,22 +551,6 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
-
-    [OnDeserialized]
-    internal void OnDeserializedMethod(StreamingContext context)
-    {
-        foreach (var child in children)
-            child._parent = this;
-
-        // Update Component Cache
-        _componentCache = new MultiValueDictionary<Type, MonoBehaviour>();
-        foreach (var component in _components)
-        {
-            component.AttachToGameObject(this);
-            _componentCache.Add(component.GetType(), component);
-        }
-    }
-
     public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
     {
         CompoundTag compoundTag = new CompoundTag();
