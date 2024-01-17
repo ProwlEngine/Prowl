@@ -69,8 +69,7 @@ namespace Prowl.Editor.Assets
 
                 // Create the object tree, We need to do this first so we can get the bone names
                 List<(GameObject, Node)> GOs = [];
-                Dictionary<string, int> nameToIndex = [];
-                GetNodes(scene.RootNode, ref GOs, ref nameToIndex);
+                GetNodes(scene.RootNode, ref GOs);
 
                 //if (scene.HasTextures) {
                 //    // Embedded textures, Extract them first
@@ -248,26 +247,27 @@ namespace Prowl.Editor.Assets
                         }
 
                         if (m.HasBones) {
+                            mesh.boneNames = new string[m.Bones.Count];
                             for (var i = 0; i < m.Bones.Count; i++) {
                                 var bone = m.Bones[i];
+                                mesh.boneNames[i] = bone.Name;
+
                                 if (!bone.HasVertexWeights) continue;
 
-                                int nameIndex = nameToIndex[bone.Name];
-
                                 var weight0 = bone.VertexWeights[0];
-                                vertices[weight0.VertexID] = vertices[weight0.VertexID] with { BoneIndex0 = (byte)nameIndex, Weight0 = weight0.Weight };
+                                vertices[weight0.VertexID] = vertices[weight0.VertexID] with { BoneIndex0 = (byte)i, Weight0 = weight0.Weight };
                                 if (bone.VertexWeightCount == 1) continue;
 
                                 var weight1 = bone.VertexWeights[1];
-                                vertices[weight1.VertexID] = vertices[weight1.VertexID] with { BoneIndex1 = (byte)nameIndex, Weight1 = weight1.Weight };
+                                vertices[weight1.VertexID] = vertices[weight1.VertexID] with { BoneIndex1 = (byte)i, Weight1 = weight1.Weight };
                                 if (bone.VertexWeightCount == 2) continue;
 
                                 var weight2 = bone.VertexWeights[2];
-                                vertices[weight2.VertexID] = vertices[weight2.VertexID] with { BoneIndex2 = (byte)nameIndex, Weight2 = weight2.Weight };
+                                vertices[weight2.VertexID] = vertices[weight2.VertexID] with { BoneIndex2 = (byte)i, Weight2 = weight2.Weight };
                                 if (bone.VertexWeightCount == 3) continue;
 
                                 var weight3 = bone.VertexWeights[3];
-                                vertices[weight3.VertexID] = vertices[weight3.VertexID] with { BoneIndex3 = (byte)nameIndex, Weight3 = weight3.Weight };
+                                vertices[weight3.VertexID] = vertices[weight3.VertexID] with { BoneIndex3 = (byte)i, Weight3 = weight3.Weight };
                             }
 
                             for (int i = 0; i < vertices.Length; i++) {
@@ -285,7 +285,7 @@ namespace Prowl.Editor.Assets
                         mesh.indices = m.GetShortIndices().Cast<ushort>().ToArray();
 
                         ctx.AddSubObject(mesh);
-                        meshMats.Add(new MeshMaterialBinding(m.Name, m.HasBones, mesh, mats[m.MaterialIndex]));
+                        meshMats.Add(new MeshMaterialBinding(m.Name, m, mesh, mats[m.MaterialIndex]));
                     }
 
                 // Create Meshes
@@ -320,11 +320,11 @@ namespace Prowl.Editor.Assets
 
             static void AddMeshComponent(List<(GameObject, Node)> GOs, GameObject go, MeshMaterialBinding uMeshAndMat)
             {
-                if (uMeshAndMat.HasBones) {
+                if (uMeshAndMat.AMesh.HasBones) {
                     var mr = go.AddComponent<SkinnedMeshRenderer>();
                     mr.Mesh = uMeshAndMat.Mesh;
                     mr.Material = uMeshAndMat.Material;
-                    mr.Root = GOs[0].Item1;
+                    mr.Root = GOs[0].Item1.transform.Find(uMeshAndMat.Mesh.boneNames[0])!.gameObject;
                 } else {
                     var mr = go.AddComponent<MeshRenderer>();
                     mr.Mesh = uMeshAndMat.Mesh;
@@ -377,10 +377,9 @@ namespace Prowl.Editor.Assets
             }
         }
 
-        GameObject GetNodes(Node node, ref List<(GameObject, Node)> GOs, ref Dictionary<string, int> nameToIndex)
+        GameObject GetNodes(Node node, ref List<(GameObject, Node)> GOs)
         {
             GameObject uOb = GameObject.CreateSilently();
-            nameToIndex.Add(node.Name, GOs.Count);
             GOs.Add((uOb, node));
             uOb.Name = node.Name;
 
@@ -395,7 +394,7 @@ namespace Prowl.Editor.Assets
             if (node.HasChildren) 
                 foreach (var cn in node.Children)
                 {
-                    var go = GetNodes(cn, ref GOs, ref nameToIndex);
+                    var go = GetNodes(cn, ref GOs);
                     go.SetParent(uOb, false);
                 }
 
@@ -406,20 +405,20 @@ namespace Prowl.Editor.Assets
         {
             private string meshName;
             private Mesh mesh;
-            private bool hasBones;
+            private Assimp.Mesh aMesh;
             private Material material;
 
             private MeshMaterialBinding() { }
-            public MeshMaterialBinding(string meshName, bool hasBones, Mesh mesh, Material material)
+            public MeshMaterialBinding(string meshName, Assimp.Mesh aMesh, Mesh mesh, Material material)
             {
                 this.meshName = meshName;
                 this.mesh = mesh;
-                this.hasBones = hasBones;
+                this.aMesh = aMesh;
                 this.material = material;
             }
 
             public Mesh Mesh { get => mesh; }
-            public bool HasBones { get => hasBones; }
+            public Assimp.Mesh AMesh { get => aMesh; }
             public Material Material { get => material; }
             public string MeshName { get => meshName; }
         }

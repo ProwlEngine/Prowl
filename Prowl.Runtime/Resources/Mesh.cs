@@ -19,6 +19,10 @@ namespace Prowl.Runtime
         public Vertex[] vertices;
         public ushort[] indices;
 
+        // The array of bone paths under a root
+        // The index of a path is the Bone Index
+        public string[] boneNames;
+
         public Mesh() 
         {
             // Default Format
@@ -303,7 +307,13 @@ namespace Prowl.Runtime
             using (MemoryStream memoryStream = new MemoryStream())
             using (BinaryWriter writer = new BinaryWriter(memoryStream))
             {
-                //SerializeArray(writer, vertices);
+
+                // Serialize bone names
+                writer.Write(boneNames?.Length ?? 0);
+                if (boneNames != null)
+                    for (int i = 0; i < boneNames.Length; i++)
+                        writer.Write(boneNames[i]);
+
                 writer.Write(vertices.Length);
                 foreach (var vertex in vertices)
                 {
@@ -350,7 +360,14 @@ namespace Prowl.Runtime
             using (MemoryStream memoryStream = new MemoryStream(value["Data"].ByteArrayValue))
             using (BinaryReader reader = new BinaryReader(memoryStream))
             {
-                //vertices = DeserializeArray<Vertex>(reader);
+                int boneCount = reader.ReadInt32();
+                if (boneCount > 0)
+                {
+                    boneNames = new string[boneCount];
+                    for (int i = 0; i < boneCount; i++)
+                        boneNames[i] = reader.ReadString();
+                }
+
                 int vertexCount = reader.ReadInt32();
                 vertices = new Vertex[vertexCount];
                 for (int i = 0; i < vertexCount; i++)

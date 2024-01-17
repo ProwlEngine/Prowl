@@ -33,7 +33,7 @@ Pass 0
 		layout (location = 2) in vec3 vertexNormal;
 		layout (location = 3) in vec3 vertexColor;
 		layout (location = 4) in vec3 vertexTangent;
-#ifdef SKINNING
+#ifdef SKINNED
 		layout (location = 5) in ivec4 vertexBoneIndices;
 		layout (location = 6) in vec4 vertexBoneWeights;
 		
@@ -61,7 +61,7 @@ Pass 0
 			vec3 boneVertexNormal = vertexNormal;
 			vec3 boneVertexTangent = vertexTangent;
 			
-#ifdef SKINNING
+#ifdef SKINNED
 			for(int i=0; i<MAX_BONE_INFLUENCE; i++) {
 				int index = vertexBoneIndices[i];
 				if (index != 0) {

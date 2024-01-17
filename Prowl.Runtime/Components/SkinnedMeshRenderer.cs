@@ -15,31 +15,11 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
     public GameObject Root;
     public AssetRef<Material> Material;
 
-    GameObject[] bones;
-
-    public void ProcessBoneTree()
-    {
-        // Get children bone tree
-        List<GameObject> b = [];
-        GetNodes(Root, ref b);
-        bones = b.ToArray();
-    }
-
-
-    void GetNodes(GameObject obj, ref List<GameObject> bones)
-    {
-        bones.Add(obj);
-        if (obj.children.Count > 0) 
-            foreach (var c in obj.children) 
-                GetNodes(c, ref bones);
-    }
-
     System.Numerics.Matrix4x4[] GetBoneMatrices()
     {
-        ProcessBoneTree();
-        System.Numerics.Matrix4x4[] matrices = new System.Numerics.Matrix4x4[bones.Length];
-        for (int i = 0; i < bones.Length; i++)
-            matrices[i] = bones[i].transform.localToWorldMatrix.ToFloat();
+        System.Numerics.Matrix4x4[] matrices = new System.Numerics.Matrix4x4[Mesh.Res.boneNames.Length];
+        for (int i = 0; i < Mesh.Res.boneNames.Length; i++)
+            matrices[i] = Root.transform.Find(Mesh.Res.boneNames[i])?.localToWorldMatrix.ToFloat() ?? System.Numerics.Matrix4x4.Identity;
         return matrices;
     }
 
@@ -55,7 +35,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         {
             Material.Res!.EnableKeyword("SKINNED");
             Material.Res!.SetInt("ObjectID", GameObject.InstanceID);
-            //Material.Res!.SetMatrices("bindposes", GetBoneMatrices());
+            Material.Res!.SetMatrices("bindposes", GetBoneMatrices());
             for (int i = 0; i < Material.Res!.PassCount; i++)
             {
                 Material.Res!.SetPass(i);

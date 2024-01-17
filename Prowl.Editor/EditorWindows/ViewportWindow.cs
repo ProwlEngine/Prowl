@@ -184,7 +184,7 @@ public class ViewportWindow : EditorWindow
         //Cam.GameObject.Local = iview.ToDouble();
         Cam.GameObject.transform.localPosition = pos;
         Cam.GameObject.transform.localRotation = rot;
-        Cam.GameObject.transform.localScale = scale;
+        //Cam.GameObject.transform.localScale = scale;
     }
 
     private void DrawGizmos(GameObject go, System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection, bool isSelected)
