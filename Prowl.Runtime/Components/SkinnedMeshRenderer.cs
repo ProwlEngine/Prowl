@@ -25,7 +25,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
                 matrices[i] = System.Numerics.Matrix4x4.Identity;
             else
             {
-                matrices[i] = t.localToWorldMatrix.ToFloat();
+                //matrices[i] = t.localToWorldMatrix.ToFloat();
 
                 // Alrighty so in ModelImporter we set the Node transforms
                 // so LocalToWorldMatrix already contains the boneOffset
@@ -33,10 +33,10 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
                 // This effectively doubles the offset, If the gameobjects were at 0,0,0 we could do this:
                 // matrices[i] = t.localToWorldMatrix.ToFloat() * Mesh.Res.boneOffsets[i].ToFloat();
                 // So we need to do this:
-                //var startOffset = Mesh.Res.boneOffsets[i];
-                //Matrix4x4 mat = Matrix4x4.TRS(t.localPosition - startOffset.Item1, t.localRotation - startOffset.Item2, t.localScale - startOffset.Item3);
-                //mat = t.parent != null ? t.parent.localToWorldMatrix * mat : mat;
-                //matrices[i] = mat.ToFloat();
+                var startOffset = Mesh.Res.boneOffsets[i];
+                Matrix4x4 mat = Matrix4x4.TRS(t.localPosition - startOffset.Item1, t.localRotation - startOffset.Item2, t.localScale - startOffset.Item3);
+                mat = t.parent != null ? t.parent.localToWorldMatrix * mat : mat;
+                matrices[i] = mat.ToFloat();
 
             }
         }

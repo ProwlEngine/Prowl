@@ -252,8 +252,11 @@ namespace Prowl.Editor.Assets
                             for (var i = 0; i < m.Bones.Count; i++) {
                                 var bone = m.Bones[i];
                                 mesh.boneNames[i] = bone.Name;
-                                bone.OffsetMatrix.Decompose(out var sca, out var rot, out var pos);
-                                mesh.boneOffsets[i] = (new Vector3(pos.X, pos.Y, pos.Z), new Runtime.Quaternion(rot.X, rot.Y, rot.Z, rot.W), new Vector3(sca.X, sca.Y, sca.Z));
+                                //var offMat = bone.OffsetMatrix;
+                                //offMat.Decompose(out var sca, out var rot, out var pos);
+                                //mesh.boneOffsets[i] = (new Vector3(pos.X, pos.Y, pos.Z), new Runtime.Quaternion(rot.X, rot.Y, rot.Z, rot.W), new Vector3(sca.X, sca.Y, sca.Z));
+                                var t = GOs[0].Item1.transform.Find(mesh.boneNames[i]);
+                                mesh.boneOffsets[i] = (t.localPosition, t.localRotation, t.localScale);
 
                                 if (!bone.HasVertexWeights) continue;
                                 byte boneIndex = (byte)(i + 1);
@@ -413,9 +416,9 @@ namespace Prowl.Editor.Assets
             var t = node.Transform;
             t.Decompose(out var aSca, out var aRot, out var aPos);
 
-            //uOb.transform.localPosition = new Vector3(aPos.X, aPos.Y, aPos.Z);
-            //uOb.transform.localRotation = new Runtime.Quaternion(aRot.X, aRot.Y, aRot.Z, aRot.W);
-            //uOb.transform.localScale = new Vector3(aSca.X, aSca.Y, aSca.Z);
+            uOb.transform.localPosition = new Vector3(aPos.X, aPos.Y, aPos.Z);
+            uOb.transform.localRotation = new Runtime.Quaternion(aRot.X, aRot.Y, aRot.Z, aRot.W);
+            uOb.transform.localScale = new Vector3(aSca.X, aSca.Y, aSca.Z);
 
             return uOb;
         }
