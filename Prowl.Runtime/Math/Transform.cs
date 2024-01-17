@@ -12,9 +12,9 @@ namespace Prowl.Runtime
             get {
 
                 if (parent != null)
-                    return parent.localToWorldMatrix.MultiplyPoint(m_LocalPosition);
+                    return MakeSafe(parent.localToWorldMatrix.MultiplyPoint(m_LocalPosition));
                 else
-                    return m_LocalPosition;
+                    return MakeSafe(m_LocalPosition);
             }
             set {
                 Vector3 newPosition = value;
@@ -22,15 +22,15 @@ namespace Prowl.Runtime
                 if (p != null)
                     newPosition = p.InverseTransformPoint(newPosition);
 
-                localPosition = newPosition;
+                localPosition = MakeSafe(newPosition);
             }
         }
 
         public Vector3 localPosition {
-            get => m_LocalPosition;
+            get => MakeSafe(m_LocalPosition);
             set {
                 if (m_LocalPosition != value)
-                    m_LocalPosition = value;
+                    m_LocalPosition = MakeSafe(value);
             }
         }
         #endregion
@@ -45,40 +45,40 @@ namespace Prowl.Runtime
                     worldRot = p.m_LocalRotation * worldRot;
                     p = p.parent;
                 }
-                return worldRot;
+                return MakeSafe(worldRot);
             }
             set {
                 if (parent != null)
-                    localRotation = (Quaternion.NormalizeSafe(Quaternion.Inverse(parent.rotation) * value));
+                    localRotation = MakeSafe(Quaternion.NormalizeSafe(Quaternion.Inverse(parent.rotation) * value));
                 else
-                    localRotation = (Quaternion.NormalizeSafe(value));
+                    localRotation = MakeSafe(Quaternion.NormalizeSafe(value));
             }
         }
 
         public Quaternion localRotation {
-            get => m_LocalRotation;
+            get => MakeSafe(m_LocalRotation);
             set {
 
                 if (m_LocalRotation != value)
-                    m_LocalRotation = value;
+                    m_LocalRotation = MakeSafe(value);
             }
         }
 
-        public Vector3 eulerAngles { get => rotation.eulerAngles; set => rotation = Quaternion.Euler(value); }
+        public Vector3 eulerAngles { get => MakeSafe(rotation.eulerAngles); set => rotation = MakeSafe(Quaternion.Euler(value)); }
 
         public Vector3 localEulerAngles {
-            get => m_LocalRotation.eulerAngles;
-            set => m_LocalRotation.eulerAngles = value;
+            get => MakeSafe(m_LocalRotation.eulerAngles);
+            set => m_LocalRotation.eulerAngles = MakeSafe(value);
         }
         #endregion
 
         #region Scale
 
         public Vector3 localScale {
-            get => m_LocalScale;
+            get => MakeSafe(m_LocalScale);
             set {
                 if (m_LocalScale != value)
-                    m_LocalScale = value;
+                    m_LocalScale = MakeSafe(value);
             }
         }
 
