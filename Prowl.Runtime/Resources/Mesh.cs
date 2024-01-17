@@ -22,6 +22,7 @@ namespace Prowl.Runtime
         // The array of bone paths under a root
         // The index of a path is the Bone Index
         public string[] boneNames;
+        public (Vector3, Quaternion, Vector3)[] boneOffsets;
 
         public Mesh() 
         {
@@ -314,6 +315,23 @@ namespace Prowl.Runtime
                     for (int i = 0; i < boneNames.Length; i++)
                         writer.Write(boneNames[i]);
 
+                // Serialize bone offsets
+                writer.Write(boneOffsets?.Length ?? 0);
+                if (boneOffsets != null)
+                    for (int i = 0; i < boneOffsets.Length; i++)
+                    {
+                        writer.Write((float)boneOffsets[i].Item1.x);
+                        writer.Write((float)boneOffsets[i].Item1.y);
+                        writer.Write((float)boneOffsets[i].Item1.z);
+                        writer.Write((float)boneOffsets[i].Item2.x);
+                        writer.Write((float)boneOffsets[i].Item2.y);
+                        writer.Write((float)boneOffsets[i].Item2.z);
+                        writer.Write((float)boneOffsets[i].Item2.w);
+                        writer.Write((float)boneOffsets[i].Item3.x);
+                        writer.Write((float)boneOffsets[i].Item3.y);
+                        writer.Write((float)boneOffsets[i].Item3.z);
+                    }
+
                 writer.Write(vertices.Length);
                 foreach (var vertex in vertices)
                 {
@@ -368,6 +386,20 @@ namespace Prowl.Runtime
                         boneNames[i] = reader.ReadString();
                 }
 
+                int boneOffsetCount = reader.ReadInt32();
+                if (boneOffsetCount > 0)
+                {
+                    boneOffsets = new (Vector3, Quaternion, Vector3)[boneOffsetCount];
+                    for (int i = 0; i < boneOffsetCount; i++)
+                    {
+                        Vector3 v = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                        Quaternion q = new Quaternion(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                        Vector3 s = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                        boneOffsets[i] = (v, q, s);
+                    }
+                }
+
+
                 int vertexCount = reader.ReadInt32();
                 vertices = new Vertex[vertexCount];
                 for (int i = 0; i < vertexCount; i++)
@@ -390,6 +422,7 @@ namespace Prowl.Runtime
                     };
                 }
                 indices = DeserializeArray<ushort> (reader);
+
             }
             format = TagSerializer.Deserialize<VertexFormat>(value["Format"], ctx);
         }

@@ -248,27 +248,44 @@ namespace Prowl.Editor.Assets
 
                         if (m.HasBones) {
                             mesh.boneNames = new string[m.Bones.Count];
+                            mesh.boneOffsets = new (Vector3, Runtime.Quaternion, Vector3)[m.Bones.Count];
                             for (var i = 0; i < m.Bones.Count; i++) {
                                 var bone = m.Bones[i];
                                 mesh.boneNames[i] = bone.Name;
+                                bone.OffsetMatrix.Decompose(out var sca, out var rot, out var pos);
+                                mesh.boneOffsets[i] = (new Vector3(pos.X, pos.Y, pos.Z), new Runtime.Quaternion(rot.X, rot.Y, rot.Z, rot.W), new Vector3(sca.X, sca.Y, sca.Z));
 
                                 if (!bone.HasVertexWeights) continue;
-
-                                var weight0 = bone.VertexWeights[0];
                                 byte boneIndex = (byte)(i + 1);
-                                vertices[weight0.VertexID] = vertices[weight0.VertexID] with { BoneIndex0 = boneIndex, Weight0 = weight0.Weight };
-                                if (bone.VertexWeightCount == 1) continue;
 
-                                var weight1 = bone.VertexWeights[1];
-                                vertices[weight1.VertexID] = vertices[weight1.VertexID] with { BoneIndex1 = boneIndex, Weight1 = weight1.Weight };
-                                if (bone.VertexWeightCount == 2) continue;
-
-                                var weight2 = bone.VertexWeights[2];
-                                vertices[weight2.VertexID] = vertices[weight2.VertexID] with { BoneIndex2 = boneIndex, Weight2 = weight2.Weight };
-                                if (bone.VertexWeightCount == 3) continue;
-
-                                var weight3 = bone.VertexWeights[3];
-                                vertices[weight3.VertexID] = vertices[weight3.VertexID] with { BoneIndex3 = boneIndex, Weight3 = weight3.Weight };
+                                // foreach weight
+                                for (int j = 0; j < bone.VertexWeightCount; j++)
+                                {
+                                    var weight = bone.VertexWeights[j];
+                                    int vertexID = weight.VertexID;
+                                    var v = vertices[vertexID];
+                                    if (v.BoneIndex0 == 0)
+                                    {
+                                        v.BoneIndex0 = boneIndex;
+                                        v.Weight0 = weight.Weight;
+                                    } else if (v.BoneIndex1 == 0)
+                                    {
+                                        v.BoneIndex1 = boneIndex;
+                                        v.Weight1 = weight.Weight;
+                                    } else if (v.BoneIndex2 == 0)
+                                    {
+                                        v.BoneIndex2 = boneIndex;
+                                        v.Weight2 = weight.Weight;
+                                    } else if (v.BoneIndex3 == 0)
+                                    {
+                                        v.BoneIndex3 = boneIndex;
+                                        v.Weight3 = weight.Weight;
+                                    } else
+                                    {
+                                        Debug.LogWarning($"Vertex {vertexID} has more than 4 bone weights, Skipping...");
+                                    }
+                                    vertices[vertexID] = v;
+                                }
                             }
 
                             for (int i = 0; i < vertices.Length; i++) {
@@ -396,9 +413,9 @@ namespace Prowl.Editor.Assets
             var t = node.Transform;
             t.Decompose(out var aSca, out var aRot, out var aPos);
 
-            uOb.transform.localPosition = new Vector3(aPos.X, aPos.Y, aPos.Z);
-            uOb.transform.localRotation = new Runtime.Quaternion(aRot.X, aRot.Y, aRot.Z, aRot.W);
-            uOb.transform.localScale = new Vector3(aSca.X, aSca.Y, aSca.Z);
+            //uOb.transform.localPosition = new Vector3(aPos.X, aPos.Y, aPos.Z);
+            //uOb.transform.localRotation = new Runtime.Quaternion(aRot.X, aRot.Y, aRot.Z, aRot.W);
+            //uOb.transform.localScale = new Vector3(aSca.X, aSca.Y, aSca.Z);
 
             return uOb;
         }

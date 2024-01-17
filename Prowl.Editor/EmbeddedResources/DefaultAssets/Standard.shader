@@ -63,13 +63,14 @@ Pass 0
 			
 #ifdef SKINNED
 			for(int i=0; i<MAX_BONE_INFLUENCE; i++) {
-				int index = vertexBoneIndices[i];
-				if (index != 0) {
-					index = index - 1;
-					boneVertexPosition += (bindposes[index] * vec4(vertexPosition, 1.0)).xyz * vertexBoneWeights[i];
-					boneVertexNormal += (bindposes[index] * vec4(vertexNormal, 0.0)).xyz * vertexBoneWeights[i];
-					boneVertexTangent += (bindposes[index] * vec4(vertexNormal, 0.0)).xyz * vertexBoneWeights[i];
-				}
+				int index = vertexBoneIndices[i] - 1;
+				if (index == -1) continue;
+
+				float weight = vertexBoneWeights[i];
+				//float weight = 1.0;
+				boneVertexPosition += (bindposes[index] * vec4(vertexPosition, 1.0)).xyz * weight;
+				boneVertexNormal += (bindposes[index] * vec4(vertexNormal, 0.0)).xyz * weight;
+				boneVertexTangent += (bindposes[index] * vec4(vertexNormal, 0.0)).xyz * weight;
 			}
 #endif
 
