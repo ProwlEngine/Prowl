@@ -124,7 +124,7 @@ namespace Prowl.Runtime
 
         [SerializeField] Vector3 m_LocalPosition;
         [SerializeField] Vector3 m_LocalScale = Vector3.one;
-        [SerializeField] Quaternion m_LocalRotation;
+        [SerializeField] Quaternion m_LocalRotation = Quaternion.identity;
 
         [NonSerialized]
         bool _hasChanged = false;
