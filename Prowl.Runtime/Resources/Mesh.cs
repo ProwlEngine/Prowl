@@ -505,7 +505,10 @@ namespace Prowl.Runtime
                     Graphics.GL.EnableVertexAttribArray(index);
                     int offset = (int)element.Offset;
                     unsafe {
-                        Graphics.GL.VertexAttribPointer(index, element.Count, (GLEnum)element.Type, element.Normalized, (uint)Size, (void*)offset);
+                        if(element.Type == VertexType.Float)
+                            Graphics.GL.VertexAttribPointer(index, element.Count, (GLEnum)element.Type, element.Normalized, (uint)Size, (void*)offset);
+                        else
+                            Graphics.GL.VertexAttribIPointer(index, element.Count, (GLEnum)element.Type, (uint)Size, (void*)offset);
                     }
                 }
             }

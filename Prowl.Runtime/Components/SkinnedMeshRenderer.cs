@@ -19,6 +19,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
     {
         System.Numerics.Matrix4x4[] matrices = new System.Numerics.Matrix4x4[Mesh.Res.boneNames.Length];
         for (int i = 0; i < Mesh.Res.boneNames.Length; i++)
+            //matrices[i] = System.Numerics.Matrix4x4.Identity;
             matrices[i] = Root.transform.Find(Mesh.Res.boneNames[i])?.localToWorldMatrix.ToFloat() ?? System.Numerics.Matrix4x4.Identity;
         return matrices;
     }

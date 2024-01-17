@@ -255,24 +255,26 @@ namespace Prowl.Editor.Assets
                                 if (!bone.HasVertexWeights) continue;
 
                                 var weight0 = bone.VertexWeights[0];
-                                vertices[weight0.VertexID] = vertices[weight0.VertexID] with { BoneIndex0 = (byte)i, Weight0 = weight0.Weight };
+                                byte boneIndex = (byte)(i + 1);
+                                vertices[weight0.VertexID] = vertices[weight0.VertexID] with { BoneIndex0 = boneIndex, Weight0 = weight0.Weight };
                                 if (bone.VertexWeightCount == 1) continue;
 
                                 var weight1 = bone.VertexWeights[1];
-                                vertices[weight1.VertexID] = vertices[weight1.VertexID] with { BoneIndex1 = (byte)i, Weight1 = weight1.Weight };
+                                vertices[weight1.VertexID] = vertices[weight1.VertexID] with { BoneIndex1 = boneIndex, Weight1 = weight1.Weight };
                                 if (bone.VertexWeightCount == 2) continue;
 
                                 var weight2 = bone.VertexWeights[2];
-                                vertices[weight2.VertexID] = vertices[weight2.VertexID] with { BoneIndex2 = (byte)i, Weight2 = weight2.Weight };
+                                vertices[weight2.VertexID] = vertices[weight2.VertexID] with { BoneIndex2 = boneIndex, Weight2 = weight2.Weight };
                                 if (bone.VertexWeightCount == 3) continue;
 
                                 var weight3 = bone.VertexWeights[3];
-                                vertices[weight3.VertexID] = vertices[weight3.VertexID] with { BoneIndex3 = (byte)i, Weight3 = weight3.Weight };
+                                vertices[weight3.VertexID] = vertices[weight3.VertexID] with { BoneIndex3 = boneIndex, Weight3 = weight3.Weight };
                             }
 
                             for (int i = 0; i < vertices.Length; i++) {
                                 var v = vertices[i];
                                 var totalWeight = v.Weight0 + v.Weight1 + v.Weight2 + v.Weight3;
+                                if (totalWeight == 0) continue;
                                 v.Weight0 /= totalWeight;
                                 v.Weight1 /= totalWeight;
                                 v.Weight2 /= totalWeight;
@@ -383,20 +385,20 @@ namespace Prowl.Editor.Assets
             GOs.Add((uOb, node));
             uOb.Name = node.Name;
 
-            // Transform
-            // convert to Matrix4x4
-            node.Transform.Decompose(out var aSca, out var aRot, out var aPos);
-
-            uOb.transform.localPosition = new Vector3(aPos.X, aPos.Y, aPos.Z);
-            uOb.transform.localRotation = new Runtime.Quaternion(aRot.X, aRot.Y, aRot.Z, aRot.W);
-            uOb.transform.localScale = new Vector3(aSca.X, aSca.Y, aSca.Z);
-
             if (node.HasChildren) 
                 foreach (var cn in node.Children)
                 {
                     var go = GetNodes(cn, ref GOs);
                     go.SetParent(uOb, false);
                 }
+
+            // Transform
+            var t = node.Transform;
+            t.Decompose(out var aSca, out var aRot, out var aPos);
+
+            uOb.transform.localPosition = new Vector3(aPos.X, aPos.Y, aPos.Z);
+            uOb.transform.localRotation = new Runtime.Quaternion(aRot.X, aRot.Y, aRot.Z, aRot.W);
+            uOb.transform.localScale = new Vector3(aSca.X, aSca.Y, aSca.Z);
 
             return uOb;
         }

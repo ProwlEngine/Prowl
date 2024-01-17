@@ -38,7 +38,7 @@ Pass 0
 		layout (location = 6) in vec4 vertexBoneWeights;
 		
 		const int MAX_BONE_INFLUENCE = 4;
-		uniform mat4 bindposes[100];
+		uniform mat4 bindposes[200];
 #endif
 
 		out vec3 FragPos;
@@ -65,6 +65,7 @@ Pass 0
 			for(int i=0; i<MAX_BONE_INFLUENCE; i++) {
 				int index = vertexBoneIndices[i];
 				if (index != 0) {
+					index = index - 1;
 					boneVertexPosition += (bindposes[index] * vec4(vertexPosition, 1.0)).xyz * vertexBoneWeights[i];
 					boneVertexNormal += (bindposes[index] * vec4(vertexNormal, 0.0)).xyz * vertexBoneWeights[i];
 					boneVertexTangent += (bindposes[index] * vec4(vertexNormal, 0.0)).xyz * vertexBoneWeights[i];
