@@ -132,6 +132,22 @@ namespace Prowl.Runtime
         public GameObject gameObject { get; internal set; }
         #endregion
 
+        private double MakeSafe(double v) => double.IsNaN(v) ? 0 : v;
+        private Vector3 MakeSafe(Vector3 v) => new Vector3(MakeSafe(v.x), MakeSafe(v.y), MakeSafe(v.z));
+        private Quaternion MakeSafe(Quaternion v) => new Quaternion(MakeSafe(v.x), MakeSafe(v.y), MakeSafe(v.z), MakeSafe(v.w));
+
+        public Transform? Find(string name)
+        {
+            if (name == null) return null;
+            if (name == gameObject.Name) return this;
+            foreach (var child in gameObject.children)
+            {
+                var t = child.transform.Find(name);
+                if (t != null) return t;
+            }
+            return null;
+        }
+
         public void Translate(Vector3 translation, Transform? relativeTo = null)
         {
             if (relativeTo != null)
