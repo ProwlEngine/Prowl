@@ -290,8 +290,8 @@ public class ViewportWindow : EditorWindow
             // Version with fixed gimbal lock
             var mouseDelta = Input.MouseDelta;
             var rot = Cam.GameObject.transform.eulerAngles;
-            rot.x += mouseDelta.X * (Time.deltaTimeF * 5f * Settings.LookSensitivity);
-            rot.y += mouseDelta.Y * (Time.deltaTimeF * 5f * Settings.LookSensitivity);
+            rot.y += mouseDelta.X * (Time.deltaTimeF * 5f * Settings.LookSensitivity);
+            rot.x += mouseDelta.Y * (Time.deltaTimeF * 5f * Settings.LookSensitivity);
             Cam.GameObject.transform.eulerAngles = rot;
              
             Input.MousePosition = WindowCenter.ToFloat().ToGeneric();

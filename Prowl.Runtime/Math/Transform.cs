@@ -156,7 +156,6 @@ namespace Prowl.Runtime
                 position += translation;
         }
 
-        // Applies a rotation of /eulerAngles.z/ degrees around the z axis, /eulerAngles.x/ degrees around the x axis, and /eulerAngles.y/ degrees around the y axis (in that order).
         public void Rotate(Vector3 eulerAngles, bool relativeToSelf = true)
         {
             Quaternion eulerRot = Quaternion.Euler(eulerAngles.x, eulerAngles.y, eulerAngles.z);
@@ -166,13 +165,11 @@ namespace Prowl.Runtime
                 rotation = rotation * (Quaternion.Inverse(rotation) * eulerRot * rotation);
         }
 
-        // Rotates the transform around /axis/ by /angle/ degrees.
         public void Rotate(Vector3 axis, double angle, bool relativeToSelf = true)
         {
             RotateAroundInternal(relativeToSelf ? TransformDirection(axis) : axis, angle * Mathf.Deg2Rad);
         }
 
-        // Rotates the transform about /axis/ passing through /point/ in world coordinates by /angle/ degrees.
         public void RotateAround(Vector3 point, Vector3 axis, double angle)
         {
             Vector3 worldPos = position;
