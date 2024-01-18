@@ -101,7 +101,7 @@ namespace Prowl.Runtime
         public Matrix4x4 localToWorldMatrix {
             get {
                 Matrix4x4 t = Matrix4x4.TRS(m_LocalPosition, m_LocalRotation, m_LocalScale);
-                return parent != null ? parent.localToWorldMatrix * t : t;
+                return parent != null ? t * parent.localToWorldMatrix : t;
             }
         }
 
