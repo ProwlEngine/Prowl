@@ -133,7 +133,7 @@ namespace Prowl.Editor.Assets
         {
             var passesList = new List<ParsedShaderPass>();
 
-            var passMatches = Regex.Matches(input, @"Pass (\d+)\s+({(?:[^{}]|(?<o>{)|(?<-o>}))+(?(o)(?!))})");
+            var passMatches = Regex.Matches(input, @"\bPass (\d+)\s+({(?:[^{}]|(?<o>{)|(?<-o>}))+(?(o)(?!))})");
             foreach (Match passMatch in passMatches)
             {
                 var passContent = passMatch.Groups[2].Value;
