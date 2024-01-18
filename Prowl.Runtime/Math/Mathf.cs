@@ -234,7 +234,7 @@ namespace Prowl.Runtime
             if (double.IsNaN(yaw) || double.IsInfinity(yaw)) yaw = 0;
             if (double.IsNaN(pitch) || double.IsInfinity(pitch)) pitch = 0;
             if (double.IsNaN(roll) || double.IsInfinity(roll)) roll = 0;
-            return new Vector3(yaw, pitch, roll);
+            return new Vector3(pitch, yaw, roll);
         }
 
         [MethodImpl(IN)] public static Vector3 ToDeg(this Vector3 v) => new((double)(v.x * Rad2Deg), (double)(v.y * Rad2Deg), (double)(v.z * Rad2Deg));
@@ -248,7 +248,7 @@ namespace Prowl.Runtime
         [MethodImpl(IN)] public static float ToDeg(this float v) => (float)(v * Rad2Deg);
 
         [MethodImpl(IN)] public static float ToRad(this float v) => (float)(v * Deg2Rad);
-        [MethodImpl(IN)] public static Quaternion GetQuaternion(this Vector3 vector) => Quaternion.CreateFromYawPitchRoll(vector.x, vector.y, vector.z);
+        [MethodImpl(IN)] public static Quaternion GetQuaternion(this Vector3 vector) => Quaternion.CreateFromYawPitchRoll(vector.y, vector.x, vector.z);
 
         [MethodImpl(IN)]
         public static Vector3 NormalizeEulerAngleDegrees(this Vector3 angle)
