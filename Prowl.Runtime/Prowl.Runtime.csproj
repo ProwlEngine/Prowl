@@ -38,5 +38,9 @@
       <PackageReference Include="Silk.NET" Version="2.20.0" />
       <PackageReference Include="System.Collections.Specialized" Version="4.3.0" />
     </ItemGroup>
+    
+    <ItemGroup>
+      <Folder Include="Utils\CSG\" />
+    </ItemGroup>
 
 </Project>
