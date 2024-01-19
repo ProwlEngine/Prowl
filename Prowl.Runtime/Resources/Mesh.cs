@@ -143,6 +143,81 @@ namespace Prowl.Runtime
             Unload();
         }
 
+        #region Utilities
+        public void RecalculateNormals()
+        {
+            int verticesNum = vertices.Length;
+            int indiciesNum = triangles.Length;
+
+            int[] counts = new int[verticesNum];
+            for (int i = 0; i < indiciesNum - 3; i += 3)
+            {
+                int ai = triangles[i];
+                int bi = triangles[i + 1];
+                int ci = triangles[i + 2];
+
+                if (ai < verticesNum && bi < verticesNum && ci < verticesNum)
+                {
+                    Vector3 n = Vector3.Normalize(Vector3.Cross(
+                        vertices[bi].Position - vertices[ai].Position,
+                        vertices[ci].Position - vertices[ai].Position
+                    ));
+
+                    vertices[ai].Normal -= n.ToFloat();
+                    vertices[bi].Normal -= n.ToFloat();
+                    vertices[ci].Normal -= n.ToFloat();
+
+                    counts[ai]++;
+                    counts[bi]++;
+                    counts[ci]++;
+                }
+            }
+
+            for (int i = 0; i < verticesNum; i++)
+                vertices[i].Normal /= counts[i];
+        }
+
+        // http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-13-normal-mapping/
+        public void RecalculateTangents()
+        {
+            int verticesNum = vertices.Length;
+            int indiciesNum = triangles.Length;
+
+            int[] counts = new int[verticesNum];
+            for (int i = 0; i < indiciesNum - 3; i += 3)
+            {
+                int ai = triangles[i];
+                int bi = triangles[i + 1];
+                int ci = triangles[i + 2];
+
+                if (ai < verticesNum && bi < verticesNum && ci < verticesNum)
+                {
+                    Vector3 deltaPos1 = vertices[bi].Position - vertices[ai].Position;
+                    Vector3 deltaPos2 = vertices[ci].Position - vertices[ai].Position;
+
+                    Vector2 deltaUV1 = vertices[bi].TexCoord - vertices[ai].TexCoord;
+                    Vector2 deltaUV2 = vertices[ci].TexCoord - vertices[ai].TexCoord;
+
+                    double r = 1.0 / (deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x);
+                    Vector3 t = (deltaPos1 * deltaUV2.y - deltaPos2 * deltaUV1.y) * r;
+
+
+                    vertices[ai].Tangent += t.ToFloat();
+                    vertices[bi].Tangent += t.ToFloat();
+                    vertices[ci].Tangent += t.ToFloat();
+
+                    counts[ai]++;
+                    counts[bi]++;
+                    counts[ci]++;
+                }
+            }
+
+            for (int i = 0; i < verticesNum; i++)
+                vertices[i].Tangent /= counts[i];
+        }
+
+        #endregion
+
         #region Create Primitives
 
         public struct CubeFace
