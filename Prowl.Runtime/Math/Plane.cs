@@ -67,12 +67,9 @@ namespace Prowl.Runtime
 
         public Plane(Vector3 a, Vector3 b, Vector3 c)
         {
-            Vector3 ab = b - a;
-            Vector3 ac = c - a;
-
-            Vector3 cross = Vector3.Cross(ab, ac);
-            normal = Vector3.Normalize(cross);
-            distance = -(Vector3.Dot(normal, a));
+            normal = Vector3.Cross(a - c, a - b);
+            normal = Vector3.Normalize(normal);
+            distance = Vector3.Dot(normal, a);
         }
 
         public Plane(double a, double b, double c, double d)
@@ -108,7 +105,13 @@ namespace Prowl.Runtime
         public bool GetSide(Vector3 inPt) => Vector3.Dot(normal, inPt) + distance > 0.0;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsOnPositiveSide(Vector3 point) => Vector3.Dot(normal, point) > distance;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public double GetDistanceToPoint(Vector3 inPt) => Vector3.Dot(normal, inPt) + distance;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsOnPlane(Vector3 point, double tolerance = 0) => Mathf.Abs(Vector3.Dot(normal, point) - distance) <= tolerance;
 
         public void Normalize()
         {
@@ -168,6 +171,27 @@ namespace Prowl.Runtime
                 return PlaneIntersectionType.Back;
 
             return PlaneIntersectionType.Intersecting;
+        }
+
+        public bool DoesLineIntersectPlane(Vector3 lineStart, Vector3 lineEnd, out Vector3 result)
+        {
+            result = Vector3.zero;
+
+            Vector3 segment = lineStart - lineEnd;
+            double den = Vector3.Dot(normal, segment);
+
+            if (Mathf.Abs(den) < Mathf.Small)
+                return false;
+
+            double dist = (Vector3.Dot(normal, lineStart) - distance) / den;
+
+            if (dist < (double)-Mathf.Small || dist > (1.0f + (double)Mathf.Small))
+                return false;
+
+            dist = -dist;
+            result = lineStart + segment * dist;
+
+            return true;
         }
 
         internal string DebugDisplayString => string.Concat(this.normal.ToString(), "  ", this.distance.ToString());
