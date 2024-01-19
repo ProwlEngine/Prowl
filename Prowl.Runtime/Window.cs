@@ -58,6 +58,8 @@ namespace Prowl.Runtime
             options.Size = new Vector2D<int>(width, height);
             options.WindowState = startState;
             options.VSync = VSync;
+            var api = new GraphicsAPI(ContextAPI.OpenGL, new APIVersion(4, 1));
+            options.API = api;
             InternalWindow = Silk.NET.Windowing.Window.Create(options);
 
             InternalWindow.Load += OnLoad;

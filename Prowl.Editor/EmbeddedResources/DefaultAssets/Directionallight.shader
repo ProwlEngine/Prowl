@@ -136,7 +136,7 @@ Pass 0
 		    //float bias = (1 - dot(normal, lightDir)) * constantBias;
 
 			float bias = u_Bias*tan(acos(max(dot(normal, lightDir), 0.0))); // cosTheta is dot( n,l ), clamped between 0 and 1
-			bias = clamp(bias, 0,0.01);
+			bias = clamp(bias, 0.0,0.01);
 
 			vec4 fragPosLightSpace = matShadowSpace * vec4(p, 1.0);
 		    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;

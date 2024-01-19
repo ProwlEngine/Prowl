@@ -114,8 +114,8 @@ namespace Prowl.Runtime
             }
 
             // Insert the version at the start
-            frag = frag.Insert(0, $"#version 330\n");
-            vert = vert.Insert(0, $"#version 330\n");
+            frag = frag.Insert(0, $"#version 410\n");
+            vert = vert.Insert(0, $"#version 410\n");
         }
 
         private uint Compile(string vertexSource, string geometrySource, string fragmentSource)
