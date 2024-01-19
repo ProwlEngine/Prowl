@@ -9,7 +9,7 @@ namespace Prowl.Runtime.CSG
     public enum OperationType { Union, Intersection, Subtraction, };
 
     /// <summary> Handle/Perform operations between 2 Brush. </summary>
-    public static class CSG
+    public static class CSGUtility
     {
         struct Build2DFaceCollection
         {
