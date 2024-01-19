@@ -70,6 +70,11 @@ namespace Prowl.Runtime
 
         public void Scale(Vector3 scale) { x *= scale.x; y *= scale.y; z *= scale.z; }
 
+        public static Vector3 Scale(Vector3 v, Vector3 scale)
+        {
+            return new Vector3(v.x * scale.x, v.y * scale.y, v.z * scale.z);
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Normalize()
         {
@@ -449,6 +454,7 @@ namespace Prowl.Runtime
         {
             return new Vector3((Double)Math.Sqrt(value.x), (Double)Math.Sqrt(value.y), (Double)Math.Sqrt(value.z));
         }
+
         #endregion Public Static Methods
 
         #region Public Static Operators
