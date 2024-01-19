@@ -455,6 +455,20 @@ namespace Prowl.Runtime
             return new Vector3((Double)Math.Sqrt(value.x), (Double)Math.Sqrt(value.y), (Double)Math.Sqrt(value.z));
         }
 
+        public static Vector3 ProjectOnPlane(Vector3 vector, Vector3 planeNormal)
+        {
+            // Normalize the plane normal to ensure it's a unit vector.
+            planeNormal = Vector3.Normalize(planeNormal);
+
+            // Calculate the distance of the vector from the plane along the normal.
+            double distance = Vector3.Dot(vector, planeNormal);
+
+            // Project the vector onto the plane.
+            Vector3 projectedVector = vector - distance * planeNormal;
+
+            return projectedVector;
+        }
+
         #endregion Public Static Methods
 
         #region Public Static Operators
