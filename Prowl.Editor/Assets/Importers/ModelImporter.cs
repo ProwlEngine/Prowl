@@ -304,7 +304,7 @@ namespace Prowl.Editor.Assets
                         }
 
                         mesh.vertices = vertices;
-                        mesh.indices = m.GetShortIndices().Cast<ushort>().ToArray();
+                        mesh.triangles = m.GetShortIndices().Cast<ushort>().ToArray();
 
                         ctx.AddSubObject(mesh);
                         meshMats.Add(new MeshMaterialBinding(m.Name, m, mesh, mats[m.MaterialIndex]));

@@ -13,11 +13,11 @@ namespace Prowl.Runtime
         public VertexFormat format;
 
         public int vertexCount => vertices.Length;
-        public int triangleCount => indices.Length / 3;
+        public int triangleCount => triangles.Length / 3;
 
         // Vertex attributes data
         public Vertex[] vertices;
-        public ushort[] indices;
+        public ushort[] triangles;
 
         // The array of bone paths under a root
         // The index of a path is the Bone Index
@@ -64,11 +64,11 @@ namespace Prowl.Runtime
             Graphics.CheckGL();
             format.Bind();
 
-            uploadedIBOSize = indices?.Length ?? 0;
-            if (indices != null) {
+            uploadedIBOSize = triangles?.Length ?? 0;
+            if (triangles != null) {
                 ibo = Graphics.GL.GenBuffer();
                 Graphics.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, ibo);
-                Graphics.GL.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<ushort>(indices), BufferUsageARB.StaticDraw);
+                Graphics.GL.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<ushort>(triangles), BufferUsageARB.StaticDraw);
             }
 
             Debug.Log($"VAO: [ID {vao}] Mesh uploaded successfully to VRAM (GPU)");
@@ -96,12 +96,12 @@ namespace Prowl.Runtime
             }
             uploadedVBOSize = vertices.Length;
 
-            if ((uploadedIBOSize > 0 && indices == null) || (uploadedIBOSize != indices.Length)) {
-                uploadedIBOSize = indices?.Length ?? 0;
+            if ((uploadedIBOSize > 0 && triangles == null) || (uploadedIBOSize != triangles.Length)) {
+                uploadedIBOSize = triangles?.Length ?? 0;
 
 
                 // if indices has been deleted
-                if (indices == null) {
+                if (triangles == null) {
                     Graphics.GL.DeleteBuffer(ibo);
                     ibo = 0;
                 } else {
@@ -114,10 +114,10 @@ namespace Prowl.Runtime
                     Graphics.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, ibo);
                     if (uploadedIBOSize != vertices.Length) {
                         // Size changed so reallocate
-                        Graphics.GL.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<ushort>(indices), BufferUsageARB.StaticDraw);
+                        Graphics.GL.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<ushort>(triangles), BufferUsageARB.StaticDraw);
                     } else {
                         // Size didnt change so just update
-                        Graphics.GL.BufferSubData(BufferTargetARB.ElementArrayBuffer, IntPtr.Zero, new ReadOnlySpan<ushort>(indices));
+                        Graphics.GL.BufferSubData(BufferTargetARB.ElementArrayBuffer, IntPtr.Zero, new ReadOnlySpan<ushort>(triangles));
                     }
                 }
             }
@@ -215,7 +215,7 @@ namespace Prowl.Runtime
             }
 
             mesh.vertices = [.. vertices];
-            mesh.indices = [.. indices];
+            mesh.triangles = [.. indices];
             return mesh;
         }
 
@@ -227,7 +227,7 @@ namespace Prowl.Runtime
             int triangleCount = rings * slices * 2;
 
             mesh.vertices = new Vertex[vertexCount];
-            mesh.indices = new ushort[triangleCount * 3];
+            mesh.triangles = new ushort[triangleCount * 3];
 
             int vertexIndex = 0;
             int triangleIndex = 0;
@@ -263,13 +263,13 @@ namespace Prowl.Runtime
                     ushort nextRing = (ushort)((i + 1) * sliceCount);
                     ushort nextSlice = (ushort)(j + 1);
 
-                    mesh.indices[triangleIndex] = (ushort)(i * sliceCount + j);
-                    mesh.indices[triangleIndex + 1] = (ushort)(nextRing + j);
-                    mesh.indices[triangleIndex + 2] = (ushort)(nextRing + nextSlice);
+                    mesh.triangles[triangleIndex] = (ushort)(i * sliceCount + j);
+                    mesh.triangles[triangleIndex + 1] = (ushort)(nextRing + j);
+                    mesh.triangles[triangleIndex + 2] = (ushort)(nextRing + nextSlice);
 
-                    mesh.indices[triangleIndex + 3] = (ushort)(i * sliceCount + j);
-                    mesh.indices[triangleIndex + 4] = (ushort)(nextRing + nextSlice);
-                    mesh.indices[triangleIndex + 5] = (ushort)(i * sliceCount + nextSlice);
+                    mesh.triangles[triangleIndex + 3] = (ushort)(i * sliceCount + j);
+                    mesh.triangles[triangleIndex + 4] = (ushort)(nextRing + nextSlice);
+                    mesh.triangles[triangleIndex + 5] = (ushort)(i * sliceCount + nextSlice);
 
                     triangleIndex += 6;
                 }
@@ -293,7 +293,7 @@ namespace Prowl.Runtime
                 new Vertex { Position = new Vector3(1, 1, 0), TexCoord = new Vector2(1, 1) }
             ];
 
-            mesh.indices = [0, 2, 1, 2, 3, 1];
+            mesh.triangles = [0, 2, 1, 2, 3, 1];
 
             fullScreenQuad = mesh;
             return mesh;
@@ -365,7 +365,7 @@ namespace Prowl.Runtime
                     writer.Write(vertex.Weight3);
                 }
 
-                SerializeArray(writer, indices);
+                SerializeArray(writer, triangles);
 
                 compoundTag.Add("Data", new ByteArrayTag(memoryStream.ToArray()));
             }
@@ -421,7 +421,7 @@ namespace Prowl.Runtime
                         Weight3 = reader.ReadSingle()
                     };
                 }
-                indices = DeserializeArray<ushort> (reader);
+                triangles = DeserializeArray<ushort> (reader);
 
             }
             format = TagSerializer.Deserialize<VertexFormat>(value["Format"], ctx);

@@ -38,7 +38,7 @@ namespace Prowl.Runtime
             if (mesh.IsAvailable == false) return [new SphereShape(0.001f)]; // Mesh is missing so we create a sphere with a tiny radius to prevent errors
 
             if (!convex) {
-                var indices = mesh.Res.indices;
+                var indices = mesh.Res.triangles;
                 var vertices = mesh.Res.vertices;
 
                 List<JTriangle> triangles = new();
