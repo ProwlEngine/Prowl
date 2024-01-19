@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Prowl.Runtime.CSG;
+using System;
 using System.Linq;
 using System.Runtime.CompilerServices;
 
@@ -33,6 +34,9 @@ namespace Prowl.Runtime
 
         /// <summary>Multiply an angle in radians by this, to convert it to degrees</summary>
         public const double Rad2Deg = 360 / TAU;
+
+        /// A small but not tiny value, Used in places like ApproximatelyEquals, where there is some tolerance (0.00001)
+        public static readonly double Small = 0.00001;
 
         /// <inheritdoc cref="double.MinValue"/>
         public static readonly double Epsilon = double.MinValue;
@@ -189,6 +193,183 @@ namespace Prowl.Runtime
         [MethodImpl(IN)] public static uint Pack4u(uint a, uint r, uint g, uint b) => (a << 24) + (r << 16) + (g << 8) + b;
 
         [MethodImpl(IN)] public static int ComputeMipLevels(int width, int height) => (int)Math.Log2(Math.Max(width, height));
+
+        [MethodImpl(IN)] public static bool ApproximatelyEquals(double a, double b) => Mathf.Abs(a - b) < 0.00001f;
+        [MethodImpl(IN)] public static bool ApproximatelyEquals(Vector2 a, Vector2 b) => ApproximatelyEquals(a.x, b.x) && ApproximatelyEquals(a.y, b.y);
+        [MethodImpl(IN)] public static bool ApproximatelyEquals(Vector3 a, Vector3 b) => ApproximatelyEquals(a.x, b.x) && ApproximatelyEquals(a.y, b.y) && ApproximatelyEquals(a.z, b.z);
+        [MethodImpl(IN)] public static bool ApproximatelyEquals(Vector4 a, Vector4 b) => ApproximatelyEquals(a.x, b.x) && ApproximatelyEquals(a.y, b.y) && ApproximatelyEquals(a.z, b.z) && ApproximatelyEquals(a.w, b.w);
+
+        /// <summary> 
+        /// Compute the closest position on a line to point 
+        /// </summary>
+        public static Vector2 GetClosestPointOnLine(Vector2 point, Vector2 lineStart, Vector2 lineEnd)
+        {
+            Vector2 p = point - lineStart;
+            Vector2 n = lineEnd - lineStart;
+            double l2 = n.sqrMagnitude;
+            if (l2 < 1e-20f)
+                return lineStart; // Both points are the same, just give any.
+
+            double d = Vector2.Dot(n, p) / l2;
+
+            if (d <= 0.0f)
+                return lineStart; // Before first point.
+            else if (d >= 1.0f)
+                return lineEnd; // After first point.
+            else
+                return lineStart + n * d; // Inside.
+        }
+
+        /// <summary>
+        /// Checks if two Lines Intersect (Mathf.Small Tolerance)
+        /// </summary>
+        public static bool DoesLineIntersectLine(Vector2 startA, Vector2 endA, Vector2 startB, Vector2 endB, out Vector2 result)
+        {
+            result = Vector2.zero;
+
+            Vector2 AB = endA - startA;
+            Vector2 AC = startB - startA;
+            Vector2 AD = endB - startA;
+
+            double ABlen = Vector2.Dot(AB, AB);
+            if (ABlen <= 0)
+                return false;
+            Vector2 AB_norm = AB / ABlen;
+            AC = new Vector2(AC.x * AB_norm.x + AC.y * AB_norm.y, AC.y * AB_norm.x - AC.x * AB_norm.y);
+            AD = new Vector2(AD.x * AB_norm.x + AD.y * AB_norm.y, AD.y * AB_norm.x - AD.x * AB_norm.y);
+
+            // segments don't intersect
+            if ((AC.y < -Small && AD.y < -Small) || (AC.y > Small && AD.y > Small))
+                return false;
+
+            if (Abs(AD.y - AC.y) < Small)
+                return false;
+
+            double ABpos = AD.x + (AC.x - AD.x) * AD.y / (AD.y - AC.y);
+            if ((ABpos < 0) || (ABpos > 1))
+                return false;
+
+            result = startA + AB * ABpos;
+            return true;
+        }
+
+        /// <summary>
+        /// Checks if two 2D lines are Parallel within a tolerance
+        /// </summary>
+        public static bool AreLinesParallel(Vector2 startA, Vector2 endA, Vector2 startB, Vector2 endB, double tolerance)
+        {
+            Vector2 segment1 = endA - startA;
+            Vector2 segment2 = endB - startB;
+            double segment1_length2 = Vector2.Dot(segment1, segment1);
+            double segment2_length2 = Vector2.Dot(segment2, segment2);
+            double segment_onto_segment = Vector2.Dot(segment2, segment1);
+
+            if (segment1_length2 < tolerance || segment2_length2 < tolerance)
+                return true;
+
+            double max_separation2;
+            if (segment1_length2 > segment2_length2)
+                max_separation2 = segment2_length2 - segment_onto_segment * segment_onto_segment / segment1_length2;
+            else
+                max_separation2 = segment1_length2 - segment_onto_segment * segment_onto_segment / segment2_length2;
+
+            return max_separation2 < tolerance;
+        }
+
+        /// <summary>
+        /// Checks if a Ray intersects a triangle (Uses Mathf.Small for Error)
+        /// </summary>
+        public static bool RayIntersectsTriangle(Vector3 origin, Vector3 dir, Vector3 a, Vector3 b, Vector3 c, out Vector3 intersection)
+        {
+            intersection = Vector3.zero;
+
+            Vector3 edge1 = b - a;
+            Vector3 edge2 = c - a;
+            Vector3 h = Vector3.Cross(dir, edge2);
+            double dot = Vector3.Dot(edge1, h);
+            // Check if ray is parallel to triangle.
+            if (Abs(dot) < Small)
+                return false;
+            double f = 1.0f / dot;
+
+            Vector3 s = origin - a;
+            double u = f * Vector3.Dot(s, h);
+            if (u < 0.0 - Small || u > 1.0 + Small)
+                return false;
+
+            Vector3 q = Vector3.Cross(s, edge1);
+            double v = f * Vector3.Dot(dir, q);
+            if (v < 0.0 - Small || u + v > 1.0 + Small)
+                return false;
+
+            // Ray intersects triangle.
+            // Calculate distance.
+            double t = f * Vector3.Dot(edge2, q);
+            // Confirm triangle is in front of ray.
+            if (t >= Small)
+            {
+                intersection = origin + dir * t;
+                return true;
+            }
+            else return false;
+        }
+
+        /// <summary>
+        /// Checks if a 3D Point exists inside a 3D Triangle
+        /// </summary>
+        public static bool IsPointInTriangle(Vector3 point, Vector3 a, Vector3 b, Vector3 c) => Internal_IsPointInTriangle(point, a, b, c, 0);
+
+        private static bool Internal_IsPointInTriangle(Vector3 point, Vector3 a, Vector3 b, Vector3 c, int shifted)
+        {
+            double det = Vector3.Dot(a, Vector3.Cross(b, c));
+
+            // If determinant is, zero try shift the triangle and the point.
+            if (Abs(det) < Small)
+            {
+                if (shifted > 2)
+                    return false; // Triangle appears degenerate, so ignore it.
+
+                Vector3 shift_by = Vector3.zero;
+                shift_by[shifted] = 1;
+                Vector3 shifted_point = point + shift_by;
+                return Internal_IsPointInTriangle(shifted_point, a + shift_by, b + shift_by, c + shift_by, shifted + 1);
+            }
+
+            // Find the barycentric coordinates of the point with respect to the vertices.
+            double[] lambda =
+            [
+                Vector3.Dot(point, Vector3.Cross(b, c)) / det,
+                Vector3.Dot(point, Vector3.Cross(c, a)) / det,
+                Vector3.Dot(point, Vector3.Cross(a, b)) / det,
+            ];
+
+            // Point is in the plane if all lambdas sum to 1.
+            if (!(Abs((lambda[0] + lambda[1] + lambda[2]) - 1) < Small))
+                return false;
+
+            // Point is inside the triangle if all lambdas are positive.
+            if (lambda[0] < 0 || lambda[1] < 0 || lambda[2] < 0)
+                return false;
+
+            return true;
+        }
+
+        /// <summary>
+        /// Checks if a 2D Point exists inside a 2D Triangle
+        /// </summary>
+        public static bool IsPointInTriangle(Vector2 point, Vector2 a, Vector2 b, Vector2 c)
+        {
+            Vector2 an = a - point;
+            Vector2 bn = b - point;
+            Vector2 cn = c - point;
+
+            bool orientation = (an.x * bn.y - an.y * bn.x) > 0;
+
+            if (((bn.x * cn.y - bn.y * cn.x) > 0) != orientation)
+                return false;
+
+            return ((cn.x * an.y - cn.y * an.x) > 0) == orientation;
+        }
 
         #endregion
 
