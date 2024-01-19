@@ -201,22 +201,8 @@ namespace Prowl.Runtime
 
         #region Transform 
 
-        public Vector3 TransformPoint(Vector3 inPoint) => localToWorldMatrix.MultiplyPoint(inPoint);
-        public Vector3 InverseTransformPoint(Vector3 inPosition)
-        {
-            Vector3 newPosition, localPosition;
-            if (parent != null)
-                localPosition = parent.InverseTransformPoint(inPosition);
-            else
-                localPosition = inPosition;
-
-            localPosition -= m_LocalPosition;
-            newPosition = Quaternion.Inverse(m_LocalRotation) * localPosition;
-            if (m_LocalScale != Vector3.one)
-                newPosition.Scale(InverseSafe(m_LocalScale));
-
-            return newPosition;
-        }
+        public Vector3 TransformPoint(Vector3 inPoint) => Vector3.Transform(inPoint, localToWorldMatrix);
+        public Vector3 InverseTransformPoint(Vector3 inPosition) => Vector3.Transform(inPosition, worldToLocalMatrix);
 
         public Vector3 TransformDirection(Vector3 inDirection) => rotation * inDirection;
         public Vector3 InverseTransformDirection(Vector3 inDirection) => Quaternion.Inverse(rotation) *  inDirection;
