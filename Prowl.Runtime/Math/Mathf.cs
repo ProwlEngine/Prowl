@@ -36,7 +36,7 @@ namespace Prowl.Runtime
         public const double Rad2Deg = 360 / TAU;
 
         /// A small but not tiny value, Used in places like ApproximatelyEquals, where there is some tolerance (0.00001)
-        public static readonly double Small = 0.00001;
+        public static readonly double Small = 0.000001;
 
         /// <inheritdoc cref="double.MinValue"/>
         public static readonly double Epsilon = double.MinValue;

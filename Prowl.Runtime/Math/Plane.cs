@@ -67,9 +67,10 @@ namespace Prowl.Runtime
 
         public Plane(Vector3 a, Vector3 b, Vector3 c)
         {
-            normal = Vector3.Cross(a - c, a - b);
-            normal = Vector3.Normalize(normal);
-            distance = Vector3.Dot(normal, a);
+            Set3Points(a, b, c);
+            //normal = Vector3.Cross(a - c, a - b);
+            //normal = Vector3.Normalize(normal);
+            //distance = Vector3.Dot(normal, a);
         }
 
         public Plane(double a, double b, double c, double d)
@@ -108,7 +109,7 @@ namespace Prowl.Runtime
         public bool IsOnPositiveSide(Vector3 point) => Vector3.Dot(normal, point) > distance;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double GetDistanceToPoint(Vector3 inPt) => Vector3.Dot(normal, inPt) + distance;
+        public double GetDistanceToPoint(Vector3 inPt) => Math.Abs(Vector3.Dot(normal, inPt) + distance);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsOnPlane(Vector3 point, double tolerance = 0) => Mathf.Abs(Vector3.Dot(normal, point) - distance) <= tolerance;
@@ -125,8 +126,8 @@ namespace Prowl.Runtime
 
         public void Set3Points(Vector3 a, Vector3 b, Vector3 c)
         {
-            normal = Vector3.Normalize(Vector3.Cross(b - a, c - a));
-            distance = -Vector3.Dot(normal, a);
+            normal = Vector3.Normalize(Vector3.Cross(a - c, a - b));
+            distance = Vector3.Dot(normal, a);
         }
 
         public static Plane Normalize(Plane value)

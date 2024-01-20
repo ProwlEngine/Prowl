@@ -4,25 +4,95 @@ namespace Prowl.Runtime.CSG
 {
     internal class Build2DFaces
     {
-        internal struct Vertex2D
+        struct Vertex2D
         {
             public Vector2 point;
             public Vector2 uv;
         };
 
-        internal struct Face2D
+		struct Face2D
         {
             public int[] vertex_idx;
         };
 
         private List<Vertex2D> vertices = new List<Vertex2D>();
-        private List<Face2D> faces = new List<Face2D>();
+		private List<Face2D> faces = new List<Face2D>();
 
-        private double vertex_tolerance = 1e-10f;
+		private double vertex_tolerance = 1e-10f;
 
-        private TransformCSG to_3D, to_2D;
+		private TransformCSG to_3D, to_2D;
 
-        private Plane plane;
+		private Plane plane;
+
+        static Vector2 get_closest_point_to_segment(Vector2 point, Vector2[] segment)
+        {
+            Vector2 p = point - segment[0];
+            Vector2 n = segment[1] - segment[0];
+            double l2 = n.sqrMagnitude;
+            if (l2 < 1e-20f)
+                return segment[0]; // Both points are the same, just give any.
+
+            double d = Vector2.Dot(n, p) / l2;
+            if (d <= 0.0f)
+                return segment[0]; // Before first point.
+            else if (d >= 1.0f)
+                return segment[1]; // After first point.
+            else
+                return segment[0] + n * d; // Inside.
+        }
+
+
+        static Vector2 LerpEdgeUV(Vector2[] segment_points, Vector2[] uvs, Vector2 interpolation)
+        {
+            // This condition seem quite rare
+            //if (Mathf.ApproximatelyEquals(segment_points[0], segment_points[1]))
+            //    return uvs[0];
+
+            double segment_length = Vector2.Distance(segment_points[0], segment_points[1]);
+            double distance = Vector2.Distance(segment_points[0], interpolation);
+            double fraction = distance / segment_length;
+
+            return Vector2.Lerp(uvs[0], uvs[1], fraction);
+        }
+
+        static Vector2 LerpTriangleUV(Vector2[] vertices, Vector2[] uvs, Vector2 interpolation_point)
+        {
+            // These conditions seem quite rare
+            //if (Mathf.ApproximatelyEquals(interpolation_point, vertices[0]))
+            //    return uvs[0];
+            //if (Mathf.ApproximatelyEquals(interpolation_point, vertices[1]))
+            //    return uvs[1];
+            //if (Mathf.ApproximatelyEquals(interpolation_point, vertices[2]))
+            //    return uvs[2];
+
+            Vector2 edge1 = vertices[1] - vertices[0];
+            Vector2 edge2 = vertices[2] - vertices[0];
+            Vector2 interpolation = interpolation_point - vertices[0];
+
+            double edge1_on_edge1 = Vector2.Dot(edge1, edge1);
+            double edge1_on_edge2 = Vector2.Dot(edge1, edge2);
+            double edge2_on_edge2 = Vector2.Dot(edge2, edge2);
+            double inter_on_edge1 = Vector2.Dot(interpolation, edge1);
+            double inter_on_edge2 = Vector2.Dot(interpolation, edge2);
+            double scale = (edge1_on_edge1 * edge2_on_edge2 - edge1_on_edge2 * edge1_on_edge2);
+            if (scale == 0)
+                return uvs[0];
+
+            double v = (edge2_on_edge2 * inter_on_edge1 - edge1_on_edge2 * inter_on_edge2) / scale;
+            double w = (edge1_on_edge1 * inter_on_edge2 - edge1_on_edge2 * inter_on_edge1) / scale;
+            double u = 1.0f - v - w;
+
+            return uvs[0] * u + uvs[1] * v + uvs[2] * w;
+        }
+
+        static bool IsTriangleDegenerate(Vector2[] vertices, double tolerance)
+        {
+            double det = vertices[0].x * vertices[1].y - vertices[0].x * vertices[2].y +
+                    vertices[0].y * vertices[2].x - vertices[0].y * vertices[1].x +
+                    vertices[1].x * vertices[2].y - vertices[1].y * vertices[2].x;
+
+            return det < tolerance;
+        }
 
         internal Build2DFaces() { }
 
@@ -96,56 +166,6 @@ namespace Prowl.Runtime.CSG
             faces.Add(face);
         }
 
-        private static Vector2 InterpolateSegmentUV(Vector2[] segment_points, Vector2[] uvs, Vector2 interpolation)
-        {
-            if (Mathf.ApproximatelyEquals(segment_points[0], segment_points[1]))
-                return uvs[0];
-
-            double segment_length = Vector2.Distance(segment_points[0], segment_points[1]);
-            double distance = Vector2.Distance(segment_points[0], interpolation);
-            double fraction = distance / segment_length;
-
-            return Vector2.Lerp(uvs[0], uvs[1], fraction);
-        }
-
-        private static Vector2 InterpolateTriangleUV(Vector2[] vertices, Vector2[] uvs, Vector2 interpolation_point)
-        {
-            if (Mathf.ApproximatelyEquals(interpolation_point, vertices[0]))
-                return uvs[0];
-            if (Mathf.ApproximatelyEquals(interpolation_point, vertices[1]))
-                return uvs[1];
-            if (Mathf.ApproximatelyEquals(interpolation_point, vertices[2]))
-                return uvs[2];
-
-            Vector2 edge1 = vertices[1] - vertices[0];
-            Vector2 edge2 = vertices[2] - vertices[0];
-            Vector2 interpolation = interpolation_point - vertices[0];
-
-            double edge1_on_edge1 = Vector2.Dot(edge1, edge1);
-            double edge1_on_edge2 = Vector2.Dot(edge1, edge2);
-            double edge2_on_edge2 = Vector2.Dot(edge2, edge2);
-            double inter_on_edge1 = Vector2.Dot(interpolation, edge1);
-            double inter_on_edge2 = Vector2.Dot(interpolation, edge2);
-            double scale = (edge1_on_edge1 * edge2_on_edge2 - edge1_on_edge2 * edge1_on_edge2);
-            if (scale == 0)
-                return uvs[0];
-
-            double v = (edge2_on_edge2 * inter_on_edge1 - edge1_on_edge2 * inter_on_edge2) / scale;
-            double w = (edge1_on_edge1 * inter_on_edge2 - edge1_on_edge2 * inter_on_edge1) / scale;
-            double u = 1.0f - v - w;
-
-            return uvs[0] * u + uvs[1] * v + uvs[2] * w;
-        }
-
-        private static bool IsTriangleDegenerate(Vector2[] vertices, double tolerance)
-        {
-            double det = vertices[0].x * vertices[1].y - vertices[0].x * vertices[2].y +
-                    vertices[0].y * vertices[2].x - vertices[0].y * vertices[1].x +
-                    vertices[1].x * vertices[2].y - vertices[1].y * vertices[2].x;
-
-            return det < tolerance;
-        }
-
         private int GetPointIndex(Vector2 point)
         {
             for (int vertex_idx = 0; vertex_idx < vertices.Count; ++vertex_idx)
@@ -158,21 +178,16 @@ namespace Prowl.Runtime.CSG
         {
             // Check if vertex exists.
             int vertex_id = GetPointIndex(vertex.point);
-            if (vertex_id != -1)
-            {
-                return vertex_id;
-            }
+            if (vertex_id != -1) return vertex_id;
 
             vertices.Add(vertex);
             return vertices.Count - 1;
         }
 
-
         private void AddVertexIndexSorted(List<int> vertex_indices, int new_vertex_index)
         {
             if (new_vertex_index >= 0 && vertex_indices.IndexOf(new_vertex_index) == -1)
             {
-
                 // The first vertex.
                 if (vertex_indices.Count == 0)
                 {
@@ -192,20 +207,13 @@ namespace Prowl.Runtime.CSG
                     // Sort along the axis with the greatest difference.
                     axis = 0;
                     if (Mathf.Abs(new_point.x - first_point.x) < Mathf.Abs(new_point.y - first_point.y))
-                    {
                         axis = 1;
-                    }
 
                     // Add it to the beginning or the end appropriately.
                     if (new_point[axis] < first_point[axis])
-                    {
                         vertex_indices.Insert(0, new_vertex_index);
-                    }
                     else
-                    {
                         vertex_indices.Add(new_vertex_index);
-                    }
-
                     return;
                 }
 
@@ -217,9 +225,7 @@ namespace Prowl.Runtime.CSG
                 // Determine axis being sorted against i.e. the axis with the greatest difference.
                 axis = 0;
                 if (Mathf.Abs(last_point.x - first_point.x) < Mathf.Abs(last_point.y - first_point.y))
-                {
                     axis = 1;
-                }
 
                 // Insert the point at the appropriate index.
                 for (int insert_idx = 0; insert_idx < vertex_indices.Count; ++insert_idx)
@@ -239,10 +245,7 @@ namespace Prowl.Runtime.CSG
         private void MergeFaces(List<int> segment_indices)
         {
             int segments = segment_indices.Count - 1;
-            if (segments < 2)
-            {
-                return;
-            }
+            if (segments < 2) return;
 
             // Faces around an inner vertex are merged by moving the inner vertex to the first vertex.
             for (int sorted_idx = 1; sorted_idx < segments; ++sorted_idx)
@@ -286,21 +289,13 @@ namespace Prowl.Runtime.CSG
 
                     // Skip flattened faces.
                     if (outer_edge_idx[0] == segment_indices[closest_idx] ||
-                            outer_edge_idx[1] == segment_indices[closest_idx])
-                    {
+                        outer_edge_idx[1] == segment_indices[closest_idx])
                         continue;
-                    }
 
                     //Don't create degenerate triangles.
-                    Vector2[] edge1 = {
-                        vertices[outer_edge_idx[0]].point,
-                        vertices[segment_indices[closest_idx]].point
-                    };
-                    Vector2[] edge2 = {
-                        vertices[outer_edge_idx[1]].point,
-                        vertices[segment_indices[closest_idx]].point
-                    };
-                    if (Mathf.AreLinesParallel(edge1[0], edge1[1], edge2[0], edge2[1], vertex_tolerance))
+                    if (Mathf.AreLinesParallel(vertices[outer_edge_idx[0]].point, vertices[segment_indices[closest_idx]].point, 
+                                               vertices[outer_edge_idx[1]].point, vertices[segment_indices[closest_idx]].point, 
+                                               vertex_tolerance))
                     {
                         if (!degenerate_points.Contains(outer_edge_idx[0]))
                             degenerate_points.Add(outer_edge_idx[0]);
@@ -322,14 +317,10 @@ namespace Prowl.Runtime.CSG
                 merge_faces_idx.Sort();
                 merge_faces_idx.Reverse();
                 for (int i = 0; i < merge_faces_idx.Count; ++i)
-                {
                     faces.RemoveAt(merge_faces_idx[i]);
-                }
 
                 if (degenerate_points.Count == 0)
-                {
                     continue;
-                }
 
                 // Split faces using degenerate points.
                 for (int face_idx = 0; face_idx < faces.Count; ++face_idx)
@@ -361,10 +352,7 @@ namespace Prowl.Runtime.CSG
                                 break;
                             }
                         }
-                        if (existing)
-                        {
-                            continue;
-                        }
+                        if (existing) continue;
 
                         // Check if point is on each edge.
                         for (int face_edge_idx = 0; face_edge_idx < 3; ++face_edge_idx)
@@ -373,7 +361,7 @@ namespace Prowl.Runtime.CSG
                                 face_points[face_edge_idx],
                                 face_points[(face_edge_idx + 1) % 3]
                             };
-                            Vector2 closest_point = Mathf.GetClosestPointOnLine(point_2D, edge_points[0], edge_points[1]);
+                            Vector2 closest_point = get_closest_point_to_segment(point_2D, edge_points);
 
                             if ((point_2D - closest_point).sqrMagnitude < vertex_tolerance)
                             {
@@ -445,7 +433,7 @@ namespace Prowl.Runtime.CSG
                     bool on_edge = false;
                     for (int edge_point_idx = 0; edge_point_idx < 2; ++edge_point_idx)
                     {
-                        intersection_point = Mathf.GetClosestPointOnLine(segment_points[edge_point_idx], edge_points[0], edge_points[1]);
+                        intersection_point = get_closest_point_to_segment(segment_points[edge_point_idx], edge_points);
                         if ((segment_points[edge_point_idx] - intersection_point).sqrMagnitude < vertex_tolerance)
                         {
                             on_edge = true;
@@ -458,21 +446,17 @@ namespace Prowl.Runtime.CSG
                     {
                         // Check if intersection point is an edge point.
                         if (((edge_points[0] - intersection_point).sqrMagnitude < vertex_tolerance) ||
-                                ((edge_points[1] - intersection_point).sqrMagnitude < vertex_tolerance))
-                        {
+                            ((edge_points[1] - intersection_point).sqrMagnitude < vertex_tolerance))
                             continue;
-                        }
 
                         // Check if edge exists, by checking if the intersecting segment is parallel to the edge.
                         if (Mathf.AreLinesParallel(segment_points[0], segment_points[1], edge_points[0], edge_points[1], vertex_tolerance))
-                        {
                             continue;
-                        }
 
                         // Add the intersection point as a new vertex.
                         Vertex2D new_vertex;
                         new_vertex.point = intersection_point;
-                        new_vertex.uv = InterpolateSegmentUV(edge_points, edge_uvs, intersection_point);
+                        new_vertex.uv = LerpEdgeUV(edge_points, edge_uvs, intersection_point);
                         int new_vertex_idx = AddVertex(new_vertex);
                         int opposite_vertex_idx = face.vertex_idx[(face_edge_idx + 2) % 3];
                         AddVertexIndexSorted(segment_indices, new_vertex_idx);
@@ -487,7 +471,7 @@ namespace Prowl.Runtime.CSG
                         }
 
                         // If opposite point is on the segment, add its index to segment indices too.
-                        Vector2 closest_point = Mathf.GetClosestPointOnLine(vertices[opposite_vertex_idx].point, segment_points[0], segment_points[1]);
+                        Vector2 closest_point = get_closest_point_to_segment(vertices[opposite_vertex_idx].point, segment_points);
                         if ((vertices[opposite_vertex_idx].point - closest_point).sqrMagnitude < vertex_tolerance)
                         {
                             AddVertexIndexSorted(segment_indices, opposite_vertex_idx);
@@ -542,18 +526,12 @@ namespace Prowl.Runtime.CSG
 
                 // Skip degenerate triangles.
                 if (IsTriangleDegenerate(points, vertex_tolerance))
-                {
                     continue;
-                }
 
                 // Check if point is existing face vertex.
                 for (int i = 0; i < 3; ++i)
-                {
                     if ((face_vertices[i].point - point).sqrMagnitude < vertex_tolerance)
-                    {
                         return face.vertex_idx[i];
-                    }
-                }
 
                 // Check if point is on each edge.
                 bool on_edge = false;
@@ -568,7 +546,7 @@ namespace Prowl.Runtime.CSG
                         uvs[(face_edge_idx + 1) % 3]
                     };
 
-                    Vector2 closest_point = Mathf.GetClosestPointOnLine(point, edge_points[0], edge_points[1]);
+                    Vector2 closest_point = get_closest_point_to_segment(point, edge_points);
                     if ((point - closest_point).sqrMagnitude < vertex_tolerance)
                     {
                         on_edge = true;
@@ -576,7 +554,7 @@ namespace Prowl.Runtime.CSG
                         // Add the point as a new vertex.
                         Vertex2D new_vertex;
                         new_vertex.point = point;
-                        new_vertex.uv = InterpolateSegmentUV(edge_points, edge_uvs, point);
+                        new_vertex.uv = LerpEdgeUV(edge_points, edge_uvs, point);
                         new_vertex_idx = AddVertex(new_vertex);
                         int opposite_vertex_idx = face.vertex_idx[(face_edge_idx + 2) % 3];
 
@@ -590,11 +568,8 @@ namespace Prowl.Runtime.CSG
                         }
 
                         // Don't create degenerate triangles.
-                        Vector2[] split_edge1 = { vertices[new_vertex_idx].point, edge_points[0] };
-                        Vector2[] split_edge2 = { vertices[new_vertex_idx].point, edge_points[1] };
-                        Vector2[] new_edge = { vertices[new_vertex_idx].point, vertices[opposite_vertex_idx].point };
-                        if (Mathf.AreLinesParallel(split_edge1[0], split_edge1[1], new_edge[0], new_edge[1], vertex_tolerance) &&
-                            Mathf.AreLinesParallel(split_edge2[0], split_edge2[1], new_edge[0], new_edge[1], vertex_tolerance))
+                        if (Mathf.AreLinesParallel(vertices[new_vertex_idx].point, edge_points[0], vertices[new_vertex_idx].point, vertices[opposite_vertex_idx].point, vertex_tolerance) &&
+                            Mathf.AreLinesParallel(vertices[new_vertex_idx].point, edge_points[1], vertices[new_vertex_idx].point, vertices[opposite_vertex_idx].point, vertex_tolerance))
                         {
                             break;
                         }
@@ -629,7 +604,7 @@ namespace Prowl.Runtime.CSG
                     // Add the point as a new vertex.
                     Vertex2D new_vertex;
                     new_vertex.point = point;
-                    new_vertex.uv = InterpolateTriangleUV(points, uvs, point);
+                    new_vertex.uv = LerpTriangleUV(points, uvs, point);
                     new_vertex_idx = AddVertex(new_vertex);
 
                     // Create three new faces around this point and remove this face.
@@ -638,10 +613,7 @@ namespace Prowl.Runtime.CSG
                     {
                         // Don't create degenerate triangles.
                         Vector2[] new_points = { points[i], points[(i + 1) % 3], vertices[new_vertex_idx].point };
-                        if (IsTriangleDegenerate(new_points, vertex_tolerance))
-                        {
-                            continue;
-                        }
+                        if (IsTriangleDegenerate(new_points, vertex_tolerance)) continue;
 
                         Face2D new_face;
                         new_face.vertex_idx = new int[3];
@@ -669,13 +641,9 @@ namespace Prowl.Runtime.CSG
             {
                 Vector3 point_3D;
                 if (brush_a == null)
-                {
                     point_3D = brush.faces[face_idx].vertices[i];
-                }
                 else
-                {
                     point_3D = brush_a.obj.transform.InverseTransformPoint(brush.obj.transform.TransformPoint(brush.faces[face_idx].vertices[i]));
-                }
 
                 if (plane.IsOnPlane(point_3D, Mathf.Small))
                 {
@@ -689,26 +657,17 @@ namespace Prowl.Runtime.CSG
                 {
                     Vector3 next_point_3D;
                     if (brush_a == null)
-                    {
                         next_point_3D = brush.faces[face_idx].vertices[(i + 1) % 3];
-                    }
                     else
-                    {
                         next_point_3D = brush_a.obj.transform.InverseTransformPoint(brush.obj.transform.TransformPoint(brush.faces[face_idx].vertices[(i + 1) % 3]));
-                    }
 
                     if (plane.IsOnPlane(next_point_3D, Mathf.Small))
-                    {
                         continue; // Next point is in plane, it will be added separately.
-                    }
                     if (plane.IsOnPositiveSide(point_3D) == plane.IsOnPositiveSide(next_point_3D))
-                    {
                         continue; // Both points on the same side of the plane, ignore.
-                    }
 
                     // Edge crosses the plane, find and add the intersection point.
-                    Vector3 point_2D = Vector3.zero;
-                    if (plane.DoesLineIntersectPlane(point_3D, next_point_3D, out point_2D))
+                    if (plane.DoesLineIntersectPlane(point_3D, next_point_3D, out Vector3 point_2D))
                     {
                         point_2D = to_2D.XForm(point_2D);
                         points_2D[points_count++] = new Vector2(point_2D.x, point_2D.y);
@@ -722,9 +681,7 @@ namespace Prowl.Runtime.CSG
 
             // Insert points.
             for (int i = 0; i < points_count; ++i)
-            {
                 inserted_index[i] = InsertPoint(points_2D[i]);
-            }
 
             if (points_count == 2)
             {
@@ -733,9 +690,7 @@ namespace Prowl.Runtime.CSG
                 segment[1] = points_2D[1];
                 FindEdgeIntersections(segment, ref segment_indices);
                 for (int i = 0; i < 2; ++i)
-                {
                     AddVertexIndexSorted(segment_indices, inserted_index[i]);
-                }
                 MergeFaces(segment_indices);
             }
 
@@ -748,9 +703,7 @@ namespace Prowl.Runtime.CSG
                     segment[1] = points_2D[(edge_idx + 1) % 3];
                     FindEdgeIntersections(segment, ref segment_indices);
                     for (int i = 0; i < 2; ++i)
-                    {
                         AddVertexIndexSorted(segment_indices, inserted_index[(edge_idx + i) % 3]);
-                    }
                     MergeFaces(segment_indices);
                     segment_indices.Clear();
                 }

@@ -38,16 +38,15 @@ namespace Prowl.Runtime.CSG
         };
 
         private List<Vector3> points;
+
         private List<Face> faces_a, faces_b;
+        private int face_from_a, face_from_b;
 
-        private int face_from_a = 0;
-        private int face_from_b = 0;
+		internal double vertex_snap = 0.0f;
 
-        public double vertex_snap = 0.0f;
+		Dictionary<Vector3, int> snap_cache;
 
-        Dictionary<Vector3, int> snap_cache;
-
-        public Vector3 scale_a;
+		internal Vector3 scale_a;
 
         class FaceBVHCmpX : IComparer
         {
@@ -56,13 +55,9 @@ namespace Prowl.Runtime.CSG
                 (int i, FaceBVH f) p_left = ((int, FaceBVH))obj1;
                 (int i, FaceBVH f) p_right = ((int, FaceBVH))obj2;
                 if (p_left.f.center.x == p_right.f.center.x)
-                {
                     return 0;
-                }
                 if (p_left.f.center.x < p_right.f.center.x)
-                {
                     return 1;
-                }
                 return -1;
             }
         };
@@ -74,13 +69,9 @@ namespace Prowl.Runtime.CSG
                 (int i, FaceBVH f) p_left = ((int, FaceBVH))obj1;
                 (int i, FaceBVH f) p_right = ((int, FaceBVH))obj2;
                 if (p_left.f.center.y == p_right.f.center.y)
-                {
                     return 0;
-                }
                 if (p_left.f.center.y < p_right.f.center.y)
-                {
                     return 1;
-                }
                 return -1;
             }
         };
@@ -92,67 +83,59 @@ namespace Prowl.Runtime.CSG
                 (int i, FaceBVH f) p_left = ((int, FaceBVH))obj1;
                 (int i, FaceBVH f) p_right = ((int, FaceBVH))obj2;
                 if (p_left.f.center.z == p_right.f.center.z)
-                {
                     return 0;
-                }
                 if (p_left.f.center.z < p_right.f.center.z)
-                {
                     return 1;
-                }
                 return -1;
             }
         };
 
         internal MeshMerge(int size_a = 0, int size_b = 0)
         {
-            points = new List<Vector3>();
-            faces_a = new List<Face>(size_a);
-            faces_b = new List<Face>(size_b);
-            snap_cache = new Dictionary<Vector3, int>(3 * (size_a + size_b));
+            points = new ();
+            faces_a = new(size_a);
+            faces_b = new(size_b);
+            snap_cache = new(3 * (size_a + size_b));
         }
 
-        int CreateBVH(ref FaceBVH[] facebvh, ref (int i, FaceBVH f)[] id_facebvh, int from, int size, int depth, ref int r_max_depth)
+        private int CreateBVH(ref FaceBVH[] facebvh, ref (int i, FaceBVH f)[] id_facebvh, int from, int size, int depth, ref int r_max_depth)
         {
             if (depth > r_max_depth)
                 r_max_depth = depth;
 
-            if (size == 0)
-                return -1;
+            if (size == 0) return -1;
 
             if (size <= BVH_LIMIT)
             {
                 for (int i = 0; i < size - 1; i++)
-                {
                     facebvh[id_facebvh[from + i].i].next = id_facebvh[from + i + 1].i;
-                }
                 return id_facebvh[from].i;
             }
 
-            AABBCSG aabb = new AABBCSG(facebvh[id_facebvh[from].i].aabb.GetPosition(), facebvh[id_facebvh[from].i].aabb.GetSize());
+            AABBCSG aabb = new(facebvh[id_facebvh[from].i].aabb.GetPosition(), facebvh[id_facebvh[from].i].aabb.GetSize());
             for (int i = 1; i < size; i++)
                 aabb.MergeWith(id_facebvh[from + i].f.aabb);
 
-            int li = aabb.GetLongestAxis();
-
+            int li = aabb.GetLongestAxisIndex();
             switch (li)
             {
                 case 0:
                 {
-                    SortArray temp = new SortArray(new FaceBVHCmpX());
+                    SortArray temp = new(new FaceBVHCmpX());
                     temp.nthElement(from, from + size, from + size / 2, ref id_facebvh);
                 }
                 break;
 
                 case 1:
                 {
-                    SortArray temp = new SortArray(new FaceBVHCmpY());
+                    SortArray temp = new(new FaceBVHCmpY());
                     temp.nthElement(from, from + size, from + size / 2, ref id_facebvh);
                 }
                 break;
 
                 case 2:
                 {
-                    SortArray temp = new SortArray(new FaceBVHCmpZ());
+                    SortArray temp = new(new FaceBVHCmpZ());
                     temp.nthElement(from, from + size, from + size / 2, ref id_facebvh);
                 }
                 break;
@@ -162,51 +145,40 @@ namespace Prowl.Runtime.CSG
             int right = CreateBVH(ref facebvh, ref id_facebvh, from + size / 2, size - size / 2, depth + 1, ref r_max_depth);
 
             Array.Resize(ref facebvh, facebvh.Length + 1);
-            var fbvh = facebvh[facebvh.Length - 1];
-            fbvh.aabb = aabb;
-            fbvh.center = aabb.GetCenter();
-            fbvh.face = -1;
-            fbvh.left = left;
-            fbvh.right = right;
-            fbvh.next = -1;
-            facebvh[facebvh.Length - 1] = fbvh;
-
+            FaceBVH fBVH = new() {
+                aabb = aabb,
+                center = aabb.GetCenter(),
+                face = -1,
+                left = left,
+                right = right,
+                next = -1
+            };
+            facebvh[^1] = fBVH;
             return facebvh.Length - 1;
         }
 
-        void AddDistance(ref List<double> r_intersectionsA, ref List<double> r_intersectionsB, bool from_B, double distance)
+        private void AddDistance(ref List<double> r_intersectionsA, ref List<double> r_intersectionsB, bool from_B, double distance)
         {
             List<double> intersections = from_B ? r_intersectionsB : r_intersectionsA;
-
             // Check if distance exists.
             foreach (double E in intersections)
                 if (Mathf.Abs(E - distance) < Mathf.Small)
                     return;
-
             intersections.Add(distance);
         }
 
-        bool BVHInside(ref FaceBVH[] facebvh, int max_depth, int bvh_first, int face_idx, bool from_faces_a)
+        private bool InsideBVH(ref FaceBVH[] facebvh, int max_depth, int bvh_first, int face_idx, bool from_faces_a)
         {
-            Face face;
-            if (from_faces_a)
-                face = faces_a[face_idx];
-            else
-                face = faces_b[face_idx];
+            Face face = from_faces_a ? faces_a[face_idx] : faces_b[face_idx];
 
-            Vector3[] face_points = {
-                points[face.points[0]],
-                points[face.points[1]],
-                points[face.points[2]]
-            };
+            Vector3[] face_points = [points[face.points[0]], points[face.points[1]], points[face.points[2]]];
             Vector3 face_center = (face_points[0] + face_points[1] + face_points[2]) / 3.0f;
             Vector3 face_normal = new Plane(face_points[0], face_points[1], face_points[2]).normal;
 
             int[] stack = new int[max_depth];
 
-
-            List<double> intersectionsA = new List<double>();
-            List<double> intersectionsB = new List<double>();
+            List<double> intersectionsA = [];
+            List<double> intersectionsB = [];
 
             int level = 0;
             int pos = bvh_first;
@@ -223,71 +195,51 @@ namespace Prowl.Runtime.CSG
                 {
                     case (int)VISIT.TEST_AABB_BIT:
                     {
-                        if (((FaceBVH)current_facebvh).face >= 0)
+                        if (current_facebvh.Value.face >= 0)
                         {
                             while (current_facebvh != null)
                             {
-                                if (((FaceBVH)current_facebvh).aabb.IntersectsRay(face_center, face_normal))
+                                if ((current_facebvh.Value).aabb.IntersectsRay(face_center, face_normal))
                                 {
-                                    Face current_face;
-                                    if (from_faces_a)
-                                    {
-                                        current_face = faces_b[((FaceBVH)current_facebvh).face];
-                                    }
-                                    else
-                                    {
-                                        current_face = faces_a[((FaceBVH)current_facebvh).face];
-                                    }
-                                    Vector3[] current_points = {
-                                        points[current_face.points[0]],
-                                        points[current_face.points[1]],
-                                        points[current_face.points[2]]
-                                    };
-                                    Vector3 current_normal = new Plane(current_points[0], current_points[1], current_points[2]).normal;
-                                    Vector3 intersection_point;
+                                    Face current_face = from_faces_a ? faces_b[current_facebvh.Value.face] : faces_a[current_facebvh.Value.face];
+
+                                    Vector3 A = points[current_face.points[0]];
+                                    Vector3 B = points[current_face.points[1]];
+                                    Vector3 C = points[current_face.points[2]];
+
+                                    Vector3 current_normal = new Plane(A, B, C).normal;
+                                    Vector3 intersection_point = new();
 
                                     // Check if faces are co-planar.
-                                    if (Mathf.ApproximatelyEquals(current_normal, face_normal) &&
-                                        Mathf.IsPointInTriangle(face_center, current_points[0], current_points[1], current_points[2]))
+                                    if (Mathf.ApproximatelyEquals(current_normal, face_normal) && Mathf.IsPointInTriangle(face_center, A, B, C))
                                     {
                                         // Only add an intersection if not a B face.
                                         if (!face.from_b)
-                                        {
                                             AddDistance(ref intersectionsA, ref intersectionsB, current_face.from_b, 0);
-                                        }
                                     }
-                                    else if (Mathf.RayIntersectsTriangle(face_center, face_normal, current_points[0], current_points[1], current_points[2], out intersection_point))
+                                    else if (Mathf.RayIntersectsTriangle(face_center, face_normal, A, B, C, out intersection_point))
                                     {
                                         double distance = Vector3.Distance(face_center, intersection_point);
                                         AddDistance(ref intersectionsA, ref intersectionsB, current_face.from_b, distance);
                                     }
                                 }
 
-                                if (((FaceBVH)current_facebvh).next != -1)
-                                {
-                                    current_facebvh = facebvh[((FaceBVH)current_facebvh).next];
-                                }
+                                if ((current_facebvh.Value).next != -1)
+                                    current_facebvh = facebvh[(current_facebvh.Value).next];
                                 else
-                                {
                                     current_facebvh = null;
-                                }
                             }
 
                             stack[level] = ((int)VISIT.VISIT_DONE_BIT << (int)VISIT.VISITED_BIT_SHIFT) | node;
-
                         }
                         else
                         {
-                            bool valid = ((FaceBVH)current_facebvh).aabb.IntersectsRay(face_center, face_normal);
+                            bool valid = (current_facebvh.Value).aabb.IntersectsRay(face_center, face_normal);
 
                             if (!valid)
-                            {
                                 stack[level] = ((int)VISIT.VISIT_DONE_BIT << (int)VISIT.VISITED_BIT_SHIFT) | node;
-                            }
                             else
-                            {
                                 stack[level] = ((int)VISIT.VISIT_LEFT_BIT << (int)VISIT.VISITED_BIT_SHIFT) | node;
-                            }
                         }
                         continue;
                     }
@@ -295,7 +247,7 @@ namespace Prowl.Runtime.CSG
                     case (int)VISIT.VISIT_LEFT_BIT:
                     {
                         stack[level] = ((int)VISIT.VISIT_RIGHT_BIT << (int)VISIT.VISITED_BIT_SHIFT) | node;
-                        stack[level + 1] = ((FaceBVH)current_facebvh).left | (int)VISIT.TEST_AABB_BIT;
+                        stack[level + 1] = (current_facebvh.Value).left | (int)VISIT.TEST_AABB_BIT;
                         level++;
                         continue;
                     }
@@ -303,7 +255,7 @@ namespace Prowl.Runtime.CSG
                     case (int)VISIT.VISIT_RIGHT_BIT:
                     {
                         stack[level] = ((int)VISIT.VISIT_DONE_BIT << (int)VISIT.VISITED_BIT_SHIFT) | node;
-                        stack[level + 1] = ((FaceBVH)current_facebvh).right | (int)VISIT.TEST_AABB_BIT;
+                        stack[level + 1] = (current_facebvh.Value).right | (int)VISIT.TEST_AABB_BIT;
                         level++;
                         continue;
                     }
@@ -323,24 +275,24 @@ namespace Prowl.Runtime.CSG
                     }
                 }
 
-                if (done)
-                {
-                    break;
-                }
+                if (done) break;
             }
             // Inside if face normal intersects other faces an odd number of times.
             int res = (intersectionsA.Count + intersectionsB.Count) & 1;
             return res != 0;
         }
 
-        internal void PerformOperation(OperationType operation, ref CSGBrush r_merged_brush)
+        /// <summary>
+        /// This method set up the face to kown if there are inside
+        /// </summary>
+        public void PerformOperation(CSGOperation operation, ref CSGBrush r_merged_brush)
         {
 
-            FaceBVH[] bvhvec_a = [];
+            FaceBVH[] bvhvec_a = new FaceBVH[0];
             Array.Resize(ref bvhvec_a, faces_a.Count);
             FaceBVH[] facebvh_a = bvhvec_a;
 
-            FaceBVH[] bvhvec_b = [];
+            FaceBVH[] bvhvec_b = new FaceBVH[0];
             Array.Resize(ref bvhvec_b, faces_b.Count);
             FaceBVH[] facebvh_b = bvhvec_b;
 
@@ -352,77 +304,73 @@ namespace Prowl.Runtime.CSG
 
             for (int i = 0; i < faces_a.Count; i++)
             {
-                var f = new FaceBVH();
-                f.left = -1;
-                f.right = -1;
-                f.face = i;
-                f.aabb = new AABBCSG();
-                f.aabb.SetPosition(points[faces_a[i].points[0]]);
-                f.aabb.Encapsulate(points[faces_a[i].points[1]]);
-                f.aabb.Encapsulate(points[faces_a[i].points[2]]);
-                f.center = f.aabb.GetCenter();
-                f.aabb.Grow(vertex_snap);
-                f.next = -1;
+                FaceBVH faceA = new();
+                faceA.left = -1;
+                faceA.right = -1;
+                faceA.face = i;
+                faceA.aabb = new AABBCSG();
+                faceA.aabb.SetPosition(points[faces_a[i].points[0]]);
+                faceA.aabb.Encapsulate(points[faces_a[i].points[1]]);
+                faceA.aabb.Encapsulate(points[faces_a[i].points[2]]);
+                faceA.center = faceA.aabb.GetCenter();
+                faceA.aabb.ExpandBy(vertex_snap);
+                faceA.next = -1;
                 if (first_a)
                 {
-                    aabb_a = f.aabb.Copy();
+                    aabb_a = faceA.aabb.Copy();
                     first_a = false;
                 }
                 else
                 {
-                    aabb_a.MergeWith(f.aabb);
+                    aabb_a.MergeWith(faceA.aabb);
                 }
-                facebvh_a[i] = f;
+                facebvh_a[i] = faceA;
             }
 
             for (int i = 0; i < faces_b.Count; i++)
             {
-                var f = new FaceBVH();
-                f.left = -1;
-                f.right = -1;
-                f.face = i;
-                f.aabb = new AABBCSG();
-                f.aabb.SetPosition(points[faces_b[i].points[0]]);
-                f.aabb.Encapsulate(points[faces_b[i].points[1]]);
-                f.aabb.Encapsulate(points[faces_b[i].points[2]]);
-                f.center = f.aabb.GetCenter();
-                f.aabb.Grow(vertex_snap);
-                f.next = -1;
+                FaceBVH faceB = new();
+                faceB.left = -1;
+                faceB.right = -1;
+                faceB.face = i;
+                faceB.aabb = new AABBCSG();
+                faceB.aabb.SetPosition(points[faces_b[i].points[0]]);
+                faceB.aabb.Encapsulate(points[faces_b[i].points[1]]);
+                faceB.aabb.Encapsulate(points[faces_b[i].points[2]]);
+                faceB.center = faceB.aabb.GetCenter();
+                faceB.aabb.ExpandBy(vertex_snap);
+                faceB.next = -1;
                 if (first_b)
                 {
-                    aabb_b = f.aabb.Copy();
+                    aabb_b = faceB.aabb.Copy();
                     first_b = false;
                 }
                 else
                 {
-                    aabb_b.MergeWith(f.aabb);
+                    aabb_b.MergeWith(faceB.aabb);
                 }
-                facebvh_b[i] = f;
+                facebvh_b[i] = faceB;
             }
 
-            AABBCSG intersection_aabb = aabb_a.GetIntersectionAABB(aabb_b);
+            AABBCSG intersection_aabb = aabb_a.ComputeIntersection(aabb_b);
 
             // Check if shape AABBs intersect.
-            if (operation == OperationType.Intersection && intersection_aabb.GetSize() == Vector3.zero)
+            if (operation == CSGOperation.Intersection && intersection_aabb.GetSize() == Vector3.zero)
             {
                 //return;
             }
 
-            (int, FaceBVH)[] bvhtrvec_a = new (int, FaceBVH)[0];
+            (int, FaceBVH)[] bvhtrvec_a = [];
             Array.Resize(ref bvhtrvec_a, faces_a.Count);
             (int, FaceBVH)[] bvhptr_a = bvhtrvec_a;
             for (int i = 0; i < faces_a.Count; i++)
-            {
                 bvhptr_a[i] = (i, facebvh_a[i]);
-            }
 
-            (int, FaceBVH)[] bvhtrvec_b = new (int, FaceBVH)[0];
+            (int, FaceBVH)[] bvhtrvec_b = [];
             Array.Resize(ref bvhtrvec_b, faces_b.Count);
             (int, FaceBVH)[] bvhptr_b = bvhtrvec_b;
             for (int i = 0; i < faces_b.Count; i++)
-            {
                 bvhptr_b[i] = (i, facebvh_b[i]);
-            }
 
             int max_depth_a = 0;
             CreateBVH(ref facebvh_a, ref bvhptr_a, 0, face_from_a, 1, ref max_depth_a);
@@ -434,57 +382,65 @@ namespace Prowl.Runtime.CSG
 
             switch (operation)
             {
-                case OperationType.Union:
+                case CSGOperation.Union:
                 {
                     int faces_count = 0;
                     Array.Resize(ref r_merged_brush.faces, faces_a.Count + faces_b.Count);
 
                     for (int i = 0; i < faces_a.Count; i++)
                     {
+                        var face = faces_a[i];
+
                         // Check if face AABB intersects the intersection AABB.
-                        if (!intersection_aabb.Intersects(facebvh_a[i].aabb))
+                        if (!intersection_aabb.IntersectInclusive(facebvh_a[i].aabb))
                         {
-                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_a[i].points[0]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_a[i].points[1]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_a[i].points[2]]);
-                            r_merged_brush.faces[faces_count].uvs = new Vector2[3] { faces_a[i].uvs[0], faces_a[i].uvs[1], faces_a[i].uvs[2] };
+                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3) {
+                                points[face.points[0]],
+                                points[face.points[1]],
+                                points[face.points[2]]
+                            };
+                            r_merged_brush.faces[faces_count].uvs = [face.uvs[0], face.uvs[1], face.uvs[2]];
                             faces_count++;
                             continue;
                         }
 
-                        if (!BVHInside(ref facebvh_b, max_depth_b, max_alloc_b - 1, i, true))
+                        if (!InsideBVH(ref facebvh_b, max_depth_b, max_alloc_b - 1, i, true))
                         {
-                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_a[i].points[0]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_a[i].points[1]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_a[i].points[2]]);
-                            r_merged_brush.faces[faces_count].uvs = new Vector2[3] { faces_a[i].uvs[0], faces_a[i].uvs[1], faces_a[i].uvs[2] };
+                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3) {
+                                points[face.points[0]],
+                                points[face.points[1]],
+                                points[face.points[2]]
+                            };
+                            r_merged_brush.faces[faces_count].uvs = [face.uvs[0], face.uvs[1], face.uvs[2]];
                             faces_count++;
                         }
                     }
 
                     for (int i = 0; i < faces_b.Count; i++)
                     {
+                        var face = faces_b[i];
+
                         // Check if face AABB intersects the intersection AABB.
-                        if (!intersection_aabb.Intersects(facebvh_b[i].aabb))
+                        if (!intersection_aabb.IntersectInclusive(facebvh_b[i].aabb))
                         {
-                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_b[i].points[0]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_b[i].points[1]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_b[i].points[2]]);
-                            r_merged_brush.faces[faces_count].uvs = new Vector2[3] { faces_b[i].uvs[0], faces_b[i].uvs[1], faces_b[i].uvs[2] };
+                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3) {
+                                points[face.points[0]],
+                                points[face.points[1]],
+                                points[face.points[2]]
+                            };
+                            r_merged_brush.faces[faces_count].uvs = [face.uvs[0], face.uvs[1], face.uvs[2]];
                             faces_count++;
                             continue;
                         }
 
-                        if (!BVHInside(ref facebvh_a, max_depth_a, max_alloc_a - 1, i, false))
+                        if (!InsideBVH(ref facebvh_a, max_depth_a, max_alloc_a - 1, i, false))
                         {
-                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_b[i].points[0]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_b[i].points[1]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_b[i].points[2]]);
-                            r_merged_brush.faces[faces_count].uvs = new Vector2[3] { faces_b[i].uvs[0], faces_b[i].uvs[1], faces_b[i].uvs[2] };
+                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3) {
+                                points[face.points[0]],
+                                points[face.points[1]],
+                                points[face.points[2]]
+                            };
+                            r_merged_brush.faces[faces_count].uvs = [face.uvs[0], face.uvs[1], face.uvs[2]];
                             faces_count++;
                         }
                     }
@@ -493,41 +449,47 @@ namespace Prowl.Runtime.CSG
                 }
                 break;
 
-                case OperationType.Intersection:
+                case CSGOperation.Intersection:
                 {
                     int faces_count = 0;
                     Array.Resize(ref r_merged_brush.faces, faces_a.Count + faces_b.Count);
 
                     for (int i = 0; i < faces_a.Count; i++)
                     {
+                        var face = faces_a[i];
+
                         // Check if face AABB intersects the intersection AABB.
-                        if (!intersection_aabb.Intersects(facebvh_a[i].aabb))
+                        if (!intersection_aabb.IntersectInclusive(facebvh_a[i].aabb))
                             continue;
 
-                        if (BVHInside(ref facebvh_b, max_depth_b, max_alloc_b - 1, i, true))
+                        if (InsideBVH(ref facebvh_b, max_depth_b, max_alloc_b - 1, i, true))
                         {
-                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_a[i].points[0]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_a[i].points[1]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_a[i].points[2]]);
-                            r_merged_brush.faces[faces_count].uvs = new Vector2[3] { faces_a[i].uvs[0], faces_a[i].uvs[1], faces_a[i].uvs[2] };
+                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3) {
+                                points[face.points[0]],
+                                points[face.points[1]],
+                                points[face.points[2]]
+                            };
+                            r_merged_brush.faces[faces_count].uvs = [face.uvs[0], face.uvs[1], face.uvs[2]];
                             faces_count++;
                         }
                     }
 
                     for (int i = 0; i < faces_b.Count; i++)
                     {
+                        var face = faces_b[i];
+
                         // Check if face AABB intersects the intersection AABB.
-                        if (!intersection_aabb.Intersects(facebvh_b[i].aabb))
+                        if (!intersection_aabb.IntersectInclusive(facebvh_b[i].aabb))
                             continue;
 
-                        if (BVHInside(ref facebvh_a, max_depth_a, max_alloc_a - 1, i, false))
+                        if (InsideBVH(ref facebvh_a, max_depth_a, max_alloc_a - 1, i, false))
                         {
-                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_b[i].points[0]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_b[i].points[1]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_b[i].points[2]]);
-                            r_merged_brush.faces[faces_count].uvs = new Vector2[3] { faces_b[i].uvs[0], faces_b[i].uvs[1], faces_b[i].uvs[2] };
+                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3) {
+                                points[face.points[0]],
+                                points[face.points[1]],
+                                points[face.points[2]]
+                            };
+                            r_merged_brush.faces[faces_count].uvs = [face.uvs[0], face.uvs[1], face.uvs[2]];
                             faces_count++;
                         }
                     }
@@ -535,49 +497,56 @@ namespace Prowl.Runtime.CSG
                 }
                 break;
 
-                case OperationType.Subtraction:
+                case CSGOperation.Subtraction:
                 {
                     int faces_count = 0;
                     Array.Resize(ref r_merged_brush.faces, faces_a.Count + faces_b.Count);
 
                     for (int i = 0; i < faces_a.Count; i++)
                     {
+                        var face = faces_a[i];
+
                         // Check if face AABB intersects the intersection AABB.
-                        if (!intersection_aabb.Intersects(facebvh_a[i].aabb))
+                        if (!intersection_aabb.IntersectInclusive(facebvh_a[i].aabb))
                         {
-                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_a[i].points[0]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_a[i].points[1]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_a[i].points[2]]);
-                            r_merged_brush.faces[faces_count].uvs = new Vector2[3] { faces_a[i].uvs[0], faces_a[i].uvs[1], faces_a[i].uvs[2] };
+                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3) {
+                                points[face.points[0]],
+                                points[face.points[1]],
+                                points[face.points[2]]
+                            };
+                            r_merged_brush.faces[faces_count].uvs = [face.uvs[0], face.uvs[1], face.uvs[2]];
                             faces_count++;
                             continue;
                         }
 
-                        if (!BVHInside(ref facebvh_b, max_depth_b, max_alloc_b - 1, i, true))
+                        if (!InsideBVH(ref facebvh_b, max_depth_b, max_alloc_b - 1, i, true))
                         {
-                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_a[i].points[0]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_a[i].points[1]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_a[i].points[2]]);
-                            r_merged_brush.faces[faces_count].uvs = new Vector2[3] { faces_a[i].uvs[0], faces_a[i].uvs[1], faces_a[i].uvs[2] };
+                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3) {
+                                points[face.points[0]],
+                                points[face.points[1]],
+                                points[face.points[2]]
+                            };
+                            r_merged_brush.faces[faces_count].uvs = [face.uvs[0], face.uvs[1], face.uvs[2]];
                             faces_count++;
                         }
                     }
 
                     for (int i = 0; i < faces_b.Count; i++)
                     {
+                        var face = faces_b[i];
+
                         // Check if face AABB intersects the intersection AABB.
-                        if (!intersection_aabb.Intersects(facebvh_b[i].aabb))
+                        if (!intersection_aabb.IntersectInclusive(facebvh_b[i].aabb))
                             continue;
 
-                        if (BVHInside(ref facebvh_a, max_depth_a, max_alloc_a - 1, i, false))
+                        if (InsideBVH(ref facebvh_a, max_depth_a, max_alloc_a - 1, i, false))
                         {
-                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_b[i].points[1]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_b[i].points[0]]);
-                            r_merged_brush.faces[faces_count].vertices.Add(points[faces_b[i].points[2]]);
-                            r_merged_brush.faces[faces_count].uvs = new Vector2[3] { faces_b[i].uvs[0], faces_b[i].uvs[1], faces_b[i].uvs[2] };
+                            r_merged_brush.faces[faces_count].vertices = new List<Vector3>(3) {
+                                points[face.points[1]],
+                                points[face.points[0]],
+                                points[face.points[2]]
+                            };
+                            r_merged_brush.faces[faces_count].uvs = [face.uvs[0], face.uvs[1], face.uvs[2]];
                             faces_count++;
                         }
                     }
@@ -593,14 +562,15 @@ namespace Prowl.Runtime.CSG
             int[] indices = new int[3];
             for (int i = 0; i < 3; i++)
             {
-                Vector3 vk = new Vector3();
-                vk.x = Mathf.RoundToInt(((points[i].x + vertex_snap) * 0.31234f) / vertex_snap);
-                vk.y = Mathf.RoundToInt(((points[i].y + vertex_snap) * 0.31234f) / vertex_snap);
-                vk.z = Mathf.RoundToInt(((points[i].z + vertex_snap) * 0.31234f) / vertex_snap);
+                Vector3 vk = new() {
+                    x = Mathf.RoundToInt(((points[i].x + vertex_snap) * 0.31234f) / vertex_snap),
+                    y = Mathf.RoundToInt(((points[i].y + vertex_snap) * 0.31234f) / vertex_snap),
+                    z = Mathf.RoundToInt(((points[i].z + vertex_snap) * 0.31234f) / vertex_snap)
+                };
 
-                if (snap_cache.ContainsKey(vk))
+                if (snap_cache.TryGetValue(vk, out int value))
                 {
-                    indices[i] = snap_cache[vk];
+                    indices[i] = value;
                 }
                 else
                 {
@@ -614,16 +584,18 @@ namespace Prowl.Runtime.CSG
             if (indices[0] == indices[2] || indices[0] == indices[1] || indices[1] == indices[2])
                 return;
 
-            Face face = new Face();
-            face.from_b = from_b;
-            face.points = new int[3];
-            face.uvs = new Vector2[3];
+            Face face = new() {
+                from_b = from_b,
+                points = new int[3],
+                uvs = new Vector2[3]
+            };
 
             for (int k = 0; k < 3; k++)
             {
                 face.points[k] = indices[k];
                 face.uvs[k] = uvs[k];
             }
+
             if (from_b)
             {
                 face_from_b++;

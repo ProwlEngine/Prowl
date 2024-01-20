@@ -3,12 +3,8 @@ using System.Collections.Generic;
 
 namespace Prowl.Runtime.CSG
 {
-    // Implementation based on Godot's CSG library: https://github.com/godotengine/godot/blob/master/modules/csg
+    public enum CSGOperation { Union, Intersection, Subtraction, };
 
-    /// <summary> A CSG operation Type. </summary>
-    public enum OperationType { Union, Intersection, Subtraction, };
-
-    /// <summary> Handle/Perform operations between 2 Brush. </summary>
     public static class CSGUtility
     {
         struct Build2DFaceCollection
@@ -17,29 +13,25 @@ namespace Prowl.Runtime.CSG
             public Dictionary<int, Build2DFaces> build2DFacesB;
         };
 
-        /// <summary> Merge two brushes togather into mergedBrush </summary>
-        public static void MergeBrushes(ref CSGBrush mergedBrush, OperationType operation, CSGBrush brushA, CSGBrush brushB, double tolerance = 0.00001f)
+        public static void MergeBrushes(ref CSGBrush merged_brush, CSGOperation operation, CSGBrush brush_a, CSGBrush brush_b, double tolerance = 0.00001f)
         {
             Build2DFaceCollection build2DFaceCollection;
-            build2DFaceCollection.build2DFacesA = new Dictionary<int, Build2DFaces>(brushA.faces.Length);
-            build2DFaceCollection.build2DFacesB = new Dictionary<int, Build2DFaces>(brushB.faces.Length);
-            brushA.RegenFaceAABB();
-            brushB.RegenFaceAABB();
+            build2DFaceCollection.build2DFacesA = new Dictionary<int, Build2DFaces>(brush_a.faces.Length);
+            build2DFaceCollection.build2DFacesB = new Dictionary<int, Build2DFaces>(brush_b.faces.Length);
+            brush_a.RegenerateFaceAABBs();
+            brush_b.RegenerateFaceAABBs();
 
-            // Find Intersecting faces
-            for (int i = 0; i < brushA.faces.Length; i++)
-                for (int j = 0; j < brushB.faces.Length; j++)
-                    if (brushA.faces[i].aabb.Intersects(brushB.faces[j].aabb))
-                        UpdateFace(ref brushA, i, ref brushB, j, ref build2DFaceCollection, tolerance);
+            for (int i = 0; i < brush_a.faces.Length; i++)
+                for (int j = 0; j < brush_b.faces.Length; j++)
+                    if (brush_a.faces[i].aabb.IntersectInclusive(brush_b.faces[j].aabb))
+                        UpdateFace(ref brush_a, i, ref brush_b, j, ref build2DFaceCollection, tolerance);
 
             // Add faces to MeshMerge.
-            MeshMerge mesh_merge = new MeshMerge(brushA.faces.Length + build2DFaceCollection.build2DFacesA.Count, brushB.faces.Length + build2DFaceCollection.build2DFacesB.Count);
+            MeshMerge mesh_merge = new MeshMerge(brush_a.faces.Length + build2DFaceCollection.build2DFacesA.Count, brush_b.faces.Length + build2DFaceCollection.build2DFacesB.Count);
             mesh_merge.vertex_snap = tolerance;
-            mesh_merge.scale_a = brushA.obj.transform.localScale;
+            mesh_merge.scale_a = brush_a.obj.transform.localScale;
 
-            Vector3[] points = new Vector3[3];
-            Vector2[] uvs = new Vector2[3];
-            for (int i = 0; i < brushA.faces.Length; i++)
+            for (int i = 0; i < brush_a.faces.Length; i++)
             {
                 if (build2DFaceCollection.build2DFacesA.ContainsKey(i))
                 {
@@ -47,18 +39,18 @@ namespace Prowl.Runtime.CSG
                 }
                 else
                 {
-                    var face = brushA.faces[i];
-                    points[0] = face.vertices[0];
-                    points[1] = face.vertices[1];
-                    points[2] = face.vertices[2];
-                    uvs[0] = face.uvs[0];
-                    uvs[1] = face.uvs[1];
-                    uvs[2] = face.uvs[2];
+                    Vector3[] points = new Vector3[3];
+                    Vector2[] uvs = new Vector2[3];
+                    for (int j = 0; j < 3; j++)
+                    {
+                        points[j] = brush_a.faces[i].vertices[j];
+                        uvs[j] = brush_a.faces[i].uvs[j];
+                    }
                     mesh_merge.AddFace(points, uvs, false);
                 }
             }
 
-            for (int i = 0; i < brushB.faces.Length; i++)
+            for (int i = 0; i < brush_b.faces.Length; i++)
             {
                 if (build2DFaceCollection.build2DFacesB.ContainsKey(i))
                 {
@@ -66,130 +58,130 @@ namespace Prowl.Runtime.CSG
                 }
                 else
                 {
-                    var bFace = brushB.faces[i];
-                    var transformA = brushA.obj.transform;
-                    var transformB = brushB.obj.transform;
-                    points[0] = transformA.InverseTransformPoint(transformB.TransformPoint(bFace.vertices[0]));
-                    points[1] = transformA.InverseTransformPoint(transformB.TransformPoint(bFace.vertices[1]));
-                    points[2] = transformA.InverseTransformPoint(transformB.TransformPoint(bFace.vertices[2]));
-                    uvs[0] = bFace.uvs[0];
-                    uvs[1] = bFace.uvs[1];
-                    uvs[2] = bFace.uvs[2];
+                    Vector3[] points = new Vector3[3];
+                    Vector2[] uvs = new Vector2[3];
+                    for (int j = 0; j < 3; j++)
+                    {
+                        points[j] = brush_a.obj.transform.InverseTransformPoint(brush_b.obj.transform.TransformPoint(brush_b.faces[i].vertices[j]));
+                        uvs[j] = brush_b.faces[i].uvs[j];
+                    }
                     mesh_merge.AddFace(points, uvs, true);
                 }
             }
 
-            Array.Clear(mergedBrush.faces, 0, mergedBrush.faces.Length);
-            mesh_merge.PerformOperation(operation, ref mergedBrush);
+            Array.Clear(merged_brush.faces, 0, merged_brush.faces.Length);
+            mesh_merge.PerformOperation(operation, ref merged_brush);
             mesh_merge = null;
-            GC.Collect();
+            System.GC.Collect();
         }
 
-        static void UpdateFace(ref CSGBrush brushA, int aFaceID, ref CSGBrush brushB, int bFaceID, ref Build2DFaceCollection collection, double tolerance)
+        private static void UpdateFace(ref CSGBrush brush_a, int face_idx_a, ref CSGBrush brush_b, int face_idx_b, ref Build2DFaceCollection collection, double vertex_snap)
         {
-            var aFace = brushA.faces[aFaceID];
-            Vector3[] aVerts = { aFace.vertices[0], aFace.vertices[1], aFace.vertices[2] };
+            Vector3[] vertices_a = {
+                brush_a.faces[face_idx_a].vertices[0],
+                brush_a.faces[face_idx_a].vertices[1],
+                brush_a.faces[face_idx_a].vertices[2]
+            };
 
-            var bFace = brushB.faces[bFaceID];
-            var aTransform = brushA.obj.transform;
-            var bTransform = brushB.obj.transform;
-            Vector3[] bVerts = {
-                aTransform.InverseTransformPoint(bTransform.TransformPoint(bFace.vertices[0])),
-                aTransform.InverseTransformPoint(bTransform.TransformPoint(bFace.vertices[1])),
-                aTransform.InverseTransformPoint(bTransform.TransformPoint(bFace.vertices[2]))
+            Vector3[] vertices_b = {
+                brush_a.obj.transform.InverseTransformPoint(brush_b.obj.transform.TransformPoint(brush_b.faces[face_idx_b].vertices[0])),
+                brush_a.obj.transform.InverseTransformPoint(brush_b.obj.transform.TransformPoint(brush_b.faces[face_idx_b].vertices[1])),
+                brush_a.obj.transform.InverseTransformPoint(brush_b.obj.transform.TransformPoint(brush_b.faces[face_idx_b].vertices[2]))
             };
 
             // Don't use degenerate faces.
-            bool degenerate = false;
-            if (IsDifferant(aVerts[0], aVerts[1], tolerance) ||
-                IsDifferant(aVerts[0], aVerts[2], tolerance) ||
-                IsDifferant(aVerts[1], aVerts[2], tolerance))
+            bool has_degenerate = false;
+            if (IsSame(vertices_a[0], vertices_a[1], vertex_snap) ||
+                IsSame(vertices_a[0], vertices_a[2], vertex_snap) ||
+                IsSame(vertices_a[1], vertices_a[2], vertex_snap))
             {
-                collection.build2DFacesA[aFaceID] = new Build2DFaces();
-                degenerate = true;
+                collection.build2DFacesA[face_idx_a] = new Build2DFaces();
+                has_degenerate = true;
             }
 
-            if (IsDifferant(bVerts[0], bVerts[1], tolerance) ||
-                IsDifferant(bVerts[0], bVerts[2], tolerance) ||
-                IsDifferant(bVerts[1], bVerts[2], tolerance))
+            if (IsSame(vertices_b[0], vertices_b[1], vertex_snap) ||
+                IsSame(vertices_b[0], vertices_b[2], vertex_snap) ||
+                IsSame(vertices_b[1], vertices_b[2], vertex_snap))
             {
-                collection.build2DFacesB[bFaceID] = new Build2DFaces();
-                degenerate = true;
+                collection.build2DFacesB[face_idx_b] = new Build2DFaces();
+                has_degenerate = true;
             }
 
-            if (degenerate) return;
-
-            const double distance_tolerance = 0.3f;
+            if (has_degenerate) return;
 
             // Ensure B has points either side of or in the plane of A.
-            int over = 0, under = 0;
-            Plane aPlane = new Plane(aVerts[0], aVerts[1], aVerts[2]);
+            int over_count = 0, under_count = 0;
+            Plane plane_a = new Plane(vertices_a[0], vertices_a[1], vertices_a[2]);
+            double distance_tolerance = 0.3f;
 
             for (int i = 0; i < 3; i++)
             {
-                if (aPlane.GetDistanceToPoint(bVerts[i]) >= distance_tolerance)
+                if (plane_a.GetDistanceToPoint(vertices_b[i]) >= distance_tolerance)
                 {
-                    if (Vector3.Dot(aPlane.normal, bVerts[i]) > aPlane.distance)
-                        over++;
+                    if (Vector3.Dot(plane_a.normal, vertices_b[i]) > plane_a.distance)
+                        over_count++;
                     else
-                        under++;
+                        under_count++;
                 }
-                //else In plane.
+                // else In plane.
             }
-
             // If all points under or over the plane, there is no intersection.
-            if (over == 3 || under == 3) return;
+            if (over_count == 3 || under_count == 3) return;
 
             // Ensure A has points either side of or in the plane of B.
-            over = under = 0;
-            Plane bPlane = new Plane(bVerts[0], bVerts[1], bVerts[2]);
+            over_count = 0;
+            under_count = 0;
+            Plane plane_b = new Plane(vertices_b[0], vertices_b[1], vertices_b[2]);
+
             for (int i = 0; i < 3; i++)
             {
-                if (bPlane.GetDistanceToPoint(aVerts[i]) >= distance_tolerance)
+                if (plane_b.GetDistanceToPoint(vertices_a[i]) >= distance_tolerance)
                 {
-                    if (Vector3.Dot(bPlane.normal, aVerts[i]) > bPlane.distance)
-                        over++;
+                    if (Vector3.Dot(plane_b.normal, vertices_a[i]) > plane_b.distance)
+                        over_count++;
                     else
-                        under++;
+                        under_count++;
                 }
-                //else In plane.
+                // else In plane.
             }
-
             // If all points under or over the plane, there is no intersection.
-            if (over == 3 || under == 3) return;
+            if (over_count == 3 || under_count == 3) return;
 
             // Check for intersection using the SAT theorem.
             {
                 // Edge pair cross product combinations.
                 for (int i = 0; i < 3; i++)
                 {
-                    Vector3 axis_a = Vector3.Normalize(aVerts[i] - aVerts[(i + 1) % 3]);
+                    Vector3 axis_a = (vertices_a[i] - vertices_a[(i + 1) % 3]);
+                    axis_a /= axis_a.magnitude;
+
                     for (int j = 0; j < 3; j++)
                     {
-                        Vector3 axis_b = Vector3.Normalize(bVerts[j] - bVerts[(j + 1) % 3]);
-                        Vector3 sep_axis = Vector3.Cross(axis_a, axis_b);
-                        if (sep_axis == Vector3.zero)
-                            continue; //colineal
-                        sep_axis = Vector3.Normalize(sep_axis);
+                        Vector3 axis_b = (vertices_b[j] - vertices_b[(j + 1) % 3]);
+                        axis_b /= axis_b.magnitude;
 
-                        double min_a = 1e20, max_a = -1e20;
-                        double min_b = 1e20, max_b = -1e20;
+                        Vector3 sep_axis = Vector3.Cross(axis_a, axis_b);
+                        if (sep_axis == Vector3.zero) continue; //colineal
+                        sep_axis /= sep_axis.magnitude;
+
+                        double min_a = 1e20f, max_a = -1e20f;
+                        double min_b = 1e20f, max_b = -1e20f;
 
                         for (int k = 0; k < 3; k++)
                         {
-                            double d = Vector3.Dot(sep_axis, aVerts[k]);
-                            min_a = Mathf.Min(min_a, d);
-                            max_a = Mathf.Max(max_a, d);
-                            d = Vector3.Dot(sep_axis, bVerts[k]);
-                            min_b = Mathf.Min(min_b, d);
-                            max_b = Mathf.Max(max_b, d);
+                            double d = Vector3.Dot(sep_axis, vertices_a[k]);
+                            min_a = (min_a < d) ? min_a : d;
+                            max_a = (max_a > d) ? max_a : d;
+                            d = Vector3.Dot(sep_axis, vertices_b[k]);
+                            min_b = (min_b < d) ? min_b : d;
+                            max_b = (max_b > d) ? max_b : d;
                         }
 
-                        min_b -= (max_a - min_a) * 0.5;
-                        max_b += (max_a - min_a) * 0.5;
+                        min_b -= (max_a - min_a) * 0.5f;
+                        max_b += (max_a - min_a) * 0.5f;
 
-                        double dmin = min_b - (min_a + max_a) * 0.5;
-                        double dmax = max_b - (min_a + max_a) * 0.5;
+                        double dmin = min_b - (min_a + max_a) * 0.5f;
+                        double dmax = max_b - (min_a + max_a) * 0.5f;
 
                         if (dmin > Mathf.Small || dmax < -Mathf.Small)
                             return; // Does not contain zero, so they don't overlap.
@@ -198,18 +190,17 @@ namespace Prowl.Runtime.CSG
             }
 
             // If we're still here, the faces probably intersect, so add new faces.
-            if (!collection.build2DFacesA.ContainsKey(aFaceID))
-                collection.build2DFacesA.Add(aFaceID, new Build2DFaces(brushA, aFaceID));
-            collection.build2DFacesA[aFaceID].Insert(brushB, bFaceID, brushA);
+            if (!collection.build2DFacesA.ContainsKey(face_idx_a))
+                collection.build2DFacesA.Add(face_idx_a, new Build2DFaces(brush_a, face_idx_a));
+            collection.build2DFacesA[face_idx_a].Insert(brush_b, face_idx_b, brush_a);
 
-            if (!collection.build2DFacesB.ContainsKey(bFaceID))
-                collection.build2DFacesB.Add(bFaceID, new Build2DFaces(brushB, bFaceID, brushA));
-            collection.build2DFacesB[bFaceID].Insert(brushA, aFaceID);
+            if (!collection.build2DFacesB.ContainsKey(face_idx_b))
+                collection.build2DFacesB.Add(face_idx_b, new Build2DFaces(brush_b, face_idx_b, brush_a));
+            collection.build2DFacesB[face_idx_b].Insert(brush_a, face_idx_a);
         }
 
-        private static bool IsDifferant(Vector3 point1, Vector3 point2, double distance) 
+        static bool IsSame(Vector3 point1, Vector3 point2, double distance)
             => (point1 - point2).sqrMagnitude < distance * distance;
-
 
     }
 }

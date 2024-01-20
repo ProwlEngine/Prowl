@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 
-
 namespace Prowl.Runtime.CSG
 {
     public class CSGBrush
@@ -33,20 +32,13 @@ namespace Prowl.Runtime.CSG
 
             for (int i = 0; i < faces.Length; i++)
             {
-                Face new_face = new Face();
-                new_face.vertices = new List<Vector3>(3);
-                new_face.vertices.Add(vertices[i * 3 + 2]);
-                new_face.vertices.Add(vertices[i * 3 + 1]);
-                new_face.vertices.Add(vertices[i * 3 + 0]);
-                new_face.uvs = new Vector2[3];
-                new_face.uvs[0] = ruv[i * 3 + 2];
-                new_face.uvs[1] = ruv[i * 3 + 1];
-                new_face.uvs[2] = ruv[i * 3 + 0];
-
+                Face new_face = new();
+                new_face.vertices = [ vertices[i * 3 + 2], vertices[i * 3 + 1], vertices[i * 3 + 0] ];
+                new_face.uvs = [ ruv[i * 3 + 2], ruv[i * 3 + 1], ruv[i * 3 + 0] ];
                 faces[i] = new_face;
             }
 
-            RegenFaceAABB();
+            RegenerateFaceAABBs();
         }
 
         public void BuildFromMesh(Mesh mesh)
@@ -58,7 +50,7 @@ namespace Prowl.Runtime.CSG
             for (int i = 0; i < faces.Length; i++)
             {
                 Face new_face = new Face();
-                new_face.vertices = new List<Vector3>(3);
+                new_face.vertices = new(3);
                 new_face.vertices.Add(mesh.vertices[mesh.triangles[i * 3 + 2]].Position);
                 new_face.vertices.Add(mesh.vertices[mesh.triangles[i * 3 + 1]].Position);
                 new_face.vertices.Add(mesh.vertices[mesh.triangles[i * 3 + 0]].Position);
@@ -69,7 +61,7 @@ namespace Prowl.Runtime.CSG
             }
         }
 
-        public void RegenFaceAABB()
+        public void RegenerateFaceAABBs()
         {
             for (int i = 0; i < faces.Length; i++)
             {
@@ -83,7 +75,9 @@ namespace Prowl.Runtime.CSG
         public Mesh GetMesh(Mesh m = null)
         {
             if (m == null)
+            {
                 m = new Mesh();
+            }
 
             Mesh.Vertex[] vert = new Mesh.Vertex[faces.Length * 3];
             ushort[] triangles = new ushort[faces.Length * 3];
@@ -94,22 +88,26 @@ namespace Prowl.Runtime.CSG
                 var c = new Mesh.Vertex();
                 a.Position = faces[i].vertices[0];
                 a.TexCoord = faces[i].uvs[0];
+                a.Color = System.Numerics.Vector3.One;
                 b.Position = faces[i].vertices[1];
                 b.TexCoord = faces[i].uvs[1];
+                b.Color = System.Numerics.Vector3.One;
                 c.Position = faces[i].vertices[2];
                 c.TexCoord = faces[i].uvs[2];
+                c.Color = System.Numerics.Vector3.One;
 
 
                 vert[3 * i + 2] = a;
                 vert[3 * i + 1] = b;
-                vert[3 * i] = c;
-                triangles[3 * i] = (ushort)(3 * i);
+                vert[3 * i + 0] = c;
+                triangles[3 * i + 0] = (ushort)(3 * i);
                 triangles[3 * i + 1] = (ushort)(3 * i + 1);
                 triangles[3 * i + 2] = (ushort)(3 * i + 2);
             }
             m.vertices = vert;
             m.triangles = triangles;
-            //m.RecalculateNormals();
+            m.RecalculateNormals();
+            m.RecalculateTangents();
             return m;
         }
 
