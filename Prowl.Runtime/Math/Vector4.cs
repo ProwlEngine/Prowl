@@ -55,6 +55,8 @@ namespace Prowl.Runtime
 
         public double sqrMagnitude { get { return x * x + y * y + z * z + w * w; } }
 
+        public Vector3 xyz => new Vector3(x, y, z);
+
         public double this[int index] {
             get {
                 switch (index) {

@@ -1,9 +1,8 @@
 using System.Collections;
-using System.Collections.Generic;
 
 namespace Prowl.Runtime.CSG
 {
-	internal class SortArray
+    internal class SortArray
 	{
 		private IComparer compare;
 		public SortArray(IComparer comp)
@@ -11,7 +10,7 @@ namespace Prowl.Runtime.CSG
 			this.compare = comp;
 		}
 
-		private int bitlog(int n)
+		private int BitLog(int n)
 		{
 			int k;
 			for (k = 0; n != 1; n >>= 1)
@@ -27,16 +26,16 @@ namespace Prowl.Runtime.CSG
 			{
 				return;
 			}
-			introselect(first, nth, last, ref array, bitlog(last - first) * 2);
+			IntroSelect(first, nth, last, ref array, BitLog(last - first) * 2);
 		}
 
-		private void introselect(int first, int nth, int last, ref (int i, MeshMerge.FaceBVH f)[] array, int max_depth)
+		private void IntroSelect(int first, int nth, int last, ref (int i, MeshMerge.FaceBVH f)[] array, int max_depth)
 		{
 			while (last - first > 3)
 			{
 				if (max_depth == 0)
 				{
-					partial_select(first, nth + 1, last, ref array);
+					PartialSelect(first, nth + 1, last, ref array);
 					(int i, MeshMerge.FaceBVH f) temps = array[first];
 					array[first] = array[nth];
 					array[nth] = temps;
@@ -45,10 +44,10 @@ namespace Prowl.Runtime.CSG
 
 				max_depth--;
 
-				int cut = partitioner(
+				int cut = Partitioner(
 						first,
 						last,
-						median_of_3(
+						MedianOfThree(
 								array[first],
 								array[first + (last - first) / 2],
 								array[last - 1]),
@@ -63,10 +62,10 @@ namespace Prowl.Runtime.CSG
 					last = cut;
 				}
 			}
-			insertion_sort(first, last, ref array);
+			InsertionSort(first, last, ref array);
 		}
 
-		private void insertion_sort(int first, int last, ref (int i, MeshMerge.FaceBVH f)[] array)
+		private void InsertionSort(int first, int last, ref (int i, MeshMerge.FaceBVH f)[] array)
 		{
 			if (first == last)
 			{
@@ -74,11 +73,11 @@ namespace Prowl.Runtime.CSG
 			}
 			for (int i = first + 1; i != last; i++)
 			{
-				linear_insert(first, i, ref array);
+				LinearInsert(first, i, ref array);
 			}
 		}
 
-		private void linear_insert(int first, int last, ref (int i, MeshMerge.FaceBVH f)[] array)
+		private void LinearInsert(int first, int last, ref (int i, MeshMerge.FaceBVH f)[] array)
 		{
 			(int i, MeshMerge.FaceBVH f) val = array[last];
 			if (compare.Compare(val, array[first]) == 1)
@@ -91,11 +90,11 @@ namespace Prowl.Runtime.CSG
 			}
 			else
 			{
-				unguarded_linear_insert(last, val, ref array);
+				UnguardedLinearInsert(last, val, ref array);
 			}
 		}
 
-		private void unguarded_linear_insert(int last, (int i, MeshMerge.FaceBVH f) value, ref (int i, MeshMerge.FaceBVH f)[] array)
+		private void UnguardedLinearInsert(int last, (int i, MeshMerge.FaceBVH f) value, ref (int i, MeshMerge.FaceBVH f)[] array)
 		{
 			int next = last - 1;
 			while (compare.Compare(value, array[next]) == 1)
@@ -107,7 +106,7 @@ namespace Prowl.Runtime.CSG
 			array[last] = value;
 		}
 
-		private (int i, MeshMerge.FaceBVH f) median_of_3((int i, MeshMerge.FaceBVH f) a, (int i, MeshMerge.FaceBVH f) b, (int i, MeshMerge.FaceBVH f) c)
+		private (int i, MeshMerge.FaceBVH f) MedianOfThree((int i, MeshMerge.FaceBVH f) a, (int i, MeshMerge.FaceBVH f) b, (int i, MeshMerge.FaceBVH f) c)
 		{
 			if (compare.Compare(a, b) == 1)
 			{
@@ -138,30 +137,30 @@ namespace Prowl.Runtime.CSG
 			}
 		}
 
-		private void partial_select(int first, int last, int middle, ref (int i, MeshMerge.FaceBVH f)[] array)
+		private void PartialSelect(int first, int last, int middle, ref (int i, MeshMerge.FaceBVH f)[] array)
 		{
-			make_heap(first, middle, ref array);
+			MakeHeap(first, middle, ref array);
 			for (int i = middle; i < last; i++)
 			{
 				if (compare.Compare(array[i], array[first]) == 1)
 				{
-					pop_heap(first, middle, i, array[i], ref array);
+					PopHeap(first, middle, i, array[i], ref array);
 				}
 			}
 		}
 
-		private void pop_heap(int first, int last, int result, (int i, MeshMerge.FaceBVH f) value, ref (int i, MeshMerge.FaceBVH f)[] array)
+		private void PopHeap(int first, int last, int result, (int i, MeshMerge.FaceBVH f) value, ref (int i, MeshMerge.FaceBVH f)[] array)
 		{
 			array[result] = array[first];
-			adjust_heap(first, 0, last - first, value, ref array);
+			AdustHeap(first, 0, last - first, value, ref array);
 		}
 
-		private void pop_heap(int first, int last, ref (int i, MeshMerge.FaceBVH f)[] array)
+		private void PopHeap(int first, int last, ref (int i, MeshMerge.FaceBVH f)[] array)
 		{
-			pop_heap(first, last - 1, last - 1, array[last - 1], ref array);
+			PopHeap(first, last - 1, last - 1, array[last - 1], ref array);
 		}
 
-		private void make_heap(int first, int last, ref (int i, MeshMerge.FaceBVH f)[] array)
+		private void MakeHeap(int first, int last, ref (int i, MeshMerge.FaceBVH f)[] array)
 		{
 			if (last - first < 2)
 			{
@@ -171,7 +170,7 @@ namespace Prowl.Runtime.CSG
 			int parent = (len - 2) / 2;
 			while (true)
 			{
-				adjust_heap(first, parent, len, array[first + parent], ref array);
+				AdustHeap(first, parent, len, array[first + parent], ref array);
 				if (parent == 0)
 				{
 					return;
@@ -180,7 +179,7 @@ namespace Prowl.Runtime.CSG
 			}
 		}
 
-		private void adjust_heap(int first, int hole_idx, int len, (int i, MeshMerge.FaceBVH f) value, ref (int i, MeshMerge.FaceBVH f)[] array)
+		private void AdustHeap(int first, int hole_idx, int len, (int i, MeshMerge.FaceBVH f) value, ref (int i, MeshMerge.FaceBVH f)[] array)
 		{
 			int top_index = hole_idx;
 			int second_child = 2 * hole_idx + 2;
@@ -201,10 +200,10 @@ namespace Prowl.Runtime.CSG
 				array[first + hole_idx] = array[first + (second_child - 1)];
 				hole_idx = second_child - 1;
 			}
-			push_heap(first, hole_idx, top_index, value, ref array);
+			PushHeap(first, hole_idx, top_index, value, ref array);
 		}
 
-		private void push_heap(int first, int hole_idx, int top_index, (int i, MeshMerge.FaceBVH f) value, ref (int i, MeshMerge.FaceBVH f)[] array)
+		private void PushHeap(int first, int hole_idx, int top_index, (int i, MeshMerge.FaceBVH f) value, ref (int i, MeshMerge.FaceBVH f)[] array)
 		{
 			int parent = (hole_idx - 1) / 2;
 			while (hole_idx > top_index && compare.Compare(array[first + parent], value) == 1)
@@ -216,7 +215,7 @@ namespace Prowl.Runtime.CSG
 			array[first + hole_idx] = value;
 		}
 
-		private int partitioner(int first, int last, (int i, MeshMerge.FaceBVH f) pivot, ref (int i, MeshMerge.FaceBVH f)[] array)
+		private int Partitioner(int first, int last, (int i, MeshMerge.FaceBVH f) pivot, ref (int i, MeshMerge.FaceBVH f)[] array)
 		{
 			while (true)
 			{
