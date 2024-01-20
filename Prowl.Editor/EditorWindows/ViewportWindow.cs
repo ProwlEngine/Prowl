@@ -142,8 +142,25 @@ public class ViewportWindow : EditorWindow
 #warning TODO: Camera rendering clears Gizmos untill the rendering overhaul, so gizmos will Flicker here
         Camera.Current = Cam;
         foreach (var activeGO in SceneManager.AllGameObjects)
-            if (activeGO.enabledInHierarchy)
-                DrawGizmos(activeGO, view, projection, HierarchyWindow.SelectHandler.IsSelected(new WeakReference(activeGO)));
+            if (activeGO.enabledInHierarchy) {
+                if (activeGO.hideFlags.HasFlag(HideFlags.NoGizmos)) continue;
+
+                foreach (var component in activeGO.GetComponents())
+                {
+                    component.CallDrawGizmos();
+                    if (HierarchyWindow.SelectHandler.IsSelected(new WeakReference(activeGO))) 
+                        component.CallDrawGizmosSelected();
+                }
+            }
+
+        var selectedWeaks = HierarchyWindow.SelectHandler.Selected;
+        var selectedGOs = new List<GameObject>();
+        foreach (var weak in selectedWeaks)
+            if (weak.Target is GameObject go)
+                selectedGOs.Add(go);
+
+        DrawGizmos(selectedGOs, view, projection);
+
         Camera.Current = null;
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 5));
@@ -187,46 +204,90 @@ public class ViewportWindow : EditorWindow
         //Cam.GameObject.transform.localScale = scale;
     }
 
-    private void DrawGizmos(GameObject go, System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection, bool isSelected)
+    private void DrawGizmos(IEnumerable<GameObject> selectedGOs, System.Numerics.Matrix4x4 view, System.Numerics.Matrix4x4 projection)
     {
-        if (go.hideFlags.HasFlag(HideFlags.NoGizmos)) return;
+        Vector3 center = Vector3.zero;
+        int count = 0;
+        Dictionary<GameObject, (Vector3 Position, Vector3 Scale)> originalTransforms = new Dictionary<GameObject, (Vector3 Position, Vector3 Scale)>();
+        List<GameObject> gameObjects = new List<GameObject>(selectedGOs);
 
-        if (isSelected)
+        // Calculate the center point and store original positions
+        foreach (var go in selectedGOs)
         {
-            //var goMatrix = go.Global;
-            var goMatrix = Matrix4x4.CreateScale(go.transform.localScale) * Matrix4x4.CreateFromQuaternion(go.transform.rotation) * Matrix4x4.CreateTranslation(go.transform.position);
+            if (go.hideFlags.HasFlag(HideFlags.NoGizmos)) continue;
 
-            unsafe
+            center += go.transform.position;
+            originalTransforms[go] = (go.transform.position, go.transform.localScale);
+            count++;
+        }
+
+        // Remove any gameobjects who's parents are also selected
+        foreach (var go in selectedGOs)
+        {
+            if (go.hideFlags.HasFlag(HideFlags.NoGizmos)) continue;
+
+            if (selectedGOs.Any(x => go.IsChildOf(x)))
             {
-                float* snap = null;
-                float* localBound = null;
-                //float[] localBounds = { -0.5f, -0.5f, -0.5f, 0.5f, 0.5f, 0.5f };
-                //localBound = (float*)Unsafe.AsPointer(ref localBounds[0]);
-                if (ImGui.GetIO().KeyCtrl)
-                {
-                    float[] snaps = { 1, 1, 1 };
-                    snap = (float*)Unsafe.AsPointer(ref snaps[0]);
-                }
-
-                // Perform ImGuizmo manipulation
-                var fmat = goMatrix.ToFloat();
-                if (ImGuizmo.Manipulate(ref view, ref projection, GizmosOperation, GizmosSpace, ref fmat, null, snap, localBound, snap))
-                {
-                    goMatrix = fmat.ToDouble();
-                    // decompose
-                    Matrix4x4.Decompose(goMatrix, out var scale, out var rot, out var pos);
-                    go.transform.position = pos;
-                    go.transform.rotation = rot;
-                    go.transform.localScale = scale;
-
-                    //go.Global = goMatrix;
-                }
+                gameObjects.Remove(go);
+                originalTransforms.Remove(go);
+                count--;
             }
         }
 
-        foreach (var component in go.GetComponents()) {
-            component.CallDrawGizmos();
-            if (isSelected) component.CallDrawGizmosSelected();
+        if (count == 0) return;
+        center /= count;
+
+        var centerMatrix = Matrix4x4.CreateTranslation(center);
+        if(count == 1)
+        {
+            // Only 1 thing use its full transform
+            var go = gameObjects.First();
+            centerMatrix = Matrix4x4.CreateScale(go.transform.localScale) * Matrix4x4.CreateFromQuaternion(go.transform.rotation) * Matrix4x4.CreateTranslation(go.transform.position);
+        }
+
+        unsafe
+        {
+            float* snap = null;
+            float* localBound = null;
+            if (ImGui.GetIO().KeyCtrl)
+            {
+                float[] snaps = { 1, 1, 1 };
+                snap = (float*)Unsafe.AsPointer(ref snaps[0]);
+            }
+
+            var fmat = centerMatrix.ToFloat();
+            if (ImGuizmo.Manipulate(ref view, ref projection, GizmosOperation, GizmosSpace, ref fmat, null, snap, localBound, snap))
+            {
+                centerMatrix = fmat.ToDouble();
+                Matrix4x4.Decompose(centerMatrix, out var scale, out var rot, out var pos);
+
+                if (count == 1)
+                {
+                    // Only 1 thing use its full transform
+                    var go = gameObjects.First();
+                    go.transform.position = pos;
+                    go.transform.rotation = rot;
+                    go.transform.localScale = scale;
+                }
+                else
+                {
+                    // Apply transformations to all GameObjects
+                    foreach (var go in gameObjects)
+                    {
+                        if (go.hideFlags.HasFlag(HideFlags.NoGizmos)) continue;
+
+                        var original = originalTransforms[go];
+
+                        // Calculate new position considering the offset and the transformation
+                        Vector3 offset = original.Position - center;
+                        offset = Vector3.Transform(offset, rot); // Apply rotation to the offset
+                        go.transform.position = pos + offset * scale; // New position based on central transformation and scaled offset
+
+                        go.transform.rotation *= rot; // Additive rotation
+                        go.transform.localScale = original.Scale * scale; // Apply scale relative to original scale
+                    }
+                }
+            }
         }
     }
 
