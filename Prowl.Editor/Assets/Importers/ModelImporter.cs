@@ -67,9 +67,15 @@ namespace Prowl.Editor.Assets
 
                 if (!scene.HasMeshes) Failed("Model has no Meshes.");
 
+                double scale = UnitScale;
+
+                // FBX's are usually in cm, so scale them to meters
+                if (assetPath.Extension.Equals(".fbx", StringComparison.OrdinalIgnoreCase))
+                    scale *= 0.01;
+
                 // Create the object tree, We need to do this first so we can get the bone names
                 List<(GameObject, Node)> GOs = [];
-                GetNodes(scene.RootNode, ref GOs);
+                GetNodes(Path.GetFileNameWithoutExtension(assetPath.Name), scene.RootNode, ref GOs, scale);
 
                 //if (scene.HasTextures) {
                 //    // Embedded textures, Extract them first
@@ -232,7 +238,7 @@ namespace Prowl.Editor.Assets
                         for (var i = 0; i < vertices.Length; i++) {
                             Vertex vert = new Vertex();
                             var v = verts[i]; var n = norms[i]; var t = tangs[i]; var tc = texs[i];
-                            vert.Position = new Vector3(v.X, v.Y, v.Z);
+                            vert.Position = new Vector3(v.X, v.Y, v.Z) * scale;
                             vert.TexCoord = new Vector2(tc.X, tc.Y);
                             vert.Normal = new Vector3(n.X, n.Y, n.Z);
                             if (m.HasVertexColors(0)) {
@@ -335,6 +341,7 @@ namespace Prowl.Editor.Assets
                 GameObject rootNode = GOs[0].Item1;
                 if(UnitScale != 1f)
                     rootNode.transform.localScale = Vector3.one * UnitScale;
+
                 ctx.SetMainObject(rootNode);
 
                 ImGuiNotify.InsertNotification("Model Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), AssetDatabase.FileToRelative(assetPath));
@@ -399,16 +406,16 @@ namespace Prowl.Editor.Assets
             }
         }
 
-        GameObject GetNodes(Node node, ref List<(GameObject, Node)> GOs)
+        GameObject GetNodes(string? name, Node node, ref List<(GameObject, Node)> GOs, double scale)
         {
             GameObject uOb = GameObject.CreateSilently();
             GOs.Add((uOb, node));
-            uOb.Name = node.Name;
+            uOb.Name = name ?? node.Name;
 
             if (node.HasChildren) 
                 foreach (var cn in node.Children)
                 {
-                    var go = GetNodes(cn, ref GOs);
+                    var go = GetNodes(null, cn, ref GOs, scale);
                     go.SetParent(uOb, false);
                 }
 
@@ -416,7 +423,7 @@ namespace Prowl.Editor.Assets
             var t = node.Transform;
             t.Decompose(out var aSca, out var aRot, out var aPos);
 
-            uOb.transform.localPosition = new Vector3(aPos.X, aPos.Y, aPos.Z);
+            uOb.transform.localPosition = new Vector3(aPos.X, aPos.Y, aPos.Z) * scale;
             uOb.transform.localRotation = new Runtime.Quaternion(aRot.X, aRot.Y, aRot.Z, aRot.W);
             uOb.transform.localScale = new Vector3(aSca.X, aSca.Y, aSca.Z);
 
