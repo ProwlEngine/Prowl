@@ -26,7 +26,9 @@ namespace Prowl.Runtime
         internal void Update(double delta)
         {
             timer += delta;
-            while (timer >= Time.fixedDeltaTime) {
+            int count = 0;
+            while (timer >= Time.fixedDeltaTime && count < 10) {
+                count++;
                 world.Step((float)Time.fixedDeltaTime);
                 SceneManager.PhysicsUpdate();
                 timer -= Time.fixedDeltaTime;
