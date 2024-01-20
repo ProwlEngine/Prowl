@@ -99,13 +99,26 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
-
     public bool IsChildOrSameTransform(GameObject transform, GameObject inParent)
     {
         GameObject child = transform;
         while (child != null)
         {
             if (child == inParent)
+                return true;
+            child = child._parent;
+        }
+        return false;
+    }
+
+    public bool IsChildOf(GameObject parent)
+    {
+        if (this.InstanceID == parent.InstanceID) return false; // Not a child their the same object
+
+        GameObject child = this;
+        while (child != null)
+        {
+            if (child == parent)
                 return true;
             child = child._parent;
         }
