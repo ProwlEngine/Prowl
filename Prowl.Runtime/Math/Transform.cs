@@ -201,8 +201,8 @@ namespace Prowl.Runtime
 
         #region Transform 
 
-        public Vector3 TransformPoint(Vector3 inPoint) => Vector3.Transform(inPoint, localToWorldMatrix);
-        public Vector3 InverseTransformPoint(Vector3 inPosition) => Vector3.Transform(inPosition, worldToLocalMatrix);
+        public Vector3 TransformPoint(Vector3 inPosition) => Vector4.Transform(new Vector4(inPosition, 1.0), localToWorldMatrix).xyz;
+        public Vector3 InverseTransformPoint(Vector3 inPosition) => Vector4.Transform(new Vector4(inPosition, 1.0), worldToLocalMatrix).xyz;
 
         public Vector3 TransformDirection(Vector3 inDirection) => rotation * inDirection;
         public Vector3 InverseTransformDirection(Vector3 inDirection) => Quaternion.Inverse(rotation) *  inDirection;
