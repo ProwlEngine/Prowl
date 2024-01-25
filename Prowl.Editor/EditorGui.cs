@@ -1,4 +1,4 @@
-using HexaEngine.ImGuiNET;
+using Hexa.NET.ImGui;
 using Prowl.Editor.EditorWindows;
 using Prowl.Runtime;
 using System.Reflection;

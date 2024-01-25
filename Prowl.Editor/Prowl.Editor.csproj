@@ -147,10 +147,10 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="HexaEngine.ImGui" Version="2.0.17" />
-      <PackageReference Include="HexaEngine.ImGuizmo" Version="2.0.17" />
-      <PackageReference Include="HexaEngine.ImNodes" Version="2.0.17" />
-      <PackageReference Include="HexaEngine.ImPlot" Version="2.0.17" />
+      <PackageReference Include="Hexa.NET.ImGui" Version="1.0.1" />
+      <PackageReference Include="Hexa.NET.ImGuizmo" Version="1.0.1" />
+      <PackageReference Include="Hexa.NET.ImNodes" Version="1.0.1" />
+      <PackageReference Include="Hexa.NET.ImPlot" Version="1.0.1" />
       <PackageReference Include="AssimpNet" Version="5.0.0-beta1" />
     </ItemGroup>
 

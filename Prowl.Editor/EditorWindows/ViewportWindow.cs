@@ -1,5 +1,5 @@
-using HexaEngine.ImGuiNET;
-using HexaEngine.ImGuizmoNET;
+using Hexa.NET.ImGui;
+using Hexa.NET.ImGuizmo;
 using Jitter2.LinearMath;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
@@ -354,7 +354,7 @@ public class ViewportWindow : EditorWindow
             rot.y += mouseDelta.X * (Time.deltaTimeF * 5f * Settings.LookSensitivity);
             rot.x += mouseDelta.Y * (Time.deltaTimeF * 5f * Settings.LookSensitivity);
             Cam.GameObject.transform.eulerAngles = rot;
-             
+
             Input.MousePosition = WindowCenter.ToFloat().ToGeneric();
         } else {
             moveSpeed = 1;

@@ -1,4 +1,4 @@
-﻿using HexaEngine.ImGuiNET;
+﻿using Hexa.NET.ImGui;
 using System.Numerics;
 
 // Ported to c#: https://github.com/Limeoats/L2DFileDialog - Apache-2.0 license
@@ -74,7 +74,7 @@ namespace Prowl.Editor
         private static void Sort(ImFileDialogInfo dialogInfo, bool forceSort = false)
         {
             //var directories = dialogInfo.currentDirectories;
-            //var files = dialogInfo.currentFiles;            
+            //var files = dialogInfo.currentFiles;
             bool sort = false;
 
             if (fileNameSortOrderCopy != fileNameSortOrder)

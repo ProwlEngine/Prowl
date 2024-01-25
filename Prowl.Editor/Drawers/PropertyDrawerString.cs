@@ -1,4 +1,4 @@
-using HexaEngine.ImGuiNET;
+using Hexa.NET.ImGui;
 
 namespace Prowl.Editor.PropertyDrawers;
 

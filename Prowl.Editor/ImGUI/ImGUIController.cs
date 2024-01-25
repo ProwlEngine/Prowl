@@ -1,7 +1,7 @@
-﻿using HexaEngine.ImGuiNET;
-using HexaEngine.ImGuizmoNET;
-using HexaEngine.ImNodesNET;
-using HexaEngine.ImPlotNET;
+﻿using Hexa.NET.ImGui;
+using Hexa.NET.ImGuizmo;
+using Hexa.NET.ImNodes;
+using Hexa.NET.ImPlot;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Silk.NET.Input;
@@ -55,7 +55,7 @@ namespace Prowl.Editor.ImGUI
         {
             Init(gl, view, input);
 
-            var io = ImGui.GetIO(); 
+            var io = ImGui.GetIO();
 
             using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Prowl.Editor.EmbeddedResources.font.ttf")) {
                 string tempFilePath = Path.Combine(Path.GetTempPath(), "font.ttf");
