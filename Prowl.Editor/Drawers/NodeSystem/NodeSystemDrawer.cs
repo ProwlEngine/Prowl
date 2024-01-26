@@ -1,5 +1,5 @@
-﻿using HexaEngine.ImGuiNET;
-using HexaEngine.ImNodesNET;
+﻿using Hexa.NET.ImGui;
+using Hexa.NET.ImNodes;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
 using Prowl.Runtime.NodeSystem;

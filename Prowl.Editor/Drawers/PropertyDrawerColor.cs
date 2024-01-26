@@ -1,5 +1,5 @@
 using Prowl.Runtime;
-using HexaEngine.ImGuiNET;
+using Hexa.NET.ImGui;
 using System.Threading.Channels;
 
 namespace Prowl.Editor.PropertyDrawers;
