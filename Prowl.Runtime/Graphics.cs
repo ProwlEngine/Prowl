@@ -68,10 +68,13 @@ namespace Prowl.Runtime
             unsafe
             {
                 if (OperatingSystem.IsWindows())
+                {
                     GL.DebugMessageCallback(DebugCallback, null);
+                    GL.Enable(EnableCap.DebugOutput);
+                    GL.Enable(EnableCap.DebugOutputSynchronous);
+
+                }
             }
-            GL.Enable(EnableCap.DebugOutput);
-            GL.Enable(EnableCap.DebugOutputSynchronous);
 
             // Smooth lines
             GL.Enable(EnableCap.LineSmooth);
