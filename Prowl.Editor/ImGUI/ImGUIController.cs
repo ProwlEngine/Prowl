@@ -74,7 +74,6 @@ namespace Prowl.Editor.ImGUI
             io.BackendFlags |= ImGuiBackendFlags.RendererHasVtxOffset;
 
             CreateDeviceResources();
-            SetKeyMappings();
 
             SetPerFrameImGuiData(1f / 60f);
 
@@ -231,12 +230,11 @@ namespace Prowl.Editor.ImGUI
             io.DeltaTime = deltaSeconds; // DeltaTime is in seconds.
         }
 
-        private static Key[] keyEnumArr = (Key[])Enum.GetValues(typeof(Key));
         private void UpdateImGuiInput()
         {
             var io = ImGui.GetIO();
 
-            var keyboardState = _input.Keyboards[0];
+            var keyState = _input.Keyboards[0];
 
             io.MouseDown[0] = _input.Mice[0].IsButtonPressed(MouseButton.Left);
             io.MouseDown[1] = _input.Mice[0].IsButtonPressed(MouseButton.Right);
@@ -248,52 +246,39 @@ namespace Prowl.Editor.ImGUI
             io.MouseWheel = wheel.Y;
             io.MouseWheelH = wheel.X;
 
-            foreach (var key in keyEnumArr) {
-                if (key == Key.Unknown) {
-                    continue;
-                }
-                io.KeysDown[(int)key] = keyboardState.IsKeyPressed(key);
-            }
+            void KeyE(ImGuiKey imguiKey, Key silkKey) => io.AddKeyEvent(imguiKey, keyState.IsKeyPressed(silkKey));
 
-            foreach (var c in _pressedChars) {
+            KeyE(ImGuiKey.Tab, Key.Tab);
+            KeyE(ImGuiKey.LeftArrow, Key.Left);
+            KeyE(ImGuiKey.RightArrow, Key.Right);
+            KeyE(ImGuiKey.UpArrow, Key.Up);
+            KeyE(ImGuiKey.DownArrow, Key.Down);
+            KeyE(ImGuiKey.PageUp, Key.PageUp);
+            KeyE(ImGuiKey.PageDown, Key.PageDown);
+            KeyE(ImGuiKey.Home, Key.Home);
+            KeyE(ImGuiKey.End, Key.End);
+            KeyE(ImGuiKey.Delete, Key.Delete);
+            KeyE(ImGuiKey.Backspace, Key.Backspace);
+            KeyE(ImGuiKey.Enter, Key.Enter);
+            KeyE(ImGuiKey.Escape, Key.Escape);
+            KeyE(ImGuiKey.A, Key.A); KeyE(ImGuiKey.B, Key.B); KeyE(ImGuiKey.C, Key.C);
+            KeyE(ImGuiKey.D, Key.D); KeyE(ImGuiKey.E, Key.E); KeyE(ImGuiKey.F, Key.F);
+            KeyE(ImGuiKey.G, Key.G); KeyE(ImGuiKey.H, Key.H); KeyE(ImGuiKey.I, Key.I);
+            KeyE(ImGuiKey.J, Key.J); KeyE(ImGuiKey.K, Key.K); KeyE(ImGuiKey.L, Key.L);
+            KeyE(ImGuiKey.M, Key.M); KeyE(ImGuiKey.N, Key.N); KeyE(ImGuiKey.O, Key.O);
+            KeyE(ImGuiKey.P, Key.P); KeyE(ImGuiKey.Q, Key.Q); KeyE(ImGuiKey.R, Key.R);
+            KeyE(ImGuiKey.S, Key.S); KeyE(ImGuiKey.T, Key.T); KeyE(ImGuiKey.U, Key.U);
+            KeyE(ImGuiKey.V, Key.V); KeyE(ImGuiKey.W, Key.W); KeyE(ImGuiKey.X, Key.X);
+            KeyE(ImGuiKey.Y, Key.Y); KeyE(ImGuiKey.Z, Key.Z);
+
+            foreach (var c in _pressedChars)
                 io.AddInputCharacter(c);
-            }
-
             _pressedChars.Clear();
 
-            io.KeyCtrl = keyboardState.IsKeyPressed(Key.ControlLeft) || keyboardState.IsKeyPressed(Key.ControlRight);
-            io.KeyAlt = keyboardState.IsKeyPressed(Key.AltLeft) || keyboardState.IsKeyPressed(Key.AltRight);
-            io.KeyShift = keyboardState.IsKeyPressed(Key.ShiftLeft) || keyboardState.IsKeyPressed(Key.ShiftRight);
-            io.KeySuper = keyboardState.IsKeyPressed(Key.SuperLeft) || keyboardState.IsKeyPressed(Key.SuperRight);
-        }
-
-        internal void PressChar(char keyChar)
-        {
-            _pressedChars.Add(keyChar);
-        }
-
-        private static void SetKeyMappings()
-        {
-            var io = ImGui.GetIO();
-            io.KeyMap[(int)ImGuiKey.Tab] = (int)Key.Tab;
-            io.KeyMap[(int)ImGuiKey.LeftArrow] = (int)Key.Left;
-            io.KeyMap[(int)ImGuiKey.RightArrow] = (int)Key.Right;
-            io.KeyMap[(int)ImGuiKey.UpArrow] = (int)Key.Up;
-            io.KeyMap[(int)ImGuiKey.DownArrow] = (int)Key.Down;
-            io.KeyMap[(int)ImGuiKey.PageUp] = (int)Key.PageUp;
-            io.KeyMap[(int)ImGuiKey.PageDown] = (int)Key.PageDown;
-            io.KeyMap[(int)ImGuiKey.Home] = (int)Key.Home;
-            io.KeyMap[(int)ImGuiKey.End] = (int)Key.End;
-            io.KeyMap[(int)ImGuiKey.Delete] = (int)Key.Delete;
-            io.KeyMap[(int)ImGuiKey.Backspace] = (int)Key.Backspace;
-            io.KeyMap[(int)ImGuiKey.Enter] = (int)Key.Enter;
-            io.KeyMap[(int)ImGuiKey.Escape] = (int)Key.Escape;
-            io.KeyMap[(int)ImGuiKey.A] = (int)Key.A;
-            io.KeyMap[(int)ImGuiKey.C] = (int)Key.C;
-            io.KeyMap[(int)ImGuiKey.V] = (int)Key.V;
-            io.KeyMap[(int)ImGuiKey.X] = (int)Key.X;
-            io.KeyMap[(int)ImGuiKey.Y] = (int)Key.Y;
-            io.KeyMap[(int)ImGuiKey.Z] = (int)Key.Z;
+            io.KeyCtrl = keyState.IsKeyPressed(Key.ControlLeft) || keyState.IsKeyPressed(Key.ControlRight);
+            io.KeyAlt = keyState.IsKeyPressed(Key.AltLeft) || keyState.IsKeyPressed(Key.AltRight);
+            io.KeyShift = keyState.IsKeyPressed(Key.ShiftLeft) || keyState.IsKeyPressed(Key.ShiftRight);
+            io.KeySuper = keyState.IsKeyPressed(Key.SuperLeft) || keyState.IsKeyPressed(Key.SuperRight);
         }
 
         private unsafe void SetupRenderState(ImDrawDataPtr drawDataPtr, int framebufferWidth, int framebufferHeight)
