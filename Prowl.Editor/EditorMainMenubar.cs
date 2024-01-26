@@ -1,13 +1,13 @@
 using Prowl.Runtime;
 using Prowl.Icons;
-using HexaEngine.ImGuiNET;
+using Hexa.NET.ImGui;
 using System.Numerics;
 using System.Runtime.InteropServices;
 
 namespace Prowl.Editor.EditorWindows;
 
 public class EditorMainMenubar {
-    
+
     private struct Position {
         public int X;
         public int Y;
@@ -21,11 +21,11 @@ public class EditorMainMenubar {
     private Position _mousePosRef;
 
     private bool _dragging;
-    
+
     public EditorMainMenubar() {
         EditorApplication.OnDrawEditor += Draw;
     }
-    
+
     private void Draw() {
         ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new System.Numerics.Vector2(4, 4));
         if(ImGui.BeginMainMenuBar()) {
@@ -40,24 +40,24 @@ public class EditorMainMenubar {
             GUIHelper.Tooltip("Recompile Project Scripts.");
 
 
-            ImGui.EndMainMenuBar();   
+            ImGui.EndMainMenuBar();
         }
         // pop main menu bar size
         ImGui.PopStyleVar();
     }
 
     private static void DrawPlayControls() {
-        
+
         void AlignForWidth(float width, float alignment = 0.5f) {
             float avail = ImGui.GetContentRegionAvail().X;
             float off = (avail - width) * alignment;
             if(off > 0.0f)
                 ImGui.SetCursorPosX(off);
         }
-        
+
         ImGuiStylePtr style = ImGui.GetStyle();
         float width = 0.0f;
-        
+
         switch(PlayMode.Current) {
             case PlayMode.Mode.Editing:
                 width += ImGui.CalcTextSize(" " + FontAwesome6.Play).X;
@@ -71,7 +71,7 @@ public class EditorMainMenubar {
                 width += style.ItemSpacing.X;
                 width += ImGui.CalcTextSize(" " + FontAwesome6.Stop).X;
                 AlignForWidth(width);
-                
+
                 if(ImGui.Button(" " + FontAwesome6.Pause))
                     PlayMode.Pause();
                 if(ImGui.Button(" " + FontAwesome6.Stop))
@@ -82,7 +82,7 @@ public class EditorMainMenubar {
                 width += style.ItemSpacing.X;
                 width += ImGui.CalcTextSize(" " + FontAwesome6.Stop).X;
                 AlignForWidth(width);
-                
+
                 if(ImGui.Button(" " + FontAwesome6.Play))
                     PlayMode.Resume();
                 if(ImGui.Button(" " + FontAwesome6.Stop))
@@ -92,7 +92,7 @@ public class EditorMainMenubar {
                 throw new ArgumentOutOfRangeException();
         }
     }
-    
+
     private static void DrawMenuItems()
     {
         ImGui.SetCursorPosX(2);
@@ -127,11 +127,11 @@ public class EditorMainMenubar {
             if(ImGui.MenuItem("Utilities")) { new UtilitiesWindow(); }
             ImGui.EndMenu();
         }
-        
+
         if(ImGui.BeginMenu("Help")) {
             if(ImGui.MenuItem("Tip: Just get good.")) { }
             ImGui.EndMenu();
         }
     }
-    
+
 }
