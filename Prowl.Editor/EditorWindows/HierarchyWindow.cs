@@ -71,7 +71,7 @@ public class HierarchyWindow : EditorWindow
                 ImGui.EndPopup();
             }
 
-            ImGui.TableSetupColumn("  Label", ImGuiTableColumnFlags.NoHide | ImGuiTableColumnFlags.NoClip, contentWidth);
+            ImGui.TableSetupColumn("  Label", ImGuiTableColumnFlags.NoHide | ImGuiTableColumnFlags.NoClip | ImGuiTableColumnFlags.WidthStretch, contentWidth);
             ImGui.TableSetupColumn(" " + FontAwesome6.Tag, ImGuiTableColumnFlags.WidthFixed, lineHeight * 1.0f);
             ImGui.TableSetupColumn(" " + FontAwesome6.LayerGroup, ImGuiTableColumnFlags.WidthFixed, lineHeight * 1.0f);
             ImGui.TableSetupColumn(" " + FontAwesome6.Eye, ImGuiTableColumnFlags.WidthFixed, lineHeight * 1.0f);

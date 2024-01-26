@@ -48,9 +48,7 @@ public class ProjectsWindow : EditorWindow
         if (ImGui.Button("Create"))
         {
             Project.CreateNew(createName);
-            ImGui.CloseCurrentPopup();
         }
-        ImGui.EndPopup();
 
         if (Project.HasProject)
         {

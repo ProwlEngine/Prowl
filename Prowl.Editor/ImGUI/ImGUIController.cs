@@ -114,6 +114,7 @@ namespace Prowl.Editor.ImGUI
 
         private void BeginFrame()
         {
+            ImGui.GetIO().ConfigFlags |= ImGuiConfigFlags.DockingEnable;
             ImGui.NewFrame();
             ImGuizmo.BeginFrame();
             _frameBegun = true;
