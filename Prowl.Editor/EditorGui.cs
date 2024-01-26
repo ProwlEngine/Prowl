@@ -20,7 +20,8 @@ public static class EditorGui
         ImGui.GetIO().ConfigWindowsResizeFromEdges = true;
         ImGui.GetIO().ConfigWindowsMoveFromTitleBarOnly = true;
         ImGui.GetIO().MouseDrawCursor = true;
-        Input.Mice[0].Cursor.CursorMode = Silk.NET.Input.CursorMode.Hidden;
+        if (OperatingSystem.IsWindows())
+            Input.Mice[0].Cursor.CursorMode = Silk.NET.Input.CursorMode.Hidden;
 
         new EditorMainMenubar();
         new HierarchyWindow();
