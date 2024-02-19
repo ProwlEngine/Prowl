@@ -20,7 +20,8 @@ public static class EditorGui
         ImGui.GetIO().ConfigWindowsResizeFromEdges = true;
         ImGui.GetIO().ConfigWindowsMoveFromTitleBarOnly = true;
         ImGui.GetIO().MouseDrawCursor = true;
-        Input.Mice[0].Cursor.CursorMode = Silk.NET.Input.CursorMode.Hidden;
+        if (OperatingSystem.IsWindows())
+            Input.Mice[0].Cursor.CursorMode = Silk.NET.Input.CursorMode.Hidden;
 
         new EditorMainMenubar();
         new HierarchyWindow();
@@ -43,10 +44,8 @@ public static class EditorGui
 
     private static void SetTheme()
     {
-
         // Fork of Rounded Visual Studio style from ImThemes
         var style = ImGui.GetStyle();
-
 
         style.Colors[(int)ImGuiCol.Text] = new(1.00f, 1.00f, 1.00f, 1.00f);
         style.Colors[(int)ImGuiCol.TextDisabled] = new(0.50f, 0.50f, 0.50f, 1.00f);
@@ -135,7 +134,8 @@ public static class EditorGui
         style.ColumnsMinSpacing = 6.0f;
         //style.TabMinWidthForCloseButton = 0.0f;
         style.ColorButtonPosition = ImGuiDir.Right;
-        style.ButtonTextAlign = new Vector2(0.5f, 0.5f);
+        // Causes assert failure on macOS
+        //style.ButtonTextAlign = new Vector2(0.5f, 0.5f);
         style.SelectableTextAlign = new Vector2(0.0f, 0.0f);
 
     }
