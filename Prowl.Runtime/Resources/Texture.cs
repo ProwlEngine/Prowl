@@ -66,13 +66,13 @@ namespace Prowl.Runtime
         public TextureWrapMode WrapMode { get; protected set; }
 
         /// <summary>The internal format of the pixels, such as RGBA, RGB, R32f, or even different depth/stencil formats.</summary>
-        internal readonly InternalFormat PixelInternalFormat;
+        public readonly InternalFormat PixelInternalFormat;
 
         /// <summary>The data type of the components of the <see cref="Texture"/>'s pixels.</summary>
-        internal readonly PixelType PixelType;
+        public readonly PixelType PixelType;
 
         /// <summary>The format of the pixel data.</summary>
-        internal readonly PixelFormat PixelFormat;
+        public readonly PixelFormat PixelFormat;
 
         /// <summary>The format for this <see cref="Texture"/>'s image.</summary>
         public readonly TextureImageFormat ImageFormat;
