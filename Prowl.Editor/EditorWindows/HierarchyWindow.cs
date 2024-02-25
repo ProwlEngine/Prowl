@@ -325,7 +325,7 @@ public class HierarchyWindow : EditorWindow
             if (ImGui.MenuItem("Delete", "Del"))
                 entity.Destroy();
 
-            if (SelectHandler.Count > 0 && ImGui.MenuItem("Delete All")) {
+            if (SelectHandler.Count > 1 && ImGui.MenuItem("Delete All")) {
                 SelectHandler.Foreach((go) => {
                     (go.Target as GameObject).Destroy();
                 });
