@@ -13,6 +13,18 @@ namespace Prowl.Editor.EditorWindows
         #region Assets
         public static DirectoryInfo? Directory { get; set; }
 
+        [MenuItem("Create/Folder")]
+        public static void CreateFolder()
+        {
+            Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+            DirectoryInfo dir = new DirectoryInfo(Directory + "/New Folder");
+            while (dir.Exists)
+            {
+                dir = new DirectoryInfo(dir.FullName.Replace("New Folder", "New Folder new"));
+            }
+            dir.Create();
+        }
+
         [MenuItem("Create/Material")]
         public static void CreateMaterial()
         {
