@@ -311,18 +311,25 @@ namespace Prowl.Runtime
             object resultObject = CreateInstance(oType);
 
             ctx.idToObject[compound.SerializedID] = resultObject;
+            resultObject = DeserializeInto(compound, resultObject, ctx);
 
-            if (resultObject is ISerializeCallbacks callback1)
+            return resultObject;
+        }
+
+        public static object DeserializeInto(CompoundTag tag, object into) => DeserializeInto(tag, into, new SerializationContext());
+        private static object DeserializeInto(CompoundTag tag, object into, SerializationContext ctx)
+        {
+            if (into is ISerializeCallbacks callback1)
                 callback1.PreDeserialize();
 
-            if (resultObject is ISerializable serializable)
+            if (into is ISerializable serializable)
             {
-                serializable.Deserialize(compound, ctx);
-                resultObject = serializable;
+                serializable.Deserialize(tag, ctx);
+                into = serializable;
             }
             else
             {
-                FieldInfo[] fields = GetAllFields(oType).ToArray();
+                FieldInfo[] fields = GetAllFields(into.GetType()).ToArray();
 
                 var properties = fields.Where(field => (field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() != null) && field.GetCustomAttribute<SerializeIgnoreAttribute>() == null);
                 // If public and has System.NonSerializedAttribute then ignore
@@ -331,14 +338,14 @@ namespace Prowl.Runtime
                 {
                     string name = field.Name;
 
-                    if (!compound.TryGet<Tag>(name, out var node))
+                    if (!tag.TryGet<Tag>(name, out var node))
                     {
                         // Before we completely give up, a field can have FormerlySerializedAs Attributes
                         // This allows backwards compatibility
                         var formerNames = Attribute.GetCustomAttributes(field, typeof(FormerlySerializedAsAttribute));
                         foreach (FormerlySerializedAsAttribute formerName in formerNames)
                         {
-                            if (compound.TryGet<Tag>(formerName.oldName, out node))
+                            if (tag.TryGet<Tag>(formerName.oldName, out node))
                             {
                                 name = formerName.oldName;
                                 break;
@@ -359,16 +366,14 @@ namespace Prowl.Runtime
                             data = (sbyte)@byte;
                     }
 
-                    field.SetValue(resultObject, data);
+                    field.SetValue(into, data);
                 }
             }
 
-            if (resultObject is ISerializeCallbacks callback2)
+            if (into is ISerializeCallbacks callback2)
                 callback2.PostDeserialize();
-
-            return resultObject;
+            return into;
         }
-
 
         static object CreateInstance(Type type)
         {
