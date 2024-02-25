@@ -126,7 +126,7 @@ Getting Prowl up and running is super easy!
 - [ ] Realtime GI
 - [ ] Lightmaps and Light Probes
 - [ ] Cascaded shadow mapping
-- [ ] Skinned Mesh Rendering & Animations - In Development Now
+- [ ] Skinned Mesh Rendering & Animations - Partially Implemented
 - [ ] Particle System
 - [ ] Terrain Engine
 
