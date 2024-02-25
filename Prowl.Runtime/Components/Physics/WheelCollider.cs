@@ -28,7 +28,7 @@ namespace Prowl.Runtime
 
         private float torque;
 
-        private World.RaycastFilterPre rayCast;
+        private World.RayCastFilterPre rayCast;
 
         /// <summary> The damping factor of the suspension spring. </summary>
         public float Damping = 4000f;
@@ -153,7 +153,7 @@ namespace Prowl.Runtime
             JVector wheelLeft = JVector.Cross(worldAxis, wheelFwd);
             wheelLeft.Normalize();
 
-            onFloor = car.Space.world.Raycast(worldPos, -worldAxis, rayCast, null, out Shape? shape, out JVector groundNormal, out float dist);
+            onFloor = car.Space.world.RayCast(worldPos, -worldAxis, rayCast, null, out Shape? shape, out JVector groundNormal, out float dist);
             if (!onFloor || dist > Radius * 2f) return;
             if (groundNormal.LengthSquared() > 0.0f) groundNormal.Normalize();
 

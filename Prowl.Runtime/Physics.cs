@@ -62,10 +62,10 @@ namespace Prowl.Runtime
             }
         }
 
-        public static RaycastHit? Raycast(Ray ray, double maxDistance = 10.0, World.RaycastFilterPre? preFilter = null, World.RaycastFilterPost? postFilter = null)
+        public static RaycastHit? Raycast(Ray ray, double maxDistance = 10.0, World.RayCastFilterPre? preFilter = null, World.RayCastFilterPost? postFilter = null)
         {
             ray.direction *= maxDistance;
-            if (DefaultSpace.world.Raycast(ray.origin, ray.direction, preFilter, postFilter, out Shape hitShape, out JVector hitNormal, out float hitFraction)) {
+            if (DefaultSpace.world.RayCast(ray.origin, ray.direction, preFilter, postFilter, out Shape hitShape, out JVector hitNormal, out float hitFraction)) {
                 if (hitFraction <= maxDistance)
                     return new RaycastHit(hitShape.RigidBody.Tag as Rigidbody, hitNormal, ray.origin, ray.direction, hitFraction);
             }

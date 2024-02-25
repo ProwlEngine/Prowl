@@ -33,7 +33,7 @@
     </ItemGroup>
     
     <ItemGroup>
-      <PackageReference Include="Jitter2" Version="2.1.1" />
+      <PackageReference Include="Jitter2" Version="2.2.0" />
       <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="13.5.0" />
       <PackageReference Include="Silk.NET" Version="2.20.0" />
       <PackageReference Include="System.Collections.Specialized" Version="4.3.0" />
