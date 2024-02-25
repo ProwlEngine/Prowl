@@ -1,7 +1,6 @@
 ﻿using Prowl.Editor;
 using Prowl.Editor.Assets;
 using Prowl.Runtime.Utils;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO.Compression;
 
