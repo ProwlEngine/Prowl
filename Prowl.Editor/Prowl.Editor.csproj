@@ -152,6 +152,7 @@
       <PackageReference Include="Hexa.NET.ImNodes" Version="1.0.2" />
       <PackageReference Include="Hexa.NET.ImPlot" Version="1.0.2" />
       <PackageReference Include="AssimpNet" Version="5.0.0-beta1" />
+      <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="13.6.0" />
     </ItemGroup>
 
     <ItemGroup>

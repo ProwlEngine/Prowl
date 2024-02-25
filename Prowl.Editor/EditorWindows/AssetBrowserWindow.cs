@@ -284,7 +284,7 @@ public class AssetBrowserWindow : EditorWindow {
             fileName = directory.EnumerateFiles().Any() || directory.EnumerateDirectories().Any() ? "FolderFilledIcon.png" : "FolderEmptyIcon.png";
             if (!cachedThumbnails.ContainsKey(fileName)) {
                 using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources." + fileName);
-                cachedThumbnails[fileName] = Texture2D.FromStream(stream);
+                cachedThumbnails[fileName] = Texture2DLoader.FromStream(stream);
             }
         } else if (entry is FileInfo file) {
             if (lastGenerated.Item1 != Time.frameCount || !lastGenerated.Item2) {
@@ -313,7 +313,7 @@ public class AssetBrowserWindow : EditorWindow {
         if (!cachedThumbnails.ContainsKey(fileName)) {
             lastGenerated = (Time.frameCount, true);
             using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources." + fileName)) {
-                cachedThumbnails[fileName] = Texture2D.FromStream(stream);
+                cachedThumbnails[fileName] = Texture2DLoader.FromStream(stream);
             }
         }
         return cachedThumbnails[fileName];
