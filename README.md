@@ -205,13 +205,13 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 ### Runtime
 - [Silk.NET](https://github.com/dotnet/Silk.NET)
-- [ImageMagick](http://www.imagemagick.org/) via [Magick.NET](https://github.com/dlemstra/Magick.NET)
-- [ImGUI](https://github.com/ocornut/imgui) via [ImGUI.NET](https://github.com/ImGuiNET/ImGui.NET)
 - [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2)
 
 ### Editor
 
 - [Assimp](https://github.com/assimp/assimp) via [Assimp.NET](https://bitbucket.org/Starnick/assimpnet)
+- [ImageMagick](http://www.imagemagick.org/) via [Magick.NET](https://github.com/dlemstra/Magick.NET)
+- [ImGUI](https://github.com/ocornut/imgui) via [ImGUI.NET](https://github.com/ImGuiNET/ImGui.NET)
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 # Screenshots
