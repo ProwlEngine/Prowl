@@ -325,7 +325,7 @@ public class ViewportWindow : EditorWindow
 
         if (Input.GetMouseButton(1)) {
             ImGui.FocusWindow(ImGUIWindow, ImGuiFocusRequestFlags.None);
-
+            ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeAll);
             Vector3 moveDir = Vector3.zero;
             if (Input.GetKey(Key.W)) moveDir += Cam.GameObject.transform.forward;
             if (Input.GetKey(Key.S)) moveDir -= Cam.GameObject.transform.forward;
