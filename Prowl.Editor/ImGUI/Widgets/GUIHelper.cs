@@ -15,6 +15,7 @@ namespace Prowl.Editor
         {
             if (ImGui.IsItemHovered())
             {
+                ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
                 ImGui.BeginTooltip();
                 ImGui.Text(tooltip);
                 ImGui.EndTooltip();
