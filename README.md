@@ -195,6 +195,7 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 - [Josh Davis](https://github.com/10xJosh)
 - [ReCore67](https://github.com/recore67)
 - [Isaac Marovitz](https://github.com/IsaacMarovitz)
+- [Kuvrot](https://github.com/Kuvrot)
  
 # License
 
