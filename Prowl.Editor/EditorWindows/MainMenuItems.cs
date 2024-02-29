@@ -17,48 +17,21 @@ namespace Prowl.Editor.EditorWindows
         public static void CreateFolder()
         {
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
-            DirectoryInfo dir = new DirectoryInfo(Directory + "/New Folder");
-            while (dir.Exists)
-            {
-                dir = new DirectoryInfo(dir.FullName.Replace("New Folder", "New Folder new"));
-            }
-            dir.Create();
+            FileNamingWindow fWindow = new FileNamingWindow(Directory, "Folder");
         }
 
         [MenuItem("Create/Material")]
         public static void CreateMaterial()
         {
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
-            Material mat = new Material(Shader.Find("Defaults/Standard.shader"));
-            FileInfo file = new FileInfo(Directory + "/NewMaterial.mat");
-            while (file.Exists)
-            {
-                file = new FileInfo(file.FullName.Replace(".mat", "") + " new.mat");
-            }
-            StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), file);
-
-            var r = AssetDatabase.FileToRelative(file);
-            AssetDatabase.Reimport(r);
-            AssetDatabase.Ping(r);
+            FileNamingWindow fWindow = new FileNamingWindow(Directory, "Material");
         }
 
         [MenuItem("Create/Script")]
         public static void CreateScript()
         {
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
-            FileInfo file = new FileInfo(Directory + "/New Script.cs");
-            while (file.Exists)
-            {
-                file = new FileInfo(file.FullName.Replace(".cs", "") + " new.cs");
-            }
-            using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
-            using StreamReader reader = new StreamReader(stream);
-            string script = reader.ReadToEnd();
-            script = script.Replace("%SCRIPTNAME%", Utilities.FilterAlpha(Path.GetFileNameWithoutExtension(file.Name)));
-            File.WriteAllText(file.FullName, script);
-            var r = AssetDatabase.FileToRelative(file);
-            AssetDatabase.Reimport(r);
-            AssetDatabase.Ping(r);
+            FileNamingWindow fWindow = new FileNamingWindow(Directory , "Script");
         }
 
         #endregion
