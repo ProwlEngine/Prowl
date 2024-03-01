@@ -17,21 +17,60 @@ namespace Prowl.Editor.EditorWindows
         public static void CreateFolder()
         {
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
-            FileNamingWindow fWindow = new FileNamingWindow(Directory, "Folder");
+            var folderAction = new Action<string, string>((directory, createName) =>
+            {
+                DirectoryInfo dir = new DirectoryInfo(Path.Combine(directory, createName));
+                while (dir.Exists)
+                {
+                    dir = new DirectoryInfo(dir.FullName.Replace("New Folder", "New Folder new"));
+                }
+                dir.Create();
+            });
+            CreateNewFileWindow fWindow = new CreateNewFileWindow(Directory, folderAction);
         }
 
         [MenuItem("Create/Material")]
         public static void CreateMaterial()
         {
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
-            FileNamingWindow fWindow = new FileNamingWindow(Directory, "Material");
+            var materialAction = new Action<string, string>((directory, createName) =>
+            {
+                Material mat = new Material(Shader.Find("Defaults/Standard.shader"));
+                FileInfo file = new FileInfo(Path.Combine(directory, $"{createName}.mat"));
+                while (file.Exists)
+                {
+                    file = new FileInfo(file.FullName.Replace(".mat", "") + " new.mat");
+                }
+                StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), file);
+
+                var r = AssetDatabase.FileToRelative(file);
+                AssetDatabase.Reimport(r);
+                AssetDatabase.Ping(r);
+            });
+            CreateNewFileWindow fWindow = new CreateNewFileWindow(Directory, materialAction);
         }
 
         [MenuItem("Create/Script")]
         public static void CreateScript()
         {
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
-            FileNamingWindow fWindow = new FileNamingWindow(Directory , "Script");
+            var scriptAction = new Action<string, string>((directory, createName) =>
+            {
+                FileInfo file = new FileInfo(Path.Combine(directory, $"{createName}.cs"));
+                while (file.Exists)
+                {
+                    file = new FileInfo(file.FullName.Replace(".cs", "") + " new.cs");
+                }
+                using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
+                using StreamReader reader = new StreamReader(stream);
+                string script = reader.ReadToEnd();
+                script = script.Replace("%SCRIPTNAME%", Utilities.FilterAlpha(Path.GetFileNameWithoutExtension(file.Name)));
+                File.WriteAllText(file.FullName, script);
+                var r = AssetDatabase.FileToRelative(file);
+                AssetDatabase.Reimport(r);
+                AssetDatabase.Ping(r);
+            });
+            CreateNewFileWindow fWindow = new CreateNewFileWindow(Directory, scriptAction);
         }
 
         #endregion
