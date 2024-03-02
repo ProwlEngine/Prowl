@@ -215,19 +215,19 @@ public class AssetsWindow : EditorWindow
 
                 ImGui.EndPopup();
             }
-        } else if (fileInfo is DirectoryInfo directory) {
+        } else if (fileInfo is DirectoryInfo dir) {
             if (ImGui.BeginPopupContextItem()) {
                 if (ImGui.MenuItem("Reimport"))
-                    AssetDatabase.ReimportFolder(directory);
+                    AssetDatabase.ReimportFolder(dir);
                 ImGui.Separator();
-                MainMenuItems.Directory = directory;
+                MainMenuItems.Directory = dir;
                 MenuItem.DrawMenuRoot("Create");
                 if (ImGui.MenuItem("Show In Explorer"))
-                    AssetDatabase.OpenPath(directory.Parent!.FullName);
+                    AssetDatabase.OpenPath(dir.Parent!.FullName);
                 if (ImGui.MenuItem("Open"))
-                    AssetDatabase.OpenPath(directory.FullName);
+                    AssetDatabase.OpenPath(dir.FullName);
                 if (ImGui.MenuItem("Delete"))
-                    directory.Delete(true); // Will trigger the AssetDatabase file watchers
+                    dir.Delete(true); // Will trigger the AssetDatabase file watchers
                 ImGui.Separator();
                 if (ImGui.MenuItem("Reimport All"))
                     AssetDatabase.ReimportAll();
