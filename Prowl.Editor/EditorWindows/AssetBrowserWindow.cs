@@ -12,7 +12,7 @@ public class AssetBrowserWindow : EditorWindow {
 
     public static EditorSettings Settings => Project.ProjectSettings.GetSetting<EditorSettings>();
 
-    public DirectoryInfo CurDirectory;
+    static public DirectoryInfo CurDirectory;
     public bool Locked = false;
 
     private string _searchText = "";

@@ -16,7 +16,7 @@ namespace Prowl.Editor.EditorWindows
         [MenuItem("Create/Folder")]
         public static void CreateFolder()
         {
-            Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+            Directory ??= AssetBrowserWindow.CurDirectory;
             var folderAction = new Action<string, string>((directory, createName) =>
             {
                 DirectoryInfo dir = new DirectoryInfo(Path.Combine(directory, createName));
@@ -32,7 +32,7 @@ namespace Prowl.Editor.EditorWindows
         [MenuItem("Create/Material")]
         public static void CreateMaterial()
         {
-            Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+            Directory ??= AssetBrowserWindow.CurDirectory;
             var materialAction = new Action<string, string>((directory, createName) =>
             {
                 Material mat = new Material(Shader.Find("Defaults/Standard.shader"));
@@ -53,7 +53,7 @@ namespace Prowl.Editor.EditorWindows
         [MenuItem("Create/Script")]
         public static void CreateScript()
         {
-            Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+            Directory ??= AssetBrowserWindow.CurDirectory;
             var scriptAction = new Action<string, string>((directory, createName) =>
             {
                 FileInfo file = new FileInfo(Path.Combine(directory, $"{createName}.cs"));

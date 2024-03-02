@@ -24,7 +24,6 @@ public class CreateNewFileWindow : EditorWindow
     protected override bool BackgroundFade { get; } = true;
 
     DirectoryInfo? directory;
-    string fileType = "";
     Action<string, string> fileAction;
 
     public CreateNewFileWindow(DirectoryInfo? directory , Action<string, string> fileAction) : base()
