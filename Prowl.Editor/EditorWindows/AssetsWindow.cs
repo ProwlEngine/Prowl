@@ -90,7 +90,7 @@ public class AssetsWindow : EditorWindow
         bool opened = ImGui.TreeNodeEx($"{FontAwesome6.FolderTree} {root.Name}", rootFlags);
         SelectHandler.HandleSelectable(treeCounter++, root);
         GUIHelper.ItemRectFilled(1f, 1f, 1f, 0.2f);
-        HandleFileContextMenu(null);
+        HandleFileContextMenu(null, null);
         ImGui.PopStyleColor();
 
         if (opened) {
@@ -179,12 +179,12 @@ public class AssetsWindow : EditorWindow
         }
     }
 
-    public static void HandleFileContextMenu(FileSystemInfo? fileInfo)
+    public static void HandleFileContextMenu(FileSystemInfo? fileInfo, DirectoryInfo? directory = null)
     {
         // If still null then show a simplified context menu
         if (fileInfo == null) {
             if (ImGui.BeginPopupContextItem()) {
-                MainMenuItems.Directory = null;
+                MainMenuItems.Directory = directory;
                 MenuItem.DrawMenuRoot("Create");
                 if (ImGui.MenuItem("Show In Explorer"))
                     AssetDatabase.OpenPath(Project.ProjectAssetDirectory);

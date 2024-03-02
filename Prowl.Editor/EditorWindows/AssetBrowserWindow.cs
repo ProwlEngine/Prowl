@@ -67,7 +67,7 @@ public class AssetBrowserWindow : EditorWindow {
         ImGui.BeginChild("Body");
         RenderBody();
         ImGui.EndChild();
-        AssetsWindow.HandleFileContextMenu(null);
+        AssetsWindow.HandleFileContextMenu(null, CurDirectory);
         if (DragnDrop.ReceiveReference<GameObject>(out var go)) {
             // Create Prefab
             var prefab = new Prefab();
@@ -208,7 +208,7 @@ public class AssetBrowserWindow : EditorWindow {
             GUIHelper.ItemRect(1f, 0.8f, 0.0f, 0.8f, MathF.Sin(pingTimer) * 6f, 3f, 2.5f);
         }
 
-        AssetsWindow.HandleFileContextMenu(entry);
+        AssetsWindow.HandleFileContextMenu(entry, CurDirectory);
         ImGui.PopID();
 
         curPos.X = 5 + ((i + 1) % rowCount) * itemSize;
