@@ -196,6 +196,7 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 - [ReCore67](https://github.com/recore67)
 - [Isaac Marovitz](https://github.com/IsaacMarovitz)
 - [Kuvrot](https://github.com/Kuvrot)
+- [JaggerJo](https://github.com/JaggerJo)
  
 # License
 
