@@ -393,11 +393,35 @@ public class ViewportWindow : EditorWindow
 
             if (Input.GetKeyDown(Key.F) && HierarchyWindow.SelectHandler.Selected.Any())
             {
-                var selectedWeakGO = HierarchyWindow.SelectHandler.Selected.First();
-                if (selectedWeakGO.Target is GameObject go)
-                    Cam.GameObject.transform.position = 
-                        go.transform.position - (Cam.GameObject.transform.forward * 3f);
+                float defaultZoomFactor = 2f;
+                if (HierarchyWindow.SelectHandler.Selected.Count == 1)
+                {
+                    // If only one object is selected, set the camera position to the center of that object
+                    if (HierarchyWindow.SelectHandler.Selected.First().Target is GameObject singleObject)
+                    {
+                        Cam.GameObject.transform.position = singleObject.transform.position - (Cam.GameObject.transform.forward * defaultZoomFactor);
+                        return;
+                    }
+                }
+
+                // Calculate the bounding box based on the positions of selected objects
+                Bounds combinedBounds = new Bounds();
+                foreach (var obj in HierarchyWindow.SelectHandler.Selected)
+                {
+                    if (obj.Target is GameObject go)
+                    {
+                        combinedBounds.Encapsulate(go.transform.position);
+                    }
+                }
+
+                // Calculate the zoom factor based on the size of the bounding box
+                float boundingBoxSize = (float)Mathf.Max(combinedBounds.size.x, combinedBounds.size.y, combinedBounds.size.z);
+                float zoomFactor = boundingBoxSize * defaultZoomFactor;
+
+                Vector3 averagePosition = combinedBounds.center;
+                Cam.GameObject.transform.position = averagePosition - (Cam.GameObject.transform.forward * zoomFactor);
             }
+
         }
     }
 
