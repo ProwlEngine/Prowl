@@ -1,4 +1,3 @@
-using JetBrains.Annotations;
 using Prowl.Runtime;
 
 namespace Prowl.Standalone;

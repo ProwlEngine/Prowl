@@ -24,31 +24,37 @@ public class StandaloneAssetProvider : IAssetProvider
 
     public bool HasAsset(Guid assetID) => _loaded.ContainsKey(assetID);
 
-    public T LoadAsset<T>(string relativeAssetPath) where T : EngineObject
+    public T LoadAsset<T>(string relativeAssetPath, int fileID = 0) where T : EngineObject
     {
         Guid guid = GetGuidFromPath(relativeAssetPath);
         if (_loaded.ContainsKey(guid))
-            return (T)_loaded[guid].Main;
+            return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID]);
 
         foreach (AssetBuildPackage package in packages)
             if (package.TryGetAsset(relativeAssetPath, out var asset)) {
                 _loaded[guid] = asset;
-                return (T)asset.Main;
+                return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID]);
             }
         throw new FileNotFoundException($"Asset with path {relativeAssetPath} not found.");
     }
 
-    public T LoadAsset<T>(Guid guid) where T : EngineObject
+    public T LoadAsset<T>(Guid guid, int fileID = 0) where T : EngineObject
     {
         if (_loaded.ContainsKey(guid))
-            return (T)_loaded[guid].Main;
+            return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID]);
 
         foreach (AssetBuildPackage package in packages)
             if (package.TryGetAsset(guid, out var asset)) {
                 _loaded[guid] = asset;
-                return (T)asset.Main;
+                return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID]);
             }
         throw new FileNotFoundException($"Asset with GUID {guid} not found.");
+    }
+
+    public T? LoadAsset<T>(IAssetRef assetID) where T : EngineObject
+    {
+        if (assetID == null) return null;
+        return LoadAsset<T>(assetID.AssetID, assetID.FileID);
     }
 
     public string GetPathFromGUID(Guid guid)
