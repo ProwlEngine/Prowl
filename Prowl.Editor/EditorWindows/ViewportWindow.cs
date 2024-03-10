@@ -390,6 +390,14 @@ public class ViewportWindow : EditorWindow
                 else if (Input.GetKeyDown(Key.T)) GizmosOperation = ImGuizmoOperation.Bounds;
 
             }
+
+            if (Input.GetKeyDown(Key.F) && HierarchyWindow.SelectHandler.Selected.Any())
+            {
+                var selectedWeakGO = HierarchyWindow.SelectHandler.Selected.First();
+                if (selectedWeakGO.Target is GameObject go)
+                    Cam.GameObject.transform.position = 
+                        go.transform.position - (Cam.GameObject.transform.forward * 3f);
+            }
         }
     }
 
