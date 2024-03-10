@@ -197,6 +197,7 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 - [Isaac Marovitz](https://github.com/IsaacMarovitz)
 - [Kuvrot](https://github.com/Kuvrot)
 - [JaggerJo](https://github.com/JaggerJo)
+- [Jihad Khawaja](https://github.com/jihadkhawaja)
  
 # License
 
