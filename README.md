@@ -112,7 +112,7 @@ Getting Prowl up and running is super easy!
 - [ ] Cross Platform
   - [x] Windows - Fully functional
   - [ ] Linux - Compiles & Opens but OpenGL Fails
-  - [ ] MacOS - Compiles, M1 fails rest unknown
+  - [ ] MacOS - Compiles, Input fails and color channels seem off?
   - [ ] Andriod - Unknown
   - [ ] iOS - Unknown
   - [ ] Web - Unknown
