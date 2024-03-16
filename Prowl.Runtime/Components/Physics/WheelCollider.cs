@@ -89,7 +89,7 @@ namespace Prowl.Runtime
         {
             car ??= GetComponentInParent<Rigidbody>();
             if (car == null) Debug.LogWarning("WheelCollider: No RigidBody found in parent.");
-            float mass = car.Mass / 4.0f;
+            float mass = car.Mass / WheelCount;
             //float wheelMass = car.Mass * 0.5f;
 
             Inertia = 0.5f * (Radius * Radius) * mass;
