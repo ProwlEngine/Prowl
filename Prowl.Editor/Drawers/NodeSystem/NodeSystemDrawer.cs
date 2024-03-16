@@ -355,7 +355,7 @@ namespace Prowl.Editor.Drawers.NodeSystem
                         if (!_NodeEditors.TryAdd(graphEditor.GraphType, graphEditor))
                             Debug.LogWarning($"Failed to register graph editor for {type.ToString()}");
                     }
-                    catch (Exception e)
+                    catch
                     {
                         Debug.LogWarning($"Failed to register graph editor for {type.ToString()}");
                     }

@@ -11,7 +11,7 @@ namespace Prowl.Runtime.Assets
         /// <summary> A Utility class for AssetBase to ensure GUID's and Asset paths are loaded and synced correctly. </summary>
         static class GuidPathHolder
         {
-            static readonly Dictionary<Guid, string> guidToPath = new();
+            static readonly Dictionary<Guid, string> guidToPath = [];
             static readonly Dictionary<string, Guid> pathToGuid = new(StringComparer.OrdinalIgnoreCase);
 
             /// <summary>Gets the collection of asset paths.</summary>
@@ -83,18 +83,18 @@ namespace Prowl.Runtime.Assets
 
         public static Guid LastLoadedAssetID { get; private set; } = Guid.Empty;
 
-        static readonly List<DirectoryInfo> rootFolders = new();
-        static readonly List<FileSystemWatcher> rootWatchers = new();
+        static readonly List<DirectoryInfo> rootFolders = [];
+        static readonly List<FileSystemWatcher> rootWatchers = [];
 
         // Serialized Asset
-        static readonly Dictionary<Guid, SerializedAsset> guidToAssetData = new();
-        static readonly List<Guid> dirtyAssetData = new();
+        static readonly Dictionary<Guid, SerializedAsset> guidToAssetData = [];
+        static readonly List<Guid> dirtyAssetData = [];
         static readonly Queue<Guid> refreshedMeta = new();
 
         static int isEditing = 0;
         static bool scriptsDirty = false;
-        static Stack<DirectoryInfo> dirtyDirectories = new();
-        static Stack<FileInfo> dirtyFiles = new();
+        static readonly Stack<DirectoryInfo> dirtyDirectories = new();
+        static readonly Stack<FileInfo> dirtyFiles = new();
         static double RefreshTimer = 0f;
 
         public static string TempAssetDirectory => Path.Combine(Project.ProjectDirectory, "Library/AssetDatabase");
@@ -102,9 +102,9 @@ namespace Prowl.Runtime.Assets
         public static event Action<Guid, string>? AssetRemoved;
         public static event Action<string>? Pinged;
 
-        public readonly static List<FileSystemInfo> IgnoreFiles = new();
+        public readonly static List<FileSystemInfo> IgnoreFiles = [];
 
-        public static List<DirectoryInfo> GetRootfolders() => rootFolders;
+        public static List<DirectoryInfo> GetRootFolders() => rootFolders;
 
         public static void AddRootFolder(string rootFolder)
         {
@@ -163,7 +163,7 @@ namespace Prowl.Runtime.Assets
                     scriptsDirty = true;
 
                 var parent = Directory.GetParent(e.FullPath);
-                if (parent.Exists)
+                if (parent != null && parent.Exists)
                     dirtyDirectories.Push(parent);
                 else
                     foreach (var root in rootFolders)
@@ -194,7 +194,7 @@ namespace Prowl.Runtime.Assets
                     }
 
                     bool changed = false;
-                    HashSet<string> allPaths = new();
+                    HashSet<string> allPaths = [];
 
                     while (dirtyDirectories.TryPop(out var dir))
                         if (dir.Exists) {
@@ -244,8 +244,10 @@ namespace Prowl.Runtime.Assets
 
         public static void Ping(Guid guid)
         {
-            if (guid != Guid.Empty)
-                Ping(GUIDToAssetPath(guid));
+            if (guid == Guid.Empty) return;
+            var relativeAssetPath = GUIDToAssetPath(guid);
+            if(relativeAssetPath != null)
+                Ping(relativeAssetPath);
         }
         public static void Ping(string relativeAssetPath) => Pinged?.Invoke(relativeAssetPath);
 
@@ -310,9 +312,7 @@ namespace Prowl.Runtime.Assets
             if (assetGuid == Guid.Empty) throw new ArgumentException("Asset Guid cannot be empty", nameof(assetGuid));
             if (string.IsNullOrWhiteSpace(newName)) throw new ArgumentException("New Name cannot be null or whitespace", nameof(newName));
 
-            string? relativeAssetPath = GuidPathHolder.GetPath(assetGuid);
-            if (relativeAssetPath == null) throw new ArgumentException("Asset Guid does not exist in the Asset Database", nameof(assetGuid));
-
+            string? relativeAssetPath = GuidPathHolder.GetPath(assetGuid) ?? throw new ArgumentException("Asset Guid does not exist in the Asset Database", nameof(assetGuid));
             string oldRelativeAssetPath = relativeAssetPath;
             string newRelativeAssetPath = Path.GetDirectoryName(relativeAssetPath) + "/" + newName + Path.GetExtension(relativeAssetPath);
             MoveAsset(oldRelativeAssetPath, newRelativeAssetPath);
@@ -340,7 +340,7 @@ namespace Prowl.Runtime.Assets
 
             int packageIndex = 0;
             Debug.Log($"Creating First Package {packageIndex}");
-            FileInfo firstPackage = new FileInfo(Path.Combine(destination.FullName, $"Data{packageIndex++}.prowl"));
+            FileInfo firstPackage = new(Path.Combine(destination.FullName, $"Data{packageIndex++}.prowl"));
 
             // Create the package
             var package = AssetBuildPackage.CreateNew(firstPackage);
@@ -358,11 +358,13 @@ namespace Prowl.Runtime.Assets
                     Debug.Log($"Packing, Reached 4GB...");
                     package.Dispose();
                     Debug.Log($"Creating New Package {packageIndex}");
-                    FileInfo next = new FileInfo(Path.Combine(destination.FullName, $"Data{packageIndex++}.prowl"));
+                    FileInfo next = new(Path.Combine(destination.FullName, $"Data{packageIndex++}.prowl"));
                     package = AssetBuildPackage.CreateNew(next);
                 }
 
-                string relativeAssetPath = GUIDToAssetPath(assetGuid);
+                var relativeAssetPath = GUIDToAssetPath(assetGuid);
+                if (relativeAssetPath == null)
+                    throw new Exception("Asset Guid does not exist in the Asset Database");
                 package.AddAsset(relativeAssetPath, assetGuid, asset);
 
                 count++;
@@ -599,8 +601,7 @@ namespace Prowl.Runtime.Assets
             if (relativeAssetPath == null) return null; // Asset is missing from database
 
             FileInfo asset = RelativeToFile(GuidPathHolder.GetPath(assetGuid));
-            if (!asset.Exists) throw null;
-
+            if (!asset.Exists) throw new FileNotFoundException("Asset file does not exist.", asset.FullName);
 
             FileInfo serializedAssetPath = GetSerializedFile(assetGuid);
             if (!serializedAssetPath.Exists)
@@ -613,7 +614,7 @@ namespace Prowl.Runtime.Assets
                 var serializedAsset = SerializedAsset.FromSerializedAsset(serializedAssetPath.FullName);
                 guidToAssetData[assetGuid] = serializedAsset;
                 return serializedAsset;
-            } catch (Exception e) {
+            } catch {
                 Debug.LogError($"Failed to load serialized asset {serializedAssetPath.FullName}!");
                 EditorGui.Notify($"Failed to load serialized asset {serializedAssetPath.FullName}", "", new Color(0.8f, 0.1f, 0.1f, 1), ImGuiToastType.Error);
                 return null; // Failed file might be in use?

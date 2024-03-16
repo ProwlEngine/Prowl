@@ -74,7 +74,7 @@ public abstract class PropertyDrawer {
                     if (!_propertyDrawerLookup.TryAdd(propertyDrawer.PropertyType, propertyDrawer))
                         Debug.LogWarning($"Failed to register property drawer for {type.ToString()}");
                 }
-                catch (Exception e)
+                catch
                 {
                     Debug.LogWarning($"Failed to register property drawer for {type.ToString()}");
                 }
