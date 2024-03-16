@@ -170,9 +170,9 @@ public unsafe class EditorApplication : Application {
                     isPlaying = PlayMode.Current != PlayMode.Mode.Editing;
                     isActivelyPlaying = PlayMode.Current == PlayMode.Mode.Playing;
 
-                    SceneManager.Update();
                     if (isActivelyPlaying)
                         Physics.Update();
+                    SceneManager.Update();
                 }
 
                 OnUpdateEditor?.Invoke();

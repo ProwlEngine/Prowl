@@ -44,8 +44,8 @@ public abstract class Application
             try {
                 Time.Update(delta);
 
-                SceneManager.Update();
                 Physics.Update();
+                SceneManager.Update();
             } catch (Exception e) {
                 Console.WriteLine(e.ToString());
             }
