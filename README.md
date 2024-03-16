@@ -1,4 +1,4 @@
-<img src="https://github.com/Kuvrot/Prowl/assets/23508114/bcc49640-8644-437a-98e4-9050f96f98ae" width="512">
+<img src="https://github.com/Kuvrot/Prowl/assets/23508114/5eef8da7-fb84-42f3-9d18-54b4f2d06551" width="512">
 
 ---
 
