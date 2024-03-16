@@ -1,5 +1,8 @@
-# Prowl, An Open Source Unity-like C# Game Engine!
+<img src="https://github.com/Kuvrot/Prowl/assets/23508114/bcc49640-8644-437a-98e4-9050f96f98ae" width="512">
 
+---
+
+# Prowl, An Open Source Unity-like C# Game Engine!
 <a id="readme-top"></a>
 
   <ol>
