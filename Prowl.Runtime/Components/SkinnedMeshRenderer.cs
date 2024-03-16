@@ -37,7 +37,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
     }
 
     private Dictionary<int, Matrix4x4> prevMats = new();
-    public void OnRenderObject()
+    public override void OnRenderObject()
     {
         var mat = GameObject.GlobalCamRelative;
         int camID = Camera.Current.InstanceID;
@@ -60,7 +60,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         prevMats[camID] = mat;
     }
 
-    public void OnRenderObjectDepth()
+    public override void OnRenderObjectDepth()
     {
         if (Mesh.IsAvailable && Material.IsAvailable)
         {

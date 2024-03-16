@@ -15,7 +15,6 @@ namespace Prowl.Runtime
         public static BlendingFactor CustomBlendDstFactor { get; set; }
         public static BlendEquationModeEXT CustomBlendEquation { get; set; }
 
-        public static event Action UpdateShadowmaps;
 
         public static Vector2 Resolution;
         public static Matrix4x4 MatView;
@@ -181,11 +180,6 @@ namespace Prowl.Runtime
         public static void EndFrame()
         {
 
-        }
-
-        public static void UpdateAllShadowmaps()
-        {
-            UpdateShadowmaps?.Invoke();
         }
 
         public static void DrawMeshNow(Mesh mesh, Matrix4x4 transform, Material material, Matrix4x4? oldTransform = null)

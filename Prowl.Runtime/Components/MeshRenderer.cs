@@ -18,7 +18,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable
 
     private static Material? InvalidMat;
 
-    public void OnRenderObject()
+    public override void OnRenderObject()
     {
         Matrix4x4 mat = GameObject.GlobalCamRelative;
 
@@ -45,7 +45,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable
         prevMats[camID] = mat;
     }
 
-    public void OnRenderObjectDepth()
+    public override void OnRenderObjectDepth()
     {
         if (Mesh.IsAvailable && Material.IsAvailable) {
 

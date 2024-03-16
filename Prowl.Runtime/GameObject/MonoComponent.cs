@@ -5,38 +5,24 @@ using System.Reflection;
 
 namespace Prowl.Runtime;
 
+// TODO: https://docs.unity3d.com/540/Documentation/Manual/ExecutionOrder.html
+// Need to work on mimicng Unity's Execution Order
+
 public abstract class MonoBehaviour : EngineObject
 {
     public static bool PauseLogic = false;
+    private static Dictionary<Type, bool> CachedExecuteAlways = new();
 
     [SerializeField, HideInInspector]
     internal protected bool _enabled = true;
     [SerializeField, HideInInspector]
     internal protected bool _enabledInHierarchy = true;
 
-    private bool _hasBeenEnabled = false;
-
     [HideInInspector]
     public HideFlags hideFlags;
 
     private Dictionary<string, Coroutine> _coroutines = new();
     private Dictionary<string, Coroutine> _endOfFrameCoroutines = new();
-
-    private MethodInfo onEnable;
-    private MethodInfo onDisable;
-    private MethodInfo awake;
-    private MethodInfo start;
-    private MethodInfo fixedUpdate;
-    private MethodInfo update;
-    private MethodInfo lateUpdate;
-    private MethodInfo onSceneLoaded;
-    private MethodInfo onDestroy;
-    private MethodInfo onRenderObject;
-    private MethodInfo onRenderObjectDepth;
-    private MethodInfo drawGizmos;
-    private MethodInfo drawGizmosSelected;
-
-    public bool HasStarted { get; set; } = false;
 
     public enum RenderingOrder { None, Opaque, Lighting }
     public virtual RenderingOrder RenderOrder => RenderingOrder.None;
@@ -47,7 +33,8 @@ public abstract class MonoBehaviour : EngineObject
     public GameObject GameObject => _go;
 
     private bool executeAlways = false;
-    private bool hasCached = false;
+    private bool hasAwoken = false;
+    public bool HasStarted { get; private set; } = false;
 
     public string Tag => _go.tag;
 
@@ -65,7 +52,6 @@ public abstract class MonoBehaviour : EngineObject
     }
 
     public bool EnabledInHierarchy => _enabledInHierarchy;
-    public bool HasBeenEnabled => _hasBeenEnabled;
 
     public MonoBehaviour() : base() { }
 
@@ -94,20 +80,25 @@ public abstract class MonoBehaviour : EngineObject
     internal void AttachToGameObject(GameObject go)
     {
         _go = go;
-        HierarchyStateChanged();
+
+        bool isEnabled = _enabled && _go.enabledInHierarchy;
+        _enabledInHierarchy = isEnabled;
+        if (isEnabled)
+            Try(AwakeAndEnable);
     }
 
     internal void HierarchyStateChanged()
     {
         bool newState = _enabled && _go.enabledInHierarchy;
-        _hasBeenEnabled |= newState;
         if (newState != _enabledInHierarchy)
         {
             _enabledInHierarchy = newState;
             if (newState)
-                Internal_OnEnabled();
+            {
+                Try(AwakeAndEnable);
+            }
             else
-                Internal_OnDisabled();
+                Try(Internal_OnDisabled);
         }
     }
 
@@ -124,103 +115,83 @@ public abstract class MonoBehaviour : EngineObject
 
     #region Behaviour
 
-    internal bool Internal_Awake()
+    public virtual void Awake() { }
+    public virtual void OnEnable() { }
+    public virtual void OnDisable() { }
+    public virtual void Start() { }
+    public virtual void FixedUpdate() { }
+    public virtual void Update() { }
+    public virtual void LateUpdate() { }
+    public virtual void OnPreRender() { }
+    public virtual void OnRenderObject() { }
+    public virtual void OnPostRender() { }
+    public virtual void OnRenderObjectDepth() { }
+    public virtual void DrawGizmos() { }
+    public virtual void DrawGizmosSelected() { }
+    public virtual void OnLevelWasLoaded() { }
+    public virtual void OnDestroy() { }
+
+    internal void AwakeAndEnable()
     {
-        if (!hasCached)
+        if (!hasAwoken)
         {
-            hasCached = true;
-            List<string> methodNames = new List<string>()
-            {
-                "OnEnable",
-                "OnDisable",
-                "Awake",
-                "Start",
-                "FixedUpdate",
-                "Update",
-                "LateUpdate",
-                "OnDestroy",
-                "OnRenderObject",
-                "OnRenderObjectDepth",
-                "DrawGizmos",
-                "DrawGizmosSelected",
-                "OnSceneLoaded",
-            };
+            var t = GetType();
+            executeAlways = CachedExecuteAlways.TryGetValue(t, out bool value) ? value : (CachedExecuteAlways[t] = t.GetCustomAttribute<ExecuteAlwaysAttribute>() != null);
 
-            MethodInfo[] retMethods = new MethodInfo[methodNames.Count];
-            foreach (var method in GetType().GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy))
+            if (!PauseLogic || executeAlways)
             {
-                var ind = methodNames.IndexOf(method.Name);
-                if (ind != -1) retMethods[ind] = method;
+                hasAwoken = true;
+                Awake();
             }
-
-            onEnable = retMethods[0];
-            onDisable = retMethods[1];
-            awake = retMethods[2];
-            start = retMethods[3];
-            fixedUpdate = retMethods[4];
-            update = retMethods[5];
-            lateUpdate = retMethods[6];
-            onDestroy = retMethods[7];
-            onRenderObject = retMethods[8];
-            onRenderObjectDepth = retMethods[9];
-            drawGizmos = retMethods[10];
-            drawGizmosSelected = retMethods[11];
-            onSceneLoaded = retMethods[12];
-
-            executeAlways = this.GetType().GetCustomAttribute<ExecuteAlwaysAttribute>() != null;
         }
 
-        if (!PauseLogic || executeAlways) {
-            awake?.Invoke(this, []);
-            try {
-                onEnable?.Invoke(this, []);
-            } catch (Exception e) {
-                Debug.LogError($"Error in {GetType().Name}.OnEnable of {GameObject.Name}: {e.Message} \n StackTrace: {e.StackTrace}");
-            }
-            return true;
-        }
-        return false;
-    }
-
-    internal void Internal_OnEnabled()
-    {
-        if (!PauseLogic || executeAlways) onEnable?.Invoke(this, []);
+        // Always enable
+        if (!PauseLogic || executeAlways) OnEnable();
     }
     internal void Internal_OnDisabled()
     {
-        if (!PauseLogic || executeAlways) onDisable?.Invoke(this, []);
+        if (!PauseLogic || executeAlways) OnDisable();
     }
     internal void Internal_Start()
     {
-        if (!PauseLogic || executeAlways) start?.Invoke(this, []);
+        if (HasStarted) return;
+        if (!PauseLogic || executeAlways)
+        {
+            HasStarted = true;
+            Start();
+        }
     }
     internal void Internal_FixedUpdate()
     {
-        if (!PauseLogic || executeAlways) fixedUpdate?.Invoke(this, []);
+        if (!PauseLogic || executeAlways) FixedUpdate();
     }
     internal void Internal_Update()
     {
-        if (!PauseLogic || executeAlways) update?.Invoke(this, []);
+        if (!PauseLogic || executeAlways) Update();
     }
     internal void Internal_LateUpdate()
     {
-        if (!PauseLogic || executeAlways) lateUpdate?.Invoke(this, []);
+        if (!PauseLogic || executeAlways) LateUpdate();
     }
-    internal void Internal_OnSceneLoaded()
+    internal void Internal_OnLevelWasLoaded()
     {
-        if (!PauseLogic || executeAlways) onSceneLoaded?.Invoke(this, []);
+        if (!PauseLogic || executeAlways) OnLevelWasLoaded();
     }
     internal void Internal_OnDestroy()
     {
-        if (!PauseLogic || executeAlways) onDestroy?.Invoke(this, []);
+        if (!PauseLogic || executeAlways) OnDestroy();
     }
-    public void CallDrawGizmos()
+
+    internal static void Try(Action action)
     {
-        drawGizmos?.Invoke(this, []);
-    }
-    public void CallDrawGizmosSelected()
-    {
-        drawGizmosSelected?.Invoke(this, []);
+        try
+        {
+            action();
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"Error: {e.Message} \n StackTrace: {e.StackTrace}");
+        }
     }
 
     public Coroutine StartCoroutine(string methodName)
@@ -349,12 +320,6 @@ public abstract class MonoBehaviour : EngineObject
             }
         }
     }
-
-    // Rendering always occurs
-    internal void Internal_OnRenderObject() => onRenderObject?.Invoke(this, []);
-
-    // Rendering always occurs
-    internal void Internal_OnRenderObjectDepth() => onRenderObjectDepth?.Invoke(this, []);
 
     /// <summary> Calls the method named methodName on every MonoBehaviour in this game object or any of its children. </summary>
     public void BroadcastMessage(string methodName, params object[] objs) => GameObject.BroadcastMessage(methodName, objs);

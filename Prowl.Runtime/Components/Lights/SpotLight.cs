@@ -17,7 +17,7 @@ public class SpotLight : MonoBehaviour
     Mesh mesh;
     int lastCamID = -1;
 
-    public void OnRenderObject()
+    public override void OnRenderObject()
     {
         if (mesh == null)
             mesh = Mesh.CreateSphere(1f, 16, 16);

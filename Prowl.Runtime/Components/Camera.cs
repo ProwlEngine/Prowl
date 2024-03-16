@@ -74,14 +74,16 @@ public class Camera : MonoBehaviour
             if (go.enabledInHierarchy)
                 foreach (var comp in go.GetComponents())
                     if (comp.Enabled && comp.RenderOrder == order)
-                        comp.Internal_OnRenderObject();
+                        comp.OnRenderObject();
     }
 
     private void OpaquePass()
     {
+        SceneManager.ForeachComponent((x) => Try(x.OnPreRender));
         gBuffer.Begin();                            // Start
         RenderAllOfOrder(RenderingOrder.Opaque);    // Render
         gBuffer.End();                              // End
+        SceneManager.ForeachComponent((x) => Try(x.OnPostRender));
     }
 
     Matrix4x4? oldView = null;
@@ -136,9 +138,6 @@ public class Camera : MonoBehaviour
         Matrix4x4.Invert(Graphics.MatProjection, out Graphics.MatProjectionInverse);
 
         OpaquePass();
-
-#warning TODO: Smarter Shadowmap Updating, updating every frame for every camera is stupid
-        Graphics.UpdateAllShadowmaps();
 
         var outputNode = rp.Res!.GetNode<OutputNode>();
         if (outputNode == null)

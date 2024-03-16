@@ -44,6 +44,11 @@ public static class SceneManager
         Clear();
         var deserialized = TagSerializer.Deserialize<GameObject[]>(StoredScene);
         MainScene.AssetID = StoredSceneID;
+    }
+
+    public static void ClearStoredScene()
+    {
+        Debug.IfNull(StoredScene, "Scene is not stored.");
         StoredScene = null;
     }
 
@@ -94,91 +99,40 @@ public static class SceneManager
     {
         EngineObject.HandleDestroyed();
 
-        for (int i=0; i< _gameObjects.Count; i++)
-            foreach (var comp in _gameObjects[i].GetComponents<MonoBehaviour>())
-            {
-                if (!comp.HasStarted)
-                {
-                    try
-                    {
-#warning TODO: Awake should be called immediately after the creation of the component/gameobject not in the first frame
-                        try {
-                            comp.HasStarted |= comp.Internal_Awake();
-                        }
-                        catch (Exception e) {
-                            Debug.LogError($"Error in {comp.GetType().Name}.Awake of {_gameObjects[i].Name}: {e.Message} \n StackTrace: {e.StackTrace}");
-                            comp.HasStarted = true; // An error counts as started
-                        }
-                        if(comp.HasStarted)
-                            comp.Internal_Start();
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogError($"Error in {comp.GetType().Name}.Start of {_gameObjects[i].Name}: {e.Message} \n StackTrace: {e.StackTrace}");
-                    }
-                }
+        ForeachComponent((x) => {
 
-                try
-                {
-                    comp.UpdateCoroutines();
-                    comp.Internal_Update();
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError($"Error in {comp.GetType().Name}.Update of {_gameObjects[i].Name}: {e.Message} \n StackTrace: {e.StackTrace}");
-                }
-            }
+            MonoBehaviour.Try(x.Internal_Start);
+            MonoBehaviour.Try(x.UpdateCoroutines);
+            MonoBehaviour.Try(x.Internal_Update);
+        });
 
+
+        ForeachComponent((x) => MonoBehaviour.Try(x.Internal_LateUpdate));
+        ForeachComponent((x) => MonoBehaviour.Try(x.UpdateEndOfFrameCoroutines));
+    }
+
+    public static void ForeachComponent(Action<MonoBehaviour> action)
+    {
         for (int i = 0; i < _gameObjects.Count; i++)
-            foreach (var comp in _gameObjects[i].GetComponents<MonoBehaviour>())
-            {
-                try
-                {
-                    comp.Internal_LateUpdate();
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError($"Error in {comp.GetType().Name}.LateUpdate of {_gameObjects[i].Name}: {e.Message} \n StackTrace: {e.StackTrace}");
-                }
-            }
-
-        for (int i = 0; i < _gameObjects.Count; i++)
-            foreach (var comp in _gameObjects[i].GetComponents<MonoBehaviour>())
-            {
-                try
-                {
-                    comp.UpdateEndOfFrameCoroutines();
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError($"Error in {comp.GetType().Name}.UpdateEndOfFrameCoroutines of {_gameObjects[i].Name}: {e.Message} \n StackTrace: {e.StackTrace}");
-                }
-            }
+            if (_gameObjects[i].enabledInHierarchy)
+                foreach (var comp in _gameObjects[i].GetComponents<MonoBehaviour>())
+                    if (comp.EnabledInHierarchy)
+                        action.Invoke(comp);
     }
 
     public static void PhysicsUpdate()
     {
         PreFixedUpdate?.Invoke();
-        for (int i = 0; i < _gameObjects.Count; i++)
-            foreach (var comp in _gameObjects[i].GetComponents<MonoBehaviour>())
-            {
-                try
-                {
-                    comp.Internal_FixedUpdate();
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError($"Error in {comp.GetType().Name}.FixedUpdate of {_gameObjects[i].Name}: {e.Message} \n StackTrace: {e.StackTrace}");
-                }
-            }
+        ForeachComponent((x) => MonoBehaviour.Try(x.Internal_FixedUpdate));
         PostFixedUpdate?.Invoke();
     }
 
-    public static void Draw() {
+    public static void Draw()
+    {
         var Cameras = MonoBehaviour.FindObjectsOfType<Camera>().ToList();
         Cameras.Sort((a, b) => a.RenderOrder.CompareTo(b.DrawOrder));
-        foreach (var cam in Cameras) 
-            if(cam.EnabledInHierarchy)
+        foreach (var cam in Cameras)
+            if (cam.EnabledInHierarchy)
                 cam.Render(-1, -1);
     }
 
@@ -187,20 +141,16 @@ public static class SceneManager
         Clear();
         MainScene = scene;
         MainScene.InstantiateScene();
-        for (int i = 0; i < _gameObjects.Count; i++)
-            foreach (var comp in _gameObjects[i].GetComponents<MonoBehaviour>())
-                comp.Internal_OnSceneLoaded();
+        ForeachComponent((x) => MonoBehaviour.Try(x.Internal_OnLevelWasLoaded));
     }
 
     public static void LoadScene(AssetRef<Scene> scene)
     {
-        if(scene.IsAvailable == false) throw new Exception("Scene is not available.");
+        if (scene.IsAvailable == false) throw new Exception("Scene is not available.");
         Clear();
         MainScene = scene.Res;
         MainScene.InstantiateScene();
-        for (int i = 0; i < _gameObjects.Count; i++)
-            foreach (var comp in _gameObjects[i].GetComponents<MonoBehaviour>())
-                comp.Internal_OnSceneLoaded();
+        ForeachComponent((x) => MonoBehaviour.Try(x.Internal_OnLevelWasLoaded));
     }
 }
 

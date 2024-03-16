@@ -29,17 +29,12 @@ public class DirectionalLight : MonoBehaviour
     RenderTexture? shadowMap;
     Matrix4x4 depthMVP;
 
-    public void OnEnable()
+    public override void OnPreRender()
     {
-        Graphics.UpdateShadowmaps += UpdateShadowmap;
+        UpdateShadowmap();
     }
 
-    public void OnDisable()
-    {
-        Graphics.UpdateShadowmaps -= UpdateShadowmap;
-    }
-
-    public void OnRenderObject()
+    public override void OnRenderObject()
     {
         lightMat ??= new Material(Shader.Find("Defaults/Directionallight.shader"));
         lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.transform.forward, Graphics.MatView));
@@ -103,7 +98,7 @@ public class DirectionalLight : MonoBehaviour
                 if (go.enabledInHierarchy)
                     foreach (var comp in go.GetComponents())
                         if (comp.Enabled && comp.RenderOrder == RenderingOrder.Opaque)
-                            comp.Internal_OnRenderObjectDepth();
+                            comp.OnRenderObjectDepth();
             disposable?.Dispose();
             shadowMap.End();
         } else {

@@ -16,7 +16,7 @@ namespace Prowl.Runtime
             GetComponentInParent<Rigidbody>().IsActive = true;
         }
 
-        public void DrawGizmosSelected()
+        public override void DrawGizmosSelected()
         {
             var mat = Matrix4x4.Identity;
             mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateScale((radius * (float)GameObject.transform.localScale.x) * 1.0025f));

@@ -301,6 +301,7 @@ public unsafe class EditorApplication : Application {
                     CreateAssetMenuHandler.FindAllMenus(); // Injects into Menuitem so doesnt need to Unload
 
                     SceneManager.RestoreScene();
+                    SceneManager.ClearStoredScene();
                 }
             }
             else

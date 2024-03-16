@@ -147,9 +147,9 @@ public class ViewportWindow : EditorWindow
 
                 foreach (var component in activeGO.GetComponents())
                 {
-                    component.CallDrawGizmos();
+                    component.DrawGizmos();
                     if (HierarchyWindow.SelectHandler.IsSelected(new WeakReference(activeGO))) 
-                        component.CallDrawGizmosSelected();
+                        component.DrawGizmosSelected();
                 }
             }
 

@@ -77,7 +77,7 @@ namespace Prowl.Runtime
         private const float dampingFrac = 0.8f;
         private const float springFrac = 0.45f;
 
-        public void OnEnable()
+        public override void OnEnable()
         {
             car = GetComponentInParent<Rigidbody>();
             if(car == null) Debug.LogWarning("WheelCollider: No RigidBody found in parent.");
@@ -90,10 +90,10 @@ namespace Prowl.Runtime
             car ??= GetComponentInParent<Rigidbody>();
             if (car == null) Debug.LogWarning("WheelCollider: No RigidBody found in parent.");
             float mass = car.Mass / 4.0f;
-            float wheelMass = car.Mass * 0.03f;
+            //float wheelMass = car.Mass * 0.5f;
 
-            Inertia = 0.5f * (Radius * Radius) * wheelMass;
-            Spring = mass * car.Space.world.Gravity.Length() / (WheelTravel * springFrac);
+            Inertia = 0.5f * (Radius * Radius) * mass;
+            Spring = mass * car.Space.world.Gravity.Length() / (WheelTravel * springFrac) * 0.5f;
             Damping = 2.0f * (float)Math.Sqrt(Spring * car.Mass) * 0.25f * dampingFrac;
         }
 
@@ -103,7 +103,7 @@ namespace Prowl.Runtime
         /// <param name="torque">The amount of torque applied to this wheel.</param>
         public void AddTorque(float torque) => heldTorque += torque;
 
-        public void FixedUpdate()
+        public override void FixedUpdate()
         {
             car.Body.DeactivationTime = TimeSpan.MaxValue;
 
@@ -114,7 +114,7 @@ namespace Prowl.Runtime
             heldTorque = 0;
         }
 
-        public void DrawGizmos()
+        public override void DrawGizmos()
         {
             car = GetComponentInParent<Rigidbody>();
             if (car == null) return;

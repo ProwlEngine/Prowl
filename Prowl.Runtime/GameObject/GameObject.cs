@@ -317,7 +317,7 @@ public class GameObject : EngineObject, ISerializable
                     c.Internal_OnDisabled();
             foreach (MonoBehaviour c in components)
             {
-                if (c.HasBeenEnabled) // OnDestroy is only called if the component has previously been active
+                if (c.HasStarted) // OnDestroy is only called if the component has previously been active
                     c.Internal_OnDestroy();
 
                 _components.Remove(c);
@@ -334,7 +334,7 @@ public class GameObject : EngineObject, ISerializable
         _componentCache.Remove(typeof(T), component);
 
         if (component.EnabledInHierarchy) component.Internal_OnDisabled();
-        if (component.HasBeenEnabled) component.Internal_OnDestroy(); // OnDestroy is only called if the component has previously been active
+        if (component.HasStarted) component.Internal_OnDestroy(); // OnDestroy is only called if the component has previously been active
     }
 
     public void RemoveComponent(MonoBehaviour component)
@@ -345,7 +345,7 @@ public class GameObject : EngineObject, ISerializable
         _componentCache.Remove(component.GetType(), component);
 
         if (component.EnabledInHierarchy) component.Internal_OnDisabled();
-        if (component.HasBeenEnabled) component.Internal_OnDestroy(); // OnDestroy is only called if the component has previously been active
+        if (component.HasStarted) component.Internal_OnDestroy(); // OnDestroy is only called if the component has previously been active
     }
 
     public T GetComponent<T>() where T : MonoBehaviour => (T)GetComponent(typeof(T));
@@ -509,7 +509,7 @@ public class GameObject : EngineObject, ISerializable
         foreach (var component in _components)
         {
             if (component.EnabledInHierarchy) component.Internal_OnDisabled();
-            if (component.HasBeenEnabled) component.Internal_OnDestroy(); // OnDestroy is only called if the component has previously been active
+            if (component.HasStarted) component.Internal_OnDestroy(); // OnDestroy is only called if the component has previously been active
             component.Dispose();
         }
         _components.Clear();

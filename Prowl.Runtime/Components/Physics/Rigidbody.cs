@@ -157,7 +157,12 @@ namespace Prowl.Runtime
         #region Prowl Methods
         public override void OnValidate() { if (Application.isPlaying) Refresh(); }
 
-        private void OnEnable()
+        public override void Awake()
+        {
+            base.Awake();
+        }
+
+        public override void OnEnable()
         {
             Body = Space.world.CreateRigidBody();
             Body.AddShape(Shapes);
@@ -175,13 +180,13 @@ namespace Prowl.Runtime
             SetRotation(GameObject.transform.rotation);
         }
 
-        private void OnDisable()
+        public override void OnDisable()
         {
             Space.world.Remove(Body);
             Body = null;
         }
 
-        private void LateUpdate()
+        public override void LateUpdate()
         {
             GameObject.transform.position = Body.Position;
             GameObject.transform.rotation = JQuaternion.CreateFromMatrix(Body.Orientation);
