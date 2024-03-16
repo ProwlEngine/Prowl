@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json.Serialization;
-using System.Xml.Linq;
 
 namespace Prowl.Runtime
 {
@@ -34,6 +32,8 @@ namespace Prowl.Runtime
         /// <summary> Gets a collection containing all tags in this CompoundTag. </summary>
         [JsonIgnore]
         public IEnumerable<Tag> AllTags => Tags.Values;
+        [JsonIgnore]
+        public int Count => Tags.Count;
 
         public CompoundTag() : this(new (string, Tag)[] { }) { }
         public CompoundTag(IEnumerable<(string, Tag)> tags)
