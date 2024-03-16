@@ -110,7 +110,7 @@ namespace Prowl.Runtime
 
         public static Color operator -(Color a, Color b) => new Color(a.r - b.r, a.g - b.g, a.b - b.b, a.a - b.a);
 
-        public override bool Equals(object other)
+        public override bool Equals(object? other)
         {
             if (other is not Color c) return false;
             return r.Equals(c.r) && g.Equals(c.g) && b.Equals(c.b) && a.Equals(c.a);

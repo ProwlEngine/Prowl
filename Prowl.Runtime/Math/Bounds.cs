@@ -254,9 +254,9 @@ namespace Prowl.Runtime
             return (this.min == other.min) && (this.max == other.max);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
-            return (obj is Bounds) ? this.Equals((Bounds)obj) : false;
+            return (obj is Bounds bounds) ? this.Equals(bounds) : false;
         }
 
         public Vector3[] GetCorners()

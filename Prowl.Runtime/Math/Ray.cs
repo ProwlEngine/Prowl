@@ -56,9 +56,9 @@ namespace Prowl.Runtime
 
         #region Public Methods
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
-            return (obj is Ray) ? this.Equals((Ray)obj) : false;
+            return (obj is Ray ray) ? this.Equals(ray) : false;
         }
 
 

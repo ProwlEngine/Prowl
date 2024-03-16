@@ -847,11 +847,11 @@ namespace Prowl.Runtime
         /// </summary>
         /// <param name="obj">The Object to compare against.</param>
         /// <returns>True if the Object is equal to this Quaternion; False otherwise.</returns>
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
-            if (obj is Quaternion)
+            if (obj is Quaternion quaternion)
             {
-                return Equals((Quaternion)obj);
+                return Equals(quaternion);
             }
 
             return false;

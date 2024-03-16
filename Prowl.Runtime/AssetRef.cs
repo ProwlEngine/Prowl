@@ -191,10 +191,10 @@ namespace Prowl.Runtime
             return string.Format("[{2}] {0}", resType.Name, stateChar);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
-            if (obj is AssetRef<T>)
-                return this == (AssetRef<T>)obj;
+            if (obj is AssetRef<T> @ref)
+                return this == @ref;
             else
                 return base.Equals(obj);
         }

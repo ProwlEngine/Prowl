@@ -195,12 +195,12 @@ namespace Prowl.Runtime
             result = ContainmentType.Contains;
         }
 
-        public bool Equals(BoundingFrustum other)
+        public bool Equals(BoundingFrustum? other)
         {
             return (this == other);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             BoundingFrustum f = obj as BoundingFrustum;
             return (object.Equals(f, null)) ? false : (this == f);

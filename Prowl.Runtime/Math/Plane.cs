@@ -150,7 +150,7 @@ namespace Prowl.Runtime
 
         public static bool operator ==(Plane plane1, Plane plane2) => plane1.Equals(plane2);
 
-        public override bool Equals(object other) => (other is Plane) ? this.Equals((Plane)other) : false;
+        public override bool Equals(object? other) => (other is Plane plane) ? this.Equals(plane) : false;
 
         public bool Equals(Plane other) => ((normal == other.normal) && (distance == other.distance));
 

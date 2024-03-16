@@ -455,7 +455,7 @@ namespace Prowl.Icons
         public const string EnvelopeOpen = "\uf2b6";
         public const string EnvelopeOpenText = "\uf658";
         public const string EnvelopesBulk = "\uf674";
-        public const string Equals = "\u003d";
+        public new const string Equals = "\u003d";
         public const string Eraser = "\uf12d";
         public const string Ethernet = "\uf796";
         public const string EuroSign = "\uf153";

@@ -90,9 +90,9 @@ namespace Prowl.Runtime
         /// <param name="obj">The Object to compare against.</param>
         /// <returns>True if the Object is equal to this Vector2; False otherwise.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
-            if (!(obj is Vector2))
+            if (obj is not Vector2)
                 return false;
             return Equals((Vector2)obj);
         }
