@@ -29,8 +29,8 @@ namespace Prowl.Runtime
             int count = 0;
             while (timer >= Time.fixedDeltaTime && count < 10) {
                 count++;
-                world.Step((float)Time.fixedDeltaTime);
                 SceneManager.PhysicsUpdate();
+                world.Step((float)Time.fixedDeltaTime);
                 timer -= Time.fixedDeltaTime;
             }
         }
