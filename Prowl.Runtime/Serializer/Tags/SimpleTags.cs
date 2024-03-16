@@ -5,6 +5,7 @@ namespace Prowl.Runtime
     public class NullTag : Tag
     {
         public NullTag() { }
+        public override object GetValue() => null;
         public override TagType GetTagType() => TagType.Null;
         public override Tag Clone() => new NullTag();
     }
@@ -14,6 +15,7 @@ namespace Prowl.Runtime
         public string Value { get; set; }
         public StringTag() { }
         public StringTag(string value = "") => Value = value;
+        public override object GetValue() => Value;
         public override TagType GetTagType() => TagType.String;
         public override Tag Clone() => new StringTag(Value);
     }
@@ -27,6 +29,7 @@ namespace Prowl.Runtime
             value ??= new byte[] { };
             Value = (byte[])value.Clone();
         }
+        public override object GetValue() => Value;
         public override TagType GetTagType() => TagType.ByteArray;
         public override Tag Clone() => new ByteArrayTag((byte[])Value.Clone());
     }
@@ -36,6 +39,7 @@ namespace Prowl.Runtime
         public bool Value { get; set; }
         public BoolTag() { }
         public BoolTag(bool value) => Value = value;
+        public override object GetValue() => Value;
         public override TagType GetTagType() => TagType.Bool;
         public override Tag Clone() => new BoolTag(Value);
     }

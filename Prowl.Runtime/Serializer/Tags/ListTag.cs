@@ -26,6 +26,7 @@ namespace Prowl.Runtime
         public Tag Get(int tagIdx) => Get<Tag>(tagIdx);
         public T Get<T>(int tagIdx) where T : Tag => (T)Tags[tagIdx];
         public void Add(Tag tag) => Tags.Add(tag);
+        public override object GetValue() => Tags;
         public override TagType GetTagType() => TagType.List;
         public override Tag Clone()
         {

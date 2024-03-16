@@ -142,6 +142,8 @@ namespace Prowl.Runtime
 
         #endregion
 
+        public override object GetValue() => Tags;
+
         public override TagType GetTagType() => TagType.Compound;
 
         public override Tag Clone()

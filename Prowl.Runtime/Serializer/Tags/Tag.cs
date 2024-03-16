@@ -47,6 +47,7 @@ namespace Prowl.Runtime
     {
         public Tag() { }
 
+        public abstract object GetValue();
         public abstract TagType GetTagType();
         public abstract Tag Clone();
 
