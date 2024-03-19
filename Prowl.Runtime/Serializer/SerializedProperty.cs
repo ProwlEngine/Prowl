@@ -25,8 +25,24 @@ namespace Prowl.Runtime
         Compound,
     }
 
+    public class PropertyChangeEventArgs : EventArgs
+    {
+        public SerializedProperty Property { get; }
+        public object? OldValue { get; }
+        public object? NewValue { get; }
+
+        public PropertyChangeEventArgs(SerializedProperty property, object? oldValue, object? newValue)
+        {
+            Property = property;
+            OldValue = oldValue;
+            NewValue = newValue;
+        }
+    }
+
     public sealed partial class SerializedProperty
     {
+        public event EventHandler<PropertyChangeEventArgs>? PropertyChanged;
+
         private object? _value;
         public object? Value { get { return _value; } private set { Set(value); } }
 
@@ -90,6 +106,12 @@ namespace Prowl.Runtime
             return new(TagType, Value);
         }
 
+        private void OnPropertyChanged(PropertyChangeEventArgs e)
+        {
+            PropertyChanged?.Invoke(this, e);
+            Parent?.OnPropertyChanged(e);
+        }
+
         #region Shortcuts
 
         /// <summary>
@@ -145,6 +167,8 @@ namespace Prowl.Runtime
                 PropertyType.Bool => (bool)value,
                 _ => throw new InvalidOperationException("Cannot set value of " + TagType.ToString())
             };
+
+            OnPropertyChanged(new PropertyChangeEventArgs(this, old, value));
         }
 
         /// <summary> Returns the value of this tag, cast as a bool. </summary>
