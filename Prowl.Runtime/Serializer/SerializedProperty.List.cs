@@ -24,6 +24,7 @@ namespace Prowl.Runtime
             if (TagType != PropertyType.List)
                 throw new System.InvalidOperationException("Cannot add tag to non-list tag");
             List.Add(tag);
+            tag.Parent = this;
         }
 
         public void ListRemove(SerializedProperty tag)
@@ -31,6 +32,7 @@ namespace Prowl.Runtime
             if (TagType != PropertyType.List)
                 throw new System.InvalidOperationException("Cannot remove tag from non-list tag");
             List.Remove(tag);
+            tag.Parent = null;
         }
     }
 }

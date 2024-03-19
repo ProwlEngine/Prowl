@@ -61,6 +61,7 @@ namespace Prowl.Runtime
             else if (newTag == this)
                 throw new ArgumentException("Cannot add tag to self");
             Tags.Add(name, newTag);
+            newTag.Parent = this;
         }
 
         public bool Remove(string name)
@@ -189,7 +190,7 @@ namespace Prowl.Runtime
                 else
                 {
                     // Add the new tag
-                    Tags.Add(applyTag.Key, applyTag.Value);
+                    Add(applyTag.Key, applyTag.Value);
                 }
             }
         }

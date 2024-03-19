@@ -27,9 +27,12 @@ namespace Prowl.Runtime
 
     public sealed partial class SerializedProperty
     {
-        public object? Value { get; private set; }
+        private object? _value;
+        public object? Value { get { return _value; } private set { Set(value); } }
 
         public PropertyType TagType { get; private set; }
+
+        public SerializedProperty? Parent { get; private set; }
 
         public SerializedProperty() { }
         public SerializedProperty(byte i) { Value = i; TagType = PropertyType.Byte; }
@@ -124,6 +127,7 @@ namespace Prowl.Runtime
         /// </summary>
         public void Set(object value)
         {
+            var old = _value;
             Value = TagType switch {
                 PropertyType.Byte => (byte)value,
                 PropertyType.sByte => (sbyte)value,
