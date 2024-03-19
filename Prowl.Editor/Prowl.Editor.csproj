@@ -70,10 +70,10 @@
       <EmbeddedResource Include="EmbeddedResources\Checkerboard.png" />
       <EmbeddedResource Include="EmbeddedResources\CSharpIcon.png" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\1mcube.obj" />
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\DefaultRenderPipeline.scriptobj" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Tonemapper.shader" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Cube.obj" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Cylinder.obj" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\DefaultRenderPipeline.scriptobj" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_emission.png" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_gray18.png" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_normal.png" />
