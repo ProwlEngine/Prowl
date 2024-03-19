@@ -268,7 +268,7 @@ namespace Prowl.Runtime
             if (string.IsNullOrWhiteSpace(type))
                 return null;
 
-            Type oType = Type.GetType(type);
+            Type oType = RuntimeUtils.FindType(type);
             if (oType == null)
             {
                 Debug.LogError("[TagSerializer] Couldn't find type: " + type);
