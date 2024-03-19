@@ -114,21 +114,26 @@ public class ViewportWindow : EditorWindow
         mouseUV.y = 1.0 - mouseUV.y;
 
         if (ImGui.IsItemClicked() && !ImGuizmo.IsOver()) {
-            var instanceID = Cam.gBuffer.GetObjectIDAt(mouseUV);
-            if (instanceID != 0) {
-                // find InstanceID Object
-                var go = EngineObject.FindObjectByID<GameObject>(instanceID);
-                if (go != null)
+            // If the Scene Camera has no Render Graph, the gBuffer may not be initialized
+            if (Cam.gBuffer != null)
+            {
+                var instanceID = Cam.gBuffer.GetObjectIDAt(mouseUV);
+                if (instanceID != 0)
                 {
-                    if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                    // find InstanceID Object
+                    var go = EngineObject.FindObjectByID<GameObject>(instanceID);
+                    if (go != null)
                     {
-                        HierarchyWindow.SelectHandler.Select(new WeakReference(go));
-                        HierarchyWindow.Ping(go);
-                    }
-                    else
-                    {
-                        HierarchyWindow.SelectHandler.Select(new WeakReference(go.transform.root.gameObject));
-                        HierarchyWindow.Ping(go.transform.root.gameObject);
+                        if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                        {
+                            HierarchyWindow.SelectHandler.Select(new WeakReference(go));
+                            HierarchyWindow.Ping(go);
+                        }
+                        else
+                        {
+                            HierarchyWindow.SelectHandler.Select(new WeakReference(go.transform.root.gameObject));
+                            HierarchyWindow.Ping(go.transform.root.gameObject);
+                        }
                     }
                 }
             }
