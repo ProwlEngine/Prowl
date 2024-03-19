@@ -16,7 +16,7 @@ internal class Program {
         FileInfo StartingScene = new FileInfo(Path.Combine(Data.FullName, "level.prowl"));
         if (StartingScene.Exists)
         {
-            Tag tag = BinaryTagConverter.ReadFromFile(StartingScene);
+            SerializedProperty tag = BinaryTagConverter.ReadFromFile(StartingScene);
             Scene scene = TagSerializer.Deserialize<Scene>((CompoundTag)tag);
             SceneManager.LoadScene(scene);
         }

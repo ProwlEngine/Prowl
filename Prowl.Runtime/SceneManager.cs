@@ -18,7 +18,7 @@ public static class SceneManager
     public static event Action PreFixedUpdate;
     public static event Action PostFixedUpdate;
 
-    private static Tag? StoredScene;
+    private static SerializedProperty? StoredScene;
     private static Guid StoredSceneID;
 
     public static void Initialize()

@@ -34,37 +34,37 @@ namespace Prowl.Runtime
             }
         }
 
-        private static void WriteTag(Tag tag, BinaryWriter writer)
+        private static void WriteTag(SerializedProperty tag, BinaryWriter writer)
         {
             var type = tag.GetTagType();
             writer.Write((byte)type);
-            if (type == TagType.Null) { } // Nothing for Null
-            else if (type == TagType.Byte) writer.Write(tag.ByteValue);
-            else if (type == TagType.sByte) writer.Write(tag.sByteValue);
-            else if (type == TagType.Short) writer.Write(tag.ShortValue);
-            else if (type == TagType.Int) writer.Write(tag.IntValue);
-            else if (type == TagType.Long) writer.Write(tag.LongValue);
-            else if (type == TagType.UShort) writer.Write(tag.UShortValue);
-            else if (type == TagType.UInt) writer.Write(tag.UIntValue);
-            else if (type == TagType.ULong) writer.Write(tag.ULongValue);
-            else if (type == TagType.Float) writer.Write(tag.FloatValue);
-            else if (type == TagType.Double) writer.Write(tag.DoubleValue);
-            else if (type == TagType.Decimal) writer.Write(tag.DecimalValue);
-            else if (type == TagType.String) writer.Write(tag.StringValue);
-            else if (type == TagType.ByteArray)
+            if (type == PropertyType.Null) { } // Nothing for Null
+            else if (type == PropertyType.Byte) writer.Write(tag.ByteValue);
+            else if (type == PropertyType.sByte) writer.Write(tag.sByteValue);
+            else if (type == PropertyType.Short) writer.Write(tag.ShortValue);
+            else if (type == PropertyType.Int) writer.Write(tag.IntValue);
+            else if (type == PropertyType.Long) writer.Write(tag.LongValue);
+            else if (type == PropertyType.UShort) writer.Write(tag.UShortValue);
+            else if (type == PropertyType.UInt) writer.Write(tag.UIntValue);
+            else if (type == PropertyType.ULong) writer.Write(tag.ULongValue);
+            else if (type == PropertyType.Float) writer.Write(tag.FloatValue);
+            else if (type == PropertyType.Double) writer.Write(tag.DoubleValue);
+            else if (type == PropertyType.Decimal) writer.Write(tag.DecimalValue);
+            else if (type == PropertyType.String) writer.Write(tag.StringValue);
+            else if (type == PropertyType.ByteArray)
             {
                 writer.Write(tag.ByteArrayValue.Length);
                 writer.Write(tag.ByteArrayValue);
             }
-            else if (type == TagType.Bool) writer.Write(tag.BoolValue);
-            else if (type == TagType.List)
+            else if (type == PropertyType.Bool) writer.Write(tag.BoolValue);
+            else if (type == PropertyType.List)
             {
                 var listTag = (ListTag)tag;
                 writer.Write(listTag.Count);
                 foreach (var subTag in listTag.Tags)
                     WriteTag(subTag, writer); // Lists dont care about names, so dont need to write Tag Names inside a List
             }
-            else if (type == TagType.Compound) WriteCompound((CompoundTag)tag, writer);
+            else if (type == PropertyType.Compound) WriteCompound((CompoundTag)tag, writer);
             else throw new Exception($"Unknown tag type: {type}");
         }
 
@@ -94,25 +94,25 @@ namespace Prowl.Runtime
             return tag;
         }
 
-        private static Tag ReadTag(BinaryReader reader)
+        private static SerializedProperty ReadTag(BinaryReader reader)
         {
-            var type = (TagType)reader.ReadByte();
-            if (type == TagType.Null) return new NullTag();
-            else if (type == TagType.Byte) return new ByteTag(reader.ReadByte());
-            else if (type == TagType.sByte) return new sByteTag(reader.ReadSByte());
-            else if (type == TagType.Short) return new ShortTag(reader.ReadInt16());
-            else if (type == TagType.Int) return new IntTag(reader.ReadInt32());
-            else if (type == TagType.Long) return new LongTag(reader.ReadInt64());
-            else if (type == TagType.UShort) return new UShortTag(reader.ReadUInt16());
-            else if (type == TagType.UInt) return new UIntTag(reader.ReadUInt32());
-            else if (type == TagType.ULong) return new ULongTag(reader.ReadUInt64());
-            else if (type == TagType.Float) return new FloatTag(reader.ReadSingle());
-            else if (type == TagType.Double) return new DoubleTag(reader.ReadDouble());
-            else if (type == TagType.Decimal) return new DecimalTag(reader.ReadDecimal());
-            else if (type == TagType.String) return new StringTag(reader.ReadString());
-            else if (type == TagType.ByteArray) return new ByteArrayTag(reader.ReadBytes(reader.ReadInt32()));
-            else if (type == TagType.Bool) return new BoolTag(reader.ReadBoolean());
-            else if (type == TagType.List)
+            var type = (PropertyType)reader.ReadByte();
+            if (type == PropertyType.Null) return new NullTag();
+            else if (type == PropertyType.Byte) return new ByteTag(reader.ReadByte());
+            else if (type == PropertyType.sByte) return new sByteTag(reader.ReadSByte());
+            else if (type == PropertyType.Short) return new ShortTag(reader.ReadInt16());
+            else if (type == PropertyType.Int) return new IntTag(reader.ReadInt32());
+            else if (type == PropertyType.Long) return new LongTag(reader.ReadInt64());
+            else if (type == PropertyType.UShort) return new UShortTag(reader.ReadUInt16());
+            else if (type == PropertyType.UInt) return new UIntTag(reader.ReadUInt32());
+            else if (type == PropertyType.ULong) return new ULongTag(reader.ReadUInt64());
+            else if (type == PropertyType.Float) return new FloatTag(reader.ReadSingle());
+            else if (type == PropertyType.Double) return new DoubleTag(reader.ReadDouble());
+            else if (type == PropertyType.Decimal) return new DecimalTag(reader.ReadDecimal());
+            else if (type == PropertyType.String) return new StringTag(reader.ReadString());
+            else if (type == PropertyType.ByteArray) return new ByteArrayTag(reader.ReadBytes(reader.ReadInt32()));
+            else if (type == PropertyType.Bool) return new BoolTag(reader.ReadBoolean());
+            else if (type == PropertyType.List)
             {
                 var listTag = new ListTag();
                 var tagCount = reader.ReadInt32();
@@ -120,7 +120,7 @@ namespace Prowl.Runtime
                     listTag.Add(ReadTag(reader));
                 return listTag;
             }
-            else if (type == TagType.Compound) return ReadCompound(reader);
+            else if (type == PropertyType.Compound) return ReadCompound(reader);
             else throw new Exception($"Unknown tag type: {type}");
         }
 

@@ -8,7 +8,7 @@ namespace Prowl.Editor.Drawers
         public readonly List<object> targetObjects = new();
         public bool isEditingMultipleObjects => targetObjects.Count > 1;
 
-        private CompoundTag serializedObject = new();
+        private SerializedProperty serializedObject = new();
 
         public SerializedObject(params object[] targetObject)
         {
@@ -28,26 +28,30 @@ namespace Prowl.Editor.Drawers
             Update();
         }
 
+        public SerializedProperty? FindProperty(string name) => serializedObject.Get(name);
+
+        public SerializedProperty? FindPropertyDeep(string name) => serializedObject.Find(name);
+
         /// <summary>
         /// Update the serialized object representation.
+        /// By serializing all target objects into 1 CompoundTag.
         /// </summary>
-        /// <exception cref="NotImplementedException"></exception>
         public void Update()
         {
             // Loop through all target objects and serialize them
-            List<CompoundTag> tags = new();
+            List<SerializedProperty> tags = new();
             foreach (var target in targetObjects)
-                tags.Add(TagSerializer.Serialize(target) as CompoundTag);
+                tags.Add(TagSerializer.Serialize(target));
 
             // Merge the tags into 1
             // Ignore tags whos value shifts between objects
-            serializedObject = CompoundTag.Merge(tags);
+            serializedObject = SerializedProperty.Merge(tags);
         }
 
         /// <summary>
         /// Apply the serialized object to the target object.
+        /// This will apply the CompoundTag stored to all target objects.
         /// </summary>
-        /// <exception cref="NotImplementedException"></exception>
         public void ApplyModifiedProperties()
         {
             // TODO: Apply only modified properties

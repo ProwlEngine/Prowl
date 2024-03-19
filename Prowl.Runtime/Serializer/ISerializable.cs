@@ -4,8 +4,8 @@ namespace Prowl.Runtime
 {
     public interface ISerializable
     {
-        public CompoundTag Serialize(SerializationContext ctx);
-        public void Deserialize(CompoundTag value, SerializationContext ctx);
+        public SerializedProperty Serialize(SerializationContext ctx);
+        public void Deserialize(SerializedProperty value, SerializationContext ctx);
 
     }
 }

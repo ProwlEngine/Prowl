@@ -221,7 +221,7 @@ public static class Project
 
         BoundedLog($"Preparing default scene to {BuildDataPath}...");
         FileInfo StartingScene = new FileInfo(Path.Combine(BuildDataPath, "level.prowl"));
-        Tag tag = TagSerializer.Serialize(BuildSettings.StartingScene.Res!);
+        SerializedProperty tag = TagSerializer.Serialize(BuildSettings.StartingScene.Res!);
         BinaryTagConverter.WriteToFile((CompoundTag)tag, StartingScene);
 
 
