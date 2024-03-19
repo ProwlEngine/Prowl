@@ -6,6 +6,37 @@ using System.Reflection;
 
 namespace Prowl.Runtime
 {
+    // Classes used to test serialization
+    //public class TestSerialize
+    //{
+    //    public object NullField = null;
+    //    public Guid GuidField = Guid.NewGuid();
+    //    public byte ByteField = 123;
+    //    public sbyte SByteField = -123;
+    //    public short ShortField = 12345;
+    //    public int IntField = 123456789;
+    //    public long LongField = 1234567890123456789;
+    //    public ushort UShortField = 12345;
+    //    public uint UIntField = 123456789;
+    //    public ulong ULongField = 1234567890123456789;
+    //    public float FloatField = 123.456f;
+    //    public double DoubleField = 123.456789;
+    //    public decimal DecimalField = 123.456789m;
+    //    public string StringField = "Hello World!";
+    //    public byte[] ByteArrayField = new byte[] { 1, 2, 3, 4, 5 };
+    //    public bool BoolField = true;
+    //    public TestSimpleSerialize ObjectField = new();
+    //    public List<TestSimpleSerialize> ListField = new() { new(), new() };
+    //    public Dictionary<string, TestSimpleSerialize> DictionaryField = new() { { "1", new() }, { "2", new() } };
+    //
+    //}
+    //
+    //public class TestSimpleSerialize
+    //{
+    //    public string StringField = "Hello World!";
+    //    public byte[] ByteArrayField = new byte[] { 1, 2, 3, 4, 5 };
+    //}
+
     public static class Serializer
     {
         public class SerializationContext
