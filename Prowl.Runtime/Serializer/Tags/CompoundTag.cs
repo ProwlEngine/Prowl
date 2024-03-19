@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Text;
 using System.Text.Json.Serialization;
 
@@ -141,6 +142,99 @@ namespace Prowl.Runtime
         }
 
         #endregion
+
+        /// <summary>
+        /// Returns a new compound with all the tags/paths combined
+        /// If a tag is found with identical Path/Name, and values are the same its kept, otherwise its discarded
+        /// </summary>
+        public static CompoundTag Merge(List<CompoundTag> tags)
+        {
+            CompoundTag result = new CompoundTag();
+
+            if (tags.Count == 0) return result;
+
+            var referenceTag = tags[0];
+            foreach (var nameVal in referenceTag.Tags)
+            {
+                bool isConsistent = true;
+                Tag firstTagValue = nameVal.Value;
+
+                for (int i = 1; i < tags.Count; i++)
+                {
+                    if (tags[i].TryGet(nameVal.Key, out Tag nTag) && nTag.GetTagType() == firstTagValue.GetTagType())
+                    {
+                        // Check for value equality for primitive types
+                        if (firstTagValue is CompoundTag)
+                        {
+                            // Handle recursion for CompoundTags
+                            var subTagsToMerge = tags.Select(tag => tag.Get<CompoundTag>(nameVal.Key)).ToList();
+                            var mergedSubTag = Merge(subTagsToMerge);
+                            if (mergedSubTag.Count > 0) // Only add if the mergedSubTag contains keys
+                            {
+                                result.Add(nameVal.Key, mergedSubTag);
+                            }
+                            isConsistent = false; // Prevent adding the CompoundTag again outside the if-block
+                        }
+                        // List tags and Byte arrays are ignored when multiple objects are selected
+                        else if (firstTagValue is ListTag || firstTagValue is ByteArrayTag)
+                        {
+                            isConsistent = false;
+                            break;
+                        }
+                        else if (!firstTagValue.GetValue().Equals(tags[i].Get<Tag>(nameVal.Key).GetValue()))
+                        {
+                            isConsistent = false;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        isConsistent = false;
+                        break;
+                    }
+                }
+
+                if (isConsistent)
+                    result.Add(nameVal.Key, firstTagValue);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Returns a new CompoundTag that contains all the tags from us who vary from the given CompoundTag
+        /// For example if we have an additional tag that the given CompoundTag does not have, it will be included in the result
+        /// Or if we have a tag with a different value, it will be included in the result
+        /// This will occur recursively for CompoundTags
+        /// </summary>
+        /// <param name="from">The Given CompoundTag To Compare Against</param>
+        public CompoundTag DifferenceFrom(CompoundTag from)
+        {
+            CompoundTag result = new();
+
+            foreach (var usTag in Tags)
+            {
+                if (!from.TryGet(usTag.Key, out Tag fromTag))
+                {
+                    result.Add(usTag.Key, usTag.Value);
+                }
+                else if (usTag.Value.GetTagType() == fromTag.GetTagType())
+                {
+                    if (usTag.Value is CompoundTag)
+                    {
+                        var subTag = ((CompoundTag)usTag.Value).DifferenceFrom((CompoundTag)fromTag);
+                        if (subTag.Count > 0)
+                            result.Add(usTag.Key, subTag);
+                    }
+                    else if (!usTag.Value.GetValue().Equals(fromTag.GetValue()))
+                    {
+                        result.Add(usTag.Key, usTag.Value);
+                    }
+                }
+            }
+
+            return result;
+        }
 
         public override object GetValue() => Tags;
 

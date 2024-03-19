@@ -41,62 +41,7 @@ namespace Prowl.Editor.Drawers
 
             // Merge the tags into 1
             // Ignore tags whos value shifts between objects
-            serializedObject = MergeTags(tags);
-        }
-
-        // TODO: Find a faster way to do this, this is just for the Inspector to support multiple objects at once
-        private CompoundTag MergeTags(List<CompoundTag> tags)
-        {
-            CompoundTag result = new CompoundTag();
-
-            if (tags.Count == 0) return result;
-
-            var referenceTag = tags[0];
-            foreach (var nameVal in referenceTag.Tags)
-            {
-                bool isConsistent = true;
-                Tag firstTagValue = nameVal.Value;
-
-                for (int i = 1; i < tags.Count; i++)
-                {
-                    if (tags[i].TryGet(nameVal.Key, out Tag nTag) && nTag.GetTagType() == firstTagValue.GetTagType())
-                    {
-                        // Check for value equality for primitive types
-                        if (firstTagValue is CompoundTag)
-                        {
-                            // Handle recursion for CompoundTags
-                            var subTagsToMerge = tags.Select(tag => tag.Get<CompoundTag>(nameVal.Key)).ToList();
-                            var mergedSubTag = MergeTags(subTagsToMerge);
-                            if (mergedSubTag.Count > 0) // Only add if the mergedSubTag contains keys
-                            {
-                                result.Add(nameVal.Key, mergedSubTag);
-                            }
-                            isConsistent = false; // Prevent adding the CompoundTag again outside the if-block
-                        }
-                        // List tags and Byte arrays are ignored when multiple objects are selected
-                        else if (firstTagValue is ListTag || firstTagValue is ByteArrayTag)
-                        {
-                            isConsistent = false;
-                            break;
-                        }
-                        else if (!firstTagValue.GetValue().Equals(tags[i].Get<Tag>(nameVal.Key).GetValue()))
-                        {
-                            isConsistent = false;
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        isConsistent = false;
-                        break;
-                    }
-                }
-
-                if (isConsistent)
-                    result.Add(nameVal.Key, firstTagValue);
-            }
-
-            return result;
+            serializedObject = CompoundTag.Merge(tags);
         }
 
         /// <summary>
