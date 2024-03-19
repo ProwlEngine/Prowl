@@ -168,7 +168,7 @@ namespace Prowl.Runtime
             }
 
             compound["$id"] = new(PropertyType.Int, id);
-            compound["$type"] = new(PropertyType.String, type.AssemblyQualifiedName);
+            compound["$type"] = new(PropertyType.String, type.FullName);
 
             if (value is ISerializeCallbacks callback2)
                 callback2.PostSerialize();

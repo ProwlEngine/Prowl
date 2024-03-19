@@ -522,7 +522,7 @@ namespace Prowl.Runtime.Assets
 
             meta.assetTypes = new string[ctx.SubAssets.Count];
             for (int i = 0; i < ctx.SubAssets.Count; i++)
-                meta.assetTypes[i] = ctx.SubAssets[i].GetType().AssemblyQualifiedName!;
+                meta.assetTypes[i] = ctx.SubAssets[i].GetType().FullName!;
 
             SaveMeta(meta, relativeAssetPath);
             ctx.SaveToFile(serialized);
