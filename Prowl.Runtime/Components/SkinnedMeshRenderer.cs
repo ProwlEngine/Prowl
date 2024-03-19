@@ -74,20 +74,20 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         }
     }
 
-    public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
+    public SerializedProperty Serialize(Serializer.SerializationContext ctx)
     {
-        CompoundTag compoundTag = new CompoundTag();
-        compoundTag.Add("Mesh", TagSerializer.Serialize(Mesh, ctx));
-        compoundTag.Add("Material", TagSerializer.Serialize(Material, ctx));
-        compoundTag.Add("Root", TagSerializer.Serialize(Root, ctx));
+        SerializedProperty compoundTag = SerializedProperty.NewCompound();
+        compoundTag.Add("Mesh", Serializer.Serialize(Mesh, ctx));
+        compoundTag.Add("Material", Serializer.Serialize(Material, ctx));
+        compoundTag.Add("Root", Serializer.Serialize(Root, ctx));
 
         return compoundTag;
     }
 
-    public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
+    public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
     {
-        Mesh = TagSerializer.Deserialize<AssetRef<Mesh>>(value["Mesh"], ctx);
-        Material = TagSerializer.Deserialize<AssetRef<Material>>(value["Material"], ctx);
-        Root = TagSerializer.Deserialize<GameObject>(value["Root"], ctx);
+        Mesh = Serializer.Deserialize<AssetRef<Mesh>>(value["Mesh"], ctx);
+        Material = Serializer.Deserialize<AssetRef<Material>>(value["Material"], ctx);
+        Root = Serializer.Deserialize<GameObject>(value["Root"], ctx);
     }
 }

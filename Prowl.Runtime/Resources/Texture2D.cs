@@ -206,25 +206,25 @@ namespace Prowl.Runtime
                 throw new ArgumentOutOfRangeException("Specified area is outside of the texture's storage");
         }
 
-        public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
+        public SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
-            CompoundTag compoundTag = new CompoundTag();
-            compoundTag.Add("Width", new IntTag((int)Width));
-            compoundTag.Add("Height", new IntTag((int)Height));
-            compoundTag.Add("IsMipMapped", new BoolTag(IsMipmapped));
-            compoundTag.Add("ImageFormat", new IntTag((int)ImageFormat));
-            compoundTag.Add("PixelFormat", new IntTag((int)PixelFormat));
-            compoundTag.Add("MinFilter", new IntTag((int)MinFilter));
-            compoundTag.Add("MagFilter", new IntTag((int)MagFilter));
-            compoundTag.Add("Wrap", new IntTag((int)WrapMode));
+            SerializedProperty compoundTag = SerializedProperty.NewCompound();
+            compoundTag.Add("Width", new((int)Width));
+            compoundTag.Add("Height", new((int)Height));
+            compoundTag.Add("IsMipMapped", new(IsMipmapped));
+            compoundTag.Add("ImageFormat", new((int)ImageFormat));
+            compoundTag.Add("PixelFormat", new((int)PixelFormat));
+            compoundTag.Add("MinFilter", new((int)MinFilter));
+            compoundTag.Add("MagFilter", new((int)MagFilter));
+            compoundTag.Add("Wrap", new((int)WrapMode));
             Memory<byte> memory = new byte[GetSize()];
             GetData(memory, PixelFormat);
-            compoundTag.Add("Data", new ByteArrayTag(memory.ToArray()));
+            compoundTag.Add("Data", new(memory.ToArray()));
 
             return compoundTag;
         }
 
-        public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
+        public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
             Width = (uint)value["Width"].IntValue;
             Height = (uint)value["Height"].IntValue;

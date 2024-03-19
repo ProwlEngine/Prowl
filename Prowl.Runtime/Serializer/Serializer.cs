@@ -6,7 +6,7 @@ using System.Reflection;
 
 namespace Prowl.Runtime
 {
-    public static class TagSerializer
+    public static class Serializer
     {
         public class SerializationContext
         {
@@ -121,11 +121,11 @@ namespace Prowl.Runtime
 
             var type = value.GetType();
 
-            var compound = new SerializedProperty();
+            var compound = SerializedProperty.NewCompound();
 
             if (ctx.objectToId.TryGetValue(value, out int id))
             {
-                compound.SerializedID = id;
+                compound["$id"] = new(PropertyType.Int, id);
                 // Dont need to write compound data, its already been serialized at some point earlier
                 return compound;
             }
@@ -167,8 +167,8 @@ namespace Prowl.Runtime
                 }
             }
 
-            compound.SerializedID = id;
-            compound.SerializedType = type.AssemblyQualifiedName;
+            compound["$id"] = new(PropertyType.Int, id);
+            compound["$type"] = new(PropertyType.String, type.AssemblyQualifiedName);
 
             if (value is ISerializeCallbacks callback2)
                 callback2.PostSerialize();
@@ -255,22 +255,30 @@ namespace Prowl.Runtime
 
         private static object? DeserializeObject(SerializedProperty compound, SerializationContext ctx)
         {
-            if (ctx.idToObject.TryGetValue(compound.SerializedID, out object? existingObj))
-                return existingObj;
+            SerializedProperty? id = compound.Get("$id");
+            if(id != null)
+                if (ctx.idToObject.TryGetValue(id.IntValue, out object? existingObj))
+                    return existingObj;
 
-            if (string.IsNullOrWhiteSpace(compound.SerializedType))
+            SerializedProperty? typeProperty = compound.Get("$type");
+            if (typeProperty == null)
                 return null;
 
-            Type oType = Type.GetType(compound.SerializedType);
+            string type = typeProperty.StringValue;
+            if (string.IsNullOrWhiteSpace(type))
+                return null;
+
+            Type oType = Type.GetType(type);
             if (oType == null)
             {
-                Debug.LogError("[TagSerializer] Couldn't find type: " + compound.SerializedType);
+                Debug.LogError("[TagSerializer] Couldn't find type: " + type);
                 return null;
             }
 
             object resultObject = CreateInstance(oType);
 
-            ctx.idToObject[compound.SerializedID] = resultObject;
+            if (id != null)
+                ctx.idToObject[id.IntValue] = resultObject;
             resultObject = DeserializeInto(compound, resultObject, ctx);
 
             return resultObject;

@@ -19,13 +19,13 @@ namespace Prowl.Editor.Assets
             {
                 string json = File.ReadAllText(assetPath.FullName);
                 var tag = StringTagConverter.Read(json);
-                mat = TagSerializer.Deserialize<Material>(tag);
+                mat = Serializer.Deserialize<Material>(tag);
             }
             catch
             {
                 // something went wrong, lets just create a new material and save it
                 mat = new Material();
-                string json = StringTagConverter.Write((CompoundTag)TagSerializer.Serialize(mat));
+                string json = StringTagConverter.Write(Serializer.Serialize(mat));
                 File.WriteAllText(json, assetPath.FullName);
             }
 
@@ -45,7 +45,7 @@ namespace Prowl.Editor.Assets
             try
             {
                 var tag = StringTagConverter.ReadFromFile((target as MetaFile).AssetPath);
-                Material mat = TagSerializer.Deserialize<Material>(tag);
+                Material mat = Serializer.Deserialize<Material>(tag);
 
                 PropertyDrawer.Draw(mat, typeof(Material).GetField("Shader")!);
                 bool changed = false;
@@ -157,7 +157,7 @@ namespace Prowl.Editor.Assets
 
                 if (changed)
                 {
-                    StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(mat), (target as MetaFile).AssetPath);
+                    StringTagConverter.WriteToFile(Serializer.Serialize(mat), (target as MetaFile).AssetPath);
                     AssetDatabase.Reimport(AssetDatabase.FileToRelative((target as MetaFile).AssetPath));
                 }
             }

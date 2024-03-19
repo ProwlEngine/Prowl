@@ -562,47 +562,47 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
-    public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
+    public SerializedProperty Serialize(Serializer.SerializationContext ctx)
     {
-        CompoundTag compoundTag = new CompoundTag();
-        compoundTag.Add("Name", new StringTag(Name));
+        SerializedProperty compoundTag = SerializedProperty.NewCompound();
+        compoundTag.Add("Name", new SerializedProperty(Name));
 
-        compoundTag.Add("Enabled", new ByteTag((byte)(_enabled ? 1 : 0)));
-        compoundTag.Add("EnabledInHierarchy", new ByteTag((byte)(_enabledInHierarchy ? 1 : 0)));
+        compoundTag.Add("Enabled", new SerializedProperty((byte)(_enabled ? 1 : 0)));
+        compoundTag.Add("EnabledInHierarchy", new SerializedProperty((byte)(_enabledInHierarchy ? 1 : 0)));
 
-        compoundTag.Add("TagIndex", new IntTag(tagIndex));
-        compoundTag.Add("LayerIndex", new IntTag(layerIndex));
+        compoundTag.Add("TagIndex", new SerializedProperty(tagIndex));
+        compoundTag.Add("LayerIndex", new SerializedProperty(layerIndex));
 
-        compoundTag.Add("HideFlags", new IntTag((int)hideFlags));
+        compoundTag.Add("HideFlags", new SerializedProperty((int)hideFlags));
 
         if (_transform != null)
         {
             // If the transforms position, rotation and scale are all default we dont need to serialize it
             if (_transform.localPosition != Vector3.zero || _transform.localRotation != Quaternion.identity || _transform.localScale != Vector3.one)
-                compoundTag.Add("Transform", TagSerializer.Serialize(_transform, ctx));
+                compoundTag.Add("Transform", Serializer.Serialize(_transform, ctx));
         }
 
         if (AssetID != Guid.Empty)
         {
-            compoundTag.Add("AssetID", new StringTag(AssetID.ToString()));
+            compoundTag.Add("AssetID", new SerializedProperty(AssetID.ToString()));
             if(FileID != 0)
-                compoundTag.Add("FileID", new ShortTag(FileID));
+                compoundTag.Add("FileID", new SerializedProperty(FileID));
         }
 
-        ListTag components = new ListTag();
+        SerializedProperty components = SerializedProperty.NewList();
         foreach (var comp in _components)
-            components.Add(TagSerializer.Serialize(comp, ctx));
+            components.ListAdd(Serializer.Serialize(comp, ctx));
         compoundTag.Add("Components", components);
 
-        ListTag children = new ListTag();
+        SerializedProperty children = SerializedProperty.NewList();
         foreach (var child in this.children)
-            children.Add(TagSerializer.Serialize(child, ctx));
+            children.ListAdd(Serializer.Serialize(child, ctx));
         compoundTag.Add("Children", children);
 
         return compoundTag;
     }
 
-    public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
+    public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
     {
         Name = value["Name"].StringValue;
         _enabled = value["Enabled"].ByteValue == 1;
@@ -611,30 +611,30 @@ public class GameObject : EngineObject, ISerializable
         layerIndex = value["LayerIndex"].IntValue;
         hideFlags = (HideFlags)value["HideFlags"].IntValue;
 
-        if (value.TryGet("Transform", out CompoundTag transformTag))
-            _transform = TagSerializer.Deserialize<Transform>(transformTag, ctx);
+        if (value.TryGet("Transform", out SerializedProperty transformTag))
+            _transform = Serializer.Deserialize<Transform>(transformTag, ctx);
 
-        if (value.TryGet("AssetID", out StringTag guid))
-            AssetID = Guid.Parse(guid.Value);
-        if (value.TryGet("FileID", out ShortTag fileID))
-            FileID = fileID.Value;
+        if (value.TryGet("AssetID", out var guid))
+            AssetID = Guid.Parse(guid.StringValue);
+        if (value.TryGet("FileID", out var fileID))
+            FileID = fileID.ShortValue;
 
-        ListTag comps = (ListTag)value["Components"];
+        var comps = value["Components"];
         _components = new();
-        foreach (CompoundTag compTag in comps.Tags)
+        foreach (var compTag in comps.List)
         {
-            MonoBehaviour? component = TagSerializer.Deserialize<MonoBehaviour>(compTag, ctx);
+            MonoBehaviour? component = Serializer.Deserialize<MonoBehaviour>(compTag, ctx);
             if (component == null) continue;
             component.AttachToGameObject(this);
             _components.Add(component);
             _componentCache.Add(component.GetType(), component);
         }
 
-        ListTag children = (ListTag)value["Children"];
+        var children = value["Children"];
         this.children = new();
-        foreach (CompoundTag childTag in children.Tags)
+        foreach (var childTag in children.List)
         {
-            GameObject? child = TagSerializer.Deserialize<GameObject>(childTag, ctx);
+            GameObject? child = Serializer.Deserialize<GameObject>(childTag, ctx);
             if (child == null) continue;
             child._parent = this;
             this.children.Add(child);

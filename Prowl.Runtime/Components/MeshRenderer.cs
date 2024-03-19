@@ -61,19 +61,19 @@ public class MeshRenderer : MonoBehaviour, ISerializable
         }
     }
 
-    public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
+    public SerializedProperty Serialize(Serializer.SerializationContext ctx)
     {
-        CompoundTag compoundTag = new CompoundTag();
-        compoundTag.Add("Mesh", TagSerializer.Serialize(Mesh, ctx));
-        compoundTag.Add("Material", TagSerializer.Serialize(Material, ctx));
-        compoundTag.Add("mainColor", TagSerializer.Serialize(mainColor, ctx));
+        SerializedProperty compoundTag = SerializedProperty.NewCompound();
+        compoundTag.Add("Mesh", Serializer.Serialize(Mesh, ctx));
+        compoundTag.Add("Material", Serializer.Serialize(Material, ctx));
+        compoundTag.Add("mainColor", Serializer.Serialize(mainColor, ctx));
         return compoundTag;
     }
 
-    public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
+    public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
     {
-        Mesh = TagSerializer.Deserialize<AssetRef<Mesh>>(value["Mesh"], ctx);
-        Material = TagSerializer.Deserialize<AssetRef<Material>>(value["Material"], ctx);
-        mainColor = TagSerializer.Deserialize<Color>(value["mainColor"], ctx);
+        Mesh = Serializer.Deserialize<AssetRef<Mesh>>(value["Mesh"], ctx);
+        Material = Serializer.Deserialize<AssetRef<Material>>(value["Material"], ctx);
+        mainColor = Serializer.Deserialize<Color>(value["mainColor"], ctx);
     }
 }

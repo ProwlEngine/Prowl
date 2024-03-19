@@ -2,11 +2,11 @@
 {
     public class Prefab : EngineObject
     {
-        public CompoundTag GameObject;
+        public SerializedProperty GameObject;
 
         public GameObject Instantiate()
         {
-            var go = TagSerializer.Deserialize<GameObject>(GameObject);
+            var go = Serializer.Deserialize<GameObject>(GameObject);
             go.AssetID = AssetID;
             return go;
         }

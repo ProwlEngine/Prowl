@@ -1,4 +1,4 @@
-﻿using static Prowl.Runtime.TagSerializer;
+﻿using static Prowl.Runtime.Serializer;
 
 namespace Prowl.Runtime
 {

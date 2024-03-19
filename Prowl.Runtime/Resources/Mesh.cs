@@ -376,9 +376,9 @@ namespace Prowl.Runtime
 
         #endregion
 
-        public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
+        public SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
-            CompoundTag compoundTag = new CompoundTag();
+            SerializedProperty compoundTag = SerializedProperty.NewCompound();
             // Serialize to byte[]
             using (MemoryStream memoryStream = new MemoryStream())
             using (BinaryWriter writer = new BinaryWriter(memoryStream))
@@ -442,13 +442,13 @@ namespace Prowl.Runtime
 
                 SerializeArray(writer, triangles);
 
-                compoundTag.Add("Data", new ByteArrayTag(memoryStream.ToArray()));
+                compoundTag.Add("Data", new(memoryStream.ToArray()));
             }
-            compoundTag.Add("Format", TagSerializer.Serialize(format, ctx));
+            compoundTag.Add("Format", Serializer.Serialize(format, ctx));
             return compoundTag;
         }
 
-        public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
+        public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
             using (MemoryStream memoryStream = new MemoryStream(value["Data"].ByteArrayValue))
             using (BinaryReader reader = new BinaryReader(memoryStream))
@@ -499,7 +499,7 @@ namespace Prowl.Runtime
                 triangles = DeserializeArray<ushort> (reader);
 
             }
-            format = TagSerializer.Deserialize<VertexFormat>(value["Format"], ctx);
+            format = Serializer.Deserialize<VertexFormat>(value["Format"], ctx);
         }
 
         // Helper method to serialize an array

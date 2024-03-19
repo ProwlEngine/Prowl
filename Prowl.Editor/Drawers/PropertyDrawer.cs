@@ -1,4 +1,5 @@
 using Hexa.NET.ImGui;
+using Prowl.Editor.Utilities;
 using Prowl.Runtime;
 using System.Reflection;
 using System.Text;
@@ -65,7 +66,7 @@ public abstract class PropertyDrawer {
         _propertyDrawerLookup.Clear();
         foreach (Assembly editorAssembly in EditorApplication.Instance.ExternalAssemblies.Append(typeof(EditorApplication).Assembly))
         {
-            List<Type> derivedTypes = Utilities.GetDerivedTypes(typeof(PropertyDrawer<>), editorAssembly);
+            List<Type> derivedTypes = EditorUtils.GetDerivedTypes(typeof(PropertyDrawer<>), editorAssembly);
             foreach (Type type in derivedTypes)
             {
                 try

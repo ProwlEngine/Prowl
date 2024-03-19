@@ -1,6 +1,7 @@
 ﻿using Hexa.NET.ImGui;
 using Hexa.NET.ImNodes;
 using Prowl.Editor.PropertyDrawers;
+using Prowl.Editor.Utilities;
 using Prowl.Runtime;
 using Prowl.Runtime.NodeSystem;
 using System.Reflection;
@@ -346,7 +347,7 @@ namespace Prowl.Editor.Drawers.NodeSystem
             _NodeEditors.Clear();
             foreach (Assembly editorAssembly in EditorApplication.Instance.ExternalAssemblies.Append(typeof(EditorApplication).Assembly))
             {
-                List<Type> derivedTypes = Utilities.GetDerivedTypes(typeof(NodeEditor), editorAssembly);
+                List<Type> derivedTypes = EditorUtils.GetDerivedTypes(typeof(NodeEditor), editorAssembly);
                 foreach (Type type in derivedTypes)
                 {
                     try

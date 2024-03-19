@@ -92,9 +92,9 @@ namespace Prowl.Runtime
         {
             if (obj.IsDestroyed) throw new Exception(obj.Name + " has been destroyed.");
             // Serialize and deserialize to get a new object
-            var serialized = TagSerializer.Serialize(obj);
+            var serialized = Serializer.Serialize(obj);
             // dont need to assign ID or add it to objects list the constructor will do that automatically
-            var newObj = TagSerializer.Deserialize<EngineObject>(serialized);
+            var newObj = Serializer.Deserialize<EngineObject>(serialized);
             // Some objects might have a readonly name (like components) in that case it should remain the same, so if name is different set it
             newObj.Name = obj.Name;
             // Need to make sure to set GUID to empty so the engine knows this isn't the original Asset file

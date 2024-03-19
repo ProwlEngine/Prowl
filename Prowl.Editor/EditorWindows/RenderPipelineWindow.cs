@@ -47,7 +47,7 @@ public class RenderPipelineWindow : EditorWindow
             if (ImGui.Button("Save"))
             {
                 // Need to save original asset
-                StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(CurrentRenderPipeline.Res!), assetFile);
+                StringTagConverter.WriteToFile(Serializer.Serialize(CurrentRenderPipeline.Res!), assetFile);
                 AssetDatabase.Reimport(AssetDatabase.FileToRelative(assetFile), false);
                 changed = false;
             }

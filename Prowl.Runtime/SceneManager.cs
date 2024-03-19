@@ -34,7 +34,7 @@ public static class SceneManager
         // Serialize the Scene manually to save its state
         // exclude objects with the DontSave hideFlag
         GameObject[] GameObjects = AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
-        StoredScene = TagSerializer.Serialize(GameObjects);
+        StoredScene = Serializer.Serialize(GameObjects);
         StoredSceneID = MainScene.AssetID;
     }
 
@@ -42,7 +42,7 @@ public static class SceneManager
     {
         Debug.IfNull(StoredScene, "Scene is not stored.");
         Clear();
-        var deserialized = TagSerializer.Deserialize<GameObject[]>(StoredScene);
+        var deserialized = Serializer.Deserialize<GameObject[]>(StoredScene);
         MainScene.AssetID = StoredSceneID;
     }
 

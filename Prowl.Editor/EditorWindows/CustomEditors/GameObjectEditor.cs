@@ -2,6 +2,7 @@
 using Hexa.NET.ImGui;
 using Prowl.Editor.Assets;
 using Prowl.Editor.PropertyDrawers;
+using Prowl.Editor.Utilities;
 using Prowl.Runtime;
 using Prowl.Runtime.Assets;
 using Prowl.Runtime.SceneManagement;
@@ -210,8 +211,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
         {
             if (ImGui.BeginPopupContextItem()) {
                 if (ImGui.MenuItem("Duplicate")) {
-                    var serialized = TagSerializer.Serialize(comp);
-                    var copy = TagSerializer.Deserialize<MonoBehaviour>(serialized);
+                    var serialized = Serializer.Serialize(comp);
+                    var copy = Serializer.Deserialize<MonoBehaviour>(serialized);
                     go.AddComponentDirectly(copy);
                 }
                 if (ImGui.MenuItem("Delete")) go.RemoveComponent(comp);
@@ -256,14 +257,14 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
                     using StreamReader reader = new StreamReader(stream);
                     string script = reader.ReadToEnd();
-                    script = script.Replace("%SCRIPTNAME%", Utilities.FilterAlpha(_searchText));
+                    script = script.Replace("%SCRIPTNAME%", EditorUtils.FilterAlpha(_searchText));
                     File.WriteAllText(file.FullName, script);
                     var r = AssetDatabase.FileToRelative(file);
                     AssetDatabase.Ping(r);
 
                     EditorApplication.ForceRecompile();
 
-                    Type? type = Type.GetType($"{Utilities.FilterAlpha(_searchText)}, CSharp, Version=1.0.0.0, Culture=neutral");
+                    Type? type = Type.GetType($"{EditorUtils.FilterAlpha(_searchText)}, CSharp, Version=1.0.0.0, Culture=neutral");
                     if(type != null && type.IsAssignableTo(typeof(MonoBehaviour)))
                         go.AddComponent(type);
                     ImGui.EndMenu();

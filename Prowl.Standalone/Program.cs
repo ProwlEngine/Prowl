@@ -17,7 +17,7 @@ internal class Program {
         if (StartingScene.Exists)
         {
             SerializedProperty tag = BinaryTagConverter.ReadFromFile(StartingScene);
-            Scene scene = TagSerializer.Deserialize<Scene>((CompoundTag)tag);
+            Scene scene = Serializer.Deserialize<Scene>(tag);
             SceneManager.LoadScene(scene);
         }
 

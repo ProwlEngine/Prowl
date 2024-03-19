@@ -2,11 +2,11 @@
 {
     public class Scene : EngineObject
     {
-        public ListTag GameObjects;
+        public SerializedProperty GameObjects;
 
         public GameObject[] InstantiateScene()
         {
-            return TagSerializer.Deserialize<GameObject[]>(GameObjects);
+            return Serializer.Deserialize<GameObject[]>(GameObjects);
         }
     }
 }

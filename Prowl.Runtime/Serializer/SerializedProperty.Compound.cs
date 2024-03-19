@@ -1,16 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Text.Json.Serialization;
 
 namespace Prowl.Runtime
 {
     public sealed partial class SerializedProperty
     {
-        public Dictionary<string, SerializedProperty> Tags => Value as Dictionary<string, SerializedProperty>;
-        public string SerializedType { get; set; } = "";
-        public int SerializedID { get; set; } = 0;
+        public Dictionary<string, SerializedProperty> Tags => (Value as Dictionary<string, SerializedProperty>)!;
 
         public SerializedProperty this[string tagName]
         {
@@ -27,44 +23,41 @@ namespace Prowl.Runtime
             }
         }
 
-
         /// <summary> Gets a collection containing all tag names in this CompoundTag. </summary>
-        [JsonIgnore]
-        public IEnumerable<string> Names => Tags.Keys;
-        /// <summary> Gets a collection containing all tags in this CompoundTag. </summary>
-        [JsonIgnore]
-        public IEnumerable<SerializedProperty> AllTags => Tags.Values;
+        public IEnumerable<string> GetNames() => Tags.Keys;
 
-        public SerializedProperty Get(string tagName)
+        /// <summary> Gets a collection containing all tags in this CompoundTag. </summary>
+        public IEnumerable<SerializedProperty> GetAllTags() => Tags.Values;
+
+        public SerializedProperty? Get(string tagName)
         {
             if (TagType != PropertyType.Compound)
                 throw new InvalidOperationException("Cannot get tag from non-compound tag");
             else if (tagName == null)
-                throw new ArgumentNullException("tagName");
-            return Tags.TryGetValue(tagName, out SerializedProperty result) ? result : null;
+                throw new ArgumentNullException(nameof(tagName));
+            return Tags.TryGetValue(tagName, out var result) ? result : null;
         }
-        public bool TryGet(string tagName, out SerializedProperty result)
+
+        public bool TryGet(string tagName, out SerializedProperty? result)
         {
             if (TagType != PropertyType.Compound)
                 throw new InvalidOperationException("Cannot get tag from non-compound tag");
-            if (tagName == null)
-                throw new ArgumentNullException("tagName");
-            return Tags.TryGetValue(tagName, out result);
+            return tagName != null ? Tags.TryGetValue(tagName, out result) : throw new ArgumentNullException(nameof(tagName));
         }
+
         public bool Contains(string tagName)
         {
             if (TagType != PropertyType.Compound)
                 throw new InvalidOperationException("Cannot get tag from non-compound tag");
-            if (tagName == null)
-                throw new ArgumentNullException("tagName");
-            return Tags.ContainsKey(tagName);
+            return tagName != null ? Tags.ContainsKey(tagName) : throw new ArgumentNullException(nameof(tagName));
         }
+
         public void Add(string name, SerializedProperty newTag)
         {
             if (TagType != PropertyType.Compound)
                 throw new InvalidOperationException("Cannot get tag from non-compound tag");
             if (newTag == null)
-                throw new ArgumentNullException("newTag");
+                throw new ArgumentNullException(nameof(newTag));
             else if (newTag == this)
                 throw new ArgumentException("Cannot add tag to self");
             Tags.Add(name, newTag);
@@ -75,13 +68,11 @@ namespace Prowl.Runtime
             if (TagType != PropertyType.Compound)
                 throw new InvalidOperationException("Cannot get tag from non-compound tag");
             if (string.IsNullOrWhiteSpace(name))
-                throw new ArgumentNullException("name");
+                throw new ArgumentNullException(nameof(name));
             return Tags.Remove(name);
         }
 
-        #region Querying
-
-        public bool TryFind(string path, [MaybeNullWhen(false)] out SerializedProperty tag)
+        public bool TryFind(string path, out SerializedProperty? tag)
         {
             tag = Find(path);
             return tag != null;
@@ -96,7 +87,7 @@ namespace Prowl.Runtime
             {
                 var i = path.IndexOf('/');
                 var name = i < 0 ? path : path[..i];
-                if (!currentTag.TryGet(name, out SerializedProperty tag))
+                if (!currentTag.TryGet(name, out SerializedProperty? tag) || tag == null)
                     return null;
 
                 if (i < 0)
@@ -110,8 +101,6 @@ namespace Prowl.Runtime
             }
         }
 
-        #endregion
-
         /// <summary>
         /// Returns a new compound with all the tags/paths combined
         /// If a tag is found with identical Path/Name, and values are the same its kept, otherwise its discarded
@@ -119,7 +108,7 @@ namespace Prowl.Runtime
         /// </summary>
         public static SerializedProperty Merge(List<SerializedProperty> allTags)
         {
-            SerializedProperty result = new SerializedProperty();
+            SerializedProperty result = SerializedProperty.NewCompound();
             if (allTags.Count == 0) return result;
 
             var referenceTag = allTags[0];
@@ -134,7 +123,7 @@ namespace Prowl.Runtime
                     if (tag.TagType != PropertyType.Compound)
                         return false;
 
-                    if (!tag.TryGet(nameVal.Key, out SerializedProperty nTag))
+                    if (!tag.TryGet(nameVal.Key, out SerializedProperty? nTag))
                         return false;
 
                     if (nTag.TagType != nameVal.Value.TagType)
@@ -221,7 +210,7 @@ namespace Prowl.Runtime
                 throw new InvalidOperationException("Cannot get the difference from a non-compound tag");
 
 
-            SerializedProperty result = new SerializedProperty();
+            SerializedProperty result = SerializedProperty.NewCompound();
 
             foreach (var kvp in Tags)
             {

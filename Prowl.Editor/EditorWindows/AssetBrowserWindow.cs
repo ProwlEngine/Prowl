@@ -71,13 +71,13 @@ public class AssetBrowserWindow : EditorWindow {
         if (DragnDrop.ReceiveReference<GameObject>(out var go)) {
             // Create Prefab
             var prefab = new Prefab();
-            prefab.GameObject = (CompoundTag)TagSerializer.Serialize(go);
+            prefab.GameObject = Serializer.Serialize(go);
             prefab.Name = go.Name;
             FileInfo file = new FileInfo(CurDirectory + $"/{prefab.Name}.prefab");
             while (file.Exists) {
                 file = new FileInfo(file.FullName.Replace(".prefab", "") + " new.prefab");
             }
-            StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(prefab), file);
+            StringTagConverter.WriteToFile(Serializer.Serialize(prefab), file);
 
             var r = AssetDatabase.FileToRelative(file);
             AssetDatabase.Reimport(r);

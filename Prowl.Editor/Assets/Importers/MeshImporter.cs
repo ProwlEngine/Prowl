@@ -14,7 +14,7 @@ namespace Prowl.Editor.Assets
             {
                 string json = File.ReadAllText(assetPath.FullName);
                 var tag = StringTagConverter.Read(json);
-                mesh = TagSerializer.Deserialize<Mesh>(tag);
+                mesh = Serializer.Deserialize<Mesh>(tag);
             }
             catch
             {

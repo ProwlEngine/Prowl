@@ -113,28 +113,28 @@ namespace Prowl.Runtime
             Graphics.CheckGL();
         }
 
-        public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
+        public SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
-            CompoundTag compoundTag = new CompoundTag();
-            compoundTag.Add("Width", new IntTag(Width));
-            compoundTag.Add("Height", new IntTag(Height));
-            compoundTag.Add("NumTextures", new IntTag(numTextures));
-            compoundTag.Add("HasDepthAttachment", new ByteTag((byte)(hasDepthAttachment ? 1 : 0)));
-            ListTag textureFormatsTag = new ListTag();
+            SerializedProperty compoundTag = SerializedProperty.NewCompound();
+            compoundTag.Add("Width", new(Width));
+            compoundTag.Add("Height", new(Height));
+            compoundTag.Add("NumTextures", new(numTextures));
+            compoundTag.Add("HasDepthAttachment", new((byte)(hasDepthAttachment ? 1 : 0)));
+            SerializedProperty textureFormatsTag = SerializedProperty.NewList();
             foreach (var format in textureFormats)
-                textureFormatsTag.Add(new ByteTag((byte)format));
+                textureFormatsTag.ListAdd(new((byte)format));
             compoundTag.Add("TextureFormats", textureFormatsTag);
             return compoundTag;
         }
 
-        public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
+        public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
             Width = value["Width"].IntValue;
             Height = value["Height"].IntValue;
             numTextures = value["NumTextures"].IntValue;
             hasDepthAttachment = value["HasDepthAttachment"].ByteValue == 1;
             textureFormats = new Texture.TextureImageFormat[numTextures];
-            var textureFormatsTag = value.Get<ListTag>("TextureFormats");
+            var textureFormatsTag = value.Get("TextureFormats");
             for (int i = 0; i < numTextures; i++)
                 textureFormats[i] = (Texture.TextureImageFormat)textureFormatsTag[i].ByteValue;
 

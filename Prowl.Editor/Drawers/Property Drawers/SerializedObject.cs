@@ -8,7 +8,7 @@ namespace Prowl.Editor.Drawers
         public readonly List<object> targetObjects = new();
         public bool isEditingMultipleObjects => targetObjects.Count > 1;
 
-        private SerializedProperty serializedObject = new();
+        private SerializedProperty serializedObject = SerializedProperty.NewCompound();
 
         public SerializedObject(params object[] targetObject)
         {
@@ -41,7 +41,7 @@ namespace Prowl.Editor.Drawers
             // Loop through all target objects and serialize them
             List<SerializedProperty> tags = new();
             foreach (var target in targetObjects)
-                tags.Add(TagSerializer.Serialize(target));
+                tags.Add(Serializer.Serialize(target));
 
             // Merge the tags into 1
             // Ignore tags whos value shifts between objects
@@ -56,7 +56,7 @@ namespace Prowl.Editor.Drawers
         {
             // TODO: Apply only modified properties
             foreach (var target in targetObjects)
-                TagSerializer.DeserializeInto(serializedObject, target);
+                Serializer.DeserializeInto(serializedObject, target);
         }
 
     }

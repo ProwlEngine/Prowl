@@ -62,6 +62,9 @@ namespace Prowl.Runtime
             Value = tags;
         }
 
+        public static SerializedProperty NewCompound() => new(PropertyType.Compound, new Dictionary<string, SerializedProperty>());
+        public static SerializedProperty NewList() => new(PropertyType.List, new List<SerializedProperty>());
+
         public SerializedProperty Clone()
         {
             if (TagType == PropertyType.Null) return new(PropertyType.Null, null);

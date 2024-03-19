@@ -1,11 +1,13 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
+using System.Text.Json;
 
 namespace Prowl.Runtime
 {
 
     // TODO: Convert to YAML and support Unity's YAML format
 
-    public static class YAMLTagConverter
+    public static class StringTagConverter
     {
         public static void WriteToFile(SerializedProperty tag, FileInfo file)
         {
@@ -26,7 +28,9 @@ namespace Prowl.Runtime
 
         public static SerializedProperty Read(string json)
         {
-            return JsonSerializer.Deserialize<CompoundTag>(json, new JsonSerializerOptions { MaxDepth = 1024 });
+            return JsonSerializer.Deserialize<SerializedProperty>(json, new JsonSerializerOptions { MaxDepth = 1024 });
+        }
+
         }
 
     }

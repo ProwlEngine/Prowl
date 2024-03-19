@@ -19,7 +19,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             {
                 bool changed = false;
 
-                ScriptableObject scriptObject = TagSerializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile((target as MetaFile).AssetPath));
+                ScriptableObject scriptObject = Serializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile((target as MetaFile).AssetPath));
 
                 FieldInfo[] fields = scriptObject.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 
@@ -73,7 +73,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 if (changed)
                 {
                     scriptObject.OnValidate();
-                    StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(scriptObject), (target as MetaFile).AssetPath);
+                    StringTagConverter.WriteToFile(Serializer.Serialize(scriptObject), (target as MetaFile).AssetPath);
                     AssetDatabase.Reimport(AssetDatabase.FileToRelative((target as MetaFile).AssetPath));
                 }
             }

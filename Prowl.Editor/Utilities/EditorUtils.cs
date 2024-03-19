@@ -5,9 +5,9 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Prowl.Editor
+namespace Prowl.Editor.Utilities
 {
-    public static class Utilities
+    public static class EditorUtils
     {
 
         public static string FilterAlpha(string input) => new string(input.Where(char.IsLetter).ToArray());

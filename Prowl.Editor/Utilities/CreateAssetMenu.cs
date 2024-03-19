@@ -78,7 +78,7 @@ namespace Prowl.Editor
             {
                 file = new FileInfo(file.FullName.Replace(".scriptobj", "") + " New.scriptobj");
             }
-            StringTagConverter.WriteToFile((CompoundTag)TagSerializer.Serialize(obj), file);
+            StringTagConverter.WriteToFile(Serializer.Serialize(obj), file);
             AssetDatabase.Reimport(AssetDatabase.FileToRelative(file));
             AssetDatabase.Ping(AssetDatabase.LastLoadedAssetID);
         }

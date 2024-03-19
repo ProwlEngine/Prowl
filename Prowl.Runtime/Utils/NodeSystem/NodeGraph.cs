@@ -56,8 +56,8 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> Creates a copy of the original node in the graph </summary>
         public virtual Node CopyNode(Node original)
         {
-            SerializedProperty nodeTag = TagSerializer.Serialize(original);
-            Node node = TagSerializer.Deserialize<Node>(nodeTag);
+            SerializedProperty nodeTag = Serializer.Serialize(original);
+            Node node = Serializer.Deserialize<Node>(nodeTag);
             node.graph = this;
             node.ClearConnections();
             nodes.Add(node);
@@ -81,14 +81,14 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> Create a new deep copy of this graph </summary>
         public virtual NodeGraph Copy()
         {
-            SerializedProperty graphTag = TagSerializer.Serialize(this);
-            NodeGraph graph = TagSerializer.Deserialize<NodeGraph>(graphTag);
+            SerializedProperty graphTag = Serializer.Serialize(this);
+            NodeGraph graph = Serializer.Deserialize<NodeGraph>(graphTag);
             // Instantiate all nodes inside the graph
             for (int i = 0; i < nodes.Count; i++)
             {
                 if (nodes[i] == null) continue;
-                SerializedProperty nodeTag = TagSerializer.Serialize(nodes[i]);
-                Node node = TagSerializer.Deserialize<Node>(nodeTag);
+                SerializedProperty nodeTag = Serializer.Serialize(nodes[i]);
+                Node node = Serializer.Deserialize<Node>(nodeTag);
                 node.graph = graph;
                 graph.nodes[i] = node;
             }

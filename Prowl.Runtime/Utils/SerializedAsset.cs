@@ -21,7 +21,7 @@ namespace Prowl.Runtime.Utils
             // so like if we delete another asset we can let the user know its in use by X object are they sure?
 
             file.Directory?.Create(); // Ensure the Directory exists
-            CompoundTag tag = (CompoundTag)TagSerializer.Serialize(this);
+            var tag = Serializer.Serialize(this);
             using var stream = file.OpenWrite();
             using BinaryWriter writer = new(stream);
             BinaryTagConverter.WriteTo(tag, writer);
@@ -31,7 +31,7 @@ namespace Prowl.Runtime.Utils
         {
             if (Main == null) throw new Exception("Asset does not have a main object.");
 
-            CompoundTag tag = (CompoundTag)TagSerializer.Serialize(this);
+            var tag = Serializer.Serialize(this);
             using BinaryWriter binarywriter = new(writer);
             BinaryTagConverter.WriteTo(tag, binarywriter);
         }
@@ -44,7 +44,7 @@ namespace Prowl.Runtime.Utils
 
             bool prev = SceneManager.AllowGameObjectConstruction;
             SceneManager.AllowGameObjectConstruction = false;
-            var obj = TagSerializer.Deserialize<SerializedAsset>(tag);
+            var obj = Serializer.Deserialize<SerializedAsset>(tag);
             SceneManager.AllowGameObjectConstruction = prev; // Restore state
             return obj;
         }
@@ -56,7 +56,7 @@ namespace Prowl.Runtime.Utils
 
             bool prev = SceneManager.AllowGameObjectConstruction;
             SceneManager.AllowGameObjectConstruction = false;
-            var obj = TagSerializer.Deserialize<SerializedAsset>(tag);
+            var obj = Serializer.Deserialize<SerializedAsset>(tag);
             SceneManager.AllowGameObjectConstruction = prev; // Restore state
             return obj;
         }

@@ -265,23 +265,23 @@ namespace Prowl.Runtime
         }
 
 
-        public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
+        public SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
-            CompoundTag compoundTag = new CompoundTag();
-            compoundTag.Add("AssetID", new StringTag(assetID.ToString()));
+            SerializedProperty compoundTag = SerializedProperty.NewCompound();
+            compoundTag.Add("AssetID", new SerializedProperty(assetID.ToString()));
             if(fileID != 0)
-                compoundTag.Add("FileID", new ShortTag(fileID));
+                compoundTag.Add("FileID", new SerializedProperty(fileID));
             if (IsRuntimeResource)
-                compoundTag.Add("Instance", TagSerializer.Serialize(instance, ctx));
+                compoundTag.Add("Instance", Serializer.Serialize(instance, ctx));
             return compoundTag;
         }
 
-        public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
+        public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
             assetID = Guid.Parse(value["AssetID"].StringValue);
-            fileID = value.TryGet("FileID", out ShortTag fileTag) ? fileTag.ShortValue : (short)0;
-            if (assetID == Guid.Empty && value.TryGet("Instance", out CompoundTag tag))
-                instance = TagSerializer.Deserialize<T?>(tag, ctx);
+            fileID = value.TryGet("FileID", out SerializedProperty fileTag) ? fileTag.ShortValue : (short)0;
+            if (assetID == Guid.Empty && value.TryGet("Instance", out SerializedProperty tag))
+                instance = Serializer.Deserialize<T?>(tag, ctx);
         }
     }
 }

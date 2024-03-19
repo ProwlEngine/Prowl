@@ -244,66 +244,66 @@ namespace Prowl.Runtime
             return Application.AssetProvider.LoadAsset<Shader>(path);
         }
 
-        public CompoundTag Serialize(TagSerializer.SerializationContext ctx)
+        public SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
-            CompoundTag compoundTag = new CompoundTag();
-            ListTag propertiesTag = new ListTag();
+            SerializedProperty compoundTag = SerializedProperty.NewCompound();
+            SerializedProperty propertiesTag = SerializedProperty.NewList();
             foreach (var property in Properties)
             {
-                CompoundTag propertyTag = new CompoundTag();
-                propertyTag.Add("Name", new StringTag(property.Name));
-                propertyTag.Add("DisplayName", new StringTag(property.DisplayName));
-                propertyTag.Add("Type", new ByteTag((byte)property.Type));
-                propertiesTag.Add(propertyTag);
+                SerializedProperty propertyTag = SerializedProperty.NewCompound();
+                propertyTag.Add("Name", new(property.Name));
+                propertyTag.Add("DisplayName", new(property.DisplayName));
+                propertyTag.Add("Type", new((byte)property.Type));
+                propertiesTag.ListAdd(propertyTag);
             }
             compoundTag.Add("Properties", propertiesTag);
-            ListTag passesTag = new ListTag();
+            SerializedProperty passesTag = SerializedProperty.NewList();
             foreach (var pass in Passes)
             {
-                CompoundTag passTag = new CompoundTag();
-                passTag.Add("RenderMode", new StringTag(pass.RenderMode));
-                passTag.Add("Vertex", new StringTag(pass.Vertex));
-                passTag.Add("Fragment", new StringTag(pass.Fragment));
-                passesTag.Add(passTag);
+                SerializedProperty passTag = SerializedProperty.NewCompound();
+                passTag.Add("RenderMode", new(pass.RenderMode));
+                passTag.Add("Vertex", new(pass.Vertex));
+                passTag.Add("Fragment", new(pass.Fragment));
+                passesTag.ListAdd(passTag);
             }
             compoundTag.Add("Passes", passesTag);
             if (ShadowPass != null)
             {
-                CompoundTag shadowPassTag = new CompoundTag();
-                shadowPassTag.Add("Vertex", new StringTag(ShadowPass.Vertex));
-                shadowPassTag.Add("Fragment", new StringTag(ShadowPass.Fragment));
+                SerializedProperty shadowPassTag = SerializedProperty.NewCompound();
+                shadowPassTag.Add("Vertex", new(ShadowPass.Vertex));
+                shadowPassTag.Add("Fragment", new(ShadowPass.Fragment));
                 compoundTag.Add("ShadowPass", shadowPassTag);
             }
             return compoundTag;
         }
 
-        public void Deserialize(CompoundTag value, TagSerializer.SerializationContext ctx)
+        public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
             Properties.Clear();
-            var propertiesTag = value.Get<ListTag>("Properties");
-            foreach (CompoundTag propertyTag in propertiesTag.Tags)
+            var propertiesTag = value.Get("Properties");
+            foreach (var propertyTag in propertiesTag.List)
             {
                 Property property = new Property();
-                property.Name = propertyTag.Get<StringTag>("Name").StringValue;
-                property.DisplayName = propertyTag.Get<StringTag>("DisplayName").StringValue;
-                property.Type = (Property.PropertyType)propertyTag.Get<ByteTag>("Type").ByteValue;
+                property.Name = propertyTag.Get("Name").StringValue;
+                property.DisplayName = propertyTag.Get("DisplayName").StringValue;
+                property.Type = (Property.PropertyType)propertyTag.Get("Type").ByteValue;
                 Properties.Add(property);
             }
             Passes.Clear();
-            var passesTag = value.Get<ListTag>("Passes");
-            foreach (CompoundTag passTag in passesTag.Tags)
+            var passesTag = value.Get("Passes");
+            foreach (var passTag in passesTag.List)
             {
                 ShaderPass pass = new ShaderPass();
-                pass.RenderMode = passTag.Get<StringTag>("RenderMode").StringValue;
-                pass.Vertex = passTag.Get<StringTag>("Vertex").StringValue;
-                pass.Fragment = passTag.Get<StringTag>("Fragment").StringValue;
+                pass.RenderMode = passTag.Get("RenderMode").StringValue;
+                pass.Vertex = passTag.Get("Vertex").StringValue;
+                pass.Fragment = passTag.Get("Fragment").StringValue;
                 Passes.Add(pass);
             }
-            if (value.TryGet<CompoundTag>("ShadowPass", out var shadowPassTag))
+            if (value.TryGet("ShadowPass", out var shadowPassTag))
             {
                 ShaderShadowPass shadowPass = new ShaderShadowPass();
-                shadowPass.Vertex = shadowPassTag.Get<StringTag>("Vertex").StringValue;
-                shadowPass.Fragment = shadowPassTag.Get<StringTag>("Fragment").StringValue;
+                shadowPass.Vertex = shadowPassTag.Get("Vertex").StringValue;
+                shadowPass.Fragment = shadowPassTag.Get("Fragment").StringValue;
                 ShadowPass = shadowPass;
             }
         }
