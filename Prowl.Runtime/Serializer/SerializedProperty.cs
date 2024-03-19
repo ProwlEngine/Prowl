@@ -51,34 +51,34 @@ namespace Prowl.Runtime
         public SerializedProperty? Parent { get; private set; }
 
         public SerializedProperty() { }
-        public SerializedProperty(byte i) { Value = i; TagType = PropertyType.Byte; }
-        public SerializedProperty(sbyte i) { Value = i; TagType = PropertyType.sByte; }
-        public SerializedProperty(short i) { Value = i; TagType = PropertyType.Short; }
-        public SerializedProperty(int i) { Value = i; TagType = PropertyType.Int; }
-        public SerializedProperty(long i) { Value = i; TagType = PropertyType.Long; }
-        public SerializedProperty(ushort i) { Value = i; TagType = PropertyType.UShort; }
-        public SerializedProperty(uint i) { Value = i; TagType = PropertyType.UInt; }
-        public SerializedProperty(ulong i) { Value = i; TagType = PropertyType.ULong; }
-        public SerializedProperty(float i) { Value = i; TagType = PropertyType.Float; }
-        public SerializedProperty(double i) { Value = i; TagType = PropertyType.Double; }
-        public SerializedProperty(decimal i) { Value = i; TagType = PropertyType.Decimal; }
-        public SerializedProperty(string i) { Value = i; TagType = PropertyType.String; }
-        public SerializedProperty(byte[] i) { Value = i; TagType = PropertyType.ByteArray; }
-        public SerializedProperty(bool i) { Value = i; TagType = PropertyType.Bool; }
+        public SerializedProperty(byte i) { _value = i; TagType = PropertyType.Byte; }
+        public SerializedProperty(sbyte i) { _value = i; TagType = PropertyType.sByte; }
+        public SerializedProperty(short i) { _value = i; TagType = PropertyType.Short; }
+        public SerializedProperty(int i) { _value = i; TagType = PropertyType.Int; }
+        public SerializedProperty(long i) { _value = i; TagType = PropertyType.Long; }
+        public SerializedProperty(ushort i) { _value = i; TagType = PropertyType.UShort; }
+        public SerializedProperty(uint i) { _value = i; TagType = PropertyType.UInt; }
+        public SerializedProperty(ulong i) { _value = i; TagType = PropertyType.ULong; }
+        public SerializedProperty(float i) { _value = i; TagType = PropertyType.Float; }
+        public SerializedProperty(double i) { _value = i; TagType = PropertyType.Double; }
+        public SerializedProperty(decimal i) { _value = i; TagType = PropertyType.Decimal; }
+        public SerializedProperty(string i) { _value = i; TagType = PropertyType.String; }
+        public SerializedProperty(byte[] i) { _value = i; TagType = PropertyType.ByteArray; }
+        public SerializedProperty(bool i) { _value = i; TagType = PropertyType.Bool; }
         public SerializedProperty(PropertyType type, object? value) 
         { 
             TagType = type;
             if (type == PropertyType.List && value == null)
-                Value = new List<SerializedProperty>();
+                _value = new List<SerializedProperty>();
             else if (type == PropertyType.Compound && value == null)
-                Value = new Dictionary<string, SerializedProperty>();
+                _value = new Dictionary<string, SerializedProperty>();
             else
-                Value = value;
+                _value = value;
         }
         public SerializedProperty(List<SerializedProperty> tags)
         {
             TagType = PropertyType.List;
-            Value = tags;
+            _value = tags;
         }
 
         public static SerializedProperty NewCompound() => new(PropertyType.Compound, new Dictionary<string, SerializedProperty>());
