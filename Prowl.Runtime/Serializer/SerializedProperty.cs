@@ -49,9 +49,9 @@ namespace Prowl.Runtime
         public SerializedProperty(PropertyType type, object? value) 
         { 
             TagType = type;
-            if (type == PropertyType.List)
+            if (type == PropertyType.List && value == null)
                 Value = new List<SerializedProperty>();
-            else if (type == PropertyType.Compound)
+            else if (type == PropertyType.Compound && value == null)
                 Value = new Dictionary<string, SerializedProperty>();
             else
                 Value = value;
