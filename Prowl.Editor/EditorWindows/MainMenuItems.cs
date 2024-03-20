@@ -20,7 +20,6 @@ namespace Prowl.Editor.EditorWindows
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
             var folderAction = new Action<string, string>((directory, createName) =>
             {
-                DirectoryInfo dir = new DirectoryInfo(Path.Combine(directory, createName));
                 while (dir.Exists)
                 {
                     dir = new DirectoryInfo(dir.FullName.Replace("New Folder", "New Folder new"));
@@ -28,6 +27,7 @@ namespace Prowl.Editor.EditorWindows
                 dir.Create();
             });
             CreateNewFileWindow fWindow = new CreateNewFileWindow(Directory, folderAction);
+            DirectoryInfo dir = new(Path.Combine(Directory.FullName, "New Folder"));
         }
 
         [MenuItem("Create/Material")]
@@ -37,7 +37,6 @@ namespace Prowl.Editor.EditorWindows
             var materialAction = new Action<string, string>((directory, createName) =>
             {
                 Material mat = new Material(Shader.Find("Defaults/Standard.shader"));
-                FileInfo file = new FileInfo(Path.Combine(directory, $"{createName}.mat"));
                 while (file.Exists)
                 {
                     file = new FileInfo(file.FullName.Replace(".mat", "") + " new.mat");
@@ -49,6 +48,7 @@ namespace Prowl.Editor.EditorWindows
                 AssetDatabase.Ping(r);
             });
             CreateNewFileWindow fWindow = new CreateNewFileWindow(Directory, materialAction);
+            FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New Material.mat"));
         }
 
         [MenuItem("Create/Script")]
@@ -57,7 +57,6 @@ namespace Prowl.Editor.EditorWindows
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
             var scriptAction = new Action<string, string>((directory, createName) =>
             {
-                FileInfo file = new FileInfo(Path.Combine(directory, $"{createName}.cs"));
                 while (file.Exists)
                 {
                     file = new FileInfo(file.FullName.Replace(".cs", "") + " new.cs");
@@ -72,6 +71,7 @@ namespace Prowl.Editor.EditorWindows
                 AssetDatabase.Ping(r);
             });
             CreateNewFileWindow fWindow = new CreateNewFileWindow(Directory, scriptAction);
+            FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New Script.cs"));
         }
 
         #endregion
