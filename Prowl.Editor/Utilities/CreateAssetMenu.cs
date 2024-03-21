@@ -1,6 +1,6 @@
-﻿using Prowl.Editor.EditorWindows;
+﻿using Prowl.Editor.Assets;
+using Prowl.Editor.EditorWindows;
 using Prowl.Runtime;
-using Prowl.Runtime.Assets;
 using Prowl.Runtime.Utils;
 using System.Reflection;
 using static Prowl.Editor.MenuItem;
@@ -74,13 +74,13 @@ namespace Prowl.Editor
             MainMenuItems.Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
             var obj = Activator.CreateInstance(type);
             FileInfo file = new FileInfo(MainMenuItems.Directory + $"/New {type.Name}.scriptobj");
-            while (file.Exists)
+            while (File.Exists(file.FullName))
             {
                 file = new FileInfo(file.FullName.Replace(".scriptobj", "") + " New.scriptobj");
             }
             StringTagConverter.WriteToFile(Serializer.Serialize(obj), file);
-            AssetDatabase.Reimport(AssetDatabase.FileToRelative(file));
-            AssetDatabase.Ping(AssetDatabase.LastLoadedAssetID);
+            AssetDatabase.Update();
+            AssetDatabase.Ping(file);
         }
     }
 }

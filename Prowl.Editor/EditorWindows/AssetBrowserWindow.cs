@@ -3,31 +3,30 @@ using Prowl.Editor.Assets;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
-using Prowl.Runtime.Assets;
 using System.Reflection;
 
 namespace Prowl.Editor.EditorWindows;
 
-public class AssetBrowserWindow : EditorWindow {
-
+public class AssetBrowserWindow : EditorWindow
+{
     public static EditorSettings Settings => Project.ProjectSettings.GetSetting<EditorSettings>();
 
     public DirectoryInfo CurDirectory;
     public bool Locked = false;
 
     private string _searchText = "";
-    private readonly List<FileSystemInfo> _found = [];
-    private readonly Dictionary<string, Texture2D> cachedThumbnails = new();
-    private static (long, bool) lastGenerated = (-1, false);
+    private readonly List<FileSystemInfo> _found = new();
+    private readonly Dictionary<string, AssetRef<Texture2D>> _cachedThumbnails = new();
+    private static (long, bool) _lastGenerated = (-1, false);
+    internal static string? RenamingEntry = null;
+
+    private const float PingDuration = 3f;
+    private float _pingTimer = 0;
+    private FileInfo _pingedFile;
 
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse;
 
     private float ThumbnailSize => (1.0f + Settings.m_ThumbnailSize) * 65f;
-
-
-    private const float PingDuration = 3f;
-    private float pingTimer = 0;
-    private FileInfo pingedFile;
 
     public AssetBrowserWindow() : base()
     {
@@ -45,16 +44,22 @@ public class AssetBrowserWindow : EditorWindow {
         AssetDatabase.Pinged -= OnAssetPinged;
     }
 
-    private void OnAssetPinged(string relativeAssetPath)
+    private void OnAssetPinged(FileInfo assetPath)
     {
-        pingTimer = PingDuration;
-        pingedFile = AssetDatabase.RelativeToFile(relativeAssetPath);
-        CurDirectory = pingedFile.Directory;
+        _pingTimer = PingDuration;
+        _pingedFile = assetPath;
+        CurDirectory = _pingedFile.Directory;
+    }
+
+    public static void StartRename(string? entry)
+    {
+        RenamingEntry = entry;
     }
 
     protected override void Draw()
     {
-        if (Project.HasProject == false) return;
+        if (!Project.HasProject)
+            return;
 
         ImGui.PushStyleColor(ImGuiCol.Header, EditorGui.SelectedColor);
 
@@ -65,25 +70,27 @@ public class AssetBrowserWindow : EditorWindow {
         ImGui.BeginChild("Body");
         RenderBody();
         ImGui.EndChild();
-        AssetsWindow.HandleFileContextMenu(null, CurDirectory);
-        if (DragnDrop.ReceiveReference<GameObject>(out var go)) {
-            // Create Prefab
-            var prefab = new Prefab();
-            prefab.GameObject = Serializer.Serialize(go);
-            prefab.Name = go.Name;
+        AssetsWindow.HandleFileContextMenu(null, CurDirectory, true);
+
+        if (DragnDrop.ReceiveReference<GameObject>(out var go))
+        {
+            var prefab = new Prefab {
+                GameObject = Serializer.Serialize(go),
+                Name = go.Name
+            };
             FileInfo file = new FileInfo(CurDirectory + $"/{prefab.Name}.prefab");
-            while (file.Exists) {
+            while (File.Exists(file.FullName))
                 file = new FileInfo(file.FullName.Replace(".prefab", "") + " new.prefab");
-            }
+
             StringTagConverter.WriteToFile(Serializer.Serialize(prefab), file);
 
-            var r = AssetDatabase.FileToRelative(file);
-            AssetDatabase.Reimport(r);
-            AssetDatabase.Ping(r);
+            AssetDatabase.Update();
+            AssetDatabase.Ping(file);
         }
 
         if (!AssetsWindow.SelectHandler.SelectedThisFrame && ImGui.IsItemClicked(0))
             AssetsWindow.SelectHandler.Clear();
+
         ImGui.PopStyleColor();
     }
 
@@ -94,9 +101,13 @@ public class AssetBrowserWindow : EditorWindow {
 
     private void SelectionChanged(object to)
     {
-        if (Locked) return;
-        if (to is DirectoryInfo directory) CurDirectory = directory;
-        else if (to is FileInfo file) CurDirectory = file.Directory;
+        if (Locked)
+            return;
+
+        if (to is DirectoryInfo directory)
+            CurDirectory = directory;
+        else if (to is FileInfo file)
+            CurDirectory = file.Directory;
     }
 
     private void RenderHeader()
@@ -108,33 +119,35 @@ public class AssetBrowserWindow : EditorWindow {
         const int padding = 5;
         const int rightOffset = 43;
 
-        // Up button
-#warning TODO: Project.IsPathInProject(CurDirectory.Parent!.FullName); Would be nice here, then we disable if its not
-        bool disabledUpButton = CurDirectory.FullName.Equals(Project.ProjectAssetDirectory, StringComparison.OrdinalIgnoreCase);
-        disabledUpButton |= CurDirectory.FullName.Equals(Project.ProjectDefaultsDirectory, StringComparison.OrdinalIgnoreCase);
-        disabledUpButton |= CurDirectory.FullName.Equals(Project.ProjectPackagesDirectory, StringComparison.OrdinalIgnoreCase);
-        disabledUpButton |= CurDirectory.Parent == null;
+        bool disabledUpButton = CurDirectory.FullName.Equals(Project.ProjectAssetDirectory, StringComparison.OrdinalIgnoreCase)
+            || CurDirectory.FullName.Equals(Project.ProjectDefaultsDirectory, StringComparison.OrdinalIgnoreCase)
+            || CurDirectory.FullName.Equals(Project.ProjectPackagesDirectory, StringComparison.OrdinalIgnoreCase)
+            || CurDirectory.Parent == null;
 
-        if (disabledUpButton) ImGui.BeginDisabled(true);
+        if (disabledUpButton)
+            ImGui.BeginDisabled(true);
         if (ImGui.Button(FontAwesome6.ArrowUp))
             CurDirectory = CurDirectory.Parent!;
-        if (disabledUpButton) ImGui.EndDisabled();
+        if (disabledUpButton)
+            ImGui.EndDisabled();
 
         ImGui.SameLine();
 
         float cPX = ImGui.GetCursorPosX();
         float cPY = ImGui.GetCursorPosY();
-        if (GUIHelper.Search("##searchBox", ref _searchText, searchBarSize)) {
+        if (GUIHelper.Search("##searchBox", ref _searchText, searchBarSize))
+        {
             _found.Clear();
-            if (!string.IsNullOrEmpty(_searchText)) {
+            if (!string.IsNullOrEmpty(_searchText))
+            {
                 _found.AddRange(CurDirectory.EnumerateFiles("*", SearchOption.AllDirectories));
                 _found.AddRange(CurDirectory.EnumerateDirectories("*", SearchOption.AllDirectories));
-                // Remove Meta's & only keep the ones with SearchText inside them
                 _found.RemoveAll(f => f.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase) || !f.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
             }
         }
 
-        if (Project.HasProject == false) return;
+        if (!Project.HasProject)
+            return;
 
         ImGui.SetCursorPosY(cPY);
         ImGui.SetCursorPosX(cPX + searchBarSize + padding);
@@ -163,25 +176,28 @@ public class AssetBrowserWindow : EditorWindow {
         float contentWidth = ImGui.GetContentRegionAvail().X;
 
         int rowCount = Math.Max((int)(contentWidth / (ThumbnailSize + padding)), 1);
-        float itemSize = ((ThumbnailSize) + padding);
+        float itemSize = ThumbnailSize + padding;
 
         var curPos = ImGui.GetCursorPos() + new System.Numerics.Vector2(5, 5);
         int i = 0;
-        if (!string.IsNullOrEmpty(_searchText)) {
-            // Show only Filters elements
+        if (!string.IsNullOrEmpty(_searchText))
+        {
             foreach (var entry in _found)
                 RenderEntry(rowCount, itemSize, ref curPos, ref i, entry);
-        } else {
+        }
+        else
+        {
             var directories = CurDirectory.GetDirectories();
-            foreach (var folder in directories) {
-                if (!folder.Exists) return;
-                RenderEntry(rowCount, itemSize, ref curPos, ref i, folder);
+            foreach (var folder in directories)
+            {
+                if (folder.Exists)
+                    RenderEntry(rowCount, itemSize, ref curPos, ref i, folder);
             }
             var files = CurDirectory.GetFiles();
-            foreach (var file in files) {
-                if (!file.Exists) return;
-                if (file.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase)) continue;
-                RenderEntry(rowCount, itemSize, ref curPos, ref i, file);
+            foreach (var file in files)
+            {
+                if (file.Exists && !file.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase))
+                    RenderEntry(rowCount, itemSize, ref curPos, ref i, file);
             }
         }
     }
@@ -194,19 +210,19 @@ public class AssetBrowserWindow : EditorWindow {
         RenderFileSystemEntry(entry);
         ImGui.EndChild();
 
-        // Ping Rendering
-        if (pingTimer > 0 && pingedFile.FullName.Equals(entry.FullName, StringComparison.OrdinalIgnoreCase)) {
-            pingTimer -= Time.deltaTimeF;
-            if (pingTimer > PingDuration - 1f) {
-                // For the first second lock scroll to the target file and directory
-                CurDirectory = pingedFile.Directory;
+        if (_pingTimer > 0 && _pingedFile.FullName.Equals(entry.FullName, StringComparison.OrdinalIgnoreCase))
+        {
+            _pingTimer -= Time.deltaTimeF;
+            if (_pingTimer > PingDuration - 1f)
+            {
+                CurDirectory = _pingedFile.Directory;
                 ImGui.ScrollToItem(ImGuiScrollFlags.None);
             }
-            GUIHelper.ItemRect(1f, 0.8f, 0.0f, 0.8f, MathF.Sin(pingTimer) * 1f, 3f, 2.5f);
-            GUIHelper.ItemRect(1f, 0.8f, 0.0f, 0.8f, MathF.Sin(pingTimer) * 6f, 3f, 2.5f);
+            GUIHelper.ItemRect(1f, 0.8f, 0.0f, 0.8f, MathF.Sin(_pingTimer) * 1f, 3f, 2.5f);
+            GUIHelper.ItemRect(1f, 0.8f, 0.0f, 0.8f, MathF.Sin(_pingTimer) * 6f, 3f, 2.5f);
         }
 
-        AssetsWindow.HandleFileContextMenu(entry, CurDirectory);
+        AssetsWindow.HandleFileContextMenu(entry, CurDirectory, true);
         ImGui.PopID();
 
         curPos.X = 5 + ((i + 1) % rowCount) * itemSize;
@@ -216,7 +232,8 @@ public class AssetBrowserWindow : EditorWindow {
 
     private void RenderFileSystemEntry(FileSystemInfo entry)
     {
-        if (!entry.Exists) return;
+        if (!entry.Exists)
+            return;
 
         bool isSelected = AssetsWindow.SelectHandler.IsSelected(entry);
         float thumbnailSize = Math.Min(ThumbnailSize, ImGui.GetContentRegionAvail().X);
@@ -229,13 +246,14 @@ public class AssetBrowserWindow : EditorWindow {
 
         GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
 
-        if (ImGui.IsItemHovered()) {
-            if (entry is FileInfo fileInfo) {
+        if (ImGui.IsItemHovered())
+        {
+            if (entry is FileInfo fileInfo)
                 AssetsWindow.HandleFileClick(fileInfo);
-            } else {
-                // Folder selection is a bit differant, just clicking will select but keep the same directory
-                // Double clicking will select and change the directory to the one clicked
-                if (ImGui.IsMouseClicked(0)) {
+            else
+            {
+                if (ImGui.IsMouseClicked(0))
+                {
                     var old = CurDirectory;
                     AssetsWindow.SelectHandler.Select(entry);
                     CurDirectory = old;
@@ -248,26 +266,83 @@ public class AssetBrowserWindow : EditorWindow {
 
         ImGui.PopStyleVar(2);
 
-        Texture2D thumbnail = GetEntryThumbnail(entry);
-        DrawThumbnailForEntry(thumbnail, thumbnailSize);
+        var thumbnail = GetEntryThumbnail(entry);
+        if (thumbnail.IsAvailable)
+            DrawThumbnailForEntry(thumbnail.Res!, thumbnailSize);
 
-        if (entry is FileInfo file) {
+        ImGui.PushID(entry.FullName);
+        if (entry is FileInfo file)
+        {
             ImDrawListPtr drawList = ImGui.GetWindowDrawList();
             var lineColor = AssetsWindow.GetFileColor(file.Extension.ToLower().Trim());
             var pos = ImGui.GetCursorScreenPos();
             drawList.AddLine(new(0, pos.Y), new(pos.X + thumbnailSize, pos.Y + 1f), lineColor, 3f);
-            ImGui.TextUnformatted(Settings.m_HideExtensions ? Path.GetFileNameWithoutExtension(entry.FullName) : Path.GetFileName(entry.FullName));
 
-        } else
-            ImGui.TextUnformatted(entry.Name);
+            if (RenamingEntry == entry.FullName)
+            {
+                string newName = entry.Name;
+                ImGui.SetNextItemWidth(thumbnailSize);
+                if (ImGui.InputText("##Rename", ref newName, 255, ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll))
+                {
+                    string newPath = Path.Combine(file.Directory.FullName, newName);
+                    if (File.Exists(newPath))
+                        EditorGui.Notify("A file with the same name already exists.");
+                    else
+                    {
+                        AssetDatabase.Rename(file, newName);
+                    }
+                    RenamingEntry = null;
+                }
+                if (!ImGui.IsItemActive() && (ImGui.IsMouseClicked(ImGuiMouseButton.Left) || ImGui.IsMouseClicked(ImGuiMouseButton.Right)))
+                    RenamingEntry = null;
+                ImGui.SetKeyboardFocusHere(-1);
+            }
+            else
+            {
+                ImGui.TextUnformatted(Settings.m_HideExtensions ? Path.GetFileNameWithoutExtension(entry.FullName) : Path.GetFileName(entry.FullName));
+                if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(0))
+                    RenamingEntry = entry.FullName;
+            }
+        }
+        else
+        {
+            if (RenamingEntry == entry.FullName)
+            {
+                string newName = entry.Name;
+                ImGui.SetNextItemWidth(thumbnailSize);
+                if (ImGui.InputText("##Rename", ref newName, 255, ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll))
+                {
+                    string newPath = Path.Combine((entry as DirectoryInfo).Parent.FullName, newName);
+                    if (Directory.Exists(newPath))
+                        EditorGui.Notify("A directory with the same name already exists.");
+                    else
+                    {
+                        EditorGui.Notify("Renaming directories is not yet implemented.");
+                    }
+                    RenamingEntry = null;
+                }
+                if (!ImGui.IsItemActive() && (ImGui.IsMouseClicked(ImGuiMouseButton.Left) || ImGui.IsMouseClicked(ImGuiMouseButton.Right)))
+                    RenamingEntry = null;
+                ImGui.SetKeyboardFocusHere(-1);
+            }
+            else
+            {
+                ImGui.TextUnformatted(entry.Name);
+                if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(0))
+                    RenamingEntry = entry.FullName;
+            }
+
+        }
+        ImGui.PopID();
 
         ImGui.EndGroup();
     }
 
     private void DrawThumbnailForEntry(Texture2D thumbnail, float thumbnailSize)
     {
-        if (thumbnail == null) return;
-        // Thumbnail should draw smaller to fit Text
+        if (thumbnail == null)
+            return;
+
         thumbnailSize -= 30;
         float thumbnailWidth = ((float)thumbnail.Width / thumbnail.Height) * thumbnailSize;
         float xOffset = ((thumbnailSize - thumbnailWidth) / 2) + 15;
@@ -275,45 +350,53 @@ public class AssetBrowserWindow : EditorWindow {
         ImGui.Image((IntPtr)thumbnail.Handle, new System.Numerics.Vector2(thumbnailWidth, thumbnailSize), System.Numerics.Vector2.UnitY, System.Numerics.Vector2.UnitX);
     }
 
-    private Texture2D GetEntryThumbnail(FileSystemInfo entry)
+    private AssetRef<Texture2D> GetEntryThumbnail(FileSystemInfo entry)
     {
         string fileName = "FileIcon.png";
-        if (entry is DirectoryInfo directory) {
-            fileName = directory.EnumerateFiles().Any() || directory.EnumerateDirectories().Any() ? "FolderFilledIcon.png" : "FolderEmptyIcon.png";
-            if (!cachedThumbnails.ContainsKey(fileName)) {
-                using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources." + fileName);
-                cachedThumbnails[fileName] = Texture2DLoader.FromStream(stream);
-            }
-        } else if (entry is FileInfo file) {
-            if (lastGenerated.Item1 != Time.frameCount || !lastGenerated.Item2) {
-                if (TextureImporter.Supported.Contains(file.Extension, StringComparer.OrdinalIgnoreCase)) {
-                    string? relativeAssetPath = AssetDatabase.GetRelativePath(file.FullName);
 
-                    if (cachedThumbnails.TryGetValue(file.FullName, out Texture2D? value))
+        if (entry is DirectoryInfo directory)
+        {
+            fileName = directory.EnumerateFiles().Any() || directory.EnumerateDirectories().Any() ? "FolderFilledIcon.png" : "FolderEmptyIcon.png";
+            if (!_cachedThumbnails.ContainsKey(fileName))
+            {
+                using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources." + fileName);
+                _cachedThumbnails[fileName] = Texture2DLoader.FromStream(stream);
+            }
+        }
+        else if (entry is FileInfo file)
+        {
+            if (_lastGenerated.Item1 != Time.frameCount || !_lastGenerated.Item2)
+            {
+                if (TextureImporter.Supported.Contains(file.Extension, StringComparer.OrdinalIgnoreCase))
+                {
+                    string relativeAssetPath = AssetDatabase.GetRelativePath(file.FullName);
+                    if (_cachedThumbnails.TryGetValue(file.FullName, out var value))
                         return value;
 
-#warning TODO: if the texture at path changes this needs to somehow know and update
-
-                    if (relativeAssetPath != null) // if its null fallback to the default FileIcon
+                    if (relativeAssetPath != null)
                     {
-                        lastGenerated = (Time.frameCount, true);
+                        _lastGenerated = (Time.frameCount, true);
                         var tex = Application.AssetProvider.LoadAsset<Texture2D>(relativeAssetPath);
-                        cachedThumbnails[file.FullName] = tex;
-                        return tex;
+                        if (tex.IsAvailable)
+                        {
+                            _cachedThumbnails[file.FullName] = tex;
+                            return tex.Res!;
+                        }
                     }
-                } else if (ImporterAttribute.SupportsExtension(file.Extension)) {
+                }
+                else if (ImporterAttribute.SupportsExtension(file.Extension))
                     fileName = ImporterAttribute.GetIconForExtension(file.Extension);
-                } else if (file.Extension.Equals(".cs", StringComparison.OrdinalIgnoreCase)) // Special case, is a c# script
+                else if (file.Extension.Equals(".cs", StringComparison.OrdinalIgnoreCase))
                     fileName = "CSharpIcon.png";
             }
         }
 
-        if (!cachedThumbnails.ContainsKey(fileName)) {
-            lastGenerated = (Time.frameCount, true);
-            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources." + fileName)) {
-                cachedThumbnails[fileName] = Texture2DLoader.FromStream(stream);
-            }
+        if (!_cachedThumbnails.ContainsKey(fileName))
+        {
+            _lastGenerated = (Time.frameCount, true);
+            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources." + fileName))
+                _cachedThumbnails[fileName] = Texture2DLoader.FromStream(stream);
         }
-        return cachedThumbnails[fileName];
+        return _cachedThumbnails[fileName].Res;
     }
 }

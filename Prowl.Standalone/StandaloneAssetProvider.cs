@@ -13,7 +13,7 @@ public class StandaloneAssetProvider : IAssetProvider
         int packageIndex = 0;
         FileInfo firstPackage = new FileInfo(Path.Combine(Program.Data.FullName, $"Data{packageIndex++}.prowl"));
         List<AssetBuildPackage> packages = new();
-        while (firstPackage.Exists) {
+        while (File.Exists(firstPackage.FullName)) {
             packages.Add(new AssetBuildPackage(firstPackage.OpenRead(), ZipArchiveMode.Read));
             firstPackage = new FileInfo(Path.Combine(Program.Data.FullName, $"Data{packageIndex++}.prowl"));
         }
@@ -24,7 +24,7 @@ public class StandaloneAssetProvider : IAssetProvider
 
     public bool HasAsset(Guid assetID) => _loaded.ContainsKey(assetID);
 
-    public T LoadAsset<T>(string relativeAssetPath, int fileID = 0) where T : EngineObject
+    public AssetRef<T> LoadAsset<T>(string relativeAssetPath, int fileID = 0) where T : EngineObject
     {
         Guid guid = GetGuidFromPath(relativeAssetPath);
         if (_loaded.ContainsKey(guid))
@@ -38,7 +38,7 @@ public class StandaloneAssetProvider : IAssetProvider
         throw new FileNotFoundException($"Asset with path {relativeAssetPath} not found.");
     }
 
-    public T LoadAsset<T>(Guid guid, int fileID = 0) where T : EngineObject
+    public AssetRef<T> LoadAsset<T>(Guid guid, int fileID = 0) where T : EngineObject
     {
         if (_loaded.ContainsKey(guid))
             return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID]);
@@ -51,7 +51,7 @@ public class StandaloneAssetProvider : IAssetProvider
         throw new FileNotFoundException($"Asset with GUID {guid} not found.");
     }
 
-    public T? LoadAsset<T>(IAssetRef assetID) where T : EngineObject
+    public AssetRef<T> LoadAsset<T>(IAssetRef assetID) where T : EngineObject
     {
         if (assetID == null) return null;
         return LoadAsset<T>(assetID.AssetID, assetID.FileID);

@@ -62,9 +62,6 @@ namespace Prowl.Editor.Assets
                 };
 
             ctx.SetMainObject(shader);
-
-
-            ImGuiNotify.InsertNotification("Shader Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);
         }
 
 #warning TODO: Replace regex with a proper parser, this works just fine for now though so Low Priority

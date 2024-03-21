@@ -1,10 +1,7 @@
-﻿using Prowl.Editor.Utilities;
+﻿using Prowl.Editor.Assets;
+using Prowl.Editor.Utilities;
 using Prowl.Runtime;
-using Prowl.Runtime.Assets;
 using Prowl.Runtime.SceneManagement;
-using Prowl.Runtime.Utils;
-using System;
-using System.IO;
 using System.Reflection;
 
 namespace Prowl.Editor.EditorWindows
@@ -13,65 +10,61 @@ namespace Prowl.Editor.EditorWindows
     {
         #region Assets
         public static DirectoryInfo? Directory { get; set; }
+        public static bool fromAssetBrowser = false;
 
         [MenuItem("Create/Folder")]
         public static void CreateFolder()
         {
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
-            var folderAction = new Action<string, string>((directory, createName) =>
-            {
-                while (dir.Exists)
-                {
-                    dir = new DirectoryInfo(dir.FullName.Replace("New Folder", "New Folder new"));
-                }
-                dir.Create();
-            });
-            CreateNewFileWindow fWindow = new CreateNewFileWindow(Directory, folderAction);
+
             DirectoryInfo dir = new(Path.Combine(Directory.FullName, "New Folder"));
+            EditorUtils.GetSafeName(ref dir);
+            dir.Create();
+            if (fromAssetBrowser)
+                AssetBrowserWindow.StartRename(dir.FullName);
+            else
+                AssetsWindow.StartRename(dir.FullName);
         }
 
         [MenuItem("Create/Material")]
         public static void CreateMaterial()
         {
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
-            var materialAction = new Action<string, string>((directory, createName) =>
-            {
-                Material mat = new Material(Shader.Find("Defaults/Standard.shader"));
-                while (file.Exists)
-                {
-                    file = new FileInfo(file.FullName.Replace(".mat", "") + " new.mat");
-                }
-                StringTagConverter.WriteToFile(Serializer.Serialize(mat), file);
 
-                var r = AssetDatabase.FileToRelative(file);
-                AssetDatabase.Reimport(r);
-                AssetDatabase.Ping(r);
-            });
-            CreateNewFileWindow fWindow = new CreateNewFileWindow(Directory, materialAction);
             FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New Material.mat"));
+            EditorUtils.GetSafeName(ref file);
+
+            Material mat = new Material(Shader.Find("Defaults\\Standard.shader"));
+            StringTagConverter.WriteToFile(Serializer.Serialize(mat), file);
+            if (fromAssetBrowser)
+                AssetBrowserWindow.StartRename(file.FullName);
+            else
+                AssetsWindow.StartRename(file.FullName);
+
+            AssetDatabase.Update();
+            AssetDatabase.Ping(file);
         }
 
         [MenuItem("Create/Script")]
         public static void CreateScript()
         {
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
-            var scriptAction = new Action<string, string>((directory, createName) =>
-            {
-                while (file.Exists)
-                {
-                    file = new FileInfo(file.FullName.Replace(".cs", "") + " new.cs");
-                }
-                using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
-                using StreamReader reader = new StreamReader(stream);
-                string script = reader.ReadToEnd();
-                script = script.Replace("%SCRIPTNAME%", EditorUtils.FilterAlpha(Path.GetFileNameWithoutExtension(file.Name)));
-                File.WriteAllText(file.FullName, script);
-                var r = AssetDatabase.FileToRelative(file);
-                AssetDatabase.Reimport(r);
-                AssetDatabase.Ping(r);
-            });
-            CreateNewFileWindow fWindow = new CreateNewFileWindow(Directory, scriptAction);
+
             FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New Script.cs"));
+            EditorUtils.GetSafeName(ref file);
+
+            using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
+            using StreamReader reader = new StreamReader(stream);
+            string script = reader.ReadToEnd();
+            script = script.Replace("%SCRIPTNAME%", EditorUtils.FilterAlpha(Path.GetFileNameWithoutExtension(file.Name)));
+            File.WriteAllText(file.FullName, script);
+            if (fromAssetBrowser)
+                AssetBrowserWindow.StartRename(file.FullName);
+            else
+                AssetsWindow.StartRename(file.FullName);
+
+            AssetDatabase.Update();
+            AssetDatabase.Ping(file);
         }
 
         #endregion
@@ -95,16 +88,16 @@ namespace Prowl.Editor.EditorWindows
                 return;
             }
 
-            var relativeAssetPath = AssetDatabase.GUIDToAssetPath(scene.AssetID);
-            AssetDatabase.Remove(relativeAssetPath);
-            var file = AssetDatabase.RelativeToFile(relativeAssetPath);
+            if (AssetDatabase.TryGetFile(scene.AssetID, out var file))
+            {
+                AssetDatabase.Delete(file);
 
-            var allGameObjects = SceneManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
-            scene.GameObjects = Serializer.Serialize(allGameObjects);
-            StringTagConverter.WriteToFile(Serializer.Serialize(scene), file);
-            var r = AssetDatabase.FileToRelative(file);
-            AssetDatabase.Reimport(r);
-            AssetDatabase.Ping(r);
+                var allGameObjects = SceneManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
+                scene.GameObjects = Serializer.Serialize(allGameObjects);
+                StringTagConverter.WriteToFile(Serializer.Serialize(scene), file);
+                AssetDatabase.Update();
+                AssetDatabase.Ping(file);
+            }
         }
 
         [MenuItem("Scene/Save As")]
@@ -124,7 +117,7 @@ namespace Prowl.Editor.EditorWindows
                         return;
 
                     if (File.Exists(path))
-                        AssetDatabase.Remove(AssetDatabase.FileToRelative(file));
+                        AssetDatabase.Delete(file);
 
                     // If no extension (or wrong extension) add .scene
                     if (!file.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase))
@@ -135,9 +128,8 @@ namespace Prowl.Editor.EditorWindows
                     scene.GameObjects = Serializer.Serialize(allGameObjects);
                     var tag = Serializer.Serialize(scene);
                     StringTagConverter.WriteToFile(tag, file);
-                    var r = AssetDatabase.FileToRelative(file);
-                    AssetDatabase.Reimport(r);
-                    AssetDatabase.Ping(r);
+                    AssetDatabase.Update();
+                    AssetDatabase.Ping(file);
                 }   
             };
             ImGuiFileDialog.FileDialog(imFileDialogInfo);

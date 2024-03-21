@@ -1,9 +1,9 @@
 ﻿using Hexa.NET.ImGui;
+using Prowl.Editor.Assets;
 using Prowl.Editor.Drawers.NodeSystem;
+using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
-using Prowl.Runtime.Assets;
-using Prowl.Editor.ImGUI.Widgets;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -37,24 +37,21 @@ public class RenderPipelineWindow : EditorWindow
 
         changed |= changedThisFrame;
 
-        if (changed)
+        if (changed && AssetDatabase.TryGetFile(CurrentRenderPipeline.Res!.AssetID, out var assetFile))
         {
-            string relativeAssetPath = AssetDatabase.GUIDToAssetPath(CurrentRenderPipeline.Res!.AssetID);
-            var assetFile = AssetDatabase.RelativeToFile(relativeAssetPath);
-
             // Show Save/Decline buttons in the bottom right corner
             //ImGui.SetCursorPos(new System.Numerics.Vector2(ImGui.GetStyle().WindowPadding.X + 100, ImGui.GetStyle().WindowPadding.Y + 30));
             if (ImGui.Button("Save"))
             {
                 // Need to save original asset
                 StringTagConverter.WriteToFile(Serializer.Serialize(CurrentRenderPipeline.Res!), assetFile);
-                AssetDatabase.Reimport(AssetDatabase.FileToRelative(assetFile), false);
+                AssetDatabase.Reimport(assetFile, false);
                 changed = false;
             }
             ImGui.SameLine();
             if (ImGui.Button("Decline"))
             {
-                AssetDatabase.Reimport(AssetDatabase.FileToRelative(assetFile), false);
+                AssetDatabase.Reimport(assetFile, false);
                 changed = false;
             }
 

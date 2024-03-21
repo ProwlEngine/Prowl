@@ -44,7 +44,7 @@ namespace Prowl.Editor.Assets
         public static MetaFile? Load(FileInfo assetFile)
         {
             var file = new FileInfo(assetFile + ".meta");
-            if (!file.Exists) return null; // Doesnt Exist
+            if (!File.Exists(file.FullName)) return null; // Doesnt Exist
             var tag = StringTagConverter.ReadFromFile(file);
             var meta = Serializer.Deserialize<MetaFile>(tag);
             meta!.AssetPath = assetFile;

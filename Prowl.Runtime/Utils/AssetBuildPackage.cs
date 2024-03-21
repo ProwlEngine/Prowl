@@ -43,7 +43,7 @@ namespace Prowl.Runtime.Utils
 
         public static AssetBuildPackage CreateNew(FileInfo path)
         {
-            if (path.Exists)
+            if (File.Exists(path.FullName))
                 throw new ArgumentException("File already exists.", nameof(path));
 
             return new AssetBuildPackage(path.Open(FileMode.Create, FileAccess.ReadWrite), ZipArchiveMode.Update);

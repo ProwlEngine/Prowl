@@ -1,15 +1,9 @@
-﻿using Assimp;
-using Hexa.NET.ImGui;
+﻿using Hexa.NET.ImGui;
 using Prowl.Editor.Assets;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Editor.Utilities;
 using Prowl.Runtime;
-using Prowl.Runtime.Assets;
-using Prowl.Runtime.SceneManagement;
-using Silk.NET.Vulkan;
 using System.Reflection;
-using System.Xml.Linq;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace Prowl.Editor.EditorWindows.CustomEditors
 {
@@ -251,25 +245,21 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 if (ImGui.MenuItem("Create Script " + _searchText))
                 {
                     FileInfo file = new FileInfo(Project.ProjectAssetDirectory + $"/{_searchText}.cs");
-                    if (file.Exists)
+                    if (File.Exists(file.FullName))
                         return;
-                    AssetDatabase.IgnoreFiles.Add(file);
                     using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
                     using StreamReader reader = new StreamReader(stream);
                     string script = reader.ReadToEnd();
                     script = script.Replace("%SCRIPTNAME%", EditorUtils.FilterAlpha(_searchText));
                     File.WriteAllText(file.FullName, script);
-                    var r = AssetDatabase.FileToRelative(file);
-                    AssetDatabase.Ping(r);
-
-                    EditorApplication.ForceRecompile();
+                    AssetDatabase.Ping(file);
+                    // Trigger an update so the script get imported which will recompile all scripts
+                    AssetDatabase.Update();
 
                     Type? type = Type.GetType($"{EditorUtils.FilterAlpha(_searchText)}, CSharp, Version=1.0.0.0, Culture=neutral");
                     if(type != null && type.IsAssignableTo(typeof(MonoBehaviour)))
                         go.AddComponent(type);
                     ImGui.EndMenu();
-
-                    AssetDatabase.IgnoreFiles.Clear();
                 }
             }
         }

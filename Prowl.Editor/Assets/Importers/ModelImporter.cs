@@ -1,13 +1,7 @@
 ﻿using Assimp;
 using Hexa.NET.ImGui;
 using Prowl.Runtime;
-using Prowl.Runtime.Assets;
 using Prowl.Runtime.Utils;
-using Silk.NET.Input;
-using System;
-using System.ComponentModel.Design;
-using System.Linq;
-using System.Xml.Linq;
 using static Prowl.Runtime.Mesh;
 using Material = Prowl.Runtime.Material;
 using Mesh = Prowl.Runtime.Mesh;
@@ -130,7 +124,7 @@ namespace Prowl.Editor.Assets
                 List<Material> mats = new();
                 if (scene.HasMaterials)
                     foreach (var m in scene.Materials) {
-                        Material mat = new Material(Shader.Find("Defaults/Standard.shader"));
+                        Material mat = new Material(Shader.Find("Defaults\\Standard.shader"));
                         string? name = m.HasName ? m.Name : null;
 
                         // Albedo
@@ -155,9 +149,9 @@ namespace Prowl.Editor.Assets
                             if (FindTextureFromPath(m.TextureDiffuse.FilePath, parentDir, out var file))
                                 LoadTextureIntoMesh("_MainTex", ctx, file, mat);
                             else
-                                mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/grid.png")));
+                                mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")));
                         } else
-                            mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/grid.png")));
+                            mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")));
 
                         // Normal Texture
                         if (m.HasTextureNormal)
@@ -166,9 +160,9 @@ namespace Prowl.Editor.Assets
                             if (FindTextureFromPath(m.TextureNormal.FilePath, parentDir, out var file))
                                 LoadTextureIntoMesh("_NormalTex", ctx, file, mat);
                             else
-                                mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_normal.png")));
+                                mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")));
                         } else
-                            mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_normal.png")));
+                            mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")));
 
                         //AO, Roughness, Metallic Texture
                         if (m.GetMaterialTexture(TextureType.Unknown, 0, out var surface)) {
@@ -176,9 +170,9 @@ namespace Prowl.Editor.Assets
                             if (FindTextureFromPath(surface.FilePath, parentDir, out var file))
                                 LoadTextureIntoMesh("_SurfaceTex", ctx, file, mat);
                             else
-                                mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_surface.png")));
+                                mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")));
                         } else
-                            mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_surface.png")));
+                            mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")));
 
                         // Emissive Texture
                         if (m.HasTextureEmissive) {
@@ -187,9 +181,9 @@ namespace Prowl.Editor.Assets
                                 mat.SetFloat("_EmissionIntensity", 1f);
                                 LoadTextureIntoMesh("_EmissionTex", ctx, file, mat);
                             } else
-                                mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_emission.png")));
+                                mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")));
                         } else
-                            mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GUIDFromAssetPath("Defaults/default_emission.png")));
+                            mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")));
 
                         name ??= "StandardMat";
                         mat.Name = name;
@@ -343,8 +337,6 @@ namespace Prowl.Editor.Assets
                     rootNode.transform.localScale = Vector3.one * UnitScale;
 
                 ctx.SetMainObject(rootNode);
-
-                ImGuiNotify.InsertNotification("Model Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), AssetDatabase.FileToRelative(assetPath));
             }
 
             static void AddMeshComponent(List<(GameObject, Node)> GOs, GameObject go, MeshMaterialBinding uMeshAndMat)
@@ -366,7 +358,7 @@ namespace Prowl.Editor.Assets
         {
             // If the filePath is stored in the model relative to the file this will exist
             file = new FileInfo(Path.Combine(parentDir.FullName, filePath));
-            if (file.Exists) return true;
+            if (File.Exists(file.FullName)) return true;
             // If not the filePath is probably a Full path, so lets loop over each node in the path starting from the end
             // so first check if the File name exists inside parentDir, if so return, if not then check the file with its parent exists so like
             // if the file is at C:\Users\Me\Documents\MyModel\Textures\MyTexture.png
@@ -384,8 +376,7 @@ namespace Prowl.Editor.Assets
 
         private static void LoadTextureIntoMesh(string name, SerializedAsset ctx, FileInfo file, Material mat)
         {
-            Guid guid = AssetDatabase.GUIDFromAssetPath(file);
-            if (guid != Guid.Empty)
+            if (AssetDatabase.TryGetGuid(file, out var guid))
             {
                 // We have this texture as an asset, Juse use the asset we dont need to load it
                 mat.SetTexture(name, new AssetRef<Texture2D>(guid));
@@ -478,7 +469,7 @@ namespace Prowl.Editor.Assets
 
             if (ImGui.Button("Save")) {
                 (target as MetaFile).Save();
-                AssetDatabase.Reimport(AssetDatabase.FileToRelative((target as MetaFile).AssetPath));
+                AssetDatabase.Reimport((target as MetaFile).AssetPath);
             }
         }
     }

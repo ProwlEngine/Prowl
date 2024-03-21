@@ -1,7 +1,6 @@
 using Prowl.Editor.Assets;
 using Prowl.Editor.EditorWindows;
 using Prowl.Runtime;
-using Prowl.Runtime.Assets;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Reflection;
@@ -63,11 +62,11 @@ public static class Project
 
         CreateDefaults("Defaults");
         AssetDatabase.AddRootFolder("Defaults");
-        AssetDatabase.ReimportAll();
+        AssetDatabase.Update(); // Ensure defaults are loaded
         AssetDatabase.AddRootFolder("Packages");
-
+        AssetDatabase.Update(); // Ensure packages are loaded
         AssetDatabase.AddRootFolder("Assets");
-        AssetDatabase.CleanupCache();
+        AssetDatabase.Update();
 
         OnProjectChanged?.Invoke();
     }
@@ -262,7 +261,7 @@ public static class Project
         Runtime.Debug.Log($"Successfully built project!");
 
         // Open the Build folder
-        AssetDatabase.OpenPath(BuildPath);
+        AssetDatabase.OpenPath(new DirectoryInfo(BuildPath));
 
         return true;
     }

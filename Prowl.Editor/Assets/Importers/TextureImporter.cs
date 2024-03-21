@@ -1,7 +1,6 @@
-﻿using Prowl.Runtime;
+﻿using Hexa.NET.ImGui;
+using Prowl.Runtime;
 using Prowl.Runtime.Utils;
-using Hexa.NET.ImGui;
-using Prowl.Runtime.Assets;
 using Silk.NET.OpenGL;
 
 namespace Prowl.Editor.Assets
@@ -34,8 +33,6 @@ namespace Prowl.Editor.Assets
                 texture.GenerateMipmaps();
 
             ctx.SetMainObject(texture);
-
-            ImGuiNotify.InsertNotification("Texture Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);
         }
     }
 
@@ -79,7 +76,7 @@ namespace Prowl.Editor.Assets
             if (ImGui.Button("Save")) {
                 (target as MetaFile).Save();
                 // reimport
-                AssetDatabase.Reimport(AssetDatabase.FileToRelative((target as MetaFile).AssetPath));
+                AssetDatabase.Reimport((target as MetaFile).AssetPath);
             }
         }
     }

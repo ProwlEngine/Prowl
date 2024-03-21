@@ -3,7 +3,6 @@ using Prowl.Editor.Assets;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
-using Prowl.Runtime.Assets;
 using Prowl.Runtime.SceneManagement;
 
 namespace Prowl.Editor.EditorWindows;
@@ -19,81 +18,116 @@ public class AssetsWindow : EditorWindow
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse;
 
     private string _searchText = "";
-    private readonly List<FileInfo> _found = [];
+    private readonly List<FileInfo> _found = new();
 
     public readonly static SelectHandler<FileSystemInfo> SelectHandler = new((item) => !item.Exists, (a, b) => a.FullName.Equals(b.FullName, StringComparison.OrdinalIgnoreCase));
+    internal static string? RenamingEntry = null;
 
-    private int treeCounter = 0;
+    private int _treeCounter = 0;
 
     public AssetsWindow() : base()
     {
         Title = FontAwesome6.FolderTree + " Assets";
     }
 
+    public static void StartRename(string? entry)
+    {
+        RenamingEntry = entry;
+    }
+
     protected override void Draw()
     {
-        if (Project.HasProject == false) return;
+        if (!Project.HasProject)
+            return;
 
         ImGui.PushStyleColor(ImGuiCol.Header, EditorGui.SelectedColor);
         SelectHandler.StartFrame();
 
         float cPX = ImGui.GetCursorPosX();
-        if (GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X)) {
+        if (GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X))
+        {
             SelectHandler.Clear();
             _found.Clear();
-            if (!string.IsNullOrEmpty(_searchText)) {
+            if (!string.IsNullOrEmpty(_searchText))
+            {
                 _found.AddRange(AssetDatabase.GetRootFolders()[2].EnumerateFiles("*", SearchOption.AllDirectories)); // Assets
                 _found.AddRange(AssetDatabase.GetRootFolders()[0].EnumerateFiles("*", SearchOption.AllDirectories)); // Defaults
                 _found.AddRange(AssetDatabase.GetRootFolders()[1].EnumerateFiles("*", SearchOption.AllDirectories)); // Packages Folder
-                // Remove Meta's & only keep the ones with SearchText inside them
                 _found.RemoveAll(f => f.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase) || !f.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
             }
         }
 
         ImGui.BeginChild("Tree");
-        treeCounter = 0;
-        if (!string.IsNullOrEmpty(_searchText)) {
-            foreach (var file in _found) {
+        _treeCounter = 0;
+        if (!string.IsNullOrEmpty(_searchText))
+        {
+            foreach (var file in _found)
+            {
                 ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
-                if (AssetsWindow.SelectHandler.IsSelected(file)) flags |= ImGuiTreeNodeFlags.Selected;
+                if (AssetsWindow.SelectHandler.IsSelected(file))
+                    flags |= ImGuiTreeNodeFlags.Selected;
 
                 string ext = file.Extension.ToLower().Trim();
 
                 var curPos = ImGui.GetCursorPos();
                 bool opened = ImGui.TreeNodeEx($"      {Path.GetFileNameWithoutExtension(file.Name)}", flags);
-                SelectHandler.HandleSelectable(treeCounter++, file);
-                if (treeCounter % 2 == 0) GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
+                SelectHandler.HandleSelectable(_treeCounter++, file);
+                if (_treeCounter % 2 == 0)
+                    GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
 
                 GUIHelper.Tooltip(file.Name);
                 ImGui.PushStyleColor(ImGuiCol.Text, GetFileColor(ext));
-                // Display icon behind text
                 ImGui.SetCursorPos(new System.Numerics.Vector2(curPos.X + 26, curPos.Y));
                 ImGui.TextUnformatted(GetIcon(ext));
                 ImGui.PopStyleColor();
-                if (opened) ImGui.TreePop();
+                if (opened)
+                    ImGui.TreePop();
+
+                if (RenamingEntry == file.FullName)
+                {
+                    string newName = file.Name;
+                    if (ImGui.InputText("##Rename", ref newName, 255, ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll))
+                    {
+                        string newPath = Path.Combine(file.Directory.FullName, newName);
+                        if (File.Exists(newPath))
+                            EditorGui.Notify("A file with the same name already exists.");
+                        else
+                        {
+                            EditorGui.Notify("Renaming assets is not yet implemented.");
+                        }
+                        RenamingEntry = null;
+                    }
+                    if (!ImGui.IsItemActive() && (ImGui.IsMouseClicked(ImGuiMouseButton.Left) || ImGui.IsMouseClicked(ImGuiMouseButton.Right)))
+                        RenamingEntry = null;
+                    ImGui.SetKeyboardFocusHere(-1);
+                }
             }
-        } else {
-            RenderRootFolter(true, AssetDatabase.GetRootFolders()[2]); // Assets Folder
-            RenderRootFolter(false, AssetDatabase.GetRootFolders()[0]); // Defaults Folder
-            RenderRootFolter(true, AssetDatabase.GetRootFolders()[1]); // Packages Folder
+        }
+        else
+        {
+            RenderRootFolder(true, AssetDatabase.GetRootFolders()[2]); // Assets Folder
+            RenderRootFolder(false, AssetDatabase.GetRootFolders()[0]); // Defaults Folder
+            RenderRootFolder(true, AssetDatabase.GetRootFolders()[1]); // Packages Folder
         }
         ImGui.EndChild();
         ImGui.PopStyleColor();
     }
 
-    private void RenderRootFolter(bool defaultOpen, DirectoryInfo root)
+    private void RenderRootFolder(bool defaultOpen, DirectoryInfo root)
     {
         ImGuiTreeNodeFlags rootFlags = ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
-        if (defaultOpen) rootFlags |= ImGuiTreeNodeFlags.DefaultOpen;
+        if (defaultOpen)
+            rootFlags |= ImGuiTreeNodeFlags.DefaultOpen;
 
         ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(250f / 255f, 210f / 255f, 100f / 255f, 1f));
         bool opened = ImGui.TreeNodeEx($"{FontAwesome6.FolderTree} {root.Name}", rootFlags);
-        SelectHandler.HandleSelectable(treeCounter++, root);
+        SelectHandler.HandleSelectable(_treeCounter++, root);
         GUIHelper.ItemRectFilled(1f, 1f, 1f, 0.2f);
-        HandleFileContextMenu(null, null);
+        HandleFileContextMenu(null, null, false);
         ImGui.PopStyleColor();
 
-        if (opened) {
+        if (opened)
+        {
             DrawDirectory(root);
             ImGui.TreePop();
         }
@@ -101,133 +135,208 @@ public class AssetsWindow : EditorWindow
 
     private void DrawDirectory(DirectoryInfo directory)
     {
-        // Folders
         var directories = directory.GetDirectories();
-        foreach (DirectoryInfo subDirectory in directories) {
-            if (!subDirectory.Exists) return;
+        foreach (DirectoryInfo subDirectory in directories)
+        {
+            if (!subDirectory.Exists)
+                continue;
+
             ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
             bool isLeaf = subDirectory.GetFiles().Length == 0 && subDirectory.GetDirectories().Length == 0;
-            if (isLeaf) flags |= ImGuiTreeNodeFlags.Leaf;
+            if (isLeaf)
+                flags |= ImGuiTreeNodeFlags.Leaf;
 
-            if (AssetsWindow.SelectHandler.IsSelected(subDirectory)) flags |= ImGuiTreeNodeFlags.Selected;
+            if (AssetsWindow.SelectHandler.IsSelected(subDirectory))
+                flags |= ImGuiTreeNodeFlags.Selected;
 
             bool opened = ImGui.TreeNodeEx($"{(isLeaf ? FontAwesome6.FolderOpen : FontAwesome6.Folder)} {subDirectory.Name}", flags);
-            SelectHandler.HandleSelectable(treeCounter++, subDirectory);
-            HandleFileContextMenu(subDirectory);
+            SelectHandler.HandleSelectable(_treeCounter++, subDirectory);
+            HandleFileContextMenu(subDirectory, null, false);
             GUIHelper.Tooltip(subDirectory.Name);
 
-            if (treeCounter % 2 == 0) GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
+            if (_treeCounter % 2 == 0)
+                GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
 
-            if (opened) {
+            if (opened)
+            {
                 DrawDirectory(subDirectory);
                 ImGui.TreePop();
             }
+
+            if (RenamingEntry == subDirectory.FullName)
+            {
+                string newName = subDirectory.Name;
+                if (ImGui.InputText("##Rename", ref newName, 255, ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll))
+                {
+                    string newPath = Path.Combine(subDirectory.Parent.FullName, newName);
+                    if (Directory.Exists(newPath))
+                        EditorGui.Notify("A directory with the same name already exists.");
+                    else
+                    {
+                        EditorGui.Notify("Renaming assets is not yet implemented.");
+                    }
+                    RenamingEntry = null;
+                }
+                if (!ImGui.IsItemActive() && (ImGui.IsMouseClicked(ImGuiMouseButton.Left) || ImGui.IsMouseClicked(ImGuiMouseButton.Right)))
+                    RenamingEntry = null;
+                ImGui.SetKeyboardFocusHere(-1);
+            }
         }
 
-        // Files
         var files = directory.GetFiles();
-        foreach (FileInfo file in files) {
-            if (!file.Exists) return;
+        foreach (FileInfo file in files)
+        {
+            if (!File.Exists(file.FullName))
+                continue;
+
             ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
-            if (AssetsWindow.SelectHandler.IsSelected(file)) flags |= ImGuiTreeNodeFlags.Selected;
+            if (AssetsWindow.SelectHandler.IsSelected(file))
+                flags |= ImGuiTreeNodeFlags.Selected;
 
             string ext = file.Extension.ToLower().Trim();
-            if (ext.Equals(".meta", StringComparison.OrdinalIgnoreCase)) continue;
+            if (ext.Equals(".meta", StringComparison.OrdinalIgnoreCase))
+                continue;
 
             var curPos = ImGui.GetCursorPos();
-            var name = (Settings.m_HideExtensions ? Path.GetFileNameWithoutExtension(file.Name) : file.Name);
+            var name = Settings.m_HideExtensions ? Path.GetFileNameWithoutExtension(file.Name) : file.Name;
             bool opened = ImGui.TreeNodeEx($"      {name}", flags);
-            SelectHandler.HandleSelectable(treeCounter++, file);
-            if (treeCounter % 2 == 0) GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
+            SelectHandler.HandleSelectable(_treeCounter++, file);
+            if (_treeCounter % 2 == 0)
+                GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
             if (ImGui.IsItemHovered())
                 HandleFileClick(file);
-            HandleFileContextMenu(file);
+            HandleFileContextMenu(file, null, false);
             GUIHelper.Tooltip(file.Name);
             ImGui.PushStyleColor(ImGuiCol.Text, GetFileColor(ext));
-            // Display icon behind text
             ImGui.SetCursorPos(new System.Numerics.Vector2(curPos.X + 26, curPos.Y));
             ImGui.TextUnformatted(GetIcon(ext));
             ImGui.PopStyleColor();
-            if (opened) ImGui.TreePop();
+            if (opened)
+                ImGui.TreePop();
+
+            if (RenamingEntry == file.FullName)
+            {
+                string newName = file.Name;
+                if (ImGui.InputText("##Rename", ref newName, 255, ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll))
+                {
+                    string newPath = Path.Combine(file.Directory.FullName, newName);
+                    if (File.Exists(newPath))
+                        EditorGui.Notify("A file with the same name already exists.");
+                    else
+                    {
+                        EditorGui.Notify("Renaming assets is not yet implemented.");
+                    }
+                    RenamingEntry = null;
+                }
+                if (!ImGui.IsItemActive() && (ImGui.IsMouseClicked(ImGuiMouseButton.Left) || ImGui.IsMouseClicked(ImGuiMouseButton.Right)))
+                    RenamingEntry = null;
+                ImGui.SetKeyboardFocusHere(-1);
+            }
         }
     }
 
     public static void HandleFileClick(FileInfo entry)
     {
-        // Drag and Drop Payload
-        if (ImporterAttribute.SupportsExtension(entry.Extension)) {
+        Guid guid;
+        bool isAsset = AssetDatabase.TryGetGuid(entry, out guid);
+
+        if (isAsset && ImporterAttribute.SupportsExtension(entry.Extension))
+        {
             Type type = ImporterAttribute.GetGeneralType(entry.Extension);
-            if (type != null) {
-                var guid = AssetDatabase.GUIDFromAssetPath(Path.GetRelativePath(Project.ProjectDirectory, entry.FullName));
+            if (type != null)
+            {
                 if (DragnDrop.OfferAsset(guid, type.Name))
-                    return; // Dont do Selection/Open stuff
+                    return;
             }
         }
 
         if (ImGui.IsMouseReleased(0))
             AssetsWindow.SelectHandler.Select(entry);
 
-        string relativeAssetPath = Path.GetRelativePath(Project.ProjectDirectory, entry.FullName);
-        bool isAsset = AssetDatabase.Contains(relativeAssetPath);
-        if (isAsset && ImGui.IsMouseDoubleClicked(0)) {
-            if (entry.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase)) {
-                var guid = AssetDatabase.GUIDFromAssetPath(relativeAssetPath);
+        if (isAsset && ImGui.IsMouseDoubleClicked(0))
+        {
+            if (entry.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase))
                 SceneManager.LoadScene(new AssetRef<Runtime.Scene>(guid));
-            } else {
-                AssetDatabase.OpenRelativeAsset(relativeAssetPath);
-            }
+            else
+                AssetDatabase.OpenPath(entry);
         }
     }
 
-    public static void HandleFileContextMenu(FileSystemInfo? fileInfo, DirectoryInfo? directory = null)
+    public static void HandleFileContextMenu(FileSystemInfo? fileInfo, DirectoryInfo? directory = null, bool fromAssetBrowser = false)
     {
-        // If still null then show a simplified context menu
-        if (fileInfo == null) {
-            if (ImGui.BeginPopupContextItem()) {
+        if (fileInfo == null)
+        {
+            if (ImGui.BeginPopupContextItem())
+            {
                 MainMenuItems.Directory = directory;
+                MainMenuItems.fromAssetBrowser = fromAssetBrowser;
                 MenuItem.DrawMenuRoot("Create");
                 if (ImGui.MenuItem("Show In Explorer"))
-                    AssetDatabase.OpenPath(Project.ProjectAssetDirectory);
+                    AssetDatabase.OpenPath(new DirectoryInfo(Project.ProjectAssetDirectory));
                 ImGui.Separator();
                 if (ImGui.MenuItem("Reimport All"))
                     AssetDatabase.ReimportAll();
 
                 ImGui.EndPopup();
             }
-            return;
-        } else if (fileInfo is FileInfo file) {
-            if (ImGui.BeginPopupContextItem()) {
-                var relativeAssetPath = AssetDatabase.FileToRelative(file);
+        }
+        else if (fileInfo is FileInfo file)
+        {
+            if (ImGui.BeginPopupContextItem())
+            {
+                if (ImGui.MenuItem("Rename"))
+                    if(fromAssetBrowser)
+                    {
+                        AssetBrowserWindow.StartRename(file.FullName);
+                    }
+                    else
+                    {
+                        StartRename(file.FullName);
+                    }
                 if (ImGui.MenuItem("Reimport"))
-                    AssetDatabase.Reimport(relativeAssetPath);
+                    AssetDatabase.Reimport(file);
                 ImGui.Separator();
                 MainMenuItems.Directory = file.Directory;
+                MainMenuItems.fromAssetBrowser = fromAssetBrowser;
                 MenuItem.DrawMenuRoot("Create");
                 if (ImGui.MenuItem("Show In Explorer"))
-                    AssetDatabase.OpenPath(file.Directory!.FullName);
+                    AssetDatabase.OpenPath(file.Directory);
                 if (ImGui.MenuItem("Open"))
-                    AssetDatabase.OpenRelativeAsset(relativeAssetPath);
+                    AssetDatabase.OpenPath(file);
                 if (ImGui.MenuItem("Delete"))
-                    file.Delete(); // Will trigger the AssetDatabase file watchers
+                    file.Delete();
                 ImGui.Separator();
                 if (ImGui.MenuItem("Reimport All"))
                     AssetDatabase.ReimportAll();
 
                 ImGui.EndPopup();
             }
-        } else if (fileInfo is DirectoryInfo dir) {
-            if (ImGui.BeginPopupContextItem()) {
+        }
+        else if (fileInfo is DirectoryInfo dir)
+        {
+            if (ImGui.BeginPopupContextItem())
+            {
+                if (ImGui.MenuItem("Rename"))
+                    if (fromAssetBrowser)
+                    {
+                        AssetBrowserWindow.StartRename(dir.FullName);
+                    }
+                    else
+                    {
+                        StartRename(dir.FullName);
+                    }
                 if (ImGui.MenuItem("Reimport"))
                     AssetDatabase.ReimportFolder(dir);
                 ImGui.Separator();
                 MainMenuItems.Directory = dir;
+                MainMenuItems.fromAssetBrowser = fromAssetBrowser;
                 MenuItem.DrawMenuRoot("Create");
                 if (ImGui.MenuItem("Show In Explorer"))
-                    AssetDatabase.OpenPath(dir.Parent!.FullName);
+                    AssetDatabase.OpenPath(dir.Parent!);
                 if (ImGui.MenuItem("Open"))
-                    AssetDatabase.OpenPath(dir.FullName);
+                    AssetDatabase.OpenPath(dir);
                 if (ImGui.MenuItem("Delete"))
-                    dir.Delete(true); // Will trigger the AssetDatabase file watchers
+                    dir.Delete(true);
                 ImGui.Separator();
                 if (ImGui.MenuItem("Reimport All"))
                     AssetDatabase.ReimportAll();

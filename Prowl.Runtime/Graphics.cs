@@ -190,7 +190,7 @@ namespace Prowl.Runtime
             oldTransform ??= transform;
 
             if(defaultNoise.IsAvailable == false) {
-                defaultNoise = Application.AssetProvider.LoadAsset<Texture2D>("Defaults/noise.png");
+                defaultNoise = Application.AssetProvider.LoadAsset<Texture2D>("Defaults\\noise.png");
             }
 
             material.SetTexture("DefaultNoise", defaultNoise);
@@ -300,7 +300,7 @@ namespace Prowl.Runtime
         /// </summary>
         public static void Blit(RenderTexture? renderTexture, Texture2D texture, bool clear = true)
         {
-            defaultMat ??= new Material(Shader.Find("Defaults/Basic.shader"));
+            defaultMat ??= new Material(Shader.Find("Defaults\\Basic.shader"));
             defaultMat.SetTexture("texture0", texture);
             defaultMat.SetPass(0);
 

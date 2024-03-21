@@ -1,35 +1,39 @@
-﻿using System.Reflection;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace Prowl.Editor.Utilities
 {
     public static class EditorUtils
     {
 
-        public static void GetSafeName(ref FileSystemInfo fileSystemInfo)
+        public static void GetSafeName(ref DirectoryInfo dir)
         {
-            string name = fileSystemInfo.Name;
-            string? ext = null;
-
-            if (fileSystemInfo is FileInfo file)
-            {
-                ext = file.Extension;
-                name = file.Name[..^ext.Length]; // Remove the extension from the name
-            }
-
-            if (fileSystemInfo.Exists)
+            string name = dir.Name;
+            if (dir.Exists)
             {
                 int counter = 1;
-                while (fileSystemInfo.Exists)
+                while (dir.Exists)
                 {
-                    string newName = $"{name} ({counter})";
-                    if (fileSystemInfo is DirectoryInfo dir)
-                    {
-                        fileSystemInfo = new DirectoryInfo(Path.Combine(dir.Parent!.FullName, newName));
-                    }
-                    else if (fileSystemInfo is FileInfo info)
-                    {
-                        fileSystemInfo = new FileInfo(Path.Combine(info.Directory!.FullName, $"{newName}{ext}"));
-                    }
+                    dir = new DirectoryInfo(Path.Combine(dir.Parent.FullName, $"{name} ({counter})"));
+                    counter++;
+                }
+            }
+        }
+
+        public static void GetSafeName(ref FileInfo file)
+        {
+            string name = Path.GetFileNameWithoutExtension(file.FullName);
+            string ext = file.Extension;
+            if (File.Exists(file.FullName))
+            {
+                int counter = 1;
+                while (File.Exists(file.FullName))
+                {
+                    file = new FileInfo(Path.Combine(file.Directory.FullName, $"{name} ({counter}){ext}"));
                     counter++;
                 }
             }
@@ -96,7 +100,7 @@ namespace Prowl.Editor.Utilities
         {
             FileInfo file = new(Path.Combine(dir.FullName, $"{fileName}.{ext}"));
             int matAttempt = 0;
-            while (file.Exists)
+            while (File.Exists(file.FullName))
                 file = new(Path.Combine(dir.FullName, $"{fileName}-{matAttempt++}.ext"));
             return file;
         }

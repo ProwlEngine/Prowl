@@ -95,7 +95,7 @@ public class Camera : MonoBehaviour
     {
         if (RenderPipeline.IsAvailable == false) 
         {
-            RenderPipeline = Application.AssetProvider.LoadAsset<RenderPipeline>("Defaults/DefaultRenderPipeline.scriptobj");
+            RenderPipeline = Application.AssetProvider.LoadAsset<RenderPipeline>("Defaults\\DefaultRenderPipeline.scriptobj");
             if (RenderPipeline.IsAvailable == false)
             {
                 Debug.LogError($"Camera on {GameObject.Name} cannot render, Missing Default Render Pipeline!");

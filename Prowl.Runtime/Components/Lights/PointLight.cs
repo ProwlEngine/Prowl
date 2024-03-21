@@ -26,7 +26,7 @@ public class PointLight : MonoBehaviour
         var mat = Matrix4x4.CreateScale(radius) * GameObject.GlobalCamRelative;
         if (lightMat == null)
         {
-            lightMat = new Material(Shader.Find("Defaults/Pointlight.shader"));
+            lightMat = new Material(Shader.Find("Defaults\\Pointlight.shader"));
         }
         else
         {

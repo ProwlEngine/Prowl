@@ -23,7 +23,7 @@ public class HierarchyWindow : EditorWindow
     }
 
     private string _searchText = "";
-    private List<GameObject> m_RenamingEntities = null;
+    private GameObject? m_RenamingGO = null;
     public static SelectHandler<WeakReference> SelectHandler { get; private set; } = new((item) => !item.IsAlive || (item.Target is EngineObject eObj && eObj.IsDestroyed), (a, b) => ReferenceEquals(a.Target, b.Target));
 
     private const float PingDuration = 3f;
@@ -98,15 +98,16 @@ public class HierarchyWindow : EditorWindow
             }
             ImGui.PopStyleVar(2);
 
-            if (ImGui.BeginPopup("RenameGameObjects")) {
-                ImGui.SetKeyboardFocusHere();
-                string name = m_RenamingEntities[0].Name;
+            if (m_RenamingGO != null && ImGui.BeginPopup("RenameGameObjects"))
+            {
+                string name = m_RenamingGO.Name;
                 if (ImGui.InputText("##Tag", ref name, 0x100)) {
-                    m_RenamingEntities.ForEach((go) => { go.Name = name; });
+                    m_RenamingGO.Name = name;
                 }
+                ImGui.SetKeyboardFocusHere(-1);
                 ImGui.EndPopup();
             } else {
-                m_RenamingEntities = null;
+                m_RenamingGO = null;
             }
 
             ImGui.EndTable();
@@ -183,7 +184,7 @@ public class HierarchyWindow : EditorWindow
             SelectHandler.HandleSelectable(index++, new WeakReference(entity));
             if (SelectHandler.Count == 1 && ImGui.IsMouseDoubleClicked(0) && ImGui.IsItemHovered())
             {
-                m_RenamingEntities = [entity];
+                m_RenamingGO = entity;
                 ImGui.OpenPopup("RenameGameObjects");
             }
         }
@@ -311,10 +312,7 @@ public class HierarchyWindow : EditorWindow
             ImGui.Separator();
 
             if (ImGui.MenuItem("Rename")) {
-                m_RenamingEntities = new();
-                SelectHandler.Foreach((go) => {
-                    m_RenamingEntities.Add(go.Target as GameObject);
-                });
+                m_RenamingGO = entity;
 #warning This rename looks like it fails because of https://github.com/ocornut/imgui/issues/6462
                 ImGui.OpenPopup("RenameGameObjects");
             }

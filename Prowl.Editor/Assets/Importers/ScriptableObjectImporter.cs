@@ -12,8 +12,6 @@ namespace Prowl.Editor.Assets
             //var scriptable = JsonUtility.Deserialize<ScriptableObject>(File.ReadAllText(assetPath.FullName));
             var scriptable = Serializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile(assetPath));
             ctx.SetMainObject(scriptable);
-
-            ImGuiNotify.InsertNotification("ScriptableObject Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);
         }
     }
 

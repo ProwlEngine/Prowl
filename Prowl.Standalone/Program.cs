@@ -14,7 +14,7 @@ internal class Program {
         Application.AssetProvider = new StandaloneAssetProvider();
 
         FileInfo StartingScene = new FileInfo(Path.Combine(Data.FullName, "level.prowl"));
-        if (StartingScene.Exists)
+        if (File.Exists(StartingScene.FullName))
         {
             SerializedProperty tag = BinaryTagConverter.ReadFromFile(StartingScene);
             Scene scene = Serializer.Deserialize<Scene>(tag);

@@ -65,7 +65,7 @@ namespace Prowl.Runtime
         {
             if (ShadowPass == null)
             {
-                var defaultDepth = Find("Defaults/Depth.shader");
+                var defaultDepth = Find("Defaults\\Depth.shader");
                 if (!defaultDepth.IsAvailable) throw new Exception($"Failed to default Depth shader for shader: {Name}");
                 return defaultDepth.Res!.CompilePass(0, []);
             }

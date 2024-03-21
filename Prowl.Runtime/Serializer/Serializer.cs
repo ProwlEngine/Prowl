@@ -302,7 +302,7 @@ namespace Prowl.Runtime
             Type oType = RuntimeUtils.FindType(type);
             if (oType == null)
             {
-                Debug.LogError("[TagSerializer] Couldn't find type: " + type);
+                Debug.LogError("Couldn't find type: " + type);
                 return null;
             }
 

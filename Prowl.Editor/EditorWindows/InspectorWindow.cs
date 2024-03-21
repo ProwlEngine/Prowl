@@ -2,7 +2,6 @@ using Hexa.NET.ImGui;
 using Prowl.Editor.Assets;
 using Prowl.Icons;
 using Prowl.Runtime;
-using Prowl.Runtime.Assets;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -80,10 +79,9 @@ public class InspectorWindow : EditorWindow
                 if (relativeAssetPath != null)
                 {
                     // The selected object is a path in our asset database, load its meta data and display a custom editor for the Importer if ones found
-                    var id = AssetDatabase.GUIDFromAssetPath(path);
-                    if (id != Guid.Empty)
+                    if (AssetDatabase.TryGetGuid(path, out var id))
                     {
-                        var meta = AssetDatabase.LoadMeta(relativeAssetPath);
+                        var meta = MetaFile.Load(path);
                         if (meta != null)
                         {
                             Type? editorType = CustomEditorAttribute.GetEditor(meta.importer.GetType());

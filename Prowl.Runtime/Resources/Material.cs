@@ -170,7 +170,7 @@ namespace Prowl.Runtime
 
         public Material(AssetRef<Shader> shader)
         {
-            if (shader == null) throw new ArgumentNullException(nameof(shader));
+            if (shader.AssetID == Guid.Empty) throw new ArgumentNullException(nameof(shader));
             Shader = shader;
             PropertyBlock = new();
         }

@@ -2,7 +2,6 @@
 using Prowl.Editor.Assets;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
-using Prowl.Runtime.Assets;
 using System.Reflection;
 
 namespace Prowl.Editor.EditorWindows.CustomEditors
@@ -74,7 +73,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 {
                     scriptObject.OnValidate();
                     StringTagConverter.WriteToFile(Serializer.Serialize(scriptObject), (target as MetaFile).AssetPath);
-                    AssetDatabase.Reimport(AssetDatabase.FileToRelative((target as MetaFile).AssetPath));
+                    AssetDatabase.Reimport((target as MetaFile).AssetPath);
                 }
             }
             catch

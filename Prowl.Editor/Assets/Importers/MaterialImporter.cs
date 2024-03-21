@@ -1,10 +1,8 @@
 ﻿using Hexa.NET.ImGui;
+using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
-using Prowl.Runtime.Assets;
-using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Runtime.Utils;
-using System.Numerics;
 
 namespace Prowl.Editor.Assets
 {
@@ -30,8 +28,6 @@ namespace Prowl.Editor.Assets
             }
 
             ctx.SetMainObject(mat);
-
-            ImGuiNotify.InsertNotification("Material Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);
         }
     }
 
@@ -109,27 +105,30 @@ namespace Prowl.Editor.Assets
                                 if (tex.IsExplicitNull)
                                 {
                                     path = "(Null)";
-                                    drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.9f, 0.1f, 0.1f, 0.3f)));
                                     if (ImGui.Selectable("##" + path, false, new System.Numerics.Vector2(50, 50)))
                                         AssetDatabase.Ping(tex.AssetID);
+                                    drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.9f, 0.1f, 0.1f, 0.3f)));
                                     GUIHelper.Tooltip(path);
                                 }
                                 else if (tex.IsRuntimeResource)
                                 {
                                     path = "(Runtime)" + tex.Name;
-                                    drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.1f, 0.1f, 0.9f, 0.3f)));
                                     if (ImGui.Selectable("##" + path, false, new System.Numerics.Vector2(50, 50)))
                                         AssetDatabase.Ping(tex.AssetID);
-                                        GUIHelper.Tooltip(path);
-                                    }
-                                else if (AssetDatabase.Contains(tex.AssetID))
+                                    GUIHelper.Tooltip(path);
+                                    drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.1f, 0.1f, 0.9f, 0.3f)));
+                                }
+                                else if (AssetDatabase.TryGetFile(tex.AssetID, out var fileInfo))
                                 {
-                                    path = AssetDatabase.GUIDToAssetPath(tex.AssetID);
+                                    path = AssetDatabase.ToRelativePath(fileInfo);
                                     var thumbnail = Application.AssetProvider.LoadAsset<Texture2D>(tex);
-                                    var cPos = ImGui.GetCursorScreenPos();
-                                    ImGui.SetCursorScreenPos(new System.Numerics.Vector2(cPos.X, cPos.Y + 50));
-                                    ImGui.Image(new ImTextureID((nint)thumbnail.Handle), new System.Numerics.Vector2(50, -50));
-                                    ImGui.SetCursorScreenPos(cPos);
+                                    if (thumbnail.IsAvailable)
+                                    {
+                                        var cPos = ImGui.GetCursorScreenPos();
+                                        ImGui.SetCursorScreenPos(new System.Numerics.Vector2(cPos.X, cPos.Y + 50));
+                                        ImGui.Image(new ImTextureID((nint)thumbnail.Res!.Handle), new System.Numerics.Vector2(50, -50));
+                                        ImGui.SetCursorScreenPos(cPos);
+                                    }
                                     if (ImGui.Selectable("##" + path, false, new System.Numerics.Vector2(50, 50)))
                                         AssetDatabase.Ping(tex.AssetID);
                                     GUIHelper.Tooltip(path);
@@ -158,7 +157,7 @@ namespace Prowl.Editor.Assets
                 if (changed)
                 {
                     StringTagConverter.WriteToFile(Serializer.Serialize(mat), (target as MetaFile).AssetPath);
-                    AssetDatabase.Reimport(AssetDatabase.FileToRelative((target as MetaFile).AssetPath));
+                    AssetDatabase.Reimport((target as MetaFile).AssetPath);
                 }
             }
             catch

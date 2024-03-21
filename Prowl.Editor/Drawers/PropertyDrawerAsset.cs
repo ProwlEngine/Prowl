@@ -1,9 +1,8 @@
 ﻿using Hexa.NET.ImGui;
+using Prowl.Editor.Assets;
+using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
-using Prowl.Runtime.Assets;
-using Prowl.Editor.ImGUI.Widgets;
-using Prowl.Editor.EditorWindows;
 
 namespace Prowl.Editor.PropertyDrawers;
 
@@ -33,8 +32,8 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
 #warning TODO: Show a popup with a list of all assets of the type - property.Type.Name
             }
             GUIHelper.ItemRectFilled(0.1f, 0.1f, 0.9f, 0.3f);
-        } else if (AssetDatabase.Contains(value.AssetID)) {
-            path = AssetDatabase.GUIDToAssetPath(value.AssetID);
+        } else if (AssetDatabase.TryGetFile(value.AssetID, out var assetPath)) {
+            path = AssetDatabase.ToRelativePath(assetPath);
             if (ImGui.Selectable($"{Name}: {path}", Selected == this, new System.Numerics.Vector2(width, 17))) {
                 AssetDatabase.Ping(value.AssetID);
                 Selected = this;

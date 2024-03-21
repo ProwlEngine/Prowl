@@ -12,8 +12,6 @@ namespace Prowl.Editor.Assets
             textAsset.Text = File.ReadAllText(assetPath.FullName);
 
             ctx.SetMainObject(textAsset);
-
-            ImGuiNotify.InsertNotification("TextAsset Imported.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);
         }
     }
 

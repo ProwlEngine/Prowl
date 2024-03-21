@@ -36,7 +36,7 @@ public class DirectionalLight : MonoBehaviour
 
     public override void OnRenderObject()
     {
-        lightMat ??= new Material(Shader.Find("Defaults/Directionallight.shader"));
+        lightMat ??= new Material(Shader.Find("Defaults\\Directionallight.shader"));
         lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.transform.forward, Graphics.MatView));
         lightMat.SetColor("LightColor", color);
         lightMat.SetFloat("LightIntensity", intensity);

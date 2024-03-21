@@ -6,7 +6,6 @@ using Prowl.Editor.ImGUI;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Icons;
 using Prowl.Runtime;
-using Prowl.Runtime.Assets;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
 using System.Text.Json;
@@ -143,7 +142,7 @@ public unsafe class EditorApplication : Application {
                     hasDockSetup = true;
                 }
 
-                AssetDatabase.Update();
+                AssetDatabase.InternalUpdate();
 
                 if(PlayMode.Current == PlayMode.Mode.Editing) // Dont recompile scripts unless were in editor mode
                     CheckReloadingAssemblies();

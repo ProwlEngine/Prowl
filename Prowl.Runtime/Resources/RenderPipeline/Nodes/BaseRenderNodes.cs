@@ -92,7 +92,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             var gbuffer = Camera.Current.gBuffer;
             var lighting = GetInputValue<RenderTexture>("LightingRT");
 
-            CombineShader ??= new(Shader.Find("Defaults/GBuffercombine.shader"));
+            CombineShader ??= new(Shader.Find("Defaults\\GBuffercombine.shader"));
             CombineShader.SetTexture("gAlbedoAO", gbuffer.AlbedoAO);
             CombineShader.SetTexture("gLighting", lighting.InternalTextures[0]);
 
@@ -119,7 +119,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             var rt = GetInputValue<RenderTexture>("RenderTexture");
             if (rt == null) return;
 
-            Mat ??= new Material(Shader.Find("Defaults/DOF.shader"));
+            Mat ??= new Material(Shader.Find("Defaults\\DOF.shader"));
             Mat.SetTexture("gCombined", rt.InternalTextures[0]);
             Mat.SetTexture("gDepth", gbuffer.Depth);
 
@@ -148,7 +148,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             var rt = GetInputValue<RenderTexture>("RenderTexture");
             if (rt == null) return;
 
-            Mat ??= new Material(Shader.Find("Defaults/ProcedualSkybox.shader"));
+            Mat ??= new Material(Shader.Find("Defaults\\ProcedualSkybox.shader"));
             Mat.SetTexture("gColor", rt.InternalTextures[0]);
             Mat.SetTexture("gPositionRoughness", gbuffer.PositionRoughness);
             Mat.SetFloat("fogDensity", FogDensity);
@@ -185,7 +185,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             var rt = GetInputValue<RenderTexture>("RenderTexture");
             if (rt == null) return;
 
-            Mat ??= new Material(Shader.Find("Defaults/Bloom.shader"));
+            Mat ??= new Material(Shader.Find("Defaults\\Bloom.shader"));
 
             RenderTexture[] rts = [renderRTs[0], renderRTs[1]];
 
@@ -241,7 +241,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             var rt = GetInputValue<RenderTexture>("RenderTexture");
             if (rt == null) return;
 
-            AcesMat ??= new(Shader.Find("Defaults/Tonemapper.shader"));
+            AcesMat ??= new(Shader.Find("Defaults\\Tonemapper.shader"));
             AcesMat.SetTexture("gAlbedo", rt.InternalTextures[0]);
             AcesMat.SetFloat("Contrast", Math.Clamp(Contrast, 0, 2));
             AcesMat.SetFloat("Saturation", Math.Clamp(Saturation, 0, 2));
@@ -295,7 +295,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             var rt = GetInputValue<RenderTexture>("RenderTexture");
             if (rt == null) return;
 
-            Mat ??= new Material(Shader.Find("Defaults/SSR.shader"));
+            Mat ??= new Material(Shader.Find("Defaults\\SSR.shader"));
             Mat.SetTexture("gColor", rt.InternalTextures[0]);
             Mat.SetTexture("gNormalMetallic", gbuffer.NormalMetallic);
             Mat.SetTexture("gPositionRoughness", gbuffer.PositionRoughness);
@@ -365,7 +365,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             var rt = GetInputValue<RenderTexture>("RenderTexture");
             if (rt == null) return;
 
-            Mat ??= new Material(Shader.Find("Defaults/TAA.shader"));
+            Mat ??= new Material(Shader.Find("Defaults\\TAA.shader"));
             Mat.SetTexture("gColor", rt.InternalTextures[0]);
             Mat.SetTexture("gHistory", renderRTs[1].InternalTextures[0]);
             Mat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);

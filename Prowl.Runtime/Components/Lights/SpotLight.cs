@@ -24,7 +24,7 @@ public class SpotLight : MonoBehaviour
 
         if (lightMat == null)
         {
-            lightMat = new Material(Shader.Find("Defaults/Spotlight.shader"));
+            lightMat = new Material(Shader.Find("Defaults\\Spotlight.shader"));
         }
         else
         {

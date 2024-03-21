@@ -36,7 +36,7 @@ namespace Prowl.Runtime
         public static void Render()
         {
             try {
-                mat ??= new Material(Shader.Find("Defaults/Gizmos.shader"));
+                mat ??= new Material(Shader.Find("Defaults\\Gizmos.shader"));
             } catch {
                 return; // Happens when no project is loaded (Or no Gizmos shader was found)
             }
