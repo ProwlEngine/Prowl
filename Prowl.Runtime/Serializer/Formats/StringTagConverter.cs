@@ -164,8 +164,7 @@ namespace Prowl.Runtime
         private static void WriteByteArray(TextWriter writer, byte[] value)
         {
             writer.Write("[B;");
-            for (int i = 0; i < value.Length; i++)
-                writer.Write(value[i]);
+            writer.Write(Convert.ToBase64String(value));
             writer.Write(']');
         }
 
@@ -336,9 +335,7 @@ namespace Prowl.Runtime
                     case TextNbtTokenType.Separator:
                         continue;
                     case TextNbtTokenType.Value:
-                        arr = new byte[parser.Token.Length];
-                        for (int i = 0; i < arr.Length; i++)
-                            arr[i] = byte.Parse(parser.Token[i].ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture);
+                        arr = Convert.FromBase64String(parser.Token.ToString());
                         continue;
                     default:
                         throw new InvalidDataException($"Invalid token \"{parser.Token}\" found while reading a byte array at position {parser.TokenPosition}");
