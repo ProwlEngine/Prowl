@@ -167,9 +167,9 @@ namespace Prowl.Runtime
         private void RetrieveInstance()
         {
             if (assetID != Guid.Empty)
-                instance = Application.AssetProvider.LoadAsset<T>(this);
+                instance = (T)Application.AssetProvider.LoadAsset<T>(assetID, fileID);
             else if (instance != null && instance.AssetID != Guid.Empty)
-                instance = Application.AssetProvider.LoadAsset<T>(instance.AssetID, instance.FileID);
+                instance = (T)Application.AssetProvider.LoadAsset<T>(instance.AssetID, instance.FileID);
             else
                 instance = null;
         }
