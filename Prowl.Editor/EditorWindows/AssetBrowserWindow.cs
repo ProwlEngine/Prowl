@@ -317,7 +317,7 @@ public class AssetBrowserWindow : EditorWindow
                         EditorGui.Notify("A directory with the same name already exists.");
                     else
                     {
-                        EditorGui.Notify("Renaming directories is not yet implemented.");
+                        (entry as DirectoryInfo).MoveTo(newPath);
                     }
                     RenamingEntry = null;
                 }
