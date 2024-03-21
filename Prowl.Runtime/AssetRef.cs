@@ -133,7 +133,7 @@ namespace Prowl.Runtime
         /// Creates a ContentRef pointing to the specified <see cref="Resource"/>.
         /// </summary>
         /// <param name="res">The Resource to reference.</param>
-        public AssetRef(T res)
+        public AssetRef(T? res)
         {
             instance = res;
             assetID = res != null ? res.AssetID : Guid.Empty;
