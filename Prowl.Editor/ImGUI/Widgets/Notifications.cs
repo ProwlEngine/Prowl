@@ -102,17 +102,25 @@ namespace Prowl.Editor
         public static void InsertNotification(ImGuiToast toast)
         {
             notifications.Add(toast);
+
+            if (toast.Type == ImGuiToastType.Warning)
+                Debug.LogWarning($"{toast.Title} - {toast.Content}");
+            else if (toast.Type == ImGuiToastType.Error)
+                Debug.LogError($"{toast.Title} - {toast.Content}");
+            else
+                Debug.Log($"{toast.Title} - {toast.Content}");
         }
 
         public static void InsertNotification(string Title, Color color, string Content="")
         {
-            Console.WriteLine($"Inserting notification: {Title} - {Content}");
             InsertNotification(new ImGuiToast()
             {
                 Title = Title,
                 Content = Content,
                 Color = color,
             });
+
+            Debug.Log($"{Title} - {Content}");
         }
 
         public static void RemoveNotification(int index)
