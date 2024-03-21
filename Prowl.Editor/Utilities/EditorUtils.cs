@@ -1,14 +1,39 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Reflection;
 
 namespace Prowl.Editor.Utilities
 {
     public static class EditorUtils
     {
+
+        public static void GetSafeName(ref FileSystemInfo fileSystemInfo)
+        {
+            string name = fileSystemInfo.Name;
+            string? ext = null;
+
+            if (fileSystemInfo is FileInfo file)
+            {
+                ext = file.Extension;
+                name = file.Name[..^ext.Length]; // Remove the extension from the name
+            }
+
+            if (fileSystemInfo.Exists)
+            {
+                int counter = 1;
+                while (fileSystemInfo.Exists)
+                {
+                    string newName = $"{name} ({counter})";
+                    if (fileSystemInfo is DirectoryInfo dir)
+                    {
+                        fileSystemInfo = new DirectoryInfo(Path.Combine(dir.Parent!.FullName, newName));
+                    }
+                    else if (fileSystemInfo is FileInfo info)
+                    {
+                        fileSystemInfo = new FileInfo(Path.Combine(info.Directory!.FullName, $"{newName}{ext}"));
+                    }
+                    counter++;
+                }
+            }
+        }
 
         public static string FilterAlpha(string input) => new string(input.Where(char.IsLetter).ToArray());
 
