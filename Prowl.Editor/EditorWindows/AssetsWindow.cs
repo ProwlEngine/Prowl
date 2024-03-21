@@ -4,6 +4,7 @@ using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
+using static Assimp.Metadata;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -93,7 +94,7 @@ public class AssetsWindow : EditorWindow
                             EditorGui.Notify("A file with the same name already exists.");
                         else
                         {
-                            EditorGui.Notify("Renaming assets is not yet implemented.");
+                            AssetDatabase.Rename(file, newName);
                         }
                         RenamingEntry = null;
                     }
@@ -173,7 +174,7 @@ public class AssetsWindow : EditorWindow
                         EditorGui.Notify("A directory with the same name already exists.");
                     else
                     {
-                        EditorGui.Notify("Renaming assets is not yet implemented.");
+                        subDirectory.MoveTo(newPath);
                     }
                     RenamingEntry = null;
                 }
@@ -224,7 +225,7 @@ public class AssetsWindow : EditorWindow
                         EditorGui.Notify("A file with the same name already exists.");
                     else
                     {
-                        EditorGui.Notify("Renaming assets is not yet implemented.");
+                        AssetDatabase.Rename(file, newName);
                     }
                     RenamingEntry = null;
                 }
