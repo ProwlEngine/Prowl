@@ -76,5 +76,12 @@ namespace Prowl.Runtime.Utils
             obj.FileID = (short)0;
             Main = obj;
         }
+
+        public void Destroy()
+        {
+            Main?.DestroyImmediate();
+            foreach (var obj in SubAssets)
+                obj.DestroyImmediate();
+        }
     }
 }
