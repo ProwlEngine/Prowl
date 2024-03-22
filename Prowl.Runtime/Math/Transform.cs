@@ -22,7 +22,7 @@ namespace Prowl.Runtime
                     newPosition = p.InverseTransformPoint(newPosition);
 
                 localPosition = MakeSafe(newPosition);
-                _hasChanged = true;
+                _version++;
             }
         }
 
@@ -32,7 +32,7 @@ namespace Prowl.Runtime
                 if (m_LocalPosition != value)
                 {
                     m_LocalPosition = MakeSafe(value);
-                    _hasChanged = true;
+                    _version++;
                 }
             }
         }
@@ -55,7 +55,7 @@ namespace Prowl.Runtime
                     localRotation = MakeSafe(Quaternion.NormalizeSafe(Quaternion.Inverse(parent.rotation) * value));
                 else
                     localRotation = MakeSafe(Quaternion.NormalizeSafe(value));
-                _hasChanged = true;
+                _version++;
             }
         }
 
@@ -66,7 +66,7 @@ namespace Prowl.Runtime
                 if (m_LocalRotation != value)
                 {
                     m_LocalRotation = MakeSafe(value);
-                    _hasChanged = true;
+                    _version++;
                 }
             }
         }
@@ -75,7 +75,7 @@ namespace Prowl.Runtime
             get => MakeSafe(rotation.eulerAngles);
             set {
                 rotation = MakeSafe(Quaternion.Euler(value));
-                _hasChanged = true;
+                _version++;
             }
         }
 
@@ -83,7 +83,7 @@ namespace Prowl.Runtime
             get => MakeSafe(m_LocalRotation.eulerAngles);
             set {
                 m_LocalRotation.eulerAngles = MakeSafe(value);
-                _hasChanged = true;
+                _version++;
             }
         }
         #endregion
@@ -96,7 +96,7 @@ namespace Prowl.Runtime
                 if (m_LocalScale != value)
                 {
                     m_LocalScale = MakeSafe(value);
-                    _hasChanged = true;
+                    _version++;
                 }
             }
         }
@@ -129,9 +129,11 @@ namespace Prowl.Runtime
             set => gameObject.SetParent(value.gameObject, true);
         }
 
-        public bool hasChanged {
-            get => _hasChanged;
-            set => _hasChanged = value;
+        // https://forum.unity.com/threads/transform-haschanged-would-be-better-if-replaced-by-a-version-number.700004/
+        // Replacement for hasChanged
+        public uint version {
+            get => _version;
+            set => _version = value;
         }
 
         public Transform root => parent == null ? this : parent.root;
@@ -146,7 +148,7 @@ namespace Prowl.Runtime
         [SerializeField] Quaternion m_LocalRotation = Quaternion.identity;
 
         [NonSerialized]
-        bool _hasChanged = false;
+        uint _version = 0;
 
         public GameObject gameObject { get; internal set; }
         #endregion
