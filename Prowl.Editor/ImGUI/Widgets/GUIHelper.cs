@@ -169,7 +169,9 @@ namespace Prowl.Editor
 
         public static void ItemRectFilled(Vector4 color, float expand = 0.0f, float roundness = 0.0f) => ItemRectFilled((float)color.x, (float)color.y, (float)color.z, (float)color.w, expand, roundness);
 
-        public static void ItemRectFilled(float r, float g, float b, float a, float expand = 0.0f, float roundness = 0.0f)
+        public static void ItemRectFilled(float r, float g, float b, float a, float expand = 0.0f, float roundness = 0.0f) => ItemRectFilled(ImGui.GetColorU32(new Vector4(r, g, b, a)), expand, roundness);
+
+        public static void ItemRectFilled(uint color, float expand = 0.0f, float roundness = 0.0f)
         {
             var min = ImGui.GetItemRectMin();
             var max = ImGui.GetItemRectMax();
@@ -180,7 +182,7 @@ namespace Prowl.Editor
                 max.X += expand;
                 max.Y += expand;
             }
-            ImGui.GetWindowDrawList().AddRectFilled(min, max, ImGui.GetColorU32(new Vector4(r, g, b, a)), roundness);
+            ImGui.GetWindowDrawList().AddRectFilled(min, max, color, roundness);
         }
 
         public static void ItemRect(float r, float g, float b, float a, float expand = 0.0f, float roundness = 0.0f, float thickness = 1.0f)
