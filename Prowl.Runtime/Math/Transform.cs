@@ -22,6 +22,7 @@ namespace Prowl.Runtime
                     newPosition = p.InverseTransformPoint(newPosition);
 
                 localPosition = MakeSafe(newPosition);
+                _hasChanged = true;
             }
         }
 
@@ -29,7 +30,10 @@ namespace Prowl.Runtime
             get => MakeSafe(m_LocalPosition);
             set {
                 if (m_LocalPosition != value)
+                {
                     m_LocalPosition = MakeSafe(value);
+                    _hasChanged = true;
+                }
             }
         }
         #endregion
@@ -51,6 +55,7 @@ namespace Prowl.Runtime
                     localRotation = MakeSafe(Quaternion.NormalizeSafe(Quaternion.Inverse(parent.rotation) * value));
                 else
                     localRotation = MakeSafe(Quaternion.NormalizeSafe(value));
+                _hasChanged = true;
             }
         }
 
@@ -59,15 +64,27 @@ namespace Prowl.Runtime
             set {
 
                 if (m_LocalRotation != value)
+                {
                     m_LocalRotation = MakeSafe(value);
+                    _hasChanged = true;
+                }
             }
         }
 
-        public Vector3 eulerAngles { get => MakeSafe(rotation.eulerAngles); set => rotation = MakeSafe(Quaternion.Euler(value)); }
+        public Vector3 eulerAngles {
+            get => MakeSafe(rotation.eulerAngles);
+            set {
+                rotation = MakeSafe(Quaternion.Euler(value));
+                _hasChanged = true;
+            }
+        }
 
         public Vector3 localEulerAngles {
             get => MakeSafe(m_LocalRotation.eulerAngles);
-            set => m_LocalRotation.eulerAngles = MakeSafe(value);
+            set {
+                m_LocalRotation.eulerAngles = MakeSafe(value);
+                _hasChanged = true;
+            }
         }
         #endregion
 
@@ -77,7 +94,10 @@ namespace Prowl.Runtime
             get => MakeSafe(m_LocalScale);
             set {
                 if (m_LocalScale != value)
+                {
                     m_LocalScale = MakeSafe(value);
+                    _hasChanged = true;
+                }
             }
         }
 
