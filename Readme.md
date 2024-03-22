@@ -28,7 +28,7 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
 
 ### [Join our Discord server!](https://discord.gg/BqnJ9Rn4sn)
 
-**Note:** The Engine is very young and far from production-ready, being developed mainly by a single developer in his spare time. **And has only been tested and compiled for Windows!**
+**Note:** The Engine is very young and far from production-ready, mainly developed by a single developer in his spare time. **And has only been tested and compiled for Windows!**
 
 ![Sponza screenshot](https://i.imgur.com/RrB7A0a.png)
 
@@ -43,8 +43,8 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - Editor with support for Editor Scripts and Custom Editors
     - Physics ([Jitter Physics 2](https://github.com/notgiven688/jitterphysics2))
       - Colliders: Box, Sphere, Capsule, Cylinder, Mesh Collider, Wheel Collider
-      - Rigidbody based Character Controller
-    - Less than 10k lines of Executable Code for both the Editor and Engine combined!
+      - Rigidbody-based Character Controller
+    - Small! 7k loc for Runtime and 4k for the editor
     - Unity-like Coroutines
     - Playtest directly in Editor
     - ScriptableObjects
@@ -195,7 +195,7 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Contributors
-- [Michael (AKA Wulferis)](https://twitter.com/Wulferis)
+- [Michael (Wulferis)](https://twitter.com/Wulferis)
 - [Josh Davis](https://github.com/10xJosh)
 - [ReCore67](https://github.com/recore67)
 - [Isaac Marovitz](https://github.com/IsaacMarovitz)
