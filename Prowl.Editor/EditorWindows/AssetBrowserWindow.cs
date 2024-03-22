@@ -174,6 +174,8 @@ public class AssetBrowserWindow : EditorWindow
     {
         const float padding = 8;
         float contentWidth = ImGui.GetContentRegionAvail().X;
+        var start = ImGui.GetCursorScreenPos();
+        var size = ImGui.GetContentRegionAvail();
 
         int rowCount = Math.Max((int)(contentWidth / (ThumbnailSize + padding)), 1);
         float itemSize = ThumbnailSize + padding;
@@ -200,6 +202,12 @@ public class AssetBrowserWindow : EditorWindow
                     RenderEntry(rowCount, itemSize, ref curPos, ref i, file);
             }
         }
+
+        // Background rect for entire body
+        var drawList = ImGui.GetWindowDrawList();
+        var min = start;
+        var max = start + size;
+        drawList.AddRectFilled(min, max, ImGui.GetColorU32(ImGuiCol.FrameBg), 0f);
     }
 
     private void RenderEntry(int rowCount, float itemSize, ref System.Numerics.Vector2 curPos, ref int i, FileSystemInfo entry)
@@ -244,7 +252,26 @@ public class AssetBrowserWindow : EditorWindow
 
         ImGui.Selectable("##" + entry.FullName, isSelected, ImGuiSelectableFlags.AllowOverlap, System.Numerics.Vector2.One * thumbnailSize);
 
-        GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
+        var gradientStart = ImGui.GetColorU32(new System.Numerics.Vector4(0.2f, 0.2f, 0.2f, 0.8f));
+        var gradientEnd = ImGui.GetColorU32(new System.Numerics.Vector4(0.1f, 0.1f, 0.1f, 0.8f));
+        if (entry is FileInfo f)
+        {
+            gradientStart = AssetsWindow.GetFileColor(f.Extension.ToLower().Trim(), 0.2f);
+            gradientEnd = AssetsWindow.GetFileColor(f.Extension.ToLower().Trim(), 0.8f);
+        }
+
+        // Draw a gradient background
+        var drawList = ImGui.GetWindowDrawList();
+        var min = ImGui.GetItemRectMin();
+        var max = ImGui.GetItemRectMax();
+        //drawList.AddRectFilledMultiColor(min, max, ImGui.GetColorU32(gradientStart), ImGui.GetColorU32(gradientStart), ImGui.GetColorU32(gradientEnd), ImGui.GetColorU32(gradientEnd));
+        //drawList.AddRectFilledMultiColor
+        //GUIHelper.ItemRectFilled(gradientStart, 0, 8f); 
+        
+        int vertStartIdx = drawList.VtxBuffer.Size;
+        drawList.AddRectFilled(min, max, ImGui.GetColorU32(gradientStart), 8f);
+        int vertEndIdx = drawList.VtxBuffer.Size;
+        ImGui.ShadeVertsLinearColorGradientKeepAlpha(drawList, vertStartIdx, vertEndIdx, min, new System.Numerics.Vector2(min.X, max.Y), gradientStart, gradientEnd);
 
         if (ImGui.IsItemHovered())
         {
@@ -273,10 +300,8 @@ public class AssetBrowserWindow : EditorWindow
         ImGui.PushID(entry.FullName);
         if (entry is FileInfo file)
         {
-            ImDrawListPtr drawList = ImGui.GetWindowDrawList();
-            var lineColor = AssetsWindow.GetFileColor(file.Extension.ToLower().Trim());
             var pos = ImGui.GetCursorScreenPos();
-            drawList.AddLine(new(0, pos.Y), new(pos.X + thumbnailSize, pos.Y + 1f), lineColor, 3f);
+            drawList.AddLine(new(0, pos.Y), new(pos.X + thumbnailSize, pos.Y + 1f), gradientStart, 3f);
 
             if (RenamingEntry == entry.FullName)
             {
