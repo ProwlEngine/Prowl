@@ -102,6 +102,8 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
 
 Getting Prowl up and running is super easy!
 
+**Note: There are no official releases yet so you need to download this repository to use Prowl!**
+
 ### Prerequisites
 
 * [Visual Studio Version 17.8.0+](https://visualstudio.microsoft.com/vs/preview/) - Required to support .NET 8
