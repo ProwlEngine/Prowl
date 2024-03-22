@@ -4,6 +4,14 @@ namespace Prowl.Runtime
 {
     public class Transform
     {
+        #region Events
+
+        public event Action OnPositionChanged;
+        public event Action OnRotationChanged;
+        public event Action OnScaleChanged;
+
+        #endregion
+
         #region Properties
 
         #region Position
@@ -23,6 +31,7 @@ namespace Prowl.Runtime
 
                 localPosition = MakeSafe(newPosition);
                 _hasChanged = true;
+                OnPositionChanged?.Invoke();
             }
         }
 
@@ -33,6 +42,7 @@ namespace Prowl.Runtime
                 {
                     m_LocalPosition = MakeSafe(value);
                     _hasChanged = true;
+                    OnPositionChanged?.Invoke();
                 }
             }
         }
@@ -56,6 +66,7 @@ namespace Prowl.Runtime
                 else
                     localRotation = MakeSafe(Quaternion.NormalizeSafe(value));
                 _hasChanged = true;
+                OnRotationChanged?.Invoke();
             }
         }
 
@@ -67,6 +78,7 @@ namespace Prowl.Runtime
                 {
                     m_LocalRotation = MakeSafe(value);
                     _hasChanged = true;
+                    OnRotationChanged?.Invoke();
                 }
             }
         }
@@ -76,6 +88,7 @@ namespace Prowl.Runtime
             set {
                 rotation = MakeSafe(Quaternion.Euler(value));
                 _hasChanged = true;
+                OnRotationChanged?.Invoke();
             }
         }
 
@@ -84,6 +97,7 @@ namespace Prowl.Runtime
             set {
                 m_LocalRotation.eulerAngles = MakeSafe(value);
                 _hasChanged = true;
+                OnRotationChanged?.Invoke();
             }
         }
         #endregion
@@ -97,6 +111,7 @@ namespace Prowl.Runtime
                 {
                     m_LocalScale = MakeSafe(value);
                     _hasChanged = true;
+                    OnScaleChanged?.Invoke();
                 }
             }
         }
