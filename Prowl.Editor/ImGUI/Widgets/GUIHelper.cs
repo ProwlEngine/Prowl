@@ -215,12 +215,93 @@ namespace Prowl.Editor
             return changed;
         }
 
+        public static bool DragByte(string v1, ref byte value, float v2)
+        {
+            unsafe
+            {
+                fixed (byte* v = &value)
+                    return ImGui.DragScalar(v1, ImGuiDataType.U8, v, v2, "%u");
+            }
+        }
+
+        public static bool DragSByte(string v1, ref sbyte value, float v2)
+        {
+            unsafe
+            {
+                fixed (sbyte* v = &value)
+                    return ImGui.DragScalar(v1, ImGuiDataType.S8, v, v2, "%d");
+            }
+        }
+
+        public static bool DragShort(string v1, ref short value, float v2)
+        {
+            unsafe
+            {
+                fixed (short* v = &value)
+                    return ImGui.DragScalar(v1, ImGuiDataType.S16, v, v2, "%d");
+            }
+        }
+
+        public static bool DragUShort(string v1, ref ushort value, float v2)
+        {
+            unsafe
+            {
+                fixed (ushort* v = &value)
+                    return ImGui.DragScalar(v1, ImGuiDataType.U16, v, v2, "%u");
+            }
+        }
+
+        public static bool DragInt(string v1, ref int value, float v2)
+        {
+            unsafe
+            {
+                fixed (int* v = &value)
+                    return ImGui.DragScalar(v1, ImGuiDataType.S32, v, v2, "%d");
+            }
+        }
+
+        public static bool DragUInt(string v1, ref uint value, float v2)
+        {
+            unsafe
+            {
+                fixed (uint* v = &value)
+                    return ImGui.DragScalar(v1, ImGuiDataType.U32, v, v2, "%u");
+            }
+        }
+
+        public static bool DragLong(string v1, ref long value, float v2)
+        {
+            unsafe
+            {
+                fixed (long* v = &value)
+                    return ImGui.DragScalar(v1, ImGuiDataType.S64, v, v2, "%lld");
+            }
+        }
+
+        public static bool DragULong(string v1, ref ulong value, float v2)
+        {
+            unsafe
+            {
+                fixed (ulong* v = &value)
+                    return ImGui.DragScalar(v1, ImGuiDataType.U64, v, v2, "%lld");
+            }
+        }
+
         public static bool DragDouble(string v1, ref double value, float v2)
         {
             unsafe
             {
                 fixed (double* v = &value)
                     return ImGui.DragScalar(v1, ImGuiDataType.Double, v, v2, "%g");
+            }
+        }
+
+        public static bool DragFloat(string v1, ref float value, float v2)
+        {
+            unsafe
+            {
+                fixed (float* v = &value)
+                    return ImGui.DragScalar(v1, ImGuiDataType.Float, v, v2, "%g");
             }
         }
     }
