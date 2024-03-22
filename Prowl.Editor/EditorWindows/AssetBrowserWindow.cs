@@ -299,7 +299,8 @@ public class AssetBrowserWindow : EditorWindow
             }
             else
             {
-                ImGui.TextUnformatted(Settings.m_HideExtensions ? Path.GetFileNameWithoutExtension(entry.FullName) : Path.GetFileName(entry.FullName));
+                var text = Settings.m_HideExtensions ? Path.GetFileNameWithoutExtension(entry.FullName) : Path.GetFileName(entry.FullName);
+                GUIHelper.TextCenter(text);
                 if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(0))
                     RenamingEntry = entry.FullName;
             }
@@ -327,7 +328,7 @@ public class AssetBrowserWindow : EditorWindow
             }
             else
             {
-                ImGui.TextUnformatted(entry.Name);
+                GUIHelper.TextCenter(entry.Name);
                 if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(0))
                     RenamingEntry = entry.FullName;
             }
