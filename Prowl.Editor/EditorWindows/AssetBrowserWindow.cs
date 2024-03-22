@@ -65,7 +65,7 @@ public class AssetBrowserWindow : EditorWindow
         // Ensure we always have a Directory, if the current one is deleted move to its parent
         // if theres no parent move to the Assets Directory
         // If theres no project directory well why the hell are we here? the line above should have stopped us
-        while (CurDirectory?.Exists == false)
+        while (!Path.Exists(CurDirectory.FullName))
             CurDirectory = CurDirectory.Parent ?? new DirectoryInfo(Project.ProjectAssetDirectory);
 
         RenderHeader();
