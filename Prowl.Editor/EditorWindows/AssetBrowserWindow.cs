@@ -62,9 +62,11 @@ public class AssetBrowserWindow : EditorWindow
             return;
 
         ImGui.PushStyleColor(ImGuiCol.Header, EditorGui.SelectedColor);
-
-        if (!CurDirectory.Exists)
-            CurDirectory = new DirectoryInfo(Project.ProjectAssetDirectory);
+        // Ensure we always have a Directory, if the current one is deleted move to its parent
+        // if theres no parent move to the Assets Directory
+        // If theres no project directory well why the hell are we here? the line above should have stopped us
+        while (CurDirectory?.Exists == false)
+            CurDirectory = CurDirectory.Parent ?? new DirectoryInfo(Project.ProjectAssetDirectory);
 
         RenderHeader();
         ImGui.BeginChild("Body");
