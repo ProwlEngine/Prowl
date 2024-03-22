@@ -149,8 +149,9 @@ namespace Prowl.Runtime
         /// </summary>
         public void Set(object value)
         {
+            if (_value == value) return;
             var old = _value;
-            Value = TagType switch {
+            _value = TagType switch {
                 PropertyType.Byte => (byte)value,
                 PropertyType.sByte => (sbyte)value,
                 PropertyType.Short => (short)value,
