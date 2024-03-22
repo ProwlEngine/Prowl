@@ -74,6 +74,14 @@ namespace Prowl.Runtime
             this.a = 1f;
         }
 
+        public Color(byte r, byte g, byte b, byte a)
+        {
+            this.r = r / 255f;
+            this.g = g / 255f;
+            this.b = b / 255f;
+            this.a = a / 255f;
+        }
+
         public Color(byte r, byte g, byte b)
         {
             this.r = r / 255f;
