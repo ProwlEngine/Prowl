@@ -1,10 +1,14 @@
 <img src="https://github.com/Kuvrot/Prowl/assets/23508114/5eef8da7-fb84-42f3-9d18-54b4f2d06551" width="100%">
 
----
+[![GitHub version](https://img.shields.io/github/v/release/michaelsakharov/prowl?include_prereleases&style=flat-square)](https://github.com/michaelsakharov/prowl/releases) 
+[![GitHub license](https://img.shields.io/github/license/michaelsakharov/prowl?style=flat-square)](https://github.com/michaelsakharov/prowl/blob/main/LICENSE.txt) 
+[![GitHub issues](https://img.shields.io/github/issues/michaelsakharov/prowl?style=flat-square)](https://github.com/michaelsakharov/prowl/issues) 
+[![GitHub stars](https://img.shields.io/github/stars/michaelsakharov/prowl?style=flat-square)](https://github.com/michaelsakharov/prowl/stargazers) 
+[![Discord](https://img.shields.io/discord/1151582593519722668?style=flat-square)](https://discord.gg/BqnJ9Rn4sn)
 
-# Prowl, An Open Source Unity-like C# Game Engine!
+# <p align="center">An Open Source Unity-like Engine!</p>
+
 <a id="readme-top"></a>
-
   <ol>
     <li> <a href="#about-the-project">About The Project</a> </li>
     <li> <a href="#about-the-project">Features</a> </li>
@@ -23,7 +27,7 @@
     <li><a href="#screenshots">Screenshots</a></li>
   </ol>
 
-# About The Project
+# <p align="center">About The Project</p>
 Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in .NET 8**, (which surprisingly has **no runtime fees** believe it or not!). It aims to provide a seamless transition for developers familiar with Unity by maintaining a similar API while also following KISS and staying as small and customizable as possible. This engine is intended to be customized to your needs, everything is written to be a "Minimal" Production-Ready Implementation. Ideally, there will be plenty of Modules/Packages to expand on functionality for those who don't want (or are unable) to expand the base engine.
 
 ### [Join our Discord server!](https://discord.gg/BqnJ9Rn4sn)
@@ -32,7 +36,7 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
 
 ![Sponza screenshot](https://i.imgur.com/RrB7A0a.png)
 
-# Features
+# <p align="center">Features</p>
 
 -   **General:**
     - Unity-like Editor & Scripting API
@@ -94,9 +98,11 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - Sub-Assets, Assets stored inside other assets
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-# Getting Started
+# <p align="center">Getting Started</p>
 
 Getting Prowl up and running is super easy!
+
+**Note: There are no official releases yet so you need to download this repository to use Prowl!**
 
 ### Prerequisites
 
@@ -110,7 +116,7 @@ Getting Prowl up and running is super easy!
 3. That's it! :D
 <p align="right">(<a href="#readme-top">back to top</a>)</p> 
 
-# Roadmap
+# <p align="center">Roadmap</p>
 
 ### Engine
 - [ ] Cross Platform
@@ -146,7 +152,7 @@ Getting Prowl up and running is super easy!
 See the [open issues](https://github.com/michaelsakharov/prowl/issues) for a full list of proposed features (and known issues).
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-# Contributing
+# <p align="center">Contributing</p>
 
 🚀 **Welcome to the Prowl community! We're thrilled that you're interested in contributing.**
 
@@ -188,7 +194,7 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 **Thank you for considering contributing to Prowl. Together, let's build something amazing!**
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-# Acknowledgments
+# <p align="center">Acknowledgments</p>
 
 - Hat tip to the creators of [Raylib](https://github.com/raysan5/raylib), While we are no longer based upon it, it has shaved off hours of development time getting the engine to a usable state.
 - Some ideas/code have been taken from the amazing 2D Engine [Duality](https://github.com/AdamsLair/duality).
@@ -221,7 +227,7 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 - [ImGUI](https://github.com/ocornut/imgui) via [ImGUI.NET](https://github.com/ImGuiNET/ImGui.NET)
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-# Screenshots
+# <p align="center">Screenshots</p>
 ![Bokeh Depth of Field](https://i.imgur.com/VYs44qq.png)
 ![Editor](https://github.com/michaelsakharov/Prowl/assets/8621606/bb3c423b-3cc8-45a1-baa7-c9ad31d945c6)
 ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/f755ee5d-eba5-4453-9f31-f61768c2554c)
