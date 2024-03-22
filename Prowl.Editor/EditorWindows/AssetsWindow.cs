@@ -347,8 +347,10 @@ public class AssetsWindow : EditorWindow
         }
     }
 
-    public static uint GetFileColor(string ext)
+    public static uint GetFileColor(string ext, float darkness = 0, float alpha = 0.6f)
     {
+        byte a = (byte)(alpha * 255);
+        float dark = 1 - darkness;
         switch (ext) {
             case ".png":
             case ".bmp":
@@ -362,7 +364,7 @@ public class AssetsWindow : EditorWindow
             case ".ktx":
             case ".pkm":
             case ".pvr":
-                return ImGui.GetColorU32(new Color(31, 230, 71));
+                return ImGui.GetColorU32(new Color(31, 230, 71, a) * dark);
             case ".obj":
             case ".blend":
             case ".dae":
@@ -371,22 +373,22 @@ public class AssetsWindow : EditorWindow
             case ".ply":
             case ".pmx":
             case ".stl":
-                return ImGui.GetColorU32(new Color(243, 232, 47));
+                return ImGui.GetColorU32(new Color(243, 232, 47, a) * dark);
             case ".scriptobj":
-                return ImGui.GetColorU32(new Color(245, 245, 1));
+                return ImGui.GetColorU32(new Color(245, 245, 1, a) * dark);
             case ".mat":
-                return ImGui.GetColorU32(new Color(43, 211, 212));
+                return ImGui.GetColorU32(new Color(43, 211, 212, a) * dark);
             case ".shader":
-                return ImGui.GetColorU32(new Color(239, 12, 106));
+                return ImGui.GetColorU32(new Color(239, 12, 106, a) * dark);
             case ".glsl":
-                return ImGui.GetColorU32(new Color(254, 22, 2));
+                return ImGui.GetColorU32(new Color(254, 22, 2, a) * dark);
             case ".md":
             case ".txt":
-                return ImGui.GetColorU32(new Color(228, 238, 5));
+                return ImGui.GetColorU32(new Color(228, 238, 5, a) * dark);
             case ".cs":
-                return ImGui.GetColorU32(new Color(244, 101, 2));
+                return ImGui.GetColorU32(new Color(244, 101, 2, a) * dark);
             default:
-                return ImGui.GetColorU32(new Color(1.0f, 1.0f, 1.0f, 0.6f));
+                return ImGui.GetColorU32(new Color(1.0f, 1.0f, 1.0f, alpha) * dark);
         }
     }
 
