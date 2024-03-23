@@ -269,6 +269,8 @@ namespace Prowl.Runtime
         {
             SerializedProperty compoundTag = SerializedProperty.NewCompound();
             compoundTag.Add("AssetID", new SerializedProperty(assetID.ToString()));
+            if(assetID != Guid.Empty)
+                ctx.AddDependency(assetID);
             if(fileID != 0)
                 compoundTag.Add("FileID", new SerializedProperty(fileID));
             if (IsRuntimeResource)

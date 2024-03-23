@@ -44,7 +44,8 @@ namespace Prowl.Runtime
             public Dictionary<object, int> objectToId = new Dictionary<object, int>(ReferenceEqualityComparer.Instance);
             public Dictionary<int, object> idToObject = new Dictionary<int, object>();
             public int nextId = 1;
-            public List<Guid> dependencies = new List<Guid>();
+            private int dependencyCounter = 0;
+            public HashSet<Guid> dependencies = new();
 
             public SerializationContext()
             {
@@ -54,6 +55,26 @@ namespace Prowl.Runtime
                 idToObject.Add(0, new NullKey());
                 nextId = 1;
                 dependencies.Clear();
+            }
+
+            public void AddDependency(Guid guid)
+            {
+                if (dependencyCounter > 0)
+                    dependencies.Add(guid);
+                else throw new InvalidOperationException("Cannot add a dependency outside of a BeginDependencies/EndDependencies block.");
+            }
+
+            public void BeginDependencies()
+            {
+                dependencyCounter++;
+            }
+
+            public HashSet<Guid> EndDependencies()
+            {
+                dependencyCounter--;
+                if (dependencyCounter == 0)
+                    return dependencies;
+                return new();
             }
 
         }
@@ -164,6 +185,7 @@ namespace Prowl.Runtime
             id = ctx.nextId++;
             ctx.objectToId[value] = id;
             ctx.idToObject[id] = value;
+            ctx.BeginDependencies();
 
             if (value is ISerializeCallbacks callback)
                 callback.PreSerialize();
@@ -200,6 +222,9 @@ namespace Prowl.Runtime
 
             compound["$id"] = new(PropertyType.Int, id);
             compound["$type"] = new(PropertyType.String, type.FullName);
+            var dependencies = ctx.EndDependencies();
+            if(dependencies.Count > 0)
+                compound["$dependencies"] = new(PropertyType.List, dependencies.Select(d => new SerializedProperty(PropertyType.String, d.ToString())).ToList());
 
             if (value is ISerializeCallbacks callback2)
                 callback2.PostSerialize();

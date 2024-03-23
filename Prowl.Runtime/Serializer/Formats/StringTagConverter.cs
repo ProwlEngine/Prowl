@@ -189,11 +189,18 @@ namespace Prowl.Runtime
                 writer.WriteLine();
             }
 
+            if (dict.ContainsKey("$dependencies"))
+            {
+                WriteCompoundElement("$dependencies", writer, dict, indentLevel, indent);
+                writer.Write(",");
+                writer.WriteLine();
+            }
+
             // Write the remaining key-value pairs
             var skipNextComma = true;
             foreach (var kvp in dict)
             {
-                if (kvp.Key == "$id" || kvp.Key == "$type")
+                if (kvp.Key == "$id" || kvp.Key == "$type" || kvp.Key == "$dependencies")
                     continue;
 
                 if (!skipNextComma)
