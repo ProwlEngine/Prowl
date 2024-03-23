@@ -223,8 +223,8 @@ namespace Prowl.Runtime
             compound["$id"] = new(PropertyType.Int, id);
             compound["$type"] = new(PropertyType.String, type.FullName);
             var dependencies = ctx.EndDependencies();
-            if(dependencies.Count > 0)
-                compound["$dependencies"] = new(PropertyType.List, dependencies.Select(d => new SerializedProperty(PropertyType.String, d.ToString())).ToList());
+            //if(dependencies.Count > 0)
+            //    compound["$dependencies"] = new(PropertyType.List, dependencies.Select(d => new SerializedProperty(PropertyType.String, d.ToString())).ToList());
 
             if (value is ISerializeCallbacks callback2)
                 callback2.PostSerialize();

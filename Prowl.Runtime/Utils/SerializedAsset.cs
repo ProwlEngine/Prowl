@@ -12,16 +12,15 @@ namespace Prowl.Runtime.Utils
 
         public bool HasMain => Main != null;
 
-        public void SaveToFile(FileInfo file)
+        public void SaveToFile(FileInfo file, out HashSet<Guid>? dependencies)
         {
             if (Main == null) throw new Exception("Asset does not have a main object.");
 
-#warning TODO: Somehow record Dependencies - reflection to find all AssetRef instances and store them in a list?
-            // We need a way for said Dependencies to be able to be loaded and references independently of the asset
-            // so like if we delete another asset we can let the user know its in use by X object are they sure?
-
             file.Directory?.Create(); // Ensure the Directory exists
-            var tag = Serializer.Serialize(this);
+            Serializer.SerializationContext ctx = new();
+            var tag = Serializer.Serialize(this, ctx);
+            dependencies = ctx.dependencies;
+
             using var stream = file.OpenWrite();
             using BinaryWriter writer = new(stream);
             BinaryTagConverter.WriteTo(tag, writer);

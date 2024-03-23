@@ -11,6 +11,7 @@ namespace Prowl.Editor.Assets
 
         public DateTime lastModified;
         public ScriptedImporter importer;
+        public List<Guid> dependencies;
 
         /// <summary>Default constructor for MetaFile.</summary>
         public MetaFile() { }

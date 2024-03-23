@@ -334,19 +334,20 @@ namespace Prowl.Editor.Assets
                 return false; // Import failed no Main Object
             }
 
-            // Update the meta file (LastModified is set by MetaFile.Load)
-            meta.assetTypes = new string[ctx.SubAssets.Count];
-            for (int i = 0; i < ctx.SubAssets.Count; i++)
-                meta.assetTypes[i] = ctx.SubAssets[i].GetType().FullName!;
-            meta.Save();
-
             // Delete the old imported asset if it exists
             var serialized = GetSerializedFile(meta.guid);
             if (File.Exists(serialized.FullName)) 
                 serialized.Delete();
 
             // Save the asset
-            ctx.SaveToFile(serialized);
+            ctx.SaveToFile(serialized, out var dependencies);
+
+            // Update the meta file (LastModified is set by MetaFile.Load)
+            meta.assetTypes = new string[ctx.SubAssets.Count];
+            for (int i = 0; i < ctx.SubAssets.Count; i++)
+                meta.assetTypes[i] = ctx.SubAssets[i].GetType().FullName!;
+            meta.dependencies = dependencies.ToList();
+            meta.Save();
             return true;
         }
 
