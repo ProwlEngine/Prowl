@@ -187,8 +187,8 @@ namespace Prowl.Runtime
             ctx.idToObject[id] = value;
             ctx.BeginDependencies();
 
-            if (value is ISerializeCallbacks callback)
-                callback.PreSerialize();
+            if (value is ISerializationCallbackReceiver callback)
+                callback.OnBeforeSerialize();
 
             if (value is ISerializable serializable)
             {
@@ -225,9 +225,6 @@ namespace Prowl.Runtime
             var dependencies = ctx.EndDependencies();
             //if(dependencies.Count > 0)
             //    compound["$dependencies"] = new(PropertyType.List, dependencies.Select(d => new SerializedProperty(PropertyType.String, d.ToString())).ToList());
-
-            if (value is ISerializeCallbacks callback2)
-                callback2.PostSerialize();
 
             return compound;
         }
@@ -343,9 +340,6 @@ namespace Prowl.Runtime
         public static object DeserializeInto(SerializedProperty tag, object into) => DeserializeInto(tag, into, new SerializationContext());
         private static object DeserializeInto(SerializedProperty tag, object into, SerializationContext ctx)
         {
-            if (into is ISerializeCallbacks callback1)
-                callback1.PreDeserialize();
-
             if (into is ISerializable serializable)
             {
                 serializable.Deserialize(tag, ctx);
@@ -394,8 +388,8 @@ namespace Prowl.Runtime
                 }
             }
 
-            if (into is ISerializeCallbacks callback2)
-                callback2.PostDeserialize();
+            if (into is ISerializationCallbackReceiver callback2)
+                callback2.OnAfterDeserialize();
             return into;
         }
 
