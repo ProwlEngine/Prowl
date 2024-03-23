@@ -5,7 +5,7 @@ using System.Reflection;
 
 namespace Prowl.Runtime.NodeSystem
 {
-    public abstract class NodeGraph : ScriptableObject, ISerializeCallbacks
+    public abstract class NodeGraph : ScriptableObject, ISerializationCallbackReceiver
     {
         [SerializeField] int _nextID = 0;
         public int NextID => _nextID++;
@@ -112,13 +112,13 @@ namespace Prowl.Runtime.NodeSystem
             Clear();
         }
 
-        public void PreSerialize() { }
+        public void OnBeforeSerialize() { }
 
         public void PostSerialize() { }
 
         public void PreDeserialize() { }
 
-        public void PostDeserialize()
+        public void OnAfterDeserialize()
         {
             // Clear null nodes
             nodes.RemoveAll(n => n == null);
