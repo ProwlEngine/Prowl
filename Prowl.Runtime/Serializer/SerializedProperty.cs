@@ -84,6 +84,32 @@ namespace Prowl.Runtime
         public static SerializedProperty NewCompound() => new(PropertyType.Compound, new Dictionary<string, SerializedProperty>());
         public static SerializedProperty NewList() => new(PropertyType.List, new List<SerializedProperty>());
 
+        public void GetAllAssetRefs(ref HashSet<Guid> refs)
+        {
+            if (TagType == PropertyType.List)
+            {
+                foreach (var tag in (List<SerializedProperty>)Value!)
+                    tag.GetAllAssetRefs(ref refs);
+            }
+            else if (TagType == PropertyType.Compound)
+            {
+                var dict = (Dictionary<string, SerializedProperty>)Value!;
+                if (TryGet("$type", out var typeName))
+                {
+                    // This isnt a perfect solution since maybe theres a class named AssetRefCollection or something
+                    // But this in combination with the "AssetID" tag and Guid.TryParse should be reliable enough while being fast
+                    if (typeName!.StringValue.Contains("Prowl.Runtime.AssetRef") && TryGet("AssetID", out var assetId))
+                    {
+                        // Is an AssetRef were cloning, Spit out 
+                        if (Guid.TryParse(assetId!.StringValue, out var id) && id != Guid.Empty)
+                            refs.Add(id);
+                    }
+                }
+                foreach (var (_, tag) in dict)
+                    tag.GetAllAssetRefs(ref refs);
+            }
+        }
+
         public SerializedProperty Clone()
         {
             if (TagType == PropertyType.Null) return new(PropertyType.Null, null);

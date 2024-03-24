@@ -95,6 +95,10 @@ namespace Prowl.Runtime
             if (value is SerializedProperty t)
             {
                 var clone = t.Clone();
+                HashSet<Guid> deps = new();
+                clone.GetAllAssetRefs(ref deps);
+                foreach (var dep in deps)
+                    ctx.AddDependency(dep);
                 return clone;
             }
 
