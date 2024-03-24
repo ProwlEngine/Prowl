@@ -25,18 +25,11 @@ namespace Prowl.Runtime
         Compound,
     }
 
-    public class PropertyChangeEventArgs : EventArgs
+    public class PropertyChangeEventArgs(SerializedProperty property, object? oldValue, object? newValue) : EventArgs
     {
-        public SerializedProperty Property { get; }
-        public object? OldValue { get; }
-        public object? NewValue { get; }
-
-        public PropertyChangeEventArgs(SerializedProperty property, object? oldValue, object? newValue)
-        {
-            Property = property;
-            OldValue = oldValue;
-            NewValue = newValue;
-        }
+        public SerializedProperty Property { get; } = property;
+        public object? OldValue { get; } = oldValue;
+        public object? NewValue { get; } = newValue;
     }
 
     public sealed partial class SerializedProperty
