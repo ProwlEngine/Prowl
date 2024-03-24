@@ -99,6 +99,18 @@ namespace Prowl.Editor.Assets
             return null;
         }
 
+        public static HashSet<Guid> AllThatDependOn(Guid dependsOn)
+        {
+            HashSet<Guid> result = new();
+            // Go over all stored meta files and return any that depend on the specified GUID
+            foreach (var meta in assetGuidToMeta.Values)
+            {
+                if (meta.dependencies.Contains(dependsOn))
+                    result.Add(meta.guid);
+            }
+            return result;
+        }
+
         /// <summary>
         /// Checks if a file is within the project directory.
         /// </summary>
