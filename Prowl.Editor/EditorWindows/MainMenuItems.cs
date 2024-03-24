@@ -93,7 +93,7 @@ namespace Prowl.Editor.EditorWindows
                 AssetDatabase.Delete(file);
 
                 var allGameObjects = SceneManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
-                scene.GameObjects = Serializer.Serialize(allGameObjects);
+                scene = Scene.Create(allGameObjects);
                 StringTagConverter.WriteToFile(Serializer.Serialize(scene), file);
                 AssetDatabase.Update();
                 AssetDatabase.Ping(file);
@@ -124,8 +124,7 @@ namespace Prowl.Editor.EditorWindows
                         file = new FileInfo(file.FullName + ".scene");
 
                     var allGameObjects = SceneManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
-                    Scene scene = new Scene();
-                    scene.GameObjects = Serializer.Serialize(allGameObjects);
+                    Scene scene = Scene.Create(allGameObjects);
                     var tag = Serializer.Serialize(scene);
                     StringTagConverter.WriteToFile(tag, file);
                     AssetDatabase.Update();
