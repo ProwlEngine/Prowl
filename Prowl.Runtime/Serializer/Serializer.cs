@@ -41,11 +41,11 @@ namespace Prowl.Runtime
     {
         public class SerializationContext
         {
-            public Dictionary<object, int> objectToId = new Dictionary<object, int>(ReferenceEqualityComparer.Instance);
-            public Dictionary<int, object> idToObject = new Dictionary<int, object>();
+            public Dictionary<object, int> objectToId = new(ReferenceEqualityComparer.Instance);
+            public Dictionary<int, object> idToObject = [];
             public int nextId = 1;
             private int dependencyCounter = 0;
-            public HashSet<Guid> dependencies = new();
+            public HashSet<Guid> dependencies = [];
 
             public SerializationContext()
             {
@@ -74,7 +74,7 @@ namespace Prowl.Runtime
                 dependencyCounter--;
                 if (dependencyCounter == 0)
                     return dependencies;
-                return new();
+                return [];
             }
 
         }
@@ -95,7 +95,7 @@ namespace Prowl.Runtime
             if (value is SerializedProperty t)
             {
                 var clone = t.Clone();
-                HashSet<Guid> deps = new();
+                HashSet<Guid> deps = [];
                 clone.GetAllAssetRefs(ref deps);
                 foreach (var dep in deps)
                     ctx.AddDependency(dep);
@@ -136,7 +136,7 @@ namespace Prowl.Runtime
             else if (p is bool bo) return new(PropertyType.Bool, bo);
             else if (p is DateTime date) return new(PropertyType.Long, date.ToBinary());
             else if (p is Guid g) return new(PropertyType.String, g.ToString());
-            else if (p.GetType().IsEnum) return new(PropertyType.Int, (int)p); // Serialize enums as integers
+            else if (p.GetType().IsEnum) return new(PropertyType.Int, (int)p); // Serialize as integers
             else throw new NotSupportedException("The type '" + p.GetType() + "' is not a supported primitive.");
         }
 
@@ -182,7 +182,7 @@ namespace Prowl.Runtime
             if (ctx.objectToId.TryGetValue(value, out int id))
             {
                 compound["$id"] = new(PropertyType.Int, id);
-                // Dont need to write compound data, its already been serialized at some point earlier
+                // Don't need to write compound data, its already been serialized at some point earlier
                 return compound;
             }
 
@@ -271,7 +271,7 @@ namespace Prowl.Runtime
                 if (targetType.IsArray)
                 {
                     // Deserialize List into Array
-                    Type type = targetType.GetElementType();
+                    Type type = targetType.GetElementType() ?? throw new InvalidOperationException("Array type is null");
                     var array = Array.CreateInstance(type, value.Count);
                     for (int idx = 0; idx < array.Length; idx++)
                         array.SetValue(Deserialize(value[idx], type, ctx), idx);
@@ -279,10 +279,10 @@ namespace Prowl.Runtime
                 }
                 else if (targetType.IsAssignableTo(typeof(IList)))
                 {
-                    // IEnumerable covers many types, we need to find the type of element in the IEnumrable
+                    // IEnumerable covers many types, we need to find the type of element in the IEnumerable
                     // For now just assume its the first generic argument
                     Type type = targetType.GetGenericArguments()[0];
-                    var list2 = (IList)Activator.CreateInstance(targetType);
+                    var list2 = CreateInstance(targetType) as IList ?? throw new InvalidOperationException("Failed to create instance of type: " + targetType);
                     foreach (var tag in value.List)
                         list2.Add(Deserialize(tag, type, ctx));
                     return list2;
@@ -297,7 +297,7 @@ namespace Prowl.Runtime
                                           targetType.IsGenericType &&
                                           targetType.GetGenericArguments()[0] == typeof(string))
                 {
-                    var dict = (IDictionary)Activator.CreateInstance(targetType);
+                    var dict = CreateInstance(targetType) as IDictionary ?? throw new InvalidOperationException("Failed to create instance of type: " + targetType);
                     var valueType = targetType.GetGenericArguments()[1];
                     foreach (var tag in value.Tags)
                         dict.Add(tag.Key, Deserialize(tag.Value, valueType, ctx));
@@ -365,7 +365,7 @@ namespace Prowl.Runtime
                         // Before we completely give up, a field can have FormerlySerializedAs Attributes
                         // This allows backwards compatibility
                         var formerNames = Attribute.GetCustomAttributes(field, typeof(FormerlySerializedAsAttribute));
-                        foreach (FormerlySerializedAsAttribute formerName in formerNames)
+                        foreach (FormerlySerializedAsAttribute formerName in formerNames.Cast<FormerlySerializedAsAttribute>())
                         {
                             if (tag.TryGet(formerName.oldName, out node))
                             {
@@ -373,11 +373,12 @@ namespace Prowl.Runtime
                                 break;
                             }
                         }
-                        if (node == null) // Continue onto the next field
-                            continue;
                     }
 
-                    object data = Deserialize(node, field.FieldType, ctx);
+                    if (node == null) // Continue onto the next field
+                        continue;
+
+                    object? data = Deserialize(node, field.FieldType, ctx);
 
                     // Some manual casting for edge cases
                     if (data is byte @byte)
@@ -399,11 +400,10 @@ namespace Prowl.Runtime
 
         static object CreateInstance(Type type)
         {
-            object data = Activator.CreateInstance(type);
-            return data;
+            return Activator.CreateInstance(type) ?? throw new InvalidOperationException("Failed to create instance of type: " + type);
         }
 
-        static IEnumerable<FieldInfo> GetAllFields(Type t)
+        static IEnumerable<FieldInfo> GetAllFields(Type? t)
         {
             if (t == null)
                 return Enumerable.Empty<FieldInfo>();
