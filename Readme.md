@@ -89,6 +89,7 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - Adjustable Render Resolutions per camera
     - Dedicated Shadow Pass for Shaders
     - Procedural Skybox with Skybox-Blended Fog
+    - GPU Skinned Mesh Rendering
 
 -   **Asset Pipeline:**
     - A Powerful Asset Pipeline with a very similar structure to unity
@@ -137,7 +138,7 @@ Getting Prowl up and running is super easy!
 - ❌ Realtime GI
 - ❌ Lightmaps and Light Probes
 - ❌ Cascaded shadow mapping
-- ❌ Skinned Mesh Rendering & Animations - Partially Implemented
+- ❌ Animations
 - ❌ Particle System
 - ❌ Terrain Engine
 
