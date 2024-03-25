@@ -15,6 +15,18 @@ namespace Prowl.Runtime
 
         public bool convex = false;
 
+        public override void Awake()
+        {
+            if (mesh.IsExplicitNull)
+            {
+                var meshRenderer = GetComponentInChildren<MeshRenderer>();
+                if (meshRenderer != null)
+                {
+                    mesh = meshRenderer.Mesh;
+                }
+            }
+        }
+
         public enum Approximation
         {
             Level1 = 6,
@@ -44,9 +56,9 @@ namespace Prowl.Runtime
                 List<JTriangle> triangles = new();
 
                 for (int i = 0; i < mesh.Res.triangleCount; i += 3) {
-                    JVector v1 = vertices[i + 0].Position.ToDouble();
-                    JVector v2 = vertices[i + 1].Position.ToDouble();
-                    JVector v3 = vertices[i + 2].Position.ToDouble();
+                    JVector v1 = vertices[indices[i]].Position.ToDouble();
+                    JVector v2 = vertices[indices[i + 1]].Position.ToDouble();
+                    JVector v3 = vertices[indices[i + 2]].Position.ToDouble();
                     triangles.Add(new JTriangle(v1, v2, v3));
                 }
 
