@@ -129,6 +129,7 @@ Getting Prowl up and running is super easy!
   - ❌ Andriod
   - ❌ iOS
   - ❌ Web
+- ❌ UI Engine
 - ❌ VR Support
 - ❌ Navmesh and AI Agents
 - ❌ Networking Solution
@@ -148,7 +149,7 @@ Getting Prowl up and running is super easy!
 - ❌ Live Collaborative Tools
 - ❌ Visual Scripting
 - ❌ Material Node Editor
-- ❌ Basic 2D Support
+- ❌ 2D Support
 
 
 See the [open issues](https://github.com/michaelsakharov/prowl/issues) for a full list of proposed features (and known issues).
