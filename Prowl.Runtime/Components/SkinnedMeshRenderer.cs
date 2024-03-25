@@ -36,7 +36,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
                 //boneTransforms[i] = (pose * t.localToWorldMatrix).ToFloat();
                 boneTransforms[i] = (t.localToWorldMatrix * this.GameObject.transform.worldToLocalMatrix).ToFloat();
                 bindPoses[i] = Mesh.Res.bindPoses[i].ToFloat();
-                bindPoses[i].Translation *= 0.01f;
+                //bindPoses[i].Translation *= 0.01f;
             }
         }
     }

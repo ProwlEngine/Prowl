@@ -269,6 +269,9 @@ namespace Prowl.Editor.Assets
                                 //);
                                 //bindPose = Prowl.Runtime.Matrix4x4.Transpose(bindPose);
 
+                                // Adjust translation by scale
+                                bindPose.Translation *= scale;
+
                                 mesh.bindPoses[i] = bindPose;
 
                                 if (!bone.HasVertexWeights) continue;
