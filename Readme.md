@@ -89,6 +89,7 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - Adjustable Render Resolutions per camera
     - Dedicated Shadow Pass for Shaders
     - Procedural Skybox with Skybox-Blended Fog
+    - GPU Skinned Mesh Rendering
 
 -   **Asset Pipeline:**
     - A Powerful Asset Pipeline with a very similar structure to unity
@@ -128,6 +129,7 @@ Getting Prowl up and running is super easy!
   - ❌ Andriod
   - ❌ iOS
   - ❌ Web
+- ❌ UI Engine
 - ❌ VR Support
 - ❌ Navmesh and AI Agents
 - ❌ Networking Solution
@@ -137,7 +139,7 @@ Getting Prowl up and running is super easy!
 - ❌ Realtime GI
 - ❌ Lightmaps and Light Probes
 - ❌ Cascaded shadow mapping
-- ❌ Skinned Mesh Rendering & Animations - Partially Implemented
+- ❌ Animations
 - ❌ Particle System
 - ❌ Terrain Engine
 
@@ -147,7 +149,7 @@ Getting Prowl up and running is super easy!
 - ❌ Live Collaborative Tools
 - ❌ Visual Scripting
 - ❌ Material Node Editor
-- ❌ Basic 2D Support
+- ❌ 2D Support
 
 
 See the [open issues](https://github.com/michaelsakharov/prowl/issues) for a full list of proposed features (and known issues).
@@ -229,6 +231,7 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 # <p align="center">📸 Screenshots 📸</p>
+![image](https://github.com/michaelsakharov/Prowl/assets/8621606/2fdad2ea-f956-42f5-a7c6-4c2ae0df4495)
 ![Bokeh Depth of Field](https://i.imgur.com/VYs44qq.png)
 ![Editor](https://github.com/michaelsakharov/Prowl/assets/8621606/bb3c423b-3cc8-45a1-baa7-c9ad31d945c6)
 ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/f755ee5d-eba5-4453-9f31-f61768c2554c)
