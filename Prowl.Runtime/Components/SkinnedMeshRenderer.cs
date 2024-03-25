@@ -71,6 +71,11 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
     {
         if (Mesh.IsAvailable && Material.IsAvailable)
         {
+            GetBoneMatrices();
+            Material.Res!.EnableKeyword("SKINNED");
+            Material.Res!.SetMatrices("bindPoses", bindPoses);
+            Material.Res!.SetMatrices("boneTransforms", boneTransforms);
+
             var mvp = Matrix4x4.Identity;
             mvp = Matrix4x4.Multiply(mvp, GameObject.GlobalCamRelative);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
@@ -78,6 +83,8 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
             Material.Res!.SetMatrix("mvp", mvp);
             Material.Res!.SetShadowPass(true);
             Graphics.DrawMeshNowDirect(Mesh.Res!);
+
+            Material.Res!.DisableKeyword("SKINNED");
         }
     }
 

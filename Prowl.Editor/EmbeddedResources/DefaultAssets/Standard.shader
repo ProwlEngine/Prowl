@@ -210,14 +210,44 @@ ShadowPass 0
 	{
 		layout (location = 0) in vec3 vertexPosition;
 		layout (location = 1) in vec2 vertexTexCoord;
+#ifdef SKINNED
+		layout (location = 5) in ivec4 vertexBoneIndices;
+		layout (location = 6) in vec4 vertexBoneWeights;
+		
+		const int MAX_BONE_INFLUENCE = 4;
+		const int MAX_BONES = 100;
+		uniform mat4 bindPoses[MAX_BONES];
+		uniform mat4 boneTransforms[MAX_BONES];
+#endif
 		
 		out vec2 TexCoords;
 
 		uniform mat4 mvp;
 		void main()
 		{
-		    gl_Position =  mvp * vec4(vertexPosition, 1.0);
+			vec3 boneVertexPosition = vertexPosition;
+			
+#ifdef SKINNED    
+			vec4 totalPosition = vec4(0.0);
+
+			for (int i = 0; i < MAX_BONE_INFLUENCE; i++)
+			{
+			    int index = vertexBoneIndices[i] - 1;
+			    if (index < 0)
+			        continue;
+
+			    float weight = vertexBoneWeights[i];
+			    mat4 boneTransform = boneTransforms[index] * bindPoses[index];
+
+			    totalPosition += (boneTransform * vec4(vertexPosition, 1.0)) * weight;
+			}
+
+			boneVertexPosition = totalPosition.xyz;
+#endif
+
 		    TexCoords = vertexTexCoord;
+			
+		    gl_Position = mvp * vec4(boneVertexPosition, 1.0);
 		}
 	}
 
