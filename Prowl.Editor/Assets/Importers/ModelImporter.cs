@@ -261,13 +261,6 @@ namespace Prowl.Editor.Assets
                                     offsetMatrix.A3, offsetMatrix.B3, offsetMatrix.C3, offsetMatrix.D3,
                                     offsetMatrix.A4, offsetMatrix.B4, offsetMatrix.C4, offsetMatrix.D4
                                 );
-                                //Prowl.Runtime.Matrix4x4 bindPose = new Prowl.Runtime.Matrix4x4(
-                                //    offsetMatrix.A1, offsetMatrix.A2, offsetMatrix.A3, offsetMatrix.A4,
-                                //    offsetMatrix.B1, offsetMatrix.B2, offsetMatrix.B3, offsetMatrix.B4,
-                                //    offsetMatrix.C1, offsetMatrix.C2, offsetMatrix.C3, offsetMatrix.C4,
-                                //    offsetMatrix.D1, offsetMatrix.D2, offsetMatrix.D3, offsetMatrix.D4
-                                //);
-                                //bindPose = Prowl.Runtime.Matrix4x4.Transpose(bindPose);
 
                                 // Adjust translation by scale
                                 bindPose.Translation *= scale;
