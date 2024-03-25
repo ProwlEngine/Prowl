@@ -15,25 +15,29 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
     public GameObject Root;
     public AssetRef<Material> Material;
 
-    System.Numerics.Matrix4x4[] GetBoneMatrices()
+    private System.Numerics.Matrix4x4[] bindPoses;
+    private System.Numerics.Matrix4x4[] boneTransforms;
+
+    void GetBoneMatrices()
     {
-        System.Numerics.Matrix4x4[] matrices = new System.Numerics.Matrix4x4[Mesh.Res.boneNames.Length];
+        boneTransforms = new System.Numerics.Matrix4x4[Mesh.Res.boneNames.Length];
+        bindPoses = new System.Numerics.Matrix4x4[Mesh.Res.bindPoses.Length];
         for (int i = 0; i < Mesh.Res.boneNames.Length; i++)
         {
             var t = Root.transform.Find(Mesh.Res.boneNames[i]);
             if (t == null)
-                matrices[i] = System.Numerics.Matrix4x4.Identity;
+            {
+                boneTransforms[i] = System.Numerics.Matrix4x4.Identity;
+                bindPoses[i] = Mesh.Res.bindPoses[i].ToFloat();
+            }
             else
             {
-                //matrices[i] = t.localToWorldMatrix.ToFloat();
-                var startOffset = Mesh.Res.boneOffsets[i];
-                Matrix4x4 mat = Matrix4x4.TRS(t.localPosition - startOffset.Item1, t.localRotation - startOffset.Item2, t.localScale - startOffset.Item3);
-                mat = t.parent != null ? t.parent.localToWorldMatrix * mat : mat;
-                matrices[i] = mat.ToFloat();
-
+                var pose = Mesh.Res.bindPoses[i];
+                //pose = Matrix4x4.Transpose(pose);
+                boneTransforms[i] = (pose * t.localToWorldMatrix).ToFloat();
+                bindPoses[i] = Mesh.Res.bindPoses[i].ToFloat();
             }
         }
-        return matrices;
     }
 
     private Dictionary<int, Matrix4x4> prevMats = new();
@@ -46,9 +50,11 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         
         if (Mesh.IsAvailable && Material.IsAvailable)
         {
+            GetBoneMatrices();
             Material.Res!.EnableKeyword("SKINNED");
             Material.Res!.SetInt("ObjectID", GameObject.InstanceID);
-            Material.Res!.SetMatrices("bindposes", GetBoneMatrices());
+            //Material.Res!.SetMatrices("bindPoses", bindPoses);
+            Material.Res!.SetMatrices("boneTransforms", boneTransforms);
             for (int i = 0; i < Material.Res!.PassCount; i++)
             {
                 Material.Res!.SetPass(i);

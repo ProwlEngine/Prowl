@@ -22,7 +22,7 @@ namespace Prowl.Runtime
         // The array of bone paths under a root
         // The index of a path is the Bone Index
         public string[] boneNames;
-        public (Vector3, Quaternion, Vector3)[] boneOffsets;
+        public Matrix4x4[] bindPoses;
 
         public Mesh() 
         {
@@ -391,20 +391,26 @@ namespace Prowl.Runtime
                         writer.Write(boneNames[i]);
 
                 // Serialize bone offsets
-                writer.Write(boneOffsets?.Length ?? 0);
-                if (boneOffsets != null)
-                    for (int i = 0; i < boneOffsets.Length; i++)
+                writer.Write(bindPoses?.Length ?? 0);
+                if (bindPoses != null)
+                    for (int i = 0; i < bindPoses.Length; i++)
                     {
-                        writer.Write((float)boneOffsets[i].Item1.x);
-                        writer.Write((float)boneOffsets[i].Item1.y);
-                        writer.Write((float)boneOffsets[i].Item1.z);
-                        writer.Write((float)boneOffsets[i].Item2.x);
-                        writer.Write((float)boneOffsets[i].Item2.y);
-                        writer.Write((float)boneOffsets[i].Item2.z);
-                        writer.Write((float)boneOffsets[i].Item2.w);
-                        writer.Write((float)boneOffsets[i].Item3.x);
-                        writer.Write((float)boneOffsets[i].Item3.y);
-                        writer.Write((float)boneOffsets[i].Item3.z);
+                        writer.Write((float)bindPoses[i].M11);
+                        writer.Write((float)bindPoses[i].M12);
+                        writer.Write((float)bindPoses[i].M13);
+                        writer.Write((float)bindPoses[i].M14);
+                        writer.Write((float)bindPoses[i].M21);
+                        writer.Write((float)bindPoses[i].M22);
+                        writer.Write((float)bindPoses[i].M23);
+                        writer.Write((float)bindPoses[i].M24);
+                        writer.Write((float)bindPoses[i].M31);
+                        writer.Write((float)bindPoses[i].M32);
+                        writer.Write((float)bindPoses[i].M33);
+                        writer.Write((float)bindPoses[i].M34);
+                        writer.Write((float)bindPoses[i].M41);
+                        writer.Write((float)bindPoses[i].M42);
+                        writer.Write((float)bindPoses[i].M43);
+                        writer.Write((float)bindPoses[i].M44);
                     }
 
                 writer.Write(vertices.Length);
@@ -464,13 +470,27 @@ namespace Prowl.Runtime
                 int boneOffsetCount = reader.ReadInt32();
                 if (boneOffsetCount > 0)
                 {
-                    boneOffsets = new (Vector3, Quaternion, Vector3)[boneOffsetCount];
+                    bindPoses = new Matrix4x4[boneOffsetCount];
                     for (int i = 0; i < boneOffsetCount; i++)
                     {
-                        Vector3 v = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-                        Quaternion q = new Quaternion(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-                        Vector3 s = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-                        boneOffsets[i] = (v, q, s);
+                        var m = new Matrix4x4();
+                        m.M11 = reader.ReadSingle();
+                        m.M12 = reader.ReadSingle();
+                        m.M13 = reader.ReadSingle();
+                        m.M14 = reader.ReadSingle();
+                        m.M21 = reader.ReadSingle();
+                        m.M22 = reader.ReadSingle();
+                        m.M23 = reader.ReadSingle();
+                        m.M24 = reader.ReadSingle();
+                        m.M31 = reader.ReadSingle();
+                        m.M32 = reader.ReadSingle();
+                        m.M33 = reader.ReadSingle();
+                        m.M34 = reader.ReadSingle();
+                        m.M41 = reader.ReadSingle();
+                        m.M42 = reader.ReadSingle();
+                        m.M43 = reader.ReadSingle();
+                        m.M44 = reader.ReadSingle();
+                        bindPoses[i] = m;
                     }
                 }
 

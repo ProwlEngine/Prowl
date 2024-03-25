@@ -38,7 +38,9 @@ Pass 0
 		layout (location = 6) in vec4 vertexBoneWeights;
 		
 		const int MAX_BONE_INFLUENCE = 4;
-		uniform mat4 bindposes[200];
+		const int MAX_BONES = 100;
+		//uniform mat4 bindPoses[MAX_BONES];
+		uniform mat4 boneTransforms[MAX_BONES];
 #endif
 
 		out vec3 FragPos;
@@ -61,17 +63,28 @@ Pass 0
 			vec3 boneVertexNormal = vertexNormal;
 			vec3 boneVertexTangent = vertexTangent;
 			
-#ifdef SKINNED
-			for(int i=0; i<MAX_BONE_INFLUENCE; i++) {
-				int index = vertexBoneIndices[i] - 1;
-				if (index == -1) continue;
+#ifdef SKINNED    
+			vec4 totalPosition = vec4(0.0);
+			vec3 totalNormal = vec3(0.0);
+			vec3 totalTangent = vec3(0.0);
 
-				float weight = vertexBoneWeights[i];
-				//float weight = 1.0;
-				boneVertexPosition += (bindposes[index] * vec4(vertexPosition, 1.0)).xyz * weight;
-				boneVertexNormal += (bindposes[index] * vec4(vertexNormal, 0.0)).xyz * weight;
-				boneVertexTangent += (bindposes[index] * vec4(vertexNormal, 0.0)).xyz * weight;
+			for (int i = 0; i < MAX_BONE_INFLUENCE; i++)
+			{
+			    int index = vertexBoneIndices[i] - 1;
+			    if (index < 0)
+			        continue;
+
+			    float weight = vertexBoneWeights[i];
+			    mat4 boneTransform = boneTransforms[index];// * bindPoses[index];
+
+			    totalPosition += boneTransform * vec4(vertexPosition, 1.0) * weight;
+			    totalNormal += mat3(boneTransform) * vertexNormal * weight;
+			    totalTangent += mat3(boneTransform) * vertexTangent * weight;
 			}
+
+			boneVertexPosition = totalPosition.xyz;
+			boneVertexNormal = normalize(totalNormal);
+			boneVertexTangent = normalize(totalTangent);
 #endif
 
 		    /*

@@ -1,5 +1,6 @@
 ﻿using Assimp;
 using Hexa.NET.ImGui;
+using Jitter2.LinearMath;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 using static Prowl.Runtime.Mesh;
@@ -248,15 +249,27 @@ namespace Prowl.Editor.Assets
 
                         if (m.HasBones) {
                             mesh.boneNames = new string[m.Bones.Count];
-                            mesh.boneOffsets = new (Vector3, Runtime.Quaternion, Vector3)[m.Bones.Count];
+                            mesh.bindPoses = new Prowl.Runtime.Matrix4x4[m.Bones.Count];
                             for (var i = 0; i < m.Bones.Count; i++) {
                                 var bone = m.Bones[i];
                                 mesh.boneNames[i] = bone.Name;
-                                //var offMat = bone.OffsetMatrix;
-                                //offMat.Decompose(out var sca, out var rot, out var pos);
-                                //mesh.boneOffsets[i] = (new Vector3(pos.X, pos.Y, pos.Z), new Runtime.Quaternion(rot.X, rot.Y, rot.Z, rot.W), new Vector3(sca.X, sca.Y, sca.Z));
-                                var t = GOs[0].Item1.transform.Find(mesh.boneNames[i]);
-                                mesh.boneOffsets[i] = (t.localPosition, t.localRotation, t.localScale);
+
+                                var offsetMatrix = bone.OffsetMatrix;
+                                Prowl.Runtime.Matrix4x4 bindPose = new Prowl.Runtime.Matrix4x4(
+                                    offsetMatrix.A1, offsetMatrix.B1, offsetMatrix.C1, offsetMatrix.D1,
+                                    offsetMatrix.A2, offsetMatrix.B2, offsetMatrix.C2, offsetMatrix.D2,
+                                    offsetMatrix.A3, offsetMatrix.B3, offsetMatrix.C3, offsetMatrix.D3,
+                                    offsetMatrix.A4, offsetMatrix.B4, offsetMatrix.C4, offsetMatrix.D4
+                                );
+                                //Prowl.Runtime.Matrix4x4 bindPose = new Prowl.Runtime.Matrix4x4(
+                                //    offsetMatrix.A1, offsetMatrix.A2, offsetMatrix.A3, offsetMatrix.A4,
+                                //    offsetMatrix.B1, offsetMatrix.B2, offsetMatrix.B3, offsetMatrix.B4,
+                                //    offsetMatrix.C1, offsetMatrix.C2, offsetMatrix.C3, offsetMatrix.C4,
+                                //    offsetMatrix.D1, offsetMatrix.D2, offsetMatrix.D3, offsetMatrix.D4
+                                //);
+                                //bindPose = Prowl.Runtime.Matrix4x4.Transpose(bindPose);
+
+                                mesh.bindPoses[i] = bindPose;
 
                                 if (!bone.HasVertexWeights) continue;
                                 byte boneIndex = (byte)(i + 1);
