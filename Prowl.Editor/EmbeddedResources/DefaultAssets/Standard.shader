@@ -39,7 +39,7 @@ Pass 0
 		
 		const int MAX_BONE_INFLUENCE = 4;
 		const int MAX_BONES = 100;
-		//uniform mat4 bindPoses[MAX_BONES];
+		uniform mat4 bindPoses[MAX_BONES];
 		uniform mat4 boneTransforms[MAX_BONES];
 #endif
 
@@ -75,11 +75,11 @@ Pass 0
 			        continue;
 
 			    float weight = vertexBoneWeights[i];
-			    mat4 boneTransform = boneTransforms[index];// * bindPoses[index];
+			    mat4 boneTransform = boneTransforms[index] * bindPoses[index];
 
-			    totalPosition += boneTransform * vec4(vertexPosition, 1.0) * weight;
-			    totalNormal += mat3(boneTransform) * vertexNormal * weight;
-			    totalTangent += mat3(boneTransform) * vertexTangent * weight;
+			    totalPosition += (boneTransform * vec4(vertexPosition, 1.0)) * weight;
+			    totalNormal += (mat3(boneTransform) * vertexNormal) * weight;
+			    totalTangent += (mat3(boneTransform) * vertexTangent) * weight;
 			}
 
 			boneVertexPosition = totalPosition.xyz;

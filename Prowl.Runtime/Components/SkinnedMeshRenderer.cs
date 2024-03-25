@@ -32,10 +32,11 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
             }
             else
             {
-                var pose = Mesh.Res.bindPoses[i];
-                //pose = Matrix4x4.Transpose(pose);
-                boneTransforms[i] = (pose * t.localToWorldMatrix).ToFloat();
+                //var pose = Mesh.Res.bindPoses[i];
+                //boneTransforms[i] = (pose * t.localToWorldMatrix).ToFloat();
+                boneTransforms[i] = (t.localToWorldMatrix * this.GameObject.transform.worldToLocalMatrix).ToFloat();
                 bindPoses[i] = Mesh.Res.bindPoses[i].ToFloat();
+                bindPoses[i].Translation *= 0.01f;
             }
         }
     }
@@ -53,7 +54,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
             GetBoneMatrices();
             Material.Res!.EnableKeyword("SKINNED");
             Material.Res!.SetInt("ObjectID", GameObject.InstanceID);
-            //Material.Res!.SetMatrices("bindPoses", bindPoses);
+            Material.Res!.SetMatrices("bindPoses", bindPoses);
             Material.Res!.SetMatrices("boneTransforms", boneTransforms);
             for (int i = 0; i < Material.Res!.PassCount; i++)
             {
