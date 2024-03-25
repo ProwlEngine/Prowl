@@ -12,8 +12,8 @@ namespace Prowl.Runtime
     {
         private List<Shape> shape;
         public List<Shape> Shape => shape ??= CreateShapes();
-        public void OnEnable() => GetComponentInParent<Rigidbody>()?.RefreshShape();
-        public void OnDisable() => GetComponentInParent<Rigidbody>()?.RefreshShape();
+        public override void OnEnable() => GetComponentInParent<Rigidbody>()?.RefreshShape();
+        public override void OnDisable() => GetComponentInParent<Rigidbody>()?.RefreshShape();
         public abstract List<Shape> CreateShapes();
         public virtual List<TransformedShape> CreateTransformedShape(Rigidbody body)
         {
