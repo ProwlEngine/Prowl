@@ -230,6 +230,7 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 # <p align="center">📸 Screenshots 📸</p>
+![image](https://github.com/michaelsakharov/Prowl/assets/8621606/2fdad2ea-f956-42f5-a7c6-4c2ae0df4495)
 ![Bokeh Depth of Field](https://i.imgur.com/VYs44qq.png)
 ![Editor](https://github.com/michaelsakharov/Prowl/assets/8621606/bb3c423b-3cc8-45a1-baa7-c9ad31d945c6)
 ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/f755ee5d-eba5-4453-9f31-f61768c2554c)
