@@ -157,15 +157,34 @@ namespace Prowl.Runtime
         private Vector3 MakeSafe(Vector3 v) => new Vector3(MakeSafe(v.x), MakeSafe(v.y), MakeSafe(v.z));
         private Quaternion MakeSafe(Quaternion v) => new Quaternion(MakeSafe(v.x), MakeSafe(v.y), MakeSafe(v.z), MakeSafe(v.w));
 
-        public Transform? Find(string name)
+        public Transform? Find(string path)
         {
-            if (name == null) return null;
-            if (name == gameObject.Name) return this;
-            foreach (var child in gameObject.children)
+            if (string.IsNullOrEmpty(path))
+                return null;
+
+            var names = path.Split('/');
+            var currentTransform = this;
+
+            foreach (var name in names)
             {
-                var t = child.transform.Find(name);
-                if (t != null) return t;
+                if (string.IsNullOrEmpty(name))
+                    continue;
+
+                var childTransform = FindImmediateChild(currentTransform, name);
+                if (childTransform == null)
+                    return null;
+
+                currentTransform = childTransform;
             }
+
+            return currentTransform;
+        }
+
+        private Transform? FindImmediateChild(Transform parent, string name)
+        {
+            foreach (var child in parent.gameObject.children)
+                if (child.Name == name)
+                    return child.transform;
             return null;
         }
 
