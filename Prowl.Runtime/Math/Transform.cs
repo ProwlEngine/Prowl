@@ -188,6 +188,19 @@ namespace Prowl.Runtime
             return null;
         }
 
+        public static string GetPath(Transform target, Transform root) 
+        { 
+            string path = target.gameObject.Name; 
+            while (target.parent != null) 
+            {
+                target = target.parent; 
+                path = target.gameObject.Name + "/" + path; 
+                if(target == root)
+                    break;
+            } 
+            return path; 
+        }
+
         public void Translate(Vector3 translation, Transform? relativeTo = null)
         {
             if (relativeTo != null)
