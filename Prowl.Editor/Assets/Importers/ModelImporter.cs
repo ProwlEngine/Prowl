@@ -432,13 +432,13 @@ namespace Prowl.Editor.Assets
                     // RootNode -> Parent -> Parent -> ... -> Parent -> Bone
                     Assimp.Node target = boneNode;
                     string path = target.Name;
-                    while (target.Parent != null)
-                    {
-                        target = target.Parent;
-                        path = target.Name + "/" + path;
-                        if (target.Name == scene.RootNode.Name) // TODO: Can we just do reference comparison here instead of string comparison?
-                            break;
-                    }
+                    //while (target.Parent != null)
+                    //{
+                    //    target = target.Parent;
+                    //    path = target.Name + "/" + path;
+                    //    if (target.Name == scene.RootNode.Name) // TODO: Can we just do reference comparison here instead of string comparison?
+                    //        break;
+                    //}
 
                     if (channel.HasPositionKeys)
                     {
