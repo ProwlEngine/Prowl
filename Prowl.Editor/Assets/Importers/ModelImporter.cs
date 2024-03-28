@@ -1,11 +1,8 @@
 ﻿using Assimp;
-using Assimp.Unmanaged;
 using Hexa.NET.ImGui;
-using Jitter2.LinearMath;
+using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
-using System.Xml.Linq;
-using static Prowl.Editor.EditorConfiguration;
 using static Prowl.Runtime.AnimationClip;
 using static Prowl.Runtime.Mesh;
 using Material = Prowl.Runtime.Material;
@@ -27,6 +24,7 @@ namespace Prowl.Editor.Assets
         public bool MakeLeftHanded = true;
         public bool FlipUVs = false;
         public bool CullEmpty = false;
+        public bool OptimizeGraph = false;
         public bool OptimizeMeshes = false;
         public bool FlipWindingOrder = false;
         public bool WeldVertices = false;
@@ -57,6 +55,7 @@ namespace Prowl.Editor.Assets
                 if (CalculateTangentSpace) steps |= PostProcessSteps.CalculateTangentSpace;
                 if (MakeLeftHanded) steps |= PostProcessSteps.MakeLeftHanded;
                 if (FlipUVs) steps |= PostProcessSteps.FlipUVs;
+                if (OptimizeGraph) steps |= PostProcessSteps.OptimizeGraph;
                 if (OptimizeMeshes) steps |= PostProcessSteps.OptimizeMeshes;
                 if (FlipWindingOrder) steps |= PostProcessSteps.FlipWindingOrder;
                 if (WeldVertices) steps |= PostProcessSteps.JoinIdenticalVertices;
@@ -632,12 +631,52 @@ namespace Prowl.Editor.Assets
     [CustomEditor(typeof(ModelImporter))]
     public class ModelEditor : ScriptedEditor
     {
+
+        int selectedAnim = 0;
+        int selectedAnimBone = 0;
+
         public override void OnInspectorGUI()
         {
             var importer = (ModelImporter)(target as MetaFile).importer;
+            var serialized = AssetDatabase.LoadAsset((target as MetaFile).AssetPath);
 
+            if (ImGui.BeginTabBar("ModelImporterTabs", ImGuiTabBarFlags.None))
+            {
+                ImGui.Separator();
+                if (ImGui.BeginTabItem("Meshes"))
+                {
+                    Meshes(importer, serialized);
+                    ImGui.EndTabItem();
+                }
+                if (ImGui.BeginTabItem("Materials"))
+                {
+                    Materials(importer, serialized);
+                    ImGui.EndTabItem();
+                }
+                if (ImGui.BeginTabItem("Scene"))
+                {
+                    Scene(importer, serialized);
+                    ImGui.EndTabItem();
+                }
+                if (ImGui.BeginTabItem("Animations"))
+                {
+                    Animations(importer, serialized);
+                    ImGui.EndTabItem();
+                }
+
+                ImGui.EndTabBar();
+            }
+
+            if (ImGui.Button("Save")) {
+                (target as MetaFile).Save();
+                AssetDatabase.Reimport((target as MetaFile).AssetPath);
+            }
+        }
+
+        private static void Meshes(ModelImporter importer, SerializedAsset? serialized)
+        {
             ImGui.Checkbox("Generate Normals", ref importer.GenerateNormals);
-            if(importer.GenerateNormals)
+            if (importer.GenerateNormals)
                 ImGui.Checkbox("Generate Smooth Normals", ref importer.GenerateSmoothNormals);
             ImGui.Checkbox("Calculate Tangent Space", ref importer.CalculateTangentSpace);
             ImGui.Checkbox("Make Left Handed", ref importer.MakeLeftHanded);
@@ -649,13 +688,136 @@ namespace Prowl.Editor.Assets
             ImGui.Checkbox("GlobalScale", ref importer.GlobalScale);
             ImGui.DragFloat("UnitScale", ref importer.UnitScale, 0.01f, 0.01f, 1000f);
 
+            var meshes = serialized.SubAssets.Where(x => x is Mesh);
+
+            // Mesh Count
+            ImGui.Text($"Mesh Count: {meshes.Count()}");
+            // Vertex Count
+            ImGui.Text($"Vertex Count: {meshes.Sum(x => (x as Mesh).vertices.Length)}");
+            // Triangle Count
+            ImGui.Text($"Triangle Count: {meshes.Sum(x => (x as Mesh).triangles.Length / 3)}");
+            // Bone Count
+            ImGui.Text($"Bone Count: {meshes.Sum(x => (x as Mesh).boneNames?.Length ?? 0)}");
+
 #warning TODO: Support for Exporting sub assets
 #warning TODO: Support for editing Model specific data like Animation data
+        }
 
-            if (ImGui.Button("Save")) {
-                (target as MetaFile).Save();
-                AssetDatabase.Reimport((target as MetaFile).AssetPath);
+        private void Scene(ModelImporter importer, SerializedAsset? serialized)
+        {
+            // Draw the Scene Graph
+            GameObject root = serialized.Main as GameObject;
+
+            ImGui.Text($"GameObject Count: {CountNodes(root)}");
+            ImGui.Checkbox("Merge Objects", ref importer.OptimizeGraph);
+            ImGui.Checkbox("Cull Empty Objects", ref importer.CullEmpty);
+            ImGui.Separator();
+            ImGui.BeginChild("##SceneGraph", new Vector2(0,250), true);
+            ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetCursorScreenPos(), new System.Numerics.Vector2(9999f, 9999f), ImGui.ColorConvertFloat4ToU32(new Vector4(0.1f, 0.1f, 0.1f, 1f)));
+            DrawNode(root);
+            ImGui.EndChild();
+
+
+
+        }
+
+        private int CountNodes(GameObject go)
+        {
+            int count = 1;
+            foreach (var child in go.children)
+                count += CountNodes(child);
+            return count;
+        }
+
+        private void DrawNode(GameObject go)
+        {
+            bool isLeaf = go.children.Count == 0;
+            if (ImGui.TreeNodeEx(go.Name, ImGuiTreeNodeFlags.DefaultOpen | (isLeaf ? ImGuiTreeNodeFlags.Leaf : ImGuiTreeNodeFlags.None)))
+            {
+                foreach (var child in go.children)
+                    DrawNode(child);
+                ImGui.TreePop();
             }
+        }
+
+        private void Materials(ModelImporter importer, SerializedAsset? serialized)
+        {
+            var materials = serialized.SubAssets.Where(x => x is Material);
+
+            // Material Count
+            ImGui.Text($"Material Count: {materials.Count()}");
+
+            if (ImGui.BeginListBox("##MaterialsList"))
+            {
+                foreach (var mat in materials)
+                {
+                    ImGui.Text(mat.Name);
+                }
+                ImGui.EndListBox();
+            }
+
+        }
+
+        private void Animations(ModelImporter importer, SerializedAsset? serialized)
+        {
+            var animations = serialized.SubAssets.Where(x => x is AnimationClip);
+
+            // Animation Count
+            ImGui.Text($"Animation Count: {animations.Count()}");
+
+            if (animations.Count() <= 0) return;
+
+            ImGui.Separator();
+            // Selectable List of Animations
+            if (ImGui.BeginListBox("##AnimationsList"))
+            {
+                int i = 0;
+                foreach (var anim in animations)
+                {
+                    i++;
+                    if (ImGui.Selectable(anim.Name))
+                        selectedAnim = i;
+                }
+                ImGui.EndListBox();
+            }
+
+            ImGui.Separator();
+            // Animation Inspector
+            if (selectedAnim > 0 && selectedAnim <= animations.Count())
+            {
+                var anim = animations.ElementAt(selectedAnim - 1) as AnimationClip;
+                ImGui.Text($"Name: {anim.Name}");
+                ImGui.Text($"Duration: {anim.Duration}");
+                ImGui.Text($"Ticks Per Second: {anim.TicksPerSecond}");
+                ImGui.Text($"Duration In Ticks: {anim.DurationInTicks}");
+                ImGui.Text($"Bone Count: {anim.Bones.Count}");
+                if (anim.Bones.Count <= 0) return;
+                ImGui.Separator();
+                // Show Selected Bone List
+                if (ImGui.BeginListBox("##BoneList"))
+                {
+                    int i = 0;
+                    foreach (var bone in anim.Bones)
+                    {
+                        i++;
+                        if (ImGui.Selectable(bone.BoneName))
+                            selectedAnimBone = i;
+                    }
+                    ImGui.EndListBox();
+                }
+
+                ImGui.Separator();
+                // Bone Inspector
+                if (selectedAnimBone > 0 && selectedAnimBone <= anim.Bones.Count)
+                {
+                    var bone = anim.Bones[selectedAnimBone - 1];
+                    ImGui.Text($"Bone Name: {bone.BoneName}");
+                    ImGui.Text($"Position Keys: {bone.PosX.Keys.Count}");
+                    ImGui.Text($"Rotation Keys: {bone.RotX.Keys.Count}");
+                    ImGui.Text($"Scale Keys: {bone.ScaleX.Keys.Count}");
+                }
+            }
+
         }
     }
 }
