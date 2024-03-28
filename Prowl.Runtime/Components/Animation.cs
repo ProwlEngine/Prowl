@@ -66,16 +66,16 @@ namespace Prowl.Runtime
                 return;
             }
 
+            // Normalize weights for Blend states
+            var totalBlendWeight = _states.Where(s => s.Enabled && s.Blend == AnimationState.BlendMode.Blend).Sum(s => s.Weight);
+            var blendNormalizer = totalBlendWeight > 0 ? 1.0 / totalBlendWeight : 0;
+
             // Update all transforms
             foreach (var transform in transforms)
             {
                 var position = Vector3.zero;
                 var rotation = Quaternion.identity;
                 var scale = Vector3.one;
-
-                // Normalize weights for Blend states
-                var totalBlendWeight = _states.Where(s => s.Enabled && s.Blend == AnimationState.BlendMode.Blend).Sum(s => s.Weight);
-                var blendNormalizer = totalBlendWeight > 0 ? 1.0 / totalBlendWeight : 0;
 
                 if (blendNormalizer > 0)
                 {
