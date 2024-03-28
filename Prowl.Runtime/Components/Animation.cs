@@ -58,6 +58,9 @@ namespace Prowl.Runtime
                         }
                     }
                 }
+
+                // Weight always update even if the state is disabled
+                state.Weight = Mathf.MoveTowards(state.Weight, state.TargetWeight, state.MoveWeightSpeed * Time.deltaTimeF);
             }
 
             if (_states.Where(s => s.Enabled).Sum(s => s.Weight) <= 0)
@@ -124,10 +127,21 @@ namespace Prowl.Runtime
 
         public void Blend(string clipName, double targetWeight, double fadeLength = 0.3f)
         {
+            if (_stateDictionary.TryGetValue(clipName, out var state))
+            {
+                state.TargetWeight = targetWeight;
+                state.MoveWeightSpeed = 1.0f / fadeLength;
+            }
         }
 
         public void CrossFade(string clipName, double fadeLength = 0.3f)
         {
+            // Set all target weights to 0, and assign movespeed according to fadeLength
+            foreach (var state in _states)
+            {
+                state.TargetWeight = state.Name.Equals(clipName, System.StringComparison.OrdinalIgnoreCase) ? 1.0 : 0.0;
+                state.MoveWeightSpeed = 1.0f / fadeLength;
+            }
         }
 
         public void Play(string stateName)
@@ -196,6 +210,8 @@ namespace Prowl.Runtime
         public double Speed = 1.0;
         public double Time = 0;
         public double Weight = 1.0;
+        public double MoveWeightSpeed = 1.0;
+        public double TargetWeight = 1.0;
 
         public WrapMode Wrap = WrapMode.Loop;
 
