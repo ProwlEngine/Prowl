@@ -348,10 +348,11 @@ public class GameObject : EngineObject, ISerializable
         if (component.HasStarted) component.Internal_OnDestroy(); // OnDestroy is only called if the component has previously been active
     }
 
-    public T GetComponent<T>() where T : MonoBehaviour => (T)GetComponent(typeof(T));
+    public T? GetComponent<T>() where T : MonoBehaviour => (T?)GetComponent(typeof(T));
 
-    public MonoBehaviour GetComponent(Type type)
+    public MonoBehaviour? GetComponent(Type type)
     {
+        if (type == null) return null; 
         if (_componentCache.TryGetValue(type, out var components))
             return components.First();
         else
@@ -363,7 +364,7 @@ public class GameObject : EngineObject, ISerializable
 
     public IEnumerable<MonoBehaviour> GetComponents() => _components;
 
-    public bool TryGetComponent<T>(out T component) where T : MonoBehaviour => (component = GetComponent<T>()) != null;
+    public bool TryGetComponent<T>(out T? component) where T : MonoBehaviour => (component = GetComponent<T>()) != null;
 
     public IEnumerable<T> GetComponents<T>() where T : MonoBehaviour
     {
@@ -391,10 +392,11 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
-    public T GetComponentInParent<T>(bool includeSelf = true) where T : MonoBehaviour => (T)GetComponentInParent(typeof(T), includeSelf);
+    public T? GetComponentInParent<T>(bool includeSelf = true) where T : MonoBehaviour => (T)GetComponentInParent(typeof(T), includeSelf);
 
-    public MonoBehaviour GetComponentInParent(Type componentType, bool includeSelf = true)
+    public MonoBehaviour? GetComponentInParent(Type componentType, bool includeSelf = true)
     {
+        if (componentType == null) return null;
         // First check the current Object
         MonoBehaviour component;
         if (includeSelf) {
@@ -427,10 +429,11 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
-    public T GetComponentInChildren<T>(bool includeSelf = true) where T : MonoBehaviour => (T)GetComponentInChildren(typeof(T), includeSelf);
+    public T? GetComponentInChildren<T>(bool includeSelf = true) where T : MonoBehaviour => (T)GetComponentInChildren(typeof(T), includeSelf);
 
     public MonoBehaviour GetComponentInChildren(Type componentType, bool includeSelf = true)
     {
+        if (componentType == null) return null;
         // First check the current Object
         MonoBehaviour component;
         if (includeSelf) {
