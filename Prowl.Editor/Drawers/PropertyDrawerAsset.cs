@@ -41,7 +41,7 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         }
 
         if (value.IsAvailable && ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
-            GlobalSelectHandler.Select(value.GetInstance());
+            GlobalSelectHandler.Select(value);
 
         // DragDrop code
         string payloadName = value.InstanceType.Name;
@@ -55,7 +55,8 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         // Add a button for clearing the Asset
         if (ImGui.IsKeyPressed(ImGuiKey.Delete) && ImGui.IsWindowFocused()) {
             if (Selected == this) {
-                value = null;
+                value.AssetID = Guid.Empty;
+                value.FileID = 0;
                 changed = true;
             }
         }

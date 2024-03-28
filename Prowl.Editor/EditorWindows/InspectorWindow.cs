@@ -26,6 +26,9 @@ public class InspectorWindow : EditorWindow
     {
         if (n is DirectoryInfo) return; // Dont care about directories
 
+        if(n is IAssetRef asset)
+            n = asset.GetInstance();
+
         if (n is WeakReference weak) n = weak.Target;
 
         _ForwardStack.Clear();
