@@ -5,6 +5,8 @@ using Jitter2.LinearMath;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 using System.Xml.Linq;
+using static Prowl.Editor.EditorConfiguration;
+using static Prowl.Runtime.AnimationClip;
 using static Prowl.Runtime.Mesh;
 using Material = Prowl.Runtime.Material;
 using Mesh = Prowl.Runtime.Mesh;
@@ -130,8 +132,9 @@ namespace Prowl.Editor.Assets
                     LoadMaterials(ctx, scene, parentDir, mats);
 
                 // Animations
+                List<AnimationClip> anims = [];
                 if (scene.HasAnimations)
-                    LoadAnimations(ctx, scene);
+                    anims = LoadAnimations(ctx, scene);
 
                 List<MeshMaterialBinding> meshMats = new List<MeshMaterialBinding>();
                 if (scene.HasMeshes)
@@ -168,6 +171,15 @@ namespace Prowl.Editor.Assets
                 GameObject rootNode = GOs[0].Item1;
                 if (UnitScale != 1f)
                     rootNode.transform.localScale = Vector3.one * UnitScale;
+
+                // Add Animation Component with all the animations assigned
+                if (anims.Count > 0)
+                {
+                    var anim = rootNode.AddComponent<Runtime.Animation>();
+                    foreach (var a in anims)
+                        anim.Clips.Add(a);
+                    anim.DefaultClip = new AssetRef<AnimationClip>(anims[0]);
+                }
 
                 ctx.SetMainObject(rootNode);
             }
@@ -413,20 +425,24 @@ namespace Prowl.Editor.Assets
             }
         }
 
-        private static void LoadAnimations(SerializedAsset ctx, Assimp.Scene? scene)
+        private static List<AnimationClip> LoadAnimations(SerializedAsset ctx, Assimp.Scene? scene)
         {
+            List<AnimationClip> anims = [];
             foreach (var anim in scene.Animations)
             {
                 // Create Animation
                 AnimationClip animation = new AnimationClip();
                 animation.Name = anim.Name;
-                animation.Duration = anim.DurationInTicks / anim.TicksPerSecond;
+                animation.Duration = anim.DurationInTicks / (anim.TicksPerSecond != 0 ? anim.TicksPerSecond : 25.0);
                 animation.TicksPerSecond = anim.TicksPerSecond;
                 animation.DurationInTicks = anim.DurationInTicks;
 
                 foreach (var channel in anim.NodeAnimationChannels)
                 {
                     Assimp.Node boneNode = scene.RootNode.FindNode(channel.NodeName);
+
+                    var animBone = new AnimBone();
+                    animBone.BoneName = boneNode.Name;
 
                     // construct full path from RootNode to this bone
                     // RootNode -> Parent -> Parent -> ... -> Parent -> Bone
@@ -447,13 +463,14 @@ namespace Prowl.Editor.Assets
                         var zCurve = new AnimationCurve();
                         foreach (var posKey in channel.PositionKeys)
                         {
-                            xCurve.Keys.Add(new(posKey.Time, posKey.Value.X));
-                            yCurve.Keys.Add(new(posKey.Time, posKey.Value.Y));
-                            zCurve.Keys.Add(new(posKey.Time, posKey.Value.Z));
+                            double time = (posKey.Time / anim.DurationInTicks) * animation.Duration;
+                            xCurve.Keys.Add(new(time, posKey.Value.X));
+                            yCurve.Keys.Add(new(time, posKey.Value.Y));
+                            zCurve.Keys.Add(new(time, posKey.Value.Z));
                         }
-                        animation.SetCurve(path, typeof(Transform), "localPosition.x", xCurve);
-                        animation.SetCurve(path, typeof(Transform), "localPosition.y", yCurve);
-                        animation.SetCurve(path, typeof(Transform), "localPosition.z", zCurve);
+                        animBone.PosX = xCurve;
+                        animBone.PosY = yCurve;
+                        animBone.PosZ = zCurve;
                     }
 
                     if (channel.HasRotationKeys)
@@ -464,15 +481,16 @@ namespace Prowl.Editor.Assets
                         var wCurve = new AnimationCurve();
                         foreach (var rotKey in channel.RotationKeys)
                         {
-                            xCurve.Keys.Add(new(rotKey.Time, rotKey.Value.X));
-                            yCurve.Keys.Add(new(rotKey.Time, rotKey.Value.Y));
-                            zCurve.Keys.Add(new(rotKey.Time, rotKey.Value.Z));
-                            wCurve.Keys.Add(new(rotKey.Time, rotKey.Value.W));
+                            double time = (rotKey.Time / anim.DurationInTicks) * animation.Duration;
+                            xCurve.Keys.Add(new(time, rotKey.Value.X));
+                            yCurve.Keys.Add(new(time, rotKey.Value.Y));
+                            zCurve.Keys.Add(new(time, rotKey.Value.Z));
+                            wCurve.Keys.Add(new(time, rotKey.Value.W));
                         }
-                        animation.SetCurve(path, typeof(Transform), "localRotation.x", xCurve);
-                        animation.SetCurve(path, typeof(Transform), "localRotation.y", yCurve);
-                        animation.SetCurve(path, typeof(Transform), "localRotation.z", zCurve);
-                        animation.SetCurve(path, typeof(Transform), "localRotation.w", wCurve);
+                        animBone.RotX = xCurve;
+                        animBone.RotY = yCurve;
+                        animBone.RotZ = zCurve;
+                        animBone.RotW = wCurve;
                     }
 
                     if (channel.HasScalingKeys)
@@ -482,18 +500,25 @@ namespace Prowl.Editor.Assets
                         var zCurve = new AnimationCurve();
                         foreach (var scaleKey in channel.ScalingKeys)
                         {
-                            xCurve.Keys.Add(new(scaleKey.Time, scaleKey.Value.X));
-                            yCurve.Keys.Add(new(scaleKey.Time, scaleKey.Value.Y));
-                            zCurve.Keys.Add(new(scaleKey.Time, scaleKey.Value.Z));
+                            double time = (scaleKey.Time / anim.DurationInTicks) * animation.Duration;
+                            xCurve.Keys.Add(new(time, scaleKey.Value.X));
+                            yCurve.Keys.Add(new(time, scaleKey.Value.Y));
+                            zCurve.Keys.Add(new(time, scaleKey.Value.Z));
                         }
-                        animation.SetCurve(path, typeof(Transform), "localScale.x", xCurve);
-                        animation.SetCurve(path, typeof(Transform), "localScale.y", yCurve);
-                        animation.SetCurve(path, typeof(Transform), "localScale.z", zCurve);
+                        animBone.ScaleX = xCurve;
+                        animBone.ScaleY = yCurve;
+                        animBone.ScaleZ = zCurve;
                     }
+
+                    animation.AddBone(animBone);
                 }
 
+                animation.EnsureQuaternionContinuity();
+                anims.Add(animation);
                 ctx.AddSubObject(animation);
             }
+
+            return anims;
         }
 
         private bool FindTextureFromPath(string filePath, DirectoryInfo parentDir, out FileInfo file)
