@@ -31,6 +31,8 @@ public class InspectorWindow : EditorWindow
 
         if (n is WeakReference weak) n = weak.Target;
 
+        if (n == null) return;
+
         _ForwardStack.Clear();
         if(Selected != null)
             _BackStack.Push(Selected);
