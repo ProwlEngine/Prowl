@@ -336,14 +336,6 @@ namespace Prowl.Runtime
         #endregion
     }
 
-    public enum WrapMode
-    {
-        Once,
-        Loop,
-        PingPong,
-        ClampForever,
-    }
-
     /// <summary>
     /// Defines the continuity of keys on a <see cref="AnimationCurve"/>.
     /// </summary>

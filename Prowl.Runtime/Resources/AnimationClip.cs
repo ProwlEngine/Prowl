@@ -10,7 +10,19 @@ namespace Prowl.Runtime
         public double TicksPerSecond;
         public double DurationInTicks;
 
+        public enum WrapMode
+        {
+            Once,
+            Loop,
+            PingPong,
+            ClampForever,
+        }
+
+        public WrapMode Wrap;
+
         public MultiValueDictionary<string, AnimCurve> Curves { get; private set; } = [];
+
+        public void ClearCurves() => Curves.Clear();
 
         public void SetCurve(string nodeName, Type component, string propertyName, AnimationCurve curve)
         {
@@ -26,6 +38,7 @@ namespace Prowl.Runtime
             Duration = value.Get("Duration").DoubleValue;
             TicksPerSecond = value.Get("TicksPerSecond").DoubleValue;
             DurationInTicks = value.Get("DurationInTicks").DoubleValue;
+            Wrap = (WrapMode)value.Get("Wrap").IntValue;
 
             var curveList = value.Get("Curves");
             foreach (var curve in curveList.List)
@@ -49,6 +62,7 @@ namespace Prowl.Runtime
             value.Add("Duration", new SerializedProperty(Duration));
             value.Add("TicksPerSecond", new SerializedProperty(TicksPerSecond));
             value.Add("DurationInTicks", new SerializedProperty(DurationInTicks));
+            value.Add("Wrap", new SerializedProperty((int)Wrap));
 
             var curveList = SerializedProperty.NewList();
             foreach (var curve in Curves)
