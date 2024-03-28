@@ -26,6 +26,7 @@ namespace Prowl.Editor.Assets
         public bool CalculateTangentSpace = true;
         public bool MakeLeftHanded = true;
         public bool FlipUVs = false;
+        public bool CullEmpty = false;
         public bool OptimizeMeshes = false;
         public bool FlipWindingOrder = false;
         public bool WeldVertices = false;
@@ -179,6 +180,23 @@ namespace Prowl.Editor.Assets
                     foreach (var a in anims)
                         anim.Clips.Add(a);
                     anim.DefaultClip = new AssetRef<AnimationClip>(anims[0]);
+                }
+
+                if (CullEmpty)
+                {
+                    // Remove Empty GameObjects
+                    List<(GameObject, Node)> GOsToRemove = [];
+                    foreach (var go in GOs)
+                    {
+                        if (go.Item1.GetComponentsInChildren<MonoBehaviour>().Count() == 0)
+                            GOsToRemove.Add(go);
+                    }
+                    foreach (var go in GOsToRemove)
+                    {
+                        if(!go.Item1.IsDestroyed)
+                            go.Item1.DestroyImmediate();
+                        GOs.Remove(go);
+                    }
                 }
 
                 ctx.SetMainObject(rootNode);
