@@ -1,8 +1,10 @@
 ﻿using Assimp;
+using Assimp.Unmanaged;
 using Hexa.NET.ImGui;
 using Jitter2.LinearMath;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
+using System.Xml.Linq;
 using static Prowl.Runtime.Mesh;
 using Material = Prowl.Runtime.Material;
 using Mesh = Prowl.Runtime.Mesh;
@@ -42,7 +44,8 @@ namespace Prowl.Editor.Assets
             if (!Supported.Contains(assetPath.Extension))
                 Failed("Format Not Supported: " + assetPath.Extension);
 
-            using (var importer = new AssimpContext()) {
+            using (var importer = new AssimpContext())
+            {
                 importer.SetConfig(new Assimp.Configs.VertexBoneWeightLimitConfig(4));
                 var steps = PostProcessSteps.LimitBoneWeights | PostProcessSteps.GenerateUVCoords;
                 steps |= PostProcessSteps.Triangulate;
@@ -124,212 +127,30 @@ namespace Prowl.Editor.Assets
 
                 List<Material> mats = new();
                 if (scene.HasMaterials)
-                    foreach (var m in scene.Materials) {
-                        Material mat = new Material(Shader.Find("Defaults\\Standard.shader"));
-                        string? name = m.HasName ? m.Name : null;
+                    LoadMaterials(ctx, scene, parentDir, mats);
 
-                        // Albedo
-                        if (m.HasColorDiffuse)
-                            mat.SetColor("_MainColor", new Color(m.ColorDiffuse.R, m.ColorDiffuse.G, m.ColorDiffuse.B, m.ColorDiffuse.A));
-                        else
-                            mat.SetColor("_MainColor", Color.white);
-
-                        // Emissive Color
-                        if (m.HasColorEmissive) {
-                            mat.SetFloat("_EmissionIntensity", 1f);
-                            mat.SetColor("_EmissiveColor", new Color(m.ColorEmissive.R, m.ColorEmissive.G, m.ColorEmissive.B, m.ColorEmissive.A));
-                        } else {
-
-                            mat.SetFloat("_EmissionIntensity", 0f);
-                            mat.SetColor("_EmissiveColor", Color.black);
-                        }
-
-                        // Texture
-                        if (m.HasTextureDiffuse) {
-                            name ??= Path.GetFileNameWithoutExtension(m.TextureDiffuse.FilePath);
-                            if (FindTextureFromPath(m.TextureDiffuse.FilePath, parentDir, out var file))
-                                LoadTextureIntoMesh("_MainTex", ctx, file, mat);
-                            else
-                                mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")));
-                        } else
-                            mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")));
-
-                        // Normal Texture
-                        if (m.HasTextureNormal)
-                        {
-                            name ??= Path.GetFileNameWithoutExtension(m.TextureNormal.FilePath);
-                            if (FindTextureFromPath(m.TextureNormal.FilePath, parentDir, out var file))
-                                LoadTextureIntoMesh("_NormalTex", ctx, file, mat);
-                            else
-                                mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")));
-                        } else
-                            mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")));
-
-                        //AO, Roughness, Metallic Texture
-                        if (m.GetMaterialTexture(TextureType.Unknown, 0, out var surface)) {
-                            name ??= Path.GetFileNameWithoutExtension(surface.FilePath);
-                            if (FindTextureFromPath(surface.FilePath, parentDir, out var file))
-                                LoadTextureIntoMesh("_SurfaceTex", ctx, file, mat);
-                            else
-                                mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")));
-                        } else
-                            mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")));
-
-                        // Emissive Texture
-                        if (m.HasTextureEmissive) {
-                            name ??= Path.GetFileNameWithoutExtension(m.TextureEmissive.FilePath);
-                            if (FindTextureFromPath(m.TextureEmissive.FilePath, parentDir, out var file)) {
-                                mat.SetFloat("_EmissionIntensity", 1f);
-                                LoadTextureIntoMesh("_EmissionTex", ctx, file, mat);
-                            } else
-                                mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")));
-                        } else
-                            mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")));
-
-                        name ??= "StandardMat";
-                        mat.Name = name;
-                        ctx.AddSubObject(mat);
-                        mats.Add(mat);
-                    }
 
                 List<MeshMaterialBinding> meshMats = new List<MeshMaterialBinding>();
                 if (scene.HasMeshes)
-                    foreach (var m in scene.Meshes) {
-                        if (m.PrimitiveType != PrimitiveType.Triangle) {
-                            Debug.Log($"{assetPath.Name} 's mesh '{m.Name}' is not of Triangle Primitive, Skipping...");
-                            continue;
-                        }
-
-                        if (!m.HasNormals) {
-                            Debug.Log($"{assetPath.Name} Does not have any normals in mesh '{m.Name}', Skipping...");
-                            continue;
-                        }
-
-                        if (!m.HasTangentBasis) {
-                            Debug.Log($"{assetPath.Name} Does not have any tangents in mesh '{m.Name}', Skipping...");
-                            continue;
-                        }
-
-                        List<Mesh.VertexFormat.Element> elements = [
-                            new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.Position, Mesh.VertexFormat.VertexType.Float, 3),
-                            new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.TexCoord, Mesh.VertexFormat.VertexType.Float, 2),
-                            new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.Normal, Mesh.VertexFormat.VertexType.Float, 3, 0, true),
-                            new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.Color, Mesh.VertexFormat.VertexType.Float, 3),
-                            new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.Tangent, Mesh.VertexFormat.VertexType.Float, 3),
-                            new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.BoneIndex, Mesh.VertexFormat.VertexType.UnsignedByte, 4),
-                            new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.BoneWeight, Mesh.VertexFormat.VertexType.Float, 4)
-                        ];
-                        Mesh.VertexFormat format = new(elements.ToArray());
-
-                        Mesh mesh = new();
-                        mesh.format = format;
-
-                        var verts = m.Vertices;
-                        var norms = m.Normals;
-                        var tangs = m.Tangents;
-                        var texs = m.TextureCoordinateChannels[0];
-                        Vertex[] vertices = new Vertex[m.VertexCount];
-
-                        for (var i = 0; i < vertices.Length; i++) {
-                            Vertex vert = new Vertex();
-                            var v = verts[i]; var n = norms[i]; var t = tangs[i]; var tc = texs[i];
-                            vert.Position = new Vector3(v.X, v.Y, v.Z) * scale;
-                            vert.TexCoord = new Vector2(tc.X, tc.Y);
-                            vert.Normal = new Vector3(n.X, n.Y, n.Z);
-                            if (m.HasVertexColors(0)) {
-                                var c = m.VertexColorChannels[0][i];
-                                vert.Color = new Vector3(c.R, c.G, c.B);
-                            } else {
-                                vert.Color = Vector3.one;
-                            }
-                            vert.Tangent = new Vector3(t.X, t.Y, t.Z);
-
-                            vertices[i] = vert;
-                        }
-
-                        if (m.HasBones) {
-                            mesh.boneNames = new string[m.Bones.Count];
-                            mesh.bindPoses = new Prowl.Runtime.Matrix4x4[m.Bones.Count];
-                            for (var i = 0; i < m.Bones.Count; i++) {
-                                var bone = m.Bones[i];
-                                mesh.boneNames[i] = bone.Name;
-
-                                var offsetMatrix = bone.OffsetMatrix;
-                                Prowl.Runtime.Matrix4x4 bindPose = new Prowl.Runtime.Matrix4x4(
-                                    offsetMatrix.A1, offsetMatrix.B1, offsetMatrix.C1, offsetMatrix.D1,
-                                    offsetMatrix.A2, offsetMatrix.B2, offsetMatrix.C2, offsetMatrix.D2,
-                                    offsetMatrix.A3, offsetMatrix.B3, offsetMatrix.C3, offsetMatrix.D3,
-                                    offsetMatrix.A4, offsetMatrix.B4, offsetMatrix.C4, offsetMatrix.D4
-                                );
-
-                                // Adjust translation by scale
-                                bindPose.Translation *= scale;
-
-                                mesh.bindPoses[i] = bindPose;
-
-                                if (!bone.HasVertexWeights) continue;
-                                byte boneIndex = (byte)(i + 1);
-
-                                // foreach weight
-                                for (int j = 0; j < bone.VertexWeightCount; j++)
-                                {
-                                    var weight = bone.VertexWeights[j];
-                                    int vertexID = weight.VertexID;
-                                    var v = vertices[vertexID];
-                                    if (v.BoneIndex0 == 0)
-                                    {
-                                        v.BoneIndex0 = boneIndex;
-                                        v.Weight0 = weight.Weight;
-                                    } else if (v.BoneIndex1 == 0)
-                                    {
-                                        v.BoneIndex1 = boneIndex;
-                                        v.Weight1 = weight.Weight;
-                                    } else if (v.BoneIndex2 == 0)
-                                    {
-                                        v.BoneIndex2 = boneIndex;
-                                        v.Weight2 = weight.Weight;
-                                    } else if (v.BoneIndex3 == 0)
-                                    {
-                                        v.BoneIndex3 = boneIndex;
-                                        v.Weight3 = weight.Weight;
-                                    } else
-                                    {
-                                        Debug.LogWarning($"Vertex {vertexID} has more than 4 bone weights, Skipping...");
-                                    }
-                                    vertices[vertexID] = v;
-                                }
-                            }
-
-                            for (int i = 0; i < vertices.Length; i++) {
-                                var v = vertices[i];
-                                var totalWeight = v.Weight0 + v.Weight1 + v.Weight2 + v.Weight3;
-                                if (totalWeight == 0) continue;
-                                v.Weight0 /= totalWeight;
-                                v.Weight1 /= totalWeight;
-                                v.Weight2 /= totalWeight;
-                                v.Weight3 /= totalWeight;
-                                vertices[i] = v;
-                            }
-                        }
-
-                        mesh.vertices = vertices;
-                        mesh.triangles = m.GetShortIndices().Cast<ushort>().ToArray();
-
-                        ctx.AddSubObject(mesh);
-                        meshMats.Add(new MeshMaterialBinding(m.Name, m, mesh, mats[m.MaterialIndex]));
-                    }
+                    LoadMeshes(ctx, assetPath, scene, scale, mats, meshMats);
 
                 // Create Meshes
-                foreach (var goNode in GOs) {
+                foreach (var goNode in GOs)
+                {
                     var node = goNode.Item2;
                     var go = goNode.Item1;
                     // Set Mesh
-                    if (node.HasMeshes) {
-                        if (node.MeshIndices.Count == 1) {
+                    if (node.HasMeshes)
+                    {
+                        if (node.MeshIndices.Count == 1)
+                        {
                             var uMeshAndMat = meshMats[node.MeshIndices[0]];
                             AddMeshComponent(GOs, go, uMeshAndMat);
-                        } else {
-                            foreach (var mIdx in node.MeshIndices) {
+                        }
+                        else
+                        {
+                            foreach (var mIdx in node.MeshIndices)
+                            {
                                 var uMeshAndMat = meshMats[mIdx];
                                 GameObject uSubOb = GameObject.CreateSilently();
                                 //uSubOb.AddComponent<Transform>();
@@ -342,7 +163,7 @@ namespace Prowl.Editor.Assets
                 }
 
                 GameObject rootNode = GOs[0].Item1;
-                if(UnitScale != 1f)
+                if (UnitScale != 1f)
                     rootNode.transform.localScale = Vector3.one * UnitScale;
 
                 ctx.SetMainObject(rootNode);
@@ -354,7 +175,7 @@ namespace Prowl.Editor.Assets
                     var mr = go.AddComponent<SkinnedMeshRenderer>();
                     mr.Mesh = uMeshAndMat.Mesh;
                     mr.Material = uMeshAndMat.Material;
-                    mr.Root = GOs[0].Item1.transform.Find(uMeshAndMat.Mesh.boneNames[0])!.gameObject;
+                    mr.Root = GOs[0].Item1.transform.DeepFind(uMeshAndMat.Mesh.boneNames[0])!.gameObject;
                 } else {
                     var mr = go.AddComponent<MeshRenderer>();
                     mr.Mesh = uMeshAndMat.Mesh;
@@ -363,6 +184,231 @@ namespace Prowl.Editor.Assets
             }
         }
 
+        private void LoadMaterials(SerializedAsset ctx, Assimp.Scene? scene, DirectoryInfo? parentDir, List<Material> mats)
+        {
+            foreach (var m in scene.Materials)
+            {
+                Material mat = new Material(Shader.Find("Defaults\\Standard.shader"));
+                string? name = m.HasName ? m.Name : null;
+
+                // Albedo
+                if (m.HasColorDiffuse)
+                    mat.SetColor("_MainColor", new Color(m.ColorDiffuse.R, m.ColorDiffuse.G, m.ColorDiffuse.B, m.ColorDiffuse.A));
+                else
+                    mat.SetColor("_MainColor", Color.white);
+
+                // Emissive Color
+                if (m.HasColorEmissive)
+                {
+                    mat.SetFloat("_EmissionIntensity", 1f);
+                    mat.SetColor("_EmissiveColor", new Color(m.ColorEmissive.R, m.ColorEmissive.G, m.ColorEmissive.B, m.ColorEmissive.A));
+                }
+                else
+                {
+
+                    mat.SetFloat("_EmissionIntensity", 0f);
+                    mat.SetColor("_EmissiveColor", Color.black);
+                }
+
+                // Texture
+                if (m.HasTextureDiffuse)
+                {
+                    name ??= Path.GetFileNameWithoutExtension(m.TextureDiffuse.FilePath);
+                    if (FindTextureFromPath(m.TextureDiffuse.FilePath, parentDir, out var file))
+                        LoadTextureIntoMesh("_MainTex", ctx, file, mat);
+                    else
+                        mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")));
+                }
+                else
+                    mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")));
+
+                // Normal Texture
+                if (m.HasTextureNormal)
+                {
+                    name ??= Path.GetFileNameWithoutExtension(m.TextureNormal.FilePath);
+                    if (FindTextureFromPath(m.TextureNormal.FilePath, parentDir, out var file))
+                        LoadTextureIntoMesh("_NormalTex", ctx, file, mat);
+                    else
+                        mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")));
+                }
+                else
+                    mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")));
+
+                //AO, Roughness, Metallic Texture
+                if (m.GetMaterialTexture(TextureType.Unknown, 0, out var surface))
+                {
+                    name ??= Path.GetFileNameWithoutExtension(surface.FilePath);
+                    if (FindTextureFromPath(surface.FilePath, parentDir, out var file))
+                        LoadTextureIntoMesh("_SurfaceTex", ctx, file, mat);
+                    else
+                        mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")));
+                }
+                else
+                    mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")));
+
+                // Emissive Texture
+                if (m.HasTextureEmissive)
+                {
+                    name ??= Path.GetFileNameWithoutExtension(m.TextureEmissive.FilePath);
+                    if (FindTextureFromPath(m.TextureEmissive.FilePath, parentDir, out var file))
+                    {
+                        mat.SetFloat("_EmissionIntensity", 1f);
+                        LoadTextureIntoMesh("_EmissionTex", ctx, file, mat);
+                    }
+                    else
+                        mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")));
+                }
+                else
+                    mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")));
+
+                name ??= "StandardMat";
+                mat.Name = name;
+                ctx.AddSubObject(mat);
+                mats.Add(mat);
+            }
+        }
+
+        private static void LoadMeshes(SerializedAsset ctx, FileInfo assetPath, Assimp.Scene? scene, double scale, List<Material> mats, List<MeshMaterialBinding> meshMats)
+        {
+            foreach (var m in scene.Meshes)
+            {
+                if (m.PrimitiveType != PrimitiveType.Triangle)
+                {
+                    Debug.Log($"{assetPath.Name} 's mesh '{m.Name}' is not of Triangle Primitive, Skipping...");
+                    continue;
+                }
+                if (!m.HasNormals)
+                {
+                    Debug.Log($"{assetPath.Name} Does not have any normals in mesh '{m.Name}', Skipping...");
+                    continue;
+                }
+
+                if (!m.HasTangentBasis)
+                {
+                    Debug.Log($"{assetPath.Name} Does not have any tangents in mesh '{m.Name}', Skipping...");
+                    continue;
+                }
+
+                List<Mesh.VertexFormat.Element> elements = [
+                    new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.Position, Mesh.VertexFormat.VertexType.Float, 3),
+                    new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.TexCoord, Mesh.VertexFormat.VertexType.Float, 2),
+                    new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.Normal, Mesh.VertexFormat.VertexType.Float, 3, 0, true),
+                    new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.Color, Mesh.VertexFormat.VertexType.Float, 3),
+                    new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.Tangent, Mesh.VertexFormat.VertexType.Float, 3),
+                    new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.BoneIndex, Mesh.VertexFormat.VertexType.UnsignedByte, 4),
+                    new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.BoneWeight, Mesh.VertexFormat.VertexType.Float, 4)
+                ];
+                Mesh.VertexFormat format = new(elements.ToArray());
+
+                Mesh mesh = new();
+                mesh.format = format;
+
+                var verts = m.Vertices;
+                var norms = m.Normals;
+                var tangs = m.Tangents;
+                var texs = m.TextureCoordinateChannels[0];
+                Vertex[] vertices = new Vertex[m.VertexCount];
+
+                for (var i = 0; i < vertices.Length; i++)
+                {
+                    Vertex vert = new Vertex();
+                    var v = verts[i]; var n = norms[i]; var t = tangs[i]; var tc = texs[i];
+                    vert.Position = new Vector3(v.X, v.Y, v.Z) * scale;
+                    vert.TexCoord = new Vector2(tc.X, tc.Y);
+                    vert.Normal = new Vector3(n.X, n.Y, n.Z);
+                    if (m.HasVertexColors(0))
+                    {
+                        var c = m.VertexColorChannels[0][i];
+                        vert.Color = new Vector3(c.R, c.G, c.B);
+                    }
+                    else
+                    {
+                        vert.Color = Vector3.one;
+                    }
+                    vert.Tangent = new Vector3(t.X, t.Y, t.Z);
+
+                    vertices[i] = vert;
+                }
+
+                if (m.HasBones)
+                {
+                    mesh.boneNames = new string[m.Bones.Count];
+                    mesh.bindPoses = new Prowl.Runtime.Matrix4x4[m.Bones.Count];
+                    for (var i = 0; i < m.Bones.Count; i++)
+                    {
+                        var bone = m.Bones[i];
+                        mesh.boneNames[i] = bone.Name;
+
+                        var offsetMatrix = bone.OffsetMatrix;
+                        Prowl.Runtime.Matrix4x4 bindPose = new Prowl.Runtime.Matrix4x4(
+                            offsetMatrix.A1, offsetMatrix.B1, offsetMatrix.C1, offsetMatrix.D1,
+                            offsetMatrix.A2, offsetMatrix.B2, offsetMatrix.C2, offsetMatrix.D2,
+                            offsetMatrix.A3, offsetMatrix.B3, offsetMatrix.C3, offsetMatrix.D3,
+                            offsetMatrix.A4, offsetMatrix.B4, offsetMatrix.C4, offsetMatrix.D4
+                        );
+
+                        // Adjust translation by scale
+                        bindPose.Translation *= scale;
+
+                        mesh.bindPoses[i] = bindPose;
+
+                        if (!bone.HasVertexWeights) continue;
+                        byte boneIndex = (byte)(i + 1);
+
+                        // foreach weight
+                        for (int j = 0; j < bone.VertexWeightCount; j++)
+                        {
+                            var weight = bone.VertexWeights[j];
+                            int vertexID = weight.VertexID;
+                            var v = vertices[vertexID];
+                            if (v.BoneIndex0 == 0)
+                            {
+                                v.BoneIndex0 = boneIndex;
+                                v.Weight0 = weight.Weight;
+                            }
+                            else if (v.BoneIndex1 == 0)
+                            {
+                                v.BoneIndex1 = boneIndex;
+                                v.Weight1 = weight.Weight;
+                            }
+                            else if (v.BoneIndex2 == 0)
+                            {
+                                v.BoneIndex2 = boneIndex;
+                                v.Weight2 = weight.Weight;
+                            }
+                            else if (v.BoneIndex3 == 0)
+                            {
+                                v.BoneIndex3 = boneIndex;
+                                v.Weight3 = weight.Weight;
+                            }
+                            else
+                            {
+                                Debug.LogWarning($"Vertex {vertexID} has more than 4 bone weights, Skipping...");
+                            }
+                            vertices[vertexID] = v;
+                        }
+                    }
+
+                    for (int i = 0; i < vertices.Length; i++)
+                    {
+                        var v = vertices[i];
+                        var totalWeight = v.Weight0 + v.Weight1 + v.Weight2 + v.Weight3;
+                        if (totalWeight == 0) continue;
+                        v.Weight0 /= totalWeight;
+                        v.Weight1 /= totalWeight;
+                        v.Weight2 /= totalWeight;
+                        v.Weight3 /= totalWeight;
+                        vertices[i] = v;
+                    }
+                }
+
+                mesh.vertices = vertices;
+                mesh.triangles = m.GetShortIndices().Cast<ushort>().ToArray();
+
+                ctx.AddSubObject(mesh);
+                meshMats.Add(new MeshMaterialBinding(m.Name, m, mesh, mats[m.MaterialIndex]));
+            }
+        }
         private bool FindTextureFromPath(string filePath, DirectoryInfo parentDir, out FileInfo file)
         {
             // If the filePath is stored in the model relative to the file this will exist

@@ -24,7 +24,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         bindPoses = new System.Numerics.Matrix4x4[Mesh.Res.bindPoses.Length];
         for (int i = 0; i < Mesh.Res.boneNames.Length; i++)
         {
-            var t = Root.transform.Find(Mesh.Res.boneNames[i]);
+            var t = Root.transform.DeepFind(Mesh.Res.boneNames[i]);
             if (t == null)
             {
                 boneTransforms[i] = System.Numerics.Matrix4x4.Identity;
