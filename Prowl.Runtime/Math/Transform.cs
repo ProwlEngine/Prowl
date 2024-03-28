@@ -159,16 +159,14 @@ namespace Prowl.Runtime
 
         public Transform? Find(string path)
         {
-            if (string.IsNullOrEmpty(path))
-                return null;
+            ArgumentNullException.ThrowIfNullOrEmpty(path, nameof(path));
 
             var names = path.Split('/');
             var currentTransform = this;
 
             foreach (var name in names)
             {
-                if (string.IsNullOrEmpty(name))
-                    continue;
+                ArgumentNullException.ThrowIfNullOrEmpty(path, nameof(path));
 
                 var childTransform = FindImmediateChild(currentTransform, name);
                 if (childTransform == null)
@@ -185,6 +183,23 @@ namespace Prowl.Runtime
             foreach (var child in parent.gameObject.children)
                 if (child.Name == name)
                     return child.transform;
+            return null;
+        }
+
+        public Transform? DeepFind(string name)
+        {
+            ArgumentNullException.ThrowIfNullOrEmpty(name, nameof(name));
+
+            foreach (var child in gameObject.children)
+            {
+                if (child.Name == name)
+                    return child.transform;
+
+                var found = child.transform.DeepFind(name);
+                if (found != null)
+                    return found;
+            }
+
             return null;
         }
 
