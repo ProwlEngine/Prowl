@@ -129,6 +129,9 @@ namespace Prowl.Editor.Assets
                 if (scene.HasMaterials)
                     LoadMaterials(ctx, scene, parentDir, mats);
 
+                // Animations
+                if (scene.HasAnimations)
+                    LoadAnimations(ctx, scene);
 
                 List<MeshMaterialBinding> meshMats = new List<MeshMaterialBinding>();
                 if (scene.HasMeshes)
@@ -409,6 +412,90 @@ namespace Prowl.Editor.Assets
                 meshMats.Add(new MeshMaterialBinding(m.Name, m, mesh, mats[m.MaterialIndex]));
             }
         }
+
+        private static void LoadAnimations(SerializedAsset ctx, Assimp.Scene? scene)
+        {
+            foreach (var anim in scene.Animations)
+            {
+                // Create Animation
+                AnimationClip animation = new AnimationClip();
+                animation.Name = anim.Name;
+                animation.Duration = anim.DurationInTicks / anim.TicksPerSecond;
+                animation.TicksPerSecond = anim.TicksPerSecond;
+                animation.DurationInTicks = anim.DurationInTicks;
+
+                foreach (var channel in anim.NodeAnimationChannels)
+                {
+                    Assimp.Node boneNode = scene.RootNode.FindNode(channel.NodeName);
+
+                    // construct full path from RootNode to this bone
+                    // RootNode -> Parent -> Parent -> ... -> Parent -> Bone
+                    Assimp.Node target = boneNode;
+                    string path = target.Name;
+                    while (target.Parent != null)
+                    {
+                        target = target.Parent;
+                        path = target.Name + "/" + path;
+                        if (target.Name == scene.RootNode.Name) // TODO: Can we just do reference comparison here instead of string comparison?
+                            break;
+                    }
+
+                    if (channel.HasPositionKeys)
+                    {
+                        var xCurve = new AnimationCurve();
+                        var yCurve = new AnimationCurve();
+                        var zCurve = new AnimationCurve();
+                        foreach (var posKey in channel.PositionKeys)
+                        {
+                            xCurve.Keys.Add(new(posKey.Time, posKey.Value.X));
+                            yCurve.Keys.Add(new(posKey.Time, posKey.Value.Y));
+                            zCurve.Keys.Add(new(posKey.Time, posKey.Value.Z));
+                        }
+                        animation.SetCurve(path, typeof(Transform), "localPosition.x", xCurve);
+                        animation.SetCurve(path, typeof(Transform), "localPosition.y", yCurve);
+                        animation.SetCurve(path, typeof(Transform), "localPosition.z", zCurve);
+                    }
+
+                    if (channel.HasRotationKeys)
+                    {
+                        var xCurve = new AnimationCurve();
+                        var yCurve = new AnimationCurve();
+                        var zCurve = new AnimationCurve();
+                        var wCurve = new AnimationCurve();
+                        foreach (var rotKey in channel.RotationKeys)
+                        {
+                            xCurve.Keys.Add(new(rotKey.Time, rotKey.Value.X));
+                            yCurve.Keys.Add(new(rotKey.Time, rotKey.Value.Y));
+                            zCurve.Keys.Add(new(rotKey.Time, rotKey.Value.Z));
+                            wCurve.Keys.Add(new(rotKey.Time, rotKey.Value.W));
+                        }
+                        animation.SetCurve(path, typeof(Transform), "localRotation.x", xCurve);
+                        animation.SetCurve(path, typeof(Transform), "localRotation.y", yCurve);
+                        animation.SetCurve(path, typeof(Transform), "localRotation.z", zCurve);
+                        animation.SetCurve(path, typeof(Transform), "localRotation.w", wCurve);
+                    }
+
+                    if (channel.HasScalingKeys)
+                    {
+                        var xCurve = new AnimationCurve();
+                        var yCurve = new AnimationCurve();
+                        var zCurve = new AnimationCurve();
+                        foreach (var scaleKey in channel.ScalingKeys)
+                        {
+                            xCurve.Keys.Add(new(scaleKey.Time, scaleKey.Value.X));
+                            yCurve.Keys.Add(new(scaleKey.Time, scaleKey.Value.Y));
+                            zCurve.Keys.Add(new(scaleKey.Time, scaleKey.Value.Z));
+                        }
+                        animation.SetCurve(path, typeof(Transform), "localScale.x", xCurve);
+                        animation.SetCurve(path, typeof(Transform), "localScale.y", yCurve);
+                        animation.SetCurve(path, typeof(Transform), "localScale.z", zCurve);
+                    }
+                }
+
+                ctx.AddSubObject(animation);
+            }
+        }
+
         private bool FindTextureFromPath(string filePath, DirectoryInfo parentDir, out FileInfo file)
         {
             // If the filePath is stored in the model relative to the file this will exist
