@@ -29,5 +29,23 @@ namespace Prowl.Runtime
                 return null;
             }
         }
+
+        public static object? GetValue(this MemberInfo member, object? target)
+        {
+            if (member is PropertyInfo prop)
+                return prop.GetValue(target);
+            else if (member is FieldInfo field)
+                return field.GetValue(target);
+            else
+                return null;
+        }
+
+        public static void SetValue(this MemberInfo member, object? target, object? value)
+        {
+            if (member is PropertyInfo prop)
+                prop.SetValue(target, value);
+            else if (member is FieldInfo field)
+                field.SetValue(target, value);
+        }
     }
 }
