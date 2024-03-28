@@ -228,7 +228,7 @@ namespace Prowl.Editor.Assets
                 // Texture
                 if (m.HasTextureDiffuse)
                 {
-                    name ??= Path.GetFileNameWithoutExtension(m.TextureDiffuse.FilePath);
+                    name ??= "Mat_" + Path.GetFileNameWithoutExtension(m.TextureDiffuse.FilePath);
                     if (FindTextureFromPath(m.TextureDiffuse.FilePath, parentDir, out var file))
                         LoadTextureIntoMesh("_MainTex", ctx, file, mat);
                     else
@@ -240,7 +240,7 @@ namespace Prowl.Editor.Assets
                 // Normal Texture
                 if (m.HasTextureNormal)
                 {
-                    name ??= Path.GetFileNameWithoutExtension(m.TextureNormal.FilePath);
+                    name ??= "Mat_" + Path.GetFileNameWithoutExtension(m.TextureNormal.FilePath);
                     if (FindTextureFromPath(m.TextureNormal.FilePath, parentDir, out var file))
                         LoadTextureIntoMesh("_NormalTex", ctx, file, mat);
                     else
@@ -252,7 +252,7 @@ namespace Prowl.Editor.Assets
                 //AO, Roughness, Metallic Texture
                 if (m.GetMaterialTexture(TextureType.Unknown, 0, out var surface))
                 {
-                    name ??= Path.GetFileNameWithoutExtension(surface.FilePath);
+                    name ??= "Mat_" + Path.GetFileNameWithoutExtension(surface.FilePath);
                     if (FindTextureFromPath(surface.FilePath, parentDir, out var file))
                         LoadTextureIntoMesh("_SurfaceTex", ctx, file, mat);
                     else
@@ -264,7 +264,7 @@ namespace Prowl.Editor.Assets
                 // Emissive Texture
                 if (m.HasTextureEmissive)
                 {
-                    name ??= Path.GetFileNameWithoutExtension(m.TextureEmissive.FilePath);
+                    name ??= "Mat_" + Path.GetFileNameWithoutExtension(m.TextureEmissive.FilePath);
                     if (FindTextureFromPath(m.TextureEmissive.FilePath, parentDir, out var file))
                     {
                         mat.SetFloat("_EmissionIntensity", 1f);
