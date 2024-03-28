@@ -43,7 +43,7 @@ namespace Prowl.Runtime
             foreach (AnimBone bone in Bones)
             {
                 // Store the previous quaternion value
-                Quaternion prevQuaternion = new Quaternion(
+                Quaternion prev = new Quaternion(
                     bone.RotX.Keys[0].Value,
                     bone.RotY.Keys[0].Value,
                     bone.RotZ.Keys[0].Value,
@@ -54,7 +54,7 @@ namespace Prowl.Runtime
                 for (int i = 1; i < bone.RotX.Keys.Count; i++)
                 {
                     // Get the current quaternion value
-                    Quaternion currentQuaternion = new Quaternion(
+                    Quaternion cur = new Quaternion(
                         bone.RotX.Keys[i].Value,
                         bone.RotY.Keys[i].Value,
                         bone.RotZ.Keys[i].Value,
@@ -62,34 +62,21 @@ namespace Prowl.Runtime
                     );
 
                     // Ensure quaternion continuity between the previous and current quaternions
-                    Quaternion flipped = new Quaternion(-currentQuaternion.x, -currentQuaternion.y, -currentQuaternion.z, -currentQuaternion.w);
+                    Quaternion midQ = (prev + cur) * 0.5f;
+                    Quaternion midQFlipped = (prev + (-cur)) * 0.5f;
 
-                    Quaternion midQ = new Quaternion(
-                        Mathf.Lerp(prevQuaternion.x, currentQuaternion.x, 0.5f),
-                        Mathf.Lerp(prevQuaternion.y, currentQuaternion.y, 0.5f),
-                        Mathf.Lerp(prevQuaternion.z, currentQuaternion.z, 0.5f),
-                        Mathf.Lerp(prevQuaternion.w, currentQuaternion.w, 0.5f)
-                        );
-
-                    Quaternion midQFlipped = new Quaternion(
-                        Mathf.Lerp(prevQuaternion.x, flipped.x, 0.5f),
-                        Mathf.Lerp(prevQuaternion.y, flipped.y, 0.5f),
-                        Mathf.Lerp(prevQuaternion.z, flipped.z, 0.5f),
-                        Mathf.Lerp(prevQuaternion.w, flipped.w, 0.5f)
-                        );
-
-                    double angle = Quaternion.Angle(prevQuaternion, midQ);
-                    double angleFlipped = Quaternion.Angle(prevQuaternion, midQFlipped);
-                    Quaternion continuousQuaternion = angleFlipped < angle ? flipped : currentQuaternion;
+                    double angle = Quaternion.Angle(prev, midQ);
+                    double angleFlipped = Quaternion.Angle(prev, midQFlipped);
+                    Quaternion continuous = angleFlipped < angle ? (-cur) : cur;
 
                     // Update the keyframe values with the continuous quaternion
-                    bone.RotX.Keys[i].Value = continuousQuaternion.x;
-                    bone.RotY.Keys[i].Value = continuousQuaternion.y;
-                    bone.RotZ.Keys[i].Value = continuousQuaternion.z;
-                    bone.RotW.Keys[i].Value = continuousQuaternion.w;
+                    bone.RotX.Keys[i].Value = continuous.x;
+                    bone.RotY.Keys[i].Value = continuous.y;
+                    bone.RotZ.Keys[i].Value = continuous.z;
+                    bone.RotW.Keys[i].Value = continuous.w;
 
                     // Store the current quaternion as the previous quaternion for the next iteration
-                    prevQuaternion = continuousQuaternion;
+                    prev = continuous;
                 }
             }
         }
