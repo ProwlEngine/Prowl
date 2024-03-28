@@ -40,7 +40,7 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
             }
         }
 
-        if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+        if (value.IsAvailable && ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
             GlobalSelectHandler.Select(value.GetInstance());
 
         // DragDrop code
