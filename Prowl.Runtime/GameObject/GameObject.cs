@@ -622,17 +622,6 @@ public class GameObject : EngineObject, ISerializable
         if (value.TryGet("FileID", out var fileID))
             FileID = fileID.ShortValue;
 
-        var comps = value["Components"];
-        _components = new();
-        foreach (var compTag in comps.List)
-        {
-            MonoBehaviour? component = Serializer.Deserialize<MonoBehaviour>(compTag, ctx);
-            if (component == null) continue;
-            component.AttachToGameObject(this);
-            _components.Add(component);
-            _componentCache.Add(component.GetType(), component);
-        }
-
         var children = value["Children"];
         this.children = new();
         foreach (var childTag in children.List)
@@ -642,5 +631,18 @@ public class GameObject : EngineObject, ISerializable
             child._parent = this;
             this.children.Add(child);
         }
+
+        var comps = value["Components"];
+        _components = new();
+        foreach (var compTag in comps.List)
+        {
+            MonoBehaviour? component = Serializer.Deserialize<MonoBehaviour>(compTag, ctx);
+            if (component == null) continue;
+            _components.Add(component);
+            _componentCache.Add(component.GetType(), component);
+        }
+        // Attach all components
+        foreach (var comp in _components)
+            comp.AttachToGameObject(this);
     }
 }
