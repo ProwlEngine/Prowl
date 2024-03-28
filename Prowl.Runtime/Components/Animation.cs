@@ -60,6 +60,12 @@ namespace Prowl.Runtime
                 }
             }
 
+            if (_states.Where(s => s.Enabled).Sum(s => s.Weight) <= 0)
+            {
+                // Either all disabled or all weights are zero
+                return;
+            }
+
             // Update all transforms
             foreach (var transform in transforms)
             {
