@@ -134,7 +134,7 @@ namespace Prowl.Editor.Assets
                 // Animations
                 List<AnimationClip> anims = [];
                 if (scene.HasAnimations)
-                    anims = LoadAnimations(ctx, scene);
+                    anims = LoadAnimations(ctx, scene, scale);
 
                 List<MeshMaterialBinding> meshMats = new List<MeshMaterialBinding>();
                 if (scene.HasMeshes)
@@ -425,7 +425,7 @@ namespace Prowl.Editor.Assets
             }
         }
 
-        private static List<AnimationClip> LoadAnimations(SerializedAsset ctx, Assimp.Scene? scene)
+        private static List<AnimationClip> LoadAnimations(SerializedAsset ctx, Assimp.Scene? scene, double scale)
         {
             List<AnimationClip> anims = [];
             foreach (var anim in scene.Animations)
@@ -464,9 +464,9 @@ namespace Prowl.Editor.Assets
                         foreach (var posKey in channel.PositionKeys)
                         {
                             double time = (posKey.Time / anim.DurationInTicks) * animation.Duration;
-                            xCurve.Keys.Add(new(time, posKey.Value.X));
-                            yCurve.Keys.Add(new(time, posKey.Value.Y));
-                            zCurve.Keys.Add(new(time, posKey.Value.Z));
+                            xCurve.Keys.Add(new(time, posKey.Value.X * scale));
+                            yCurve.Keys.Add(new(time, posKey.Value.Y * scale));
+                            zCurve.Keys.Add(new(time, posKey.Value.Z * scale));
                         }
                         animBone.PosX = xCurve;
                         animBone.PosY = yCurve;
