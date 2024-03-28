@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Prowl.Runtime
 {
@@ -28,7 +29,7 @@ namespace Prowl.Runtime
 		Smooth
     }
 
-    public class AnimationCurve
+    public class AnimationCurve : ISerializable
     {
 
         #region Public Properties
@@ -294,6 +295,42 @@ namespace Prowl.Runtime
                 prev = next;
             }
             return 0f;
+        }
+
+        public SerializedProperty Serialize(Serializer.SerializationContext ctx)
+        {
+            var value = SerializedProperty.NewCompound();
+            value.Add("PreLoop", new SerializedProperty((int)this.PreLoop));
+            value.Add("PostLoop", new SerializedProperty((int)this.PostLoop));
+
+            var keyList = SerializedProperty.NewList();
+            foreach (var key in this.Keys)
+            {
+                var keyProp = SerializedProperty.NewCompound();
+                keyProp.Add("Position", new SerializedProperty(key.Position));
+                keyProp.Add("Value", new SerializedProperty(key.Value));
+                keyProp.Add("TangentIn", new SerializedProperty(key.TangentIn));
+                keyProp.Add("TangentOut", new SerializedProperty(key.TangentOut));
+                keyProp.Add("Continuity", new SerializedProperty((int)key.Continuity));
+                keyList.ListAdd(keyProp);
+            }
+            value.Add("Keys", keyList);
+
+            return value;
+        }
+
+        public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
+        {
+            this.PreLoop = (CurveLoopType)value.Get("PreLoop").IntValue;
+            this.PostLoop = (CurveLoopType)value.Get("PostLoop").IntValue;
+
+            var keyList = value.Get("Keys").List;
+            foreach (var key in keyList)
+            {
+                var position = key.Get("Position").DoubleValue;
+                var curveKey = new KeyFrame(position, key.Get("Value").DoubleValue, key.Get("TangentIn").DoubleValue, key.Get("TangentOut").DoubleValue, (CurveContinuity)key.Get("Continuity").IntValue);
+                this.Keys.Add(curveKey);
+            }
         }
 
         #endregion
