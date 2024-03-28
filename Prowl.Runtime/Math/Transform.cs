@@ -188,18 +188,13 @@ namespace Prowl.Runtime
 
         public Transform? DeepFind(string name)
         {
-            ArgumentNullException.ThrowIfNullOrEmpty(name, nameof(name));
-
+            if (name == null) return null;
+            if (name == gameObject.Name) return this;
             foreach (var child in gameObject.children)
             {
-                if (child.Name == name)
-                    return child.transform;
-
-                var found = child.transform.DeepFind(name);
-                if (found != null)
-                    return found;
+                var t = child.transform.DeepFind(name);
+                if (t != null) return t;
             }
-
             return null;
         }
 
