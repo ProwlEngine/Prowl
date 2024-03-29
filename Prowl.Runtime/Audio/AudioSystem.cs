@@ -16,6 +16,8 @@ namespace Prowl.Runtime.Audio
         private static readonly List<ActiveAudio> _pool = [];
         private static AudioListener _listener;
 
+        public static AudioListener Listener => _listener;
+
         public static AudioEngine Engine => _engine;
 
         public static void Initialize()
@@ -95,9 +97,10 @@ namespace Prowl.Runtime.Audio
             return buffer;
         }
 
-        public static void ListenerTransformChanged(Transform t)
+        public static void ListenerTransformChanged(Transform t, Vector3 lastPost)
         {
             _engine.SetListenerPosition(t.position);
+            _engine.SetListenerVelocity(t.position - lastPost);
             _engine.SetListenerOrientation(t.forward, t.up);
         }
 

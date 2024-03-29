@@ -84,7 +84,8 @@ public static class SceneManager
     }
 
     public static void Clear()
-    {
+    { 
+#warning TODO: Fix DontDestroyOnLoad
         for (int i = 0; i < _gameObjects.Count; i++)
             if (!_dontDestroyOnLoad.Contains(_gameObjects[i].InstanceID))
                 _gameObjects[i].Destroy();

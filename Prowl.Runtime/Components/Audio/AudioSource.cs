@@ -1,19 +1,24 @@
-﻿using Prowl.Runtime.Audio;
+﻿using Prowl.Icons;
+using Prowl.Runtime.Audio;
 using System;
 
 namespace Prowl.Runtime
 {
+    [AddComponentMenu($"{FontAwesome6.Music}  Audio/{FontAwesome6.Message}  Audio Source")]
     public sealed class AudioSource : MonoBehaviour
     {
         public AssetRef<AudioClip> Clip;
+        public bool PlayOnAwake = true;
         public bool Looping = false;
         public float Volume = 1f;
+        public float MaxDistance = 32f;
 
         private ActiveAudio _source;
         private AudioBuffer _buffer;
         private uint _lastVersion;
         private bool _looping = false;
         private float _gain = 1f;
+        private float _maxDistance = 32f;
 
         public void Play()
         {
@@ -24,26 +29,36 @@ namespace Prowl.Runtime
         public void Stop()
         {
             if (Clip.IsAvailable)
-                _source.Stop();
+                _source?.Stop();
         }
 
         public override void Awake()
         {
             _source = AudioSystem.Engine.CreateAudioSource();
-            _source.Position = this.GameObject.transform.position;
-            _source.Direction = this.GameObject.transform.forward;
+            _source.PositionKind = AudioPositionKind.ListenerRelative;
+            // position relative to listener
+            var listener = AudioSystem.Listener.GameObject.transform;
+            var thisPos = GameObject.transform.position;
+            _source.Position = listener.InverseTransformPoint(thisPos);
+            _source.Direction = GameObject.transform.forward;
             _source.Gain = Volume;
             _source.Looping = Looping;
+            _source.MaxDistance = MaxDistance;
             if (Clip.IsAvailable)
                 _buffer = AudioSystem.GetAudioBuffer(Clip.Res!);
+            if (PlayOnAwake)
+                Play();
         }
 
         public override void Update()
         {
-            if(_lastVersion != this.GameObject.transform.version)
+            //if (_lastVersion != GameObject.transform.version)
             {
-                _source.Position = this.GameObject.transform.position;
-                _source.Direction = this.GameObject.transform.forward;
+                var listener = AudioSystem.Listener.GameObject.transform;
+                var thisPos = GameObject.transform.position;
+                _source.Position = listener.InverseTransformPoint(thisPos);
+                _source.Direction = GameObject.transform.forward;
+                //_lastVersion = GameObject.transform.version;
             }
 
             if (Clip.IsAvailable)
@@ -59,6 +74,12 @@ namespace Prowl.Runtime
             {
                 _source.Gain = Volume;
                 _gain = Volume;
+            }
+
+            if (_maxDistance != MaxDistance)
+            {
+                _source.MaxDistance = MaxDistance;
+                _maxDistance = MaxDistance;
             }
         }
 
