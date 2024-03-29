@@ -3,6 +3,7 @@ using Hexa.NET.ImPlot;
 using Prowl.Runtime;
 using Prowl.Runtime.Audio;
 using Prowl.Runtime.Utils;
+using Silk.NET.SDL;
 using System.Buffers.Binary;
 
 namespace Prowl.Editor.Assets.Importers
@@ -101,8 +102,7 @@ namespace Prowl.Editor.Assets.Importers
                     throw new InvalidDataException("WAV file does not contain a data chunk");
                 }
 
-                float[] floatData = ConvertToFloatData(audioData, bitsPerSample);
-                AudioClip audioClip = AudioClip.Create(file.Name, floatData, numChannels, bitsPerSample, sampleRate);
+                AudioClip audioClip = AudioClip.Create(file.Name, audioData, numChannels, bitsPerSample, sampleRate);
                 return audioClip;
             }
         }
@@ -149,10 +149,38 @@ namespace Prowl.Editor.Assets.Importers
 
         ActiveAudio? preview;
 
+        short[] data16;
+        float[] dataF;
+
+        SerializedAsset serialized;
+
+        public override void OnEnable()
+        {
+            serialized = AssetDatabase.LoadAsset((target as MetaFile).AssetPath);
+            var audioClip = (AudioClip)serialized.Main;
+
+            if (audioClip.Format == BufferAudioFormat.Mono8 || audioClip.Format == BufferAudioFormat.Stereo8)
+            {
+                // nothing to do data is already in byte format
+            }
+            else if (audioClip.Format == BufferAudioFormat.Mono16 || audioClip.Format == BufferAudioFormat.Stereo16)
+            {
+                short[] data = new short[audioClip.Data.Length / 2];
+                Buffer.BlockCopy(audioClip.Data, 0, data, 0, audioClip.Data.Length);
+                data16 = data;
+            }
+            else if (audioClip.Format == BufferAudioFormat.MonoF || audioClip.Format == BufferAudioFormat.StereoF)
+            {
+                float[] data = new float[audioClip.Data.Length / 4];
+                Buffer.BlockCopy(audioClip.Data, 0, data, 0, audioClip.Data.Length);
+                dataF = data;
+            }
+
+        }
+
         public override void OnInspectorGUI()
         {
             var importer = (AudioClipImporter)(target as MetaFile).importer;
-            var serialized = AssetDatabase.LoadAsset((target as MetaFile).AssetPath);
 
             try
             {
@@ -182,14 +210,47 @@ namespace Prowl.Editor.Assets.Importers
                 GUIHelper.EnumComboBox("Resolution", ref visRes);
 
                 var reg = ImGui.GetContentRegionAvail();
-                if (ImPlot.BeginPlot("Audio Waveform", new System.Numerics.Vector2(reg.X, 150), ImPlotFlags.NoLegend))
+                ImPlotFlags flags = ImPlotFlags.None;
+                // Mono has NoLegends flag
+                if (audioClip.Format == BufferAudioFormat.Mono8 || audioClip.Format == BufferAudioFormat.Mono16 || audioClip.Format == BufferAudioFormat.MonoF)
+                {
+                    flags |= ImPlotFlags.NoLegend;
+                }
+                if (ImPlot.BeginPlot("Audio Waveform", new System.Numerics.Vector2(reg.X, 150), flags))
                 {
                     ImPlot.SetupAxes("Time (s)", "Amplitude", ImPlotAxisFlags.None, ImPlotAxisFlags.AutoFit);
                     ImPlot.SetupAxesLimits(0, audioClip.Duration, -1, 1);
                     ImPlot.SetupMouseText(ImPlotLocation.SouthEast, 0);
                     
                     int res = 1 << (int)visRes;
-                    ImPlot.PlotLine("Audio Data", ref audioClip.Data[0], audioClip.Data.Length / res, ((1.0f / audioClip.Data.Length) * audioClip.Duration) * res, 0, ImPlotLineFlags.None, 0, sizeof(float) * res);
+                    float xScale = ((1.0f / audioClip.Data.Length) * audioClip.Duration) * res;
+                    if (audioClip.Format == BufferAudioFormat.Mono8)
+                    {
+                        ImPlot.PlotLine("Audio", ref audioClip.Data[0], audioClip.Data.Length / res, xScale, 0, 0, 0, res);
+                    }
+                    else if (audioClip.Format == BufferAudioFormat.Mono16)
+                    {
+                        ImPlot.PlotLine("Audio", ref data16[0], data16.Length / res, xScale, 0, 0, 0, res);
+                    }
+                    else if (audioClip.Format == BufferAudioFormat.MonoF)
+                    {
+                        ImPlot.PlotLine("Audio", ref dataF[0], dataF.Length / res, xScale, 0, 0, 0, res);
+                    }
+                    else if (audioClip.Format == BufferAudioFormat.Stereo8)
+                    {
+                        ImPlot.PlotLine("Left Channel", ref audioClip.Data[0], (audioClip.Data.Length / 2) / res, xScale, 0, 0, 0, 2 * res);
+                        ImPlot.PlotLine("Right Channel", ref audioClip.Data[1], (audioClip.Data.Length / 2) / res, xScale, 0, 0, 0, 2 * res);
+                    }
+                    else if (audioClip.Format == BufferAudioFormat.Stereo16)
+                    {
+                        ImPlot.PlotLine("Left Channel", ref data16[0], (data16.Length / 2) / res, xScale, 0, 0, 0, 2 * res);
+                        ImPlot.PlotLine("Right Channel", ref data16[1], (data16.Length / 2) / res, xScale, 0, 0, 0, 2 * res);
+                    }
+                    else if (audioClip.Format == BufferAudioFormat.StereoF)
+                    {
+                        ImPlot.PlotLine("Left Channel", ref dataF[0], (dataF.Length / 2) / res, xScale, 0, 0, 0, 2 * res);
+                        ImPlot.PlotLine("Right Channel", ref dataF[1], (dataF.Length / 2) / res, xScale, 0, 0, 0, 2 * res);
+                    }
                     ImPlot.EndPlot();
                 }
 
