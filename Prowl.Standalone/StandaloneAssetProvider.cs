@@ -6,15 +6,15 @@ namespace Prowl.Standalone;
 
 public class StandaloneAssetProvider : IAssetProvider
 {
-    AssetBuildPackage[] packages;
+    AssetBundle[] packages;
 
     public StandaloneAssetProvider()
     {
         int packageIndex = 0;
         FileInfo firstPackage = new FileInfo(Path.Combine(Program.Data.FullName, $"Data{packageIndex++}.prowl"));
-        List<AssetBuildPackage> packages = new();
+        List<AssetBundle> packages = new();
         while (File.Exists(firstPackage.FullName)) {
-            packages.Add(new AssetBuildPackage(firstPackage.OpenRead(), ZipArchiveMode.Read));
+            packages.Add(new AssetBundle(firstPackage.OpenRead(), ZipArchiveMode.Read));
             firstPackage = new FileInfo(Path.Combine(Program.Data.FullName, $"Data{packageIndex++}.prowl"));
         }
         this.packages = packages.ToArray();
@@ -30,7 +30,7 @@ public class StandaloneAssetProvider : IAssetProvider
         if (_loaded.ContainsKey(guid))
             return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID]);
 
-        foreach (AssetBuildPackage package in packages)
+        foreach (AssetBundle package in packages)
             if (package.TryGetAsset(relativeAssetPath, out var asset)) {
                 _loaded[guid] = asset;
                 return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID]);
@@ -43,7 +43,7 @@ public class StandaloneAssetProvider : IAssetProvider
         if (_loaded.ContainsKey(guid))
             return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID]);
 
-        foreach (AssetBuildPackage package in packages)
+        foreach (AssetBundle package in packages)
             if (package.TryGetAsset(guid, out var asset)) {
                 _loaded[guid] = asset;
                 return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID]);
@@ -59,7 +59,7 @@ public class StandaloneAssetProvider : IAssetProvider
 
     public string GetPathFromGUID(Guid guid)
     {
-        foreach (AssetBuildPackage package in packages)
+        foreach (AssetBundle package in packages)
             if (package.TryGetPath(guid, out var path))
                 return path;
         throw new FileNotFoundException($"Asset with GUID {guid} not found.");
@@ -67,7 +67,7 @@ public class StandaloneAssetProvider : IAssetProvider
 
     public Guid GetGuidFromPath(string relativeAssetPath)
     {
-        foreach (AssetBuildPackage package in packages)
+        foreach (AssetBundle package in packages)
             if (package.TryGetGuid(relativeAssetPath, out var guid))
                 return guid;
         throw new FileNotFoundException($"Asset with path {relativeAssetPath} not found.");

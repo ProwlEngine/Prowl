@@ -44,7 +44,7 @@ namespace Prowl.Editor.Assets
             FileInfo firstPackage = new(Path.Combine(destination.FullName, $"Data{packageIndex++}.prowl"));
 
             // Create the package
-            var package = AssetBuildPackage.CreateNew(firstPackage);
+            var package = AssetBundle.CreateNew(firstPackage);
             int count = 0;
             int maxCount = assetsToExport.Length;
             foreach (var assetGuid in assetsToExport)
@@ -63,7 +63,7 @@ namespace Prowl.Editor.Assets
                     package.Dispose();
                     Debug.Log($"Creating New Package {packageIndex}");
                     FileInfo next = new(Path.Combine(destination.FullName, $"Data{packageIndex++}.prowl"));
-                    package = AssetBuildPackage.CreateNew(next);
+                    package = AssetBundle.CreateNew(next);
                 }
 
                 if (TryGetFile(assetGuid, out var assetPath))

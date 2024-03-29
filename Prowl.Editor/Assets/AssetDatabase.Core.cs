@@ -2,8 +2,6 @@
 using Prowl.Editor.EditorWindows;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
-using System.IO;
-using System.Reflection;
 using Debug = Prowl.Runtime.Debug;
 
 namespace Prowl.Editor.Assets

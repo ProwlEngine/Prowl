@@ -8,7 +8,7 @@ using System.Linq;
 
 namespace Prowl.Runtime.Utils
 {
-    public sealed class AssetBuildPackage : IDisposable
+    public sealed class AssetBundle : IDisposable
     {
         private readonly Stream _stream;
         private readonly ZipArchive _zipArchive;
@@ -18,7 +18,7 @@ namespace Prowl.Runtime.Utils
         readonly Dictionary<string, Guid> _pathToGuid = new(StringComparer.OrdinalIgnoreCase);
         readonly Dictionary<string, ZipArchiveEntry> _pathToEntry = new(StringComparer.OrdinalIgnoreCase);
 
-        public AssetBuildPackage(Stream stream, ZipArchiveMode mode)
+        public AssetBundle(Stream stream, ZipArchiveMode mode)
         {
             _stream = stream;
             _zipArchive = new ZipArchive(stream, mode);
@@ -41,12 +41,12 @@ namespace Prowl.Runtime.Utils
             }
         }
 
-        public static AssetBuildPackage CreateNew(FileInfo path)
+        public static AssetBundle CreateNew(FileInfo path)
         {
             if (File.Exists(path.FullName))
                 throw new ArgumentException("File already exists.", nameof(path));
 
-            return new AssetBuildPackage(path.Open(FileMode.Create, FileAccess.ReadWrite), ZipArchiveMode.Update);
+            return new AssetBundle(path.Open(FileMode.Create, FileAccess.ReadWrite), ZipArchiveMode.Update);
         }
 
         #region Assets
