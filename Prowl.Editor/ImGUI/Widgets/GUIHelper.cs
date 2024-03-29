@@ -25,6 +25,7 @@ namespace Prowl.Editor
         public static void EnumComboBox<T>(string label, ref T value, bool showLabel = true) where T : Enum
         {
             if (showLabel) ImGui.Text(label);
+            ImGui.SameLine();
             if (ImGui.BeginCombo($"##{label}", value.ToString(), ImGuiComboFlags.NoArrowButton))
             {
                 foreach (var v in Enum.GetValues(typeof(T)))
