@@ -1,4 +1,5 @@
-﻿using Prowl.Runtime.SceneManagement;
+﻿using Prowl.Runtime.Audio;
+using Prowl.Runtime.SceneManagement;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -34,6 +35,7 @@ public abstract class Application
         Window.Load += () => {
             SceneManager.Initialize();
             Physics.Initialize();
+            AudioSystem.Initialize();
 
             AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
 
@@ -41,7 +43,9 @@ public abstract class Application
         };
 
         Window.Update += (delta) => {
-            try {
+            try
+            {
+                AudioSystem.UpdatePool();
                 Time.Update(delta);
 
                 Physics.Update();

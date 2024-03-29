@@ -6,6 +6,7 @@ using Prowl.Editor.ImGUI;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Icons;
 using Prowl.Runtime;
+using Prowl.Runtime.Audio;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
 using System.Text.Json;
@@ -87,6 +88,7 @@ public unsafe class EditorApplication : Application {
 
             SceneManager.Initialize();
             Physics.Initialize();
+            AudioSystem.Initialize();
 
             AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
 
@@ -147,6 +149,7 @@ public unsafe class EditorApplication : Application {
                 if(PlayMode.Current == PlayMode.Mode.Editing) // Dont recompile scripts unless were in editor mode
                     CheckReloadingAssemblies();
 
+                AudioSystem.UpdatePool();
                 Time.Update(delta);
 
                 if (Project.HasProject) {
@@ -197,6 +200,7 @@ public unsafe class EditorApplication : Application {
 
             isRunning = false;
             Physics.Dispose();
+            AudioSystem.Dispose();
             Runtime.Debug.Log("Is terminating...");
         };
 
