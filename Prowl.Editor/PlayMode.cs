@@ -45,6 +45,7 @@ public static class PlayMode {
     
     public static void Stop() {
         Current = Mode.Editing;
+        SceneManager.Clear();
         MonoBehaviour.PauseLogic = true;
 
         SceneManager.RestoreScene();
