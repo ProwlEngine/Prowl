@@ -209,34 +209,10 @@ namespace Prowl.Editor.Drawers.NodeSystem
                 if (field.GetCustomAttribute<InputAttribute>(true) != null) continue;
                 if (field.GetCustomAttribute<OutputAttribute>(true) != null) continue;
 
-                if (field.FieldType.IsEnum)
+                if (PropertyDrawer.Draw(node, field, node.Width))
                 {
-                    var currentEnumValue = (Enum)field.GetValue(node);
-
-                    ImGui.SetNextItemWidth(node.Width);
-                    if (ImGui.BeginCombo(field.FieldType.Name, currentEnumValue.ToString()))
-                    {
-                        foreach (var enumValue in Enum.GetValues(field.FieldType))
-                        {
-                            bool isSelected = currentEnumValue.Equals(enumValue);
-
-                            if (ImGui.Selectable(enumValue.ToString(), isSelected))
-                                field.SetValue(node, enumValue);
-
-                            if (isSelected)
-                                ImGui.SetItemDefaultFocus();
-                        }
-
-                        ImGui.EndCombo();
-                    }
-                }
-                else
-                {
-                    if (PropertyDrawer.Draw(node, field, node.Width))
-                    {
-                        changed = true;
-                        node.OnValidate();
-                    }
+                    changed = true;
+                    node.OnValidate();
                 }
 
             }

@@ -35,32 +35,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                         EditorGui.HandleBeginImGUIAttributes(imGuiAttributes);
 
-                        // enums are a special case
-                        if (field.FieldType.IsEnum)
-                        {
-                            var currentEnumValue = (Enum)field.GetValue(scriptObject);
-
-                            if (ImGui.BeginCombo(field.FieldType.Name, currentEnumValue.ToString()))
-                            {
-                                foreach (var enumValue in Enum.GetValues(field.FieldType))
-                                {
-                                    bool isSelected = currentEnumValue.Equals(enumValue);
-
-                                    bool enumChanged = ImGui.Selectable(enumValue.ToString(), isSelected);
-                                    changed |= enumChanged;
-                                    if (enumChanged) field.SetValue(scriptObject, enumValue);
-
-                                    if (isSelected) ImGui.SetItemDefaultFocus();
-                                }
-
-                                ImGui.EndCombo();
-                            }
-                        }
-                        else
-                        {
-                            // Draw the field using PropertyDrawer.Draw
-                            changed |= PropertyDrawer.Draw(scriptObject, field);
-                        }
+                        // Draw the field using PropertyDrawer.Draw
+                        changed |= PropertyDrawer.Draw(scriptObject, field);
 
                         EditorGui.HandleEndImGUIAttributes(imGuiAttributes);
                     }

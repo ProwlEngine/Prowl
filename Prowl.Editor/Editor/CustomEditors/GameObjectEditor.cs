@@ -149,30 +149,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             var imGuiAttributes = attributes.Where(attr => attr is IImGUIAttri).Cast<IImGUIAttri>();
             EditorGui.HandleBeginImGUIAttributes(imGuiAttributes);
 
-            // enums are a special case
-            if (field.FieldType.IsEnum) {
-                var currentEnumValue = (Enum)field.GetValue(comp);
-
-                if (ImGui.BeginCombo(field.FieldType.Name, currentEnumValue.ToString())) {
-                    foreach (var enumValue in Enum.GetValues(field.FieldType)) {
-                        bool isSelected = currentEnumValue.Equals(enumValue);
-
-                        if (ImGui.Selectable(enumValue.ToString(), isSelected)) {
-                            field.SetValue(comp, enumValue);
-                            comp.OnValidate();
-                        }
-
-                        if (isSelected)
-                            ImGui.SetItemDefaultFocus();
-                    }
-
-                    ImGui.EndCombo();
-                }
-            } else {
-                // Draw the field using PropertyDrawer.Draw
-                if (PropertyDrawer.Draw(comp, field))
-                    comp.OnValidate();
-            }
+            if (PropertyDrawer.Draw(comp, field))
+                comp.OnValidate();
 
             EditorGui.HandleEndImGUIAttributes(imGuiAttributes);
         }

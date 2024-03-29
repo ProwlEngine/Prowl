@@ -40,12 +40,19 @@ public abstract class PropertyDrawer {
         var objType = value.GetType();
         bool changed = false;
         ImGui.PushID(label);
-        if (_propertyDrawerLookup.TryGetValue(objType, out PropertyDrawer? propertyDrawer))
+        PropertyDrawer? propertyDrawer;
+        if (_propertyDrawerLookup.TryGetValue(objType, out propertyDrawer))
+        {
+            changed = propertyDrawer.Draw_Internal(label, ref value, width);
+        }
+        // Maybe we have an editor for its base type?
+        else if (_propertyDrawerLookup.TryGetValue(objType.BaseType, out propertyDrawer))
         {
             changed = propertyDrawer.Draw_Internal(label, ref value, width);
         }
         else
         {
+            // Last Resort
             foreach (KeyValuePair<Type, PropertyDrawer> pair in _propertyDrawerLookup)
                 if (pair.Key.IsAssignableFrom(objType))
                 {
