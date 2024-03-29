@@ -4,10 +4,39 @@ using Hexa.NET.ImGui;
 using System.Numerics;
 using System.Reflection;
 using Prowl.Icons;
+using Prowl.Editor.Editor.Preferences;
+using Prowl.Editor.Editor.ProjectSettings;
 
 namespace Prowl.Editor.EditorWindows;
 
-public class ProjectSettingsWindow : EditorWindow {
+public class ProjectSettingsWindow : SingletonEditorWindow
+{
+    public ProjectSettingsWindow() : base("Project Settings") { }
+
+    public ProjectSettingsWindow(Type settingToOpen) : base(settingToOpen) { }
+
+    public override void RenderSideView()
+    {
+        RenderSideViewElement(BuildProjectSetting.Instance);
+    }
+}
+
+public class PreferencesWindow : SingletonEditorWindow
+{
+    public PreferencesWindow() : base("Preferences") { }
+
+    public PreferencesWindow(Type settingToOpen) : base(settingToOpen) { }
+    
+    public override void RenderSideView()
+    {
+        RenderSideViewElement(GeneralPreferences.Instance);
+        RenderSideViewElement(AssetPipelinePreferences.Instance);
+        RenderSideViewElement(SceneViewPreferences.Instance);
+    }
+}
+
+public abstract class SingletonEditorWindow : EditorWindow
+{
 
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse;
 
@@ -15,10 +44,11 @@ public class ProjectSettingsWindow : EditorWindow {
     protected override int Height { get; } = 512;
 
     private Type? currentType;
+    private object? currentSingleton;
 
-    public ProjectSettingsWindow() : base() { Title = FontAwesome6.Gear + " Project Settings"; }
+    public SingletonEditorWindow(string title) : base() { Title = FontAwesome6.Gear + " " + title; }
 
-    public ProjectSettingsWindow(IProjectSetting settingToOpen) : base() { currentType = settingToOpen.GetType(); }
+    public SingletonEditorWindow(Type settingToOpen) : base() { currentType = settingToOpen; }
 
     protected override void Draw()
     {
@@ -44,11 +74,16 @@ public class ProjectSettingsWindow : EditorWindow {
         }
     }
 
-    private void RenderSideView()
+    public abstract void RenderSideView();
+
+    protected void RenderSideViewElement<T>(T elementInstance)
     {
-        foreach (var settingType in Project.ProjectSettings.GetRegisteredSettingTypes())
-            if (ImGui.Selectable(settingType.Name, currentType == settingType))
-                currentType = settingType;
+        Type settingType = elementInstance.GetType();
+        if (ImGui.Selectable(settingType.Name, currentType == settingType))
+        {
+            currentType = settingType;
+            currentSingleton = elementInstance;
+        }
     }
 
     private void RenderBody()
@@ -56,7 +91,7 @@ public class ProjectSettingsWindow : EditorWindow {
         if (currentType == null) return;
 
         // Draw Settings
-        var setting = Project.ProjectSettings.GetSetting(currentType);
+        var setting = currentSingleton;
 
         FieldInfo[] fields = setting.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public);
         foreach (var field in fields)
@@ -71,7 +106,11 @@ public class ProjectSettingsWindow : EditorWindow {
 
                 // Draw the field using PropertyDrawer.Draw
                 if (PropertyDrawer.Draw(setting, field))
-                    Project.ProjectSettings.Save();
+                {
+                    // Use reflection to find a method "protected void Save()"
+                    MethodInfo? saveMethod = setting.GetType().GetMethod("Save", BindingFlags.Instance | BindingFlags.NonPublic);
+                    saveMethod?.Invoke(setting, null);
+                }
 
                 EditorGui.HandleEndImGUIAttributes(imGuiAttributes);
             }

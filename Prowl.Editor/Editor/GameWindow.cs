@@ -8,8 +8,6 @@ namespace Prowl.Editor.EditorWindows;
 
 public class GameWindow : EditorWindow
 {
-    public EditorSettings Settings => Project.ProjectSettings.GetSetting<EditorSettings>();
-
     enum Resolutions
     {
         [Text("Fit")] fit = 0,

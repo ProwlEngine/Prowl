@@ -1,5 +1,6 @@
 using Hexa.NET.ImGui;
 using Prowl.Editor.Assets;
+using Prowl.Editor.Editor.Preferences;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
@@ -14,8 +15,6 @@ namespace Prowl.Editor.EditorWindows;
 /// </summary>
 public class AssetsWindow : EditorWindow
 {
-    public static EditorSettings Settings => Project.ProjectSettings.GetSetting<EditorSettings>();
-
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse;
 
     private string _searchText = "";
@@ -199,7 +198,7 @@ public class AssetsWindow : EditorWindow
                 continue;
 
             var curPos = ImGui.GetCursorPos();
-            var name = Settings.m_HideExtensions ? Path.GetFileNameWithoutExtension(file.Name) : file.Name;
+            var name = AssetPipelinePreferences.Instance.HideExtensions ? Path.GetFileNameWithoutExtension(file.Name) : file.Name;
             bool opened = ImGui.TreeNodeEx($"      {name}", flags);
             SelectHandler.HandleSelectable(_treeCounter++, file);
             if (_treeCounter % 2 == 0)

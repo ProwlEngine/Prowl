@@ -1,5 +1,6 @@
 using Hexa.NET.ImGui;
 using Prowl.Editor.Assets;
+using Prowl.Editor.Editor.Preferences;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
@@ -9,8 +10,6 @@ namespace Prowl.Editor.EditorWindows;
 
 public class AssetBrowserWindow : EditorWindow
 {
-    public static EditorSettings Settings => Project.ProjectSettings.GetSetting<EditorSettings>();
-
     public DirectoryInfo CurDirectory;
     public bool Locked = false;
 
@@ -26,7 +25,7 @@ public class AssetBrowserWindow : EditorWindow
 
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse;
 
-    private float ThumbnailSize => (1.0f + Settings.m_ThumbnailSize) * 90f;
+    private float ThumbnailSize => (1.0f + AssetPipelinePreferences.Instance.ThumbnailSize) * 90f;
 
     public AssetBrowserWindow() : base()
     {
@@ -164,12 +163,12 @@ public class AssetBrowserWindow : EditorWindow
         ImGui.SetCursorPosY(cPY);
         ImGui.SetCursorPosX(windowWidth - rightOffset - sizeSliderSize - padding);
         ImGui.SetNextItemWidth(sizeSliderSize);
-        ImGui.SliderFloat("##ThumbnailSizeSlider", ref Settings.m_ThumbnailSize, -0.2f, 1.0f);
+        ImGui.SliderFloat("##ThumbnailSizeSlider", ref AssetPipelinePreferences.Instance.ThumbnailSize, -0.2f, 1.0f);
 
         ImGui.SetCursorPosY(cPY);
         ImGui.SetCursorPosX(windowWidth - rightOffset);
         if (ImGui.Button("   " + FontAwesome6.Gears + "   "))
-            _ = new ProjectSettingsWindow(Settings);
+            _ = new ProjectSettingsWindow(typeof(AssetPipelinePreferences));
     }
 
     private void RenderBody()
@@ -326,7 +325,7 @@ public class AssetBrowserWindow : EditorWindow
             }
             else
             {
-                var text = Settings.m_HideExtensions ? Path.GetFileNameWithoutExtension(entry.FullName) : Path.GetFileName(entry.FullName);
+                var text = AssetPipelinePreferences.Instance.HideExtensions ? Path.GetFileNameWithoutExtension(entry.FullName) : Path.GetFileName(entry.FullName);
                 GUIHelper.TextCenter(text);
                 if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(0))
                     RenamingEntry = entry.FullName;

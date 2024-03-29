@@ -1,4 +1,5 @@
 using Prowl.Editor.Assets;
+using Prowl.Editor.Editor.ProjectSettings;
 using Prowl.Editor.EditorWindows;
 using Prowl.Runtime;
 using System.Diagnostics;
@@ -13,9 +14,6 @@ namespace Prowl.Editor;
 public static class Project
 {
     #region Public Properties
-    public static BuildSettings BuildSettings => Project.ProjectSettings.GetSetting<BuildSettings>();
-
-
     public static string Projects_Directory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Prowl", "Projects");
     public static string ProjectDirectory => Path.Combine(Projects_Directory, Name);
     public static string ProjectAssetDirectory => Path.Combine(ProjectDirectory, @"Assets");
@@ -199,19 +197,19 @@ public static class Project
             return false;
         }
 
-        if (BuildSettings.StartingScene.IsAvailable == false)
+        if (BuildProjectSetting.Instance.InitialScene.IsAvailable == false)
         {
-            Runtime.Debug.LogError($"No Starting Scene Assigned...");
+            Runtime.Debug.LogError($"Initial Scene, is not Available, Initial Scene must always be available!");
             return false;
         }
 
         Runtime.Debug.Log($"Starting Project Build...");
         BoundedLog($"Creating Directories...");
 
-        string BuildPath = Path.Combine(ProjectDirectory, "Builds", "Latest");
+        string buildPath = Path.Combine(ProjectDirectory, "Builds", "Latest");
         string BuildDataPath = Path.Combine(ProjectDirectory, "Builds", "Latest", "GameData");
         // Check if "Latest" folder already exists
-        if (Directory.Exists(BuildPath))
+        if (Directory.Exists(buildPath))
         {
             // Increment the folder name
             int count = 1;
@@ -223,14 +221,14 @@ public static class Project
             } while (Directory.Exists(newBuildPath));
 
             // Move the existing "Latest" folder to the new one
-            Directory.Move(BuildPath, newBuildPath);
+            Directory.Move(buildPath, newBuildPath);
         }
 
-        Directory.CreateDirectory(BuildPath);
+        Directory.CreateDirectory(buildPath);
         Directory.CreateDirectory(BuildDataPath);
 
 
-        BoundedLog($"Compiling project assembly to {BuildPath}...");
+        BoundedLog($"Compiling project assembly to {buildPath}...");
         if (!Compile(Assembly_Proj, true))
         {
             Runtime.Debug.LogError($"Failed to compile Project assembly!");
@@ -245,23 +243,23 @@ public static class Project
 
         BoundedLog($"Preparing default scene to {BuildDataPath}...");
         FileInfo StartingScene = new FileInfo(Path.Combine(BuildDataPath, "level.prowl"));
-        SerializedProperty tag = Serializer.Serialize(BuildSettings.StartingScene.Res!);
+        SerializedProperty tag = Serializer.Serialize(BuildProjectSetting.Instance.InitialScene.Res!);
         BinaryTagConverter.WriteToFile(tag, StartingScene);
 
 
-        BoundedLog($"Copying standalone player to {BuildPath}...");
+        BoundedLog($"Copying standalone player to {buildPath}...");
         // Get the Standalone.zip file from embedded resources
         using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.Standalone.zip");
         using ZipArchive archive = new(stream, ZipArchiveMode.Read);
         // Extract the Standalone.zip file to the BuildPath
-        archive.ExtractToDirectory(BuildPath);
+        archive.ExtractToDirectory(buildPath);
 
 
         Runtime.Debug.Log("**********************************************************************************************************************");
         Runtime.Debug.Log($"Successfully built project!");
 
         // Open the Build folder
-        AssetDatabase.OpenPath(new DirectoryInfo(BuildPath));
+        AssetDatabase.OpenPath(new DirectoryInfo(buildPath));
 
         return true;
     }

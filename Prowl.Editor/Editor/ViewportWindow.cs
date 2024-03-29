@@ -1,6 +1,7 @@
 using Hexa.NET.ImGui;
 using Hexa.NET.ImGuizmo;
 using Jitter2.LinearMath;
+using Prowl.Editor.Editor.Preferences;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
@@ -13,8 +14,6 @@ namespace Prowl.Editor.EditorWindows;
 
 public class ViewportWindow : EditorWindow
 {
-    public EditorSettings Settings => Project.ProjectSettings.GetSetting<EditorSettings>();
-
     public static Camera LastFocusedCamera;
 
     public static ImGuizmoOperation GizmosOperation = ImGuizmoOperation.Translate;
@@ -98,11 +97,11 @@ public class ViewportWindow : EditorWindow
         WindowCenter = ImGui.GetWindowPos() + new System.Numerics.Vector2(windowSize.X / 2, windowSize.Y / 2);
 
         // Manually Render to the RenderTexture
-        Cam.NearClip = Settings.NearClip;
-        Cam.FarClip = Settings.FarClip;
+        Cam.NearClip = SceneViewPreferences.Instance.NearClip;
+        Cam.FarClip = SceneViewPreferences.Instance.FarClip;
         Cam.Render((int)renderSize.X, (int)renderSize.Y);
-        Settings.RenderResolution = Math.Clamp(Settings.RenderResolution, 0.1f, 8.0f);
-        Cam.RenderResolution = Settings.RenderResolution;
+        SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
+        Cam.RenderResolution = SceneViewPreferences.Instance.RenderResolution;
 
         var imagePos = ImGui.GetCursorScreenPos();
         var imageSize = ImGui.GetContentRegionAvail();
@@ -356,8 +355,8 @@ public class ViewportWindow : EditorWindow
             // Version with fixed gimbal lock
             var mouseDelta = Input.MouseDelta;
             var rot = Cam.GameObject.transform.eulerAngles;
-            rot.y += mouseDelta.X * (Time.deltaTimeF * 5f * Settings.LookSensitivity);
-            rot.x += mouseDelta.Y * (Time.deltaTimeF * 5f * Settings.LookSensitivity);
+            rot.y += mouseDelta.X * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
+            rot.x += mouseDelta.Y * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
             Cam.GameObject.transform.eulerAngles = rot;
 
             Input.MousePosition = WindowCenter.ToFloat().ToGeneric();
@@ -367,8 +366,8 @@ public class ViewportWindow : EditorWindow
 
                 var mouseDelta = Input.MouseDelta;
                 var pos = Cam.GameObject.transform.position;
-                pos -= Cam.GameObject.transform.right * mouseDelta.X * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
-                pos += Cam.GameObject.transform.up * mouseDelta.Y * (Time.deltaTimeF * 1f * Settings.PanSensitivity);
+                pos -= Cam.GameObject.transform.right * mouseDelta.X * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
+                pos += Cam.GameObject.transform.up * mouseDelta.Y * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
                 Cam.GameObject.transform.position = pos;
 
             } else if (Input.MouseWheelDelta != 0) {
@@ -376,7 +375,7 @@ public class ViewportWindow : EditorWindow
                 Matrix4x4.Invert(Cam.View, out var viewInv);
                 var dir = Vector3.Transform(Cam.gBuffer.GetViewPositionAt(mouseUV), viewInv);
                 // Larger distance more zoom, but clamped
-                double amount = dir.magnitude * 0.05 * Settings.ZoomSensitivity;
+                double amount = dir.magnitude * 0.05 * SceneViewPreferences.Instance.ZoomSensitivity;
                 if (amount > dir.magnitude * .9) amount = dir.magnitude * .9;
                 if (amount < Cam.NearClip * 2) amount = Cam.NearClip * 2;
 

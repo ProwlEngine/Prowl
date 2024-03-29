@@ -1,6 +1,8 @@
 using Hexa.NET.ImGui;
 using Prowl.Editor.Assets;
 using Prowl.Editor.Drawers.NodeSystem;
+using Prowl.Editor.Editor.Preferences;
+using Prowl.Editor.Editor.ProjectSettings;
 using Prowl.Editor.EditorWindows;
 using Prowl.Editor.ImGUI;
 using Prowl.Editor.PropertyDrawers;
@@ -154,11 +156,7 @@ public unsafe class EditorApplication : Application {
 
                 if (Project.HasProject) {
 
-                    //var setting = Project.ProjectSettings.GetSetting<ApplicationSettings>();
-                    Project.ProjectSettings.GetSetting<BuildSettings>(); // Called to ensure the Editor Ui exists
-                    EditorSettings Settings = Project.ProjectSettings.GetSetting<EditorSettings>();
-
-                    Window.InternalWindow.VSync = Settings.VSync;
+                    Window.InternalWindow.VSync = GeneralPreferences.Instance.VSync;
                     //Window.InternalWindow.FramesPerSecond = 60;
                     //Window.InternalWindow.UpdatesPerSecond = 60;
 

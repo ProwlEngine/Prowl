@@ -60,6 +60,8 @@ namespace Prowl.Editor.Utilities
                         directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Prowl", "Editor");
                         break;
                 }
+                // Ensure Directory Exists
+                Directory.CreateDirectory(directory);
                 return Path.Combine(directory, attribute.FilePath);
             }
             return string.Empty;
