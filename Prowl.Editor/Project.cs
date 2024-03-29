@@ -51,8 +51,6 @@ public static class Project
             return;
         }
 
-        AssetDatabase.Clear();
-
         Name = projectName;
         HasProject = true;
         (EditorApplication.Instance as EditorApplication).RegisterReloadOfExternalAssemblies();

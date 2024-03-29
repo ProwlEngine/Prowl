@@ -27,6 +27,12 @@ public class ProjectsWindow : EditorWindow
     {
         WindowDrawnThisFrame = true;
 
+        if (Project.HasProject)
+        {
+            // Cant open a project while one is already open
+            Close();
+        }
+
         ImGui.BeginChild("projectChild");
 
         GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X);
