@@ -61,6 +61,8 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - Large World Coordinates Support
        - Camera Relative Rendering
     - Scene System
+    - 3D Audio
+       - Currently only supports .wav files
     - Prefabs
     - Build System - Build to Standalone Application
        - Packed Asset files
