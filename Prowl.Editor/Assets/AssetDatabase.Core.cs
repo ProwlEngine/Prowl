@@ -126,6 +126,12 @@ namespace Prowl.Editor.Assets
                             if (ProcessFile(file))
                                 toReimport.Add(file);
                         }
+                        else if (!assetPathToMeta.TryGetValue(file, out var meta))
+                        {
+                            // File hasent changed but we dont have it in the cache, process it but dont reimport
+                            Debug.Log("Asset Found: " + file);
+                            ProcessFile(file);
+                        }
                     }
                 }
             }
