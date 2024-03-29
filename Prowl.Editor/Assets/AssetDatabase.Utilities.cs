@@ -124,6 +124,35 @@ namespace Prowl.Editor.Assets
             return normalizedPath.StartsWith(normalizedBaseDirPath, StringComparison.OrdinalIgnoreCase);
         }
 
+        public static void GenerateUniqueAssetPath(ref DirectoryInfo dir)
+        {
+            string name = dir.Name;
+            if (dir.Exists)
+            {
+                int counter = 1;
+                while (dir.Exists)
+                {
+                    dir = new DirectoryInfo(Path.Combine(dir.Parent.FullName, $"{name} ({counter})"));
+                    counter++;
+                }
+            }
+        }
+
+        public static void GenerateUniqueAssetPath(ref FileInfo file)
+        {
+            string name = Path.GetFileNameWithoutExtension(file.FullName);
+            string ext = file.Extension;
+            if (File.Exists(file.FullName))
+            {
+                int counter = 1;
+                while (File.Exists(file.FullName))
+                {
+                    file = new FileInfo(Path.Combine(file.Directory.FullName, $"{name} ({counter}){ext}"));
+                    counter++;
+                }
+            }
+        }
+
         #endregion
 
         #region Private Methods

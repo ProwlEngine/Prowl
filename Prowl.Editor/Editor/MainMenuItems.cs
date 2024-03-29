@@ -18,7 +18,7 @@ namespace Prowl.Editor.EditorWindows
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
 
             DirectoryInfo dir = new(Path.Combine(Directory.FullName, "New Folder"));
-            EditorUtils.GetSafeName(ref dir);
+            AssetDatabase.GenerateUniqueAssetPath(ref dir);
             dir.Create();
             if (fromAssetBrowser)
                 AssetBrowserWindow.StartRename(dir.FullName);
@@ -32,7 +32,7 @@ namespace Prowl.Editor.EditorWindows
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
 
             FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New Material.mat"));
-            EditorUtils.GetSafeName(ref file);
+            AssetDatabase.GenerateUniqueAssetPath(ref file);
 
             Material mat = new Material(Shader.Find("Defaults\\Standard.shader"));
             StringTagConverter.WriteToFile(Serializer.Serialize(mat), file);
@@ -51,7 +51,7 @@ namespace Prowl.Editor.EditorWindows
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
 
             FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New Script.cs"));
-            EditorUtils.GetSafeName(ref file);
+            AssetDatabase.GenerateUniqueAssetPath(ref file);
 
             using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
             using StreamReader reader = new StreamReader(stream);

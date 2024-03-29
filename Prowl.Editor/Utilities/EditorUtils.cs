@@ -9,36 +9,6 @@ namespace Prowl.Editor.Utilities
 {
     public static class EditorUtils
     {
-
-        public static void GetSafeName(ref DirectoryInfo dir)
-        {
-            string name = dir.Name;
-            if (dir.Exists)
-            {
-                int counter = 1;
-                while (dir.Exists)
-                {
-                    dir = new DirectoryInfo(Path.Combine(dir.Parent.FullName, $"{name} ({counter})"));
-                    counter++;
-                }
-            }
-        }
-
-        public static void GetSafeName(ref FileInfo file)
-        {
-            string name = Path.GetFileNameWithoutExtension(file.FullName);
-            string ext = file.Extension;
-            if (File.Exists(file.FullName))
-            {
-                int counter = 1;
-                while (File.Exists(file.FullName))
-                {
-                    file = new FileInfo(Path.Combine(file.Directory.FullName, $"{name} ({counter}){ext}"));
-                    counter++;
-                }
-            }
-        }
-
         public static string FilterAlpha(string input) => new string(input.Where(char.IsLetter).ToArray());
 
         public static List<Type> GetDerivedTypes(Type baseType, Assembly assembly)
