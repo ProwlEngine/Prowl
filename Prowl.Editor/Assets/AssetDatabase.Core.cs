@@ -1,11 +1,18 @@
 ﻿using Hexa.NET.ImGui;
 using Prowl.Editor.EditorWindows;
+using Prowl.Editor.Utilities;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 using Debug = Prowl.Runtime.Debug;
 
 namespace Prowl.Editor.Assets
 {
+    [FilePath("Library/LastWriteTimes.cache", FilePathAttribute.Location.ProjectFolder)]
+    public class LastWriteTimesCache : ScriptableSingleton<LastWriteTimesCache>
+    {
+        public readonly Dictionary<string, DateTime> fileLastWriteTimes = [];
+    }
+
     public static partial class AssetDatabase
     {
         #region Properties
@@ -29,7 +36,6 @@ namespace Prowl.Editor.Assets
         static bool lastFocused = false;
         static readonly Dictionary<string, MetaFile> assetPathToMeta = new(StringComparer.OrdinalIgnoreCase);
         static readonly Dictionary<Guid, MetaFile> assetGuidToMeta = [];
-        static readonly Dictionary<string, DateTime> fileLastWriteTimes = [];
         static readonly Dictionary<Guid, SerializedAsset> guidToAssetData = [];
 
         #endregion
@@ -78,13 +84,15 @@ namespace Prowl.Editor.Assets
         /// Checks for changes in the AssetDatabase.
         /// Call manually when you make changes to the asset files to ensure the changes are loaded
         /// </summary>
-        public static void Update()
+        public static void Update(bool doUnload = true)
         {
+            if (!Project.HasProject) return;
+
             RefreshTimer = 0f;
 
             HashSet<string> currentFiles = [];
             List<string> toReimport = [];
-
+            bool cacheModified = false;
             foreach (var root in rootFolders)
             {
                 var files = Directory.GetFiles(root.FullName, "*", SearchOption.AllDirectories)
@@ -97,13 +105,14 @@ namespace Prowl.Editor.Assets
                     {
                         currentFiles.Add(file);
 
-                        if (!fileLastWriteTimes.TryGetValue(file, out var lastWriteTime)
+                        if (!LastWriteTimesCache.Instance.fileLastWriteTimes.TryGetValue(file, out var lastWriteTime)
                             || !MetaFile.HasMeta(new FileInfo(file)))
                         {
                             // New file
                             Debug.Log("Asset Added: " + file);
                             lastWriteTime = File.GetLastWriteTime(file);
-                            fileLastWriteTimes[file] = lastWriteTime;
+                            LastWriteTimesCache.Instance.fileLastWriteTimes[file] = lastWriteTime;
+                            cacheModified = true;
                             if (ProcessFile(file))
                                 toReimport.Add(file);
                         }
@@ -112,7 +121,8 @@ namespace Prowl.Editor.Assets
                             // File modified
                             Debug.Log("Asset Updated: " + file);
                             lastWriteTime = File.GetLastWriteTime(file);
-                            fileLastWriteTimes[file] = lastWriteTime;
+                            LastWriteTimesCache.Instance.fileLastWriteTimes[file] = lastWriteTime;
+                            cacheModified = true;
                             if (ProcessFile(file))
                                 toReimport.Add(file);
                         }
@@ -128,35 +138,43 @@ namespace Prowl.Editor.Assets
                 EditorGui.Notify("Imported", $"{ToRelativePath(new(file))}!", color, ImGuiToastType.Success);
             }
 
-            // Check for missing paths
-            var missingPaths = fileLastWriteTimes.Keys.Except(currentFiles).ToList();
-            foreach (var file in missingPaths)
+            if (doUnload)
             {
-                fileLastWriteTimes.Remove(file);
-                bool hasMeta = assetPathToMeta.TryGetValue(file, out var meta);
-
-                if (hasMeta)
+                // Check for missing paths
+                var missingPaths = LastWriteTimesCache.Instance.fileLastWriteTimes.Keys.Except(currentFiles).ToList();
+                foreach (var file in missingPaths)
                 {
-                    assetPathToMeta.Remove(file);
+                    LastWriteTimesCache.Instance.fileLastWriteTimes.Remove(file);
+                    cacheModified = true;
+                    bool hasMeta = assetPathToMeta.TryGetValue(file, out var meta);
 
-                    // The asset could have moved, in which case that's all we need todo
-                    // But, if the guid leads to a meta file which has THIS asset path, then no new asset exists
-                    // As it would have been updated from the code above and ProcessFile()
-                    // Which means it didn't just move somewhere else, its gone
-                    if (assetGuidToMeta.TryGetValue(meta.guid, out var existingMeta))
+                    if (hasMeta)
                     {
-                        if (existingMeta.AssetPath.FullName.Equals(file, StringComparison.OrdinalIgnoreCase))
-                        {
-                            assetGuidToMeta.Remove(meta.guid);
-                            DestroyStoredAsset(meta.guid);
+                        assetPathToMeta.Remove(file);
 
-                            Debug.Log("Asset Deleted: " + file);
-                            AssetRemoved?.Invoke(meta.guid, new FileInfo(file));
+                        // The asset could have moved, in which case that's all we need todo
+                        // But, if the guid leads to a meta file which has THIS asset path, then no new asset exists
+                        // As it would have been updated from the code above and ProcessFile()
+                        // Which means it didn't just move somewhere else, its gone
+                        if (assetGuidToMeta.TryGetValue(meta.guid, out var existingMeta))
+                        {
+                            if (existingMeta.AssetPath.FullName.Equals(file, StringComparison.OrdinalIgnoreCase))
+                            {
+                                assetGuidToMeta.Remove(meta.guid);
+                                DestroyStoredAsset(meta.guid);
+
+                                Debug.Log("Asset Deleted: " + file);
+                                AssetRemoved?.Invoke(meta.guid, new FileInfo(file));
+                            }
                         }
                     }
-                }
 
+                }
             }
+
+            if(cacheModified)
+                LastWriteTimesCache.Instance.Save();
+
         }
 
         /// <summary>
@@ -244,17 +262,6 @@ namespace Prowl.Editor.Assets
                 return true;
             }
             return false;
-        }
-
-        /// <summary>
-        /// Clears the AssetDatabase.
-        /// You shouldnt call this unless you know what your doing!
-        /// </summary>
-        public static void Clear()
-        {
-            rootFolders.Clear();
-            assetGuidToMeta.Clear();
-            fileLastWriteTimes.Clear();
         }
 
         /// <summary>

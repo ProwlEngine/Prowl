@@ -58,11 +58,11 @@ public static class Project
 
         CreateDefaults("Defaults");
         AssetDatabase.AddRootFolder("Defaults");
-        AssetDatabase.Update(); // Ensure defaults are loaded
+        AssetDatabase.Update(false); // Ensure defaults are all loaded in
         AssetDatabase.AddRootFolder("Packages");
-        AssetDatabase.Update(); // Ensure packages are loaded
+        AssetDatabase.Update(false); // Ensure packages are all loaded in
         AssetDatabase.AddRootFolder("Assets");
-        AssetDatabase.Update();
+        AssetDatabase.Update(); // Not that all folders are in we can unload anything thats not in the project anymore since last session
 
         OnProjectChanged?.Invoke();
     }
