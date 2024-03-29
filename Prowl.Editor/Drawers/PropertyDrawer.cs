@@ -109,37 +109,11 @@ public abstract class PropertyDrawer<T> : PropertyDrawer {
     {
         ImGui.Columns(2, false);
         ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.8f, 0.8f, 0.8f, 1f));
-        ImGui.Text(Prettify(label));
+        ImGui.Text(RuntimeUtils.Prettify(label));
         ImGui.PopStyleColor();
         var w = width / 2.5f;
         ImGui.SetColumnWidth(0, w);
         width -= w;
         ImGui.NextColumn();
-    }
-
-    protected string Prettify(string label)
-    {
-        if (label.StartsWith('_'))
-            label = label.Substring(1);
-
-        // Use a StringBuilder to avoid modifying the original string in the loop
-        StringBuilder result = new StringBuilder(label.Length * 2);
-        result.Append(char.ToUpper(label[0]));
-
-        // Add space before each Capital letter (except the first)
-        for (int i = 1; i < label.Length; i++)
-        {
-            if (char.IsUpper(label[i]))
-            {
-                result.Append(' ');  // Add space
-                result.Append(label[i]);  // Append the current uppercase character
-            }
-            else
-            {
-                result.Append(label[i]);  // Append the current character
-            }
-        }
-
-        return Thread.CurrentThread.CurrentCulture.TextInfo.ToTitleCase(result.ToString());
     }
 }
