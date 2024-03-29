@@ -108,7 +108,7 @@ public abstract class SingletonEditorWindow : EditorWindow
                 if (PropertyDrawer.Draw(setting, field))
                 {
                     // Use reflection to find a method "protected void Save()"
-                    MethodInfo? saveMethod = setting.GetType().GetMethod("Save", BindingFlags.Instance | BindingFlags.NonPublic);
+                    MethodInfo? saveMethod = setting.GetType().GetMethod("Save", BindingFlags.Instance | BindingFlags.Public);
                     saveMethod?.Invoke(setting, null);
                 }
 

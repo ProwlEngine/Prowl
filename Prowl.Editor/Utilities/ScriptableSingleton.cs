@@ -36,7 +36,7 @@ namespace Prowl.Editor.Utilities
             }
         }
 
-        protected void Save()
+        public void Save()
         {
             StringTagConverter.WriteToFile(Serializer.Serialize(this), new(GetFilePath()));
         }
