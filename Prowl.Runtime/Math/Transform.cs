@@ -148,7 +148,7 @@ namespace Prowl.Runtime
         [SerializeField] Quaternion m_LocalRotation = Quaternion.identity;
 
         [NonSerialized]
-        uint _version = 0;
+        uint _version = 1;
 
         public GameObject gameObject { get; internal set; }
         #endregion
