@@ -1,6 +1,5 @@
 ﻿using Silk.NET.OpenAL;
 using System;
-using System.Runtime.InteropServices;
 
 namespace Prowl.Runtime.Audio.OpenAL
 {
@@ -15,14 +14,14 @@ namespace Prowl.Runtime.Audio.OpenAL
             ByteCount = 0;
         }
 
-        public override void BufferData<T>(T[] buffer, BufferAudioFormat format, int sampleRate)
+        public override void BufferData(byte[] buffer, BufferAudioFormat format, int sampleRate)
         {
             unsafe
             {
                 fixed (void* bufferptr = buffer)
                 {
-                    OpenALEngine.al.BufferData(ID, MapAudioFormat(format), bufferptr, buffer.Length * Marshal.SizeOf<T>(), sampleRate * 2);
-                    ByteCount = buffer.Length * Marshal.SizeOf<T>();
+                    OpenALEngine.al.BufferData(ID, MapAudioFormat(format), bufferptr, buffer.Length, sampleRate);
+                    ByteCount = buffer.Length;
                 }
             }
         }

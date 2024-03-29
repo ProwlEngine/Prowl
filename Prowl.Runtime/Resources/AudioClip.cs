@@ -7,7 +7,7 @@ namespace Prowl.Runtime
 {
     public sealed class AudioClip : EngineObject
     {
-        public float[] Data;
+        public byte[] Data;
         public BufferAudioFormat Format;
         public int SizeInBytes;
         public int SampleRate;
@@ -17,13 +17,13 @@ namespace Prowl.Runtime
         public float Duration => (float)SampleCount / SampleRate;
         public int SampleCount => Data.Length / Channels;
 
-        public static AudioClip Create(string name, float[] data, short numChannels, short bitsPerSample, int sampleRate)
+        public static AudioClip Create(string name, byte[] data, short numChannels, short bitsPerSample, int sampleRate)
         {
             return new AudioClip {
                 Name = name,
                 Data = data,
                 Format = MapFormat(numChannels, bitsPerSample),
-                SizeInBytes = data.Length * sizeof(float),
+                SizeInBytes = data.Length,
                 SampleRate = sampleRate
             };
         }
@@ -44,50 +44,6 @@ namespace Prowl.Runtime
         {
             return format == BufferAudioFormat.Mono8 || format == BufferAudioFormat.Stereo8 ? 8 :
                    format == BufferAudioFormat.Mono16 || format == BufferAudioFormat.Stereo16 ? 16 : 32;
-        }
-
-        public float GetSample(int sampleIndex)
-        {
-            if (sampleIndex < 0 || sampleIndex >= Data.Length)
-            {
-                throw new ArgumentOutOfRangeException(nameof(sampleIndex), "Sample index is out of range.");
-            }
-            return Data[sampleIndex];
-        }
-
-        public float[] GetSamples(int startIndex, int count)
-        {
-            if (startIndex < 0 || startIndex >= Data.Length)
-            {
-                throw new ArgumentOutOfRangeException(nameof(startIndex), "Start index is out of range.");
-            }
-            if (count < 0 || startIndex + count > Data.Length)
-            {
-                throw new ArgumentOutOfRangeException(nameof(count), "Invalid count value.");
-            }
-            return Data.Skip(startIndex).Take(count).ToArray();
-        }
-
-        public void SetSample(int sampleIndex, float value)
-        {
-            if (sampleIndex < 0 || sampleIndex >= Data.Length)
-            {
-                throw new ArgumentOutOfRangeException(nameof(sampleIndex), "Sample index is out of range.");
-            }
-            Data[sampleIndex] = value;
-        }
-
-        public void SetSamples(int startIndex, float[] samples)
-        {
-            if (startIndex < 0 || startIndex >= Data.Length)
-            {
-                throw new ArgumentOutOfRangeException(nameof(startIndex), "Start index is out of range.");
-            }
-            if (startIndex + samples.Length > Data.Length)
-            {
-                throw new ArgumentException("Sample data exceeds the size of the audio clip.", nameof(samples));
-            }
-            Array.Copy(samples, 0, Data, startIndex, samples.Length);
         }
     }
 }

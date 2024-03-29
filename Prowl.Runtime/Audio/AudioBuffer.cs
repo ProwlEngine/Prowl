@@ -12,7 +12,7 @@
 
     public abstract class AudioBuffer : System.IDisposable
     {
-        public abstract void BufferData<T>(T[] buffer, BufferAudioFormat format, int frequency) where T : struct;
+        public abstract void BufferData(byte[] buffer, BufferAudioFormat format, int frequency);
         public abstract void Dispose();
     }
 }
