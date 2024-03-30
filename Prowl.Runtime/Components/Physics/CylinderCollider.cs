@@ -15,7 +15,9 @@ namespace Prowl.Runtime
             (Shape[0] as CapsuleShape).Radius = radius;
             (Shape[0] as CapsuleShape).Length = height;
             Shape[0].UpdateShape();
-            GetComponentInParent<Rigidbody>().IsActive = true;
+            var rigid = GetComponentInParent<Rigidbody>();
+            if (rigid != null)
+                rigid.IsActive = true;
         }
     }
 

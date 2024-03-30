@@ -14,7 +14,9 @@ namespace Prowl.Runtime
         {
             (Shape[0] as BoxShape).Size = size;
             Shape[0].UpdateShape();
-            GetComponentInParent<Rigidbody>().IsActive = true;
+            var rigid = GetComponentInParent<Rigidbody>();
+            if(rigid != null)
+                rigid.IsActive = true;
         }
 
         public void DrawGizmosSelected()

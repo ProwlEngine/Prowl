@@ -13,7 +13,9 @@ namespace Prowl.Runtime
         {
             (Shape[0] as SphereShape).Radius = radius;
             Shape[0].UpdateShape();
-            GetComponentInParent<Rigidbody>().IsActive = true;
+            var rigid = GetComponentInParent<Rigidbody>();
+            if (rigid != null)
+                rigid.IsActive = true;
         }
 
         public override void DrawGizmosSelected()
