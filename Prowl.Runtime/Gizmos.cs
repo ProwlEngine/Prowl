@@ -35,17 +35,24 @@ namespace Prowl.Runtime
 
         public static void Render()
         {
-            try {
-                mat ??= new Material(Shader.Find("Defaults\\Gizmos.shader"));
-            } catch {
+            try
+            {
+                mat ??= new Material(Shader.Find("Defaults/Gizmos.shader"));
+            }
+            catch
+            {
                 return; // Happens when no project is loaded (Or no Gizmos shader was found)
             }
 
-            if (LineBatch.IsUploaded == false) {
+            if (LineBatch.IsUploaded == false)
+            {
                 foreach (var gizmo in gizmos)
-                    try {
+                    try
+                    {
                         gizmo.Item1.Render(LineBatch, gizmo.Item2);
-                    } catch {
+                    }
+                    catch
+                    {
                         // Nothing, errors are normal here
                     }
                 LineBatch.Upload();
@@ -57,7 +64,7 @@ namespace Prowl.Runtime
             mat.SetMatrix("mvp", mvp);
             mat.SetPass(0, true);
             using (Graphics.UseBlendMode(BlendMode.Additive))
-            LineBatch.Draw();
+                LineBatch.Draw();
         }
 
         public static void Clear()
@@ -132,7 +139,8 @@ namespace Prowl.Runtime
 
             int numSegments = 12;
 
-            for (int i = 0; i < numSegments; i++) {
+            for (int i = 0; i < numSegments; i++)
+            {
                 float angle = (float)i / numSegments * 2f * MathF.PI;
                 float angle2 = (float)(i + 1) / numSegments * 2f * MathF.PI;
 
@@ -152,7 +160,8 @@ namespace Prowl.Runtime
 
             int numSegments = 6;  // Adjust for smoother or more segmented circle
 
-            for (int i = 0; i < numSegments; i++) {
+            for (int i = 0; i < numSegments; i++)
+            {
                 float angle = (float)i / numSegments * 2f * MathF.PI;
                 float angle2 = (float)(i + 1) / numSegments * 2f * MathF.PI;
 

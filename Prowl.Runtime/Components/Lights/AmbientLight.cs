@@ -16,7 +16,7 @@ public class AmbientLight : MonoBehaviour
 
     public override void OnRenderObject()
     {
-        lightMat ??= new Material(Shader.Find("Defaults\\AmbientLight.shader"));
+        lightMat ??= new Material(Shader.Find("Defaults/AmbientLight.shader"));
 
         lightMat.SetColor("SkyColor", skyColor);
         lightMat.SetColor("GroundColor", groundColor);
