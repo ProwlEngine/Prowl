@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using Prowl.Icons;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace Prowl.Runtime
