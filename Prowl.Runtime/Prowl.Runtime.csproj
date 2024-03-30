@@ -33,7 +33,7 @@
     </ItemGroup>
     
     <ItemGroup>
-      <PackageReference Include="Jitter2" Version="2.2.0" />
+      <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
       <PackageReference Include="Silk.NET" Version="2.20.0" />
       <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.21.1.2" />
     </ItemGroup>
