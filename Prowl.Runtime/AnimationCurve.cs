@@ -61,6 +61,7 @@ namespace Prowl.Runtime
             // Add Default keys
             this.Keys.Add(new KeyFrame(0, 0));
             this.Keys.Add(new KeyFrame(1, 1));
+            SmoothTangents(CurveTangent.Smooth);
         }
 
         #endregion
