@@ -47,7 +47,7 @@ public class InspectorWindow : EditorWindow
     protected override void Draw()
     {
         // Move 2 pixels down
-        ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 2);
+        ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 1);
         ForwardBackButtons();
         ImGui.Separator();
         ImGui.Spacing();
