@@ -61,6 +61,27 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             //
             //ImGui.Separator();
 
+            if (go.IsPrefab)
+            {
+                // Show buttons to Ping Prefab Asset, Revert Prefab, and Apply Prefab
+                ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.2f, 0.2f, 0.2f, 1f));
+
+                if (ImGui.Button("Select", new System.Numerics.Vector2((ImGui.GetWindowWidth() / 3) - 3, 25f)))
+                    AssetDatabase.Ping(go.AssetID);
+                ImGui.SameLine();
+                if (ImGui.Button("Revert", new System.Numerics.Vector2((ImGui.GetWindowWidth() / 3) - 3, 25f)))
+                {
+#warning TODO: Implement Revert Prefab
+                }
+                ImGui.SameLine();
+                if (ImGui.Button("Apply", new System.Numerics.Vector2((ImGui.GetWindowWidth() / 3) - 3, 25f)))
+                {
+#warning TODO: Implement Apply Prefab
+                }
+
+                ImGui.PopStyleColor();
+                ImGui.Separator();
+            }
 
             PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localPosition")!, -1, "Position");
             PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localEulerAngles")!, -1, "Rotation");
