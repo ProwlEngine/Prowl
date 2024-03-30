@@ -31,7 +31,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             if (go.hideFlags.HasFlag(HideFlags.NotEditable)) ImGui.BeginDisabled();
 
             // position cursor back to window start
-            ImGui.SetCursorPos(new(56, 28));
+            ImGui.SetCursorPos(new(63, 28));
 
             ImGui.SetNextItemWidth(ImGui.GetWindowWidth() - 100);
             ImGui.InputText("##GOName", ref go.Name, 0x100);
