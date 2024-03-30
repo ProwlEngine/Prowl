@@ -143,43 +143,74 @@ public static class Project
 
         // Compile the Project Assembly using 'dotnet build'
         BoundedLog($"Compiling external assembly in {dir}...");
-        ProcessStartInfo processInfo = new()
+        ProcessStartInfo processInfo = null;
+        if (RuntimeUtils.IsWindows())
         {
-            WorkingDirectory = Path.GetDirectoryName(dir),
-            FileName = "cmd.exe",
-            Arguments = $"/c dotnet build \"{Path.GetFileName(dir)}\"" + (isRelease ? " --configuration Release" : ""),
-            CreateNoWindow = true,
-            UseShellExecute = false,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-        };
+            processInfo = new() {
+                WorkingDirectory = Path.GetDirectoryName(dir),
+                FileName = "cmd.exe",
+                Arguments = $"/c dotnet build \"{Path.GetFileName(dir)}\"" + (isRelease ? " --configuration Release" : ""),
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+            };
+        }
+        else if (RuntimeUtils.IsMac())
+        {
+            processInfo = new() {
+                WorkingDirectory = Path.GetDirectoryName(dir),
+                FileName = "/bin/bash",
+                Arguments = $"-c \"dotnet build '{Path.GetFileName(dir)}'\"" + (isRelease ? " --configuration Release" : ""),
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+            };
+        }
+        else if (RuntimeUtils.IsLinux())
+        {
+            processInfo = new() {
+                WorkingDirectory = Path.GetDirectoryName(dir),
+                FileName = "/bin/bash",
+                Arguments = $"-c \"dotnet build '{Path.GetFileName(dir)}'\"" + (isRelease ? " --configuration Release" : ""),
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+            };
+        }
+        else
+        {
+            Runtime.Debug.LogError("Unsupported OS for compiling external assembly!");
+            return false;
+        }
+
         Process process = Process.Start(processInfo) ?? throw new Exception();
-        process.OutputDataReceived += (sender, dataArgs) =>
-        {
-            string? data = dataArgs.Data;
+            process.OutputDataReceived += (sender, dataArgs) => {
+                string? data = dataArgs.Data;
 
-            if (data is null)
-                return;
+                if (data is null)
+                    return;
 
-            if (data.Contains("Warning", StringComparison.OrdinalIgnoreCase))
-                Runtime.Debug.LogWarning(data);
-            else if (data.Contains("Error", StringComparison.OrdinalIgnoreCase))
-                Runtime.Debug.LogError(data);
-            else
-                Runtime.Debug.Log(data);
-        };
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        process.ErrorDataReceived += (sender, dataArgs) =>
-        {
-            if (dataArgs.Data is not null)
-                Runtime.Debug.LogError(dataArgs.Data);
-        };
+                if (data.Contains("Warning", StringComparison.OrdinalIgnoreCase))
+                    Runtime.Debug.LogWarning(data);
+                else if (data.Contains("Error", StringComparison.OrdinalIgnoreCase))
+                    Runtime.Debug.LogError(data);
+                else
+                    Runtime.Debug.Log(data);
+            };
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            process.ErrorDataReceived += (sender, dataArgs) => {
+                if (dataArgs.Data is not null)
+                    Runtime.Debug.LogError(dataArgs.Data);
+            };
 
-        process.WaitForExit();
+            process.WaitForExit();
 
-        int exitCode = process.ExitCode;
-        process.Close();
+            int exitCode = process.ExitCode;
+            process.Close();
 
         BoundedLog($"Exit Code: '{exitCode}'");
 
