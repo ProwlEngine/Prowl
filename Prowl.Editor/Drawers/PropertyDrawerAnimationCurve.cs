@@ -80,9 +80,40 @@ public class PropertyDrawerAnimationCurve : PropertyDrawer<AnimationCurve> {
             ImPlot.SetNextLineStyle(new Vector4(0, 0.9f, 0, 1), 2.0f);
             ImPlot.PlotLine("##curve", ref evaluatedPoints[0].X, ref evaluatedPoints[0].Y, evaluatedPoints.Length, ImPlotLineFlags.None, 0, sizeof(double) * 2);
 
+            for (int i = 0; i < points.Length; i++)
+                DrawTangents(i, c.Keys[i]);
+
             ImPlot.EndPlot();
         }
 
         return changed;
+    }
+
+    private void DrawTangents(int i, KeyFrame keyframe)
+    {
+        Vector2 pointPos = new Vector2(points[i].X, points[i].Y);
+        double tangentInAngle = Mathf.Atan(keyframe.TangentIn);
+        double tangentOutAngle = Mathf.Atan(keyframe.TangentOut);
+
+        double plotZoom = ImPlot.GetPlotLimits().Y.Max - ImPlot.GetPlotLimits().Y.Min;
+        double tangentDistance = plotZoom * 0.1;
+        Vector2 tangentInPos = pointPos + (new Vector2(Mathf.Cos(tangentInAngle), Mathf.Sin(tangentInAngle)) * tangentDistance);
+        Vector2 tangentOutPos = pointPos + (new Vector2(Mathf.Cos(tangentOutAngle), Mathf.Sin(tangentOutAngle)) * tangentDistance);
+
+        var p = ImPlot.PlotToPixels(points[i]);
+        var p1 = ImPlot.PlotToPixels(new ImPlotPoint() { X = tangentInPos.x, Y = tangentInPos.y });
+        var p2 = ImPlot.PlotToPixels(new ImPlotPoint() { X = tangentOutPos.x, Y = tangentOutPos.y });
+        ImPlot.PushPlotClipRect();
+        if (i > 0)
+        {
+            ImPlot.GetPlotDrawList().AddLine(p, p1, ImGui.GetColorU32(new Vector4(0.9f, 0, 0, 1)), 2);
+            ImPlot.GetPlotDrawList().AddCircleFilled(p1, 4, ImGui.GetColorU32(new Vector4(0.9f, 0, 0, 1)));
+        }
+        if (i < points.Length - 1)
+        {
+            ImPlot.GetPlotDrawList().AddLine(p, p2, ImGui.GetColorU32(new Vector4(0.9f, 0, 0, 1)), 2);
+            ImPlot.GetPlotDrawList().AddCircleFilled(p2, 4, ImGui.GetColorU32(new Vector4(0.9f, 0, 0, 1)));
+        }
+        ImPlot.PopPlotClipRect();
     }
 }
