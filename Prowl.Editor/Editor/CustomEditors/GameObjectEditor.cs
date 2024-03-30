@@ -212,6 +212,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     var serialized = Serializer.Serialize(comp);
                     var copy = Serializer.Deserialize<MonoBehaviour>(serialized);
                     go.AddComponentDirectly(copy);
+                    copy.OnValidate();
                 }
                 if (ImGui.MenuItem("Delete")) go.RemoveComponent(comp);
                 ImGui.EndPopup();
@@ -232,7 +233,9 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                 if (item.Type != null) {
                     if (ImGui.MenuItem(item.Name))
-                        go.AddComponent(item.Type);
+                    {
+                        go.AddComponent(item.Type).OnValidate();
+                    }
                 } else {
                     if (ImGui.BeginMenu(item.Name, true)) {
                         DrawMenuItems(item, go);
@@ -262,7 +265,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                     Type? type = Type.GetType($"{EditorUtils.FilterAlpha(_searchText)}, CSharp, Version=1.0.0.0, Culture=neutral");
                     if(type != null && type.IsAssignableTo(typeof(MonoBehaviour)))
-                        go.AddComponent(type);
+                        go.AddComponent(type).OnValidate();
                     ImGui.EndMenu();
                 }
             }
