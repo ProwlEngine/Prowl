@@ -23,8 +23,8 @@ Pass 0
 		in vec2 TexCoords;
 		uniform vec2 Resolution;
 		
-		uniform sampler gCombined; // Depth
-		uniform sampler gDepth; // Depth
+		uniform sampler2D gCombined; // Depth
+		uniform sampler2D gDepth; // Depth
 
 		uniform float u_Quality; // [0.1 0.15 0.2 0.25 0.3 0.35 0.4 0.45 0.5 0.55 0.6 0.65 0.7 0.75 0.8 0.85 0.9]
 		uniform float u_BlurRadius; // [5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40]

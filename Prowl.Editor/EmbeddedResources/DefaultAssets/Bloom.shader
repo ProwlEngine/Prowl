@@ -23,7 +23,7 @@ Pass 0
 		in vec2 TexCoords;
 		uniform vec2 Resolution;
 		
-		uniform sampler gColor;
+		uniform sampler2D gColor;
 
 		uniform float u_Radius;
 		uniform float u_Threshold;

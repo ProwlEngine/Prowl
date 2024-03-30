@@ -20,8 +20,8 @@ Pass 0
 	{
 		in vec2 TexCoords;
 
-		uniform sampler gAlbedoAO; // Diffuse
-		uniform sampler gLighting; // Lighting
+		uniform sampler2D gAlbedoAO; // Diffuse
+		uniform sampler2D gLighting; // Lighting
 		
 		layout(location = 0) out vec4 OutputColor;
 		

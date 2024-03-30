@@ -22,7 +22,7 @@ Pass 0
 		uniform float Contrast;
 		uniform float Saturation;
 
-		uniform sampler gAlbedo;
+		uniform sampler2D gAlbedo;
 		
 		layout(location = 0) out vec4 OutputColor;
 		

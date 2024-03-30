@@ -6,7 +6,7 @@ vec3 projectAndDivide(mat4 matrix, vec3 pos) {
     return p.xyz / p.w;
 }
 // ----------------------------------------------------------------------------
-vec3 getScreenPos(vec2 tc, sampler depthSampler) {
+vec3 getScreenPos(vec2 tc, sampler2D depthSampler) {
 	return vec3(tc, texture2D(depthSampler, tc).x);
 }
 // ----------------------------------------------------------------------------
@@ -23,7 +23,7 @@ vec3 getViewFromScreenPos(vec3 screenPos) {
 	return projectAndDivide(matProjectionInverse, getNDCFromScreenPos(screenPos));
 }
 // ----------------------------------------------------------------------------
-vec3 getViewPos(vec2 tc, sampler depthSampler) {
+vec3 getViewPos(vec2 tc, sampler2D depthSampler) {
 	return getViewFromScreenPos(getScreenPos(tc, depthSampler));
 }
 // ----------------------------------------------------------------------------
@@ -33,7 +33,7 @@ vec3 getViewPos(vec2 tc, sampler depthSampler) {
 
 
 // ----------------------------------------------------------------------------
-vec3 binaryRefine(vec3 screenPosRayDir, vec3 startPos, int refineSteps, sampler depthSampler)
+vec3 binaryRefine(vec3 screenPosRayDir, vec3 startPos, int refineSteps, sampler2D depthSampler)
 {
 	for(int i = 0; i < refineSteps; i++)
 	{
@@ -43,7 +43,7 @@ vec3 binaryRefine(vec3 screenPosRayDir, vec3 startPos, int refineSteps, sampler 
 	return startPos;
 }
 // ----------------------------------------------------------------------------
-vec3 rayTrace(vec3 screenPos, vec3 viewPos, vec3 rayDir, float dither, int steps, int refineSteps, sampler depthSampler) 
+vec3 rayTrace(vec3 screenPos, vec3 viewPos, vec3 rayDir, float dither, int steps, int refineSteps, sampler2D depthSampler) 
 {
 	vec3 screenPosRayDir = normalize(getScreenFromViewPos(viewPos + rayDir) - screenPos) / steps;
 	screenPos += screenPosRayDir * dither;

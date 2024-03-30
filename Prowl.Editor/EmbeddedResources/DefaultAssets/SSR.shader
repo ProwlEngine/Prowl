@@ -18,10 +18,10 @@ Pass 0
 		
 		uniform vec2 Resolution;
 		
-		uniform sampler gColor; // Depth
-		uniform sampler gNormalMetallic; // Depth
-		uniform sampler gPositionRoughness; // Depth
-		uniform sampler gDepth; // Depth
+		uniform sampler2D gColor; // Depth
+		uniform sampler2D gNormalMetallic; // Depth
+		uniform sampler2D gPositionRoughness; // Depth
+		uniform sampler2D gDepth; // Depth
 		
 		uniform mat4 matProjection;
 		uniform mat4 matProjectionInverse;

@@ -140,12 +140,12 @@ Pass 0
 		uniform int Frame;
 		uniform vec2 Resolution;
 		
-		uniform samplersampler NoiseTexture; // r:Blue g:White b:Voronoi
+		uniform sampler2D NoiseTexture; // r:Blue g:White b:Voronoi
 
-		uniform sampler _MainTex; // diffuse
-		uniform sampler _NormalTex; // Normal
-		uniform sampler _SurfaceTex; // AO, Roughness, Metallic
-		uniform sampler _EmissionTex; // Emissive
+		uniform sampler2D _MainTex; // diffuse
+		uniform sampler2D _NormalTex; // Normal
+		uniform sampler2D _SurfaceTex; // AO, Roughness, Metallic
+		uniform sampler2D _EmissionTex; // Emissive
 		uniform vec4 _EmissiveColor; // Emissive color
 		uniform vec4 _MainColor; // color
 		uniform float _EmissionIntensity;
@@ -255,7 +255,7 @@ ShadowPass 0
 	{
 		layout (location = 0) out float fragmentdepth;
 		
-		uniform sampler _MainTex; // diffuse
+		uniform sampler2D _MainTex; // diffuse
 		uniform vec4 _MainColor;
 		uniform int Frame;
 

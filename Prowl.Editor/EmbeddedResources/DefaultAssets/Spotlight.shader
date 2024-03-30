@@ -36,9 +36,9 @@ Pass 0
 		uniform vec4 LightColor;
 		uniform float LightIntensity;
 		
-		uniform sampler gAlbedoAO; // Albedo & Roughness
-		uniform sampler gNormalMetallic; // Normal & Metalness
-		uniform sampler gPositionRoughness; // Depth
+		uniform sampler2D gAlbedoAO; // Albedo & Roughness
+		uniform sampler2D gNormalMetallic; // Normal & Metalness
+		uniform sampler2D gPositionRoughness; // Depth
 		
 		#include "PBR"
 		
