@@ -1,4 +1,5 @@
 ﻿using Prowl.Runtime;
+using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Assets
 {
@@ -23,6 +24,11 @@ namespace Prowl.Editor.Assets
         {
             // The Editor is a special case, its just a wrapper around the AssetDatabase
             return new AssetRef<T>(AssetDatabase.LoadAsset<T>(assetID.AssetID, assetID.FileID));
+        }
+
+        public SerializedAsset? LoadAsset(Guid guid)
+        {
+            return AssetDatabase.LoadAsset(guid);
         }
     }
 }

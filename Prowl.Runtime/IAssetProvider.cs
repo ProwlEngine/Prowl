@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Prowl.Runtime.Utils;
+using System;
 
 namespace Prowl.Runtime
 {
@@ -8,5 +9,6 @@ namespace Prowl.Runtime
         public AssetRef<T> LoadAsset<T>(string relativeAssetPath, int fileID = 0) where T : EngineObject;
         public AssetRef<T> LoadAsset<T>(Guid guid, int fileID = 0) where T : EngineObject;
         public AssetRef<T> LoadAsset<T>(IAssetRef assetID) where T : EngineObject;
+        public SerializedAsset? LoadAsset(Guid guid);
     }
 }

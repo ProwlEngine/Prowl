@@ -57,6 +57,20 @@ public class StandaloneAssetProvider : IAssetProvider
         return LoadAsset<T>(assetID.AssetID, assetID.FileID);
     }
 
+    public SerializedAsset? LoadAsset(Guid guid)
+    {
+        if (_loaded.ContainsKey(guid))
+            return _loaded[guid];
+
+        foreach (AssetBundle package in packages)
+            if (package.TryGetAsset(guid, out var asset))
+            {
+                _loaded[guid] = asset;
+                return asset;
+            }
+        throw new FileNotFoundException($"Asset with GUID {guid} not found.");
+    }
+
     public string GetPathFromGUID(Guid guid)
     {
         foreach (AssetBundle package in packages)
