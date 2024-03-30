@@ -1,4 +1,5 @@
-﻿using Hexa.NET.ImPlot;
+﻿using Hexa.NET.ImGui;
+using Hexa.NET.ImPlot;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.PropertyDrawers;
@@ -51,10 +52,20 @@ public class PropertyDrawerAnimationCurve : PropertyDrawer<AnimationCurve> {
             }
 
             // Update the keyframes in the AnimationCurve based on the modified points
+            List<Vector4> previousKeyframes = new List<Vector4>();
+            for (int i = 0; i < c.Keys.Count; i++)
+            {
+                previousKeyframes.Add(new Vector4(c.Keys[i].Position, c.Keys[i].Value, c.Keys[i].TangentIn, c.Keys[i].TangentOut));
+            }
             c.Keys.Clear();
             for (int i = 0; i < points.Length; i++)
             {
                 KeyFrame keyframe = new KeyFrame(points[i].X, points[i].Y);
+                if (i < previousKeyframes.Count)
+                {
+                    keyframe.TangentIn = previousKeyframes[i].z;
+                    keyframe.TangentOut = previousKeyframes[i].w;
+                }
                 c.Keys.Add(keyframe);
             }
 
