@@ -93,9 +93,9 @@ public class Camera : MonoBehaviour
 
     public void Render(int width, int height)
     {
-        if (RenderPipeline.IsAvailable == false) 
+        if (RenderPipeline.IsAvailable == false)
         {
-            RenderPipeline = Application.AssetProvider.LoadAsset<RenderPipeline>("Defaults\\DefaultRenderPipeline.scriptobj");
+            RenderPipeline = Application.AssetProvider.LoadAsset<RenderPipeline>("Defaults/DefaultRenderPipeline.scriptobj");
             if (RenderPipeline.IsAvailable == false)
             {
                 Debug.LogError($"Camera on {GameObject.Name} cannot render, Missing Default Render Pipeline!");
@@ -120,7 +120,7 @@ public class Camera : MonoBehaviour
 
         CheckGBuffer();
 
-        
+
         Current = this;
 
         Graphics.MatView = View;
@@ -129,7 +129,8 @@ public class Camera : MonoBehaviour
         Graphics.OldMatProjection = oldProjection ?? Graphics.MatProjection;
 
         // Set default jitter to false, this is set to true in a TAA pass
-        foreach (var node in rp.Res!.nodes) {
+        foreach (var node in rp.Res!.nodes)
+        {
             if (node is RenderPassNode renderPass)
                 renderPass.PreRender(width, height);
         }
@@ -168,7 +169,8 @@ public class Camera : MonoBehaviour
         //PostProcessStagePostCombine?.Invoke(gBuffer);
 
         // Draw to Screen
-        if (debugDraw == DebugDraw.Off) {
+        if (debugDraw == DebugDraw.Off)
+        {
             Graphics.Blit(Target.Res ?? null, result.InternalTextures[0], DoClear);
             Graphics.BlitDepth(gBuffer.buffer, Target.Res ?? null);
         }
@@ -186,7 +188,8 @@ public class Camera : MonoBehaviour
         oldView = Graphics.MatView;
         oldProjection = Graphics.MatProjection;
 
-        if (ShowGizmos) {
+        if (ShowGizmos)
+        {
             Target.Res?.Begin();
             if (Graphics.UseJitter)
                 Graphics.MatProjection = Current.GetProjectionMatrix(width, height); // Cancel out jitter if there is any

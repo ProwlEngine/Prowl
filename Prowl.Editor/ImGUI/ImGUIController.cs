@@ -57,15 +57,19 @@ namespace Prowl.Editor.ImGUI
 
             var io = ImGui.GetIO();
 
-            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Prowl.Editor.EmbeddedResources.font.ttf")) {
+            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Prowl.Editor.EmbeddedResources.font.ttf"))
+            {
                 string tempFilePath = Path.Combine(Path.GetTempPath(), "font.ttf");
                 using (FileStream fileStream = File.Create(tempFilePath))
                     stream.CopyTo(fileStream);
-                try {
+                try
+                {
                     io.Fonts.AddFontFromFileTTF(tempFilePath, 22);
                     AddEmbeddedFont(FontAwesome6.FontIconFileNameFAR, FontAwesome6.IconMin, FontAwesome6.IconMax);
                     AddEmbeddedFont(FontAwesome6.FontIconFileNameFAS, FontAwesome6.IconMin, FontAwesome6.IconMax);
-                } finally {
+                }
+                finally
+                {
                     File.Delete(tempFilePath);
                 }
             }
@@ -130,12 +134,15 @@ namespace Prowl.Editor.ImGUI
 
         unsafe void AddEmbeddedFont(string name, ushort min, ushort max, float fontSize = 22 * 2.0f / 3.0f)
         {
-            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.{name}")) {
-                if (stream != null) {
+            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.{name}"))
+            {
+                if (stream != null)
+                {
                     string tempFilePath = Path.Combine(Path.GetTempPath(), "tempfont.ttf");
                     using (FileStream fileStream = File.Create(tempFilePath))
                         stream.CopyTo(fileStream);
-                    try {
+                    try
+                    {
                         ImFontConfigPtr fontConfig = ImGui.ImFontConfig();
                         fontConfig.MergeMode = true;
                         fontConfig.PixelSnapH = true;
@@ -144,10 +151,14 @@ namespace Prowl.Editor.ImGUI
                         char[] ranges = [(char)min, (char)max];
                         ImGui.GetIO().Fonts.AddFontFromFileTTF(tempFilePath, fontSize, fontConfig, ref ranges[0]);
                         //rangeHandle.Free();
-                    } finally {
+                    }
+                    finally
+                    {
                         File.Delete(tempFilePath);
                     }
-                } else {
+                }
+                else
+                {
                     Debug.LogWarning("Failed to load AwesomeFont.");
                 }
             }
@@ -167,10 +178,12 @@ namespace Prowl.Editor.ImGUI
         /// </summary>
         public void Render()
         {
-            if (_frameBegun) {
+            if (_frameBegun)
+            {
                 var oldCtx = ImGui.GetCurrentContext();
 
-                if (oldCtx != Context) {
+                if (oldCtx != Context)
+                {
                     ImGui.SetCurrentContext(Context);
                 }
 
@@ -178,7 +191,8 @@ namespace Prowl.Editor.ImGUI
                 ImGui.Render();
                 RenderImDrawData(ImGui.GetDrawData());
 
-                if (oldCtx != Context) {
+                if (oldCtx != Context)
+                {
                     ImGui.SetCurrentContext(oldCtx);
                 }
             }
@@ -191,11 +205,13 @@ namespace Prowl.Editor.ImGUI
         {
             var oldCtx = ImGui.GetCurrentContext();
 
-            if (oldCtx != Context) {
+            if (oldCtx != Context)
+            {
                 ImGui.SetCurrentContext(Context);
             }
 
-            if (_frameBegun) {
+            if (_frameBegun)
+            {
                 ImGui.Render();
             }
 
@@ -206,7 +222,8 @@ namespace Prowl.Editor.ImGUI
             ImGui.NewFrame();
             ImGuizmo.BeginFrame();
 
-            if (oldCtx != Context) {
+            if (oldCtx != Context)
+            {
                 ImGui.SetCurrentContext(oldCtx);
                 ImGuizmo.SetImGuiContext(oldCtx);
                 ImPlot.SetImGuiContext(oldCtx);
@@ -223,7 +240,8 @@ namespace Prowl.Editor.ImGUI
             var io = ImGui.GetIO();
             io.DisplaySize = new Vector2(_windowWidth, _windowHeight);
 
-            if (_windowWidth > 0 && _windowHeight > 0) {
+            if (_windowWidth > 0 && _windowHeight > 0)
+            {
                 io.DisplayFramebufferScale = new Vector2(_view.FramebufferSize.X / _windowWidth,
                     _view.FramebufferSize.Y / _windowHeight);
             }
@@ -237,15 +255,17 @@ namespace Prowl.Editor.ImGUI
 
             var keyState = _input.Keyboards[0];
 
-            io.MouseDown[0] = _input.Mice[0].IsButtonPressed(MouseButton.Left);
-            io.MouseDown[1] = _input.Mice[0].IsButtonPressed(MouseButton.Right);
-            io.MouseDown[2] = _input.Mice[0].IsButtonPressed(MouseButton.Middle);
+            io.AddMouseButtonEvent(0, _input.Mice[0].IsButtonPressed(MouseButton.Left));
+            io.AddMouseButtonEvent(1, _input.Mice[0].IsButtonPressed(MouseButton.Right));
+            io.AddMouseButtonEvent(2, _input.Mice[0].IsButtonPressed(MouseButton.Middle));
 
-            io.MousePos = _input.Mice[0].Position;
+            // io.MousePos = _input.Mice[0].Position;
+            io.AddMousePosEvent(_input.Mice[0].Position.X, _input.Mice[0].Position.Y);
 
             var wheel = _input.Mice[0].ScrollWheels[0];
-            io.MouseWheel = wheel.Y;
-            io.MouseWheelH = wheel.X;
+            // io.MouseWheel = wheel.Y;
+            // io.MouseWheelH = wheel.X;
+            io.AddMouseWheelEvent(wheel.X, wheel.Y);
 
             void KeyE(ImGuiKey imguiKey, Key silkKey) => io.AddKeyEvent(imguiKey, keyState.IsKeyPressed(silkKey));
 
@@ -273,7 +293,9 @@ namespace Prowl.Editor.ImGUI
             KeyE(ImGuiKey.Y, Key.Y); KeyE(ImGuiKey.Z, Key.Z);
 
             foreach (var c in _pressedChars)
+            {
                 io.AddInputCharacter(c);
+            }
             _pressedChars.Clear();
 
             io.KeyCtrl = keyState.IsKeyPressed(Key.ControlLeft) || keyState.IsKeyPressed(Key.ControlRight);
@@ -387,7 +409,8 @@ namespace Prowl.Editor.ImGUI
             Vector2 clipScale = drawDataPtr.FramebufferScale; // (1,1) unless using retina display which are often (2,2)
 
             // Render command lists
-            for (int n = 0; n < drawDataPtr.CmdListsCount; n++) {
+            for (int n = 0; n < drawDataPtr.CmdListsCount; n++)
+            {
                 ImDrawListPtr cmdListPtr = drawDataPtr.CmdLists.Data[n];
 
                 // Upload vertex/index buffers
@@ -397,19 +420,24 @@ namespace Prowl.Editor.ImGUI
                 _gl.BufferData(GLEnum.ElementArrayBuffer, (nuint)(cmdListPtr.IdxBuffer.Size * sizeof(ushort)), (void*)cmdListPtr.IdxBuffer.Data, GLEnum.StreamDraw);
                 Graphics.CheckGL();
 
-                for (int cmd_i = 0; cmd_i < cmdListPtr.CmdBuffer.Size; cmd_i++) {
+                for (int cmd_i = 0; cmd_i < cmdListPtr.CmdBuffer.Size; cmd_i++)
+                {
                     var cmdPtr = cmdListPtr.CmdBuffer.Data[cmd_i];
 
-                    if (cmdPtr.UserCallback != null) {
+                    if (cmdPtr.UserCallback != null)
+                    {
                         throw new NotImplementedException();
-                    } else {
+                    }
+                    else
+                    {
                         Vector4 clipRect;
                         clipRect.x = (cmdPtr.ClipRect.X - clipOff.x) * clipScale.x;
                         clipRect.y = (cmdPtr.ClipRect.Y - clipOff.y) * clipScale.y;
                         clipRect.z = (cmdPtr.ClipRect.Z - clipOff.x) * clipScale.x;
                         clipRect.w = (cmdPtr.ClipRect.W - clipOff.y) * clipScale.y;
 
-                        if (clipRect.x < framebufferWidth && clipRect.y < framebufferHeight && clipRect.z >= 0.0f && clipRect.w >= 0.0f) {
+                        if (clipRect.x < framebufferWidth && clipRect.y < framebufferHeight && clipRect.z >= 0.0f && clipRect.w >= 0.0f)
+                        {
                             // Apply scissor/clipping rectangle
                             _gl.Scissor((int)clipRect.x, (int)(framebufferHeight - clipRect.w), (uint)(clipRect.z - clipRect.x), (uint)(clipRect.w - clipRect.y));
                             Graphics.CheckGL();
@@ -441,39 +469,57 @@ namespace Prowl.Editor.ImGUI
             _gl.BlendEquationSeparate((GLEnum)lastBlendEquationRgb, (GLEnum)lastBlendEquationAlpha);
             _gl.BlendFuncSeparate((GLEnum)lastBlendSrcRgb, (GLEnum)lastBlendDstRgb, (GLEnum)lastBlendSrcAlpha, (GLEnum)lastBlendDstAlpha);
 
-            if (lastEnableBlend) {
+            if (lastEnableBlend)
+            {
                 _gl.Enable(GLEnum.Blend);
-            } else {
+            }
+            else
+            {
                 _gl.Disable(GLEnum.Blend);
             }
 
-            if (lastEnableCullFace) {
+            if (lastEnableCullFace)
+            {
                 _gl.Enable(GLEnum.CullFace);
-            } else {
+            }
+            else
+            {
                 _gl.Disable(GLEnum.CullFace);
             }
 
-            if (lastEnableDepthTest) {
+            if (lastEnableDepthTest)
+            {
                 _gl.Enable(GLEnum.DepthTest);
-            } else {
+            }
+            else
+            {
                 _gl.Disable(GLEnum.DepthTest);
             }
-            if (lastEnableStencilTest) {
+            if (lastEnableStencilTest)
+            {
                 _gl.Enable(GLEnum.StencilTest);
-            } else {
+            }
+            else
+            {
                 _gl.Disable(GLEnum.StencilTest);
             }
 
-            if (lastEnableScissorTest) {
+            if (lastEnableScissorTest)
+            {
                 _gl.Enable(GLEnum.ScissorTest);
-            } else {
+            }
+            else
+            {
                 _gl.Disable(GLEnum.ScissorTest);
             }
 
 #if !GLES && !LEGACY
-            if (lastEnablePrimitiveRestart) {
+            if (lastEnablePrimitiveRestart)
+            {
                 _gl.Enable(GLEnum.PrimitiveRestart);
-            } else {
+            }
+            else
+            {
                 _gl.Disable(GLEnum.PrimitiveRestart);
             }
 
@@ -597,7 +643,8 @@ namespace Prowl.Editor.ImGUI
             string info = string.Empty;
 
             // Create vertex shader if requested
-            if (!string.IsNullOrEmpty(vertexSource)) {
+            if (!string.IsNullOrEmpty(vertexSource))
+            {
                 // Create and compile the shader
                 uint vertexShader = Graphics.GL.CreateShader(ShaderType.VertexShader);
                 Graphics.GL.ShaderSource(vertexShader, vertexSource);
@@ -608,7 +655,8 @@ namespace Prowl.Editor.ImGUI
                 Graphics.GL.GetShader(vertexShader, ShaderParameterName.CompileStatus, out statusCode);
 
                 // Check the compile log
-                if (statusCode != 1) {
+                if (statusCode != 1)
+                {
                     // Delete every handles when compilation failed
                     Graphics.GL.DeleteShader(vertexShader);
                     Graphics.GL.DeleteProgram(shaderProgram);
@@ -626,7 +674,8 @@ namespace Prowl.Editor.ImGUI
             }
 
             // Create fragment shader if requested
-            if (!string.IsNullOrEmpty(fragmentSource)) {
+            if (!string.IsNullOrEmpty(fragmentSource))
+            {
                 // Create and compile the shader
                 uint fragmentShader = Graphics.GL.CreateShader(ShaderType.FragmentShader);
                 Graphics.GL.ShaderSource(fragmentShader, fragmentSource);
@@ -637,7 +686,8 @@ namespace Prowl.Editor.ImGUI
                 Graphics.GL.GetShader(fragmentShader, ShaderParameterName.CompileStatus, out statusCode);
 
                 // Check the compile log
-                if (statusCode != 1) {
+                if (statusCode != 1)
+                {
                     // Delete every handles when compilation failed
                     Graphics.GL.DeleteShader(fragmentShader);
                     Graphics.GL.DeleteProgram(shaderProgram);
@@ -662,7 +712,8 @@ namespace Prowl.Editor.ImGUI
             // Check for link status
             Graphics.GL.GetProgramInfoLog(shaderProgram, out info);
             Graphics.GL.GetProgram(shaderProgram, ProgramPropertyARB.LinkStatus, out statusCode);
-            if (statusCode != 1) {
+            if (statusCode != 1)
+            {
                 // Delete the handles when failed to link the program
                 Graphics.GL.DeleteProgram(shaderProgram);
 

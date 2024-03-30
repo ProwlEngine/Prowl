@@ -129,7 +129,8 @@ namespace Prowl.Runtime
         public static void CheckGL()
         {
             var errorCode = GL.GetError();
-            while (errorCode != GLEnum.NoError) {
+            while (errorCode != GLEnum.NoError)
+            {
                 Console.WriteLine($"OpenGL Error: {errorCode}" + Environment.NewLine + $"StackTrace: " + Environment.StackTrace);
                 errorCode = GL.GetError();
             }
@@ -189,16 +190,20 @@ namespace Prowl.Runtime
 
             oldTransform ??= transform;
 
-            if(defaultNoise.IsAvailable == false) {
-                defaultNoise = Application.AssetProvider.LoadAsset<Texture2D>("Defaults\\noise.png");
+            if (defaultNoise.IsAvailable == false)
+            {
+                defaultNoise = Application.AssetProvider.LoadAsset<Texture2D>("Defaults/noise.png");
             }
 
             material.SetTexture("DefaultNoise", defaultNoise);
 
-            if (UseJitter) {
+            if (UseJitter)
+            {
                 material.SetVector("Jitter", Jitter);
                 material.SetVector("PreviousJitter", PreviousJitter);
-            } else {
+            }
+            else
+            {
                 material.SetVector("Jitter", Vector2.zero);
                 material.SetVector("PreviousJitter", Vector2.zero);
             }
@@ -256,7 +261,8 @@ namespace Prowl.Runtime
 
             mesh.Upload();
 
-            unsafe {
+            unsafe
+            {
                 GL.BindVertexArray(mesh.vao);
                 GL.DrawElements(PrimitiveType.Triangles, (uint)mesh.triangles.Length, DrawElementsType.UnsignedShort, null);
                 GL.BindVertexArray(0);
@@ -268,8 +274,10 @@ namespace Prowl.Runtime
         /// </summary>
         public static void Blit(Material mat, int pass = 0)
         {
-            using (UseDepthTest(false)) {
-                using (UseCulling(false)) {
+            using (UseDepthTest(false))
+            {
+                using (UseCulling(false))
+                {
                     mat.SetPass(pass);
                     DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
                 }
@@ -282,8 +290,10 @@ namespace Prowl.Runtime
         public static void Blit(RenderTexture? renderTexture, Material mat, int pass = 0, bool clear = true)
         {
             Graphics.GL.DepthMask(false);
-            using (UseDepthTest(false)) {
-                using (UseCulling(false)) {
+            using (UseDepthTest(false))
+            {
+                using (UseCulling(false))
+                {
                     renderTexture?.Begin();
                     if (clear)
                         Clear(0, 0, 0, 0);
@@ -300,13 +310,15 @@ namespace Prowl.Runtime
         /// </summary>
         public static void Blit(RenderTexture? renderTexture, Texture2D texture, bool clear = true)
         {
-            defaultMat ??= new Material(Shader.Find("Defaults\\Basic.shader"));
+            defaultMat ??= new Material(Shader.Find("Defaults/Basic.shader"));
             defaultMat.SetTexture("texture0", texture);
             defaultMat.SetPass(0);
 
             Graphics.GL.DepthMask(false);
-            using (UseDepthTest(false)) {
-                using (UseCulling(false)) {
+            using (UseDepthTest(false))
+            {
+                using (UseCulling(false))
+                {
                     renderTexture?.Begin();
                     if (clear) Clear(0, 0, 0, 0);
                     DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, defaultMat);

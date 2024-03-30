@@ -65,7 +65,7 @@ namespace Prowl.Runtime
         {
             if (ShadowPass == null)
             {
-                var defaultDepth = Find("Defaults\\Depth.shader");
+                var defaultDepth = Find("Defaults/Depth.shader");
                 if (!defaultDepth.IsAvailable) throw new Exception($"Failed to default Depth shader for shader: {Name}");
                 return defaultDepth.Res!.CompilePass(0, []);
             }
@@ -88,9 +88,12 @@ namespace Prowl.Runtime
 
         private uint CompileShader(string frag, string vert, string fallback)
         {
-            try {
+            try
+            {
                 return Compile(vert, "", frag);
-            } catch (Exception e) {
+            }
+            catch (Exception e)
+            {
                 Console.WriteLine(e.Message);
             }
             var fallbackShader = Find(fallback);
@@ -128,7 +131,8 @@ namespace Prowl.Runtime
             string info = string.Empty;
 
             // Create vertex shader if requested
-            if (!string.IsNullOrEmpty(vertexSource)) {
+            if (!string.IsNullOrEmpty(vertexSource))
+            {
                 // Create and compile the shader
                 uint vertexShader = Graphics.GL.CreateShader(ShaderType.VertexShader);
                 Graphics.GL.ShaderSource(vertexShader, vertexSource);
@@ -139,7 +143,8 @@ namespace Prowl.Runtime
                 Graphics.GL.GetShader(vertexShader, ShaderParameterName.CompileStatus, out statusCode);
 
                 // Check the compile log
-                if (statusCode != 1) {
+                if (statusCode != 1)
+                {
                     // Delete every handles when compilation failed
                     Graphics.GL.DeleteShader(vertexShader);
                     Graphics.GL.DeleteProgram(shaderProgram);
@@ -157,7 +162,8 @@ namespace Prowl.Runtime
             }
 
             // Create geometry shader if requested
-            if (!string.IsNullOrEmpty(geometrySource)) {
+            if (!string.IsNullOrEmpty(geometrySource))
+            {
                 // Create and compile the shader
                 uint geometryShader = Graphics.GL.CreateShader(ShaderType.GeometryShader);
                 Graphics.GL.ShaderSource(geometryShader, geometrySource);
@@ -168,7 +174,8 @@ namespace Prowl.Runtime
                 Graphics.GL.GetShader(geometryShader, ShaderParameterName.CompileStatus, out statusCode);
 
                 // Check the compile log
-                if (statusCode != 1) {
+                if (statusCode != 1)
+                {
                     // Delete every handles when compilation failed
                     Graphics.GL.DeleteShader(geometryShader);
                     Graphics.GL.DeleteProgram(shaderProgram);
@@ -186,7 +193,8 @@ namespace Prowl.Runtime
             }
 
             // Create fragment shader if requested
-            if (!string.IsNullOrEmpty(fragmentSource)) {
+            if (!string.IsNullOrEmpty(fragmentSource))
+            {
                 // Create and compile the shader
                 uint fragmentShader = Graphics.GL.CreateShader(ShaderType.FragmentShader);
                 Graphics.GL.ShaderSource(fragmentShader, fragmentSource);
@@ -197,7 +205,8 @@ namespace Prowl.Runtime
                 Graphics.GL.GetShader(fragmentShader, ShaderParameterName.CompileStatus, out statusCode);
 
                 // Check the compile log
-                if (statusCode != 1) {
+                if (statusCode != 1)
+                {
                     // Delete every handles when compilation failed
                     Graphics.GL.DeleteShader(fragmentShader);
                     Graphics.GL.DeleteProgram(shaderProgram);
@@ -222,7 +231,8 @@ namespace Prowl.Runtime
             // Check for link status
             Graphics.GL.GetProgramInfoLog(shaderProgram, out info);
             Graphics.GL.GetProgram(shaderProgram, ProgramPropertyARB.LinkStatus, out statusCode);
-            if (statusCode != 1) {
+            if (statusCode != 1)
+            {
                 // Delete the handles when failed to link the program
                 Graphics.GL.DeleteProgram(shaderProgram);
 

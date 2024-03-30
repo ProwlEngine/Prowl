@@ -27,15 +27,18 @@ public class MeshRenderer : MonoBehaviour, ISerializable
         var prevMat = prevMats[camID];
 
         var material = Material.Res;
-        if(material == null) {
-            InvalidMat ??= new Material(Shader.Find("Defaults\\Invalid.shader"));
+        if (material == null)
+        {
+            InvalidMat ??= new Material(Shader.Find("Defaults/Invalid.shader"));
             material = InvalidMat;
         }
 
-        if (Mesh.IsAvailable && material != null) {
+        if (Mesh.IsAvailable && material != null)
+        {
             material.SetColor("_MainColor", mainColor);
             material.SetInt("ObjectID", GameObject.InstanceID);
-            for (int i = 0; i < material.PassCount; i++) {
+            for (int i = 0; i < material.PassCount; i++)
+            {
 
                 material.SetPass(i);
                 Graphics.DrawMeshNow(Mesh.Res!, mat, material, prevMat);
@@ -47,7 +50,8 @@ public class MeshRenderer : MonoBehaviour, ISerializable
 
     public override void OnRenderObjectDepth()
     {
-        if (Mesh.IsAvailable && Material.IsAvailable) {
+        if (Mesh.IsAvailable && Material.IsAvailable)
+        {
 
             Matrix4x4 mat = GameObject.GlobalCamRelative;
 

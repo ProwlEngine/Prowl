@@ -34,7 +34,7 @@ namespace Prowl.Editor.EditorWindows
             FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New Material.mat"));
             AssetDatabase.GenerateUniqueAssetPath(ref file);
 
-            Material mat = new Material(Shader.Find("Defaults\\Standard.shader"));
+            Material mat = new Material(Shader.Find("Defaults/Standard.shader"));
             StringTagConverter.WriteToFile(Serializer.Serialize(mat), file);
             if (fromAssetBrowser)
                 AssetBrowserWindow.StartRename(file.FullName);
@@ -82,7 +82,7 @@ namespace Prowl.Editor.EditorWindows
         public static void SaveScene()
         {
             Scene scene = SceneManager.MainScene;
-            if(scene.AssetID == Guid.Empty || !AssetDatabase.Contains(scene.AssetID))
+            if (scene.AssetID == Guid.Empty || !AssetDatabase.Contains(scene.AssetID))
             {
                 SaveSceneAs();
                 return;
@@ -129,7 +129,7 @@ namespace Prowl.Editor.EditorWindows
                     StringTagConverter.WriteToFile(tag, file);
                     AssetDatabase.Update();
                     AssetDatabase.Ping(file);
-                }   
+                }
             };
             ImGuiFileDialog.FileDialog(imFileDialogInfo);
         }

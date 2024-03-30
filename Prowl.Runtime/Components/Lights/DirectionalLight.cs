@@ -36,7 +36,7 @@ public class DirectionalLight : MonoBehaviour
 
     public override void OnRenderObject()
     {
-        lightMat ??= new Material(Shader.Find("Defaults\\Directionallight.shader"));
+        lightMat ??= new Material(Shader.Find("Defaults/Directionallight.shader"));
         lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.transform.forward, Graphics.MatView));
         lightMat.SetColor("LightColor", color);
         lightMat.SetFloat("LightIntensity", intensity);
@@ -45,7 +45,8 @@ public class DirectionalLight : MonoBehaviour
         lightMat.SetTexture("gNormalMetallic", Camera.Current.gBuffer.NormalMetallic);
         lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
 
-        if (castShadows) {
+        if (castShadows)
+        {
             lightMat.EnableKeyword("CASTSHADOWS");
             lightMat.SetTexture("shadowMap", shadowMap.InternalDepth);
 
@@ -60,7 +61,9 @@ public class DirectionalLight : MonoBehaviour
             lightMat.SetInt("u_BlockerSamples", (int)blockerSamples);
             lightMat.SetFloat("u_Bias", shadowBias);
             lightMat.SetFloat("u_NormalBias", shadowNormalBias);
-        } else {
+        }
+        else
+        {
             lightMat.DisableKeyword("CASTSHADOWS");
         }
 
@@ -73,7 +76,8 @@ public class DirectionalLight : MonoBehaviour
     public void UpdateShadowmap()
     {
         // Populate Shadowmap
-        if (castShadows) {
+        if (castShadows)
+        {
             shadowMap ??= new RenderTexture(4096, 4096, 0);
 
             // Compute the MVP matrix from the light's point of view
@@ -101,7 +105,9 @@ public class DirectionalLight : MonoBehaviour
                             comp.OnRenderObjectDepth();
             disposable?.Dispose();
             shadowMap.End();
-        } else {
+        }
+        else
+        {
             shadowMap?.DestroyImmediate();
             shadowMap = null;
         }

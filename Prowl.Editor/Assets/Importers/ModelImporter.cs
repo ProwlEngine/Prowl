@@ -192,7 +192,7 @@ namespace Prowl.Editor.Assets
                     }
                     foreach (var go in GOsToRemove)
                     {
-                        if(!go.Item1.IsDestroyed)
+                        if (!go.Item1.IsDestroyed)
                             go.Item1.DestroyImmediate();
                         GOs.Remove(go);
                     }
@@ -203,12 +203,15 @@ namespace Prowl.Editor.Assets
 
             static void AddMeshComponent(List<(GameObject, Node)> GOs, GameObject go, MeshMaterialBinding uMeshAndMat)
             {
-                if (uMeshAndMat.AMesh.HasBones) {
+                if (uMeshAndMat.AMesh.HasBones)
+                {
                     var mr = go.AddComponent<SkinnedMeshRenderer>();
                     mr.Mesh = uMeshAndMat.Mesh;
                     mr.Material = uMeshAndMat.Material;
                     mr.Root = GOs[0].Item1.transform.DeepFind(uMeshAndMat.Mesh.boneNames[0])!.gameObject;
-                } else {
+                }
+                else
+                {
                     var mr = go.AddComponent<MeshRenderer>();
                     mr.Mesh = uMeshAndMat.Mesh;
                     mr.Material = uMeshAndMat.Material;
@@ -220,7 +223,7 @@ namespace Prowl.Editor.Assets
         {
             foreach (var m in scene.Materials)
             {
-                Material mat = new Material(Shader.Find("Defaults\\Standard.shader"));
+                Material mat = new Material(Shader.Find("Defaults/Standard.shader"));
                 string? name = m.HasName ? m.Name : null;
 
                 // Albedo
@@ -587,7 +590,7 @@ namespace Prowl.Editor.Assets
             GOs.Add((uOb, node));
             uOb.Name = name ?? node.Name;
 
-            if (node.HasChildren) 
+            if (node.HasChildren)
                 foreach (var cn in node.Children)
                 {
                     var go = GetNodes(null, cn, ref GOs, scale);
@@ -667,7 +670,8 @@ namespace Prowl.Editor.Assets
                 ImGui.EndTabBar();
             }
 
-            if (ImGui.Button("Save")) {
+            if (ImGui.Button("Save"))
+            {
                 (target as MetaFile).Save();
                 AssetDatabase.Reimport((target as MetaFile).AssetPath);
             }
@@ -712,7 +716,7 @@ namespace Prowl.Editor.Assets
             ImGui.Checkbox("Merge Objects", ref importer.OptimizeGraph);
             ImGui.Checkbox("Cull Empty Objects", ref importer.CullEmpty);
             ImGui.Separator();
-            ImGui.BeginChild("##SceneGraph", new Vector2(0,250), true);
+            ImGui.BeginChild("##SceneGraph", new Vector2(0, 250), true);
             ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetCursorScreenPos(), new System.Numerics.Vector2(9999f, 9999f), ImGui.ColorConvertFloat4ToU32(new Vector4(0.1f, 0.1f, 0.1f, 1f)));
             DrawNode(root);
             ImGui.EndChild();

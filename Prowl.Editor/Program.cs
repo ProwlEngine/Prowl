@@ -3,9 +3,11 @@ using Prowl.Editor.Assets;
 
 namespace Prowl.Editor;
 
-public static class Program {
-    
-    public static int Main(string[] args) {
+public static class Program
+{
+
+    public static int Main(string[] args)
+    {
 
         EditorApplication editorApplication = new();
         Application.AssetProvider = new EditorAssetProvider();
