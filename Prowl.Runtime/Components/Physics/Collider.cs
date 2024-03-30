@@ -17,19 +17,20 @@ namespace Prowl.Runtime
         public abstract List<Shape> CreateShapes();
         public virtual List<TransformedShape> CreateTransformedShape(Rigidbody body)
         {
-            // Transform is guranteed to exist, since a Collider must be On or under a Rigidbody which requires a Transform
-            // COllider is on a child without a transform the Parent transform of the Rigidbody is used via Inheritance
-            // This is fine since we use Global positions here, since the Body and Collider share a transform their global positions are identical
-            // Results in no offsets being applied to the shape
-            var position = GameObject.transform.position - body.GameObject.transform.position;
-            var rotation = Quaternion.RotateTowards(body.GameObject.transform.rotation, GameObject.transform.rotation, 360);
+            // Get Position and Rotation of this collider relative to the Rigidbody
+            if(GameObject.InstanceID == body.GameObject.InstanceID)
+            {
+                return Shape.Select(x => new TransformedShape(x, Vector3.zero, JMatrix.CreateScale(GameObject.transform.localScale))).ToList();
+            }
+            else
+            {
+                var position = GameObject.transform.position - body.GameObject.transform.position;
+                var rotation = GameObject.transform.rotation * body.GameObject.transform.rotation;
 
-            var invRotation = Quaternion.Inverse(body.GameObject.transform.rotation);
-            rotation = invRotation * rotation;
-            position = Vector3.Transform(position, invRotation);
-            var jRot = JMatrix.CreateFromQuaternion(rotation);
+                var jMat = JMatrix.CreateFromQuaternion(rotation) * JMatrix.CreateScale(GameObject.transform.localScale);
 
-            return Shape.Select(x => new TransformedShape(x, position, jRot)).ToList();
+                return Shape.Select(x => new TransformedShape(x, position, jMat)).ToList();
+            }
         }
     }
 
