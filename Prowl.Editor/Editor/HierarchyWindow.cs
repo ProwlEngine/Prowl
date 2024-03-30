@@ -136,7 +136,7 @@ public class HierarchyWindow : EditorWindow
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
 
-        bool isPrefab = entity.AssetID != Guid.Empty;
+        bool isPrefab = entity.IsPrefab;
         bool isSelected = SelectHandler.IsSelected(new WeakReference(entity));
 
         ImGuiTreeNodeFlags flags = CalculateFlags(entity, isSelected);
@@ -148,9 +148,9 @@ public class HierarchyWindow : EditorWindow
             ImGui.PushStyleColor(ImGuiCol.HeaderHovered, ImGui.GetColorU32(ImGuiCol.HeaderActive));
             colPushCount += 2;
         } else if (isPrefab)
-            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new System.Numerics.Vector4(0.3f, 0.0f, 0.3f, 1.0f)));
+            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new System.Numerics.Vector4(0.3215f, 0.6352f, 0.9294f, 1.0f)));
         else if (isPartOfPrefab)
-            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new System.Numerics.Vector4(0.3f, 0.0f, 0.3f, 0.5f)));
+            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new System.Numerics.Vector4(0.3215f, 0.6352f, 0.9294f, 0.5f)));
 
         if (entity.enabledInHierarchy == false) {
             ImGui.PushStyleColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled));
