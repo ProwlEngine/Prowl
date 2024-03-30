@@ -83,7 +83,11 @@ public abstract class MonoBehaviour : EngineObject
 
         bool isEnabled = _enabled && _go.enabledInHierarchy;
         _enabledInHierarchy = isEnabled;
-        if (isEnabled)
+    }
+
+    internal void TriggerAwake()
+    {
+        if(_enabledInHierarchy)
             Try(AwakeAndEnable);
     }
 

@@ -287,6 +287,7 @@ public class GameObject : EngineObject, ISerializable
         newComponent.AttachToGameObject(this);
         _components.Add(newComponent);
         _componentCache.Add(type, newComponent);
+        newComponent.TriggerAwake();
 
         return newComponent;
     }
@@ -320,6 +321,7 @@ public class GameObject : EngineObject, ISerializable
         comp.AttachToGameObject(this);
         _components.Add(comp);
         _componentCache.Add(comp.GetType(), comp);
+        comp.TriggerAwake();
     }
 
     public void RemoveAll<T>() where T : MonoBehaviour
@@ -659,5 +661,8 @@ public class GameObject : EngineObject, ISerializable
         // Attach all components
         foreach (var comp in _components)
             comp.AttachToGameObject(this);
+        // Trigger awake after all components are attached
+        foreach (var comp in _components)
+            comp.TriggerAwake();
     }
 }
