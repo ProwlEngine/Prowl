@@ -78,6 +78,11 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 if (!isCompEditable) ImGui.BeginDisabled();
                 ImGui.PushID(comp.InstanceID);
 
+                isEnabled = comp.Enabled;
+                if (ImGui.Checkbox("##Enabled", ref isEnabled))
+                    comp.Enabled = isEnabled;
+                GUIHelper.Tooltip("Is Enabled");
+                ImGui.SameLine();
                 var cType = comp.GetType();
                 if (ImGui.CollapsingHeader(GetComponentDisplayName(cType), ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.OpenOnArrow)) {
 
