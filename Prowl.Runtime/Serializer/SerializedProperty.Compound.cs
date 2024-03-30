@@ -229,7 +229,7 @@ namespace Prowl.Runtime
                         result.Add(kvp.Key, subDifference);
                     }
                 }
-                else if (!kvp.Value.Equals(value))
+                else if (!kvp.Value.Value.Equals(value.Value))
                 {
                     // Tag values are different
                     result.Add(kvp.Key, kvp.Value);
