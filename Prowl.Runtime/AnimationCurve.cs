@@ -55,7 +55,13 @@ namespace Prowl.Runtime
         /// <summary>
         /// Constructs a curve.
         /// </summary>
-        public AnimationCurve() => this.Keys = [];
+        public AnimationCurve()
+        {
+            this.Keys = [];
+            // Add Default keys
+            this.Keys.Add(new KeyFrame(0, 0));
+            this.Keys.Add(new KeyFrame(1, 1));
+        }
 
         #endregion
 
