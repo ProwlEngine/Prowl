@@ -15,18 +15,6 @@ namespace Prowl.Runtime
 
         public bool convex = false;
 
-        public override void Awake()
-        {
-            if (mesh.IsExplicitNull)
-            {
-                var meshRenderer = GetComponentInChildren<MeshRenderer>();
-                if (meshRenderer != null)
-                {
-                    mesh = meshRenderer.Mesh;
-                }
-            }
-        }
-
         public enum Approximation
         {
             Level1 = 6,
@@ -45,17 +33,29 @@ namespace Prowl.Runtime
 
         public Approximation convexApprox = Approximation.Level5;
 
+        public override void OnValidate()
+        {
+        }
+
         public override List<Shape> CreateShapes()
         {
-            if (mesh.IsAvailable == false) return [new SphereShape(0.001f)]; // Mesh is missing so we create a sphere with a tiny radius to prevent errors
+            if (mesh.IsAvailable == false)
+            {
+                var meshRenderer = GetComponentInChildren<MeshRenderer>();
+                if (meshRenderer != null)
+                    mesh = meshRenderer.Mesh;
+            }
+            if (mesh.IsAvailable == false) return [];
 
-            if (!convex) {
+            if (!convex)
+            {
                 var indices = mesh.Res.triangles;
                 var vertices = mesh.Res.vertices;
 
                 List<JTriangle> triangles = new();
 
-                for (int i = 0; i < mesh.Res.triangleCount; i += 3) {
+                for (int i = 0; i < mesh.Res.triangles.Length; i += 3)
+                {
                     JVector v1 = vertices[indices[i]].Position.ToDouble();
                     JVector v2 = vertices[indices[i + 1]].Position.ToDouble();
                     JVector v3 = vertices[indices[i + 2]].Position.ToDouble();
@@ -65,12 +65,15 @@ namespace Prowl.Runtime
                 var jtm = new TriangleMesh(triangles);
                 List<Shape> shapesToAdd = new();
 
-                for (int i = 0; i < jtm.Indices.Length; i++) {
+                for (int i = 0; i < jtm.Indices.Length; i++)
+                {
                     TriangleShape ts = new TriangleShape(jtm, i);
                     shapesToAdd.Add(ts);
                 }
                 return shapesToAdd;
-            } else {
+            }
+            else
+            {
                 var points = mesh.Res.vertices.Select(x => (JVector)x.Position.ToDouble());
                 return [new PointCloudShape(BuildConvexCloud(points.ToList()))];
             }
@@ -83,13 +86,15 @@ namespace Prowl.Runtime
 
             int steps = (int)convexApprox;
 
-            for (int thetaIndex = 0; thetaIndex < steps; thetaIndex++) {
+            for (int thetaIndex = 0; thetaIndex < steps; thetaIndex++)
+            {
                 // [0,PI]
                 float theta = MathF.PI / (steps - 1) * thetaIndex;
                 float sinTheta = (float)Math.Sin(theta);
                 float cosTheta = (float)Math.Cos(theta);
 
-                for (int phiIndex = 0; phiIndex < steps; phiIndex++) {
+                for (int phiIndex = 0; phiIndex < steps; phiIndex++)
+                {
                     // [-PI,PI]
                     float phi = (2.0f * MathF.PI) / (steps - 0) * phiIndex - MathF.PI;
                     float sinPhi = (float)Math.Sin(phi);
@@ -112,9 +117,9 @@ namespace Prowl.Runtime
 
             JVector point; float value;
 
-            for (int i = 1; i < points.Count; i++) {
+            for (int i = 1; i < points.Count; i++)
+            {
                 point = points[i];
-
                 value = JVector.Dot(ref point, ref dir);
                 if (value > current) { current = value; index = i; }
             }
