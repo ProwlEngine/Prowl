@@ -20,8 +20,8 @@ public static class EditorGui
         ImGui.GetIO().ConfigWindowsResizeFromEdges = true;
         ImGui.GetIO().ConfigWindowsMoveFromTitleBarOnly = true;
         ImGui.GetIO().MouseDrawCursor = true;
-        if (OperatingSystem.IsWindows())
-            Input.Mice[0].Cursor.CursorMode = Silk.NET.Input.CursorMode.Hidden;
+        //if (OperatingSystem.IsWindows())
+        Input.Mice[0].Cursor.CursorMode = Silk.NET.Input.CursorMode.Hidden;
 
         new EditorMainMenubar();
         new HierarchyWindow();
@@ -152,7 +152,8 @@ public static class EditorGui
     public static void HandleBeginImGUIAttributes(IEnumerable<IImGUIAttri> attribs)
     {
         foreach (IImGUIAttri imGuiAttribute in attribs)
-            switch (imGuiAttribute.AttribType()) {
+            switch (imGuiAttribute.AttribType())
+            {
 
                 case GuiAttribType.Space:
                     ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
@@ -191,7 +192,8 @@ public static class EditorGui
     public static void HandleEndImGUIAttributes(IEnumerable<IImGUIAttri> attribs)
     {
         foreach (IImGUIAttri imGuiAttribute in attribs)
-            switch (imGuiAttribute.AttribType()) {
+            switch (imGuiAttribute.AttribType())
+            {
 
                 case GuiAttribType.Disabled:
                     ImGui.EndDisabled();
@@ -210,10 +212,12 @@ public static class EditorGui
 
     public static bool HandleAttributeButtons(object target)
     {
-        foreach (MethodInfo method in target.GetType().GetMethods()) {
+        foreach (MethodInfo method in target.GetType().GetMethods())
+        {
             var attribute = method.GetCustomAttribute<ImGUIButtonAttribute>();
             if (attribute != null)
-                if (ImGui.Button(attribute.buttonText)) {
+                if (ImGui.Button(attribute.buttonText))
+                {
                     method.Invoke(target, null);
                     return true;
                 }
