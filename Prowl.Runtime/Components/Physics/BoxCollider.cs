@@ -9,10 +9,10 @@ namespace Prowl.Runtime
     {
         public Vector3 size = Vector3.one;
 
-        public override List<Shape> CreateShapes() => [ new BoxShape(size * GameObject.transform.localScale) ];
+        public override List<Shape> CreateShapes() => [ new BoxShape(size) ];
         public override void OnValidate()
         {
-            (Shape[0] as BoxShape).Size = size * GameObject.transform.localScale;
+            (Shape[0] as BoxShape).Size = size;
             Shape[0].UpdateShape();
             GetComponentInParent<Rigidbody>().IsActive = true;
         }
@@ -20,6 +20,7 @@ namespace Prowl.Runtime
         public void DrawGizmosSelected()
         {
             Gizmos.Matrix = Matrix4x4.CreateScale(size * 1.0025f) * GameObject.GlobalCamRelative;
+            Gizmos.Matrix = Matrix4x4.Multiply(Gizmos.Matrix, Matrix4x4.CreateScale(GameObject.transform.lossyScale));
             Gizmos.Cube(Color.yellow);
         }
     }

@@ -144,12 +144,8 @@ namespace Prowl.Runtime
             var colliders = GetComponentsInChildren<Collider>().ToList();
 
             List<Shape> allShapes = new();
-            foreach (var collider in colliders) {
-                if (collider.GameObject.InstanceID == GameObject.InstanceID)
-                    allShapes.AddRange(collider.Shape);
-                else
-                    allShapes.AddRange(collider.CreateTransformedShape(this));
-            }
+            foreach (var collider in colliders)
+                allShapes.AddRange(collider.CreateTransformedShape(this));
 
             return allShapes;
         }
