@@ -207,6 +207,7 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 
 ## Contributors 🌟
 - [Michael (Wulferis)](https://twitter.com/Wulferis)
+- [Abdiel Lopez (PaperPrototype)](https://github.com/PaperPrototype)
 - [Josh Davis](https://github.com/10xJosh)
 - [ReCore67](https://github.com/recore67)
 - [Isaac Marovitz](https://github.com/IsaacMarovitz)
