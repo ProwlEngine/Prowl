@@ -67,7 +67,7 @@ public class GameWindow : EditorWindow
         }
 
         // Header Bar with resolution settings, then Image under it
-        ImGui.BeginChild("Header", new System.Numerics.Vector2(0, HeaderHeight), true, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        ImGui.BeginChild("Header", new System.Numerics.Vector2(0, HeaderHeight), ImGuiChildFlags.Border, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
         {
             ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 5);

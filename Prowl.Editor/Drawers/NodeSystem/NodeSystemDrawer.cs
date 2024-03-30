@@ -147,14 +147,15 @@ namespace Prowl.Editor.Drawers.NodeSystem
                 }
             }
 
-            ImNodes.MiniMap();
+            //ImNodes.MiniMap();
             ImNodes.EndNodeEditor();
 
             int start_node_id = 0;
             int start_link_id = 0;
             int end_node_id = 0;
             int end_link_id = 0;
-            if (ImNodes.IsLinkCreated(ref start_node_id, ref start_link_id, ref end_node_id, ref end_link_id))
+            bool createdFromSnaps = false;
+            if (ImNodes.IsLinkCreatedIntPtr(ref start_node_id, ref start_link_id, ref end_node_id, ref end_link_id, ref createdFromSnaps))
             {
                 changed = true;
                 var output = graph.GetNode(start_node_id);
@@ -262,7 +263,7 @@ namespace Prowl.Editor.Drawers.NodeSystem
             bool changed = false;
             if (port.IsInput)
             {
-                ImNodes.BeginInputAttribute(port.InstanceID);
+                ImNodes.BeginInputAttribute(port.InstanceID, ImNodesPinShape.CircleFilled);
 
                 bool drawField = false;
                 var fieldInfo = GetFieldInfo(port.node.GetType(), port.fieldName);
@@ -288,7 +289,7 @@ namespace Prowl.Editor.Drawers.NodeSystem
             }
             else if (port.IsOutput)
             {
-                ImNodes.BeginOutputAttribute(port.InstanceID);
+                ImNodes.BeginOutputAttribute(port.InstanceID, ImNodesPinShape.CircleFilled);
                 ImGui.Text(port.fieldName);
                 ImNodes.EndOutputAttribute();
             }

@@ -28,7 +28,7 @@ public class RenderPipelineWindow : EditorWindow
         if (CurrentRenderPipeline.IsAvailable == false) return;
 
         var size = changed ? new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, ImGui.GetContentRegionAvail().Y - 30) : ImGui.GetContentRegionAvail();
-        ImGui.BeginChild("RenderPipeline", size, true, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        ImGui.BeginChild("RenderPipeline", size, ImGuiChildFlags.Border, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
         bool changedThisFrame = NodeSystemDrawer.Draw(CurrentRenderPipeline.Res);
         ImGui.EndChild();
 

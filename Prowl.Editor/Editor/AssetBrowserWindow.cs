@@ -215,7 +215,7 @@ public class AssetBrowserWindow : EditorWindow
     {
         ImGui.PushID(i);
         ImGui.SetCursorPos(curPos);
-        ImGui.BeginChild("ClipBox", new System.Numerics.Vector2(ThumbnailSize, ThumbnailSize), false, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        ImGui.BeginChild("ClipBox", new System.Numerics.Vector2(ThumbnailSize, ThumbnailSize), ImGuiChildFlags.None, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
         RenderFileSystemEntry(entry);
         ImGui.EndChild();
 
