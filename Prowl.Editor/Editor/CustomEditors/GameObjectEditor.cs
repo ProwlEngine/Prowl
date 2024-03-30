@@ -31,7 +31,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             if (go.hideFlags.HasFlag(HideFlags.NotEditable)) ImGui.BeginDisabled();
 
             // position cursor back to window start
-            ImGui.SetCursorPos(new(56, 24));
+            ImGui.SetCursorPos(new(56, 28));
 
             ImGui.SetNextItemWidth(ImGui.GetWindowWidth() - 100);
             ImGui.InputText("##GOName", ref go.Name, 0x100);
@@ -42,7 +42,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             if (isEnabled != go.enabled) go.enabled = isEnabled;
             GUIHelper.Tooltip("Is Enabled");
 
-            ImGui.SetCursorPosY(52);
+            ImGui.SetCursorPosY(60);
 
             //float widthToWorkWith = ImGui.GetWindowWidth() - 24f;
             //ImGui.SetNextItemWidth((widthToWorkWith / 2) - (13));

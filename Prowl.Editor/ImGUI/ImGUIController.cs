@@ -62,7 +62,7 @@ namespace Prowl.Editor.ImGUI
                 using (FileStream fileStream = File.Create(tempFilePath))
                     stream.CopyTo(fileStream);
                 try {
-                    io.Fonts.AddFontFromFileTTF(tempFilePath, 17);
+                    io.Fonts.AddFontFromFileTTF(tempFilePath, 22);
                     AddEmbeddedFont(FontAwesome6.FontIconFileNameFAR, FontAwesome6.IconMin, FontAwesome6.IconMax);
                     AddEmbeddedFont(FontAwesome6.FontIconFileNameFAS, FontAwesome6.IconMin, FontAwesome6.IconMax);
                 } finally {
@@ -128,7 +128,7 @@ namespace Prowl.Editor.ImGUI
             _pressedChars.Add(arg2);
         }
 
-        unsafe void AddEmbeddedFont(string name, ushort min, ushort max, float fontSize = 17 * 2.0f / 3.0f)
+        unsafe void AddEmbeddedFont(string name, ushort min, ushort max, float fontSize = 22 * 2.0f / 3.0f)
         {
             using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.{name}")) {
                 if (stream != null) {
