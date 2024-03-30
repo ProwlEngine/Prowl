@@ -32,8 +32,8 @@ Pass 0
 		uniform vec3 uSunPos;
 		uniform float fogDensity;
 		
-		uniform sampler2D gColor; // Pos
-		uniform sampler2D gPositionRoughness; // Pos
+		uniform sampler gColor; // Pos
+		uniform sampler gPositionRoughness; // Pos
 
 		#define PI 3.141592
         #define iSteps 16

@@ -22,7 +22,7 @@ Pass 0
 	Fragment
 	{
 		layout (location = 0) out float fragmentdepth;
-		//uniform sampler2D _MainTex; // diffuse
+		//uniform sampler _MainTex; // diffuse
 
 		void main()
 		{

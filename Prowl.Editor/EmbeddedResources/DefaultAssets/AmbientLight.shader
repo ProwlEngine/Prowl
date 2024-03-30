@@ -29,9 +29,9 @@ Pass 0
 		uniform float SkyIntensity;
 		uniform float GroundIntensity;
 		
-		uniform sampler2D gAlbedoAO; // Albedo & Roughness
-		uniform sampler2D gNormalMetallic; // Normal & Metalness
-		uniform sampler2D gPositionRoughness; // Depth
+		uniform sampler gAlbedoAO; // Albedo & Roughness
+		uniform sampler gNormalMetallic; // Normal & Metalness
+		uniform sampler gPositionRoughness; // Depth
 		
 		// ----------------------------------------------------------------------------
 

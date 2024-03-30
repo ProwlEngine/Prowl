@@ -25,7 +25,7 @@ Pass 0
 	Fragment
 	{
 		in vec2 TexCoords;
-		uniform sampler2D texture0;
+		uniform sampler texture0;
 		
 		out vec4 finalColor;
 		

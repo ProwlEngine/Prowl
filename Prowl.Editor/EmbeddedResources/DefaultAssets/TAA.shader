@@ -18,11 +18,11 @@ Pass 0
 		
 		uniform vec2 Resolution;
 
-		uniform sampler2D gColor;
-		uniform sampler2D gHistory;
-		uniform sampler2D gPositionRoughness;
-		uniform sampler2D gVelocity;
-		uniform sampler2D gDepth;
+		uniform sampler gColor;
+		uniform sampler gHistory;
+		uniform sampler gPositionRoughness;
+		uniform sampler gVelocity;
+		uniform sampler gDepth;
 		
 		uniform mat4 matProjection;
 		uniform mat4 matProjectionInverse;
@@ -49,7 +49,7 @@ Pass 0
 		    return vec4(x, y, z, w) * (1.0/6.0);
 		}
 		
-		vec4 textureBicubic(sampler2D sampler, vec2 texCoords){
+		vec4 textureBicubic(sampler sampler, vec2 texCoords){
 		
 		   vec2 texSize = textureSize(sampler, 0);
 		   vec2 invTexSize = 1.0 / texSize;
@@ -91,7 +91,7 @@ Pass 0
 		}
 
 		//note: see also http://www.decarpentier.nl/2d-catmull-rom-in-4-samples.
-		vec4 sampleLevel0(sampler2D tex, vec2 uv)
+		vec4 sampleLevel0(sampler tex, vec2 uv)
 		{
 		    return texture(tex, uv, -10.0);
 		}
@@ -101,7 +101,7 @@ Pass 0
 		//
 		// Samples a texture with Catmull-Rom filtering, using 9 texture fetches instead of 16.
 		// See http://vec3.ca/bicubic-filtering-in-fewer-taps/ for more details
-		vec4 SampleTextureCatmullRom(sampler2D tex, vec2 uv, vec2 texSize)
+		vec4 SampleTextureCatmullRom(sampler tex, vec2 uv, vec2 texSize)
 		{
 		    // We're going to sample a a 4x4 grid of texels surrounding the target UV coordinate. We'll do this by rounding
 		    // down the sample location to get the exact center of our "starting" texel. The starting texel will be at
