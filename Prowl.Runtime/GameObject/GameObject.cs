@@ -11,7 +11,7 @@ namespace Prowl.Runtime;
 /// The Base Class for all Object/Entities in a Scene.
 /// Holds a collection of Components that contain the logic for this Object/Entity
 /// </summary>
-public class GameObject : EngineObject, ISerializable
+public class GameObject : EngineObject, ISerializable, ISerializationCallbackReceiver
 {
     #region Static Fields/Properties
 
@@ -661,7 +661,13 @@ public class GameObject : EngineObject, ISerializable
         // Attach all components
         foreach (var comp in _components)
             comp.AttachToGameObject(this);
-        // Trigger awake after all components are attached
+    }
+
+    public void OnBeforeSerialize() { }
+
+    public void OnAfterDeserialize()
+    {
+        // Trigger awake after everything has been Deserialized
         foreach (var comp in _components)
             comp.TriggerAwake();
     }
