@@ -22,10 +22,10 @@ public static class Project
     public static string TempDirectory => Path.Combine(Project.ProjectDirectory, @"Temp");
 
     public static string Assembly_Proj => Path.Combine(ProjectDirectory, @"CSharp.csproj");
-    public static string Assembly_DLL => Path.Combine(ProjectDirectory, @"Temp\bin\Debug\net8.0\CSharp.dll");
+    public static string Assembly_DLL => Path.Combine(ProjectDirectory, @"Temp/bin/Debug/net8.0/CSharp.dll");
 
     public static string Editor_Assembly_Proj => Path.Combine(ProjectDirectory, @"CSharp-Editor.csproj");
-    public static string Editor_Assembly_DLL => Path.Combine(ProjectDirectory, @"Temp\bin\Debug\net8.0\CSharp-Editor.dll");
+    public static string Editor_Assembly_DLL => Path.Combine(ProjectDirectory, @"Temp/bin/Debug/net8.0/CSharp-Editor.dll");
 
 
     public static event Action OnProjectChanged;
@@ -335,10 +335,10 @@ public static class Project
                 <ProjectRoot>{ProjectDirectory}</ProjectRoot>
             </PropertyGroup>
             <PropertyGroup Condition="" '$(Configuration)' == 'Debug' "">
-                <OutputPath>$(ProjectRoot)\Temp\bin\Debug\</OutputPath>
+                <OutputPath>$(ProjectRoot)/Temp/bin/Debug/</OutputPath>
             </PropertyGroup>
             <PropertyGroup Condition="" '$(Configuration)' == 'Release' "">
-                <OutputPath>$(ProjectRoot)\Builds\Latest\</OutputPath>
+                <OutputPath>$(ProjectRoot)/Builds/Latest/</OutputPath>
             </PropertyGroup>";
 
         string gameproj = 
