@@ -1,10 +1,9 @@
 ﻿using Prowl.Runtime.SceneManagement;
-using Silk.NET.Input;
+using Prowl.Runtime.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.Serialization;
 
 namespace Prowl.Runtime;
 
@@ -78,6 +77,22 @@ public class GameObject : EngineObject, ISerializable
     public List<GameObject> children = new List<GameObject>();
 
     public int childCount => children.Count;
+
+    public bool IsPrefab => AssetID != Guid.Empty;
+
+    public bool IsPartOfPrefab {
+        get {
+            GameObject? parent = this;
+            while (parent != null)
+            {
+                if (parent.IsPrefab) return true;
+                parent = parent.parent;
+            }
+            return false;
+        }
+    }
+
+    public SerializedProperty? PrefabMods { get; set; } = null;
 
     #endregion
 
