@@ -1,5 +1,5 @@
 using Hexa.NET.ImGui;
-using Prowl.Runtime;
+using System.Threading.Channels;
 
 namespace Prowl.Editor.PropertyDrawers;
 
@@ -17,6 +17,8 @@ public abstract class SimplePropertyDrawer<T> : PropertyDrawer<T>
     public abstract bool DrawControl(ref T value);
 
 }
+
+#region Primitive Types
 
 public class PropertyDrawerByte : SimplePropertyDrawer<byte>
 {
@@ -77,3 +79,83 @@ public class PropertyDrawerBool : SimplePropertyDrawer<bool>
 {
     public override bool DrawControl(ref bool value) => ImGui.Checkbox("", ref value);
 }
+
+#endregion
+
+#region Vectors
+
+public class PropertyDrawerVector2 : SimplePropertyDrawer<Runtime.Vector2>
+{
+    public override bool DrawControl(ref Runtime.Vector2 value)
+    {
+        System.Numerics.Vector2 vec = value;
+        bool changed = ImGui.DragFloat2("", ref vec, 1f);
+        value = vec;
+        return changed;
+    }
+}
+
+public class PropertyDrawerSystemVector2 : SimplePropertyDrawer<System.Numerics.Vector2>
+{
+    public override bool DrawControl(ref System.Numerics.Vector2 value) =>  ImGui.DragFloat2("", ref value, 1f);
+}
+
+public class PropertyDrawerVector3 : SimplePropertyDrawer<Runtime.Vector3>
+{
+    public override bool DrawControl(ref Runtime.Vector3 value)
+    {
+        System.Numerics.Vector3 vec = value;
+        bool changed = ImGui.DragFloat3("", ref vec, 1f);
+        value = vec;
+        return changed;
+    }
+}
+
+public class PropertyDrawerSystemVector3 : SimplePropertyDrawer<System.Numerics.Vector3>
+{
+    public override bool DrawControl(ref System.Numerics.Vector3 value) =>  ImGui.DragFloat3("", ref value, 1f);
+}
+
+public class PropertyDrawerVector4 : SimplePropertyDrawer<Runtime.Vector4>
+{
+    public override bool DrawControl(ref Runtime.Vector4 value)
+    {
+        System.Numerics.Vector4 vec = value;
+        bool changed = ImGui.DragFloat4("", ref vec, 1f);
+        value = vec;
+        return changed;
+    }
+}
+
+public class PropertyDrawerSystemVector4 : SimplePropertyDrawer<System.Numerics.Vector4>
+{
+    public override bool DrawControl(ref System.Numerics.Vector4 value) =>  ImGui.DragFloat4("", ref value, 1f);
+}
+
+#endregion
+
+#region Colors
+
+public class PropertyDrawerColor : SimplePropertyDrawer<Runtime.Color>
+{
+    public override bool DrawControl(ref Runtime.Color value)
+    {
+        System.Numerics.Vector4 vec = value;
+        bool changed = ImGui.ColorEdit4("", ref vec);
+        value = vec;
+        return changed;
+    }
+}
+
+public class PropertyDrawerColor32 : SimplePropertyDrawer<Runtime.Color32>
+{
+    public override bool DrawControl(ref Runtime.Color32 value)
+    {
+        System.Numerics.Vector4 vec = (Runtime.Color)value;
+        bool changed = ImGui.ColorEdit4("", ref vec);
+        value = (Runtime.Color32)(Runtime.Color)vec;
+        return changed;
+    }
+}
+
+#endregion
