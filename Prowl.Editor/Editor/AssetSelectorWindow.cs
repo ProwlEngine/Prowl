@@ -8,7 +8,7 @@ public class AssetSelectorWindow : EditorWindow
 {
     private string _searchText = "";
     private Type type;
-    private Action<Guid> _onAssetSelected;
+    private Action<Guid, short> _onAssetSelected;
 
     protected override ImGuiWindowFlags Flags { get; } = ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.Tooltip | ImGuiWindowFlags.NoDecoration;
     protected override bool Center { get; } = true;
@@ -16,7 +16,7 @@ public class AssetSelectorWindow : EditorWindow
     protected override int Height { get; } = 512;
     protected override bool BackgroundFade { get; } = true;
 
-    public AssetSelectorWindow(Type type, Action<Guid> onAssetSelected) : base()
+    public AssetSelectorWindow(Type type, Action<Guid, short> onAssetSelected) : base()
     {
         Title = FontAwesome6.Book + " Assets Selection";
         this.type = type;
@@ -34,7 +34,7 @@ public class AssetSelectorWindow : EditorWindow
 
         if (ImGui.Selectable("  None", false, ImGuiSelectableFlags.None, new System.Numerics.Vector2(ImGui.GetWindowWidth(), 21)))
         {
-            _onAssetSelected(Guid.Empty);
+            _onAssetSelected(Guid.Empty, 0);
             isOpened = false;
         }
 
@@ -43,14 +43,14 @@ public class AssetSelectorWindow : EditorWindow
         var assets = AssetDatabase.GetAllAssetsOfType(type);
         foreach (var asset in assets)
         {
-            if (AssetDatabase.TryGetFile(asset, out var file))
+            if (AssetDatabase.TryGetFile(asset.Item1, out var file))
             {
                 if (string.IsNullOrEmpty(_searchText) || file.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
                 {
                     // Selectable
-                    if (ImGui.Selectable("  " + AssetDatabase.GetRelativePath(file.FullName), false, ImGuiSelectableFlags.None, new System.Numerics.Vector2(ImGui.GetWindowWidth(), 21)))
+                    if (ImGui.Selectable("  " + AssetDatabase.GetRelativePath(file.FullName) + "." + asset.Item2, false, ImGuiSelectableFlags.None, new System.Numerics.Vector2(ImGui.GetWindowWidth(), 21)))
                     {
-                        _onAssetSelected(asset);
+                        _onAssetSelected(asset.Item1, asset.Item2);
                         isOpened = false;
                     }
                     ImGui.Separator();

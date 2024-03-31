@@ -154,21 +154,21 @@ namespace Prowl.Editor.Assets
             }
         }
 
-        public static List<Guid> GetAllAssetsOfType(Type type)
+        public static List<(Guid, short)> GetAllAssetsOfType(Type type)
         {
             // Go over all loaded meta files and check the Importers type
-            List<Guid> result = new();
+            List<(Guid, short)> result = new();
             foreach (var meta in assetGuidToMeta.Values)
             {
-                var importer = meta.importer;
-                // Get importer attribute
-                var importerType = importer.GetType();
-                var importerAttribute = importerType.GetCustomAttribute<ImporterAttribute>();
-                if (importerAttribute != null)
+                var types = meta.assetTypes;
+                for (short i = 0; i < types.Length; i++)
                 {
-                    if (type.IsAssignableTo(importerAttribute.GeneralType))
-                        result.Add(meta.guid);
+                    if (types[i].Equals(type.FullName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        result.Add((meta.guid, i));
+                    }
                 }
+
             }
             return result;
         }
