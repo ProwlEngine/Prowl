@@ -1,40 +1,52 @@
 ﻿using Hexa.NET.ImGui;
 using Prowl.Editor.Assets;
+using Prowl.Editor.EditorWindows;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
+using System.IO;
 
 namespace Prowl.Editor.PropertyDrawers;
 
 public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
 {
     public static PropertyDrawerAsset Selected;
-
-    public virtual string Name { get; } = FontAwesome6.Circle;
+    public static Guid assignedGUID;
+    public static int guidAssignedToID = -1;
 
     protected override bool Draw(string label, ref IAssetRef value, float width)
     {
+        var imguiID = ImGui.GetItemID();
         bool changed = false;
         DrawLabel(label, ref width);
 
-        string path;
-        if (value.IsExplicitNull) {
-            path = "(Null)";
-            if (ImGui.Selectable($"{Name}: {path}", Selected == this, new System.Numerics.Vector2(width, 17))) {
+        if(guidAssignedToID != -1  && guidAssignedToID == imguiID)
+        {
+            value.AssetID = assignedGUID;
+            guidAssignedToID = -1;
+            changed = true;
+        }
+
+        DrawAssetSelector(imguiID, value.InstanceType);
+        if (value.IsExplicitNull)
+        {
+            if (ImGui.Selectable($"(Null)", Selected == this, new System.Numerics.Vector2(width, 21)))
                 Selected = this;
-#warning TODO: Show a popup with a list of all assets of the type - property.Type.Name
-            }
             GUIHelper.ItemRectFilled(0.9f, 0.1f, 0.1f, 0.3f);
-        } else if (value.IsRuntimeResource) {
-            path = "(Runtime)" + value.Name;
-            if (ImGui.Selectable($"{Name}: {path}", Selected == this, new System.Numerics.Vector2(width, 17))) {
+        }
+        else if (value.IsRuntimeResource)
+        {
+            if (ImGui.Selectable("(Runtime)" + value.Name, Selected == this, new System.Numerics.Vector2(width, 21)))
+            {
                 Selected = this;
-#warning TODO: Show a popup with a list of all assets of the type - property.Type.Name
+                new AssetSelectorWindow(value.InstanceType, (guid) => { assignedGUID = guid; guidAssignedToID = imguiID; });
             }
             GUIHelper.ItemRectFilled(0.1f, 0.1f, 0.9f, 0.3f);
-        } else if (AssetDatabase.TryGetFile(value.AssetID, out var assetPath)) {
-            path = AssetDatabase.ToRelativePath(assetPath);
-            if (ImGui.Selectable($"{Name}: {path}", Selected == this, new System.Numerics.Vector2(width, 17))) {
+        }
+        else if (AssetDatabase.TryGetFile(value.AssetID, out var assetPath))
+        {
+            if (ImGui.Selectable(AssetDatabase.ToRelativePath(assetPath), Selected == this, new System.Numerics.Vector2(width, 21)))
+            {
                 AssetDatabase.Ping(value.AssetID);
                 Selected = this;
             }
@@ -62,5 +74,16 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         }
         ImGui.Columns(1);
         return changed;
+    }
+
+    private void DrawAssetSelector(int imguiID, Type instanceType)
+    {
+        if (ImGui.Selectable($" {FontAwesome6.MagnifyingGlass}", Selected == this, new System.Numerics.Vector2(21, 21)))
+        {
+            Selected = this;
+            int id = imguiID;
+            new AssetSelectorWindow(instanceType, (guid) => { assignedGUID = guid; guidAssignedToID = id; });
+        }
+        ImGui.SameLine();
     }
 }
