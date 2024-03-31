@@ -31,7 +31,6 @@ public static class Project
     public static event Action OnProjectChanged;
     public static bool HasProject { get; private set; } = false;
     public static string Name { get; private set; } = "";
-    public static ProjectSettings ProjectSettings;
     #endregion
 
     #region Public Methods
@@ -54,7 +53,6 @@ public static class Project
         Name = projectName;
         HasProject = true;
         (EditorApplication.Instance as EditorApplication).RegisterReloadOfExternalAssemblies();
-        ProjectSettings = ProjectSettings.Load();
 
         CreateDefaults("Defaults");
         AssetDatabase.AddRootFolder("Defaults");
@@ -86,6 +84,7 @@ public static class Project
 
         // Create Assets Folder
         Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Assets"));
+        CreateProjectDirectories(projectDir);
         CreateDefaults("Defaults");
         Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Library"));
         Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Packages"));
@@ -94,8 +93,9 @@ public static class Project
         string configPath = Path.Combine(projectDir.FullName, @"Config");
         Directory.CreateDirectory(configPath);
 
-        ProjectSettings = new();
-        ProjectSettings.Save();
+    private static void CreateProjectDirectories(DirectoryInfo projectDir)
+    {
+        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Assets"));
     }
     static void CreateDefaults(string rootFolder)
     {
