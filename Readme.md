@@ -127,8 +127,8 @@ Getting Prowl up and running is super easy!
 ### Engine
 - 🛠️ Cross Platform
   - ✔️ Windows - Fully functional
-  - 🛠️ MacOS - Compiles, Input fails and color channels seem off?
-  - ❌ Linux
+  - ✔️ MacOS
+  - 🛠️ Linux
   - ❌ Andriod
   - ❌ iOS
   - ❌ Web
