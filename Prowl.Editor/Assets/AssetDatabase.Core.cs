@@ -295,7 +295,8 @@ namespace Prowl.Editor.Assets
         public static void ReimportFolder(DirectoryInfo directory)
         {
             ArgumentNullException.ThrowIfNull(directory);
-            var files = directory.GetFiles("*", SearchOption.AllDirectories);
+            var files = directory.GetFiles("*", SearchOption.AllDirectories)
+                .Where(file => !file.FullName.EndsWith(".meta"));
             foreach (var file in files)
                 Reimport(file);
         }
