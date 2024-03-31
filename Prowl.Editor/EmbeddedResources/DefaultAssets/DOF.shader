@@ -41,7 +41,7 @@ Pass 0
 		vec3 depthOfField(vec2 texCoord, float focusPoint, float focusScale)
 		{
 			vec3 color = texture(gCombined, texCoord).rgb;
-			float centerDepth = texture2D(gDepth, texCoord).x;
+			float centerDepth = texture(gDepth, texCoord).x;
 			float centerSize = getBlurSize(centerDepth, focusPoint, focusScale);
 			float tot = 1.0;
 			
@@ -53,7 +53,7 @@ Pass 0
 			{
 				vec2 tc = texCoord + vec2(cos(ang), sin(ang)) * texelSize * radius;
 				
-				float sampleDepth = texture2D(gDepth, tc).x;
+				float sampleDepth = texture(gDepth, tc).x;
 				float sampleSize = getBlurSize(sampleDepth, focusPoint, focusScale);
 				
 				vec3 sampleColor = texture(gCombined, tc).rgb;
@@ -75,7 +75,7 @@ Pass 0
 
 		void main()
 		{
-			float centerDepth = texture2D(gDepth, vec2(0.5,0.5)).x;
+			float centerDepth = texture(gDepth, vec2(0.5,0.5)).x;
 			//OutputColor = vec4(depthOfField(TexCoords, focusDistance, u_FocusStrength), 1.0);
 			OutputColor = vec4(depthOfField(TexCoords, centerDepth, u_FocusStrength), 1.0);
 		}

@@ -22,16 +22,15 @@ public static class Project
     public static string TempDirectory => Path.Combine(Project.ProjectDirectory, @"Temp");
 
     public static string Assembly_Proj => Path.Combine(ProjectDirectory, @"CSharp.csproj");
-    public static string Assembly_DLL => Path.Combine(ProjectDirectory, @"Temp\bin\Debug\net8.0\CSharp.dll");
+    public static string Assembly_DLL => Path.Combine(ProjectDirectory, @"Temp/bin/Debug/net8.0/CSharp.dll");
 
     public static string Editor_Assembly_Proj => Path.Combine(ProjectDirectory, @"CSharp-Editor.csproj");
-    public static string Editor_Assembly_DLL => Path.Combine(ProjectDirectory, @"Temp\bin\Debug\net8.0\CSharp-Editor.dll");
+    public static string Editor_Assembly_DLL => Path.Combine(ProjectDirectory, @"Temp/bin/Debug/net8.0/CSharp-Editor.dll");
 
 
     public static event Action OnProjectChanged;
     public static bool HasProject { get; private set; } = false;
     public static string Name { get; private set; } = "";
-    public static ProjectSettings ProjectSettings;
     #endregion
 
     #region Public Methods
@@ -54,7 +53,8 @@ public static class Project
         Name = projectName;
         HasProject = true;
         (EditorApplication.Instance as EditorApplication).RegisterReloadOfExternalAssemblies();
-        ProjectSettings = ProjectSettings.Load();
+
+        CreateProjectDirectories(projectDir);
 
         CreateDefaults("Defaults");
         AssetDatabase.AddRootFolder("Defaults");
@@ -85,18 +85,21 @@ public static class Project
         projectDir.Create();
 
         // Create Assets Folder
-        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Assets"));
+        CreateProjectDirectories(projectDir);
         CreateDefaults("Defaults");
-        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Library"));
-        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Packages"));
 
         // Create Config Folder
         string configPath = Path.Combine(projectDir.FullName, @"Config");
         Directory.CreateDirectory(configPath);
-
-        ProjectSettings = new();
-        ProjectSettings.Save();
     }
+
+    private static void CreateProjectDirectories(DirectoryInfo projectDir)
+    {
+        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Assets"));
+        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Library"));
+        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Packages"));
+    }
+
     static void CreateDefaults(string rootFolder)
     {
         if (string.IsNullOrWhiteSpace(rootFolder)) throw new ArgumentException("Root Folder cannot be null or whitespace");
@@ -143,43 +146,74 @@ public static class Project
 
         // Compile the Project Assembly using 'dotnet build'
         BoundedLog($"Compiling external assembly in {dir}...");
-        ProcessStartInfo processInfo = new()
+        ProcessStartInfo processInfo = null;
+        if (RuntimeUtils.IsWindows())
         {
-            WorkingDirectory = Path.GetDirectoryName(dir),
-            FileName = "cmd.exe",
-            Arguments = $"/c dotnet build \"{Path.GetFileName(dir)}\"" + (isRelease ? " --configuration Release" : ""),
-            CreateNoWindow = true,
-            UseShellExecute = false,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-        };
+            processInfo = new() {
+                WorkingDirectory = Path.GetDirectoryName(dir),
+                FileName = "cmd.exe",
+                Arguments = $"/c dotnet build \"{Path.GetFileName(dir)}\"" + (isRelease ? " --configuration Release" : ""),
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+            };
+        }
+        else if (RuntimeUtils.IsMac())
+        {
+            processInfo = new() {
+                WorkingDirectory = Path.GetDirectoryName(dir),
+                FileName = "/bin/bash",
+                Arguments = $"-c \"dotnet build '{Path.GetFileName(dir)}'\"" + (isRelease ? " --configuration Release" : ""),
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+            };
+        }
+        else if (RuntimeUtils.IsLinux())
+        {
+            processInfo = new() {
+                WorkingDirectory = Path.GetDirectoryName(dir),
+                FileName = "/bin/bash",
+                Arguments = $"-c \"dotnet build '{Path.GetFileName(dir)}'\"" + (isRelease ? " --configuration Release" : ""),
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+            };
+        }
+        else
+        {
+            Runtime.Debug.LogError("Unsupported OS for compiling external assembly!");
+            return false;
+        }
+
         Process process = Process.Start(processInfo) ?? throw new Exception();
-        process.OutputDataReceived += (sender, dataArgs) =>
-        {
-            string? data = dataArgs.Data;
+            process.OutputDataReceived += (sender, dataArgs) => {
+                string? data = dataArgs.Data;
 
-            if (data is null)
-                return;
+                if (data is null)
+                    return;
 
-            if (data.Contains("Warning", StringComparison.OrdinalIgnoreCase))
-                Runtime.Debug.LogWarning(data);
-            else if (data.Contains("Error", StringComparison.OrdinalIgnoreCase))
-                Runtime.Debug.LogError(data);
-            else
-                Runtime.Debug.Log(data);
-        };
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        process.ErrorDataReceived += (sender, dataArgs) =>
-        {
-            if (dataArgs.Data is not null)
-                Runtime.Debug.LogError(dataArgs.Data);
-        };
+                if (data.Contains("Warning", StringComparison.OrdinalIgnoreCase))
+                    Runtime.Debug.LogWarning(data);
+                else if (data.Contains("Error", StringComparison.OrdinalIgnoreCase))
+                    Runtime.Debug.LogError(data);
+                else
+                    Runtime.Debug.Log(data);
+            };
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            process.ErrorDataReceived += (sender, dataArgs) => {
+                if (dataArgs.Data is not null)
+                    Runtime.Debug.LogError(dataArgs.Data);
+            };
 
-        process.WaitForExit();
+            process.WaitForExit();
 
-        int exitCode = process.ExitCode;
-        process.Close();
+            int exitCode = process.ExitCode;
+            process.Close();
 
         BoundedLog($"Exit Code: '{exitCode}'");
 
@@ -304,10 +338,10 @@ public static class Project
                 <ProjectRoot>{ProjectDirectory}</ProjectRoot>
             </PropertyGroup>
             <PropertyGroup Condition="" '$(Configuration)' == 'Debug' "">
-                <OutputPath>$(ProjectRoot)\Temp\bin\Debug\</OutputPath>
+                <OutputPath>$(ProjectRoot)/Temp/bin/Debug/</OutputPath>
             </PropertyGroup>
             <PropertyGroup Condition="" '$(Configuration)' == 'Release' "">
-                <OutputPath>$(ProjectRoot)\Builds\Latest\</OutputPath>
+                <OutputPath>$(ProjectRoot)/Builds/Latest/</OutputPath>
             </PropertyGroup>";
 
         string gameproj = 

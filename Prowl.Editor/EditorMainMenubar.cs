@@ -26,24 +26,33 @@ public class EditorMainMenubar {
         EditorApplication.OnDrawEditor += Draw;
     }
 
-    private void Draw() {
-        ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new System.Numerics.Vector2(4, 4));
-        if(ImGui.BeginMainMenuBar()) {
+    private void Draw()
+    {
+        try
+        {
+            ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new System.Numerics.Vector2(4, 4));
+            if (ImGui.BeginMainMenuBar())
+            {
 
-            DrawPlayControls();
+                DrawPlayControls();
 
-            ImGui.SetCursorPosX(0);
-            DrawMenuItems();
+                ImGui.SetCursorPosX(0);
+                DrawMenuItems();
 
-            if(ImGui.Button($"{FontAwesome6.ArrowsSpin}"))
-                EditorApplication.Instance.RegisterReloadOfExternalAssemblies();
-            GUIHelper.Tooltip("Recompile Project Scripts.");
+                if (ImGui.Button($"{FontAwesome6.ArrowsSpin}"))
+                    EditorApplication.Instance.RegisterReloadOfExternalAssemblies();
+                GUIHelper.Tooltip("Recompile Project Scripts.");
 
 
-            ImGui.EndMainMenuBar();
+                ImGui.EndMainMenuBar();
+            }
+            // pop main menu bar size
+            ImGui.PopStyleVar();
         }
-        // pop main menu bar size
-        ImGui.PopStyleVar();
+        catch (Exception e)
+        {
+            Runtime.Debug.LogError("Error in EditorMainMenuBar: " + e.Message + "\n" + e.StackTrace);
+        }
     }
 
     private static void DrawPlayControls() {
@@ -98,8 +107,6 @@ public class EditorMainMenubar {
         ImGui.SetCursorPosX(2);
         if (ImGui.BeginMenu("File"))
         {
-            if (ImGui.MenuItem("Open Project")) { new ProjectsWindow(); }
-            ImGui.Separator();
             MenuItem.DrawMenuRoot("Scene");
             ImGui.Separator();
             if (ImGui.MenuItem("Quit")) Application.Quit();

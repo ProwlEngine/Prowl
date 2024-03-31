@@ -88,7 +88,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localScale")!, -1, "Scale");
 
             // Draw Components
-            HashSet<int> editorsNeeded = new();
+            HashSet<int> editorsNeeded = [];
+            List<MonoBehaviour> toDelete = [];
             foreach (var comp in go.GetComponents<MonoBehaviour>()) {
                 editorsNeeded.Add(comp.InstanceID);
 
@@ -107,7 +108,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 var cType = comp.GetType();
                 if (ImGui.CollapsingHeader(GetComponentDisplayName(cType), ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.OpenOnArrow)) {
 
-                    HandleComponentContextMenu(go, comp);
+                    HandleComponentContextMenu(go, comp, ref toDelete);
 
                     if (compEditors.TryGetValue(comp.InstanceID, out var editor)) {
                         editor.OnInspectorGUI();
@@ -142,6 +143,10 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                 GUIHelper.Space();
             }
+
+            // Handle Deletion
+            foreach (var comp in toDelete)
+                go.RemoveComponent(comp);
 
             // Remove any editors that are no longer needed
             HandleUnusedEditors(editorsNeeded);
@@ -205,7 +210,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             ImGui.PopStyleVar();
         }
 
-        private static void HandleComponentContextMenu(GameObject? go, MonoBehaviour comp)
+        private static void HandleComponentContextMenu(GameObject? go, MonoBehaviour comp, ref List<MonoBehaviour> toDelete)
         {
             if (ImGui.BeginPopupContextItem()) {
                 if (ImGui.MenuItem("Duplicate")) {
@@ -214,7 +219,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     go.AddComponentDirectly(copy);
                     copy.OnValidate();
                 }
-                if (ImGui.MenuItem("Delete")) go.RemoveComponent(comp);
+                if (ImGui.MenuItem("Delete")) toDelete.Add(comp);
                 ImGui.EndPopup();
             }
         }

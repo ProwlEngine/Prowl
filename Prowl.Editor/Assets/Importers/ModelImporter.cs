@@ -717,7 +717,7 @@ namespace Prowl.Editor.Assets
             ImGui.Checkbox("Merge Objects", ref importer.OptimizeGraph);
             ImGui.Checkbox("Cull Empty Objects", ref importer.CullEmpty);
             ImGui.Separator();
-            ImGui.BeginChild("##SceneGraph", new Vector2(0, 250), true);
+            ImGui.BeginChild("##SceneGraph", new Vector2(0, 250), ImGuiChildFlags.Border);
             ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetCursorScreenPos(), new System.Numerics.Vector2(9999f, 9999f), ImGui.ColorConvertFloat4ToU32(new Vector4(0.1f, 0.1f, 0.1f, 1f)));
             DrawNode(root);
             ImGui.EndChild();

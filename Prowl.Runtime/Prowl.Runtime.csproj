@@ -8,32 +8,32 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <None Remove="Resources\AudioIcon.png" />
-      <None Remove="Resources\Checkerboard.png" />
-      <None Remove="Resources\CSharpIcon.png" />
-      <None Remove="Resources\default.glsl" />
-      <None Remove="Resources\diffuse.glsl" />
-      <None Remove="Resources\directionallight.glsl" />
-      <None Remove="Resources\fa-regular-400.ttf" />
-      <None Remove="Resources\fa-solid-900.ttf" />
-      <None Remove="Resources\FileIcon.png" />
-      <None Remove="Resources\FolderIcon.png" />
-      <None Remove="Resources\FolderOpenIcon.png" />
-      <None Remove="Resources\font.ttf" />
-      <None Remove="Resources\fontawesome-webfont.ttf" />
-      <None Remove="Resources\GameObjectIcon.png" />
-      <None Remove="Resources\gbuffercombine.glsl" />
-      <None Remove="Resources\HierarchyIcon.png" />
-      <None Remove="Resources\invalid.glsl" />
-      <None Remove="Resources\ModelIcon.png" />
-      <None Remove="Resources\pointlightshader.glsl" />
-      <None Remove="Resources\ScreenShader.glsl" />
-      <None Remove="Resources\ShaderIcon.png" />
-      <None Remove="Resources\standard.glsl" />
+      <None Remove="Resources/AudioIcon.png" />
+      <None Remove="Resources/Checkerboard.png" />
+      <None Remove="Resources/CSharpIcon.png" />
+      <None Remove="Resources/default.glsl" />
+      <None Remove="Resources/diffuse.glsl" />
+      <None Remove="Resources/directionallight.glsl" />
+      <None Remove="Resources/fa-regular-400.ttf" />
+      <None Remove="Resources/fa-solid-900.ttf" />
+      <None Remove="Resources/FileIcon.png" />
+      <None Remove="Resources/FolderIcon.png" />
+      <None Remove="Resources/FolderOpenIcon.png" />
+      <None Remove="Resources/font.ttf" />
+      <None Remove="Resources/fontawesome-webfont.ttf" />
+      <None Remove="Resources/GameObjectIcon.png" />
+      <None Remove="Resources/gbuffercombine.glsl" />
+      <None Remove="Resources/HierarchyIcon.png" />
+      <None Remove="Resources/invalid.glsl" />
+      <None Remove="Resources/ModelIcon.png" />
+      <None Remove="Resources/pointlightshader.glsl" />
+      <None Remove="Resources/ScreenShader.glsl" />
+      <None Remove="Resources/ShaderIcon.png" />
+      <None Remove="Resources/standard.glsl" />
     </ItemGroup>
     
     <ItemGroup>
-      <PackageReference Include="Jitter2" Version="2.2.0" />
+      <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
       <PackageReference Include="Silk.NET" Version="2.20.0" />
       <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.21.1.2" />
     </ItemGroup>

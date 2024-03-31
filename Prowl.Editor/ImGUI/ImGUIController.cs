@@ -629,7 +629,7 @@ namespace Prowl.Editor.ImGUI
             _fontTexture.Dispose();
             _gl.DeleteProgram(_shader);
 
-            ImNodes.DestroyContext();
+            ImNodes.DestroyContext(nodesContext);
             ImGui.DestroyContext(Context);
         }
 

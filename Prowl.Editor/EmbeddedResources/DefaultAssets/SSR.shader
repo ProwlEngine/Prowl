@@ -49,15 +49,15 @@ Pass 0
 		{
 			vec2 texCoords = gl_FragCoord.xy / Resolution;
 
-			vec3 color = texture2D(gColor, texCoords).xyz;
+			vec3 color = texture(gColor, texCoords).xyz;
 			OutputColor = vec4(color, 1.0);
 
-			vec4 viewPosAndRough = texture2D(gPositionRoughness, texCoords);
+			vec4 viewPosAndRough = texture(gPositionRoughness, texCoords);
 			float smoothness = 1.0 - viewPosAndRough.w;
 
 			if(smoothness > 0.05)
 			{
-				vec4 normalAndMetallic = texture2D(gNormalMetallic, texCoords);
+				vec4 normalAndMetallic = texture(gNormalMetallic, texCoords);
 				vec3 normal = normalAndMetallic.xyz;
 				float metallic = normalAndMetallic.w;
 				
@@ -82,7 +82,7 @@ Pass 0
 				if(SSRCoord.z > 0.5)
 				{
 					OutputColor.rgb *= isMetal ? vec3(1.0 - smoothness) : 1.0 - fresnel;
-					OutputColor.rgb += texture2D(gColor, SSRCoord.xy).xyz * fresnel;
+					OutputColor.rgb += texture(gColor, SSRCoord.xy).xyz * fresnel;
 				}
 			}
 		}

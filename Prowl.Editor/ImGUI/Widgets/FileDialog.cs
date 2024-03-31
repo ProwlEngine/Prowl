@@ -217,7 +217,7 @@ namespace Prowl.Editor
 
                 float contentRegionWidth = ImGui.GetWindowContentRegionMax().X - ImGui.GetWindowContentRegionMin().X;
 
-                ImGui.BeginChild("##browser", new Vector2(contentRegionWidth, 300), true, ImGuiWindowFlags.HorizontalScrollbar);
+                ImGui.BeginChild("##browser", new Vector2(contentRegionWidth, 300), ImGuiChildFlags.Border, ImGuiWindowFlags.HorizontalScrollbar);
                 ImGui.Columns(4);
 
                 // Columns size
