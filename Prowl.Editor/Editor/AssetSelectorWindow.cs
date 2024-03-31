@@ -43,14 +43,14 @@ public class AssetSelectorWindow : EditorWindow
         var assets = AssetDatabase.GetAllAssetsOfType(type);
         foreach (var asset in assets)
         {
-            if (AssetDatabase.TryGetFile(asset.Item1, out var file))
+            if (AssetDatabase.TryGetFile(asset.Item2, out var file))
             {
                 if (string.IsNullOrEmpty(_searchText) || file.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
                 {
                     // Selectable
-                    if (ImGui.Selectable("  " + AssetDatabase.GetRelativePath(file.FullName) + "." + asset.Item2, false, ImGuiSelectableFlags.None, new System.Numerics.Vector2(ImGui.GetWindowWidth(), 21)))
+                    if (ImGui.Selectable("  " + AssetDatabase.GetRelativePath(file.FullName) + "." + asset.Item1, false, ImGuiSelectableFlags.None, new System.Numerics.Vector2(ImGui.GetWindowWidth(), 21)))
                     {
-                        _onAssetSelected(asset.Item1, asset.Item2);
+                        _onAssetSelected(asset.Item2, asset.Item3);
                         isOpened = false;
                     }
                     ImGui.Separator();
