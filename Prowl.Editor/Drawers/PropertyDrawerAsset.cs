@@ -12,6 +12,7 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
 {
     public static PropertyDrawerAsset Selected;
     public static Guid assignedGUID;
+    public static short assignedFileID;
     public static int guidAssignedToID = -1;
 
     protected override bool Draw(string label, ref IAssetRef value, float width)
@@ -23,6 +24,9 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         if(guidAssignedToID != -1  && guidAssignedToID == imguiID)
         {
             value.AssetID = assignedGUID;
+            value.FileID = assignedFileID;
+            assignedGUID = Guid.Empty;
+            assignedFileID = 0;
             guidAssignedToID = -1;
             changed = true;
         }
@@ -39,7 +43,6 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
             if (ImGui.Selectable("(Runtime)" + value.Name, Selected == this, new System.Numerics.Vector2(width, 21)))
             {
                 Selected = this;
-                new AssetSelectorWindow(value.InstanceType, (guid) => { assignedGUID = guid; guidAssignedToID = imguiID; });
             }
             GUIHelper.ItemRectFilled(0.1f, 0.1f, 0.9f, 0.3f);
         }
@@ -82,7 +85,7 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         {
             Selected = this;
             int id = imguiID;
-            new AssetSelectorWindow(instanceType, (guid) => { assignedGUID = guid; guidAssignedToID = id; });
+            new AssetSelectorWindow(instanceType, (guid, fileid) => { assignedGUID = guid; guidAssignedToID = id; assignedFileID = fileid; });
         }
         ImGui.SameLine();
     }
