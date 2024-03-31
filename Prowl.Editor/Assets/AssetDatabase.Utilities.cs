@@ -154,18 +154,24 @@ namespace Prowl.Editor.Assets
             }
         }
 
-        public static List<(Guid, short)> GetAllAssetsOfType(Type type)
+        public static List<(string, Guid, short)> GetAllAssetsOfType(Type type)
         {
             // Go over all loaded meta files and check the Importers type
-            List<(Guid, short)> result = new();
+            List<(string, Guid, short)> result = new();
             foreach (var meta in assetGuidToMeta.Values)
             {
+                var names = meta.assetNames;
                 var types = meta.assetTypes;
+                if(names.Length != types.Length)
+                {
+                    Runtime.Debug.LogWarning($"Meta file {meta.guid} has mismatched names and types at path {AssetDatabase.GetRelativePath(meta.AssetPath.FullName)}");
+                    continue;
+                }
                 for (short i = 0; i < types.Length; i++)
                 {
                     if (types[i].Equals(type.FullName, StringComparison.OrdinalIgnoreCase))
                     {
-                        result.Add((meta.guid, i));
+                        result.Add((names[i], meta.guid, i));
                     }
                 }
 

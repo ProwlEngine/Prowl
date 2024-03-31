@@ -113,7 +113,7 @@ namespace Prowl.Editor.Assets
                             lastWriteTime = File.GetLastWriteTime(file);
                             LastWriteTimesCache.Instance.fileLastWriteTimes[file] = lastWriteTime;
                             cacheModified = true;
-                            if (ProcessFile(file))
+                            if (ProcessFile(file, out _))
                                 toReimport.Add(file);
                         }
                         else if (File.GetLastWriteTime(file) != lastWriteTime)
@@ -123,14 +123,16 @@ namespace Prowl.Editor.Assets
                             lastWriteTime = File.GetLastWriteTime(file);
                             LastWriteTimesCache.Instance.fileLastWriteTimes[file] = lastWriteTime;
                             cacheModified = true;
-                            if (ProcessFile(file))
+                            if (ProcessFile(file, out _))
                                 toReimport.Add(file);
                         }
                         else if (!assetPathToMeta.TryGetValue(file, out var meta))
                         {
                             // File hasent changed but we dont have it in the cache, process it but dont reimport
                             Debug.Log("Asset Found: " + file);
-                            ProcessFile(file);
+                            ProcessFile(file, out var metaOutdated);
+                            if(metaOutdated)
+                                toReimport.Add(file);
                         }
                     }
                 }
@@ -188,10 +190,11 @@ namespace Prowl.Editor.Assets
         /// </summary>
         /// <param name="file"></param>
         /// <returns>True if a reimport is needed</returns>
-        static bool ProcessFile(string file)
+        static bool ProcessFile(string file, out bool metaOutdated)
         {
             ArgumentNullException.ThrowIfNullOrEmpty(file);
             var fileInfo = new FileInfo(file);
+            metaOutdated = false;
 
             var meta = MetaFile.Load(fileInfo);
             if (meta != null)
@@ -200,6 +203,12 @@ namespace Prowl.Editor.Assets
                 bool hasMetaAlready = assetGuidToMeta.ContainsKey(meta.guid);
                 assetGuidToMeta[meta.guid] = meta;
                 assetPathToMeta[fileInfo.FullName] = meta;
+
+                if (meta.version != MetaFile.MetaVersion)
+                {
+                    metaOutdated = true;
+                    return true; // Meta version is outdated
+                }
 
                 if (hasMetaAlready)
                 {
@@ -358,6 +367,12 @@ namespace Prowl.Editor.Assets
             meta.assetTypes[0] = ctx.Main.GetType().FullName!;
             for (int i = 0; i < ctx.SubAssets.Count; i++)
                 meta.assetTypes[i + 1] = ctx.SubAssets[i].GetType().FullName!;
+
+            meta.assetNames = new string[ctx.SubAssets.Count + 1];
+            meta.assetNames[0] = ctx.Main.Name;
+            for (int i = 0; i < ctx.SubAssets.Count; i++)
+                meta.assetNames[i + 1] = ctx.SubAssets[i].Name;
+
             meta.dependencies = dependencies.ToList();
             meta.Save();
             return true;

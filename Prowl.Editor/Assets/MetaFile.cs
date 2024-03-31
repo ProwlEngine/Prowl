@@ -4,10 +4,15 @@ namespace Prowl.Editor.Assets
 {
     public class MetaFile
     {
+        public const int MetaVersion = 1;
+
         public FileInfo AssetPath { get; set; }
+
+        public int version = MetaVersion;
         public Guid guid;
 
-        public string[] assetTypes;
+        public string[] assetNames = [];
+        public string[] assetTypes = [];
 
         public DateTime lastModified;
         public ScriptedImporter importer;
@@ -35,6 +40,7 @@ namespace Prowl.Editor.Assets
         public void Save()
         {
             var file = new FileInfo(AssetPath.FullName + ".meta");
+            version = MetaVersion;
             var tag = Serializer.Serialize(this);
             StringTagConverter.WriteToFile(tag, file);
         }
@@ -50,6 +56,7 @@ namespace Prowl.Editor.Assets
             var meta = Serializer.Deserialize<MetaFile>(tag);
             meta!.AssetPath = assetFile;
             meta.lastModified = DateTime.UtcNow;
+
             return meta;
         }
 
