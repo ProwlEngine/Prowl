@@ -54,6 +54,8 @@ public static class Project
         HasProject = true;
         (EditorApplication.Instance as EditorApplication).RegisterReloadOfExternalAssemblies();
 
+        CreateProjectDirectories(projectDir);
+
         CreateDefaults("Defaults");
         AssetDatabase.AddRootFolder("Defaults");
         AssetDatabase.Update(false); // Ensure defaults are all loaded in
@@ -83,20 +85,21 @@ public static class Project
         projectDir.Create();
 
         // Create Assets Folder
-        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Assets"));
         CreateProjectDirectories(projectDir);
         CreateDefaults("Defaults");
-        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Library"));
-        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Packages"));
 
         // Create Config Folder
         string configPath = Path.Combine(projectDir.FullName, @"Config");
         Directory.CreateDirectory(configPath);
+    }
 
     private static void CreateProjectDirectories(DirectoryInfo projectDir)
     {
         Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Assets"));
+        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Library"));
+        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Packages"));
     }
+
     static void CreateDefaults(string rootFolder)
     {
         if (string.IsNullOrWhiteSpace(rootFolder)) throw new ArgumentException("Root Folder cannot be null or whitespace");
