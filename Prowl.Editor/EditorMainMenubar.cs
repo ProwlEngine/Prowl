@@ -98,8 +98,6 @@ public class EditorMainMenubar {
         ImGui.SetCursorPosX(2);
         if (ImGui.BeginMenu("File"))
         {
-            if (ImGui.MenuItem("Open Project")) { new ProjectsWindow(); }
-            ImGui.Separator();
             MenuItem.DrawMenuRoot("Scene");
             ImGui.Separator();
             if (ImGui.MenuItem("Quit")) Application.Quit();
