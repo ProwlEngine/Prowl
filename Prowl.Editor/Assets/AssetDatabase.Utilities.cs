@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Reflection;
 
 namespace Prowl.Editor.Assets
 {
@@ -151,6 +152,25 @@ namespace Prowl.Editor.Assets
                     counter++;
                 }
             }
+        }
+
+        public static List<Guid> GetAllAssetsOfType(Type type)
+        {
+            // Go over all loaded meta files and check the Importers type
+            List<Guid> result = new();
+            foreach (var meta in assetGuidToMeta.Values)
+            {
+                var importer = meta.importer;
+                // Get importer attribute
+                var importerType = importer.GetType();
+                var importerAttribute = importerType.GetCustomAttribute<ImporterAttribute>();
+                if (importerAttribute != null)
+                {
+                    if (type.IsAssignableTo(importerAttribute.GeneralType))
+                        result.Add(meta.guid);
+                }
+            }
+            return result;
         }
 
         #endregion
