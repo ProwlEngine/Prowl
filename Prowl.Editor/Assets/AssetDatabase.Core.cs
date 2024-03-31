@@ -354,9 +354,10 @@ namespace Prowl.Editor.Assets
             ctx.SaveToFile(serialized, out var dependencies);
 
             // Update the meta file (LastModified is set by MetaFile.Load)
-            meta.assetTypes = new string[ctx.SubAssets.Count];
+            meta.assetTypes = new string[ctx.SubAssets.Count + 1];
+            meta.assetTypes[0] = ctx.Main.GetType().FullName!;
             for (int i = 0; i < ctx.SubAssets.Count; i++)
-                meta.assetTypes[i] = ctx.SubAssets[i].GetType().FullName!;
+                meta.assetTypes[i + 1] = ctx.SubAssets[i].GetType().FullName!;
             meta.dependencies = dependencies.ToList();
             meta.Save();
             return true;
