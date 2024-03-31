@@ -150,22 +150,30 @@ public class AssetBrowserWindow : EditorWindow
         if (!Project.HasProject)
             return;
 
+        Console.WriteLine(153);
         ImGui.SetCursorPosY(cPY);
+        Console.WriteLine(155);
         ImGui.SetCursorPosX(cPX + searchBarSize + padding);
         string assetPath = Path.GetRelativePath(Project.ProjectDirectory, CurDirectory.FullName);
         ImGui.Text(assetPath);
 
+        Console.WriteLine(160);
         ImGui.SetCursorPosY(cPY);
+        Console.WriteLine(161);
         ImGui.SetCursorPosX(windowWidth - rightOffset - sizeSliderSize - padding - 30);
         if (ImGui.Button(Locked ? FontAwesome6.Lock : FontAwesome6.LockOpen))
             Locked = !Locked;
 
+        Console.WriteLine(167);
         ImGui.SetCursorPosY(cPY);
+        Console.WriteLine(169);
         ImGui.SetCursorPosX(windowWidth - rightOffset - sizeSliderSize - padding);
         ImGui.SetNextItemWidth(sizeSliderSize);
         ImGui.SliderFloat("##ThumbnailSizeSlider", ref AssetPipelinePreferences.Instance.ThumbnailSize, -0.2f, 1.0f);
 
+        Console.WriteLine(174);
         ImGui.SetCursorPosY(cPY);
+        Console.WriteLine(176);
         ImGui.SetCursorPosX(windowWidth - rightOffset);
         if (ImGui.Button("   " + FontAwesome6.Gears + "   "))
             _ = new ProjectSettingsWindow(typeof(AssetPipelinePreferences));
@@ -214,6 +222,7 @@ public class AssetBrowserWindow : EditorWindow
     private void RenderEntry(int rowCount, float itemSize, ref System.Numerics.Vector2 curPos, ref int i, FileSystemInfo entry)
     {
         ImGui.PushID(i);
+        Console.WriteLine(225);
         ImGui.SetCursorPos(curPos);
         ImGui.BeginChild("ClipBox", new System.Numerics.Vector2(ThumbnailSize, ThumbnailSize), ImGuiChildFlags.None, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
         RenderFileSystemEntry(entry);
@@ -373,6 +382,7 @@ public class AssetBrowserWindow : EditorWindow
         thumbnailSize -= 30;
         float thumbnailWidth = ((float)thumbnail.Width / thumbnail.Height) * thumbnailSize;
         float xOffset = ((thumbnailSize - thumbnailWidth) / 2) + 15;
+        Console.WriteLine(385);
         ImGui.SetCursorPos(new System.Numerics.Vector2(xOffset, 10));
         ImGui.Image((IntPtr)thumbnail.Handle, new System.Numerics.Vector2(thumbnailWidth, thumbnailSize), System.Numerics.Vector2.UnitY, System.Numerics.Vector2.UnitX);
     }
