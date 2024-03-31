@@ -336,6 +336,7 @@ namespace Prowl.Editor.Assets
                 Mesh.VertexFormat format = new(elements.ToArray());
 
                 Mesh mesh = new();
+                mesh.Name = m.Name;
                 mesh.format = format;
 
                 var verts = m.Vertices;
