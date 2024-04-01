@@ -149,32 +149,28 @@ namespace Prowl.Runtime
             int verticesNum = vertices.Length;
             int indiciesNum = triangles.Length;
 
-            int[] counts = new int[verticesNum];
-            for (int i = 0; i < indiciesNum - 3; i += 3)
+            // Clear all normals
+            for (int i = 0; i < verticesNum; i++)
+                vertices[i].Normal = Vector3.zero;
+
+            for (int i = 0; i < indiciesNum; i += 3)
             {
                 int ai = triangles[i];
                 int bi = triangles[i + 1];
                 int ci = triangles[i + 2];
 
-                if (ai < verticesNum && bi < verticesNum && ci < verticesNum)
-                {
-                    Vector3 n = Vector3.Normalize(Vector3.Cross(
-                        vertices[bi].Position - vertices[ai].Position,
-                        vertices[ci].Position - vertices[ai].Position
-                    ));
+                Vector3 n = Vector3.Normalize(Vector3.Cross(
+                    vertices[bi].Position - vertices[ai].Position,
+                    vertices[ci].Position - vertices[ai].Position
+                ));
 
-                    vertices[ai].Normal -= n.ToFloat();
-                    vertices[bi].Normal -= n.ToFloat();
-                    vertices[ci].Normal -= n.ToFloat();
-
-                    counts[ai]++;
-                    counts[bi]++;
-                    counts[ci]++;
-                }
+                vertices[ai].Normal += n.ToFloat();
+                vertices[bi].Normal += n.ToFloat();
+                vertices[ci].Normal += n.ToFloat();
             }
 
             for (int i = 0; i < verticesNum; i++)
-                vertices[i].Normal /= counts[i];
+                vertices[i].Normal = Vector3.Normalize(vertices[i].Normal);
         }
 
         // http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-13-normal-mapping/
