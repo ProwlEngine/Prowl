@@ -172,7 +172,7 @@ namespace Prowl.Runtime
             ActiveFaceCull.Stack.Clear();
             ActiveFaceCull.SetDefault();
 
-            GL.FrontFace(FrontFaceDirection.Ccw); // Front face are defined counter clockwise (default)
+            GL.FrontFace(FrontFaceDirection.CW); // Front face are defined clockwise (default)
 
             Clear();
             Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
