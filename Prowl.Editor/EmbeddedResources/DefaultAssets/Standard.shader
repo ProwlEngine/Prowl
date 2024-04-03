@@ -29,13 +29,49 @@ Pass 0
 	Vertex
 	{
 		layout (location = 0) in vec3 vertexPosition;
-		layout (location = 1) in vec2 vertexTexCoord;
-		layout (location = 2) in vec3 vertexNormal;
-		layout (location = 3) in vec3 vertexColor;
-		layout (location = 4) in vec3 vertexTangent;
+
+#ifdef HAS_UV
+		layout (location = 1) in vec2 vertexTexCoord0;
+#else
+		vec2 vertexTexCoord0 = vec2(0.0, 0.0);
+#endif
+
+#ifdef HAS_UV2
+		layout (location = 2) in vec2 vertexTexCoord1;
+#else
+		vec2 vertexTexCoord1 = vec2(0.0, 0.0);
+#endif
+
+#ifdef HAS_NORMALS
+		layout (location = 3) in vec3 vertexNormal;
+#else
+		vec3 vertexNormal = vec3(0.0, 1.0, 0.0);
+#endif
+
+#ifdef HAS_COLORS
+		layout (location = 4) in vec4 vertexColor;
+#else
+		vec4 vertexColor = vec4(1.0, 1.0, 1.0, 1.0);
+#endif
+
+#ifdef HAS_TANGENTS
+		layout (location = 5) in vec3 vertexTangent;
+#else
+		vec3 vertexTangent = vec3(1.0, 0.0, 0.0);
+#endif
+
 #ifdef SKINNED
-		layout (location = 5) in ivec4 vertexBoneIndices;
-		layout (location = 6) in vec4 vertexBoneWeights;
+	#ifdef HAS_BONEINDICES
+		layout (location = 6) in ivec4 vertexBoneIndices;
+	#else
+		ivec4 vertexBoneIndices = ivec4(0, 0, 0, 0);
+	#endif
+
+	#ifdef HAS_BONEWEIGHTS
+		layout (location = 7) in vec4 vertexBoneWeights;
+	#else
+		vec4 vertexBoneWeights = vec4(0.0, 0.0, 0.0, 0.0);
+	#endif
 		
 		const int MAX_BONE_INFLUENCE = 4;
 		const int MAX_BONES = 100;
@@ -45,9 +81,10 @@ Pass 0
 
 		out vec3 FragPos;
 		out vec3 Pos;
-		out vec2 TexCoords;
+		out vec2 TexCoords0;
+		out vec2 TexCoords1;
 		out vec3 VertNormal;
-		out vec3 VertColor;
+		out vec4 VertColor;
 		out mat3 TBN;
 		out vec4 PosProj;
 		out vec4 PosProjOld;
@@ -93,7 +130,8 @@ Pass 0
 		 	vec4 viewPos = matView * matModel * vec4(boneVertexPosition, 1.0);
 		    Pos = (matModel * vec4(boneVertexPosition, 1.0)).xyz;
 		    FragPos = viewPos.xyz; 
-		    TexCoords = vertexTexCoord;
+		    TexCoords0 = vertexTexCoord0;
+		    TexCoords1 = vertexTexCoord1;
 		    VertColor = vertexColor;
 
 			mat3 normalMatrix = transpose(inverse(mat3(matModel)));
@@ -124,9 +162,10 @@ Pass 0
 
 		in vec3 FragPos;
 		in vec3 Pos;
-		in vec2 TexCoords;
+		in vec2 TexCoords0;
+		in vec2 TexCoords1;
 		in vec3 VertNormal;
-		in vec3 VertColor;
+		in vec4 VertColor;
 		in mat3 TBN;
 		in vec4 PosProj;
 		in vec4 PosProjOld;
@@ -165,13 +204,13 @@ Pass 0
 		
 		void main()
 		{
-			vec2 uv = UnjitterTextureUV(TexCoords, Jitter);
+			vec2 uv = UnjitterTextureUV(TexCoords0, Jitter);
 			//vec2 uv = TexCoords;
 
 			vec4 alb = texture(_MainTex, uv).rgba; 
 			float rng = InterleavedGradientNoise(gl_FragCoord.xy, Frame % 32);
 			if(rng > alb.a * _MainColor.a) discard;
-			alb.rgb *= VertColor;
+			alb.rgb *= VertColor.rgb;
 
 			// AO, Roughness, Metallic
 			vec3 surface = texture(_SurfaceTex, uv).rgb;

@@ -45,17 +45,20 @@ namespace Prowl.Runtime.CSG
         {
             Array.Clear(faces, 0, faces.Length);
 
-            Array.Resize(ref faces, mesh.triangles.Length / 3);
+            Array.Resize(ref faces, mesh.Indices.Length / 3);
 
+            var verts = mesh.Vertices;
+            var ind = mesh.Indices;
+            var uvs = mesh.UV;
             for (int i = 0; i < faces.Length; i++)
             {
                 Face new_face = new Face();
                 new_face.vertices = new(3);
-                new_face.vertices.Add(mesh.vertices[mesh.triangles[i * 3 + 2]].Position);
-                new_face.vertices.Add(mesh.vertices[mesh.triangles[i * 3 + 1]].Position);
-                new_face.vertices.Add(mesh.vertices[mesh.triangles[i * 3 + 0]].Position);
+                new_face.vertices.Add(verts[ind[i * 3 + 2]]);
+                new_face.vertices.Add(verts[ind[i * 3 + 1]]);
+                new_face.vertices.Add(verts[ind[i * 3 + 0]]);
 
-                new_face.uvs = new Vector2[3] { mesh.vertices[mesh.triangles[i * 3 + 2]].TexCoord, mesh.vertices[mesh.triangles[i * 3 + 1]].TexCoord, mesh.vertices[mesh.triangles[i * 3 + 0]].TexCoord };
+                new_face.uvs = new Vector2[3] { uvs[ind[i * 3 + 2]], uvs[ind[i * 3 + 1]], uvs[ind[i * 3 + 0]] };
 
                 faces[i] = new_face;
             }
@@ -79,33 +82,23 @@ namespace Prowl.Runtime.CSG
                 m = new Mesh();
             }
 
-            Mesh.Vertex[] vert = new Mesh.Vertex[faces.Length * 3];
-            ushort[] triangles = new ushort[faces.Length * 3];
-            for (int i = 0; i < faces.Length; i++)
+            System.Numerics.Vector3[] vert = new System.Numerics.Vector3[faces.Length * 3];
+            System.Numerics.Vector2[] uv = new System.Numerics.Vector2[faces.Length * 3];
+            uint[] triangles = new uint[faces.Length * 3];
+            for (uint i = 0; i < faces.Length; i++)
             {
-                var a = new Mesh.Vertex();
-                var b = new Mesh.Vertex();
-                var c = new Mesh.Vertex();
-                a.Position = faces[i].vertices[0];
-                a.TexCoord = faces[i].uvs[0];
-                a.Color = System.Numerics.Vector3.One;
-                b.Position = faces[i].vertices[1];
-                b.TexCoord = faces[i].uvs[1];
-                b.Color = System.Numerics.Vector3.One;
-                c.Position = faces[i].vertices[2];
-                c.TexCoord = faces[i].uvs[2];
-                c.Color = System.Numerics.Vector3.One;
-
-
-                vert[3 * i + 2] = a;
-                vert[3 * i + 1] = b;
-                vert[3 * i + 0] = c;
-                triangles[3 * i + 0] = (ushort)(3 * i);
-                triangles[3 * i + 1] = (ushort)(3 * i + 1);
-                triangles[3 * i + 2] = (ushort)(3 * i + 2);
+                vert[3 * i + 2] = faces[i].vertices[0];
+                vert[3 * i + 1] = faces[i].vertices[1];
+                vert[3 * i + 0] = faces[i].vertices[2];
+                uv[3 * i + 2] = faces[i].uvs[0];
+                uv[3 * i + 1] = faces[i].uvs[1];
+                uv[3 * i + 0] = faces[i].uvs[2];
+                triangles[3 * i + 0] = (3 * i);
+                triangles[3 * i + 1] = (3 * i + 1);
+                triangles[3 * i + 2] = (3 * i + 2);
             }
-            m.vertices = vert;
-            m.triangles = triangles;
+            m.Vertices = vert;
+            m.Indices = triangles;
             m.RecalculateNormals();
             m.RecalculateTangents();
             return m;

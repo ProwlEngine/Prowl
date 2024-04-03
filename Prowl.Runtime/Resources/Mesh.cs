@@ -1,729 +1,952 @@
-﻿using Silk.NET.OpenGL;
+﻿using Prowl.Runtime;
+using Silk.NET.OpenGL;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.InteropServices;
-using static Prowl.Runtime.Mesh.VertexFormat;
+using System.Text;
+using static VertexFormat;
 
 namespace Prowl.Runtime
 {
-    public sealed class Mesh : EngineObject, ISerializable
+    public enum IndexFormat : byte
     {
+        UInt16 = 0,
+        UInt32 = 1
+    }
 
-        public VertexFormat format;
+    public class Mesh : EngineObject, ISerializable
+    {
+        /// <summary> Whether this mesh is readable by the CPU </summary>
+        public readonly bool isReadable = true;
 
-        public int vertexCount => vertices.Length;
-        public int triangleCount => triangles.Length / 3;
+        /// <summary> Whether this mesh is writable </summary>
+        public readonly bool isWritable = true;
 
-        // Vertex attributes data
-        public Vertex[] vertices;
-        public ushort[] triangles;
+        /// <summary> The bounds of the mesh </summary>
+        public Bounds bounds { get; internal set; }
 
-        // The array of bone paths under a root
-        // The index of a path is the Bone Index
-        public string[] boneNames;
-        public Matrix4x4[] bindPoses;
-
-        public Mesh() 
-        {
-            // Default Format
-            format = new([
-                new Element(VertexSemantic.Position, VertexType.Float, 3),
-                new Element(VertexSemantic.TexCoord, VertexType.Float, 2),
-                new Element(VertexSemantic.Normal, VertexType.Float, 3, 0, true),
-                new Element(VertexSemantic.Color, VertexType.Float, 3),
-                new Element(VertexSemantic.Tangent, VertexType.Float, 3),
-                new Element(VertexSemantic.BoneIndex, VertexType.UnsignedByte, 4),
-                new Element(VertexSemantic.BoneWeight, VertexType.Float, 4)
-            ]);
-        }
-
-        public uint vao { get; private set; }
-        public uint vbo { get; private set; }
-        private int uploadedVBOSize = 0;
-        public uint ibo { get; private set; }
-        private int uploadedIBOSize = 0;
-
-        public unsafe void Upload()
-        {
-            if (vao > 0) return; // Already loaded in, You have to Unload first!
-            ArgumentNullException.ThrowIfNull(format);
-
-            ArgumentNullException.ThrowIfNull(vertices);
-            if (vertices.Length == 0) throw new($"The mesh argument '{nameof(vertices)}' is empty!");
-
-            vao = Graphics.GL.GenVertexArray();
-            Graphics.GL.BindVertexArray(vao);
-            Graphics.CheckGL();
-
-            vbo  = Graphics.GL.GenBuffer();
-            Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
-            Graphics.GL.BufferData(BufferTargetARB.ArrayBuffer, new ReadOnlySpan<Vertex>(vertices), BufferUsageARB.StaticDraw);
-            uploadedVBOSize = vertices.Length;
-
-            Graphics.CheckGL();
-            format.Bind();
-
-            uploadedIBOSize = triangles?.Length ?? 0;
-            if (triangles != null) {
-                ibo = Graphics.GL.GenBuffer();
-                Graphics.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, ibo);
-                Graphics.GL.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<ushort>(triangles), BufferUsageARB.StaticDraw);
+        /// <summary> The format of the indices for this mesh </summary>
+        public IndexFormat IndexFormat {
+            get => indexFormat;
+            set {
+                if (isWritable == false) return;
+                changed = true;
+                indexFormat = value;
+                indices = new uint[0];
             }
-
-            Debug.Log($"VAO: [ID {vao}] Mesh uploaded successfully to VRAM (GPU)");
-
-            Graphics.GL.BindVertexArray(0);
-            Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, 0);
         }
 
-        // Update the data inside the VBO and IBO if it exist if not it just unloads and reuploads
-        public void Update()
-        {
-            if (vao <= 0) {
-                Upload();
-                return;
+        /// <summary> The mesh's primitive type </summary>
+        public PrimitiveType MeshTopology {
+            get => meshTopology;
+            set {
+                if (isWritable == false) return;
+                changed = true;
+                meshTopology = value;
             }
-
-            Graphics.GL.BindVertexArray(vao);
-            Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
-            if(uploadedVBOSize != vertices.Length) {
-                // Vertex count changed then reallocate it
-                Graphics.GL.BufferData(BufferTargetARB.ArrayBuffer, new ReadOnlySpan<Vertex>(vertices), BufferUsageARB.StaticDraw);
-            } else {
-                // Vertex count didnt change so just update it
-                Graphics.GL.BufferSubData(BufferTargetARB.ArrayBuffer, IntPtr.Zero, new ReadOnlySpan<Vertex>(vertices));
-            }
-            uploadedVBOSize = vertices.Length;
-
-            if ((uploadedIBOSize > 0 && triangles == null) || (uploadedIBOSize != triangles.Length)) {
-                uploadedIBOSize = triangles?.Length ?? 0;
-
-
-                // if indices has been deleted
-                if (triangles == null) {
-                    Graphics.GL.DeleteBuffer(ibo);
-                    ibo = 0;
-                } else {
-                    // If we dont have an indices buffer create one
-                    if(ibo == 0) {
-                        ibo = Graphics.GL.GenBuffer();
-                    }
-
-                    // if indices has been changed
-                    Graphics.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, ibo);
-                    if (uploadedIBOSize != vertices.Length) {
-                        // Size changed so reallocate
-                        Graphics.GL.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<ushort>(triangles), BufferUsageARB.StaticDraw);
-                    } else {
-                        // Size didnt change so just update
-                        Graphics.GL.BufferSubData(BufferTargetARB.ElementArrayBuffer, IntPtr.Zero, new ReadOnlySpan<ushort>(triangles));
-                    }
-                }
-            }
-
-            Graphics.GL.BindVertexArray(0);
-            Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, 0);
-
-        }
-
-        // Unload from memory (RAM and VRAM)
-        public void Unload()
-        {
-            if (vao <= 0) return; // nothing to unload
-
-            // Unload rlgl vboId data
-            Graphics.GL.DeleteVertexArray(vao);
-            vao = 0;
-            Graphics.GL.DeleteBuffer(vbo);
-        }
-
-        public override void OnDispose()
-        {
-            Unload();
-        }
-
-        #region Utilities
-        public void RecalculateNormals()
-        {
-            int verticesNum = vertices.Length;
-            int indiciesNum = triangles.Length;
-
-            // Clear all normals
-            for (int i = 0; i < verticesNum; i++)
-                vertices[i].Normal = Vector3.zero;
-
-            for (int i = 0; i < indiciesNum; i += 3)
-            {
-                int ai = triangles[i];
-                int bi = triangles[i + 1];
-                int ci = triangles[i + 2];
-
-                Vector3 n = Vector3.Normalize(Vector3.Cross(
-                    vertices[bi].Position - vertices[ai].Position,
-                    vertices[ci].Position - vertices[ai].Position
-                ));
-
-                vertices[ai].Normal += n.ToFloat();
-                vertices[bi].Normal += n.ToFloat();
-                vertices[ci].Normal += n.ToFloat();
-            }
-
-            for (int i = 0; i < verticesNum; i++)
-                vertices[i].Normal = Vector3.Normalize(vertices[i].Normal);
-        }
-
-        // http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-13-normal-mapping/
-        public void RecalculateTangents()
-        {
-            int verticesNum = vertices.Length;
-            int indiciesNum = triangles.Length;
-
-            int[] counts = new int[verticesNum];
-            for (int i = 0; i < indiciesNum - 3; i += 3)
-            {
-                int ai = triangles[i];
-                int bi = triangles[i + 1];
-                int ci = triangles[i + 2];
-
-                if (ai < verticesNum && bi < verticesNum && ci < verticesNum)
-                {
-                    Vector3 deltaPos1 = vertices[bi].Position - vertices[ai].Position;
-                    Vector3 deltaPos2 = vertices[ci].Position - vertices[ai].Position;
-
-                    Vector2 deltaUV1 = vertices[bi].TexCoord - vertices[ai].TexCoord;
-                    Vector2 deltaUV2 = vertices[ci].TexCoord - vertices[ai].TexCoord;
-
-                    double r = 1.0 / (deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x);
-                    Vector3 t = (deltaPos1 * deltaUV2.y - deltaPos2 * deltaUV1.y) * r;
-
-
-                    vertices[ai].Tangent += t.ToFloat();
-                    vertices[bi].Tangent += t.ToFloat();
-                    vertices[ci].Tangent += t.ToFloat();
-
-                    counts[ai]++;
-                    counts[bi]++;
-                    counts[ci]++;
-                }
-            }
-
-            for (int i = 0; i < verticesNum; i++)
-                vertices[i].Tangent /= counts[i];
-        }
-
-        #endregion
-
-        #region Create Primitives
-
-        public struct CubeFace
-        {
-            public bool enabled;
-            public Vector2[] texCoords;
         }
 
         /// <summary>
-        /// 24 vertex cube with per face control
+        /// Sets or gets the current vertices.
+        /// Getting depends on isReadable.
+        /// Note: When setting, if the vertex count is different than previous, it'll reset all other vertex data fields.
         /// </summary>
-        /// <param name="size">Size of the cube</param>
-        /// <param name="faces">0=(Z+) 1=(Z-) 2=(Y+) 3=(Y-) 4=(X+) 5=(X-)</param>
-        public static Mesh CreateCube(Vector3 size, CubeFace[] faces)
-        {
-            if (faces.Length != 6) throw new($"The argument '{nameof(faces)}' must have 6 elements!");
-
-            Mesh mesh = new();
-
-            List<Vertex> vertices = new();
-            List<ushort> indices = new();
-
-            // Front Face (Z+) - 0
-            if (faces[0].enabled) {
-                vertices.Add(new Vertex { Position = new Vector3(-size.x, -size.y, size.z), TexCoord = faces[0].texCoords[0] });
-                vertices.Add(new Vertex { Position = new Vector3(size.x, -size.y, size.z), TexCoord = faces[0].texCoords[1] });
-                vertices.Add(new Vertex { Position = new Vector3(size.x, size.y, size.z), TexCoord = faces[0].texCoords[2] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.x, size.y, size.z), TexCoord = faces[0].texCoords[3] });
-                indices.AddRange(new ushort[] { 0, 1, 2, 0, 2, 3 });
-            }
-            // Back Face (Z-) - 1
-            if (faces[1].enabled) {
-                vertices.Add(new Vertex { Position = new Vector3(size.x, -size.y, -size.z), TexCoord = faces[1].texCoords[0] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.x, -size.y, -size.z), TexCoord = faces[1].texCoords[1] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.x, size.y, -size.z), TexCoord = faces[1].texCoords[2] });
-                vertices.Add(new Vertex { Position = new Vector3(size.x, size.y, -size.z), TexCoord = faces[1].texCoords[3] });
-                indices.AddRange(new ushort[] { 4, 5, 6, 4, 6, 7 });
-            }
-            // Top Face (Y+) - 2
-            if (faces[2].enabled) {
-                vertices.Add(new Vertex { Position = new Vector3(-size.x, size.y, -size.z), TexCoord = faces[2].texCoords[0] });
-                vertices.Add(new Vertex { Position = new Vector3(size.x, size.y, -size.z), TexCoord = faces[2].texCoords[1] });
-                vertices.Add(new Vertex { Position = new Vector3(size.x, size.y, size.z), TexCoord = faces[2].texCoords[2] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.x, size.y, size.z), TexCoord = faces[2].texCoords[3] });
-                indices.AddRange(new ushort[] { 8, 9, 10, 8, 10, 11 });
-            }
-            // Bottom Face (Y-) - 3
-            if (faces[3].enabled) {
-                vertices.Add(new Vertex { Position = new Vector3(size.x, -size.y, -size.z), TexCoord = faces[3].texCoords[0] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.x, -size.y, -size.z), TexCoord = faces[3].texCoords[1] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.x, -size.y, size.z), TexCoord = faces[3].texCoords[2] });
-                vertices.Add(new Vertex { Position = new Vector3(size.x, -size.y, size.z), TexCoord = faces[3].texCoords[3] });
-                indices.AddRange(new ushort[] { 12, 13, 14, 12, 14, 15 });
-            }
-            // Right Face (X+) - 4
-            if (faces[4].enabled) {
-                vertices.Add(new Vertex { Position = new Vector3(size.x, -size.y, size.z), TexCoord = faces[4].texCoords[0] });
-                vertices.Add(new Vertex { Position = new Vector3(size.x, -size.y, -size.z), TexCoord = faces[4].texCoords[1] });
-                vertices.Add(new Vertex { Position = new Vector3(size.x, size.y, -size.z), TexCoord = faces[4].texCoords[2] });
-                vertices.Add(new Vertex { Position = new Vector3(size.x, size.y, size.z), TexCoord = faces[4].texCoords[3] });
-                indices.AddRange(new ushort[] { 16, 17, 18, 16, 18, 19 });
-            }
-            // Left Face (X-) - 5
-            if (faces[5].enabled) {
-                vertices.Add(new Vertex { Position = new Vector3(-size.x, -size.y, -size.z), TexCoord = faces[5].texCoords[0] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.x, -size.y, size.z), TexCoord = faces[5].texCoords[1] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.x, size.y, size.z), TexCoord = faces[5].texCoords[2] });
-                vertices.Add(new Vertex { Position = new Vector3(-size.x, size.y, -size.z), TexCoord = faces[5].texCoords[3] });
-                indices.AddRange(new ushort[] { 20, 21, 22, 20, 22, 23 });
-            }
-
-            mesh.vertices = [.. vertices];
-            mesh.triangles = [.. indices];
-            return mesh;
-        }
-
-        public static Mesh CreateSphere(float radius, int rings, int slices)
-        {
-            Mesh mesh = new();
-
-            int vertexCount = (rings + 1) * (slices + 1);
-            int triangleCount = rings * slices * 2;
-
-            mesh.vertices = new Vertex[vertexCount];
-            mesh.triangles = new ushort[triangleCount * 3];
-
-            int vertexIndex = 0;
-            int triangleIndex = 0;
-
-            // Generate vertices and normals
-            for (int i = 0; i <= rings; i++)
-            {
-                float theta = (float)i / rings * (float)Math.PI;
-                for (int j = 0; j <= slices; j++)
+        public System.Numerics.Vector3[] Vertices {
+            get => vertices ?? new System.Numerics.Vector3[0];
+            set {
+                if (isWritable == false)
+                    return;
+                var needsReset = vertices == null || vertices.Length != value.Length;
+                vertices = value;
+                changed = true;
+                if (needsReset)
                 {
-                    float phi = (float)j / slices * 2.0f * (float)Math.PI;
-
-                    float x = (float)(Math.Sin(theta) * Math.Cos(phi));
-                    float y = (float)Math.Cos(theta);
-                    float z = (float)(Math.Sin(theta) * Math.Sin(phi));
-
-                    Vertex v = new()
-                    {
-                        Position = new Vector3(x, y, z) * radius,
-                        Normal = new Vector3(x, y, z),
-                        TexCoord = new Vector2((float)j / slices, (float)i / rings)
-                    };
-                    mesh.vertices[vertexIndex++] = v;
+                    normals = null;
+                    tangents = null;
+                    colors = null;
+                    colors32 = null;
+                    uv = null;
+                    uv2 = null;
+                    indices = null;
                 }
             }
+        }
 
-            // Generate triangles
-            ushort sliceCount = (ushort)(slices + 1);
-            for (ushort i = 0; i < rings; i++)
+        public System.Numerics.Vector3[] Normals {
+            get => ReadVertexData(normals ?? new System.Numerics.Vector3[0]);
+            set => WriteVertexData(ref normals, value, value.Length);
+        }
+
+        public System.Numerics.Vector3[] Tangents {
+            get => ReadVertexData(tangents ?? new System.Numerics.Vector3[0]);
+            set => WriteVertexData(ref tangents, value, value.Length);
+        }
+
+        public Color[] Colors {
+            get => ReadVertexData(colors ?? new Color[0]);
+            set => WriteVertexData(ref colors, value, value.Length);
+        }
+
+        public Color32[] Colors32 {
+            get => ReadVertexData(colors32 ?? new Color32[0]);
+            set => WriteVertexData(ref colors32, value, value.Length);
+        }
+
+        public System.Numerics.Vector2[] UV {
+            get => ReadVertexData(uv ?? new System.Numerics.Vector2[0]);
+            set => WriteVertexData(ref uv, value, value.Length);
+        }
+
+        public System.Numerics.Vector2[] UV2 {
+            get => ReadVertexData(uv2 ?? new System.Numerics.Vector2[0]);
+            set => WriteVertexData(ref uv2, value, value.Length);
+        }
+
+        public uint[] Indices {
+            get => ReadVertexData(indices ?? new uint[0]);
+            set => WriteVertexData(ref indices, value, value.Length, false);
+        }
+
+        public System.Numerics.Vector4[] BoneIndices {
+            get => ReadVertexData(boneIndices ?? new System.Numerics.Vector4[0]);
+            set => WriteVertexData(ref boneIndices, value, value.Length);
+        }
+
+        public System.Numerics.Vector4[] BoneWeights {
+            get => ReadVertexData(boneWeights ?? new System.Numerics.Vector4[0]);
+            set => WriteVertexData(ref boneWeights, value, value.Length);
+        }
+
+        public int VertexCount => vertices?.Length ?? 0;
+        public int IndexCount => indices?.Length ?? 0;
+
+        public uint VertexArrayObject => vertexArrayObject;
+        public uint VertexBuffer => vertexBuffer;
+        public uint IndexBuffer => indexBuffer;
+
+        public bool HasNormals => (normals?.Length ?? 0) > 0;
+        public bool HasTangents => (tangents?.Length ?? 0) > 0;
+        public bool HasColors => (colors?.Length ?? 0) > 0;
+        public bool HasColors32 => (colors32?.Length ?? 0) > 0;
+        public bool HasUV => (uv?.Length ?? 0) > 0;
+        public bool HasUV2 => (uv2?.Length ?? 0) > 0;
+
+        public bool HasBoneIndices => (boneIndices?.Length ?? 0) > 0;
+        public bool HasBoneWeights => (boneWeights?.Length ?? 0) > 0;
+
+        public string[]? boneNames;
+        public Matrix4x4[]? bindPoses;
+
+        bool changed = true;
+        System.Numerics.Vector3[]? vertices;
+        System.Numerics.Vector3[]? normals;
+        System.Numerics.Vector3[]? tangents;
+        Color[]? colors;
+        Color32[]? colors32;
+        System.Numerics.Vector2[]? uv;
+        System.Numerics.Vector2[]? uv2;
+        uint[]? indices;
+        System.Numerics.Vector4[]? boneIndices;
+        System.Numerics.Vector4[]? boneWeights;
+
+        IndexFormat indexFormat = IndexFormat.UInt16;
+        PrimitiveType meshTopology = PrimitiveType.TriangleStrip;
+
+        uint vertexArrayObject;
+        uint vertexBuffer;
+        uint indexBuffer;
+
+        public Mesh() { }
+
+        public void Clear()
+        {
+            vertices = null;
+            normals = null;
+            colors = null;
+            colors32 = null;
+            uv = null;
+            uv2 = null;
+            indices = null;
+            tangents = null;
+            boneIndices = null;
+            boneWeights = null;
+
+            changed = true;
+
+            DeleteGPUBuffers();
+        }
+
+        public void Upload()
+        {
+            if (changed == false && vertexArrayObject != 0)
+                return;
+
+            changed = false;
+
+            DeleteGPUBuffers();
+
+            if (vertices == null || vertices.Length == 0)
+                throw new InvalidOperationException($"Mesh has no vertices");
+
+            if (indices == null || indices.Length == 0)
+                throw new InvalidOperationException($"Mesh has no indices");
+
+            switch (meshTopology)
             {
-                for (ushort j = 0; j < slices; j++)
-                {
-                    ushort nextRing = (ushort)((i + 1) * sliceCount);
-                    ushort nextSlice = (ushort)(j + 1);
+                case PrimitiveType.Triangles:
+                    if (indices.Length % 3 != 0)
+                        throw new InvalidOperationException($"Triangle mesh doesn't have the right amount of indices. Has: {indices.Length}. Should be a multiple of 3");
+                    break;
+                case PrimitiveType.TriangleStrip:
+                    if (indices.Length < 3)
+                        throw new InvalidOperationException($"Triangle Strip mesh doesn't have the right amount of indices. Has: {indices.Length}. Should have at least 3");
+                    break;
 
-                    mesh.triangles[triangleIndex] = (ushort)(i * sliceCount + j);
-                    mesh.triangles[triangleIndex + 1] = (ushort)(nextRing + j);
-                    mesh.triangles[triangleIndex + 2] = (ushort)(nextRing + nextSlice);
+                case PrimitiveType.Lines:
+                    if (indices.Length % 2 != 0)
+                        throw new InvalidOperationException($"Line mesh doesn't have the right amount of indices. Has: {indices.Length}. Should be a multiple of 2");
+                    break;
 
-                    mesh.triangles[triangleIndex + 3] = (ushort)(i * sliceCount + j);
-                    mesh.triangles[triangleIndex + 4] = (ushort)(nextRing + nextSlice);
-                    mesh.triangles[triangleIndex + 5] = (ushort)(i * sliceCount + nextSlice);
-
-                    triangleIndex += 6;
-                }
+                case PrimitiveType.LineStrip:
+                    if (indices.Length < 2)
+                        throw new InvalidOperationException($"Line Strip mesh doesn't have the right amount of indices. Has: {indices.Length}. Should have at least 2");
+                    break;
             }
 
-            return mesh;
+            var layout = GetVertexLayout(this);
+
+            if (layout == null)
+            {
+                Debug.LogError($"[Mesh] Failed to get vertex layout for this mesh!");
+                return;
+            }
+
+            var vertexBlob = MakeVertexDataBlob(layout);
+            if (vertexBlob == null)
+                return;
+
+
+            vertexArrayObject = Graphics.GL.GenVertexArray();
+            Graphics.GL.BindVertexArray(vertexArrayObject);
+
+            vertexBuffer = Graphics.GL.GenBuffer();
+            Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, vertexBuffer);
+            Graphics.GL.BufferData(BufferTargetARB.ArrayBuffer, new ReadOnlySpan<byte>(vertexBlob), BufferUsageARB.StaticDraw);
+            layout.Bind();
+
+            indexBuffer = Graphics.GL.GenBuffer();
+            Graphics.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, indexBuffer);
+            if (indexFormat == IndexFormat.UInt16)
+            {
+                ushort[] data = new ushort[indices.Length];
+                for (var i = 0; i < indices.Length; i++)
+                {
+                    if (indices[i] >= ushort.MaxValue)
+                        throw new InvalidOperationException($"[Mesh] Invalid value {indices[i]} for 16-bit indices");
+                    data[i] = (ushort)indices[i];
+                }
+                Graphics.GL.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<ushort>(data), BufferUsageARB.StaticDraw);
+            }
+            else if (indexFormat == IndexFormat.UInt32)
+            {
+                Graphics.GL.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<uint>(indices), BufferUsageARB.StaticDraw);
+            }
+
+            Debug.Log($"VAO: [ID {vertexArrayObject}] Mesh uploaded successfully to VRAM (GPU)");
+
+            Graphics.GL.BindVertexArray(0);
+            Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, 0);
+
+            Graphics.CheckGL();
         }
+
+        public void RecalculateBounds()
+        {
+            if (vertices == null)
+                throw new ArgumentNullException();
+
+            var empty = true;
+            var minVec = System.Numerics.Vector3.One * 99999f;
+            var maxVec = System.Numerics.Vector3.One * -99999f;
+            foreach (var ptVector in vertices)
+            {
+                minVec.X = (minVec.X < ptVector.X) ? minVec.X : ptVector.X;
+                minVec.Y = (minVec.Y < ptVector.Y) ? minVec.Y : ptVector.Y;
+                minVec.Z = (minVec.Z < ptVector.Z) ? minVec.Z : ptVector.Z;
+
+                maxVec.X = (maxVec.X > ptVector.X) ? maxVec.X : ptVector.X;
+                maxVec.Y = (maxVec.Y > ptVector.Y) ? maxVec.Y : ptVector.Y;
+                maxVec.Z = (maxVec.Z > ptVector.Z) ? maxVec.Z : ptVector.Z;
+
+                empty = false;
+            }
+            if (empty)
+                throw new ArgumentException();
+
+            bounds = new Bounds(minVec, maxVec);
+        }
+
+        public void RecalculateNormals()
+        {
+            if (vertices == null || vertices.Length < 3) return;
+            if (indices == null || indices.Length < 3) return;
+
+            normals = new System.Numerics.Vector3[vertices.Length];
+
+            for (int i = 0; i < indices.Length; i += 3)
+            {
+                uint ai = indices[i];
+                uint bi = indices[i + 1];
+                uint ci = indices[i + 2];
+
+                System.Numerics.Vector3 n = System.Numerics.Vector3.Normalize(System.Numerics.Vector3.Cross(
+                    vertices[bi] - vertices[ai],
+                    vertices[ci] - vertices[ai]
+                ));
+
+                normals[ai] += n;
+                normals[bi] += n;
+                normals[ci] += n;
+            }
+
+            for (int i = 0; i < vertices.Length; i++)
+                normals[i] = Vector3.Normalize(normals[i]);
+        }
+
+        public void RecalculateTangents()
+        {
+            if (vertices == null || vertices.Length < 3) return;
+            if (indices == null || indices.Length < 3) return;
+            if (uv == null) return;
+
+            tangents = new System.Numerics.Vector3[vertices.Length];
+
+            for (int i = 0; i < indices.Length; i += 3)
+            {
+                uint ai = indices[i];
+                uint bi = indices[i + 1];
+                uint ci = indices[i + 2];
+
+                System.Numerics.Vector3 edge1 = vertices[bi] - vertices[ai];
+                System.Numerics.Vector3 edge2 = vertices[ci] - vertices[ai];
+
+                System.Numerics.Vector2 deltaUV1 = uv[bi] - uv[ai];
+                System.Numerics.Vector2 deltaUV2 = uv[ci] - uv[ai];
+
+                float f = 1.0f / (deltaUV1.X * deltaUV2.Y - deltaUV2.X * deltaUV1.Y);
+
+                System.Numerics.Vector3 tangent;
+                tangent.X = f * (deltaUV2.Y * edge1.X - deltaUV1.Y * edge2.X);
+                tangent.Y = f * (deltaUV2.Y * edge1.Y - deltaUV1.Y * edge2.Y);
+                tangent.Z = f * (deltaUV2.Y * edge1.Z - deltaUV1.Y * edge2.Z);
+
+                tangents[ai] += tangent;
+                tangents[bi] += tangent;
+                tangents[ci] += tangent;
+            }
+
+            for (int i = 0; i < vertices.Length; i++)
+                tangents[i] = Vector3.Normalize(tangents[i]);
+        }
+
+        public override void OnDispose() => DeleteGPUBuffers();
 
         private static Mesh fullScreenQuad;
         public static Mesh GetFullscreenQuad()
         {
             if (fullScreenQuad != null) return fullScreenQuad;
-
             Mesh mesh = new Mesh();
+            mesh.vertices = new System.Numerics.Vector3[4];
+            mesh.vertices[0] = new System.Numerics.Vector3(-1, -1, 0);
+            mesh.vertices[1] = new System.Numerics.Vector3(1, -1, 0);
+            mesh.vertices[2] = new System.Numerics.Vector3(-1, 1, 0);
+            mesh.vertices[3] = new System.Numerics.Vector3(1, 1, 0);
 
-            mesh.vertices = 
-            [
-                new Vertex { Position = new Vector3(-1, -1, 0), TexCoord = new Vector2(0, 0) },
-                new Vertex { Position = new Vector3(1, -1, 0), TexCoord = new Vector2(1, 0) },
-                new Vertex { Position = new Vector3(-1, 1, 0), TexCoord = new Vector2(0, 1) },
-                new Vertex { Position = new Vector3(1, 1, 0), TexCoord = new Vector2(1, 1) }
-            ];
+            mesh.uv = new System.Numerics.Vector2[4];
+            mesh.uv[0] = new System.Numerics.Vector2(0, 0);
+            mesh.uv[1] = new System.Numerics.Vector2(1, 0);
+            mesh.uv[2] = new System.Numerics.Vector2(0, 1);
+            mesh.uv[3] = new System.Numerics.Vector2(1, 1);
 
-            mesh.triangles = [0, 2, 1, 2, 3, 1];
+            mesh.indices = [0, 2, 1, 2, 3, 1];
 
             fullScreenQuad = mesh;
             return mesh;
         }
 
-        #endregion
+        public static Mesh CreateSphere(float radius, int rings, int slices)
+        {
+            Mesh mesh = new Mesh();
+
+            List<System.Numerics.Vector3> vertices = new List<System.Numerics.Vector3>();
+            List<System.Numerics.Vector2> uvs = new List<System.Numerics.Vector2>();
+            List<uint> indices = new List<uint>();
+
+            for (int i = 0; i <= rings; i++)
+            {
+                float v = 1 - (float)i / rings;
+                float phi = v * MathF.PI;
+
+                for (int j = 0; j <= slices; j++)
+                {
+                    float u = (float)j / slices;
+                    float theta = u * MathF.PI * 2;
+
+                    float x = MathF.Sin(phi) * MathF.Cos(theta);
+                    float y = MathF.Cos(phi);
+                    float z = MathF.Sin(phi) * MathF.Sin(theta);
+
+                    vertices.Add(new System.Numerics.Vector3(x, y, z) * radius);
+                    uvs.Add(new System.Numerics.Vector2(u, v));
+                }
+            }
+
+            for (int i = 0; i < rings; i++)
+            {
+                for (int j = 0; j < slices; j++)
+                {
+                    uint a = (uint)(i * (slices + 1) + j);
+                    uint b = (uint)(a + slices + 1);
+
+                    indices.Add(a);
+                    indices.Add(b);
+                    indices.Add(a + 1);
+
+                    indices.Add(b);
+                    indices.Add(b + 1);
+                    indices.Add(a + 1);
+                }
+            }
+
+            mesh.vertices = vertices.ToArray();
+            mesh.uv = uvs.ToArray();
+            mesh.indices = indices.ToArray();
+
+            mesh.RecalculateBounds();
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+
+            return mesh;
+        }
+
+        private void DeleteGPUBuffers()
+        {
+            if (vertexArrayObject != 0)
+                Graphics.GL.DeleteVertexArray(vertexArrayObject);
+            if (vertexBuffer != 0)
+                Graphics.GL.DeleteBuffer(vertexBuffer);
+            if (indexBuffer != 0)
+                Graphics.GL.DeleteBuffer(indexBuffer);
+
+            vertexArrayObject = 0;
+            vertexBuffer = 0;
+            indexBuffer = 0;
+        }
+
+        private T ReadVertexData<T>(T value)
+        {
+            if (isReadable == false)
+                throw new InvalidOperationException("Mesh is not readable");
+            return value;
+        }
+
+        private void WriteVertexData<T>(ref T target, T value, int length, bool mustMatchLength = true)
+        {
+            if (isWritable == false)
+                throw new InvalidOperationException("Mesh is not writable");
+            if ((value == null || length == 0 || length != (vertices?.Length ?? 0)) && mustMatchLength)
+                throw new ArgumentException("Array length should match vertices length");
+            changed = true;
+            target = value;
+        }
+
+        internal static VertexFormat GetVertexLayout(Mesh mesh)
+        {
+            List<Element> elements = new();
+            elements.Add(new Element(VertexSemantic.Position, VertexType.Float, 3));
+
+            if (mesh.HasUV)
+                elements.Add(new Element(VertexSemantic.TexCoord0, VertexType.Float, 2));
+
+            if (mesh.HasUV2)
+                elements.Add(new Element(VertexSemantic.TexCoord1, VertexType.Float, 2));
+
+            if (mesh.HasNormals)
+                elements.Add(new Element(VertexSemantic.Normal, VertexType.Float, 3, 0, true));
+
+            if (mesh.HasColors || mesh.HasColors32)
+                elements.Add(new Element(VertexSemantic.Color, VertexType.Float, 4));
+
+            if (mesh.HasTangents)
+                elements.Add(new Element(VertexSemantic.Tangent, VertexType.Float, 3, 0, true));
+
+            if (mesh.HasBoneIndices)
+                elements.Add(new Element(VertexSemantic.BoneIndex, VertexType.UnsignedByte, 4));
+
+            if (mesh.HasBoneWeights)
+                elements.Add(new Element(VertexSemantic.BoneWeight, VertexType.Float, 4));
+
+            return new VertexFormat(elements.ToArray());
+        }
+
+        internal byte[] MakeVertexDataBlob(VertexFormat layout)
+        {
+            var buffer = new byte[layout.Size * vertices.Length];
+
+            void Copy(byte[] source, ref int index)
+            {
+                if (index + source.Length > buffer.Length)
+                {
+                    throw new InvalidOperationException($"[Mesh] Buffer Overrun while generating vertex data blob: {index} -> {index + source.Length} "
+                        + $"is larger than buffer {buffer.Length}");
+                }
+
+                System.Buffer.BlockCopy(source, 0, buffer, index, source.Length);
+
+                index += source.Length;
+            }
+
+            for (int i = 0, index = 0; i < vertices.Length; i++)
+            {
+                if (index % layout.Size != 0)
+                    throw new InvalidOperationException("[Mesh] Exceeded expected byte count while generating vertex data blob");
+
+                //Copy position
+                Copy(BitConverter.GetBytes(vertices[i].X), ref index);
+                Copy(BitConverter.GetBytes(vertices[i].Y), ref index);
+                Copy(BitConverter.GetBytes(vertices[i].Z), ref index);
+
+                if (HasUV)
+                {
+                    Copy(BitConverter.GetBytes(uv[i].X), ref index);
+                    Copy(BitConverter.GetBytes(uv[i].Y), ref index);
+                }
+
+                if (HasUV2)
+                {
+                    Copy(BitConverter.GetBytes(uv2[i].X), ref index);
+                    Copy(BitConverter.GetBytes(uv2[i].Y), ref index);
+                }
+
+                //Copy normals
+                if (HasNormals)
+                {
+                    Copy(BitConverter.GetBytes(normals[i].X), ref index);
+                    Copy(BitConverter.GetBytes(normals[i].Y), ref index);
+                    Copy(BitConverter.GetBytes(normals[i].Z), ref index);
+                }
+
+                if (HasColors)
+                {
+                    Copy(BitConverter.GetBytes(colors[i].r), ref index);
+                    Copy(BitConverter.GetBytes(colors[i].g), ref index);
+                    Copy(BitConverter.GetBytes(colors[i].b), ref index);
+                    Copy(BitConverter.GetBytes(colors[i].a), ref index);
+                }
+                else if (HasColors32)
+                {
+                    var c = (Color)colors32[i];
+
+                    Copy(BitConverter.GetBytes(c.r), ref index);
+                    Copy(BitConverter.GetBytes(c.g), ref index);
+                    Copy(BitConverter.GetBytes(c.b), ref index);
+                    Copy(BitConverter.GetBytes(c.a), ref index);
+                }
+
+                if (HasTangents)
+                {
+                    Copy(BitConverter.GetBytes(tangents[i].X), ref index);
+                    Copy(BitConverter.GetBytes(tangents[i].Y), ref index);
+                    Copy(BitConverter.GetBytes(tangents[i].Z), ref index);
+                }
+
+                if (HasBoneIndices)
+                {
+                    //Copy(new byte[] { boneIndices[i].red, boneIndices[i].green, boneIndices[i].blue, boneIndices[i].alpha }, ref index);
+                    Copy(BitConverter.GetBytes(boneIndices[i].X), ref index);
+                    Copy(BitConverter.GetBytes(boneIndices[i].Y), ref index);
+                    Copy(BitConverter.GetBytes(boneIndices[i].Z), ref index);
+                    Copy(BitConverter.GetBytes(boneIndices[i].W), ref index);
+                }
+
+                if (HasBoneWeights)
+                {
+                    Copy(BitConverter.GetBytes(boneWeights[i].X), ref index);
+                    Copy(BitConverter.GetBytes(boneWeights[i].Y), ref index);
+                    Copy(BitConverter.GetBytes(boneWeights[i].Z), ref index);
+                    Copy(BitConverter.GetBytes(boneWeights[i].W), ref index);
+                }
+            }
+
+            return buffer;
+        }
 
         public SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
-            SerializedProperty compoundTag = SerializedProperty.NewCompound();
-            // Serialize to byte[]
+            var compoundTag = SerializedProperty.NewCompound();
+
             using (MemoryStream memoryStream = new MemoryStream())
             using (BinaryWriter writer = new BinaryWriter(memoryStream))
             {
-
-                // Serialize bone names
-                writer.Write(boneNames?.Length ?? 0);
-                if (boneNames != null)
-                    for (int i = 0; i < boneNames.Length; i++)
-                        writer.Write(boneNames[i]);
-
-                // Serialize bone offsets
-                writer.Write(bindPoses?.Length ?? 0);
-                if (bindPoses != null)
-                    for (int i = 0; i < bindPoses.Length; i++)
-                    {
-                        writer.Write((float)bindPoses[i].M11);
-                        writer.Write((float)bindPoses[i].M12);
-                        writer.Write((float)bindPoses[i].M13);
-                        writer.Write((float)bindPoses[i].M14);
-                        writer.Write((float)bindPoses[i].M21);
-                        writer.Write((float)bindPoses[i].M22);
-                        writer.Write((float)bindPoses[i].M23);
-                        writer.Write((float)bindPoses[i].M24);
-                        writer.Write((float)bindPoses[i].M31);
-                        writer.Write((float)bindPoses[i].M32);
-                        writer.Write((float)bindPoses[i].M33);
-                        writer.Write((float)bindPoses[i].M34);
-                        writer.Write((float)bindPoses[i].M41);
-                        writer.Write((float)bindPoses[i].M42);
-                        writer.Write((float)bindPoses[i].M43);
-                        writer.Write((float)bindPoses[i].M44);
-                    }
+                writer.Write((byte)indexFormat);
+                writer.Write((byte)meshTopology);
 
                 writer.Write(vertices.Length);
                 foreach (var vertex in vertices)
                 {
-                    writer.Write(vertex.Position.X);
-                    writer.Write(vertex.Position.Y);
-                    writer.Write(vertex.Position.Z);
-
-                    writer.Write(vertex.TexCoord.X);
-                    writer.Write(vertex.TexCoord.Y);
-
-                    writer.Write(vertex.Normal.X);
-                    writer.Write(vertex.Normal.Y);
-                    writer.Write(vertex.Normal.Z);
-
-                    writer.Write(vertex.Color.X);
-                    writer.Write(vertex.Color.Y);
-                    writer.Write(vertex.Color.Z);
-
-                    writer.Write(vertex.Tangent.X);
-                    writer.Write(vertex.Tangent.Y);
-                    writer.Write(vertex.Tangent.Z);
-
-                    writer.Write(vertex.BoneIndex0);
-                    writer.Write(vertex.BoneIndex1);
-                    writer.Write(vertex.BoneIndex2);
-                    writer.Write(vertex.BoneIndex3);
-
-                    writer.Write(vertex.Weight0);
-                    writer.Write(vertex.Weight1);
-                    writer.Write(vertex.Weight2);
-                    writer.Write(vertex.Weight3);
+                    writer.Write(vertex.X);
+                    writer.Write(vertex.Y);
+                    writer.Write(vertex.Z);
                 }
 
-                SerializeArray(writer, triangles);
+                writer.Write(normals?.Length ?? 0);
+                if (normals != null)
+                {
+                    foreach (var normal in normals)
+                    {
+                        writer.Write(normal.X);
+                        writer.Write(normal.Y);
+                        writer.Write(normal.Z);
+                    }
+                }
 
-                compoundTag.Add("Data", new(memoryStream.ToArray()));
+                writer.Write(tangents?.Length ?? 0);
+                if (tangents != null)
+                {
+                    foreach (var tangent in tangents)
+                    {
+                        writer.Write(tangent.X);
+                        writer.Write(tangent.Y);
+                        writer.Write(tangent.Z);
+                    }
+                }
+
+                writer.Write(colors?.Length ?? 0);
+                if (colors != null)
+                {
+                    foreach (var color in colors)
+                    {
+                        writer.Write(color.r);
+                        writer.Write(color.g);
+                        writer.Write(color.b);
+                        writer.Write(color.a);
+                    }
+                }
+
+                writer.Write(colors32?.Length ?? 0);
+                if (colors32 != null)
+                {
+                    foreach (var color in colors32)
+                    {
+                        writer.Write(color.red);
+                        writer.Write(color.green);
+                        writer.Write(color.blue);
+                        writer.Write(color.alpha);
+                    }
+                }
+
+                writer.Write(uv?.Length ?? 0);
+                if (uv != null)
+                {
+                    foreach (var uv in uv)
+                    {
+                        writer.Write(uv.X);
+                        writer.Write(uv.Y);
+                    }
+                }
+
+                writer.Write(uv2?.Length ?? 0);
+                if (uv2 != null)
+                {
+                    foreach (var uv in uv2)
+                    {
+                        writer.Write(uv.X);
+                        writer.Write(uv.Y);
+                    }
+                }
+
+                writer.Write(indices?.Length ?? 0);
+                if (indices != null)
+                {
+                    foreach (var index in indices)
+                        writer.Write(index);
+                }
+
+                writer.Write(boneIndices?.Length ?? 0);
+                if (boneIndices != null)
+                {
+                    foreach (var boneIndex in boneIndices)
+                    {
+                        //writer.Write(boneIndex.red);
+                        //writer.Write(boneIndex.green);
+                        //writer.Write(boneIndex.blue);
+                        //writer.Write(boneIndex.alpha);
+                        writer.Write(boneIndex.X);
+                        writer.Write(boneIndex.Y);
+                        writer.Write(boneIndex.Z);
+                        writer.Write(boneIndex.W);
+                    }
+                }
+
+                writer.Write(boneWeights?.Length ?? 0);
+                if (boneWeights != null)
+                {
+                    foreach (var boneWeight in boneWeights)
+                    {
+                        writer.Write(boneWeight.X);
+                        writer.Write(boneWeight.Y);
+                        writer.Write(boneWeight.Z);
+                        writer.Write(boneWeight.W);
+                    }
+                }
+
+                writer.Write(boneNames?.Length ?? 0);
+                if (boneNames != null)
+                {
+                    foreach (var boneName in boneNames)
+                        writer.Write(boneName);
+                }
+
+                writer.Write(bindPoses?.Length ?? 0);
+                if (bindPoses != null)
+                {
+                    foreach (var bindPose in bindPoses)
+                    {
+                        writer.Write(bindPose.M11);
+                        writer.Write(bindPose.M12);
+                        writer.Write(bindPose.M13);
+                        writer.Write(bindPose.M14);
+
+                        writer.Write(bindPose.M21);
+                        writer.Write(bindPose.M22);
+                        writer.Write(bindPose.M23);
+                        writer.Write(bindPose.M24);
+
+                        writer.Write(bindPose.M31);
+                        writer.Write(bindPose.M32);
+                        writer.Write(bindPose.M33);
+                        writer.Write(bindPose.M34);
+
+                        writer.Write(bindPose.M41);
+                        writer.Write(bindPose.M42);
+                        writer.Write(bindPose.M43);
+                        writer.Write(bindPose.M44);
+                    }
+                }
+
+
+                compoundTag.Add("MeshData", new SerializedProperty(memoryStream.ToArray()));
             }
-            compoundTag.Add("Format", Serializer.Serialize(format, ctx));
+
             return compoundTag;
         }
 
         public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
-            using (MemoryStream memoryStream = new MemoryStream(value["Data"].ByteArrayValue))
+            using (MemoryStream memoryStream = new MemoryStream(value["MeshData"].ByteArrayValue))
             using (BinaryReader reader = new BinaryReader(memoryStream))
             {
-                int boneCount = reader.ReadInt32();
-                if (boneCount > 0)
+                indexFormat = (IndexFormat)reader.ReadByte();
+                meshTopology = (PrimitiveType)reader.ReadByte();
+
+                var vertexCount = reader.ReadInt32();
+                vertices = new System.Numerics.Vector3[vertexCount];
+                for (int i = 0; i < vertexCount; i++)
+                    vertices[i] = new System.Numerics.Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+
+                var normalCount = reader.ReadInt32();
+                if (normalCount > 0)
                 {
-                    boneNames = new string[boneCount];
-                    for (int i = 0; i < boneCount; i++)
+                    normals = new System.Numerics.Vector3[normalCount];
+                    for (int i = 0; i < normalCount; i++)
+                        normals[i] = new System.Numerics.Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                }
+
+                var tangentCount = reader.ReadInt32();
+                if (tangentCount > 0)
+                {
+                    tangents = new System.Numerics.Vector3[tangentCount];
+                    for (int i = 0; i < tangentCount; i++)
+                        tangents[i] = new System.Numerics.Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                }
+
+                var colorCount = reader.ReadInt32();
+                if (colorCount > 0)
+                {
+                    colors = new Color[colorCount];
+                    for (int i = 0; i < colorCount; i++)
+                        colors[i] = new Color(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                }
+
+                var color32Count = reader.ReadInt32();
+                if (color32Count > 0)
+                {
+                    colors32 = new Color32[color32Count];
+                    for (int i = 0; i < color32Count; i++)
+                        colors32[i] = new Color32(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
+                }
+
+                var uvCount = reader.ReadInt32();
+                if (uvCount > 0)
+                {
+                    uv = new System.Numerics.Vector2[uvCount];
+                    for (int i = 0; i < uvCount; i++)
+                        uv[i] = new System.Numerics.Vector2(reader.ReadSingle(), reader.ReadSingle());
+                }
+
+                var uv2Count = reader.ReadInt32();
+                if (uv2Count > 0)
+                {
+                    uv2 = new System.Numerics.Vector2[uv2Count];
+                    for (int i = 0; i < uv2Count; i++)
+                        uv2[i] = new System.Numerics.Vector2(reader.ReadSingle(), reader.ReadSingle());
+                }
+
+                var indexCount = reader.ReadInt32();
+                if (indexCount > 0)
+                {
+                    indices = new uint[indexCount];
+                    for (int i = 0; i < indexCount; i++)
+                        indices[i] = reader.ReadUInt32();
+                }
+
+                var boneIndexCount = reader.ReadInt32();
+                if (boneIndexCount > 0)
+                {
+                    boneIndices = new System.Numerics.Vector4[boneIndexCount];
+                    for(int i = 0; i < boneIndexCount; i++)
+                    {
+                        //boneIndices[i] = new Color32(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
+                        boneIndices[i] = new System.Numerics.Vector4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                    }
+                }
+
+                var boneWeightCount = reader.ReadInt32();
+                if (boneWeightCount > 0)
+                {
+                    boneWeights = new System.Numerics.Vector4[boneWeightCount];
+                    for (int i = 0; i < boneWeightCount; i++)
+                        boneWeights[i] = new System.Numerics.Vector4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                }
+
+                var boneNamesCount = reader.ReadInt32();
+                if (boneNamesCount > 0)
+                {
+                    boneNames = new string[boneNamesCount];
+                    for (int i = 0; i < boneNamesCount; i++)
                         boneNames[i] = reader.ReadString();
                 }
 
-                int boneOffsetCount = reader.ReadInt32();
-                if (boneOffsetCount > 0)
+                var bindPosesCount = reader.ReadInt32();
+                if (bindPosesCount > 0)
                 {
-                    bindPoses = new Matrix4x4[boneOffsetCount];
-                    for (int i = 0; i < boneOffsetCount; i++)
+                    bindPoses = new Matrix4x4[bindPosesCount];
+                    for (int i = 0; i < bindPosesCount; i++)
                     {
-                        var m = new Matrix4x4();
-                        m.M11 = reader.ReadSingle();
-                        m.M12 = reader.ReadSingle();
-                        m.M13 = reader.ReadSingle();
-                        m.M14 = reader.ReadSingle();
-                        m.M21 = reader.ReadSingle();
-                        m.M22 = reader.ReadSingle();
-                        m.M23 = reader.ReadSingle();
-                        m.M24 = reader.ReadSingle();
-                        m.M31 = reader.ReadSingle();
-                        m.M32 = reader.ReadSingle();
-                        m.M33 = reader.ReadSingle();
-                        m.M34 = reader.ReadSingle();
-                        m.M41 = reader.ReadSingle();
-                        m.M42 = reader.ReadSingle();
-                        m.M43 = reader.ReadSingle();
-                        m.M44 = reader.ReadSingle();
-                        bindPoses[i] = m;
+                        bindPoses[i] = new Matrix4x4() {
+                            M11 = reader.ReadSingle(),
+                            M12 = reader.ReadSingle(),
+                            M13 = reader.ReadSingle(),
+                            M14 = reader.ReadSingle(),
+
+                            M21 = reader.ReadSingle(),
+                            M22 = reader.ReadSingle(),
+                            M23 = reader.ReadSingle(),
+                            M24 = reader.ReadSingle(),
+
+                            M31 = reader.ReadSingle(),
+                            M32 = reader.ReadSingle(),
+                            M33 = reader.ReadSingle(),
+                            M34 = reader.ReadSingle(),
+
+                            M41 = reader.ReadSingle(),
+                            M42 = reader.ReadSingle(),
+                            M43 = reader.ReadSingle(),
+                            M44 = reader.ReadSingle()
+                        };
                     }
                 }
 
-
-                int vertexCount = reader.ReadInt32();
-                vertices = new Vertex[vertexCount];
-                for (int i = 0; i < vertexCount; i++)
-                {
-                    vertices[i] = new Vertex
-                    {
-                        Position = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()),
-                        TexCoord = new Vector2(reader.ReadSingle(), reader.ReadSingle()),
-                        Normal = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()),
-                        Color = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()),
-                        Tangent = new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle()),
-                        BoneIndex0 = reader.ReadByte(),
-                        BoneIndex1 = reader.ReadByte(),
-                        BoneIndex2 = reader.ReadByte(),
-                        BoneIndex3 = reader.ReadByte(),
-                        Weight0 = reader.ReadSingle(),
-                        Weight1 = reader.ReadSingle(),
-                        Weight2 = reader.ReadSingle(),
-                        Weight3 = reader.ReadSingle()
-                    };
-                }
-                triangles = DeserializeArray<ushort> (reader);
-
-            }
-            format = Serializer.Deserialize<VertexFormat>(value["Format"], ctx);
-        }
-
-        // Helper method to serialize an array
-        private static void SerializeArray<T>(BinaryWriter writer, T[] array) where T : struct
-        {
-            if (array == null)
-            {
-                writer.Write(false);
-                return;
-            }
-            writer.Write(true);
-            int length = array.Length;
-            writer.Write(length);
-            int elementSize = Marshal.SizeOf<T>();
-            byte[] bytes = new byte[length * elementSize];
-            System.Buffer.BlockCopy(array, 0, bytes, 0, bytes.Length);
-            writer.Write(bytes);
-        }
-
-        // Helper method to deserialize an array
-        private static T[] DeserializeArray<T>(BinaryReader reader) where T : struct
-        {
-            bool isNotNull = reader.ReadBoolean();
-            if (!isNotNull) return null;
-            int length = reader.ReadInt32();
-            int elementSize = Marshal.SizeOf<T>();
-
-            byte[] bytes = reader.ReadBytes(length * elementSize);
-            T[] array = new T[length];
-
-            System.Buffer.BlockCopy(bytes, 0, array, 0, bytes.Length);
-
-            return array;
-        }
-
-        public struct Vertex
-        {
-            public System.Numerics.Vector3 Position;
-            public System.Numerics.Vector2 TexCoord;
-            public System.Numerics.Vector3 Normal;
-            public System.Numerics.Vector3 Color;
-            public System.Numerics.Vector3 Tangent;
-            public byte BoneIndex0, BoneIndex1, BoneIndex2, BoneIndex3;
-            public float Weight0, Weight1, Weight2, Weight3;
-        }
-
-        public class VertexFormat
-        {
-            public Element[] Elements;
-            public int Size;
-
-            public VertexFormat() { }
-
-            public VertexFormat(Element[] elements)
-            {
-                ArgumentNullException.ThrowIfNull(elements);
-
-                if (elements.Length == 0) throw new($"The argument '{nameof(elements)}' is null!");
-
-                Elements = elements;
-
-                foreach (var element in Elements)
-                {
-                    element.Offset = (short)Size;
-                    int s = 0;
-                    if ((int)element.Type > 5122)       s = 4 * element.Count; //Greater than short then its either a Float or Int
-                    else if ((int)element.Type > 5121)  s = 2 * element.Count; //Greater than byte then its a Short
-                    else                                s = 1 * element.Count; //Byte or Unsigned Byte
-                    Size += s;
-                    element.Stride = (short)s;
-                }
-            }
-
-            public class Element
-            {
-                public uint Semantic;
-                public VertexType Type;
-                public byte Count;
-                public short Offset; // Automatically assigned in VertexFormats constructor
-                public short Stride; // Automatically assigned in VertexFormats constructor
-                public short Divisor;
-                public bool Normalized;
-                public Element() { }
-                public Element(VertexSemantic semantic, VertexType type, byte count, short divisor = 0, bool normalized = false)
-                {
-                    Semantic = (uint)semantic;
-                    Type = type;
-                    Count = count;
-                    Divisor = divisor;
-                    Normalized = normalized;
-                }
-                public Element(uint semantic, VertexType type, byte count, short divisor = 0, bool normalized = false)
-                {
-                    Semantic = semantic;
-                    Type = type;
-                    Count = count;
-                    Divisor = divisor;
-                    Normalized = normalized;
-                }
-            }
-
-            public enum VertexSemantic { Position, TexCoord, Normal, Color, Tangent, BoneIndex, BoneWeight }
-
-            public enum VertexType { Byte = 5120, UnsignedByte = 5121, Short = 5122, Int = 5124, Float = 5126, }
-
-            public void Bind()
-            {
-                for (var i = 0; i < Elements.Length; i++) {
-                    var element = Elements[i];
-                    var index = element.Semantic;
-                    Graphics.GL.EnableVertexAttribArray(index);
-                    int offset = (int)element.Offset;
-                    unsafe {
-                        if(element.Type == VertexType.Float)
-                            Graphics.GL.VertexAttribPointer(index, element.Count, (GLEnum)element.Type, element.Normalized, (uint)Size, (void*)offset);
-                        else
-                            Graphics.GL.VertexAttribIPointer(index, element.Count, (GLEnum)element.Type, (uint)Size, (void*)offset);
-                    }
-                }
+                changed = true;
             }
         }
     }
+}
 
-    //public interface IInstantiatable
-    //{
-    //    void Instantiate();
-    //}
-    //
-    //public sealed class Model : EngineObject, IInstantiatable
-    //{
-    //    public Mesh[] meshes;
-    //    public Material[] materials;
-    //    public ModelNode rootNode;        // actual model root node - base node of the model - from here we can locate any node in the chain        
-    //
-    //    public void Instantiate()
-    //    {
-    //    }
-    //
-    //    public class ModelNode
-    //    {
-    //        public string name;
-    //        public ModelNode parent;
-    //        public List<ModelNode> children = new List<ModelNode>();      
-    //
-    //        public Matrix local;
-    //        public Matrix combined;
-    //    }
-    //}
-    //
-    //public sealed class SkinModel : EngineObject, IInstantiatable
-    //{
-    //    public Mesh[] meshes;
-    //    public Material[] materials;
-    //    public ModelNode rootNode;
-    //
-    //    public List<AnimationClip> animations = new List<AnimationClip>();
-    //
-    //    public void Instantiate()
-    //    {
-    //    }
-    //
-    //    public class ModelNode
-    //    {
-    //        public string name;
-    //        public ModelNode parent;
-    //        public List<ModelNode> children = new List<ModelNode>();      
-    //
-    //        // Each mesh has a list of shader-matrices - this keeps track of which meshes these bones apply to (and the bone index)
-    //        public List<ModelBone> uniqueMeshBones = new List<ModelBone>();
-    //
-    //        public Matrix local;
-    //        public Matrix combined;
-    //    }
-    //
-    //    public class ModelBone
-    //    {
-    //        public string name;
-    //        public int meshIndex = -1;
-    //        public int boneIndex = -1;
-    //        public int numWeightedVerts = 0;
-    //        public Matrix offset;
-    //    }
-    //}
-    //
-    ///// <summary> A Animation clip with Tracks for each Bone/Node, It stores one entire animation. </summary>
-    //public class AnimationClip : EngineObject
-    //{
-    //    public double DurationInTicks;
-    //    public double DurationInSeconds;
-    //    public double DurationInSecondsAdded;
-    //    public double TicksPerSecond;
-    //
-    //    public bool HasMeshAnims;
-    //    public bool HasNodeAnims;
-    //    public List<AnimTrack> animatedNodes;
-    //}
-    //
-    ///// <summary> The Position/Rotation/Scale data for a single node in the model hierarchy for the entire animation clip </summary>
-    //public class AnimTrack
-    //{
-    //    public string nodePath = ""; // The path to the node in the model hierarchy
-    //
-    //    // Frames for this track/node
-    //    public List<double> positionTime = new List<double>();
-    //    public List<double> scaleTime = new List<double>();
-    //    public List<double> rotationTime = new List<double>();
-    //    public List<Vector3> position = new List<Vector3>();
-    //    public List<Vector3> scale = new List<Vector3>();
-    //    public List<Quaternion> rotation = new List<Quaternion>();
-    //}
+public class VertexFormat
+{
+    public Element[] Elements;
+    public int Size;
+
+    public VertexFormat() { }
+
+    public VertexFormat(Element[] elements)
+    {
+        ArgumentNullException.ThrowIfNull(elements);
+
+        if (elements.Length == 0) throw new($"The argument '{nameof(elements)}' is null!");
+
+        Elements = elements;
+
+        foreach (var element in Elements)
+        {
+            element.Offset = (short)Size;
+            int s = 0;
+            if ((int)element.Type > 5122) s = 4 * element.Count; //Greater than short then its either a Float or Int
+            else if ((int)element.Type > 5121) s = 2 * element.Count; //Greater than byte then its a Short
+            else s = 1 * element.Count; //Byte or Unsigned Byte
+            Size += s;
+            element.Stride = (short)s;
+        }
+    }
+
+    public class Element
+    {
+        public uint Semantic;
+        public VertexType Type;
+        public byte Count;
+        public short Offset; // Automatically assigned in VertexFormats constructor
+        public short Stride; // Automatically assigned in VertexFormats constructor
+        public short Divisor;
+        public bool Normalized;
+        public Element() { }
+        public Element(VertexSemantic semantic, VertexType type, byte count, short divisor = 0, bool normalized = false)
+        {
+            Semantic = (uint)semantic;
+            Type = type;
+            Count = count;
+            Divisor = divisor;
+            Normalized = normalized;
+        }
+        public Element(uint semantic, VertexType type, byte count, short divisor = 0, bool normalized = false)
+        {
+            Semantic = semantic;
+            Type = type;
+            Count = count;
+            Divisor = divisor;
+            Normalized = normalized;
+        }
+    }
+
+    public enum VertexSemantic { Position, TexCoord0, TexCoord1, Normal, Color, Tangent, BoneIndex, BoneWeight }
+
+    public enum VertexType { Byte = 5120, UnsignedByte = 5121, Short = 5122, Int = 5124, Float = 5126, }
+
+    public void Bind()
+    {
+        for (var i = 0; i < Elements.Length; i++)
+        {
+            var element = Elements[i];
+            var index = element.Semantic;
+            Graphics.GL.EnableVertexAttribArray(index);
+            int offset = (int)element.Offset;
+            unsafe
+            {
+                if (element.Type == VertexType.Float)
+                    Graphics.GL.VertexAttribPointer(index, element.Count, (GLEnum)element.Type, element.Normalized, (uint)Size, (void*)offset);
+                else
+                    Graphics.GL.VertexAttribIPointer(index, element.Count, (GLEnum)element.Type, (uint)Size, (void*)offset);
+            }
+        }
+    }
 }

@@ -1,7 +1,6 @@
 ﻿using Silk.NET.OpenGL;
 using System;
 using System.Collections.Generic;
-using static Prowl.Runtime.Mesh.VertexFormat;
 
 namespace Prowl.Runtime
 {
@@ -16,6 +15,7 @@ namespace Prowl.Runtime
         private uint vao;
         private uint vbo;
         private List<Vertex> vertices = new List<Vertex>(50);
+        private Mesh mesh;
 
         private PrimitiveType primitiveType;
 
@@ -32,9 +32,9 @@ namespace Prowl.Runtime
             Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
             Graphics.CheckGL();
 
-            new Mesh.VertexFormat([
-                new Element((uint)0, VertexType.Float, 3),
-                new Element((uint)1, VertexType.Float, 4)
+            new VertexFormat([
+                new VertexFormat.Element((uint)0, VertexFormat.VertexType.Float, 3),
+                new VertexFormat.Element((uint)1, VertexFormat.VertexType.Float, 4)
             ]).Bind();
 
             Graphics.CheckGL();

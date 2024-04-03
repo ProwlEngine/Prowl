@@ -49,16 +49,16 @@ namespace Prowl.Runtime
 
             if (!convex)
             {
-                var indices = mesh.Res.triangles;
-                var vertices = mesh.Res.vertices;
+                var indices = mesh.Res.Indices;
+                var vertices = mesh.Res.Vertices;
 
                 List<JTriangle> triangles = new();
 
-                for (int i = 0; i < mesh.Res.triangles.Length; i += 3)
+                for (int i = 0; i < mesh.Res.Indices.Length; i += 3)
                 {
-                    JVector v1 = vertices[indices[i]].Position.ToDouble();
-                    JVector v2 = vertices[indices[i + 1]].Position.ToDouble();
-                    JVector v3 = vertices[indices[i + 2]].Position.ToDouble();
+                    JVector v1 = vertices[indices[i]].ToDouble();
+                    JVector v2 = vertices[indices[i + 1]].ToDouble();
+                    JVector v3 = vertices[indices[i + 2]].ToDouble();
                     triangles.Add(new JTriangle(v1, v2, v3));
                 }
 
@@ -74,7 +74,7 @@ namespace Prowl.Runtime
             }
             else
             {
-                var points = mesh.Res.vertices.Select(x => (JVector)x.Position.ToDouble());
+                var points = mesh.Res.Vertices.Select(x => (JVector)x.ToDouble());
                 return [new PointCloudShape(BuildConvexCloud(points.ToList()))];
             }
 

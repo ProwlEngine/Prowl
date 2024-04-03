@@ -1,4 +1,5 @@
-﻿using Silk.NET.Maths;
+﻿using Silk.NET.Core.Native;
+using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using System;
 
@@ -122,8 +123,13 @@ namespace Prowl.Runtime
 
         private static void DebugCallback(GLEnum source, GLEnum type, int id, GLEnum severity, int length, nint message, nint userParam)
         {
-            //var msg = SilkMarshal.PtrToString(message, NativeStringEncoding.UTF8);
-            //Console.WriteLine($"OpenGL Debug Message: {msg}");
+            var msg = SilkMarshal.PtrToString(message, NativeStringEncoding.UTF8);
+            if(type == GLEnum.DebugTypeError || type == GLEnum.DebugTypeUndefinedBehavior)
+                Debug.LogError($"OpenGL Error: {msg}");
+            else if (type == GLEnum.DebugTypePerformance || type == GLEnum.DebugTypeMarker || type == GLEnum.DebugTypePortability)
+                Debug.LogWarning($"OpenGL Warning: {msg}");
+            //else
+            //    Debug.Log($"OpenGL Message: {msg}");
         }
 
         public static void CheckGL()
@@ -247,6 +253,15 @@ namespace Prowl.Runtime
             material.SetMatrix("mvpInverse", mvpInverse);
             material.SetMatrix("mvpOld", oldMatMVP);
 
+            // Mesh data can vary between meshes, so we need to let the shaders know which attributes are in use
+            material.SetKeyword("HAS_NORMALS", mesh.HasNormals);
+            material.SetKeyword("HAS_TANGENTS", mesh.HasTangents);
+            material.SetKeyword("HAS_UV", mesh.HasUV);
+            material.SetKeyword("HAS_UV2", mesh.HasUV2);
+            material.SetKeyword("HAS_COLORS", mesh.HasColors || mesh.HasColors32);
+
+            material.SetKeyword("HAS_BONEINDICES", mesh.HasBoneIndices);
+            material.SetKeyword("HAS_BONEWEIGHTS", mesh.HasBoneWeights);
 
             // All material uniforms have been assigned, its time to properly set them
             MaterialPropertyBlock.Apply(material.PropertyBlock, Material.current.Value);
@@ -263,8 +278,8 @@ namespace Prowl.Runtime
 
             unsafe
             {
-                GL.BindVertexArray(mesh.vao);
-                GL.DrawElements(PrimitiveType.Triangles, (uint)mesh.triangles.Length, DrawElementsType.UnsignedShort, null);
+                GL.BindVertexArray(mesh.VertexArrayObject);
+                GL.DrawElements(PrimitiveType.Triangles, (uint)mesh.IndexCount, mesh.IndexFormat == IndexFormat.UInt16 ? DrawElementsType.UnsignedShort : DrawElementsType.UnsignedInt, null);
                 GL.BindVertexArray(0);
             }
         }

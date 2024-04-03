@@ -11,7 +11,11 @@ Pass 0
 	Vertex
 	{
 		layout (location = 0) in vec3 vertexPosition;
-		layout (location = 2) in vec3 vertexNormal;
+#ifdef HAS_NORMALS
+		layout (location = 3) in vec3 vertexNormal;
+#else
+		vec3 vertexNormal = vec3(0.0, 1.0, 0.0);
+#endif
 
 		out vec3 FragPos;
 		out vec3 VertNormal;

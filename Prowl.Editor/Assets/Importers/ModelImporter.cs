@@ -3,6 +3,7 @@ using Hexa.NET.ImGui;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
+using System.Collections.Generic;
 using static Prowl.Runtime.AnimationClip;
 using static Prowl.Runtime.Mesh;
 using Material = Prowl.Runtime.Material;
@@ -324,52 +325,75 @@ namespace Prowl.Editor.Assets
                     continue;
                 }
 
-                List<Mesh.VertexFormat.Element> elements = [
-                    new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.Position, Mesh.VertexFormat.VertexType.Float, 3),
-                    new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.TexCoord, Mesh.VertexFormat.VertexType.Float, 2),
-                    new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.Normal, Mesh.VertexFormat.VertexType.Float, 3, 0, true),
-                    new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.Color, Mesh.VertexFormat.VertexType.Float, 3),
-                    new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.Tangent, Mesh.VertexFormat.VertexType.Float, 3),
-                    new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.BoneIndex, Mesh.VertexFormat.VertexType.UnsignedByte, 4),
-                    new Mesh.VertexFormat.Element(Mesh.VertexFormat.VertexSemantic.BoneWeight, Mesh.VertexFormat.VertexType.Float, 4)
-                ];
-                Mesh.VertexFormat format = new(elements.ToArray());
 
                 Mesh mesh = new();
                 mesh.Name = m.Name;
-                mesh.format = format;
+                int vertexCount = m.VertexCount;
+                mesh.IndexFormat = vertexCount >= ushort.MaxValue ? IndexFormat.UInt32 : IndexFormat.UInt16;
 
                 var verts = m.Vertices;
                 var norms = m.Normals;
                 var tangs = m.Tangents;
-                var texs = m.TextureCoordinateChannels[0];
-                Vertex[] vertices = new Vertex[m.VertexCount];
+                var texs1 = m.TextureCoordinateChannels[0];
+                var texs2 = m.TextureCoordinateChannels[1];
+                var cols = m.VertexColorChannels[0];
 
+                System.Numerics.Vector3[] vertices = new System.Numerics.Vector3[vertexCount];
+                System.Numerics.Vector3[] normals = new System.Numerics.Vector3[vertexCount];
+                System.Numerics.Vector3[] tangents = new System.Numerics.Vector3[vertexCount];
+                System.Numerics.Vector2[] texCoords1 = new System.Numerics.Vector2[vertexCount];
+                System.Numerics.Vector2[] texCoords2 = new System.Numerics.Vector2[vertexCount];
+                Color[] colors = new Color[vertexCount];
                 for (var i = 0; i < vertices.Length; i++)
                 {
-                    Vertex vert = new Vertex();
-                    var v = verts[i]; var n = norms[i]; var t = tangs[i]; var tc = texs[i];
-                    vert.Position = new Vector3(v.X, v.Y, v.Z) * scale;
-                    vert.TexCoord = new Vector2(tc.X, tc.Y);
-                    vert.Normal = new Vector3(n.X, n.Y, n.Z);
-                    if (m.HasVertexColors(0))
-                    {
-                        var c = m.VertexColorChannels[0][i];
-                        vert.Color = new Vector3(c.R, c.G, c.B);
-                    }
+                    var v = verts[i]; 
+                    vertices[i] = new System.Numerics.Vector3(verts[i].X, verts[i].Y, verts[i].Z) * (float)scale;
+
+                    var n = norms[i];
+                    normals[i] = new System.Numerics.Vector3(n.X, n.Y, n.Z);
+
+                    var t = tangs[i];
+                    tangents[i] = new System.Numerics.Vector3(t.X, t.Y, t.Z);
+
+                    if (texs1.Count == 0)
+                        texCoords1[i] = new System.Numerics.Vector2(0, 0);
                     else
                     {
-                        vert.Color = Vector3.one;
+                        var tc1 = texs1[i];
+                        texCoords1[i] = new System.Numerics.Vector2(tc1.X, tc1.Y);
                     }
-                    vert.Tangent = new Vector3(t.X, t.Y, t.Z);
 
-                    vertices[i] = vert;
+                    if(texs2.Count == 0)
+                        texCoords2[i] = new System.Numerics.Vector2(0, 0);
+                    else
+                    {
+                        var tc2 = texs2[i];
+                        texCoords2[i] = new System.Numerics.Vector2(tc2.X, tc2.Y);
+                    }
+
+                    if (cols.Count == 0)
+                        colors[i] = Color.white;
+                    else
+                    {
+                        var c = cols[i];
+                        colors[i] = new Color(c.R, c.G, c.B, c.A);
+                    }
                 }
+                mesh.Vertices = vertices;
+                mesh.Normals = normals;
+                mesh.Tangents = tangents;
+                mesh.UV = texCoords1;
+                mesh.UV2 = texCoords2;
+                mesh.Colors = colors;
+                mesh.Indices = m.GetUnsignedIndices();
+
 
                 if (m.HasBones)
                 {
                     mesh.boneNames = new string[m.Bones.Count];
                     mesh.bindPoses = new Prowl.Runtime.Matrix4x4[m.Bones.Count];
+                    mesh.BoneIndices = new Color32[vertexCount];
+                    mesh.BoneWeights = new System.Numerics.Vector4[vertexCount];
                     for (var i = 0; i < m.Bones.Count; i++)
                     {
                         var bone = m.Bones[i];
@@ -395,51 +419,50 @@ namespace Prowl.Editor.Assets
                         for (int j = 0; j < bone.VertexWeightCount; j++)
                         {
                             var weight = bone.VertexWeights[j];
-                            int vertexID = weight.VertexID;
-                            var v = vertices[vertexID];
-                            if (v.BoneIndex0 == 0)
+                            var b = mesh.BoneIndices[weight.VertexID];
+                            var w = mesh.BoneWeights[weight.VertexID];
+                            if (b.X == 0)
                             {
-                                v.BoneIndex0 = boneIndex;
-                                v.Weight0 = weight.Weight;
+                                b.X = boneIndex;
+                                w.X = weight.Weight;
                             }
-                            else if (v.BoneIndex1 == 0)
+                            else if (b.Y == 0)
                             {
-                                v.BoneIndex1 = boneIndex;
-                                v.Weight1 = weight.Weight;
+                                b.Y = boneIndex;
+                                w.Y = weight.Weight;
                             }
-                            else if (v.BoneIndex2 == 0)
+                            else if (b.Z == 0)
                             {
-                                v.BoneIndex2 = boneIndex;
-                                v.Weight2 = weight.Weight;
+                                b.Z = boneIndex;
+                                w.Z = weight.Weight;
                             }
-                            else if (v.BoneIndex3 == 0)
+                            else if (b.W == 0)
                             {
-                                v.BoneIndex3 = boneIndex;
-                                v.Weight3 = weight.Weight;
+                                b.W = boneIndex;
+                                w.W = weight.Weight;
                             }
                             else
                             {
-                                Debug.LogWarning($"Vertex {vertexID} has more than 4 bone weights, Skipping...");
+                                Debug.LogWarning($"Vertex {weight.VertexID} has more than 4 bone weights, Skipping...");
                             }
-                            vertices[vertexID] = v;
+                            mesh.BoneIndices[weight.VertexID] = b;
+                            mesh.BoneWeights[weight.VertexID] = w;
                         }
                     }
 
                     for (int i = 0; i < vertices.Length; i++)
                     {
-                        var v = vertices[i];
-                        var totalWeight = v.Weight0 + v.Weight1 + v.Weight2 + v.Weight3;
+                        var w = mesh.BoneWeights[i];
+                        var totalWeight = w.X + w.Y + w.Z + w.W;
                         if (totalWeight == 0) continue;
-                        v.Weight0 /= totalWeight;
-                        v.Weight1 /= totalWeight;
-                        v.Weight2 /= totalWeight;
-                        v.Weight3 /= totalWeight;
-                        vertices[i] = v;
+                        w.X /= totalWeight;
+                        w.Y /= totalWeight;
+                        w.Z /= totalWeight;
+                        w.W /= totalWeight;
+                        mesh.BoneWeights[i] = w;
                     }
                 }
 
-                mesh.vertices = vertices;
-                mesh.triangles = m.GetShortIndices().Cast<ushort>().ToArray();
 
                 ctx.AddSubObject(mesh);
                 meshMats.Add(new MeshMaterialBinding(m.Name, m, mesh, mats[m.MaterialIndex]));
@@ -698,9 +721,9 @@ namespace Prowl.Editor.Assets
             // Mesh Count
             ImGui.Text($"Mesh Count: {meshes.Count()}");
             // Vertex Count
-            ImGui.Text($"Vertex Count: {meshes.Sum(x => (x as Mesh).vertices.Length)}");
+            ImGui.Text($"Vertex Count: {meshes.Sum(x => (x as Mesh).VertexCount)}");
             // Triangle Count
-            ImGui.Text($"Triangle Count: {meshes.Sum(x => (x as Mesh).triangles.Length / 3)}");
+            ImGui.Text($"Triangle Count: {meshes.Sum(x => (x as Mesh).IndexCount / 3)}");
             // Bone Count
             ImGui.Text($"Bone Count: {meshes.Sum(x => (x as Mesh).boneNames?.Length ?? 0)}");
 

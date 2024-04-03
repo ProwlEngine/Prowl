@@ -175,6 +175,12 @@ namespace Prowl.Runtime
             PropertyBlock = new();
         }
 
+        public void SetKeyword(string keyword, bool state)
+        {
+            if (state) EnableKeyword(keyword);
+            else DisableKeyword(keyword);
+        }
+
         public void EnableKeyword(string keyword)
         {
             string? key = keyword?.ToUpper().Replace(" ", "").Replace(";", "");
