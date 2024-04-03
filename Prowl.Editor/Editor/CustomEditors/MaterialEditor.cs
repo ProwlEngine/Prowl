@@ -2,6 +2,7 @@
 using Prowl.Editor.Assets;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Editor.PropertyDrawers;
+using Prowl.Icons;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.EditorWindows.CustomEditors
@@ -10,6 +11,9 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
     public class MaterialEditor : ScriptedEditor
     {
         private Action onChange;
+        public static Guid assignedGUID;
+        public static short assignedFileID;
+        public static int guidAssignedToID = -1;
 
         public MaterialEditor() { }
 
@@ -80,42 +84,54 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                             ImGui.PushItemWidth(ImGui.GetContentRegionAvail().X);
                             ImGui.PushID(property.Name);
 
-                            var pos = ImGui.GetCursorPos();
-                            string path;
+                            var imguiID = ImGui.GetItemID();
 
+                            if (guidAssignedToID != -1 && guidAssignedToID == imguiID)
+                            {
+                                tex.AssetID = assignedGUID;
+                                tex.FileID = assignedFileID;
+                                assignedGUID = Guid.Empty;
+                                assignedFileID = 0;
+                                guidAssignedToID = -1;
+                                changed = true;
+                            }
+
+
+                            var pos = ImGui.GetCursorPos();
                             if (tex.IsExplicitNull)
                             {
-                                path = "(Null)";
-                                if (ImGui.Selectable("##" + path, false, new System.Numerics.Vector2(50, 50)))
+                                if (ImGui.Selectable("(Null)", false, new System.Numerics.Vector2(50, 50)))
                                 {
                                     AssetDatabase.Ping(tex.AssetID);
                                 }
                                 drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.9f, 0.1f, 0.1f, 0.3f)));
-                                GUIHelper.Tooltip(path);
                             }
                             else if (tex.IsRuntimeResource)
                             {
-                                path = "(Runtime)" + tex.Name;
-                                if (ImGui.Selectable("##" + path, false, new System.Numerics.Vector2(50, 50)))
+                                if (ImGui.Selectable("(Runtime)" + tex.Name, false, new System.Numerics.Vector2(50, 50)))
                                     AssetDatabase.Ping(tex.AssetID);
-                                GUIHelper.Tooltip(path);
                                 drawList.AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new System.Numerics.Vector4(0.1f, 0.1f, 0.9f, 0.3f)));
                             }
-                            else if (AssetDatabase.TryGetFile(tex.AssetID, out var fileInfo))
+                            else
                             {
-                                path = AssetDatabase.ToRelativePath(fileInfo);
-                                var thumbnail = Application.AssetProvider.LoadAsset<Texture2D>(tex);
-                                if (thumbnail.IsAvailable)
+                                if (AssetDatabase.TryGetFile(tex.AssetID, out var fileInfo))
                                 {
-                                    var cPos = ImGui.GetCursorScreenPos();
-                                    ImGui.SetCursorScreenPos(new System.Numerics.Vector2(cPos.X, cPos.Y + 50));
-                                    ImGui.Image(new ImTextureID((nint)thumbnail.Res!.Handle), new System.Numerics.Vector2(50, -50));
-                                    ImGui.SetCursorScreenPos(cPos);
+                                    var thumbnail = Application.AssetProvider.LoadAsset<Texture2D>(tex);
+                                    if (thumbnail.IsAvailable)
+                                    {
+                                        var cPos = ImGui.GetCursorScreenPos();
+                                        ImGui.SetCursorScreenPos(new System.Numerics.Vector2(cPos.X, cPos.Y + 50));
+                                        ImGui.Image(new ImTextureID((nint)thumbnail.Res!.Handle), new System.Numerics.Vector2(50, -50));
+                                        ImGui.SetCursorScreenPos(cPos);
+                                    }
                                 }
-                                if (ImGui.Selectable("##" + path, false, new System.Numerics.Vector2(50, 50)))
+
+                                if (ImGui.Selectable(AssetDatabase.ToRelativePath(fileInfo), false, new System.Numerics.Vector2(50, 50)))
                                     AssetDatabase.Ping(tex.AssetID);
-                                GUIHelper.Tooltip(path);
                             }
+
+                            if (ImGui.IsItemClicked(ImGuiMouseButton.Left) && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                                new AssetSelectorWindow(typeof(Texture2D), (guid, fileid) => { assignedGUID = guid; guidAssignedToID = imguiID; assignedFileID = fileid; });
 
                             // DragDrop code
                             if (DragnDrop.ReceiveAsset<Texture2D>(out var droppedTex))
