@@ -470,6 +470,13 @@ namespace Prowl.Editor.Assets
                 }
             try {
                 var serializedAsset = SerializedAsset.FromSerializedAsset(serializedAssetPath.FullName);
+                serializedAsset.Main.AssetID = assetGuid;
+                serializedAsset.Main.FileID = 0;
+                for (int i = 0; i < serializedAsset.SubAssets.Count; i++)
+                {
+                    serializedAsset.SubAssets[i].AssetID = assetGuid;
+                    serializedAsset.SubAssets[i].FileID = (short)(i + 1);
+                }
                 guidToAssetData[assetGuid] = serializedAsset;
                 return serializedAsset;
             } catch {
