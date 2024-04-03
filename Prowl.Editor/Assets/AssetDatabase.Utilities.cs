@@ -180,7 +180,7 @@ namespace Prowl.Editor.Assets
             return result;
         }
 
-        public static Type GetTypeOfAsset(Guid guid, ushort fileID)
+        public static Type GetTypeOfAsset(Guid guid, short fileID)
         {
             if(assetGuidToMeta.TryGetValue(guid, out var meta))
                 if(meta.assetTypes.Length > fileID)

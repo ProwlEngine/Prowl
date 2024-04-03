@@ -387,7 +387,7 @@ namespace Prowl.Editor.Assets
         /// <param name="assetPath">The file path of the asset to load.</param>
         /// <param name="fileID">The file ID of the asset to load.</param>
         /// <returns>The loaded asset, or null if the asset could not be loaded.</returns>
-        public static T? LoadAsset<T>(FileInfo assetPath, int fileID) where T : EngineObject
+        public static T? LoadAsset<T>(FileInfo assetPath, short fileID) where T : EngineObject
         {
             ArgumentNullException.ThrowIfNull(assetPath);
             if (TryGetGuid(assetPath, out var guid))
@@ -402,7 +402,7 @@ namespace Prowl.Editor.Assets
         /// <param name="assetGuid">The GUID of the asset to load.</param>
         /// <param name="fileID">The file ID of the asset to load.</param>
         /// <returns>The loaded asset, or null if the asset could not be loaded.</returns>
-        public static T? LoadAsset<T>(Guid assetGuid, int fileID) where T : EngineObject
+        public static T? LoadAsset<T>(Guid assetGuid, short fileID) where T : EngineObject
         {
             if (assetGuid == Guid.Empty) throw new ArgumentException("Asset Guid cannot be empty", nameof(assetGuid));
 
