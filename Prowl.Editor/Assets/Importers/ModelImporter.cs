@@ -421,22 +421,22 @@ namespace Prowl.Editor.Assets
                             var weight = bone.VertexWeights[j];
                             var b = mesh.BoneIndices[weight.VertexID];
                             var w = mesh.BoneWeights[weight.VertexID];
-                            if (b.X == 0)
+                            if (b.X == 0 || weight.Weight > w.X)
                             {
                                 b.X = boneIndex;
                                 w.X = weight.Weight;
                             }
-                            else if (b.Y == 0)
+                            else if (b.Y == 0 || weight.Weight > w.Y)
                             {
                                 b.Y = boneIndex;
                                 w.Y = weight.Weight;
                             }
-                            else if (b.Z == 0)
+                            else if (b.Z == 0 || weight.Weight > w.Z)
                             {
                                 b.Z = boneIndex;
                                 w.Z = weight.Weight;
                             }
-                            else if (b.W == 0)
+                            else if (b.W == 0 || weight.Weight > w.W)
                             {
                                 b.W = boneIndex;
                                 w.W = weight.Weight;
