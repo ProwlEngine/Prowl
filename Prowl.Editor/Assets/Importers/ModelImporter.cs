@@ -313,17 +313,6 @@ namespace Prowl.Editor.Assets
                     Debug.Log($"{assetPath.Name} 's mesh '{m.Name}' is not of Triangle Primitive, Skipping...");
                     continue;
                 }
-                if (!m.HasNormals)
-                {
-                    Debug.Log($"{assetPath.Name} Does not have any normals in mesh '{m.Name}', Skipping...");
-                    continue;
-                }
-
-                if (!m.HasTangentBasis)
-                {
-                    Debug.Log($"{assetPath.Name} Does not have any tangents in mesh '{m.Name}', Skipping...");
-                    continue;
-                }
 
 
                 Mesh mesh = new();
@@ -331,62 +320,57 @@ namespace Prowl.Editor.Assets
                 int vertexCount = m.VertexCount;
                 mesh.IndexFormat = vertexCount >= ushort.MaxValue ? IndexFormat.UInt32 : IndexFormat.UInt16;
 
-                var verts = m.Vertices;
-                var norms = m.Normals;
-                var tangs = m.Tangents;
-                var texs1 = m.TextureCoordinateChannels[0];
-                var texs2 = m.TextureCoordinateChannels[1];
-                var cols = m.VertexColorChannels[0];
-
                 System.Numerics.Vector3[] vertices = new System.Numerics.Vector3[vertexCount];
-                System.Numerics.Vector3[] normals = new System.Numerics.Vector3[vertexCount];
-                System.Numerics.Vector3[] tangents = new System.Numerics.Vector3[vertexCount];
-                System.Numerics.Vector2[] texCoords1 = new System.Numerics.Vector2[vertexCount];
-                System.Numerics.Vector2[] texCoords2 = new System.Numerics.Vector2[vertexCount];
-                Color[] colors = new Color[vertexCount];
                 for (var i = 0; i < vertices.Length; i++)
-                {
-                    var v = verts[i]; 
-                    vertices[i] = new System.Numerics.Vector3(verts[i].X, verts[i].Y, verts[i].Z) * (float)scale;
-
-                    var n = norms[i];
-                    normals[i] = new System.Numerics.Vector3(n.X, n.Y, n.Z);
-
-                    var t = tangs[i];
-                    tangents[i] = new System.Numerics.Vector3(t.X, t.Y, t.Z);
-
-                    if (texs1.Count == 0)
-                        texCoords1[i] = new System.Numerics.Vector2(0, 0);
-                    else
-                    {
-                        var tc1 = texs1[i];
-                        texCoords1[i] = new System.Numerics.Vector2(tc1.X, tc1.Y);
-                    }
-
-                    if(texs2.Count == 0)
-                        texCoords2[i] = new System.Numerics.Vector2(0, 0);
-                    else
-                    {
-                        var tc2 = texs2[i];
-                        texCoords2[i] = new System.Numerics.Vector2(tc2.X, tc2.Y);
-                    }
-
-                    if (cols.Count == 0)
-                        colors[i] = Color.white;
-                    else
-                    {
-                        var c = cols[i];
-                        colors[i] = new Color(c.R, c.G, c.B, c.A);
-                    }
-                }
+                    vertices[i] = new System.Numerics.Vector3(m.Vertices[i].X, m.Vertices[i].Y, m.Vertices[i].Z) * (float)scale;
                 mesh.Vertices = vertices;
-                mesh.Normals = normals;
-                mesh.Tangents = tangents;
-                mesh.UV = texCoords1;
-                mesh.UV2 = texCoords2;
-                mesh.Colors = colors;
+
+                if (m.HasNormals)
+                {
+                    System.Numerics.Vector3[] normals = new System.Numerics.Vector3[vertexCount];
+                    for (var i = 0; i < normals.Length; i++)
+                        normals[i] = new System.Numerics.Vector3(m.Normals[i].X, m.Normals[i].Y, m.Normals[i].Z);
+                    mesh.Normals = normals;
+                }
+
+                if (m.HasTangentBasis)
+                {
+                    System.Numerics.Vector3[] tangents = new System.Numerics.Vector3[vertexCount];
+                    for (var i = 0; i < tangents.Length; i++)
+                        tangents[i] = new System.Numerics.Vector3(m.Tangents[i].X, m.Tangents[i].Y, m.Tangents[i].Z);
+                    mesh.Tangents = tangents;
+                }
+
+                if (m.HasTextureCoords(0))
+                {
+                    System.Numerics.Vector2[] texCoords1 = new System.Numerics.Vector2[vertexCount];
+                    for (var i = 0; i < texCoords1.Length; i++)
+                        texCoords1[i] = new System.Numerics.Vector2(m.TextureCoordinateChannels[0][i].X, m.TextureCoordinateChannels[0][i].Y);
+                    mesh.UV = texCoords1;
+                }
+
+                if (m.HasTextureCoords(1))
+                {
+                    System.Numerics.Vector2[] texCoords2 = new System.Numerics.Vector2[vertexCount];
+                    for (var i = 0; i < texCoords2.Length; i++)
+                        texCoords2[i] = new System.Numerics.Vector2(m.TextureCoordinateChannels[1][i].X, m.TextureCoordinateChannels[1][i].Y);
+                    mesh.UV2 = texCoords2;
+                }
+
+                if (m.HasVertexColors(0))
+                {
+                    Color[] colors = new Color[vertexCount];
+                    for (var i = 0; i < colors.Length; i++)
+                        colors[i] = new Color(m.VertexColorChannels[0][i].R, m.VertexColorChannels[0][i].G, m.VertexColorChannels[0][i].B, m.VertexColorChannels[0][i].A);
+                    mesh.Colors = colors;
+                }
+
                 mesh.Indices = m.GetUnsignedIndices();
 
+                //if(!m.HasTangentBasis)
+                //    mesh.RecalculateTangents();
+
+                mesh.RecalculateBounds();
 
                 if (m.HasBones)
                 {
