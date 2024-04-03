@@ -82,5 +82,11 @@ namespace Prowl.Runtime.Utils
             foreach (var obj in SubAssets)
                 obj.DestroyImmediate();
         }
+
+        public object GetAsset(short fileID)
+        {
+            if (fileID == 0) return Main;
+            return SubAssets[fileID - 1];
+        }
     }
 }
