@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using Prowl.Runtime;
+using System.Diagnostics;
 using System.Reflection;
 
 namespace Prowl.Editor.Assets
@@ -177,6 +178,14 @@ namespace Prowl.Editor.Assets
 
             }
             return result;
+        }
+
+        public static Type GetTypeOfAsset(Guid guid, ushort fileID)
+        {
+            if(assetGuidToMeta.TryGetValue(guid, out var meta))
+                if(meta.assetTypes.Length > fileID)
+                    return RuntimeUtils.FindType(meta.assetTypes[fileID]);
+            return null;
         }
 
         #endregion
