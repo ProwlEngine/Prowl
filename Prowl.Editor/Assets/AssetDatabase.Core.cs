@@ -298,7 +298,8 @@ namespace Prowl.Editor.Assets
             var files = directory.GetFiles("*", SearchOption.AllDirectories)
                 .Where(file => !file.FullName.EndsWith(".meta"));
             foreach (var file in files)
-                Reimport(file);
+                if (ImporterAttribute.SupportsExtension(file.Extension))
+                    Reimport(file);
         }
 
         /// <summary>
