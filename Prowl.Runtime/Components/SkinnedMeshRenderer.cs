@@ -21,22 +21,17 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
     void GetBoneMatrices()
     {
         boneTransforms = new System.Numerics.Matrix4x4[Mesh.Res.boneNames.Length];
-        bindPoses = new System.Numerics.Matrix4x4[Mesh.Res.bindPoses.Length];
+        bindPoses = Mesh.Res.bindPoses;
         for (int i = 0; i < Mesh.Res.boneNames.Length; i++)
         {
             var t = Root.transform.DeepFind(Mesh.Res.boneNames[i]);
             if (t == null)
             {
                 boneTransforms[i] = System.Numerics.Matrix4x4.Identity;
-                bindPoses[i] = Mesh.Res.bindPoses[i].ToFloat();
             }
             else
             {
-                //var pose = Mesh.Res.bindPoses[i];
-                //boneTransforms[i] = (pose * t.localToWorldMatrix).ToFloat();
                 boneTransforms[i] = (t.localToWorldMatrix * this.GameObject.transform.worldToLocalMatrix).ToFloat();
-                bindPoses[i] = Mesh.Res.bindPoses[i].ToFloat();
-                //bindPoses[i].Translation *= 0.01f;
             }
         }
     }

@@ -135,7 +135,7 @@ namespace Prowl.Runtime
         public bool HasBoneWeights => (boneWeights?.Length ?? 0) > 0;
 
         public string[]? boneNames;
-        public Matrix4x4[]? bindPoses;
+        public System.Numerics.Matrix4x4[]? bindPoses;
 
         bool changed = true;
         System.Numerics.Vector3[]? vertices;
@@ -481,7 +481,7 @@ namespace Prowl.Runtime
                 elements.Add(new Element(VertexSemantic.Tangent, VertexType.Float, 3, 0, true));
 
             if (mesh.HasBoneIndices)
-                elements.Add(new Element(VertexSemantic.BoneIndex, VertexType.UnsignedByte, 4));
+                elements.Add(new Element(VertexSemantic.BoneIndex, VertexType.Float, 4));
 
             if (mesh.HasBoneWeights)
                 elements.Add(new Element(VertexSemantic.BoneWeight, VertexType.Float, 4));
@@ -506,7 +506,8 @@ namespace Prowl.Runtime
                 index += source.Length;
             }
 
-            for (int i = 0, index = 0; i < vertices.Length; i++)
+            int index = 0;
+            for (int i = 0; i < vertices.Length; i++)
             {
                 if (index % layout.Size != 0)
                     throw new InvalidOperationException("[Mesh] Exceeded expected byte count while generating vertex data blob");
@@ -840,10 +841,10 @@ namespace Prowl.Runtime
                 var bindPosesCount = reader.ReadInt32();
                 if (bindPosesCount > 0)
                 {
-                    bindPoses = new Matrix4x4[bindPosesCount];
+                    bindPoses = new System.Numerics.Matrix4x4[bindPosesCount];
                     for (int i = 0; i < bindPosesCount; i++)
                     {
-                        bindPoses[i] = new Matrix4x4() {
+                        bindPoses[i] = new System.Numerics.Matrix4x4() {
                             M11 = reader.ReadSingle(),
                             M12 = reader.ReadSingle(),
                             M13 = reader.ReadSingle(),

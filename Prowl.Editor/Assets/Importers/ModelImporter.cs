@@ -391,8 +391,8 @@ namespace Prowl.Editor.Assets
                 if (m.HasBones)
                 {
                     mesh.boneNames = new string[m.Bones.Count];
-                    mesh.bindPoses = new Prowl.Runtime.Matrix4x4[m.Bones.Count];
-                    mesh.BoneIndices = new Color32[vertexCount];
+                    mesh.bindPoses = new System.Numerics.Matrix4x4[m.Bones.Count];
+                    mesh.BoneIndices = new System.Numerics.Vector4[vertexCount];
                     mesh.BoneWeights = new System.Numerics.Vector4[vertexCount];
                     for (var i = 0; i < m.Bones.Count; i++)
                     {
@@ -400,7 +400,7 @@ namespace Prowl.Editor.Assets
                         mesh.boneNames[i] = bone.Name;
 
                         var offsetMatrix = bone.OffsetMatrix;
-                        Prowl.Runtime.Matrix4x4 bindPose = new Prowl.Runtime.Matrix4x4(
+                        System.Numerics.Matrix4x4 bindPose = new System.Numerics.Matrix4x4(
                             offsetMatrix.A1, offsetMatrix.B1, offsetMatrix.C1, offsetMatrix.D1,
                             offsetMatrix.A2, offsetMatrix.B2, offsetMatrix.C2, offsetMatrix.D2,
                             offsetMatrix.A3, offsetMatrix.B3, offsetMatrix.C3, offsetMatrix.D3,
@@ -408,7 +408,7 @@ namespace Prowl.Editor.Assets
                         );
 
                         // Adjust translation by scale
-                        bindPose.Translation *= scale;
+                        bindPose.Translation *= (float)scale;
 
                         mesh.bindPoses[i] = bindPose;
 

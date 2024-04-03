@@ -62,9 +62,9 @@ Pass 0
 
 #ifdef SKINNED
 	#ifdef HAS_BONEINDICES
-		layout (location = 6) in ivec4 vertexBoneIndices;
+		layout (location = 6) in vec4 vertexBoneIndices;
 	#else
-		ivec4 vertexBoneIndices = ivec4(0, 0, 0, 0);
+		vec4 vertexBoneIndices = vec4(0, 0, 0, 0);
 	#endif
 
 	#ifdef HAS_BONEWEIGHTS
@@ -107,7 +107,7 @@ Pass 0
 
 			for (int i = 0; i < MAX_BONE_INFLUENCE; i++)
 			{
-			    int index = vertexBoneIndices[i] - 1;
+			    int index = int(vertexBoneIndices[i]) - 1;
 			    if (index < 0)
 			        continue;
 
@@ -248,10 +248,23 @@ ShadowPass 0
 	Vertex
 	{
 		layout (location = 0) in vec3 vertexPosition;
-		layout (location = 1) in vec2 vertexTexCoord;
+#ifdef HAS_UV
+		layout (location = 1) in vec2 vertexTexCoord0;
+#else
+		vec2 vertexTexCoord0 = vec2(0.0, 0.0);
+#endif
 #ifdef SKINNED
-		layout (location = 5) in ivec4 vertexBoneIndices;
-		layout (location = 6) in vec4 vertexBoneWeights;
+	#ifdef HAS_BONEINDICES
+		layout (location = 6) in vec4 vertexBoneIndices;
+	#else
+		vec4 vertexBoneIndices = vec4(0, 0, 0, 0);
+	#endif
+
+	#ifdef HAS_BONEWEIGHTS
+		layout (location = 7) in vec4 vertexBoneWeights;
+	#else
+		vec4 vertexBoneWeights = vec4(0.0, 0.0, 0.0, 0.0);
+	#endif
 		
 		const int MAX_BONE_INFLUENCE = 4;
 		const int MAX_BONES = 100;
@@ -271,7 +284,7 @@ ShadowPass 0
 
 			for (int i = 0; i < MAX_BONE_INFLUENCE; i++)
 			{
-			    int index = vertexBoneIndices[i] - 1;
+			    int index = int(vertexBoneIndices[i]) - 1;
 			    if (index < 0)
 			        continue;
 
@@ -284,7 +297,7 @@ ShadowPass 0
 			boneVertexPosition = totalPosition.xyz;
 #endif
 
-		    TexCoords = vertexTexCoord;
+		    TexCoords = vertexTexCoord0;
 			
 		    gl_Position = mvp * vec4(boneVertexPosition, 1.0);
 		}
