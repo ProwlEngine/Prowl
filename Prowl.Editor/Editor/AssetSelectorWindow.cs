@@ -64,7 +64,7 @@ public class AssetSelectorWindow : EditorWindow
         ImGui.EndChild();
 
         // Click outside window should close it
-        if (ImGui.IsMouseDown(0) && !ImGui.IsMouseHoveringRect(ImGui.GetWindowPos(), ImGui.GetWindowPos() + ImGui.GetWindowSize(), false))
+        if (ImGui.IsMouseClicked(0) && !ImGui.IsMouseHoveringRect(ImGui.GetWindowPos(), ImGui.GetWindowPos() + ImGui.GetWindowSize(), false))
             isOpened = false;
     }
 }
