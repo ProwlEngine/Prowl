@@ -145,6 +145,14 @@ namespace Prowl.Runtime
             return Res;
         }
 
+        public void SetInstance(object? obj)
+        {
+            if (obj is T res)
+                Res = res;
+            else
+                Res = null;
+        }
+
         /// <summary>
         /// Loads the associated content as if it was accessed now.
         /// You don't usually need to call this method. It is invoked implicitly by trying to 

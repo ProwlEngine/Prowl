@@ -14,5 +14,6 @@ namespace Prowl.Runtime
         Type InstanceType { get; }
 
         object? GetInstance();
+        void SetInstance(object? obj);
     }
 }
