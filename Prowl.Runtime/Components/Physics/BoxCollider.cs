@@ -19,10 +19,13 @@ namespace Prowl.Runtime
                 rigid.IsActive = true;
         }
 
-        public void DrawGizmosSelected()
+        public override void DrawGizmosSelected()
         {
-            Gizmos.Matrix = Matrix4x4.CreateScale(size * 1.0025f) * GameObject.GlobalCamRelative;
-            Gizmos.Matrix = Matrix4x4.Multiply(Gizmos.Matrix, Matrix4x4.CreateScale(GameObject.transform.lossyScale));
+            var mat = Matrix4x4.Identity;
+            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateScale(size * 1.0025f));
+            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateScale(GameObject.transform.lossyScale));
+            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateTranslation(GameObject.transform.position - Camera.Current.GameObject.transform.position));
+            Gizmos.Matrix = mat;
             Gizmos.Cube(Color.yellow);
         }
     }
