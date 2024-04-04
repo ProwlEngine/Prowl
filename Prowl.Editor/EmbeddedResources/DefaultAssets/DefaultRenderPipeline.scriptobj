@@ -1,7 +1,7 @@
 {
   "$id": 1,
   "$type": "Prowl.Runtime.RenderPipeline",
-  "_nextID": 44,
+  "_nextID": 64,
   "nodes": [
     {
       "$id": 2,
@@ -159,8 +159,8 @@
                                     "position": {
                                       "$id": 19,
                                       "$type": "Prowl.Runtime.Vector2",
-                                      "x": 119D,
-                                      "y": 59D
+                                      "x": 106D,
+                                      "y": 222D
                                     },
                                     "ports": {
                                       "RenderTexture": {
@@ -200,339 +200,7 @@
                                         },
                                         "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
                                         "connections": [
-                                          {
-                                            "$id": 23,
-                                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
-                                            "fieldName": "RenderTexture",
-                                            "node": {
-                                              "$id": 24,
-                                              "$type": "Prowl.Runtime.Resources.RenderPipeline.TAANode",
-                                              "Jitter2X": false,
-                                              "Clear": true,
-                                              "graph": {
-                                                "$id": 1,
 
-                                              },
-                                              "position": {
-                                                "$id": 25,
-                                                "$type": "Prowl.Runtime.Vector2",
-                                                "x": 270D,
-                                                "y": 57D
-                                              },
-                                              "ports": {
-                                                "RenderTexture": {
-                                                  "$id": 26,
-                                                  "$type": "Prowl.Runtime.NodeSystem.NodePort",
-                                                  "_fieldName": "RenderTexture",
-                                                  "_node": {
-                                                    "$id": 24,
-
-                                                  },
-                                                  "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                  "connections": [
-                                                    {
-                                                      "$id": 27,
-                                                      "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
-                                                      "fieldName": "OutputRT",
-                                                      "node": {
-                                                        "$id": 18,
-
-                                                      },
-                                                      "InstanceID": 35
-                                                    }
-                                                  ],
-                                                  "_direction": 0,
-                                                  "_connectionType": 0,
-                                                  "_typeConstraint": 0,
-                                                  "_dynamic": false,
-                                                  "InstanceID": 24
-                                                },
-                                                "OutputRT": {
-                                                  "$id": 28,
-                                                  "$type": "Prowl.Runtime.NodeSystem.NodePort",
-                                                  "_fieldName": "OutputRT",
-                                                  "_node": {
-                                                    "$id": 24,
-
-                                                  },
-                                                  "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                  "connections": [
-                                                    {
-                                                      "$id": 29,
-                                                      "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
-                                                      "fieldName": "RenderTexture",
-                                                      "node": {
-                                                        "$id": 30,
-                                                        "$type": "Prowl.Runtime.Resources.RenderPipeline.DepthOfFieldNode",
-                                                        "FocusStrength": 150F,
-                                                        "Quality": 0.05F,
-                                                        "BlurRadius": 10,
-                                                        "Clear": true,
-                                                        "graph": {
-                                                          "$id": 1,
-
-                                                        },
-                                                        "position": {
-                                                          "$id": 31,
-                                                          "$type": "Prowl.Runtime.Vector2",
-                                                          "x": 415D,
-                                                          "y": 61D
-                                                        },
-                                                        "ports": {
-                                                          "RenderTexture": {
-                                                            "$id": 32,
-                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort",
-                                                            "_fieldName": "RenderTexture",
-                                                            "_node": {
-                                                              "$id": 30,
-
-                                                            },
-                                                            "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                            "connections": [
-                                                              {
-                                                                "$id": 33,
-                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
-                                                                "fieldName": "OutputRT",
-                                                                "node": {
-                                                                  "$id": 24,
-
-                                                                },
-                                                                "InstanceID": 37
-                                                              }
-                                                            ],
-                                                            "_direction": 0,
-                                                            "_connectionType": 0,
-                                                            "_typeConstraint": 0,
-                                                            "_dynamic": false,
-                                                            "InstanceID": 15
-                                                          },
-                                                          "OutputRT": {
-                                                            "$id": 34,
-                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort",
-                                                            "_fieldName": "OutputRT",
-                                                            "_node": {
-                                                              "$id": 30,
-
-                                                            },
-                                                            "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                            "connections": [
-                                                              {
-                                                                "$id": 35,
-                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
-                                                                "fieldName": "RenderTexture",
-                                                                "node": {
-                                                                  "$id": 36,
-                                                                  "$type": "Prowl.Runtime.Resources.RenderPipeline.BloomNode",
-                                                                  "Radius": 10F,
-                                                                  "Threshold": 0.5F,
-                                                                  "Passes": 10,
-                                                                  "Clear": true,
-                                                                  "graph": {
-                                                                    "$id": 1,
-
-                                                                  },
-                                                                  "position": {
-                                                                    "$id": 37,
-                                                                    "$type": "Prowl.Runtime.Vector2",
-                                                                    "x": 571D,
-                                                                    "y": 80D
-                                                                  },
-                                                                  "ports": {
-                                                                    "RenderTexture": {
-                                                                      "$id": 38,
-                                                                      "$type": "Prowl.Runtime.NodeSystem.NodePort",
-                                                                      "_fieldName": "RenderTexture",
-                                                                      "_node": {
-                                                                        "$id": 36,
-
-                                                                      },
-                                                                      "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                                      "connections": [
-                                                                        {
-                                                                          "$id": 39,
-                                                                          "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
-                                                                          "fieldName": "OutputRT",
-                                                                          "node": {
-                                                                            "$id": 30,
-
-                                                                          },
-                                                                          "InstanceID": 39
-                                                                        }
-                                                                      ],
-                                                                      "_direction": 0,
-                                                                      "_connectionType": 0,
-                                                                      "_typeConstraint": 0,
-                                                                      "_dynamic": false,
-                                                                      "InstanceID": 18
-                                                                    },
-                                                                    "OutputRT": {
-                                                                      "$id": 40,
-                                                                      "$type": "Prowl.Runtime.NodeSystem.NodePort",
-                                                                      "_fieldName": "OutputRT",
-                                                                      "_node": {
-                                                                        "$id": 36,
-
-                                                                      },
-                                                                      "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                                      "connections": [
-                                                                        {
-                                                                          "$id": 41,
-                                                                          "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
-                                                                          "fieldName": "RenderTexture",
-                                                                          "node": {
-                                                                            "$id": 42,
-                                                                            "$type": "Prowl.Runtime.Resources.RenderPipeline.TonemappingNode",
-                                                                            "Contrast": 1.05F,
-                                                                            "Saturation": 1.15F,
-                                                                            "UseTonemapper": 0,
-                                                                            "UseGammaCorrection": true,
-                                                                            "Clear": true,
-                                                                            "graph": {
-                                                                              "$id": 1,
-
-                                                                            },
-                                                                            "position": {
-                                                                              "$id": 43,
-                                                                              "$type": "Prowl.Runtime.Vector2",
-                                                                              "x": 728D,
-                                                                              "y": 53D
-                                                                            },
-                                                                            "ports": {
-                                                                              "RenderTexture": {
-                                                                                "$id": 44,
-                                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort",
-                                                                                "_fieldName": "RenderTexture",
-                                                                                "_node": {
-                                                                                  "$id": 42,
-
-                                                                                },
-                                                                                "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                                                "connections": [
-                                                                                  {
-                                                                                    "$id": 45,
-                                                                                    "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
-                                                                                    "fieldName": "OutputRT",
-                                                                                    "node": {
-                                                                                      "$id": 36,
-
-                                                                                    },
-                                                                                    "InstanceID": 41
-                                                                                  }
-                                                                                ],
-                                                                                "_direction": 0,
-                                                                                "_connectionType": 0,
-                                                                                "_typeConstraint": 0,
-                                                                                "_dynamic": false,
-                                                                                "InstanceID": 21
-                                                                              },
-                                                                              "OutputRT": {
-                                                                                "$id": 46,
-                                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort",
-                                                                                "_fieldName": "OutputRT",
-                                                                                "_node": {
-                                                                                  "$id": 42,
-
-                                                                                },
-                                                                                "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                                                "connections": [
-                                                                                  {
-                                                                                    "$id": 47,
-                                                                                    "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
-                                                                                    "fieldName": "RenderTexture",
-                                                                                    "node": {
-                                                                                      "$id": 48,
-                                                                                      "$type": "Prowl.Runtime.Resources.RenderPipeline.OutputNode",
-                                                                                      "graph": {
-                                                                                        "$id": 1,
-
-                                                                                      },
-                                                                                      "position": {
-                                                                                        "$id": 49,
-                                                                                        "$type": "Prowl.Runtime.Vector2",
-                                                                                        "x": 955D,
-                                                                                        "y": 52D
-                                                                                      },
-                                                                                      "ports": {
-                                                                                        "RenderTexture": {
-                                                                                          "$id": 50,
-                                                                                          "$type": "Prowl.Runtime.NodeSystem.NodePort",
-                                                                                          "_fieldName": "RenderTexture",
-                                                                                          "_node": {
-                                                                                            "$id": 48,
-
-                                                                                          },
-                                                                                          "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-                                                                                          "connections": [
-                                                                                            {
-                                                                                              "$id": 51,
-                                                                                              "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
-                                                                                              "fieldName": "OutputRT",
-                                                                                              "node": {
-                                                                                                "$id": 42,
-
-                                                                                              },
-                                                                                              "InstanceID": 43
-                                                                                            }
-                                                                                          ],
-                                                                                          "_direction": 0,
-                                                                                          "_connectionType": 0,
-                                                                                          "_typeConstraint": 0,
-                                                                                          "_dynamic": false,
-                                                                                          "InstanceID": 27
-                                                                                        }
-                                                                                      },
-                                                                                      "InstanceID": 26
-                                                                                    },
-                                                                                    "InstanceID": 42
-                                                                                  }
-                                                                                ],
-                                                                                "_direction": 1,
-                                                                                "_connectionType": 0,
-                                                                                "_typeConstraint": 0,
-                                                                                "_dynamic": false,
-                                                                                "InstanceID": 22
-                                                                              }
-                                                                            },
-                                                                            "InstanceID": 20
-                                                                          },
-                                                                          "InstanceID": 40
-                                                                        }
-                                                                      ],
-                                                                      "_direction": 1,
-                                                                      "_connectionType": 0,
-                                                                      "_typeConstraint": 0,
-                                                                      "_dynamic": false,
-                                                                      "InstanceID": 19
-                                                                    }
-                                                                  },
-                                                                  "InstanceID": 17
-                                                                },
-                                                                "InstanceID": 38
-                                                              }
-                                                            ],
-                                                            "_direction": 1,
-                                                            "_connectionType": 0,
-                                                            "_typeConstraint": 0,
-                                                            "_dynamic": false,
-                                                            "InstanceID": 16
-                                                          }
-                                                        },
-                                                        "InstanceID": 14
-                                                      },
-                                                      "InstanceID": 36
-                                                    }
-                                                  ],
-                                                  "_direction": 1,
-                                                  "_connectionType": 0,
-                                                  "_typeConstraint": 0,
-                                                  "_dynamic": false,
-                                                  "InstanceID": 25
-                                                }
-                                              },
-                                              "InstanceID": 23
-                                            },
-                                            "InstanceID": 34
-                                          }
                                         ],
                                         "_direction": 1,
                                         "_connectionType": 0,
@@ -541,9 +209,342 @@
                                         "InstanceID": 10
                                       }
                                     },
-                                    "InstanceID": 8
+                                    "InstanceID": 56
                                   },
                                   "InstanceID": 32
+                                },
+                                {
+                                  "$id": 23,
+                                  "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                  "fieldName": "RenderTexture",
+                                  "node": {
+                                    "$id": 24,
+                                    "$type": "Prowl.Runtime.Resources.RenderPipeline.TAANode",
+                                    "Jitter2X": false,
+                                    "Clear": true,
+                                    "graph": {
+                                      "$id": 1,
+
+                                    },
+                                    "position": {
+                                      "$id": 25,
+                                      "$type": "Prowl.Runtime.Vector2",
+                                      "x": 220D,
+                                      "y": 43D
+                                    },
+                                    "ports": {
+                                      "RenderTexture": {
+                                        "$id": 26,
+                                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                        "_fieldName": "RenderTexture",
+                                        "_node": {
+                                          "$id": 24,
+
+                                        },
+                                        "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                        "connections": [
+                                          {
+                                            "$id": 27,
+                                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                            "fieldName": "OutputRT",
+                                            "node": {
+                                              "$id": 12,
+
+                                            },
+                                            "InstanceID": 63
+                                          }
+                                        ],
+                                        "_direction": 0,
+                                        "_connectionType": 0,
+                                        "_typeConstraint": 0,
+                                        "_dynamic": false,
+                                        "InstanceID": 24
+                                      },
+                                      "OutputRT": {
+                                        "$id": 28,
+                                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                        "_fieldName": "OutputRT",
+                                        "_node": {
+                                          "$id": 24,
+
+                                        },
+                                        "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                        "connections": [
+                                          {
+                                            "$id": 29,
+                                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                            "fieldName": "RenderTexture",
+                                            "node": {
+                                              "$id": 30,
+                                              "$type": "Prowl.Runtime.Resources.RenderPipeline.DepthOfFieldNode",
+                                              "FocusStrength": 150F,
+                                              "Quality": 0.05F,
+                                              "BlurRadius": 5,
+                                              "Clear": true,
+                                              "graph": {
+                                                "$id": 1,
+
+                                              },
+                                              "position": {
+                                                "$id": 31,
+                                                "$type": "Prowl.Runtime.Vector2",
+                                                "x": 415D,
+                                                "y": 61D
+                                              },
+                                              "ports": {
+                                                "RenderTexture": {
+                                                  "$id": 32,
+                                                  "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                  "_fieldName": "RenderTexture",
+                                                  "_node": {
+                                                    "$id": 30,
+
+                                                  },
+                                                  "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                  "connections": [
+                                                    {
+                                                      "$id": 33,
+                                                      "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                      "fieldName": "OutputRT",
+                                                      "node": {
+                                                        "$id": 24,
+
+                                                      },
+                                                      "InstanceID": 37
+                                                    }
+                                                  ],
+                                                  "_direction": 0,
+                                                  "_connectionType": 0,
+                                                  "_typeConstraint": 0,
+                                                  "_dynamic": false,
+                                                  "InstanceID": 15
+                                                },
+                                                "OutputRT": {
+                                                  "$id": 34,
+                                                  "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                  "_fieldName": "OutputRT",
+                                                  "_node": {
+                                                    "$id": 30,
+
+                                                  },
+                                                  "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                  "connections": [
+                                                    {
+                                                      "$id": 35,
+                                                      "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                      "fieldName": "RenderTexture",
+                                                      "node": {
+                                                        "$id": 36,
+                                                        "$type": "Prowl.Runtime.Resources.RenderPipeline.BloomNode",
+                                                        "Radius": 10F,
+                                                        "Threshold": 0.5F,
+                                                        "Passes": 10,
+                                                        "Clear": true,
+                                                        "graph": {
+                                                          "$id": 1,
+
+                                                        },
+                                                        "position": {
+                                                          "$id": 37,
+                                                          "$type": "Prowl.Runtime.Vector2",
+                                                          "x": 571D,
+                                                          "y": 80D
+                                                        },
+                                                        "ports": {
+                                                          "RenderTexture": {
+                                                            "$id": 38,
+                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                            "_fieldName": "RenderTexture",
+                                                            "_node": {
+                                                              "$id": 36,
+
+                                                            },
+                                                            "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                            "connections": [
+                                                              {
+                                                                "$id": 39,
+                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                "fieldName": "OutputRT",
+                                                                "node": {
+                                                                  "$id": 30,
+
+                                                                },
+                                                                "InstanceID": 39
+                                                              }
+                                                            ],
+                                                            "_direction": 0,
+                                                            "_connectionType": 0,
+                                                            "_typeConstraint": 0,
+                                                            "_dynamic": false,
+                                                            "InstanceID": 18
+                                                          },
+                                                          "OutputRT": {
+                                                            "$id": 40,
+                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                            "_fieldName": "OutputRT",
+                                                            "_node": {
+                                                              "$id": 36,
+
+                                                            },
+                                                            "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                            "connections": [
+                                                              {
+                                                                "$id": 41,
+                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                "fieldName": "RenderTexture",
+                                                                "node": {
+                                                                  "$id": 42,
+                                                                  "$type": "Prowl.Runtime.Resources.RenderPipeline.TonemappingNode",
+                                                                  "Contrast": 1.05F,
+                                                                  "Saturation": 1.15F,
+                                                                  "UseTonemapper": 0,
+                                                                  "UseGammaCorrection": true,
+                                                                  "Clear": true,
+                                                                  "graph": {
+                                                                    "$id": 1,
+
+                                                                  },
+                                                                  "position": {
+                                                                    "$id": 43,
+                                                                    "$type": "Prowl.Runtime.Vector2",
+                                                                    "x": 728D,
+                                                                    "y": 53D
+                                                                  },
+                                                                  "ports": {
+                                                                    "RenderTexture": {
+                                                                      "$id": 44,
+                                                                      "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                      "_fieldName": "RenderTexture",
+                                                                      "_node": {
+                                                                        "$id": 42,
+
+                                                                      },
+                                                                      "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                      "connections": [
+                                                                        {
+                                                                          "$id": 45,
+                                                                          "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                          "fieldName": "OutputRT",
+                                                                          "node": {
+                                                                            "$id": 36,
+
+                                                                          },
+                                                                          "InstanceID": 41
+                                                                        }
+                                                                      ],
+                                                                      "_direction": 0,
+                                                                      "_connectionType": 0,
+                                                                      "_typeConstraint": 0,
+                                                                      "_dynamic": false,
+                                                                      "InstanceID": 21
+                                                                    },
+                                                                    "OutputRT": {
+                                                                      "$id": 46,
+                                                                      "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                      "_fieldName": "OutputRT",
+                                                                      "_node": {
+                                                                        "$id": 42,
+
+                                                                      },
+                                                                      "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                      "connections": [
+                                                                        {
+                                                                          "$id": 47,
+                                                                          "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                          "fieldName": "RenderTexture",
+                                                                          "node": {
+                                                                            "$id": 48,
+                                                                            "$type": "Prowl.Runtime.Resources.RenderPipeline.OutputNode",
+                                                                            "graph": {
+                                                                              "$id": 1,
+
+                                                                            },
+                                                                            "position": {
+                                                                              "$id": 49,
+                                                                              "$type": "Prowl.Runtime.Vector2",
+                                                                              "x": 955D,
+                                                                              "y": 52D
+                                                                            },
+                                                                            "ports": {
+                                                                              "RenderTexture": {
+                                                                                "$id": 50,
+                                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                "_fieldName": "RenderTexture",
+                                                                                "_node": {
+                                                                                  "$id": 48,
+
+                                                                                },
+                                                                                "_typeQualifiedName": "Prowl.Runtime.RenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                "connections": [
+                                                                                  {
+                                                                                    "$id": 51,
+                                                                                    "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                                    "fieldName": "OutputRT",
+                                                                                    "node": {
+                                                                                      "$id": 42,
+
+                                                                                    },
+                                                                                    "InstanceID": 43
+                                                                                  }
+                                                                                ],
+                                                                                "_direction": 0,
+                                                                                "_connectionType": 0,
+                                                                                "_typeConstraint": 0,
+                                                                                "_dynamic": false,
+                                                                                "InstanceID": 27
+                                                                              }
+                                                                            },
+                                                                            "InstanceID": 61
+                                                                          },
+                                                                          "InstanceID": 42
+                                                                        }
+                                                                      ],
+                                                                      "_direction": 1,
+                                                                      "_connectionType": 0,
+                                                                      "_typeConstraint": 0,
+                                                                      "_dynamic": false,
+                                                                      "InstanceID": 22
+                                                                    }
+                                                                  },
+                                                                  "InstanceID": 59
+                                                                },
+                                                                "InstanceID": 40
+                                                              }
+                                                            ],
+                                                            "_direction": 1,
+                                                            "_connectionType": 0,
+                                                            "_typeConstraint": 0,
+                                                            "_dynamic": false,
+                                                            "InstanceID": 19
+                                                          }
+                                                        },
+                                                        "InstanceID": 58
+                                                      },
+                                                      "InstanceID": 38
+                                                    }
+                                                  ],
+                                                  "_direction": 1,
+                                                  "_connectionType": 0,
+                                                  "_typeConstraint": 0,
+                                                  "_dynamic": false,
+                                                  "InstanceID": 16
+                                                }
+                                              },
+                                              "InstanceID": 57
+                                            },
+                                            "InstanceID": 36
+                                          }
+                                        ],
+                                        "_direction": 1,
+                                        "_connectionType": 0,
+                                        "_typeConstraint": 0,
+                                        "_dynamic": false,
+                                        "InstanceID": 25
+                                      }
+                                    },
+                                    "InstanceID": 60
+                                  },
+                                  "InstanceID": 62
                                 }
                               ],
                               "_direction": 1,
@@ -553,7 +554,7 @@
                               "InstanceID": 7
                             }
                           },
-                          "InstanceID": 5
+                          "InstanceID": 55
                         },
                         "InstanceID": 30
                       }
@@ -565,7 +566,7 @@
                     "InstanceID": 4
                   }
                 },
-                "InstanceID": 2
+                "InstanceID": 54
               },
               "InstanceID": 28
             }
@@ -577,7 +578,7 @@
           "InstanceID": 1
         }
       },
-      "InstanceID": 0
+      "InstanceID": 53
     },
     {
       "$id": 6,
@@ -612,7 +613,7 @@
 
     }
   ],
-  "AssetID": "6008acea-f427-4c6e-82aa-1bf46282675d",
+  "AssetID": "2db28927-a03e-4591-829e-e527f704b721",
   "FileID": 0S,
   "Name": "NewRenderPipeline"
 }
