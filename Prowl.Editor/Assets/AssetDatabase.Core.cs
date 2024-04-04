@@ -252,7 +252,7 @@ namespace Prowl.Editor.Assets
         {
             guid = Guid.Empty;
             ArgumentNullException.ThrowIfNull(file);
-            if (!File.Exists(file.FullName)) throw new FileNotFoundException("File does not exist.", file.FullName);
+            if (!File.Exists(file.FullName)) return false;
             if(assetPathToMeta.TryGetValue(file.FullName, out var meta))
             {
                 guid = meta.guid;
