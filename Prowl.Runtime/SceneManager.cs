@@ -153,5 +153,26 @@ public static class SceneManager
         MainScene.InstantiateScene();
         ForeachComponent((x) => MonoBehaviour.Try(x.Internal_OnLevelWasLoaded));
     }
+
+    /// <summary>
+    /// Search all GameObjects in the scene for the specified one recursively
+    /// </summary>
+    public static bool Has(GameObject original)
+    {
+        foreach (var go in _gameObjects)
+            if (Has(go, original.InstanceID))
+                return true;
+        return false;
+    }
+
+    static bool Has(GameObject curr, int instanceID)
+    {
+        if(curr.InstanceID == instanceID)
+            return true;
+        foreach (var child in curr.children)
+            if (Has(child, instanceID))
+                return true;
+        return false;
+    }
 }
 
