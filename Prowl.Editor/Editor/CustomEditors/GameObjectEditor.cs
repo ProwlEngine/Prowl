@@ -108,8 +108,9 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 ImGui.SameLine();
                 var cType = comp.GetType();
                 if (ImGui.CollapsingHeader(GetComponentDisplayName(cType), ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.OpenOnArrow)) {
-                    HandleComponentContextMenu(go, comp, ref toDelete);
 
+                    DragnDrop.Drag(comp, cType);
+                    HandleComponentContextMenu(go, comp, ref toDelete);
 
                     ImGui.Indent();
                     if (compEditors.TryGetValue(comp.InstanceID, out var editor)) {
@@ -139,6 +140,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 }
                 else
                 {
+                    DragnDrop.Drag(comp, cType);
                     HandleComponentContextMenu(go, comp, ref toDelete);
                 }
 
