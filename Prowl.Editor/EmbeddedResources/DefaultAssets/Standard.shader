@@ -193,7 +193,9 @@ Pass 0
 		vec2 UnjitterTextureUV(vec2 uv, vec2 currentJitterInPixels)
 		{
 		    // Note: We negate the y because UV and screen space run in opposite directions
-		    return uv - ddx_fine(uv) * currentJitterInPixels.x + ddy_fine(uv) * currentJitterInPixels.y;
+			return uv;
+			// return uv - ddx(uv) * currentJitterInPixels.x + ddy(uv) * currentJitterInPixels.y;
+		    // return uv - ddx_fine(uv) * currentJitterInPixels.x + ddy_fine(uv) * currentJitterInPixels.y;
 		}
 
 		float InterleavedGradientNoise(vec2 pixel, int frame) 
