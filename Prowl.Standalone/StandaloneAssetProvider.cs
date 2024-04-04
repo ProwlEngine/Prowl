@@ -24,7 +24,7 @@ public class StandaloneAssetProvider : IAssetProvider
 
     public bool HasAsset(Guid assetID) => _loaded.ContainsKey(assetID);
 
-    public AssetRef<T> LoadAsset<T>(string relativeAssetPath, int fileID = 0) where T : EngineObject
+    public AssetRef<T> LoadAsset<T>(string relativeAssetPath, short fileID = 0) where T : EngineObject
     {
         Guid guid = GetGuidFromPath(relativeAssetPath);
         if (_loaded.ContainsKey(guid))
@@ -38,7 +38,7 @@ public class StandaloneAssetProvider : IAssetProvider
         throw new FileNotFoundException($"Asset with path {relativeAssetPath} not found.");
     }
 
-    public AssetRef<T> LoadAsset<T>(Guid guid, int fileID = 0) where T : EngineObject
+    public AssetRef<T> LoadAsset<T>(Guid guid, short fileID = 0) where T : EngineObject
     {
         if (_loaded.ContainsKey(guid))
             return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID]);
