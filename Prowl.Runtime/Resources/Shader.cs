@@ -90,11 +90,12 @@ namespace Prowl.Runtime
         {
             try
             {
+                Debug.Log($"Compiling Shader {Name}");
                 return Compile(vert, "", frag);
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.Message);
+                Debug.LogError(e.Message);
             }
             var fallbackShader = Find(fallback);
             return fallbackShader.Res.CompilePass(0, []);
