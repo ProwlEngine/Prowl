@@ -272,13 +272,11 @@ namespace Prowl.Editor.Drawers.NodeSystem
                     drawField = input.backingValue == ShowBackingValue.Always || (input.backingValue == ShowBackingValue.Unconnected && !port.IsConnected);
                 if (drawField)
                 {
-                    var value = fieldInfo.GetValue(port.node);
-                    if (PropertyDrawer.Draw(port.fieldName, ref value, port.node.Width))
+                    if (PropertyDrawer.Draw(port.node, fieldInfo, port.node.Width))
                     {
                         changed = true;
                         port.node.OnValidate();
                     }
-                    fieldInfo.SetValue(port.node, value);
                 }
                 else
                 {
