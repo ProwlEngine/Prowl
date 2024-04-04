@@ -52,8 +52,8 @@ public static class EditorGui
         style.Colors[(int)ImGuiCol.WindowBg] = new(0.17f, 0.17f, 0.18f, 1f);
         style.Colors[(int)ImGuiCol.ChildBg] = new(0.17f, 0.17f, 0.18f, 0.00f);
         style.Colors[(int)ImGuiCol.PopupBg] = new(0.17f, 0.17f, 0.18f, 1f);
-        style.Colors[(int)ImGuiCol.Border] = new(0.15f, 0.16f, 0.17f, 1.00f);
-        style.Colors[(int)ImGuiCol.BorderShadow] = new(0.10f, 0.11f, 0.11f, 1.00f);
+        style.Colors[(int)ImGuiCol.Border] = new(0.08f, 0.08f, 0.09f, 1.00f);
+        style.Colors[(int)ImGuiCol.BorderShadow] = new(0.08f, 0.08f, 0.09f, 1.00f);
         style.Colors[(int)ImGuiCol.FrameBg] = new(0.10f, 0.11f, 0.11f, 1.00f);
         style.Colors[(int)ImGuiCol.FrameBgHovered] = HoveredColor;
         style.Colors[(int)ImGuiCol.FrameBgActive] = new(0.10f, 0.11f, 0.11f, 1.00f);
@@ -112,7 +112,7 @@ public static class EditorGui
         style.ScrollbarSize = 10.0f;
         style.GrabMinSize = 10.0f;
 
-        style.WindowBorderSize = 0.0f;
+        style.WindowBorderSize = 4.0f;
         style.ChildBorderSize = 0.0f;
         style.PopupBorderSize = 0.0f;
         style.FrameBorderSize = 0.0f;

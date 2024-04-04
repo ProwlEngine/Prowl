@@ -15,10 +15,20 @@ public abstract class PropertyDrawer {
     public static bool Draw(object container, FieldInfo fieldInfo, float width = -1, string? label = null)
     {
         if (fieldInfo == null) return false;
+
+        if (Attribute.IsDefined(fieldInfo, typeof(HideInInspectorAttribute)))
+            return false;
+
+        var attributes = fieldInfo.GetCustomAttributes(true);
+        var imGuiAttributes = attributes.Where(attr => attr is IImGUIAttri).Cast<IImGUIAttri>();
+        EditorGui.HandleBeginImGUIAttributes(imGuiAttributes);
+
         if (width == -1) width = ImGui.GetContentRegionAvail().X;
         var value = fieldInfo.GetValue(container);
         bool changed = Draw(label ?? fieldInfo.Name, ref value, width);
         if (changed) fieldInfo.SetValue(container, value);
+
+        EditorGui.HandleEndImGUIAttributes(imGuiAttributes);
         return changed;
     }
 

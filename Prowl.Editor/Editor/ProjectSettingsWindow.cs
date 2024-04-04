@@ -96,23 +96,12 @@ public abstract class SingletonEditorWindow : EditorWindow
         FieldInfo[] fields = setting.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public);
         foreach (var field in fields)
         {
-            // Dont render if the field has the Hide attribute
-            if (!Attribute.IsDefined(field, typeof(HideInInspectorAttribute)))
+            // Draw the field using PropertyDrawer.Draw
+            if (PropertyDrawer.Draw(setting, field))
             {
-                var attributes = field.GetCustomAttributes(true);
-                var imGuiAttributes = attributes.Where(attr => attr is IImGUIAttri).Cast<IImGUIAttri>();
-
-                EditorGui.HandleBeginImGUIAttributes(imGuiAttributes);
-
-                // Draw the field using PropertyDrawer.Draw
-                if (PropertyDrawer.Draw(setting, field))
-                {
-                    // Use reflection to find a method "protected void Save()"
-                    MethodInfo? saveMethod = setting.GetType().GetMethod("Save", BindingFlags.Instance | BindingFlags.Public);
-                    saveMethod?.Invoke(setting, null);
-                }
-
-                EditorGui.HandleEndImGUIAttributes(imGuiAttributes);
+                // Use reflection to find a method "protected void Save()"
+                MethodInfo? saveMethod = setting.GetType().GetMethod("Save", BindingFlags.Instance | BindingFlags.Public);
+                saveMethod?.Invoke(setting, null);
             }
         }
 

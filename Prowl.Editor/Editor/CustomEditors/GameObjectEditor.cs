@@ -129,8 +129,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                     FieldInfo[] fields = cType.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                     foreach (var field in fields.Where(field => field.IsPublic || Attribute.IsDefined(field, typeof(SerializeFieldAttribute))))
-                        if (!Attribute.IsDefined(field, typeof(HideInInspectorAttribute)))
-                            HandleComponentField(comp, field);
+                        if (PropertyDrawer.Draw(comp, field))
+                            comp.OnValidate();
 
                     // Draw any Buttons
                     EditorGui.HandleAttributeButtons(comp);
@@ -172,18 +172,6 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     compEditors[key].OnDisable();
                     compEditors.Remove(key);
                 }
-        }
-
-        private static void HandleComponentField(MonoBehaviour comp, FieldInfo field)
-        {
-            var attributes = field.GetCustomAttributes(true);
-            var imGuiAttributes = attributes.Where(attr => attr is IImGUIAttri).Cast<IImGUIAttri>();
-            EditorGui.HandleBeginImGUIAttributes(imGuiAttributes);
-
-            if (PropertyDrawer.Draw(comp, field))
-                comp.OnValidate();
-
-            EditorGui.HandleEndImGUIAttributes(imGuiAttributes);
         }
 
         #region Add Component Popup

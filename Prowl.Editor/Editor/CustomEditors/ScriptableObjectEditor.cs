@@ -27,19 +27,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                 foreach (var field in fields)
                 {
-                    // Dont render if the field has the Hide attribute
-                    if (!Attribute.IsDefined(field, typeof(HideInInspectorAttribute)))
-                    {
-                        var attributes = field.GetCustomAttributes(true);
-                        var imGuiAttributes = attributes.Where(attr => attr is IImGUIAttri).Cast<IImGUIAttri>();
-
-                        EditorGui.HandleBeginImGUIAttributes(imGuiAttributes);
-
-                        // Draw the field using PropertyDrawer.Draw
-                        changed |= PropertyDrawer.Draw(scriptObject, field);
-
-                        EditorGui.HandleEndImGUIAttributes(imGuiAttributes);
-                    }
+                    // Draw the field using PropertyDrawer.Draw
+                    changed |= PropertyDrawer.Draw(scriptObject, field);
                 }
 
                 // Draw any Buttons
