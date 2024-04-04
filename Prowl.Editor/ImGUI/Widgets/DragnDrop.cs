@@ -8,13 +8,13 @@ namespace Prowl.Editor.ImGUI.Widgets
     public static class DragnDrop
     {
         private static object[] draggedObject;
+        private static string payloadTag = "";
 
 
-        public static bool Peek<T>(out T? payload)
+        public static bool Peek<T>(out T? payload, string tag = "")
         {
             payload = default;
-            if (draggedObject == null) return false;
-            if (Peek(out var objPayload, typeof(T)))
+            if (Peek(out var objPayload, typeof(T), tag))
             {
                 payload = (T)objPayload;
                 return true;
@@ -25,10 +25,12 @@ namespace Prowl.Editor.ImGUI.Widgets
         /// <summary>
         /// Peek at what object you would receive if you were to call Drop<T>
         /// </summary>
-        public static bool Peek(out object? payload, Type type)
+        public static bool Peek(out object? payload, Type type, string tag = "")
         {
             payload = default;
             if (draggedObject == null) return false;
+            bool hasTag = !string.IsNullOrEmpty(tag);
+            if(hasTag && payloadTag != tag) return false;
             if (ImGui.BeginDragDropTarget())
             {
                 foreach (var obj in draggedObject)
@@ -43,11 +45,10 @@ namespace Prowl.Editor.ImGUI.Widgets
             return false;
         }
 
-        public static bool Drop<T>(out T? payload)
+        public static bool Drop<T>(out T? payload, string tag = "")
         {
             payload = default;
-            if (draggedObject == null) return false;
-            if (Drop(out var objPayload, typeof(T)))
+            if (Drop(out var objPayload, typeof(T), tag))
             {
                 payload = (T)objPayload;
                 return true;
@@ -55,10 +56,12 @@ namespace Prowl.Editor.ImGUI.Widgets
             return false;
         }
 
-        public static bool Drop(out object? payload, Type type)
+        public static bool Drop(out object? payload, Type type, string tag = "")
         {
             payload = default;
             if (draggedObject == null) return false;
+            bool hasTag = !string.IsNullOrEmpty(tag);
+            if (hasTag && payloadTag != tag) return false;
 
             if (ImGui.BeginDragDropTarget())
             {
@@ -75,6 +78,8 @@ namespace Prowl.Editor.ImGUI.Widgets
                     if (!entityPayload.IsNull)
                     {
                         payload = target;
+                        draggedObject = null;
+                        payloadTag = "";
                         ImGui.EndDragDropTarget();
                         return true;
                     }
@@ -85,13 +90,16 @@ namespace Prowl.Editor.ImGUI.Widgets
             return false;
         }
 
-        public static bool Drag(params object[] objs)
+        public static bool Drag(params object[] objs) => Drag("", objs);
+
+        public static bool Drag(string tag = "", params object[] objs)
         {
             // Remove Nulls
             objs = objs.Where(o => o != null).ToArray();
             if (ImGui.BeginDragDropSource())
             {
                 draggedObject = objs;
+                payloadTag = tag;
                 unsafe { ImGui.SetDragDropPayload("heheboobies", null, 0); }
                 // Constract a name from all the types
                 string name = "";
