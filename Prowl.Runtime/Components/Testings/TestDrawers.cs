@@ -17,11 +17,11 @@ public class TestDrawers : MonoBehaviour
     public bool aBool;
     public string aString;
     public MeshRenderer aMeshRenderer;
-    public Mesh aMesh;
+    public Camera aCamera;
     public Material aMaterial;
     public GameObject aGameObject;
 
-    public float[] floats = new float[2];
+    public float[] aFloats = new float[2];
 
     // Struct
     public struct TestStruct
