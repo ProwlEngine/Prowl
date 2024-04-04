@@ -4,7 +4,7 @@ using System.Reflection;
 
 namespace Prowl.Runtime.NodeSystem
 {
-
+    [Serializable]
     public class NodePort
     {
         public enum IO { Input, Output }

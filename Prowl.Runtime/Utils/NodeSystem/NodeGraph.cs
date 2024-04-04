@@ -114,10 +114,6 @@ namespace Prowl.Runtime.NodeSystem
 
         public void OnBeforeSerialize() { }
 
-        public void PostSerialize() { }
-
-        public void PreDeserialize() { }
-
         public void OnAfterDeserialize()
         {
             // Clear null nodes

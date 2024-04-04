@@ -40,12 +40,23 @@ namespace Prowl.Runtime
 
         public static FieldInfo[] GetSerializableFields(object target)
         {
-            FieldInfo[] fields = target.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            FieldInfo[] fields = GetAllFields(target.GetType()).ToArray();
             // Only allow Publics or ones with SerializeField
-            fields = fields.Where(field => field.IsPublic || Attribute.IsDefined(field, typeof(SerializeFieldAttribute))).ToArray();
+            fields = fields.Where(field => (field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() != null) && field.GetCustomAttribute<SerializeIgnoreAttribute>() == null).ToArray();
             // Remove Public NonSerialized fields
             fields = fields.Where(field => !field.IsPublic || field.GetCustomAttribute<NonSerializedAttribute>() == null).ToArray();
             return fields;
+        }
+
+        public static IEnumerable<FieldInfo> GetAllFields(Type? t)
+        {
+            if (t == null)
+                return Enumerable.Empty<FieldInfo>();
+
+            BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic |
+                                 BindingFlags.Instance | BindingFlags.DeclaredOnly;
+
+            return t.GetFields(flags).Concat(GetAllFields(t.BaseType));
         }
 
         public static object? GetValue(this MemberInfo member, object? target)
