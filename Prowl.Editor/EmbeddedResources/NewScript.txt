@@ -2,12 +2,12 @@
 
 public class %SCRIPTNAME% : MonoBehaviour
 {
-	public void Start()
+	public override void Start()
 	{
 		Debug.Log("Start");
 	}
 
-	public void Update()
+	public override void Update()
 	{
 		Debug.Log("Update");
 	}
