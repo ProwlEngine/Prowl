@@ -1,5 +1,6 @@
 ﻿using Prowl.Icons;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace Prowl.Runtime.Components.Testings
 {
@@ -7,33 +8,53 @@ namespace Prowl.Runtime.Components.Testings
     public class VoxelChunk : MonoBehaviour
     {
 
+        public int resolution = 32;
+
+        private Mesh mesh;
+
+        [ImGUIButton("Mesh")]
         public override void Awake()
         {
             // native arrays (Unity will auto dispose NativeArrays that are allocated in a job)
-            var indices = new List<uint>();
-            var vertices = new List<System.Numerics.Vector3>();
-            var uv = new List<System.Numerics.Vector2>();
+            var indices = new List<uint>(100000);
+            var vertices = new List<System.Numerics.Vector3>(100000);
+            var uv = new List<System.Numerics.Vector2>(100000);
 
             // variables
-            var size = new Vector3(16, 16, 16);
+            var size = new Vector3(resolution, resolution, resolution);
             var bounds = new Bounds(size / 2, size);
 
             // meshing offsets
             int vertexOffset = 0;
 
-            for (int x = 0; x < 16; x++)
+            bool[,,] isAirCache = new bool[resolution + 2, resolution + 2, resolution + 2];
+
+            // Populate the isAirCache array
+            for (int x = 0; x < resolution; x++)
             {
-                for (int y = 0; y < 16; y++)
+                for (int y = 0; y < resolution; y++)
                 {
-                    for (int z = 0; z < 16; z++)
+                    for (int z = 0; z < resolution; z++)
+                    {
+                        isAirCache[x + 1, y + 1, z + 1] = IsAir(x, y, z);
+                    }
+                }
+            }
+
+
+            for (int x = 0; x < resolution; x++)
+            {
+                for (int y = 0; y < resolution; y++)
+                {
+                    for (int z = 0; z < resolution; z++)
                     {
                         Vector3 localPosition = new Vector3(x, y, z);
-                        if (!IsAir(x, y, z))
+                        if (!isAirCache[x + 1, y + 1, z + 1])
                         {
                             for (int side = 0; side < 6; side++)
                             {
                                 Vector3 neighborBlock = Neighbors[side];
-                                if (IsAir(x + neighborBlock.x, y + neighborBlock.y, z + neighborBlock.z))
+                                if (isAirCache[x + (int)neighborBlock.x + 1, y + (int)neighborBlock.y + 1, z + (int)neighborBlock.z + 1])
                                 {
                                     // Quad vertices
                                     int[] sideVertices = QuadVertices[side];
@@ -49,12 +70,12 @@ namespace Prowl.Runtime.Components.Testings
                                     uv.Add(TexCoords[3]);
 
                                     // 0 1 2 2 1 3 <- Indice numbers
-                                    indices.Add((ushort)(vertexOffset + 0));
-                                    indices.Add((ushort)(vertexOffset + 1));
-                                    indices.Add((ushort)(vertexOffset + 2));
-                                    indices.Add((ushort)(vertexOffset + 2));
-                                    indices.Add((ushort)(vertexOffset + 1));
-                                    indices.Add((ushort)(vertexOffset + 3));
+                                    indices.Add((uint)(vertexOffset + 0));
+                                    indices.Add((uint)(vertexOffset + 1));
+                                    indices.Add((uint)(vertexOffset + 2));
+                                    indices.Add((uint)(vertexOffset + 2));
+                                    indices.Add((uint)(vertexOffset + 1));
+                                    indices.Add((uint)(vertexOffset + 3));
 
                                     vertexOffset += 4;
                                 }
@@ -64,19 +85,28 @@ namespace Prowl.Runtime.Components.Testings
                 }
             }
 
-            Mesh mesh = new();
+            mesh ??= new();
+            mesh.Clear();
 
-            mesh.Indices = indices.ToArray();
-            mesh.UV = uv.ToArray();
             mesh.Vertices = vertices.ToArray();
+            mesh.UV = uv.ToArray();
+            mesh.Indices = indices.ToArray();
 
             mesh.RecalculateNormals();
             mesh.RecalculateTangents();
             mesh.Upload();
 
-            // set mesh
-            GetComponent<MeshRenderer>().Mesh = mesh;
+        }
 
+        [ImGUIButton("Assign Mesh")]
+        public void AssignMesh()
+        {
+            if (mesh == null)
+            {
+                mesh = new Mesh();
+            }
+
+            GetComponent<MeshRenderer>().Mesh = mesh;
         }
 
         private bool IsAir(double v1, double v2, double v3)
