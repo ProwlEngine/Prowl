@@ -22,9 +22,15 @@ public abstract class PropertyDrawer {
         var attributes = fieldInfo.GetCustomAttributes(true);
         var imGuiAttributes = attributes.Where(attr => attr is IImGUIAttri).Cast<IImGUIAttri>();
         EditorGui.HandleBeginImGUIAttributes(imGuiAttributes);
-
         if (width == -1) width = ImGui.GetContentRegionAvail().X;
+
         var value = fieldInfo.GetValue(container);
+        if (value == null)
+        {
+            CreateInstanceButton(label ?? fieldInfo.Name, width);
+            return false;
+        }
+
         bool changed = Draw(label ?? fieldInfo.Name, ref value, width);
         if (changed) fieldInfo.SetValue(container, value);
 
@@ -36,12 +42,27 @@ public abstract class PropertyDrawer {
     {
         if (propertyInfo == null) return false;
         if (width == -1) width = ImGui.GetContentRegionAvail().X;
+
         var value = propertyInfo.GetValue(container);
+        if (value == null)
+        {
+            CreateInstanceButton(label ?? propertyInfo.Name, width);
+            return false;
+        }
+
         bool changed = Draw(label ?? propertyInfo.Name, ref value, width);
         if (changed) propertyInfo.SetValue(container, value);
         return changed;
     }
 
+    private static void CreateInstanceButton(string name, float width)
+    {
+        float w = width;
+        DrawLabel(name, ref w);
+        ImGui.SetNextItemWidth(width);
+        ImGui.TextDisabled("null");
+        ImGui.Columns(1);
+    }
 
     public static bool Draw(string label, ref object value, float width = -1)
     {
