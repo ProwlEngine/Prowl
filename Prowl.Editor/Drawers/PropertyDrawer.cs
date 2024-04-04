@@ -99,7 +99,7 @@ public abstract class PropertyDrawer {
                 var fields = RuntimeUtils.GetSerializableFields(value);
                 if (fields.Length != 0)
                 {
-                    if (ImGui.CollapsingHeader(label, ImGuiTreeNodeFlags.None))
+                    if (ImGui.TreeNode(label))
                     {
                         ImGui.Indent();
                         foreach (var field in fields)
@@ -107,6 +107,7 @@ public abstract class PropertyDrawer {
                         ImGui.Unindent();
 
                         changed |= EditorGui.HandleAttributeButtons(value);
+                        ImGui.TreePop();
                     }
                 }
             }
