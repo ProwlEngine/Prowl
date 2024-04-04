@@ -110,6 +110,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                     HandleComponentContextMenu(go, comp, ref toDelete);
 
+                    ImGui.Indent();
                     if (compEditors.TryGetValue(comp.InstanceID, out var editor)) {
                         editor.OnInspectorGUI();
                         goto EndComponent;
@@ -130,6 +131,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     foreach (var field in RuntimeUtils.GetSerializableFields(comp))
                         if (PropertyDrawer.Draw(comp, field))
                             comp.OnValidate();
+                    ImGui.Unindent();
 
                     // Draw any Buttons
                     EditorGui.HandleAttributeButtons(comp);
