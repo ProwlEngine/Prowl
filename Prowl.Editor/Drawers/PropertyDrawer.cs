@@ -62,13 +62,33 @@ public abstract class PropertyDrawer {
         }
         else
         {
-            // Last Resort
+            // Look for an Editor for a Base Type
+            bool found = false;
             foreach (KeyValuePair<Type, PropertyDrawer> pair in _propertyDrawerLookup)
                 if (pair.Key.IsAssignableFrom(objType))
                 {
+                    found = true;
                     changed = pair.Value.Draw_Internal(label, ref value, width);
                     break;
                 }
+
+            if (!found)
+            {
+                // Nothing found, Lets just draw the object ourselves with a "Default" drawer
+                var fields = RuntimeUtils.GetSerializableFields(value);
+                if (fields.Length != 0)
+                {
+                    if (ImGui.CollapsingHeader(label, ImGuiTreeNodeFlags.None))
+                    {
+                        ImGui.Indent();
+                        foreach (var field in fields)
+                            changed |= Draw(value, field);
+                        ImGui.Unindent();
+
+                        changed |= EditorGui.HandleAttributeButtons(value);
+                    }
+                }
+            }
         }
         ImGui.PopID();
         return changed;
