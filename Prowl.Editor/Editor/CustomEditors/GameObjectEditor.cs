@@ -1,5 +1,6 @@
 ﻿using Hexa.NET.ImGui;
 using Prowl.Editor.Assets;
+using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Editor.Utilities;
 using Prowl.Runtime;
@@ -107,8 +108,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 ImGui.SameLine();
                 var cType = comp.GetType();
                 if (ImGui.CollapsingHeader(GetComponentDisplayName(cType), ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.OpenOnArrow)) {
-
                     HandleComponentContextMenu(go, comp, ref toDelete);
+
 
                     ImGui.Indent();
                     if (compEditors.TryGetValue(comp.InstanceID, out var editor)) {
@@ -135,6 +136,10 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                     // Draw any Buttons
                     EditorGui.HandleAttributeButtons(comp);
+                }
+                else
+                {
+                    HandleComponentContextMenu(go, comp, ref toDelete);
                 }
 
                 EndComponent:;
