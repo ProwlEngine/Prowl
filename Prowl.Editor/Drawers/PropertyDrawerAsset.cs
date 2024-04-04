@@ -4,7 +4,6 @@ using Prowl.Editor.EditorWindows;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
-using System.IO;
 
 namespace Prowl.Editor.PropertyDrawers;
 
