@@ -21,6 +21,10 @@ namespace Prowl.Runtime
 
         public static void Polygon(Vector3[] points, Color color, bool closed = false) => Add(new PolygonGizmo(points, color, closed));
 
+        public static void Cylinder(Color color) => Add(new CylinderGizmo(color));
+
+        public static void Capsule(Color color) => Add(new CapsuleGizmo(color));
+
 
         public static void Circle(Color color) => Add(new CircleGizmo(color));
         public static void DirectionalLight(Color color) => Add(new DirectionalLightGizmo(color));
@@ -218,6 +222,120 @@ namespace Prowl.Runtime
             batch.Line(Pos(points[1]), Pos(points[5]), color, color);
             batch.Line(Pos(points[2]), Pos(points[6]), color, color);
             batch.Line(Pos(points[3]), Pos(points[7]), color, color);
+        }
+    }
+
+    public class CylinderGizmo(Vector4 color) : Gizmo
+    {
+        public override void Render(PrimitiveBatch batch, Matrix4x4 m)
+        {
+            base.matrix = m;
+
+            int numSegments = 12;  // Adjust for smoother or more segmented circle
+
+            for (int i = 0; i < numSegments; i++)
+            {
+                float angle = (float)i / numSegments * 2f * MathF.PI;
+                float angle2 = (float)(i + 1) / numSegments * 2f * MathF.PI;
+
+                Vector3 point1 = new Vector3(MathF.Cos(angle), -1f, MathF.Sin(angle)) * 0.5;
+                Vector3 point2 = new Vector3(MathF.Cos(angle2), -1f, MathF.Sin(angle2)) * 0.5;
+                Vector3 point3 = new Vector3(MathF.Cos(angle), 1f, MathF.Sin(angle)) * 0.5;
+                Vector3 point4 = new Vector3(MathF.Cos(angle2), 1f, MathF.Sin(angle2)) * 0.5;
+
+                batch.Line(Pos(point1), Pos(point2), color, color);
+                batch.Line(Pos(point3), Pos(point4), color, color);
+                batch.Line(Pos(point1), Pos(point3), color, color);
+            }
+        }
+    }
+
+    public class CapsuleGizmo(Vector4 color) : Gizmo
+    {
+        public override void Render(PrimitiveBatch batch, Matrix4x4 m)
+        {
+            base.matrix = m;
+
+            int numSegments = 12;  // Adjust for smoother or more segmented circle
+
+            // Draw the cylinder part
+            for (int i = 0; i < numSegments; i++)
+            {
+                float angle = (float)i / numSegments * 2f * MathF.PI;
+                float angle2 = (float)(i + 1) / numSegments * 2f * MathF.PI;
+
+                Vector3 point1 = new Vector3(MathF.Cos(angle), -1f, MathF.Sin(angle)) * 0.5;
+                Vector3 point2 = new Vector3(MathF.Cos(angle2), -1f, MathF.Sin(angle2)) * 0.5;
+                Vector3 point3 = new Vector3(MathF.Cos(angle), 1f, MathF.Sin(angle)) * 0.5;
+                Vector3 point4 = new Vector3(MathF.Cos(angle2), 1f, MathF.Sin(angle2)) * 0.5;
+
+                batch.Line(Pos(point1), Pos(point2), color, color);
+                batch.Line(Pos(point3), Pos(point4), color, color);
+                batch.Line(Pos(point1), Pos(point3), color, color);
+            }
+
+            // Draw the Top Half Sphere
+            Matrix4x4 topMatrix = Matrix4x4.CreateTranslation(0f, 0.5f, 0f) * m;
+            base.matrix = topMatrix;
+            DrawHalfSphere(batch, color, true);
+
+            // Draw the Bottom Half Sphere
+            Matrix4x4 bottomMatrix = Matrix4x4.CreateTranslation(0f, -0.5f, 0f) * m;
+            base.matrix = bottomMatrix;
+            DrawHalfSphere(batch, color, false);
+        }
+
+        private void DrawHalfSphere(PrimitiveBatch batch, Vector4 color, bool isTop)
+        {
+            int numSegments = 12; // Adjust for smoother or more segmented circle
+
+            float angleStart = isTop ? 0f : (float)Math.PI;
+            float angleEnd = isTop ? (float)Math.PI / 2f : (float)Math.PI * 3f / 2f;
+
+            for (int i = 0; i < numSegments / 4; i++)
+            {
+                float angle1 = angleStart + (float)i / (numSegments / 4) * (angleEnd - angleStart);
+                float angle2 = angleStart + (float)(i + 1) / (numSegments / 4) * (angleEnd - angleStart);
+
+                for (int j = 0; j < numSegments; j++)
+                {
+                    float longitude = (float)j / numSegments * 2f * MathF.PI;
+                    float longitude2 = (float)(j + 1) / numSegments * 2f * MathF.PI;
+
+                    Vector3 point1 = new Vector3(
+                        MathF.Sin(angle1) * MathF.Cos(longitude),
+                        MathF.Cos(angle1),
+                        MathF.Sin(angle1) * MathF.Sin(longitude)) * 0.5f;
+
+                    Vector3 point2 = new Vector3(
+                        MathF.Sin(angle1) * MathF.Cos(longitude2),
+                        MathF.Cos(angle1),
+                        MathF.Sin(angle1) * MathF.Sin(longitude2)) * 0.5f;
+
+                    Vector3 point3 = new Vector3(
+                        MathF.Sin(angle2) * MathF.Cos(longitude),
+                        MathF.Cos(angle2),
+                        MathF.Sin(angle2) * MathF.Sin(longitude)) * 0.5f;
+
+                    Vector3 point4 = new Vector3(
+                        MathF.Sin(angle2) * MathF.Cos(longitude2),
+                        MathF.Cos(angle2),
+                        MathF.Sin(angle2) * MathF.Sin(longitude2)) * 0.5f;
+
+                    batch.Line(Pos(point1), Pos(point2), color, color);
+                    batch.Line(Pos(point1), Pos(point3), color, color);
+
+                    // Connect top and bottom rings
+                    if (isTop)
+                    {
+                        batch.Line(Pos(point2), Pos(point4), color, color);
+                    }
+                    else
+                    {
+                        batch.Line(Pos(point3), Pos(point4), color, color);
+                    }
+                }
+            }
         }
     }
 
