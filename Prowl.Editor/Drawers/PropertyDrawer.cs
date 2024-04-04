@@ -100,6 +100,19 @@ public abstract class PropertyDrawer {
         }
     }
 
+
+    protected static void DrawLabel(string label, ref float width)
+    {
+        ImGui.Columns(2, false);
+        ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.8f, 0.8f, 0.8f, 1f));
+        ImGui.Text(RuntimeUtils.Prettify(label));
+        ImGui.PopStyleColor();
+        var w = width / 2.5f;
+        ImGui.SetColumnWidth(0, w);
+        width -= w;
+        ImGui.NextColumn();
+    }
+
 }
 
 public abstract class PropertyDrawer<T> : PropertyDrawer {
@@ -121,16 +134,4 @@ public abstract class PropertyDrawer<T> : PropertyDrawer {
     }
     
     protected abstract bool Draw(string label, ref T? value, float width);
-    
-    protected void DrawLabel(string label, ref float width)
-    {
-        ImGui.Columns(2, false);
-        ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.8f, 0.8f, 0.8f, 1f));
-        ImGui.Text(RuntimeUtils.Prettify(label));
-        ImGui.PopStyleColor();
-        var w = width / 2.5f;
-        ImGui.SetColumnWidth(0, w);
-        width -= w;
-        ImGui.NextColumn();
-    }
 }
