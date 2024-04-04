@@ -127,8 +127,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         }
                     }
 
-                    FieldInfo[] fields = cType.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                    foreach (var field in fields.Where(field => field.IsPublic || Attribute.IsDefined(field, typeof(SerializeFieldAttribute))))
+                    foreach (var field in RuntimeUtils.GetSerializableFields(comp))
                         if (PropertyDrawer.Draw(comp, field))
                             comp.OnValidate();
 

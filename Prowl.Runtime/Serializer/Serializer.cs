@@ -201,12 +201,8 @@ namespace Prowl.Runtime
             }
             else
             {
-                // Automatic Serializer
-                var properties = GetAllFields(type).Where(field => (field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() != null) && field.GetCustomAttribute<SerializeIgnoreAttribute>() == null);
-                // If public and has System.NonSerializedAttribute then ignore
-                properties = properties.Where(field => !field.IsPublic || field.GetCustomAttribute<NonSerializedAttribute>() == null);
-
-                foreach (var field in properties)
+                // Auto Serialization
+                foreach (var field in RuntimeUtils.GetSerializableFields(value))
                 {
                     string name = field.Name;
 
@@ -351,12 +347,7 @@ namespace Prowl.Runtime
             }
             else
             {
-                FieldInfo[] fields = GetAllFields(into.GetType()).ToArray();
-
-                var properties = fields.Where(field => (field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() != null) && field.GetCustomAttribute<SerializeIgnoreAttribute>() == null);
-                // If public and has System.NonSerializedAttribute then ignore
-                properties = properties.Where(field => !field.IsPublic || field.GetCustomAttribute<NonSerializedAttribute>() == null);
-                foreach (var field in properties)
+                foreach (var field in RuntimeUtils.GetSerializableFields(into))
                 {
                     string name = field.Name;
 

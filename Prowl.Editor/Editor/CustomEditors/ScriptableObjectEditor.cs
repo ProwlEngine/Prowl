@@ -20,16 +20,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                 ScriptableObject scriptObject = Serializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile((target as MetaFile).AssetPath));
 
-                FieldInfo[] fields = scriptObject.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-
-                // Private fields need to have the SerializeField attribute
-                fields = fields.Where(field => field.IsPublic || Attribute.IsDefined(field, typeof(SerializeFieldAttribute))).ToArray();
-
-                foreach (var field in fields)
-                {
-                    // Draw the field using PropertyDrawer.Draw
+                foreach (var field in RuntimeUtils.GetSerializableFields(scriptObject))
                     changed |= PropertyDrawer.Draw(scriptObject, field);
-                }
 
                 // Draw any Buttons
                 changed |= EditorGui.HandleAttributeButtons(scriptObject);
