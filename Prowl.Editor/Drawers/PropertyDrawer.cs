@@ -1,8 +1,8 @@
 using Hexa.NET.ImGui;
+using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Editor.Utilities;
 using Prowl.Runtime;
 using System.Reflection;
-using System.Text;
 namespace Prowl.Editor.PropertyDrawers;
 
 public abstract class PropertyDrawer {
@@ -11,6 +11,33 @@ public abstract class PropertyDrawer {
     protected internal abstract Type PropertyType { get; }
     protected internal abstract bool Draw_Internal(string label, ref object value, float width);
 
+
+    public static void ClearLookUp()
+    {
+        _propertyDrawerLookup.Clear();
+    }
+
+    public static void GenerateLookUp()
+    {
+        _propertyDrawerLookup.Clear();
+        foreach (Assembly editorAssembly in EditorApplication.Instance.ExternalAssemblies.Append(typeof(EditorApplication).Assembly))
+        {
+            List<Type> derivedTypes = EditorUtils.GetDerivedTypes(typeof(PropertyDrawer<>), editorAssembly);
+            foreach (Type type in derivedTypes)
+            {
+                try
+                {
+                    PropertyDrawer propertyDrawer = Activator.CreateInstance(type) as PropertyDrawer ?? throw new NullReferenceException();
+                    if (!_propertyDrawerLookup.TryAdd(propertyDrawer.PropertyType, propertyDrawer))
+                        Debug.LogWarning($"Failed to register property drawer for {type.ToString()}");
+                }
+                catch
+                {
+                    Debug.LogWarning($"Failed to register property drawer for {type.ToString()}");
+                }
+            }
+        }
+    }
 
     public static bool Draw(object container, FieldInfo fieldInfo, float width = -1, string? label = null)
     {
@@ -24,14 +51,17 @@ public abstract class PropertyDrawer {
         EditorGui.HandleBeginImGUIAttributes(imGuiAttributes);
         if (width == -1) width = ImGui.GetContentRegionAvail().X;
 
+        if (fieldInfo.FieldType.IsAssignableTo(typeof(EngineObject)))
+            return DrawEngineObjectField(container, label ?? fieldInfo.Name, fieldInfo, ref width);
+
         var value = fieldInfo.GetValue(container);
         if (value == null)
         {
-            CreateInstanceButton(label ?? fieldInfo.Name, width);
+            DrawNullField(label ?? fieldInfo.Name, width);
             return false;
         }
 
-        bool changed = Draw(label ?? fieldInfo.Name, ref value, width);
+        bool changed = Draw(label ?? fieldInfo.Name, ref value, fieldInfo.FieldType, width);
         if (changed) fieldInfo.SetValue(container, value);
 
         EditorGui.HandleEndImGUIAttributes(imGuiAttributes);
@@ -46,29 +76,18 @@ public abstract class PropertyDrawer {
         var value = propertyInfo.GetValue(container);
         if (value == null)
         {
-            CreateInstanceButton(label ?? propertyInfo.Name, width);
+            DrawNullField(label ?? propertyInfo.Name, width);
             return false;
         }
 
-        bool changed = Draw(label ?? propertyInfo.Name, ref value, width);
+        bool changed = Draw(label ?? propertyInfo.Name, ref value, propertyInfo.PropertyType, width);
         if (changed) propertyInfo.SetValue(container, value);
         return changed;
     }
 
-    private static void CreateInstanceButton(string name, float width)
+    protected static bool Draw(string label, ref object value, Type objType, float width = -1)
     {
-        float w = width;
-        DrawLabel(name, ref w);
-        ImGui.SetNextItemWidth(width);
-        ImGui.TextDisabled("null");
-        ImGui.Columns(1);
-    }
-
-    public static bool Draw(string label, ref object value, float width = -1)
-    {
-        if (value == null) return false;
         if (width == -1) width = ImGui.GetContentRegionAvail().X;
-        var objType = value.GetType();
         bool changed = false;
         ImGui.PushID(label);
         PropertyDrawer? propertyDrawer;
@@ -115,33 +134,48 @@ public abstract class PropertyDrawer {
         ImGui.PopID();
         return changed;
     }
-    
-    public static void ClearLookUp() {
-        _propertyDrawerLookup.Clear();
-    }
 
-    public static void GenerateLookUp()
+    protected static bool DrawEngineObjectField(object container, string label, FieldInfo field, ref float width)
     {
-        _propertyDrawerLookup.Clear();
-        foreach (Assembly editorAssembly in EditorApplication.Instance.ExternalAssemblies.Append(typeof(EditorApplication).Assembly))
+        bool changed = false;
+        DrawLabel(label, ref width);
+
+        EngineObject value = (EngineObject)field.GetValue(container);
+        if (value == null)
         {
-            List<Type> derivedTypes = EditorUtils.GetDerivedTypes(typeof(PropertyDrawer<>), editorAssembly);
-            foreach (Type type in derivedTypes)
-            {
-                try
-                {
-                    PropertyDrawer propertyDrawer = Activator.CreateInstance(type) as PropertyDrawer ?? throw new NullReferenceException();
-                    if (!_propertyDrawerLookup.TryAdd(propertyDrawer.PropertyType, propertyDrawer))
-                        Debug.LogWarning($"Failed to register property drawer for {type.ToString()}");
-                }
-                catch
-                {
-                    Debug.LogWarning($"Failed to register property drawer for {type.ToString()}");
-                }
-            }
+            var pos = ImGui.GetCursorPos();
+            ImGui.TextDisabled("null");
+            ImGui.SetCursorPos(pos);
+            ImGui.Selectable("##null", new System.Numerics.Vector2(width, 21));
+            GUIHelper.ItemRectFilled(0.9f, 0.1f, 0.1f, 0.3f);
         }
+        else
+        {
+            ImGui.Selectable(value.Name, new System.Numerics.Vector2(width, 21));
+            GUIHelper.ItemRectFilled(0.1f, 0.1f, 0.9f, 0.3f);
+
+            if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                GlobalSelectHandler.Select(value);
+        }
+
+        // Drag and drop support
+        if (DragnDrop.Drop(out var instance, field.FieldType))
+        {
+            field.SetValue(container, instance);
+            changed = true;
+        }
+        ImGui.Columns(1);
+        return changed;
     }
 
+    private static void DrawNullField(string name, float width)
+    {
+        float w = width;
+        DrawLabel(name, ref w);
+        ImGui.SetNextItemWidth(width);
+        ImGui.TextDisabled("null");
+        ImGui.Columns(1);
+    }
 
     protected static void DrawLabel(string label, ref float width)
     {

@@ -5,6 +5,7 @@ namespace Prowl.Editor.PropertyDrawers;
 
 public abstract class PropertyDrawerOrderable<T> : PropertyDrawer<T> where T : class
 {
+    protected abstract Type ElementType(T value);
     protected abstract int GetCount(T value);
     protected abstract object GetElement(T value, int index);
     protected abstract void SetElement(T value, int index, object element);
@@ -56,7 +57,7 @@ public abstract class PropertyDrawerOrderable<T> : PropertyDrawer<T> where T : c
                 ImGui.SameLine();
                 ImGui.Indent(28);
 
-                if (PropertyDrawer.Draw($"Element {i}", ref element, width))
+                if (PropertyDrawer.Draw($"Element {i}", ref element, ElementType(value), width))
                 {
                     SetElement(value, i, element);
                     changed = true;
@@ -104,6 +105,7 @@ public abstract class PropertyDrawerOrderable<T> : PropertyDrawer<T> where T : c
 
 public class PropertyDrawerArray : PropertyDrawerOrderable<Array>
 {
+    protected override Type ElementType(Array value) => value.GetType().GetElementType();
     protected override int GetCount(Array value) => value.Length;
     protected override object GetElement(Array value, int index) => value.GetValue(index);
     protected override void SetElement(Array value, int index, object element) => value.SetValue(element, index);
@@ -126,6 +128,7 @@ public class PropertyDrawerArray : PropertyDrawerOrderable<Array>
 
 public class PropertyDrawerList : PropertyDrawerOrderable<System.Collections.IList>
 {
+    protected override Type ElementType(System.Collections.IList value) => value.GetType().GetGenericArguments()[0];
     protected override int GetCount(System.Collections.IList value) => value.Count;
     protected override object GetElement(System.Collections.IList value, int index) => value[index];
     protected override void SetElement(System.Collections.IList value, int index, object element) => value[index] = element;
