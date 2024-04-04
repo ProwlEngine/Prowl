@@ -291,7 +291,7 @@ namespace Prowl.Runtime
             if (vertices == null || vertices.Length < 3) return;
             if (indices == null || indices.Length < 3) return;
 
-            normals = new System.Numerics.Vector3[vertices.Length];
+            var normals = new System.Numerics.Vector3[vertices.Length];
 
             for (int i = 0; i < indices.Length; i += 3)
             {
@@ -310,7 +310,9 @@ namespace Prowl.Runtime
             }
 
             for (int i = 0; i < vertices.Length; i++)
-                normals[i] = Vector3.Normalize(normals[i]);
+                normals[i] = -Vector3.Normalize(normals[i]);
+
+            Normals = normals;
         }
 
         public void RecalculateTangents()
@@ -319,7 +321,7 @@ namespace Prowl.Runtime
             if (indices == null || indices.Length < 3) return;
             if (uv == null) return;
 
-            tangents = new System.Numerics.Vector3[vertices.Length];
+            var tangents = new System.Numerics.Vector3[vertices.Length];
 
             for (int i = 0; i < indices.Length; i += 3)
             {
@@ -347,6 +349,8 @@ namespace Prowl.Runtime
 
             for (int i = 0; i < vertices.Length; i++)
                 tangents[i] = Vector3.Normalize(tangents[i]);
+
+            Tangents = tangents;
         }
 
         public override void OnDispose() => DeleteGPUBuffers();
