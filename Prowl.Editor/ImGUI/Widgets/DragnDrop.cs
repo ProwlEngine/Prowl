@@ -12,12 +12,13 @@ namespace Prowl.Editor.ImGUI.Widgets
 
         public static bool Peek<T>(out T? payload)
         {
-            if(Peek(out var objPayload, typeof(T)))
+            payload = default;
+            if (draggedObject == null) return false;
+            if (Peek(out var objPayload, typeof(T)))
             {
                 payload = (T)objPayload;
                 return true;
             }
-            payload = default;
             return false;
         }
 
@@ -26,6 +27,8 @@ namespace Prowl.Editor.ImGUI.Widgets
         /// </summary>
         public static bool Peek(out object? payload, Type type)
         {
+            payload = default;
+            if (draggedObject == null) return false;
             if (ImGui.BeginDragDropTarget())
             {
                 foreach (var obj in draggedObject)
@@ -37,24 +40,26 @@ namespace Prowl.Editor.ImGUI.Widgets
                     }
                 }
             }
-            payload = default;
             return false;
         }
 
         public static bool Drop<T>(out T? payload)
         {
-            if(Drop(out var objPayload, typeof(T)))
+            payload = default;
+            if (draggedObject == null) return false;
+            if (Drop(out var objPayload, typeof(T)))
             {
                 payload = (T)objPayload;
                 return true;
             }
-            payload = default;
             return false;
         }
 
         public static bool Drop(out object? payload, Type type)
         {
             payload = default;
+            if (draggedObject == null) return false;
+
             if (ImGui.BeginDragDropTarget())
             {
                 object? target = null;
