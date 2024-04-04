@@ -93,8 +93,7 @@ public abstract class SingletonEditorWindow : EditorWindow
         // Draw Settings
         var setting = currentSingleton;
 
-        FieldInfo[] fields = setting.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public);
-        foreach (var field in fields)
+        foreach (var field in RuntimeUtils.GetSerializableFields(setting))
         {
             // Draw the field using PropertyDrawer.Draw
             if (PropertyDrawer.Draw(setting, field))
@@ -103,6 +102,7 @@ public abstract class SingletonEditorWindow : EditorWindow
                 MethodInfo? saveMethod = setting.GetType().GetMethod("Save", BindingFlags.Instance | BindingFlags.Public);
                 saveMethod?.Invoke(setting, null);
             }
+
         }
 
         // Draw any Buttons
