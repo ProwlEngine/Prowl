@@ -258,6 +258,15 @@ namespace Prowl.Runtime
         public SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
             SerializedProperty compoundTag = SerializedProperty.NewCompound();
+            compoundTag.Add("Name", new(Name));
+
+            if (AssetID != Guid.Empty)
+            {
+                compoundTag.Add("AssetID", new SerializedProperty(AssetID.ToString()));
+                if (FileID != 0)
+                    compoundTag.Add("FileID", new SerializedProperty(FileID));
+            }
+
             SerializedProperty propertiesTag = SerializedProperty.NewList();
             foreach (var property in Properties)
             {
@@ -290,6 +299,14 @@ namespace Prowl.Runtime
 
         public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
+            Name = value.Get("Name")?.StringValue;
+
+            if (value.TryGet("AssetID", out var assetIDTag))
+            {
+                AssetID = Guid.Parse(assetIDTag.StringValue);
+                FileID = value.Get("FileID").ShortValue;
+            }
+
             Properties.Clear();
             var propertiesTag = value.Get("Properties");
             foreach (var propertyTag in propertiesTag.List)
