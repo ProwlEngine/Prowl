@@ -1,6 +1,7 @@
 using Hexa.NET.ImGui;
 using Hexa.NET.ImGuizmo;
 using Jitter2.LinearMath;
+using Prowl.Editor.Assets;
 using Prowl.Editor.Editor.Preferences;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
@@ -297,28 +298,31 @@ public class ViewportWindow : EditorWindow
 
     private void HandleDragnDrop()
     {
-        // GameObject from Assets
-        if (DragnDrop.ReceiveAsset<GameObject>(out var original)) {
-            GameObject clone = (GameObject)EngineObject.Instantiate(original.Res!, true);
-            clone.AssetID = Guid.Empty; // Remove AssetID so it's not a Prefab - These are just GameObjects like Models
-            var t = clone;
-            if (t != null) {
-                t.transform.position = Cam.GameObject.transform.position + Cam.GameObject.transform.forward * 10;
+        if (DragnDrop.Drop<GameObject>(out var original))
+        {
+            if (original.AssetID == Guid.Empty) return;
+
+            GameObject go = (GameObject)EngineObject.Instantiate(original, true);
+            if (go != null)
+            {
+                go.transform.position = Cam.GameObject.transform.position + Cam.GameObject.transform.forward * 10;
             }
-            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(clone));
+            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
-        // Prefab from Assets
-        if (DragnDrop.ReceiveAsset<Prefab>(out var prefab)) {
-            var go = prefab.Res.Instantiate();
+        else if (DragnDrop.Drop<Prefab>(out var prefab))
+        {
+            var go = prefab.Instantiate();
             var t = go;
-            if (t != null) {
+            if (t != null)
+            {
                 t.transform.position = Cam.GameObject.transform.position + Cam.GameObject.transform.forward * 10;
             }
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
-        // Scene from Assets
-        if (DragnDrop.ReceiveAsset<Scene>(out var scene))
+        else if (DragnDrop.Drop<Scene>(out var scene))
+        {
             SceneManager.LoadScene(scene);
+        }
     }
 
     protected override void Update()

@@ -73,20 +73,23 @@ public class AssetBrowserWindow : EditorWindow
         ImGui.EndChild();
         AssetsWindow.HandleFileContextMenu(null, CurDirectory, true);
 
-        if (DragnDrop.ReceiveReference<GameObject>(out var go))
+        if (DragnDrop.Drop<GameObject>(out var go))
         {
-            var prefab = new Prefab {
-                GameObject = Serializer.Serialize(go),
-                Name = go.Name
-            };
-            FileInfo file = new FileInfo(CurDirectory + $"/{prefab.Name}.prefab");
-            while (File.Exists(file.FullName))
-                file = new FileInfo(file.FullName.Replace(".prefab", "") + " new.prefab");
+            if(go.AssetID == Guid.Empty)
+            {
+                var prefab = new Prefab {
+                    GameObject = Serializer.Serialize(go),
+                    Name = go.Name
+                };
+                FileInfo file = new FileInfo(CurDirectory + $"/{prefab.Name}.prefab");
+                while (File.Exists(file.FullName))
+                    file = new FileInfo(file.FullName.Replace(".prefab", "") + " new.prefab");
 
-            StringTagConverter.WriteToFile(Serializer.Serialize(prefab), file);
+                StringTagConverter.WriteToFile(Serializer.Serialize(prefab), file);
 
-            AssetDatabase.Update();
-            AssetDatabase.Ping(file);
+                AssetDatabase.Update();
+                AssetDatabase.Ping(file);
+            }
         }
 
         if (!AssetsWindow.SelectHandler.SelectedThisFrame && ImGui.IsItemClicked(0))

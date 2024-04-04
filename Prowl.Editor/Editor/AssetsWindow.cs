@@ -242,12 +242,12 @@ public class AssetsWindow : EditorWindow
 
         if (isAsset && ImporterAttribute.SupportsExtension(entry.Extension))
         {
-            Type type = ImporterAttribute.GetGeneralType(entry.Extension);
-            if (type != null)
-            {
-                if (DragnDrop.OfferAsset(guid, type.Name))
-                    return;
-            }
+            var serialized = AssetDatabase.LoadAsset(guid);
+            DragnDrop.Drag(serialized.Main, entry);
+        }
+        else
+        {
+            DragnDrop.Drag(entry);
         }
 
         if (ImGui.IsMouseReleased(0))

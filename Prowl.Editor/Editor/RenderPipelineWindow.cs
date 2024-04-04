@@ -21,8 +21,9 @@ public class RenderPipelineWindow : EditorWindow
         // Drag and drop support for the render pipeline asset
         var cStart = ImGui.GetCursorPos();
         ImGui.Dummy(ImGui.GetContentRegionAvail());
-        if (DragnDrop.ReceiveAsset<ScriptableObject>(out var asset) && asset.Res is RenderPipeline rp)
-            CurrentRenderPipeline = rp;
+
+        if (DragnDrop.Drop<RenderPipeline>(out var asset))
+            CurrentRenderPipeline = asset;
         ImGui.SetCursorPos(cStart);
 
         if (CurrentRenderPipeline.IsAvailable == false) return;

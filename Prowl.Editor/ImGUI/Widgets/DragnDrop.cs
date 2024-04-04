@@ -1,27 +1,78 @@
 ﻿using Hexa.NET.ImGui;
+using Prowl.Editor.Assets;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.ImGUI.Widgets
 {
+
     public static class DragnDrop
     {
-        private static object draggedObject;
+        private static object[] draggedObject;
 
-        private const string AssetPayload = "ASSETPAYLOAD_";
-        private const string ReferencePayload = "REFERENCEPAYLOAD_";
 
-        public static bool ReceiveAsset<T>(out AssetRef<T> droppedAsset) where T : EngineObject
+        public static bool Peek<T>(out T? payload)
         {
-            droppedAsset = null;
+            if(Peek(out var objPayload, typeof(T)))
+            {
+                payload = (T)objPayload;
+                return true;
+            }
+            payload = default;
+            return false;
+        }
+
+        /// <summary>
+        /// Peek at what object you would receive if you were to call Drop<T>
+        /// </summary>
+        public static bool Peek(out object? payload, Type type)
+        {
             if (ImGui.BeginDragDropTarget())
             {
-                ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.25f, 0.25f, 0.25f, 0.25f)));
-                ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload(AssetPayload + typeof(T).Name);
-                if (!entityPayload.IsNull)
+                foreach (var obj in draggedObject)
                 {
-                    droppedAsset = new AssetRef<T>((Guid)draggedObject);
-                    ImGui.EndDragDropTarget();
-                    return true;
+                    if (obj.GetType().IsAssignableTo(type))
+                    {
+                        payload = obj;
+                        return true;
+                    }
+                }
+            }
+            payload = default;
+            return false;
+        }
+
+        public static bool Drop<T>(out T? payload)
+        {
+            if(Drop(out var objPayload, typeof(T)))
+            {
+                payload = (T)objPayload;
+                return true;
+            }
+            payload = default;
+            return false;
+        }
+
+        public static bool Drop(out object? payload, Type type)
+        {
+            payload = default;
+            if (ImGui.BeginDragDropTarget())
+            {
+                object? target = null;
+                foreach (var obj in draggedObject)
+                    if (obj.GetType().IsAssignableTo(type))
+                    {
+                        ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.25f, 0.25f, 0.25f, 0.25f)));
+                        target = obj;
+                    }
+                if (target != null)
+                {
+                    ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload("heheboobies");
+                    if (!entityPayload.IsNull)
+                    {
+                        payload = target;
+                        ImGui.EndDragDropTarget();
+                        return true;
+                    }
                 }
 
                 ImGui.EndDragDropTarget();
@@ -29,81 +80,131 @@ namespace Prowl.Editor.ImGUI.Widgets
             return false;
         }
 
-        public static bool ReceiveAsset(out Guid droppedAsset, string typeName)
+        public static bool Drag(params object[] objs)
         {
-            droppedAsset = Guid.Empty;
-            if (ImGui.BeginDragDropTarget())
+            // Remove Nulls
+            objs = objs.Where(o => o != null).ToArray();
+            if (ImGui.BeginDragDropSource())
             {
-                ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.25f, 0.25f, 0.25f, 0.25f)));
-                ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload(AssetPayload + typeName);
-                if (!entityPayload.IsNull)
+                draggedObject = objs;
+                unsafe { ImGui.SetDragDropPayload("heheboobies", null, 0); }
+                // Constract a name from all the types
+                string name = "";
+                foreach (var obj in objs)
                 {
-                    droppedAsset = (Guid)draggedObject;
-                    ImGui.EndDragDropTarget();
-                    return true;
+                    // AssetRef is Special use InstanceType
+                    if (obj is IAssetRef assetRef)
+                        name += assetRef.InstanceType.Name + ", ";
+                    else
+                        name += obj.GetType().Name + ", ";
                 }
-
-                ImGui.EndDragDropTarget();
-            }
-            return false;
-        }
-
-        public static bool ReceiveReference<T>(out T droppedObject) where T : class
-        {
-            droppedObject = null;
-            if (ImGui.BeginDragDropTarget())
-            {
-                ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.25f, 0.25f, 0.25f, 0.25f)));
-                ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload(ReferencePayload + typeof(T).Name);
-                if (!entityPayload.IsNull)
-                {
-                    droppedObject = (T)draggedObject;
-                    ImGui.EndDragDropTarget();
-                    return true;
-                }
-
-                ImGui.EndDragDropTarget();
-            }
-            return false;
-        }
-
-        public static bool OfferAsset<T>(AssetRef<T> offeredAsset) where T : EngineObject
-        {
-            if (ImGui.BeginDragDropSource())
-            {
-                draggedObject = offeredAsset.AssetID;
-                unsafe { ImGui.SetDragDropPayload(AssetPayload + typeof(T).Name, null, 0); }
-                ImGui.TextUnformatted(offeredAsset.Name + " - " + offeredAsset.AssetID);
+                ImGui.TextUnformatted(name);
                 ImGui.EndDragDropSource();
                 return true;
             }
             return false;
         }
 
-        public static bool OfferAsset(Guid offeredAsset, string typeName)
-        {
-            if (ImGui.BeginDragDropSource())
-            {
-                draggedObject = offeredAsset;
-                unsafe { ImGui.SetDragDropPayload(AssetPayload + typeName, null, 0); }
-                ImGui.TextUnformatted(typeName + " - Asset");
-                ImGui.EndDragDropSource();
-                return true;
-            }
-            return false;
-        }
 
-        public static bool OfferReference<T>(T offeredObject) where T : class
-        {
-            if (ImGui.BeginDragDropSource())
-            {
-                draggedObject = offeredObject;
-                unsafe { ImGui.SetDragDropPayload(ReferencePayload + typeof(T).Name, null, 0); }
-                ImGui.TextUnformatted(typeof(T).Name + " - Instance");
-                ImGui.EndDragDropSource();
-                return true;
-            }
-            return false;
-        }
+        //private static object draggedObject;
+        //
+        //private const string AssetPayload = "ASSETPAYLOAD_";
+        //private const string ReferencePayload = "REFERENCEPAYLOAD_";
+        //
+        //public static bool ReceiveAsset<T>(out AssetRef<T> droppedAsset) where T : EngineObject
+        //{
+        //    droppedAsset = null;
+        //    if (ImGui.BeginDragDropTarget())
+        //    {
+        //        ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.25f, 0.25f, 0.25f, 0.25f)));
+        //        ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload(AssetPayload + typeof(T).Name);
+        //        if (!entityPayload.IsNull)
+        //        {
+        //            droppedAsset = new AssetRef<T>((Guid)draggedObject);
+        //            ImGui.EndDragDropTarget();
+        //            return true;
+        //        }
+        //
+        //        ImGui.EndDragDropTarget();
+        //    }
+        //    return false;
+        //}
+        //
+        //public static bool ReceiveAsset(out Guid droppedAsset, string typeName)
+        //{
+        //    droppedAsset = Guid.Empty;
+        //    if (ImGui.BeginDragDropTarget())
+        //    {
+        //        ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.25f, 0.25f, 0.25f, 0.25f)));
+        //        ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload(AssetPayload + typeName);
+        //        if (!entityPayload.IsNull)
+        //        {
+        //            droppedAsset = (Guid)draggedObject;
+        //            ImGui.EndDragDropTarget();
+        //            return true;
+        //        }
+        //
+        //        ImGui.EndDragDropTarget();
+        //    }
+        //    return false;
+        //}
+        //
+        //public static bool ReceiveReference<T>(out T droppedObject) where T : class
+        //{
+        //    droppedObject = null;
+        //    if (ImGui.BeginDragDropTarget())
+        //    {
+        //        ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.25f, 0.25f, 0.25f, 0.25f)));
+        //        ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload(ReferencePayload + typeof(T).Name);
+        //        if (!entityPayload.IsNull)
+        //        {
+        //            droppedObject = (T)draggedObject;
+        //            ImGui.EndDragDropTarget();
+        //            return true;
+        //        }
+        //
+        //        ImGui.EndDragDropTarget();
+        //    }
+        //    return false;
+        //}
+        //
+        //public static bool OfferAsset<T>(AssetRef<T> offeredAsset) where T : EngineObject
+        //{
+        //    if (ImGui.BeginDragDropSource())
+        //    {
+        //        draggedObject = offeredAsset.AssetID;
+        //        unsafe { ImGui.SetDragDropPayload(AssetPayload + typeof(T).Name, null, 0); }
+        //        ImGui.TextUnformatted(offeredAsset.Name + " - " + offeredAsset.AssetID);
+        //        ImGui.EndDragDropSource();
+        //        return true;
+        //    }
+        //    return false;
+        //}
+        //
+        //public static bool OfferAsset(Guid offeredAsset, string typeName)
+        //{
+        //    if (ImGui.BeginDragDropSource())
+        //    {
+        //        draggedObject = offeredAsset;
+        //        unsafe { ImGui.SetDragDropPayload(AssetPayload + typeName, null, 0); }
+        //        ImGui.TextUnformatted(typeName + " - Asset");
+        //        ImGui.EndDragDropSource();
+        //        return true;
+        //    }
+        //    return false;
+        //}
+        //
+        //public static bool OfferReference<T>(T offeredObject) where T : class
+        //{
+        //    if (ImGui.BeginDragDropSource())
+        //    {
+        //        draggedObject = offeredObject;
+        //        unsafe { ImGui.SetDragDropPayload(ReferencePayload + typeof(T).Name, null, 0); }
+        //        ImGui.TextUnformatted(typeof(T).Name + " - Instance");
+        //        ImGui.EndDragDropSource();
+        //        return true;
+        //    }
+        //    return false;
+        //}
     }
 }

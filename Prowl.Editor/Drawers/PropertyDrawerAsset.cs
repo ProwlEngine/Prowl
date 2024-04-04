@@ -58,12 +58,11 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
         if (value.IsAvailable && ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
             GlobalSelectHandler.Select(value);
 
-        // DragDrop code
-        string payloadName = value.InstanceType.Name;
-        if (value.InstanceType.IsAssignableTo(typeof(ScriptableObject)))
-            payloadName = "ScriptableObject"; // Scriptable objects are a special case
-        if (DragnDrop.ReceiveAsset(out Guid assetGuid, payloadName)) {
-            value.AssetID = assetGuid;
+        // Drag and drop support
+        if (DragnDrop.Drop(out var instance, value.InstanceType))
+        {
+            // SetInstance() will also set the AssetID if the instance is an asset
+            value.SetInstance(instance);
             changed = true;
         }
 

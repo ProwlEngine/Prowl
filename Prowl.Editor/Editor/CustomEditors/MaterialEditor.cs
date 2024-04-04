@@ -133,10 +133,11 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                             if (ImGui.IsItemClicked(ImGuiMouseButton.Left) && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
                                 new AssetSelectorWindow(typeof(Texture2D), (guid, fileid) => { assignedGUID = guid; guidAssignedToID = imguiID; assignedFileID = fileid; });
 
-                            // DragDrop code
-                            if (DragnDrop.ReceiveAsset<Texture2D>(out var droppedTex))
+                            // Drag and drop support
+                            if (DragnDrop.Drop(out var instance, typeof(Texture2D)))
                             {
-                                tex.AssetID = droppedTex.AssetID;
+                                // SetInstance() will also set the AssetID if the instance is an asset
+                                tex.SetInstance(instance);
                                 changed = true;
                             }
 

@@ -5,6 +5,7 @@ using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
 using static Prowl.Editor.EditorConfiguration;
+using Prowl.Editor.Assets;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -221,29 +222,25 @@ public class HierarchyWindow : EditorWindow
 
     private void HandleDragnDrop(GameObject? entity)
     {
-        // GameObject from Hierarchy
-        if (DragnDrop.ReceiveReference<GameObject>(out var go)) {
+        if (DragnDrop.Drop<GameObject>(out var original))
+        {
+            GameObject go = original;
+            if (!SceneManager.Has(original)) // If its not already in the scene, Instantiate it
+                go = (GameObject)EngineObject.Instantiate(original, true);
             go.SetParent(entity); // null is root
             SelectHandler.SetSelection(new WeakReference(go));
         }
-        // GameObject from Assets
-        if (DragnDrop.ReceiveAsset<GameObject>(out var original)) {
-            GameObject clone = (GameObject)EngineObject.Instantiate(original.Res!, true);
-            clone.AssetID = Guid.Empty; // Remove AssetID so it's not a Prefab - These are just GameObjects like Models
-            clone.SetParent(entity); // null is root
-            SelectHandler.SetSelection(new WeakReference(clone));
+        else if (DragnDrop.Drop<Prefab>(out var prefab))
+        {
+            SelectHandler.SetSelection(new WeakReference(prefab.Instantiate()));
+        }
+        else if (DragnDrop.Drop<Scene>(out var scene))
+        {
+            SceneManager.LoadScene(scene);
         }
 
-        // Prefab from Assets
-        if (DragnDrop.ReceiveAsset<Prefab>(out var prefab))
-            SelectHandler.SetSelection(new WeakReference(prefab.Res.Instantiate()));
-
-        // Scene from Assets
-        if (DragnDrop.ReceiveAsset<Scene>(out var scene))
-            SceneManager.LoadScene(scene);
-
         // Offer GameObject up from Hierarchy for Drag And Drop
-        if (entity != null) DragnDrop.OfferReference(entity);
+        if (entity != null) DragnDrop.Drag(entity);
     }
 
     private static void DrawTagIcon(GameObject entity)
