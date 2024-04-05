@@ -19,29 +19,21 @@ public static class Debug
 
     public static void Log(string message)
     {
-        if (!Configuration.DoDebugLogs)
-            return;
         Log("", message, ConsoleColor.White, LogSeverity.Normal);
     }
 
     public static void LogWarning(string message)
     {
-        if (!Configuration.DoDebugWarnings)
-            return;
         Log("Warning: ", message, ConsoleColor.Yellow, LogSeverity.Warning);
     }
 
     public static void LogError(string message)
     {
-        if (!Configuration.DoDebugErrors)
-            return;
         Log("Error: ", message, ConsoleColor.Red, LogSeverity.Error);
     }
 
     public static void LogSuccess(string message)
     {
-        if (!Configuration.DoDebugSuccess)
-            return;
         Log("Success: ", message, ConsoleColor.Green, LogSeverity.Success);
     }
 

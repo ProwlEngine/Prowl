@@ -9,5 +9,13 @@ namespace Prowl.Editor.Editor.Preferences
         [Text("General:")]
         public bool VSync = true;
         public int TargetFPS = 120;
+
+        [Indent]
+        [Text("Debugging:")]
+        public bool ShowDebugLogs = true;
+        public bool ShowDebugWarnings = true;
+        public bool ShowDebugErrors = true;
+        [Unindent]
+        public bool ShowDebugSuccess = true;
     }
 }

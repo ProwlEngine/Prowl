@@ -2,6 +2,7 @@ using Prowl.Runtime;
 using Hexa.NET.ImGui;
 using System.Numerics;
 using Prowl.Icons;
+using Prowl.Editor.Editor.Preferences;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -13,10 +14,6 @@ public class ConsoleWindow : EditorWindow {
     private uint _logCount;
     private readonly List<LogMessage> _logMessages;
     private int _maxLogs = 50;
-    private bool _showNormalLogMessages = true;
-    private bool _showSuccessLogMessages = true;
-    private bool _showWarningLogMessages = true;
-    private bool _showErrorLogMessages = true;
 
     public ConsoleWindow() : base() {
         Title = FontAwesome6.Terminal + " Console";
@@ -25,6 +22,12 @@ public class ConsoleWindow : EditorWindow {
     }
     
     private void OnLog(string message, LogSeverity logSeverity) {
+        
+        if(logSeverity == LogSeverity.Normal && !GeneralPreferences.Instance.ShowDebugLogs) return;
+        else if (logSeverity == LogSeverity.Warning && !GeneralPreferences.Instance.ShowDebugWarnings) return;
+        else if (logSeverity == LogSeverity.Error && !GeneralPreferences.Instance.ShowDebugErrors) return;
+        else if (logSeverity == LogSeverity.Success && !GeneralPreferences.Instance.ShowDebugSuccess) return;
+
         _logMessages.Add(new LogMessage(message, logSeverity));
         if(_logMessages.Count > _maxLogs)
             _logMessages.RemoveAt(0);
