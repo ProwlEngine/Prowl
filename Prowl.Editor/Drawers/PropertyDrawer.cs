@@ -25,6 +25,8 @@ public abstract class PropertyDrawer {
             List<Type> derivedTypes = EditorUtils.GetDerivedTypes(typeof(PropertyDrawer<>), editorAssembly);
             foreach (Type type in derivedTypes)
             {
+                if (type.IsAbstract || type.IsGenericType) continue;
+
                 try
                 {
                     PropertyDrawer propertyDrawer = Activator.CreateInstance(type) as PropertyDrawer ?? throw new NullReferenceException();
