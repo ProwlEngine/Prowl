@@ -3,7 +3,7 @@ using T = System.AttributeTargets;
 
 namespace Prowl.Runtime
 {
-    public enum GuiAttribType { Space, Text, Separator, Sameline, Disabled, Header, StartGroup, EndGroup, Tooltip, Button }
+    public enum GuiAttribType { Space, Text, Separator, Sameline, Disabled, Header, StartGroup, EndGroup, Indent, Unindent, ShowIf, Tooltip, Button }
 
     public interface IImGUIAttri
     {
@@ -81,6 +81,30 @@ namespace Prowl.Runtime
         public string tooltip;
         public TooltipAttribute(string text) => tooltip = text;
         public GuiAttribType AttribType() => GuiAttribType.Tooltip;
+    }
+
+    [AttributeUsage(T.Field, AllowMultiple = false)]
+    public class ShowIfAttribute : Attribute, IImGUIAttri
+    {
+        public string propertyName;
+        public ShowIfAttribute(string propertyName) => this.propertyName = propertyName;
+        public GuiAttribType AttribType() => GuiAttribType.ShowIf;
+    }
+
+    [AttributeUsage(T.Field, AllowMultiple = false)]
+    public class IndentAttribute : Attribute, IImGUIAttri
+    {
+        public int indent;
+        public IndentAttribute(int indent = 4) => this.indent = indent;
+        public GuiAttribType AttribType() => GuiAttribType.Indent;
+    }
+
+    [AttributeUsage(T.Field, AllowMultiple = false)]
+    public class UnindentAttribute : Attribute, IImGUIAttri
+    {
+        public int unindent;
+        public UnindentAttribute(int unindent = 4) => this.unindent = unindent;
+        public GuiAttribType AttribType() => GuiAttribType.Unindent;
     }
 
     [AttributeUsage(T.Method, AllowMultiple = false)]

@@ -14,7 +14,6 @@ public static class EditorGui
 
     public static void Initialize()
     {
-        // todo: make windows stay docked https://github.com/mellinoe/ImGui.NET/issues/202
         ImGui.GetIO().ConfigFlags = ImGuiConfigFlags.DockingEnable;
         ImGui.GetIO().BackendFlags = ImGuiBackendFlags.HasMouseCursors | ImGuiBackendFlags.RendererHasVtxOffset;
         ImGui.GetIO().ConfigInputTextCursorBlink = true;
@@ -152,7 +151,7 @@ public static class EditorGui
 
     #region ImGUI attributes
 
-    public static void HandleBeginImGUIAttributes(IEnumerable<IImGUIAttri> attribs)
+    public static bool HandleBeginImGUIAttributes(object target, IEnumerable<IImGUIAttri> attribs)
     {
         foreach (IImGUIAttri imGuiAttribute in attribs)
             switch (imGuiAttribute.AttribType())
@@ -164,6 +163,19 @@ public static class EditorGui
 
                 case GuiAttribType.Text:
                     ImGui.Text((imGuiAttribute as TextAttribute).text);
+                    break;
+
+                case GuiAttribType.Indent:
+                    ImGui.Indent((imGuiAttribute as IndentAttribute).indent);
+                    break;
+
+                case GuiAttribType.ShowIf:
+                    // Find the Property on target, and if its a bool return the value
+                    var showIf = imGuiAttribute as ShowIfAttribute;
+                    var prop = target.GetType().GetProperty(showIf.propertyName);
+                    if (prop != null && prop.PropertyType == typeof(bool))
+                        if ((bool)prop.GetValue(target) == false)
+                            return false;
                     break;
 
                 case GuiAttribType.Separator:
@@ -190,6 +202,7 @@ public static class EditorGui
                     break;
 
             }
+        return true;
     }
 
     public static void HandleEndImGUIAttributes(IEnumerable<IImGUIAttri> attribs)
@@ -200,6 +213,10 @@ public static class EditorGui
 
                 case GuiAttribType.Disabled:
                     ImGui.EndDisabled();
+                    break;
+
+                case GuiAttribType.Unindent:
+                    ImGui.Unindent((imGuiAttribute as UnindentAttribute).unindent);
                     break;
 
                 case GuiAttribType.EndGroup:

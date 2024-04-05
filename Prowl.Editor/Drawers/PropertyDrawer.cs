@@ -50,22 +50,25 @@ public abstract class PropertyDrawer {
 
         var attributes = fieldInfo.GetCustomAttributes(true);
         var imGuiAttributes = attributes.Where(attr => attr is IImGUIAttri).Cast<IImGUIAttri>();
-        EditorGui.HandleBeginImGUIAttributes(imGuiAttributes);
-        if (width == -1) width = ImGui.GetContentRegionAvail().X;
-
-        if (fieldInfo.FieldType.IsAssignableTo(typeof(EngineObject)))
-            return DrawEngineObjectField(container, label ?? fieldInfo.Name, fieldInfo, ref width);
-
-        var value = fieldInfo.GetValue(container);
-        if (value == null)
+        bool doDraw = EditorGui.HandleBeginImGUIAttributes(container, imGuiAttributes);
+        bool changed = false;
+        if (doDraw)
         {
-            DrawNullField(label ?? fieldInfo.Name, width);
-            return false;
+            if (width == -1) width = ImGui.GetContentRegionAvail().X;
+
+            if (fieldInfo.FieldType.IsAssignableTo(typeof(EngineObject)))
+                return DrawEngineObjectField(container, label ?? fieldInfo.Name, fieldInfo, ref width);
+
+            var value = fieldInfo.GetValue(container);
+            if (value == null)
+            {
+                DrawNullField(label ?? fieldInfo.Name, width);
+                return false;
+            }
+
+            changed = Draw(label ?? fieldInfo.Name, ref value, fieldInfo.FieldType, width);
+            if (changed) fieldInfo.SetValue(container, value);
         }
-
-        bool changed = Draw(label ?? fieldInfo.Name, ref value, fieldInfo.FieldType, width);
-        if (changed) fieldInfo.SetValue(container, value);
-
         EditorGui.HandleEndImGUIAttributes(imGuiAttributes);
         return changed;
     }
