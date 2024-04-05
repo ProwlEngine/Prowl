@@ -15,8 +15,10 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
     public class GameObjectEditor : ScriptedEditor
     {
         private string _searchText = string.Empty;
-        private MenuItemInfo rootMenuItem;
+        private static MenuItemInfo rootMenuItem;
         private Dictionary<int, ScriptedEditor> compEditors = new();
+
+        public static void ClearCache() => rootMenuItem = null;
 
         public override void OnDisable()
         {

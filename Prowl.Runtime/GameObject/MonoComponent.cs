@@ -198,6 +198,8 @@ public abstract class MonoBehaviour : EngineObject
         }
     }
 
+    public static void ClearCache() => CachedExecuteAlways.Clear();
+
     public Coroutine StartCoroutine(string methodName)
     {
         methodName = methodName.Trim();

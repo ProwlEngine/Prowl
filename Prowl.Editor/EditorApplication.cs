@@ -4,6 +4,7 @@ using Prowl.Editor.Drawers.NodeSystem;
 using Prowl.Editor.Editor.Preferences;
 using Prowl.Editor.Editor.ProjectSettings;
 using Prowl.Editor.EditorWindows;
+using Prowl.Editor.EditorWindows.CustomEditors;
 using Prowl.Editor.ImGUI;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Icons;
@@ -252,6 +253,9 @@ public unsafe class EditorApplication : Application {
                     CustomEditorAttribute.ClearLookUp();
                     NodeSystemDrawer.ClearLookUp();
                     MenuItem.ClearMenus();
+
+                    MonoBehaviour.ClearCache();
+                    GameObjectEditor.ClearCache();
 
                     // Clear internal .Net Type Cache
                     ClearTypeDescriptorCache();
