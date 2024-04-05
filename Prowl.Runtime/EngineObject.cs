@@ -8,8 +8,7 @@ namespace Prowl.Runtime
     {
         private static readonly Stack<EngineObject> destroyed = new Stack<EngineObject>();
 
-        private static readonly List<EngineObject> allObjects = new List<EngineObject>();
-        private static readonly MultiValueDictionary<Type, EngineObject> cachedObjectTypes = new();
+        private static readonly List<WeakReference<EngineObject>> allObjects = [];
 
         static int NextID = 1;
 
@@ -36,8 +35,7 @@ namespace Prowl.Runtime
         {
             _instanceID = NextID++;
             Name = "New" + GetType().Name;
-            allObjects.Add(this);
-            cachedObjectTypes.Add(GetType(), this);
+            allObjects.Add(new(this));
             CreatedInstance();
             Name = name ?? Name;
         }
@@ -48,18 +46,22 @@ namespace Prowl.Runtime
 
         public virtual void OnValidate() { }
 
-        public static T? FindObjectOfType<T>() where T : EngineObject =>
-            cachedObjectTypes.TryGetValue(typeof(T), out var cams) ? cams.FirstOrDefault() as T : null;
-        public static T[] FindObjectsOfType<T>() where T : EngineObject => 
-            cachedObjectTypes.TryGetValue(typeof(T), out var cams) ? cams.Cast<T>().ToArray() : [];
+        public static T? FindObjectOfType<T>() where T : EngineObject => 
+            allObjects.FirstOrDefault(o => o.TryGetTarget(out var obj) ? false : obj is T) as T;
+        public static T?[] FindObjectsOfType<T>() where T : EngineObject => 
+            allObjects.Where(o => o.TryGetTarget(out var obj) ? false : obj is T).Select(o => o as T).ToArray();
         public static T? FindObjectByID<T>(int id) where T : EngineObject => 
-            cachedObjectTypes.TryGetValue(typeof(T), out var cams) ? cams.FirstOrDefault(o => o.InstanceID == id && o is T) as T : null;
+            allObjects.FirstOrDefault(o => o.TryGetTarget(out var obj) ? false : obj is T t && t.InstanceID == id) as T;
 
         public static void Foreach<T>(Action<T> action) where T : EngineObject
         {
-            foreach (T obj in cachedObjectTypes[typeof(T)])
-                if (!obj.IsDestroyed)
-                    action(obj);
+            foreach (var obj in allObjects)
+            {
+                if (obj.TryGetTarget(out var target) && target is T t)
+                {
+                    action(t);
+                }
+            }
         }
 
         public void Destroy() => Destroy(this);
@@ -86,6 +88,8 @@ namespace Prowl.Runtime
                 if (!obj.IsDestroyed) continue;
                 obj.Dispose();
             }
+
+            CleanupAllObjects();
         }
 
         public static EngineObject Instantiate(EngineObject obj, bool keepAssetID = false)
@@ -110,11 +114,19 @@ namespace Prowl.Runtime
         public void Dispose()
         {
             IsDestroyed = true;
-            allObjects.Remove(this);
-            cachedObjectTypes.Remove(GetType(), this);
             GC.SuppressFinalize(this);
             OnDispose();
             //AssetProvider.RemoveAsset(this, false);
+            HasHadDispose = true;
+        }
+
+        static bool HasHadDispose = false;
+        static void CleanupAllObjects()
+        {
+            if (!HasHadDispose) return;
+            HasHadDispose = false;
+#warning TODO: Find a faster solution to keeping allObjects clean of dead objects
+            allObjects.RemoveAll(wr => !wr.TryGetTarget(out _));
         }
 
         public virtual void OnDispose() { }
