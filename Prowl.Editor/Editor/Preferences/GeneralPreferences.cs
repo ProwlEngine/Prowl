@@ -7,8 +7,11 @@ namespace Prowl.Editor.Editor.Preferences
     public class GeneralPreferences : ScriptableSingleton<GeneralPreferences>
     {
         [Text("General:")]
+        public bool LockFPS = false;
+        [ShowIf("LockFPS")]
+        public int TargetFPS = 0;
+        [ShowIf("LockFPS", true)]
         public bool VSync = true;
-        public int TargetFPS = 120;
 
         [Indent]
         [Text("Debugging:")]

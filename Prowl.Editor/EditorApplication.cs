@@ -157,9 +157,18 @@ public unsafe class EditorApplication : Application {
 
                 if (Project.HasProject) {
 
-                    Window.InternalWindow.VSync = GeneralPreferences.Instance.VSync;
-                    //Window.InternalWindow.FramesPerSecond = 60;
-                    //Window.InternalWindow.UpdatesPerSecond = 60;
+                    if (GeneralPreferences.Instance.LockFPS)
+                    {
+                        Window.InternalWindow.VSync = false;
+                        Window.InternalWindow.FramesPerSecond = GeneralPreferences.Instance.TargetFPS;
+                        Window.InternalWindow.UpdatesPerSecond = GeneralPreferences.Instance.TargetFPS;
+                    }
+                    else
+                    {
+                        Window.InternalWindow.FramesPerSecond = 0;
+                        Window.InternalWindow.UpdatesPerSecond = 0;
+                        Window.InternalWindow.VSync = GeneralPreferences.Instance.VSync;
+                    }
 
                     if (IsHotkeyDown("SaveSceneAs", new Hotkey() { Key = Key.S, Ctrl = true, Shift = true }))
                         MainMenuItems.SaveSceneAs();
