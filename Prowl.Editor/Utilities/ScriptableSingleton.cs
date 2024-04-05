@@ -3,7 +3,7 @@
 namespace Prowl.Editor.Utilities
 {
     [AttributeUsage(AttributeTargets.Class)]
-    public class FilePathAttribute : Attribute
+    public class EditorFilePathAttribute : Attribute
     {
         public enum Location
         {
@@ -15,7 +15,7 @@ namespace Prowl.Editor.Utilities
         public string FilePath { get; }
         public Location FileLocation { get; }
 
-        public FilePathAttribute(string filePath, Location fileLocation)
+        public EditorFilePathAttribute(string filePath, Location fileLocation)
         {
             FilePath = filePath;
             FileLocation = fileLocation;
@@ -43,19 +43,19 @@ namespace Prowl.Editor.Utilities
 
         protected string GetFilePath()
         {
-            var attribute = Attribute.GetCustomAttribute(GetType(), typeof(FilePathAttribute)) as FilePathAttribute;
+            var attribute = Attribute.GetCustomAttribute(GetType(), typeof(EditorFilePathAttribute)) as EditorFilePathAttribute;
             if (attribute != null)
             {
                 string directory = string.Empty;
                 switch (attribute.FileLocation)
                 {
-                    case FilePathAttribute.Location.ProjectFolder:
+                    case EditorFilePathAttribute.Location.ProjectFolder:
                         directory = Project.ProjectDirectory;
                         break;
-                    case FilePathAttribute.Location.ProjectSettingsFolder:
+                    case EditorFilePathAttribute.Location.ProjectSettingsFolder:
                         directory = Path.Combine(Project.ProjectDirectory, "ProjectSettings");
                         break;
-                    case FilePathAttribute.Location.PreferencesFolder:
+                    case EditorFilePathAttribute.Location.PreferencesFolder:
                         // Persistent across all projects
                         directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Prowl", "Editor");
                         break;

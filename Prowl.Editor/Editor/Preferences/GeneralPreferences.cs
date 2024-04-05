@@ -3,7 +3,7 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor.Editor.Preferences
 {
-    [FilePath("General.pref", FilePathAttribute.Location.PreferencesFolder)]
+    [EditorFilePath("General.pref", EditorFilePathAttribute.Location.PreferencesFolder)]
     public class GeneralPreferences : ScriptableSingleton<GeneralPreferences>
     {
         [Text("General:")]

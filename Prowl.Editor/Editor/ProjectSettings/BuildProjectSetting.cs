@@ -3,7 +3,7 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor.Editor.ProjectSettings
 {
-    [FilePath("BuildSettings.projsetting", FilePathAttribute.Location.ProjectSettingsFolder)]
+    [EditorFilePath("BuildSettings.projsetting", EditorFilePathAttribute.Location.ProjectSettingsFolder)]
     public class BuildProjectSetting : ScriptableSingleton<BuildProjectSetting>
     {
         public AssetRef<Scene> InitialScene;

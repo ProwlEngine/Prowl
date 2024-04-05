@@ -3,7 +3,7 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor.Editor.Preferences
 {
-    [FilePath("AssetPipeline.pref", FilePathAttribute.Location.PreferencesFolder)]
+    [EditorFilePath("AssetPipeline.pref", EditorFilePathAttribute.Location.PreferencesFolder)]
     public class AssetPipelinePreferences : ScriptableSingleton<AssetPipelinePreferences>
     {
         [Text("Asset Browser:")]
