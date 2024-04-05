@@ -17,10 +17,9 @@ namespace Prowl.Runtime
     }
 
     [AttributeUsage(T.Field, AllowMultiple = true)]
-    public class TextAttribute : Attribute, IImGUIAttri
+    public class TextAttribute(string text) : Attribute, IImGUIAttri
     {
-        public string text;
-        public TextAttribute(string text) { this.text = text; }
+        public string text = text;
         public GuiAttribType AttribType() => GuiAttribType.Text;
     }
 
@@ -43,29 +42,19 @@ namespace Prowl.Runtime
     }
 
     [AttributeUsage(T.Field, AllowMultiple = false)]
-    public class HeaderAttribute : Attribute, IImGUIAttri
+    public class HeaderAttribute(string name) : Attribute, IImGUIAttri
     {
-        public string name;
-        public HeaderAttribute(string name) { this.name = name; }
+        public string name = name;
         public GuiAttribType AttribType() => GuiAttribType.Header;
     }
 
     [AttributeUsage(T.Field, AllowMultiple = false)]
-    public class StartGroupAttribute : Attribute, IImGUIAttri
+    public class StartGroupAttribute(string name, float height = 100f, float headerSize = 1f, bool collapsable = true) : Attribute, IImGUIAttri
     {
-        public string name;
-        public float height;
-        public float headerSize;
-        public bool collapsable;
-
-        public StartGroupAttribute(string name, float height = 100f, float headerSize = 1f, bool collapsable = true)
-        {
-            this.name = name;
-            this.height = height;
-            this.headerSize = headerSize;
-            this.collapsable = collapsable;
-        }
-
+        public string name = name;
+        public float height = height;
+        public float headerSize = headerSize;
+        public bool collapsable = collapsable;
         public GuiAttribType AttribType() => GuiAttribType.StartGroup;
     }
 
@@ -76,42 +65,38 @@ namespace Prowl.Runtime
     }
 
     [AttributeUsage(T.Field, AllowMultiple = false)]
-    public class TooltipAttribute : Attribute, IImGUIAttri
+    public class TooltipAttribute(string text) : Attribute, IImGUIAttri
     {
-        public string tooltip;
-        public TooltipAttribute(string text) => tooltip = text;
+        public string tooltip = text;
         public GuiAttribType AttribType() => GuiAttribType.Tooltip;
     }
 
     [AttributeUsage(T.Field, AllowMultiple = false)]
-    public class ShowIfAttribute : Attribute, IImGUIAttri
+    public class ShowIfAttribute(string propertyName, bool inverted = false) : Attribute, IImGUIAttri
     {
-        public string propertyName;
-        public ShowIfAttribute(string propertyName) => this.propertyName = propertyName;
+        public string propertyName = propertyName;
+        public bool inverted = inverted;
         public GuiAttribType AttribType() => GuiAttribType.ShowIf;
     }
 
     [AttributeUsage(T.Field, AllowMultiple = false)]
-    public class IndentAttribute : Attribute, IImGUIAttri
+    public class IndentAttribute(int indent = 4) : Attribute, IImGUIAttri
     {
-        public int indent;
-        public IndentAttribute(int indent = 4) => this.indent = indent;
+        public int indent = indent;
         public GuiAttribType AttribType() => GuiAttribType.Indent;
     }
 
     [AttributeUsage(T.Field, AllowMultiple = false)]
-    public class UnindentAttribute : Attribute, IImGUIAttri
+    public class UnindentAttribute(int unindent = 4) : Attribute, IImGUIAttri
     {
-        public int unindent;
-        public UnindentAttribute(int unindent = 4) => this.unindent = unindent;
+        public int unindent = unindent;
         public GuiAttribType AttribType() => GuiAttribType.Unindent;
     }
 
     [AttributeUsage(T.Method, AllowMultiple = false)]
-    public class ImGUIButtonAttribute : Attribute 
+    public class ImGUIButtonAttribute(string text) : Attribute 
     { 
-        public string buttonText;
-        public ImGUIButtonAttribute(string text) => buttonText = text;
+        public string buttonText = text;
     }
 
     [AttributeUsage(T.Field, AllowMultiple = false)]

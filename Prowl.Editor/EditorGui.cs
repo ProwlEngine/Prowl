@@ -170,12 +170,22 @@ public static class EditorGui
                     break;
 
                 case GuiAttribType.ShowIf:
-                    // Find the Property on target, and if its a bool return the value
                     var showIf = imGuiAttribute as ShowIfAttribute;
-                    var prop = target.GetType().GetProperty(showIf.propertyName);
-                    if (prop != null && prop.PropertyType == typeof(bool))
-                        if ((bool)prop.GetValue(target) == false)
+                    var field = target.GetType().GetField(showIf.propertyName);
+                    if (field != null && field.FieldType == typeof(bool))
+                    {
+                        if ((bool)field.GetValue(target) == showIf.inverted)
                             return false;
+                    }
+                    else
+                    {
+                        var prop = target.GetType().GetProperty(showIf.propertyName);
+                        if (prop != null && prop.PropertyType == typeof(bool))
+                        {
+                            if ((bool)prop.GetValue(target) == showIf.inverted)
+                                return false;
+                        }
+                    }
                     break;
 
                 case GuiAttribType.Separator:
