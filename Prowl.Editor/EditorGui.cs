@@ -2,6 +2,7 @@ using Hexa.NET.ImGui;
 using Prowl.Editor.EditorWindows;
 using Prowl.Runtime;
 using System.Reflection;
+using System.Reflection.Metadata.Ecma335;
 
 namespace Prowl.Editor;
 
@@ -112,11 +113,13 @@ public static class EditorGui
         style.ScrollbarSize = 10.0f;
         style.GrabMinSize = 10.0f;
 
-        style.WindowBorderSize = 4.0f;
+        style.WindowBorderSize = 0.0f;
         style.ChildBorderSize = 0.0f;
         style.PopupBorderSize = 0.0f;
         style.FrameBorderSize = 0.0f;
         style.TabBorderSize = 0.0f;
+
+        style.DockingSeparatorSize = 4f;
 
         style.WindowRounding = 3.0f;
         style.ChildRounding = 3.0f;

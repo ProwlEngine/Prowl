@@ -42,6 +42,9 @@ namespace Prowl.Runtime.Components.Testings
             }
 
 
+            var timer = new Stopwatch();
+            timer.Start();
+
             for (int x = 0; x < resolution; x++)
             {
                 for (int y = 0; y < resolution; y++)
@@ -85,12 +88,16 @@ namespace Prowl.Runtime.Components.Testings
                 }
             }
 
+            timer.Stop();
+            Debug.Log($"[Prowl] Meshing + Mesh Creation {timer.Elapsed.TotalMilliseconds.ToString("0.000")}ms");
+
             mesh ??= new();
             mesh.Clear();
 
             mesh.Vertices = vertices.ToArray();
             mesh.UV = uv.ToArray();
             mesh.Indices = indices.ToArray();
+
 
             mesh.RecalculateNormals();
             mesh.RecalculateTangents();
