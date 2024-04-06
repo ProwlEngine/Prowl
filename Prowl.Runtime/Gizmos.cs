@@ -5,7 +5,7 @@ namespace Prowl.Runtime
 {
     public static class Gizmos
     {
-        private readonly static PrimitiveBatch LineBatch = new(Silk.NET.OpenGL.PrimitiveType.Lines);
+        private static PrimitiveBatch LineBatch;
         private readonly static List<(Gizmo, Matrix4x4)> gizmos = new(100);
         private static Material mat;
 
@@ -47,6 +47,8 @@ namespace Prowl.Runtime
             {
                 return; // Happens when no project is loaded (Or no Gizmos shader was found)
             }
+
+            LineBatch ??= new PrimitiveBatch(Silk.NET.OpenGL.PrimitiveType.Lines);
 
             if (LineBatch.IsUploaded == false)
             {

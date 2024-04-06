@@ -1,4 +1,6 @@
 ﻿using Prowl.Runtime;
+using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.OpenGL;
 using Silk.NET.OpenGL;
 using System;
 using System.Collections.Generic;
@@ -121,8 +123,8 @@ namespace Prowl.Runtime
         public int IndexCount => indices?.Length ?? 0;
 
         public uint VertexArrayObject => vertexArrayObject;
-        public uint VertexBuffer => vertexBuffer;
-        public uint IndexBuffer => indexBuffer;
+        public GraphicsBuffer VertexBuffer => vertexBuffer;
+        public GraphicsBuffer IndexBuffer => indexBuffer;
 
         public bool HasNormals => (normals?.Length ?? 0) > 0;
         public bool HasTangents => (tangents?.Length ?? 0) > 0;
@@ -153,8 +155,8 @@ namespace Prowl.Runtime
         PrimitiveType meshTopology = PrimitiveType.TriangleStrip;
 
         uint vertexArrayObject;
-        uint vertexBuffer;
-        uint indexBuffer;
+        GraphicsBuffer vertexBuffer;
+        GraphicsBuffer indexBuffer;
 
         public Mesh() { }
 
@@ -229,13 +231,9 @@ namespace Prowl.Runtime
             vertexArrayObject = Graphics.Device.GenVertexArray();
             Graphics.Device.BindVertexArray(vertexArrayObject);
 
-            vertexBuffer = Graphics.Device.GenBuffer();
-            Graphics.Device.BindBuffer(BufferTargetARB.ArrayBuffer, vertexBuffer);
-            Graphics.Device.BufferData(BufferTargetARB.ArrayBuffer, new ReadOnlySpan<byte>(vertexBlob), BufferUsageARB.StaticDraw);
+            vertexBuffer = Graphics.Device.CreateBuffer(BufferType.VertexBuffer, vertexBlob, false);
             layout.Bind();
 
-            indexBuffer = Graphics.Device.GenBuffer();
-            Graphics.Device.BindBuffer(BufferTargetARB.ElementArrayBuffer, indexBuffer);
             if (indexFormat == IndexFormat.UInt16)
             {
                 ushort[] data = new ushort[indices.Length];
@@ -245,17 +243,18 @@ namespace Prowl.Runtime
                         throw new InvalidOperationException($"[Mesh] Invalid value {indices[i]} for 16-bit indices");
                     data[i] = (ushort)indices[i];
                 }
-                Graphics.Device.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<ushort>(data), BufferUsageARB.StaticDraw);
+                indexBuffer = Graphics.Device.CreateBuffer(BufferType.ElementsBuffer, data, false);
             }
             else if (indexFormat == IndexFormat.UInt32)
             {
-                Graphics.Device.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<uint>(indices), BufferUsageARB.StaticDraw);
+                indexBuffer = Graphics.Device.CreateBuffer(BufferType.ElementsBuffer, indices, false);
             }
 
             Debug.Log($"VAO: [ID {vertexArrayObject}] Mesh uploaded successfully to VRAM (GPU)");
 
             Graphics.Device.BindVertexArray(0);
-            Graphics.Device.BindBuffer(BufferTargetARB.ArrayBuffer, 0);
+            GLDevice.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, 0);
+            GLDevice.GL.BindBuffer(BufferTargetARB.ArrayBuffer, 0);
         }
 
         public void RecalculateBounds()
@@ -435,14 +434,12 @@ namespace Prowl.Runtime
         {
             if (vertexArrayObject != 0)
                 Graphics.Device.DeleteVertexArray(vertexArrayObject);
-            if (vertexBuffer != 0)
-                Graphics.Device.DeleteBuffer(vertexBuffer);
-            if (indexBuffer != 0)
-                Graphics.Device.DeleteBuffer(indexBuffer);
+            //vertexBuffer?.Dispose();
+            //vertexBuffer = null;
+            //indexBuffer?.Dispose();
+            //indexBuffer = null;
 
             vertexArrayObject = 0;
-            vertexBuffer = 0;
-            indexBuffer = 0;
         }
 
         private T ReadVertexData<T>(T value)

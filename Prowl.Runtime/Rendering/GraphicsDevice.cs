@@ -1,16 +1,41 @@
-﻿using Silk.NET.OpenGL;
+﻿using Prowl.Runtime.Rendering.OpenGL;
+using Silk.NET.OpenGL;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Prowl.Runtime.Rendering
 {
+    public enum BufferType { VertexBuffer, ElementsBuffer, UniformBuffer, StructuredBuffer }
+
+    public abstract class GraphicsBuffer : IDisposable
+    {
+        public abstract bool IsDisposed { get; protected set; }
+        public abstract void Dispose();
+    }
+
     public abstract class GraphicsDevice
     {
         public abstract void Initialize(bool debug);
 
+        #region Buffers
+
+        /// <summary> Create a graphics buffer with the given type and data. </summary>
+        public abstract GraphicsBuffer CreateBuffer<T>(BufferType bufferType, T[] data, bool dynamic = false) where T : unmanaged;
+
+        /// <summary> Set the data of the given buffer with the given data. </summary>
+        public abstract void SetBuffer<T>(GraphicsBuffer buffer, T[] data, bool dynamic = false);
+
+        /// <summary> Update the given buffer with the given data at the given offset in bytes. </summary>
+        public abstract void UpdateBuffer<T>(GraphicsBuffer buffer, uint offsetInBytes, T[] data) where T : unmanaged;
+
+        public abstract void BindBuffer(GraphicsBuffer buffer);
+
+        #endregion
+
+
         public abstract void UseProgram(uint program);
         public abstract void Viewport(int v1, int v2, uint width, uint height);
-        public abstract void ClearColor(float r, float g, float b, float a);
-        public abstract void Clear(uint v);
+        public abstract void Clear(float r, float g, float b, float a, ClearFlags v);
         public abstract void DepthFunc(DepthFunction lequal);
         public abstract void Enable(EnableCap depthTest);
         public abstract void FrontFace(FrontFaceDirection cW);
@@ -24,8 +49,6 @@ namespace Prowl.Runtime.Rendering
         public abstract void CullFace(TriangleFace back);
         public abstract void Disable(EnableCap cullFace);
         public abstract uint GenVertexArray();
-        public abstract void BindBuffer(BufferTargetARB arrayBuffer, uint vbo);
-        public abstract uint GenBuffer();
         public abstract void BindTexture(TextureTarget type, uint handle);
         public abstract void TexParameter(TextureTarget type, TextureParameterName textureWrapS, int clampToEdge);
         public abstract unsafe void TexImage2D(TextureTarget textureCubeMapPositiveX, int v1, int pixelInternalFormat, uint size1, uint size2, int v2, PixelFormat pixelFormat, PixelType pixelType, void* v3);
@@ -53,9 +76,7 @@ namespace Prowl.Runtime.Rendering
         public abstract void FramebufferTexture2D(FramebufferTarget framebuffer, FramebufferAttachment framebufferAttachment, TextureTarget type, uint handle, int v);
         public abstract GLEnum CheckFramebufferStatus(FramebufferTarget framebuffer);
         public abstract void DeleteFramebuffer(uint fboId);
-        public abstract void BufferData<T>(BufferTargetARB arrayBuffer, ReadOnlySpan<T> readOnlySpan, BufferUsageARB staticDraw) where T : unmanaged;
         public abstract void DeleteVertexArray(uint vertexArrayObject);
-        public abstract void DeleteBuffer(uint vertexBuffer);
         public abstract void EnableVertexAttribArray(uint index);
         public abstract unsafe void VertexAttribPointer(uint index, byte count, GLEnum type, bool normalized, uint size, void* offset);
         public abstract unsafe void VertexAttribIPointer(uint index, byte count, GLEnum type, uint size, void* offset);

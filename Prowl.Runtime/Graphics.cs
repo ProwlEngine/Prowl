@@ -1,4 +1,5 @@
 ﻿using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.OpenGL;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using System;
@@ -64,7 +65,7 @@ namespace Prowl.Runtime
 
         public static void Initialize()
         {
-            Device = new OpenGLDevice();
+            Device = new GLDevice();
             Device.Initialize(true);
         }
 
@@ -99,8 +100,11 @@ namespace Prowl.Runtime
 
         public static void Clear(float r = 0, float g = 0, float b = 0, float a = 1, bool color = true, bool depth = true, bool stencil = true)
         {
-            Device.ClearColor(r, g, b, a);
-            Device.Clear((uint)(color ? ClearBufferMask.ColorBufferBit : 0) | (uint)(depth ? ClearBufferMask.DepthBufferBit : 0) | (uint)(stencil ? ClearBufferMask.StencilBufferBit : 0));
+            ClearFlags flags = 0;
+            if (color) flags |= ClearFlags.Color;
+            if (depth) flags |= ClearFlags.Depth;
+            if (stencil) flags |= ClearFlags.Stencil;
+            Device.Clear(r, g, b, a, flags);
         }
 
         public static void StartFrame()

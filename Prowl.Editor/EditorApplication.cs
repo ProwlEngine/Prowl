@@ -86,7 +86,7 @@ public unsafe class EditorApplication : Application {
 
         Window.Load += () => {
 
-            imguiController = new ImGUIController((Graphics.Device as OpenGLDevice).GL, Window.InternalWindow, Input.Context);
+            imguiController = new ImGUIController(GLDevice.GL, Window.InternalWindow, Input.Context);
 
             EditorGui.Initialize();
 
