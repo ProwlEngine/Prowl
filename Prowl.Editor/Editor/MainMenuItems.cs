@@ -147,6 +147,35 @@ namespace Prowl.Editor.EditorWindows
             return t.transform.position + t.transform.forward * 10;
         }
 
+        [MenuItem("Template/3D Object/Cube")]
+        public static void Template3DCube() => CreateDefaultModel("Cube");
+
+        [MenuItem("Template/3D Object/Sphere")]
+        public static void Template3DSphere() => CreateDefaultModel("Sphere");
+
+        [MenuItem("Template/3D Object/Cylinder")]
+        public static void Template3DCylinder() => CreateDefaultModel("Cylinder");
+
+        [MenuItem("Template/3D Object/Capsule")]
+        public static void Template3DCapsule() => CreateDefaultModel("Capsule");
+
+        [MenuItem("Template/3D Object/Plane")]
+        public static void Template3DPlane() => CreateDefaultModel("Plane");
+
+        [MenuItem("Template/3D Object/Quad")]
+        public static void Template3DQuad() => CreateDefaultModel("Quad");
+
+        private static void CreateDefaultModel(string name)
+        {
+            var original = Application.AssetProvider.LoadAsset<GameObject>($"Defaults/{name}.obj");
+            if (original.IsAvailable)
+            {
+                var go = GameObject.Instantiate(original.Res!);
+                go.transform.position = GetPosition();
+                HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+            }
+        }
+
         [MenuItem("Template/Lights/Ambient Light")]
         public static void TemplateAmbientLight()
         {

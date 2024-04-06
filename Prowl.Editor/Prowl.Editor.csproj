@@ -13,10 +13,10 @@
       <None Remove="EmbeddedResources\Checkerboard.png" />
       <None Remove="EmbeddedResources\CSharpIcon.png" />
       <None Remove="EmbeddedResources\DefaultAssets\1mcube.fbx" />
-      <None Remove="EmbeddedResources\DefaultAssets\1mcube.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\AmbientLight.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Basic.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Bloom.shader" />
+      <None Remove="EmbeddedResources\DefaultAssets\Capsule.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\Cube.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\Cylinder.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\DefaultRenderPipeline.scriptobj" />
@@ -40,6 +40,7 @@
       <None Remove="EmbeddedResources\DefaultAssets\Pointlight.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Pointlight.shader.meta" />
       <None Remove="EmbeddedResources\DefaultAssets\ProcedualSkybox.shader" />
+      <None Remove="EmbeddedResources\DefaultAssets\Quad.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\Random.glsl" />
       <None Remove="EmbeddedResources\DefaultAssets\Sphere.obj" />
       <None Remove="EmbeddedResources\DefaultAssets\Spotlight.shader" />
@@ -69,10 +70,11 @@
       <EmbeddedResource Include="EmbeddedResources\AudioIcon.png" />
       <EmbeddedResource Include="EmbeddedResources\Checkerboard.png" />
       <EmbeddedResource Include="EmbeddedResources\CSharpIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\1mcube.obj" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\DefaultRenderPipeline.scriptobj" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Tonemapper.shader" />
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Capsule.obj" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Cube.obj" />
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\DefaultRenderPipeline.scriptobj" />
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Quad.obj" />
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Tonemapper.shader" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Cylinder.obj" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_emission.png" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_gray18.png" />
