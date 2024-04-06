@@ -11,9 +11,6 @@ namespace Prowl.Runtime
     {
         public static GraphicsDevice Device { get; internal set; }
 
-        public static int GLMajorVersion { get; internal set; }
-        public static int GLMinorVersion { get; internal set; }
-
         public static BlendingFactor CustomBlendSrcFactor { get; set; }
         public static BlendingFactor CustomBlendDstFactor { get; set; }
         public static BlendEquationModeEXT CustomBlendEquation { get; set; }
@@ -54,14 +51,11 @@ namespace Prowl.Runtime
             GLEnum.ColorAttachment29, GLEnum.ColorAttachment30, GLEnum.ColorAttachment31
         };
 
+#warning TODO: Move these to a separate class "GraphicsCapabilities" and add more
         public static int MaxTextureSize { get; internal set; }
         public static int MaxCubeMapTextureSize { get; internal set; }
         public static int MaxArrayTextureLayers { get; internal set; }
-
-        public static int MaxRenderbufferSize { get; internal set; }
         public static int MaxFramebufferColorAttachments { get; internal set; }
-        public static int MaxDrawBuffers { get; internal set; }
-        public static int MaxSamples { get; internal set; }
 
         public static void Initialize()
         {

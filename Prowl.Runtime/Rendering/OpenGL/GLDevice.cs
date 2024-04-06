@@ -102,18 +102,11 @@ namespace Prowl.Runtime.Rendering.OpenGL
             // Smooth lines
             GL.Enable(EnableCap.LineSmooth);
 
-            Graphics.GLMajorVersion = GL.GetInteger(GLEnum.MajorVersion);
-            Graphics.GLMinorVersion = GL.GetInteger(GLEnum.MinorVersion);
-
             // Textures
-            Graphics.MaxSamples = GL.GetInteger(GLEnum.MaxSamples);
             Graphics.MaxTextureSize = GL.GetInteger(GLEnum.MaxTextureSize);
             Graphics.MaxCubeMapTextureSize = GL.GetInteger(GLEnum.MaxCubeMapTextureSize);
             Graphics.MaxArrayTextureLayers = GL.GetInteger(GLEnum.MaxArrayTextureLayers);
-
-            Graphics.MaxRenderbufferSize = GL.GetInteger(GLEnum.MaxRenderbufferSize);
             Graphics.MaxFramebufferColorAttachments = GL.GetInteger(GLEnum.MaxColorAttachments);
-            Graphics.MaxDrawBuffers = GL.GetInteger(GLEnum.MaxDrawBuffers);
         }
 
         private static void DebugCallback(GLEnum source, GLEnum type, int id, GLEnum severity, int length, nint message, nint userParam)
