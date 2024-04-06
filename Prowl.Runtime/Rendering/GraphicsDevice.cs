@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 
 namespace Prowl.Runtime.Rendering
 {
-    public enum BufferType { VertexBuffer, ElementsBuffer, UniformBuffer, StructuredBuffer }
+    public enum BufferType { VertexBuffer, ElementsBuffer, UniformBuffer, StructuredBuffer, Count }
 
     public abstract class GraphicsBuffer : IDisposable
     {
@@ -32,6 +32,17 @@ namespace Prowl.Runtime.Rendering
 
         #endregion
 
+        #region Vertex Arrays
+
+        public abstract uint GenVertexArray();
+        public abstract void BindVertexArray(uint vertexArrayObject);
+        public abstract void DeleteVertexArray(uint vertexArrayObject);
+        public abstract void EnableVertexAttribArray(uint index);
+        public abstract unsafe void VertexAttribPointer(uint index, byte count, GLEnum type, bool normalized, uint size, void* offset);
+        public abstract unsafe void VertexAttribIPointer(uint index, byte count, GLEnum type, uint size, void* offset);
+
+        #endregion
+
 
         public abstract void UseProgram(uint program);
         public abstract void Viewport(int v1, int v2, uint width, uint height);
@@ -39,7 +50,6 @@ namespace Prowl.Runtime.Rendering
         public abstract void DepthFunc(DepthFunction lequal);
         public abstract void Enable(EnableCap depthTest);
         public abstract void FrontFace(FrontFaceDirection cW);
-        public abstract void BindVertexArray(uint vertexArrayObject);
         public abstract void DepthMask(bool v);
         public abstract void BindFramebuffer(FramebufferTarget readFramebuffer, uint fboId);
         public abstract void BlitFramebuffer(int v1, int v2, int width, int height, int v3, int v4, int v5, int v6, ClearBufferMask depthBufferBit, BlitFramebufferFilter nearest);
@@ -48,7 +58,6 @@ namespace Prowl.Runtime.Rendering
         public abstract void BlendEquation(BlendEquationModeEXT equation);
         public abstract void CullFace(TriangleFace back);
         public abstract void Disable(EnableCap cullFace);
-        public abstract uint GenVertexArray();
         public abstract void BindTexture(TextureTarget type, uint handle);
         public abstract void TexParameter(TextureTarget type, TextureParameterName textureWrapS, int clampToEdge);
         public abstract unsafe void TexImage2D(TextureTarget textureCubeMapPositiveX, int v1, int pixelInternalFormat, uint size1, uint size2, int v2, PixelFormat pixelFormat, PixelType pixelType, void* v3);
@@ -76,10 +85,6 @@ namespace Prowl.Runtime.Rendering
         public abstract void FramebufferTexture2D(FramebufferTarget framebuffer, FramebufferAttachment framebufferAttachment, TextureTarget type, uint handle, int v);
         public abstract GLEnum CheckFramebufferStatus(FramebufferTarget framebuffer);
         public abstract void DeleteFramebuffer(uint fboId);
-        public abstract void DeleteVertexArray(uint vertexArrayObject);
-        public abstract void EnableVertexAttribArray(uint index);
-        public abstract unsafe void VertexAttribPointer(uint index, byte count, GLEnum type, bool normalized, uint size, void* offset);
-        public abstract unsafe void VertexAttribIPointer(uint index, byte count, GLEnum type, uint size, void* offset);
         public abstract void ReadBuffer(ReadBufferMode colorAttachment5);
         public abstract T ReadPixels<T>(int x, int y, uint v1, uint v2, PixelFormat red, PixelType @float) where T : unmanaged;
         public abstract int GetUniformLocation(uint shader, string name);

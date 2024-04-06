@@ -1,8 +1,6 @@
 ﻿using Silk.NET.Core.Native;
 using Silk.NET.OpenGL;
 using System;
-using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 
 namespace Prowl.Runtime.Rendering.OpenGL
 {
@@ -11,13 +9,18 @@ namespace Prowl.Runtime.Rendering.OpenGL
         public override bool IsDisposed { get; protected set; }
 
         public readonly uint Handle;
+        public readonly BufferType OriginalType;
         public readonly BufferTargetARB Target;
         public readonly uint SizeInBytes;
 
         public unsafe GLBuffer(BufferType type, uint sizeInBytes, void* data, bool dynamic)
         {
+            if(type == BufferType.Count)
+                throw new ArgumentOutOfRangeException(nameof(type), type, null);
+
             SizeInBytes = sizeInBytes;
 
+            OriginalType = type;
             switch (type)
             {
                 case BufferType.VertexBuffer:
@@ -64,18 +67,14 @@ namespace Prowl.Runtime.Rendering.OpenGL
             GLDevice.GL.DeleteBuffer(Handle);
         }
 
-        private static Dictionary<BufferTargetARB, uint> boundBuffers = [];
+        private readonly static uint[] boundBuffers = new uint[(int)BufferType.Count];
 
         private void Bind()
         {
-            if (boundBuffers.TryGetValue(Target, out uint boundBuffer))
-            {
-                if (boundBuffer == Handle)
-                    return;
-            }
-
+            if (boundBuffers[(int)OriginalType] == Handle)
+                return;
             GLDevice.GL.BindBuffer(Target, Handle);
-            boundBuffers[Target] = Handle;
+            boundBuffers[(int)OriginalType] = Handle;
         }
     }
 
