@@ -248,7 +248,13 @@ public static class EditorGui
             if (attribute != null)
                 if (ImGui.Button(attribute.buttonText))
                 {
-                    method.Invoke(target, null);
+                    try
+                    {
+                        method.Invoke(target, null);
+                    }catch (Exception e)
+                    {
+                        Debug.LogError("Error During ImGui Button Execution: " + e.Message + "\n" + e.StackTrace);
+                    }
                     return true;
                 }
         }
