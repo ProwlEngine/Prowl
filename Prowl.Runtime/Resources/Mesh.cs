@@ -226,16 +226,16 @@ namespace Prowl.Runtime
                 return;
 
 
-            vertexArrayObject = Graphics.GL.GenVertexArray();
-            Graphics.GL.BindVertexArray(vertexArrayObject);
+            vertexArrayObject = Graphics.Device.GenVertexArray();
+            Graphics.Device.BindVertexArray(vertexArrayObject);
 
-            vertexBuffer = Graphics.GL.GenBuffer();
-            Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, vertexBuffer);
-            Graphics.GL.BufferData(BufferTargetARB.ArrayBuffer, new ReadOnlySpan<byte>(vertexBlob), BufferUsageARB.StaticDraw);
+            vertexBuffer = Graphics.Device.GenBuffer();
+            Graphics.Device.BindBuffer(BufferTargetARB.ArrayBuffer, vertexBuffer);
+            Graphics.Device.BufferData(BufferTargetARB.ArrayBuffer, new ReadOnlySpan<byte>(vertexBlob), BufferUsageARB.StaticDraw);
             layout.Bind();
 
-            indexBuffer = Graphics.GL.GenBuffer();
-            Graphics.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, indexBuffer);
+            indexBuffer = Graphics.Device.GenBuffer();
+            Graphics.Device.BindBuffer(BufferTargetARB.ElementArrayBuffer, indexBuffer);
             if (indexFormat == IndexFormat.UInt16)
             {
                 ushort[] data = new ushort[indices.Length];
@@ -245,19 +245,17 @@ namespace Prowl.Runtime
                         throw new InvalidOperationException($"[Mesh] Invalid value {indices[i]} for 16-bit indices");
                     data[i] = (ushort)indices[i];
                 }
-                Graphics.GL.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<ushort>(data), BufferUsageARB.StaticDraw);
+                Graphics.Device.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<ushort>(data), BufferUsageARB.StaticDraw);
             }
             else if (indexFormat == IndexFormat.UInt32)
             {
-                Graphics.GL.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<uint>(indices), BufferUsageARB.StaticDraw);
+                Graphics.Device.BufferData(BufferTargetARB.ElementArrayBuffer, new ReadOnlySpan<uint>(indices), BufferUsageARB.StaticDraw);
             }
 
             Debug.Log($"VAO: [ID {vertexArrayObject}] Mesh uploaded successfully to VRAM (GPU)");
 
-            Graphics.GL.BindVertexArray(0);
-            Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, 0);
-
-            Graphics.CheckGL();
+            Graphics.Device.BindVertexArray(0);
+            Graphics.Device.BindBuffer(BufferTargetARB.ArrayBuffer, 0);
         }
 
         public void RecalculateBounds()
@@ -436,11 +434,11 @@ namespace Prowl.Runtime
         private void DeleteGPUBuffers()
         {
             if (vertexArrayObject != 0)
-                Graphics.GL.DeleteVertexArray(vertexArrayObject);
+                Graphics.Device.DeleteVertexArray(vertexArrayObject);
             if (vertexBuffer != 0)
-                Graphics.GL.DeleteBuffer(vertexBuffer);
+                Graphics.Device.DeleteBuffer(vertexBuffer);
             if (indexBuffer != 0)
-                Graphics.GL.DeleteBuffer(indexBuffer);
+                Graphics.Device.DeleteBuffer(indexBuffer);
 
             vertexArrayObject = 0;
             vertexBuffer = 0;
@@ -943,14 +941,14 @@ public class VertexFormat
         {
             var element = Elements[i];
             var index = element.Semantic;
-            Graphics.GL.EnableVertexAttribArray(index);
+            Graphics.Device.EnableVertexAttribArray(index);
             int offset = (int)element.Offset;
             unsafe
             {
                 if (element.Type == VertexType.Float)
-                    Graphics.GL.VertexAttribPointer(index, element.Count, (GLEnum)element.Type, element.Normalized, (uint)Size, (void*)offset);
+                    Graphics.Device.VertexAttribPointer(index, element.Count, (GLEnum)element.Type, element.Normalized, (uint)Size, (void*)offset);
                 else
-                    Graphics.GL.VertexAttribIPointer(index, element.Count, (GLEnum)element.Type, (uint)Size, (void*)offset);
+                    Graphics.Device.VertexAttribIPointer(index, element.Count, (GLEnum)element.Type, (uint)Size, (void*)offset);
             }
         }
     }

@@ -4,6 +4,7 @@ using Hexa.NET.ImNodes;
 using Hexa.NET.ImPlot;
 using Prowl.Icons;
 using Prowl.Runtime;
+using Prowl.Runtime.Rendering;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
@@ -334,7 +335,6 @@ namespace Prowl.Editor.ImGUI
             Graphics.UseProgram(_shader);
             _gl.Uniform1(_attribLocationTex, 0);
             _gl.UniformMatrix4(_attribLocationProjMtx, 1, false, orthoProjection);
-            Graphics.CheckGL();
 
             _gl.BindSampler(0, 0);
 
@@ -343,7 +343,6 @@ namespace Prowl.Editor.ImGUI
             // The renderer would actually work without any VAO bound, but then our VertexAttrib calls would overwrite the default one currently bound.
             _vertexArrayObject = _gl.GenVertexArray();
             _gl.BindVertexArray(_vertexArrayObject);
-            Graphics.CheckGL();
 
             // Bind vertex/index buffers and setup attributes for ImDrawVert
             _gl.BindBuffer(GLEnum.ArrayBuffer, _vboHandle);
@@ -416,9 +415,7 @@ namespace Prowl.Editor.ImGUI
                 // Upload vertex/index buffers
 
                 _gl.BufferData(GLEnum.ArrayBuffer, (nuint)(cmdListPtr.VtxBuffer.Size * sizeof(ImDrawVert)), (void*)cmdListPtr.VtxBuffer.Data, GLEnum.StreamDraw);
-                Graphics.CheckGL();
                 _gl.BufferData(GLEnum.ElementArrayBuffer, (nuint)(cmdListPtr.IdxBuffer.Size * sizeof(ushort)), (void*)cmdListPtr.IdxBuffer.Data, GLEnum.StreamDraw);
-                Graphics.CheckGL();
 
                 for (int cmd_i = 0; cmd_i < cmdListPtr.CmdBuffer.Size; cmd_i++)
                 {
@@ -440,14 +437,11 @@ namespace Prowl.Editor.ImGUI
                         {
                             // Apply scissor/clipping rectangle
                             _gl.Scissor((int)clipRect.x, (int)(framebufferHeight - clipRect.w), (uint)(clipRect.z - clipRect.x), (uint)(clipRect.w - clipRect.y));
-                            Graphics.CheckGL();
 
                             // Bind texture, Draw
                             _gl.BindTexture(GLEnum.Texture2D, (uint)cmdPtr.TextureId.Handle);
-                            Graphics.CheckGL();
 
                             _gl.DrawElementsBaseVertex(GLEnum.Triangles, cmdPtr.ElemCount, GLEnum.UnsignedShort, (void*)(cmdPtr.IdxOffset * sizeof(ushort)), (int)cmdPtr.VtxOffset);
-                            Graphics.CheckGL();
                         }
                     }
                 }
@@ -582,8 +576,6 @@ namespace Prowl.Editor.ImGUI
             _gl.BindBuffer(GLEnum.ArrayBuffer, (uint)lastArrayBuffer);
 
             _gl.BindVertexArray((uint)lastVertexArray);
-
-            Graphics.CheckGL();
         }
 
         /// <summary>
@@ -602,9 +594,8 @@ namespace Prowl.Editor.ImGUI
             _gl.GetInteger(GLEnum.TextureBinding2D, out int lastTexture);
 
             _fontTexture = new Texture2D((uint)width, (uint)height, false, Runtime.Texture.TextureImageFormat.Float4);
-            Graphics.GL.BindTexture(TextureTarget.Texture2D, _fontTexture.Handle);
-            Graphics.GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, (uint)width, (uint)height, Silk.NET.OpenGL.PixelFormat.Rgba, Silk.NET.OpenGL.PixelType.UnsignedByte, pixels);
-            Graphics.CheckGL();
+            Graphics.Device.BindTexture(TextureTarget.Texture2D, _fontTexture.Handle);
+            Graphics.Device.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, (uint)width, (uint)height, Silk.NET.OpenGL.PixelFormat.Rgba, Silk.NET.OpenGL.PixelType.UnsignedByte, pixels);
             _fontTexture.SetTextureFilters(TextureMinFilter.Linear, TextureMagFilter.Linear);
 
             // Store our identifier
@@ -636,7 +627,7 @@ namespace Prowl.Editor.ImGUI
         private uint Compile(string vertexSource, string fragmentSource)
         {
             // Create the program
-            uint shaderProgram = Graphics.GL.CreateProgram();
+            uint shaderProgram = Graphics.Device.CreateProgram();
 
             // Initialize compilation log info variables
             int statusCode = -1;
@@ -646,20 +637,20 @@ namespace Prowl.Editor.ImGUI
             if (!string.IsNullOrEmpty(vertexSource))
             {
                 // Create and compile the shader
-                uint vertexShader = Graphics.GL.CreateShader(ShaderType.VertexShader);
-                Graphics.GL.ShaderSource(vertexShader, vertexSource);
-                Graphics.GL.CompileShader(vertexShader);
+                uint vertexShader = Graphics.Device.CreateShader(ShaderType.VertexShader);
+                Graphics.Device.ShaderSource(vertexShader, vertexSource);
+                Graphics.Device.CompileShader(vertexShader);
 
                 // Check the compile log
-                Graphics.GL.GetShaderInfoLog(vertexShader, out info);
-                Graphics.GL.GetShader(vertexShader, ShaderParameterName.CompileStatus, out statusCode);
+                Graphics.Device.GetShaderInfoLog(vertexShader, out info);
+                Graphics.Device.GetShader(vertexShader, ShaderParameterName.CompileStatus, out statusCode);
 
                 // Check the compile log
                 if (statusCode != 1)
                 {
                     // Delete every handles when compilation failed
-                    Graphics.GL.DeleteShader(vertexShader);
-                    Graphics.GL.DeleteProgram(shaderProgram);
+                    Graphics.Device.DeleteShader(vertexShader);
+                    Graphics.Device.DeleteProgram(shaderProgram);
 
                     throw new InvalidOperationException("Failed to Compile Vertex Shader Source.\n" +
                         info + "\n\n" +
@@ -667,30 +658,28 @@ namespace Prowl.Editor.ImGUI
                 }
 
                 // Attach the shader to the program, and delete it (not needed anymore)
-                Graphics.GL.AttachShader(shaderProgram, vertexShader);
-                Graphics.GL.DeleteShader(vertexShader);
-
-                Graphics.CheckGL();
+                Graphics.Device.AttachShader(shaderProgram, vertexShader);
+                Graphics.Device.DeleteShader(vertexShader);
             }
 
             // Create fragment shader if requested
             if (!string.IsNullOrEmpty(fragmentSource))
             {
                 // Create and compile the shader
-                uint fragmentShader = Graphics.GL.CreateShader(ShaderType.FragmentShader);
-                Graphics.GL.ShaderSource(fragmentShader, fragmentSource);
-                Graphics.GL.CompileShader(fragmentShader);
+                uint fragmentShader = Graphics.Device.CreateShader(ShaderType.FragmentShader);
+                Graphics.Device.ShaderSource(fragmentShader, fragmentSource);
+                Graphics.Device.CompileShader(fragmentShader);
 
                 // Check the compile log
-                Graphics.GL.GetShaderInfoLog(fragmentShader, out info);
-                Graphics.GL.GetShader(fragmentShader, ShaderParameterName.CompileStatus, out statusCode);
+                Graphics.Device.GetShaderInfoLog(fragmentShader, out info);
+                Graphics.Device.GetShader(fragmentShader, ShaderParameterName.CompileStatus, out statusCode);
 
                 // Check the compile log
                 if (statusCode != 1)
                 {
                     // Delete every handles when compilation failed
-                    Graphics.GL.DeleteShader(fragmentShader);
-                    Graphics.GL.DeleteProgram(shaderProgram);
+                    Graphics.Device.DeleteShader(fragmentShader);
+                    Graphics.Device.DeleteProgram(shaderProgram);
 
                     throw new InvalidOperationException("Failed to Compile Fragment Shader Source.\n" +
                         info + "\n\n" +
@@ -698,24 +687,20 @@ namespace Prowl.Editor.ImGUI
                 }
 
                 // Attach the shader to the program, and delete it (not needed anymore)
-                Graphics.GL.AttachShader(shaderProgram, fragmentShader);
-                Graphics.GL.DeleteShader(fragmentShader);
-
-                Graphics.CheckGL();
+                Graphics.Device.AttachShader(shaderProgram, fragmentShader);
+                Graphics.Device.DeleteShader(fragmentShader);
             }
 
             // Link the compiled program
-            Graphics.GL.LinkProgram(shaderProgram);
-
-            Graphics.CheckGL();
+            Graphics.Device.LinkProgram(shaderProgram);
 
             // Check for link status
-            Graphics.GL.GetProgramInfoLog(shaderProgram, out info);
-            Graphics.GL.GetProgram(shaderProgram, ProgramPropertyARB.LinkStatus, out statusCode);
+            Graphics.Device.GetProgramInfoLog(shaderProgram, out info);
+            Graphics.Device.GetProgram(shaderProgram, ProgramPropertyARB.LinkStatus, out statusCode);
             if (statusCode != 1)
             {
                 // Delete the handles when failed to link the program
-                Graphics.GL.DeleteProgram(shaderProgram);
+                Graphics.Device.DeleteProgram(shaderProgram);
 
                 throw new InvalidOperationException("Failed to Link Shader Program.\n" +
                         info + "\n\n" +
@@ -724,8 +709,7 @@ namespace Prowl.Editor.ImGUI
 
             // Force an OpenGL flush, so that the shader will appear updated
             // in all contexts immediately (solves problems in multi-threaded apps)
-            Graphics.GL.Flush();
-            Graphics.CheckGL();
+            Graphics.Device.Flush();
 
             return shaderProgram;
         }

@@ -1,16 +1,17 @@
-﻿using Silk.NET.Core.Native;
+﻿using Prowl.Runtime.Rendering;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using System;
 
 namespace Prowl.Runtime
 {
+
     public static class Graphics
     {
-        public static GL GL { get; internal set; }
+        public static GraphicsDevice Device { get; internal set; }
 
-        public static int GLMajorVersion { get; private set; }
-        public static int GLMinorVersion { get; private set; }
+        public static int GLMajorVersion { get; internal set; }
+        public static int GLMinorVersion { get; internal set; }
 
         public static BlendingFactor CustomBlendSrcFactor { get; set; }
         public static BlendingFactor CustomBlendDstFactor { get; set; }
@@ -52,49 +53,19 @@ namespace Prowl.Runtime
             GLEnum.ColorAttachment29, GLEnum.ColorAttachment30, GLEnum.ColorAttachment31
         };
 
-        public static int MaxTextureSize { get; private set; }
-        public static int MaxCubeMapTextureSize { get; private set; }
-        public static int MaxArrayTextureLayers { get; private set; }
+        public static int MaxTextureSize { get; internal set; }
+        public static int MaxCubeMapTextureSize { get; internal set; }
+        public static int MaxArrayTextureLayers { get; internal set; }
 
-        public static int MaxRenderbufferSize { get; private set; }
-        public static int MaxFramebufferColorAttachments { get; private set; }
-        public static int MaxDrawBuffers { get; private set; }
-        public static int MaxSamples { get; private set; }
+        public static int MaxRenderbufferSize { get; internal set; }
+        public static int MaxFramebufferColorAttachments { get; internal set; }
+        public static int MaxDrawBuffers { get; internal set; }
+        public static int MaxSamples { get; internal set; }
 
         public static void Initialize()
         {
-            GL = GL.GetApi(Window.InternalWindow);
-
-            unsafe
-            {
-                if (OperatingSystem.IsWindows())
-                {
-                    GL.DebugMessageCallback(DebugCallback, null);
-                    GL.Enable(EnableCap.DebugOutput);
-                    GL.Enable(EnableCap.DebugOutputSynchronous);
-
-                }
-            }
-
-            // Smooth lines
-            GL.Enable(EnableCap.LineSmooth);
-
-            GLMajorVersion = GL.GetInteger(GLEnum.MajorVersion);
-            GLMinorVersion = GL.GetInteger(GLEnum.MinorVersion);
-
-            CheckGL();
-
-            // Textures
-            MaxSamples = GL.GetInteger(GLEnum.MaxSamples);
-            MaxTextureSize = GL.GetInteger(GLEnum.MaxTextureSize);
-            MaxCubeMapTextureSize = GL.GetInteger(GLEnum.MaxCubeMapTextureSize);
-            MaxArrayTextureLayers = GL.GetInteger(GLEnum.MaxArrayTextureLayers);
-
-            MaxRenderbufferSize = GL.GetInteger(GLEnum.MaxRenderbufferSize);
-            MaxFramebufferColorAttachments = GL.GetInteger(GLEnum.MaxColorAttachments);
-            MaxDrawBuffers = GL.GetInteger(GLEnum.MaxDrawBuffers);
-
-            CheckGL();
+            Device = new OpenGLDevice();
+            Device.Initialize(true);
         }
 
         public static IDisposable UseBlendMode(BlendMode mode) => new ActiveBlendMode(mode);
@@ -110,57 +81,35 @@ namespace Prowl.Runtime
         {
             if (activeProgram != program)
             {
-                GL.UseProgram(program);
+                Device.UseProgram(program);
                 activeProgram = program;
             }
         }
 
         public static void Viewport(int width, int height)
         {
-            GL.Viewport(0, 0, (uint)width, (uint)height);
+            Device.Viewport(0, 0, (uint)width, (uint)height);
             Resolution = new Vector2(width, height);
-        }
-
-        private static void DebugCallback(GLEnum source, GLEnum type, int id, GLEnum severity, int length, nint message, nint userParam)
-        {
-            var msg = SilkMarshal.PtrToString(message, NativeStringEncoding.UTF8);
-            if(type == GLEnum.DebugTypeError || type == GLEnum.DebugTypeUndefinedBehavior)
-                Debug.LogError($"OpenGL Error: {msg}");
-            else if (type == GLEnum.DebugTypePerformance || type == GLEnum.DebugTypeMarker || type == GLEnum.DebugTypePortability)
-                Debug.LogWarning($"OpenGL Warning: {msg}");
-            //else
-            //    Debug.Log($"OpenGL Message: {msg}");
-        }
-
-        public static void CheckGL()
-        {
-            var errorCode = GL.GetError();
-            while (errorCode != GLEnum.NoError)
-            {
-                Console.WriteLine($"OpenGL Error: {errorCode}" + Environment.NewLine + $"StackTrace: " + Environment.StackTrace);
-                errorCode = GL.GetError();
-            }
         }
 
         public static void ActivateDrawBuffers(int count)
         {
-            GL.DrawBuffers((uint)count, buffers); CheckGL();
+            Device.DrawBuffers((uint)count, buffers);
         }
 
         public static void Clear(float r = 0, float g = 0, float b = 0, float a = 1, bool color = true, bool depth = true, bool stencil = true)
         {
-            GL.ClearColor(r, g, b, a);
-            GL.Clear((uint)(color ? ClearBufferMask.ColorBufferBit : 0) | (uint)(depth ? ClearBufferMask.DepthBufferBit : 0) | (uint)(stencil ? ClearBufferMask.StencilBufferBit : 0));
-            CheckGL();
+            Device.ClearColor(r, g, b, a);
+            Device.Clear((uint)(color ? ClearBufferMask.ColorBufferBit : 0) | (uint)(depth ? ClearBufferMask.DepthBufferBit : 0) | (uint)(stencil ? ClearBufferMask.StencilBufferBit : 0));
         }
 
         public static void StartFrame()
         {
-            GL.DepthFunc(DepthFunction.Lequal);
+            Device.DepthFunc(DepthFunction.Lequal);
 
-            GL.Enable(EnableCap.DepthTest);
-            GL.Enable(EnableCap.Blend);
-            GL.Enable(EnableCap.CullFace);
+            Device.Enable(EnableCap.DepthTest);
+            Device.Enable(EnableCap.Blend);
+            Device.Enable(EnableCap.CullFace);
 
             ActiveDepthTest.Stack.Clear();
             ActiveDepthTest.SetDefault();
@@ -178,7 +127,7 @@ namespace Prowl.Runtime
             ActiveFaceCull.Stack.Clear();
             ActiveFaceCull.SetDefault();
 
-            GL.FrontFace(FrontFaceDirection.CW); // Front face are defined clockwise (default)
+            Device.FrontFace(FrontFaceDirection.CW); // Front face are defined clockwise (default)
 
             Clear();
             Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
@@ -278,9 +227,9 @@ namespace Prowl.Runtime
 
             unsafe
             {
-                GL.BindVertexArray(mesh.VertexArrayObject);
-                GL.DrawElements(PrimitiveType.Triangles, (uint)mesh.IndexCount, mesh.IndexFormat == IndexFormat.UInt16 ? DrawElementsType.UnsignedShort : DrawElementsType.UnsignedInt, null);
-                GL.BindVertexArray(0);
+                Device.BindVertexArray(mesh.VertexArrayObject);
+                Device.DrawElements(PrimitiveType.Triangles, (uint)mesh.IndexCount, mesh.IndexFormat == IndexFormat.UInt16 ? DrawElementsType.UnsignedShort : DrawElementsType.UnsignedInt, null);
+                Device.BindVertexArray(0);
             }
         }
 
@@ -304,7 +253,7 @@ namespace Prowl.Runtime
         /// </summary>
         public static void Blit(RenderTexture? renderTexture, Material mat, int pass = 0, bool clear = true)
         {
-            Graphics.GL.DepthMask(false);
+            Graphics.Device.DepthMask(false);
             using (UseDepthTest(false))
             {
                 using (UseCulling(false))
@@ -317,7 +266,7 @@ namespace Prowl.Runtime
                     renderTexture?.End();
                 }
             }
-            Graphics.GL.DepthMask(true);
+            Graphics.Device.DepthMask(true);
         }
 
         /// <summary>
@@ -329,7 +278,7 @@ namespace Prowl.Runtime
             defaultMat.SetTexture("texture0", texture);
             defaultMat.SetPass(0);
 
-            Graphics.GL.DepthMask(false);
+            Graphics.Device.DepthMask(false);
             using (UseDepthTest(false))
             {
                 using (UseCulling(false))
@@ -340,24 +289,24 @@ namespace Prowl.Runtime
                     renderTexture?.End();
                 }
             }
-            Graphics.GL.DepthMask(true);
+            Graphics.Device.DepthMask(true);
         }
 
         internal static void Dispose()
         {
-            GL.Dispose();
+            Device.Dispose();
         }
 
         internal static void BlitDepth(RenderTexture source, RenderTexture? destination)
         {
-            GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, source.fboId);
-            GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, destination?.fboId ?? 0);
-            Graphics.GL.BlitFramebuffer(0, 0, source.Width, source.Height,
+            Device.BindFramebuffer(FramebufferTarget.ReadFramebuffer, source.fboId);
+            Device.BindFramebuffer(FramebufferTarget.DrawFramebuffer, destination?.fboId ?? 0);
+            Graphics.Device.BlitFramebuffer(0, 0, source.Width, source.Height,
                                         0, 0, destination?.Width ?? (int)Graphics.Resolution.x, destination?.Height ?? (int)Graphics.Resolution.y,
                                         ClearBufferMask.DepthBufferBit, BlitFramebufferFilter.Nearest
                                         );
-            GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
-            GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, 0);
+            Device.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
+            Device.BindFramebuffer(FramebufferTarget.DrawFramebuffer, 0);
         }
     }
 }

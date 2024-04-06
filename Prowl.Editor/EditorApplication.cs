@@ -10,6 +10,7 @@ using Prowl.Editor.PropertyDrawers;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Audio;
+using Prowl.Runtime.Rendering.OpenGL;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
 using System.Text.Json;
@@ -85,7 +86,7 @@ public unsafe class EditorApplication : Application {
 
         Window.Load += () => {
 
-            imguiController = new ImGUIController(Graphics.GL, Window.InternalWindow, Input.Context);
+            imguiController = new ImGUIController((Graphics.Device as OpenGLDevice).GL, Window.InternalWindow, Input.Context);
 
             EditorGui.Initialize();
 

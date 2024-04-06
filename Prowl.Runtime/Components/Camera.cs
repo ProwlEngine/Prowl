@@ -213,6 +213,6 @@ public class Camera : MonoBehaviour
             Target.Res?.End();
         }
         Current = null;
-        Graphics.GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+        Graphics.Device.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
     }
 }

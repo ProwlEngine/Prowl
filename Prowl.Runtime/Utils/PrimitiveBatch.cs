@@ -25,19 +25,17 @@ namespace Prowl.Runtime
         {
             this.primitiveType = primitiveType;
 
-            vao = Graphics.GL.GenVertexArray();
-            vbo = Graphics.GL.GenBuffer();
+            vao = Graphics.Device.GenVertexArray();
+            vbo = Graphics.Device.GenBuffer();
 
-            Graphics.GL.BindVertexArray(vao);
-            Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
-            Graphics.CheckGL();
+            Graphics.Device.BindVertexArray(vao);
+            Graphics.Device.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
 
             new VertexFormat([
                 new VertexFormat.Element((uint)0, VertexFormat.VertexType.Float, 3),
                 new VertexFormat.Element((uint)1, VertexFormat.VertexType.Float, 4)
             ]).Bind();
 
-            Graphics.CheckGL();
             IsUploaded = false;
         }
 
@@ -59,9 +57,8 @@ namespace Prowl.Runtime
         {
             if (vertices.Count == 0) return;
 
-            Graphics.GL.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
-            Graphics.GL.BufferData(BufferTargetARB.ArrayBuffer, new ReadOnlySpan<Vertex>(vertices.ToArray()), BufferUsageARB.StaticDraw);
-            Graphics.CheckGL();
+            Graphics.Device.BindBuffer(BufferTargetARB.ArrayBuffer, vbo);
+            Graphics.Device.BufferData(BufferTargetARB.ArrayBuffer, new ReadOnlySpan<Vertex>(vertices.ToArray()), BufferUsageARB.StaticDraw);
 
             IsUploaded = true;
         }
@@ -70,9 +67,8 @@ namespace Prowl.Runtime
         {
             if (vertices.Count == 0 || vao <= 0) return;
 
-            Graphics.GL.BindVertexArray(vao);
-            Graphics.GL.DrawArrays(primitiveType, 0, (uint)vertices.Count);
-            Graphics.CheckGL();
+            Graphics.Device.BindVertexArray(vao);
+            Graphics.Device.DrawArrays(primitiveType, 0, (uint)vertices.Count);
         }
     }
 

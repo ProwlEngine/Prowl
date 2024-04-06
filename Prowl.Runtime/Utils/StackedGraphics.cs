@@ -42,7 +42,7 @@ namespace Prowl.Runtime
         public static DepthState ActiveInOGL = DepthState.Enabled;
         public static void SetDefault()
         {
-            Graphics.GL.Enable(EnableCap.DepthTest);
+            Graphics.Device.Enable(EnableCap.DepthTest);
             ActiveInOGL = DepthState.Enabled;
         }
 
@@ -51,8 +51,8 @@ namespace Prowl.Runtime
         public override void Apply()
         {
             if (ActiveInOGL != Current) {
-                if (Current == DepthState.Enabled) Graphics.GL.Enable(EnableCap.DepthTest);
-                else Graphics.GL.Disable(EnableCap.DepthTest);
+                if (Current == DepthState.Enabled) Graphics.Device.Enable(EnableCap.DepthTest);
+                else Graphics.Device.Disable(EnableCap.DepthTest);
                 ActiveInOGL = Current;
             }
         }
@@ -64,7 +64,7 @@ namespace Prowl.Runtime
         public static ColorBlendState ActiveInOGL = ColorBlendState.Enabled;
         public static void SetDefault()
         {
-            Graphics.GL.Enable(EnableCap.Blend);
+            Graphics.Device.Enable(EnableCap.Blend);
             ActiveInOGL = ColorBlendState.Enabled;
         }
 
@@ -73,8 +73,8 @@ namespace Prowl.Runtime
         public override void Apply()
         {
             if (ActiveInOGL != Current) {
-                if (Current == ColorBlendState.Enabled) Graphics.GL.Enable(EnableCap.Blend);
-                else Graphics.GL.Disable(EnableCap.Blend);
+                if (Current == ColorBlendState.Enabled) Graphics.Device.Enable(EnableCap.Blend);
+                else Graphics.Device.Disable(EnableCap.Blend);
                 ActiveInOGL = Current;
             }
         }
@@ -86,7 +86,7 @@ namespace Prowl.Runtime
         public static CullFaceState ActiveInOGL = CullFaceState.Enabled;
         public static void SetDefault()
         {
-            Graphics.GL.Enable(EnableCap.CullFace);
+            Graphics.Device.Enable(EnableCap.CullFace);
             ActiveInOGL = CullFaceState.Enabled;
         }
 
@@ -95,8 +95,8 @@ namespace Prowl.Runtime
         public override void Apply()
         {
             if (ActiveInOGL != Current) {
-                if (Current == CullFaceState.Enabled) Graphics.GL.Enable(EnableCap.CullFace);
-                else Graphics.GL.Disable(EnableCap.CullFace);
+                if (Current == CullFaceState.Enabled) Graphics.Device.Enable(EnableCap.CullFace);
+                else Graphics.Device.Disable(EnableCap.CullFace);
                 ActiveInOGL = Current;
             }
         }
@@ -109,8 +109,8 @@ namespace Prowl.Runtime
         public static BlendMode ActiveInOGL = BlendMode.Alpha;
         public static void SetDefault() 
         { 
-            Graphics.GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha); 
-            Graphics.GL.BlendEquation(BlendEquationModeEXT.FuncAdd);
+            Graphics.Device.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha); 
+            Graphics.Device.BlendEquation(BlendEquationModeEXT.FuncAdd);
             ActiveInOGL = BlendMode.Alpha;
         }
 
@@ -121,15 +121,15 @@ namespace Prowl.Runtime
             if (ActiveInOGL != Current) {
                 var equation = BlendEquationModeEXT.FuncAdd;
                 switch (Current) {
-                    case BlendMode.Alpha: Graphics.GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha); break;
-                    case BlendMode.Additive: Graphics.GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.One); break;
-                    case BlendMode.Multiply: Graphics.GL.BlendFunc(BlendingFactor.DstColor, BlendingFactor.OneMinusSrcAlpha); break;
-                    case BlendMode.AddColors: Graphics.GL.BlendFunc(BlendingFactor.One, BlendingFactor.One); break;
-                    case BlendMode.Subtract: Graphics.GL.BlendFunc(BlendingFactor.One, BlendingFactor.One); equation = BlendEquationModeEXT.FuncSubtract; break;
-                    case BlendMode.Premultiply: Graphics.GL.BlendFunc(BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha); break;
-                    case BlendMode.Custom: Graphics.GL.BlendFunc(Graphics.CustomBlendSrcFactor, Graphics.CustomBlendDstFactor); equation = Graphics.CustomBlendEquation; break;
+                    case BlendMode.Alpha: Graphics.Device.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha); break;
+                    case BlendMode.Additive: Graphics.Device.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.One); break;
+                    case BlendMode.Multiply: Graphics.Device.BlendFunc(BlendingFactor.DstColor, BlendingFactor.OneMinusSrcAlpha); break;
+                    case BlendMode.AddColors: Graphics.Device.BlendFunc(BlendingFactor.One, BlendingFactor.One); break;
+                    case BlendMode.Subtract: Graphics.Device.BlendFunc(BlendingFactor.One, BlendingFactor.One); equation = BlendEquationModeEXT.FuncSubtract; break;
+                    case BlendMode.Premultiply: Graphics.Device.BlendFunc(BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha); break;
+                    case BlendMode.Custom: Graphics.Device.BlendFunc(Graphics.CustomBlendSrcFactor, Graphics.CustomBlendDstFactor); equation = Graphics.CustomBlendEquation; break;
                 }
-                Graphics.GL.BlendEquation(equation);
+                Graphics.Device.BlendEquation(equation);
                 ActiveInOGL = Current;
             }
         }
@@ -140,7 +140,7 @@ namespace Prowl.Runtime
         public static TriangleFace ActiveInOGL = TriangleFace.Back;
         public static void SetDefault()
         {
-            Graphics.GL.CullFace(TriangleFace.Back);
+            Graphics.Device.CullFace(TriangleFace.Back);
             ActiveInOGL = TriangleFace.Back;
         }
 
@@ -149,7 +149,7 @@ namespace Prowl.Runtime
         public override void Apply()
         {
             if (ActiveInOGL != Current) {
-                Graphics.GL.CullFace(Current);
+                Graphics.Device.CullFace(Current);
                 ActiveInOGL = Current;
             }
         }

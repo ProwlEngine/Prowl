@@ -47,11 +47,11 @@ namespace Prowl.Runtime
             }
 
             // Generate FBO
-            fboId = Graphics.GL.GenFramebuffer();
+            fboId = Graphics.Device.GenFramebuffer();
             if (fboId <= 0)
                 throw new Exception("RenderTexture: [ID {fboId}] Failed to generate RenderTexture.");
 
-            Graphics.GL.BindFramebuffer(FramebufferTarget.Framebuffer, fboId);
+            Graphics.Device.BindFramebuffer(FramebufferTarget.Framebuffer, fboId);
 
             unsafe {
                 // Generate textures
@@ -61,7 +61,7 @@ namespace Prowl.Runtime
                         InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, false, this.textureFormats[i]);
                         InternalTextures[i].SetTextureFilters(TextureMinFilter.Linear, TextureMagFilter.Linear);
                         InternalTextures[i].SetWrapModes(TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge);
-                        Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, (TextureTarget)InternalTextures[i].Type, InternalTextures[i].Handle, 0);
+                        Graphics.Device.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, (TextureTarget)InternalTextures[i].Type, InternalTextures[i].Handle, 0);
                     }
                     Graphics.ActivateDrawBuffers(numTextures);
                 }
@@ -70,23 +70,21 @@ namespace Prowl.Runtime
                 if (hasDepthAttachment) {
                     var depth = new Texture2D((uint)Width, (uint)Height, false, Texture.TextureImageFormat.Depth24);
                     InternalDepth = depth;
-                    Graphics.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, depth.Handle, 0);
+                    Graphics.Device.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, depth.Handle, 0);
 
                 }
 
-                if (Graphics.GL.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
+                if (Graphics.Device.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
                     throw new Exception("RenderTexture: [ID {fboId}] RenderTexture object creation failed.");
 
                 // Unbind FBO
-                Graphics.GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+                Graphics.Device.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
             }
-
-            Graphics.CheckGL();
         }
 
         public void Begin()
         {
-            Graphics.GL.BindFramebuffer(FramebufferTarget.Framebuffer, fboId);
+            Graphics.Device.BindFramebuffer(FramebufferTarget.Framebuffer, fboId);
             Graphics.Viewport(Width, Height);
             Graphics.FrameBufferSize = new Vector2D<int>(Width, Height);
 
@@ -95,7 +93,7 @@ namespace Prowl.Runtime
 
         public void End()
         {
-            Graphics.GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            Graphics.Device.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
             Graphics.Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
             Graphics.FrameBufferSize = new Vector2D<int>(Width, Height);
         }
@@ -104,13 +102,11 @@ namespace Prowl.Runtime
         {
             if (fboId <= 0) return;
             foreach (var texture in InternalTextures)
-                Graphics.GL.DeleteTexture(texture.Handle);
+                Graphics.Device.DeleteTexture(texture.Handle);
 
             //if(hasDepthAttachment) // Should auto dispose of Depth
             //    Graphics.GL.DeleteRenderbuffer(InternalDepth.Handle);
-            Graphics.GL.DeleteFramebuffer(fboId);
-
-            Graphics.CheckGL();
+            Graphics.Device.DeleteFramebuffer(fboId);
         }
 
         public SerializedProperty Serialize(Serializer.SerializationContext ctx)

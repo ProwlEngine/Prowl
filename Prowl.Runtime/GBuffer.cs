@@ -38,9 +38,9 @@ public class GBuffer
 
     public void Begin(bool clear = true)
     {
-        Graphics.GL.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, fbo);
+        Graphics.Device.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, fbo);
         Graphics.ActivateDrawBuffers(6);
-        Graphics.GL.Disable(GLEnum.Blend);
+        Graphics.Device.Disable(EnableCap.Blend);
 
         Graphics.Viewport(Width, Height);
 
@@ -51,18 +51,17 @@ public class GBuffer
 
     public void End()
     {
-        Graphics.GL.Enable(GLEnum.Blend);
-        Graphics.GL.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, 0);
+        Graphics.Device.Enable(EnableCap.Blend);
+        Graphics.Device.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, 0);
     }
 
     public int GetObjectIDAt(Vector2 uv)
     {
         int x = (int)(uv.x * Width);
         int y = (int)(uv.y * Height);
-        Graphics.GL.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, fbo);
-        Graphics.GL.ReadBuffer(ReadBufferMode.ColorAttachment5);
-        float result = Graphics.GL.ReadPixels<float>(x, y, 1, 1, PixelFormat.Red, PixelType.Float);
-        Graphics.CheckGL();
+        Graphics.Device.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, fbo);
+        Graphics.Device.ReadBuffer(ReadBufferMode.ColorAttachment5);
+        float result = Graphics.Device.ReadPixels<float>(x, y, 1, 1, PixelFormat.Red, PixelType.Float);
         return (int)result;
     }
 
@@ -70,15 +69,14 @@ public class GBuffer
     {
         int x = (int)(uv.x * Width);
         int y = (int)(uv.y * Height);
-        Graphics.GL.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, fbo);
-        Graphics.GL.ReadBuffer(ReadBufferMode.ColorAttachment2);
+        Graphics.Device.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, fbo);
+        Graphics.Device.ReadBuffer(ReadBufferMode.ColorAttachment2);
         float[] result = new float[4];
         unsafe {
             fixed (float* ptr = result) {
-                Graphics.GL.ReadPixels(x, y, 1, 1, PixelFormat.Rgba, PixelType.Float, ptr);
+                Graphics.Device.ReadPixels(x, y, 1, 1, PixelFormat.Rgba, PixelType.Float, ptr);
             }
         }
-        Graphics.CheckGL();
         return new Vector3(result[0], result[1], result[2]);
     }
 
@@ -92,6 +90,6 @@ public class GBuffer
         Velocity.Dispose();
         ObjectIDs.Dispose();
         Depth.Dispose();
-        Graphics.GL.DeleteFramebuffer(fbo);
+        Graphics.Device.DeleteFramebuffer(fbo);
     }
 }
