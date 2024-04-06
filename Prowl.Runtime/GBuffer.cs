@@ -40,7 +40,6 @@ public class GBuffer
     {
         Graphics.Device.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, fbo);
         Graphics.ActivateDrawBuffers(6);
-        Graphics.Device.Disable(EnableCap.Blend);
 
         Graphics.Viewport(Width, Height);
 
@@ -51,7 +50,6 @@ public class GBuffer
 
     public void End()
     {
-        Graphics.Device.Enable(EnableCap.Blend);
         Graphics.Device.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, 0);
     }
 

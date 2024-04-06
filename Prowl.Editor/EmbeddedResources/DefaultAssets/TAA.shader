@@ -2,6 +2,11 @@
 
 Pass 0
 {
+	DepthTest Off
+	DepthWrite Off
+	Blend Off
+	Cull Off
+
 	Vertex
 	{
 		in vec3 vertexPosition;

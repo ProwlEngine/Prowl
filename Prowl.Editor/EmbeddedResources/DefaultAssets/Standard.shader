@@ -24,7 +24,7 @@ Properties
 
 Pass 0
 {
-	RenderMode "Opaque"
+	// Default Raster state
 
 	Vertex
 	{
@@ -247,6 +247,8 @@ Pass 0
 			
 ShadowPass 0
 {
+	CullFace Front
+
 	Vertex
 	{
 		layout (location = 0) in vec3 vertexPosition;

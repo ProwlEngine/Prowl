@@ -6,7 +6,10 @@ Properties
 
 Pass 0
 {
-	RenderMode "Opaque"
+	// Default Raster state
+	Blend On
+	BlendSrc SrcAlpha
+	BlendDst One
 
 	Vertex
 	{

@@ -1,4 +1,5 @@
-﻿using Silk.NET.OpenGL;
+﻿using Prowl.Runtime.Rendering;
+using Silk.NET.OpenGL;
 using System;
 using System.Collections.Generic;
 
@@ -20,15 +21,28 @@ namespace Prowl.Runtime
 
         public class ShaderPass
         {
-            public string RenderMode; // Defaults to Opaque
+            public RasterizerState State;
             public string Vertex;
             public string Fragment;
         }
 
         public class ShaderShadowPass
         {
+            public RasterizerState State;
             public string Vertex;
             public string Fragment;
+        }
+
+        public struct CompiledShader(CompiledShader.Pass[] passes, CompiledShader.Pass shadowPass)
+        {
+            public struct Pass(RasterizerState State, uint Program )
+            {
+                public RasterizerState State = State;
+                public uint Program = Program;
+            }
+
+            public Pass[] passes = passes;
+            public Pass shadowPass = shadowPass;
         }
 
         internal static HashSet<string> globalKeywords = new();
@@ -53,52 +67,63 @@ namespace Prowl.Runtime
         public List<ShaderPass> Passes = new();
         public ShaderShadowPass? ShadowPass;
 
-        public (uint[], uint) Compile(string[] defines)
-        {
-            uint[] compiledPasses = new uint[Passes.Count];
-            for (int i = 0; i < Passes.Count; i++)
-                compiledPasses[i] = CompilePass(i, defines);
-            return (compiledPasses, CompileShadowPass(defines));
-        }
-
-        public uint CompileShadowPass(string[] defines)
-        {
-            if (ShadowPass == null)
-            {
-                var defaultDepth = Find("Defaults/Depth.shader");
-                if (!defaultDepth.IsAvailable) throw new Exception($"Failed to default Depth shader for shader: {Name}");
-                return defaultDepth.Res!.CompilePass(0, []);
-            }
-            else
-            {
-                string frag = ShadowPass.Fragment;
-                string vert = ShadowPass.Vertex;
-                PrepareFragVert(ref frag, ref vert, defines);
-                return CompileShader(frag, vert, "Defaults/Depth.shader");
-            }
-        }
-
-        public uint CompilePass(int pass, string[] defines)
-        {
-            string frag = Passes[pass].Fragment;
-            string vert = Passes[pass].Vertex;
-            PrepareFragVert(ref frag, ref vert, defines);
-            return CompileShader(frag, vert, "Defaults/Invalid.shader");
-        }
-
-        private uint CompileShader(string frag, string vert, string fallback)
+        public CompiledShader Compile(string[] defines)
         {
             try
             {
-                Debug.Log($"Compiling Shader {Name}");
-                return Compile(vert, "", frag);
+                CompiledShader.Pass[] compiledPasses = new CompiledShader.Pass[Passes.Count];
+                for (int i = 0; i < Passes.Count; i++)
+                {
+                    string frag = Passes[i].Fragment;
+                    string vert = Passes[i].Vertex;
+                    try
+                    {
+                        PrepareFragVert(ref frag, ref vert, defines);
+                        var program = Compile(vert, "", frag);
+                        compiledPasses[i] = new(Passes[i].State, program);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError("Shader compilation failed using fallback shader, Reason: " + e.Message);
+
+                        // We Assume Invalid exists, if it doesn't we have a bigger problem
+                        var fallback = Find($"Defaults/Invalid.shader");
+                        frag = fallback.Res!.Passes[0].Fragment;
+                        vert = fallback.Res!.Passes[0].Vertex;
+                        PrepareFragVert(ref frag, ref vert, defines);
+                        compiledPasses[i] = new(new(), Compile(vert, "", frag));
+                    }
+
+                }
+
+                CompiledShader compiledShader = new();
+                compiledShader.passes = compiledPasses;
+
+                if (ShadowPass != null)
+                {
+                    string frag = ShadowPass.Fragment;
+                    string vert = ShadowPass.Vertex;
+                    PrepareFragVert(ref frag, ref vert, defines);
+                    var program = Compile(vert, "", frag);
+                    compiledShader.shadowPass = new(ShadowPass.State, program);
+                }
+                else
+                {
+                    // We Assume Depth exists, if it doesn't we have a bigger problem
+                    var depth = Find($"Defaults/Depth.shader");
+                    string frag = depth.Res!.Passes[0].Fragment;
+                    string vert = depth.Res!.Passes[0].Vertex;
+                    PrepareFragVert(ref frag, ref vert, defines);
+                    compiledShader.shadowPass = new(new(), Compile(vert, "", frag));
+                }
+
+                return compiledShader;
             }
             catch (Exception e)
             {
-                Debug.LogError(e.Message);
+                Debug.LogError("Failed to compile shader: " + Name + " Reason: " + e.Message);
+                return new();
             }
-            var fallbackShader = Find(fallback);
-            return fallbackShader.Res.CompilePass(0, []);
         }
 
         private void PrepareFragVert(ref string frag, ref string vert, string[] defines)
@@ -272,7 +297,7 @@ namespace Prowl.Runtime
             foreach (var pass in Passes)
             {
                 SerializedProperty passTag = SerializedProperty.NewCompound();
-                passTag.Add("RenderMode", new(pass.RenderMode));
+                passTag.Add("State", Serializer.Serialize(pass.State, ctx));
                 passTag.Add("Vertex", new(pass.Vertex));
                 passTag.Add("Fragment", new(pass.Fragment));
                 passesTag.ListAdd(passTag);
@@ -281,6 +306,7 @@ namespace Prowl.Runtime
             if (ShadowPass != null)
             {
                 SerializedProperty shadowPassTag = SerializedProperty.NewCompound();
+                shadowPassTag.Add("State", Serializer.Serialize(ShadowPass.State, ctx));
                 shadowPassTag.Add("Vertex", new(ShadowPass.Vertex));
                 shadowPassTag.Add("Fragment", new(ShadowPass.Fragment));
                 compoundTag.Add("ShadowPass", shadowPassTag);
@@ -313,7 +339,7 @@ namespace Prowl.Runtime
             foreach (var passTag in passesTag.List)
             {
                 ShaderPass pass = new ShaderPass();
-                pass.RenderMode = passTag.Get("RenderMode").StringValue;
+                pass.State = Serializer.Deserialize<RasterizerState>(passTag.Get("State"), ctx);
                 pass.Vertex = passTag.Get("Vertex").StringValue;
                 pass.Fragment = passTag.Get("Fragment").StringValue;
                 Passes.Add(pass);
@@ -321,6 +347,7 @@ namespace Prowl.Runtime
             if (value.TryGet("ShadowPass", out var shadowPassTag))
             {
                 ShaderShadowPass shadowPass = new ShaderShadowPass();
+                shadowPass.State = Serializer.Deserialize<RasterizerState>(shadowPassTag.Get("State"), ctx);
                 shadowPass.Vertex = shadowPassTag.Get("Vertex").StringValue;
                 shadowPass.Fragment = shadowPassTag.Get("Fragment").StringValue;
                 ShadowPass = shadowPass;

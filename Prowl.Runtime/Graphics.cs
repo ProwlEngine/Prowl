@@ -63,15 +63,6 @@ namespace Prowl.Runtime
             Device.Initialize(true);
         }
 
-        public static IDisposable UseBlendMode(BlendMode mode) => new ActiveBlendMode(mode);
-        public static IDisposable UseFaceCull(TriangleFace face) => new ActiveFaceCull(face);
-        //public static IDisposable UseMaterial(Material material, int pass = 0) => new ActiveMaterial(material, pass);
-        //public static IDisposable UseRenderTexture(RenderTexture target) => new ActiveRenderTexture(target);
-
-        public static IDisposable UseDepthTest(bool doTest) => new ActiveDepthTest(doTest);
-        public static IDisposable UseColorBlend(bool doBlend) => new ActiveColorBlend(doBlend);
-        public static IDisposable UseCulling(bool doCulling) => new ActiveCullFace(doCulling);
-
         public static void UseProgram(uint program)
         {
             if (activeProgram != program)
@@ -103,32 +94,10 @@ namespace Prowl.Runtime
 
         public static void StartFrame()
         {
-            Device.DepthFunc(DepthFunction.Lequal);
-
-            Device.Enable(EnableCap.DepthTest);
-            Device.Enable(EnableCap.Blend);
-            Device.Enable(EnableCap.CullFace);
-
-            ActiveDepthTest.Stack.Clear();
-            ActiveDepthTest.SetDefault();
-
-            ActiveColorBlend.Stack.Clear();
-            ActiveColorBlend.SetDefault();
-
-            ActiveCullFace.Stack.Clear();
-            ActiveCullFace.SetDefault();
-
-
-            ActiveBlendMode.Stack.Clear();
-            ActiveBlendMode.SetDefault();
-
-            ActiveFaceCull.Stack.Clear();
-            ActiveFaceCull.SetDefault();
-
-            Device.FrontFace(FrontFaceDirection.CW); // Front face are defined clockwise (default)
-
             Clear();
             Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
+            // Set default states
+            Device.SetState(new(), true);
         }
 
         public static void EndFrame()
@@ -236,14 +205,8 @@ namespace Prowl.Runtime
         /// </summary>
         public static void Blit(Material mat, int pass = 0)
         {
-            using (UseDepthTest(false))
-            {
-                using (UseCulling(false))
-                {
-                    mat.SetPass(pass);
-                    DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
-                }
-            }
+            mat.SetPass(pass);
+            DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
         }
 
         /// <summary>
@@ -251,20 +214,13 @@ namespace Prowl.Runtime
         /// </summary>
         public static void Blit(RenderTexture? renderTexture, Material mat, int pass = 0, bool clear = true)
         {
-            Graphics.Device.DepthMask(false);
-            using (UseDepthTest(false))
-            {
-                using (UseCulling(false))
-                {
-                    renderTexture?.Begin();
-                    if (clear)
-                        Clear(0, 0, 0, 0);
-                    mat.SetPass(pass);
-                    DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
-                    renderTexture?.End();
-                }
-            }
-            Graphics.Device.DepthMask(true);
+            renderTexture?.Begin();
+            if (clear)
+                Clear(0, 0, 0, 0);
+            mat.SetPass(pass);
+            DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
+            renderTexture?.End();
+
         }
 
         /// <summary>
@@ -276,18 +232,10 @@ namespace Prowl.Runtime
             defaultMat.SetTexture("texture0", texture);
             defaultMat.SetPass(0);
 
-            Graphics.Device.DepthMask(false);
-            using (UseDepthTest(false))
-            {
-                using (UseCulling(false))
-                {
-                    renderTexture?.Begin();
-                    if (clear) Clear(0, 0, 0, 0);
-                    DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, defaultMat);
-                    renderTexture?.End();
-                }
-            }
-            Graphics.Device.DepthMask(true);
+            renderTexture?.Begin();
+            if (clear) Clear(0, 0, 0, 0);
+            DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, defaultMat);
+            renderTexture?.End();
         }
 
         internal static void Dispose()

@@ -8,6 +8,22 @@ namespace Prowl.Runtime.Rendering.OpenGL
     public sealed unsafe class GLDevice : GraphicsDevice
     {
         public static GL GL;
+
+        // Current OpenGL State
+        private bool depthTest = true;
+        private bool depthWrite = true;
+        private DepthFunction depthMode = DepthFunction.Lequal;
+        
+        private bool doBlend = true;
+        private BlendingFactor blendSrc = BlendingFactor.SrcAlpha;
+        private BlendingFactor blendDst = BlendingFactor.OneMinusSrcAlpha;
+        private BlendEquationModeEXT blendEquation = BlendEquationModeEXT.FuncAdd;
+        
+        private bool doCull = true;
+        private TriangleFace cullFace = TriangleFace.Back;
+
+        private FrontFaceDirection winding = FrontFaceDirection.CW;
+
         public override void Initialize(bool debug)
         {
             GL = GL.GetApi(Window.InternalWindow);
@@ -21,7 +37,6 @@ namespace Prowl.Runtime.Rendering.OpenGL
                         GL.DebugMessageCallback(DebugCallback, null);
                         GL.Enable(EnableCap.DebugOutput);
                         GL.Enable(EnableCap.DebugOutputSynchronous);
-
                     }
                 }
             }
@@ -47,6 +62,8 @@ namespace Prowl.Runtime.Rendering.OpenGL
             //    Debug.Log($"OpenGL Message: {msg}");
         }
 
+        public override void Viewport(int x, int y, uint width, uint height) => GL.Viewport(x, y, width, height);
+
         public override void Clear(float r, float g, float b, float a, ClearFlags v)
         {
             GL.ClearColor(r, g, b, a);
@@ -59,6 +76,88 @@ namespace Prowl.Runtime.Rendering.OpenGL
             if (v.HasFlag(ClearFlags.Stencil))
                 clearBufferMask |= ClearBufferMask.StencilBufferBit;
             GL.Clear(clearBufferMask);
+        }
+
+        public override void SetState(RasterizerState state, bool force = false)
+        {
+            if (depthTest != state.depthTest || force)
+            {
+                if (state.depthTest)
+                    GL.Enable(EnableCap.DepthTest);
+                else
+                    GL.Disable(EnableCap.DepthTest);
+                depthTest = state.depthTest;
+            }
+
+            if (depthWrite != state.depthWrite || force)
+            {
+                GL.DepthMask(state.depthWrite);
+                depthWrite = state.depthWrite;
+            }
+
+            if (depthMode != state.depthMode || force)
+            {
+                GL.DepthFunc(state.depthMode);
+                depthMode = state.depthMode;
+            }
+
+            if (doBlend != state.doBlend || force)
+            {
+                if (state.doBlend)
+                    GL.Enable(EnableCap.Blend);
+                else
+                    GL.Disable(EnableCap.Blend);
+                doBlend = state.doBlend;
+            }
+
+            if (blendSrc != state.blendSrc || blendDst != state.blendDst || force)
+            {
+                GL.BlendFunc(state.blendSrc, state.blendDst);
+                blendSrc = state.blendSrc;
+                blendDst = state.blendDst;
+            }
+
+            if (blendEquation != state.blendEquation || force)
+            {
+                GL.BlendEquation(state.blendEquation);
+                blendEquation = state.blendEquation;
+            }
+
+            if (doCull != state.doCull || force)
+            {
+                if (state.doCull)
+                    GL.Enable(EnableCap.CullFace);
+                else
+                    GL.Disable(EnableCap.CullFace);
+                doCull = state.doCull;
+            }
+
+            if (cullFace != state.cullFace || force)
+            {
+                GL.CullFace(state.cullFace);
+                cullFace = state.cullFace;
+            }
+
+            if (winding != state.frontFace || force)
+            {
+                GL.FrontFace(state.frontFace);
+                winding = state.frontFace;
+            }
+        }
+
+        public override RasterizerState GetState()
+        {
+            return new RasterizerState {
+                depthTest = depthTest,
+                depthWrite = depthWrite,
+                depthMode = depthMode,
+                doBlend = doBlend,
+                blendSrc = blendSrc,
+                blendDst = blendDst,
+                blendEquation = blendEquation,
+                doCull = doCull,
+                cullFace = cullFace
+            };
         }
 
         #region Buffers
@@ -121,6 +220,7 @@ namespace Prowl.Runtime.Rendering.OpenGL
         #region Shaders
 
         public override void AttachShader(uint shaderProgram, uint vertexShader) => GL.AttachShader(shaderProgram, vertexShader);
+        public override void CompileShader(uint vertexShader) => GL.CompileShader(vertexShader);
         public override uint CreateProgram() => GL.CreateProgram();
         public override uint CreateShader(ShaderType vertexShader) => GL.CreateShader(vertexShader);
         public override void DeleteProgram(uint shaderProgram) => GL.DeleteProgram(shaderProgram);
@@ -168,39 +268,13 @@ namespace Prowl.Runtime.Rendering.OpenGL
         #endregion
 
 
-
-        public override void BlendEquation(BlendEquationModeEXT equation) => GL.BlendEquation(equation);
-
-        public override void BlendFunc(BlendingFactor srcAlpha, BlendingFactor oneMinusSrcAlpha) => GL.BlendFunc(srcAlpha, oneMinusSrcAlpha);
-
-
-        public override void CompileShader(uint vertexShader) => GL.CompileShader(vertexShader);
-
-        public override void CullFace(TriangleFace back) => GL.CullFace(back);
-
-
-        public override void DepthFunc(DepthFunction lequal) => GL.DepthFunc(lequal);
-
-        public override void DepthMask(bool v) => GL.DepthMask(v);
-
-        public override void Disable(EnableCap cullFace) => GL.Disable(cullFace);
-
-
         public override void DrawArrays(PrimitiveType primitiveType, int v, uint count) => GL.DrawArrays(primitiveType, v, count);
-
-        public override void Enable(EnableCap depthTest) => GL.Enable(depthTest);
-
-
-
-        public override void FrontFace(FrontFaceDirection cW) => GL.FrontFace(cW);
-
-
-
-        public override void Viewport(int v1, int v2, uint width, uint height) => GL.Viewport(v1, v2, width, height);
-
         public override unsafe void DrawElements(PrimitiveType triangles, uint indexCount, DrawElementsType drawElementsType, void* value) => GL.DrawElements(triangles, indexCount, drawElementsType, value);
 
         public override void Flush() => GL.Flush();
-        public override void Dispose() => GL.Dispose();
+        public override void Dispose()
+        {
+            GL.Dispose();
+        }
     }
 }

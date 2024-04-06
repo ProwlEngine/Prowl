@@ -69,8 +69,7 @@ namespace Prowl.Runtime
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatProjection);
             mat.SetMatrix("mvp", mvp);
             mat.SetPass(0, true);
-            using (Graphics.UseBlendMode(BlendMode.Additive))
-                LineBatch.Draw();
+            LineBatch.Draw();
         }
 
         public static void Clear()

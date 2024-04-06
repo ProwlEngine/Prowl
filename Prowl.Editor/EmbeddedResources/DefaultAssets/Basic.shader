@@ -6,7 +6,8 @@ Properties
 
 Pass 0
 {
-	RenderMode "Opaque"
+	BlendSrc SrcAlpha
+	BlendDst One
 
 	Vertex
 	{

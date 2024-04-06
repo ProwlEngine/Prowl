@@ -2,6 +2,16 @@
 
 Pass 0
 {
+	DepthTest Off
+	DepthWrite Off
+	// DepthMode Less
+	Blend On
+	BlendSrc SrcAlpha
+	BlendDst One
+	BlendEquation FuncAdd
+	Cull Off
+	// Winding CW
+
 	Vertex
 	{
 		// Input vertex attributes

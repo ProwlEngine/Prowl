@@ -156,11 +156,11 @@ namespace Prowl.Runtime
         public MaterialPropertyBlock PropertyBlock;
 
         // Key is Shader.GUID + "-" + keywords + "-" + Shader.globalKeywords
-        static Dictionary<string, (uint[], uint)> passVariants = new();
+        static Dictionary<string, Shader.CompiledShader> passVariants = new();
         HashSet<string> keywords = new();
         internal static uint? current;
 
-        public int PassCount => Shader.IsAvailable ? CompileKeywordVariant(keywords.ToArray()).Item1.Length : 0;
+        public int PassCount => Shader.IsAvailable ? GetVariant(keywords.ToArray()).passes.Length : 0;
 
         public Material()
         {
@@ -203,46 +203,42 @@ namespace Prowl.Runtime
         public void SetPass(int pass, bool apply = false)
         {
             if (Shader.IsAvailable == false) return;
-            // Make sure we have a shader
-            var shader = CompileKeywordVariant(keywords.ToArray());
+            var shader = GetVariant(keywords.ToArray());
 
             // Make sure we have a valid pass
-            if (pass < 0 || pass >= shader.Item1.Length) return;
+            if (shader.passes == null || pass < 0 || pass >= shader.passes.Length) return;
 
-            if (current != shader.Item1[pass]) {
-                // Set the shader
-                current = shader.Item1[pass];
-                Graphics.UseProgram(shader.Item1[pass]);
-            }
-
-            if (apply)
-                MaterialPropertyBlock.Apply(PropertyBlock, current.Value);
+            InternalSetPass(shader.passes[pass], apply);
         }
 
         public void SetShadowPass(bool apply = false)
         {
             if (Shader.IsAvailable == false) return;
-            // Make sure we have a shader
-            var shader = CompileKeywordVariant(keywords.ToArray());
+            var shader = GetVariant(keywords.ToArray());
+            InternalSetPass(shader.shadowPass, apply);
+        }
 
-            if (current != shader.Item2) {
+        void InternalSetPass(Shader.CompiledShader.Pass pass, bool apply = false)
+        {
+            if (current != pass.Program)
+            {
                 // Set the shader
-                current = shader.Item2;
-                Graphics.UseProgram(shader.Item2);
+                current = pass.Program;
+                Graphics.Device.SetState(pass.State);
+                Graphics.UseProgram(pass.Program);
             }
 
             if (apply)
                 MaterialPropertyBlock.Apply(PropertyBlock, current.Value);
         }
 
-        (uint[], uint) CompileKeywordVariant(string[] allKeywords)
+        Shader.CompiledShader GetVariant(string[] allKeywords)
         {
             if (Shader.IsAvailable == false) throw new Exception("Cannot compile without a valid shader assigned");
             passVariants ??= new();
 
             string keywords = string.Join("-", allKeywords);
-#warning TODO: AssetID isnt reliable, especially if the shader is generated at runtime since then there wont be an asset ID 
-            string key = Shader.AssetID.ToString() + "-" + keywords + "-" + Runtime.Shader.globalKeywords;
+            string key = Shader.Res.InstanceID + "-" + keywords + "-" + Runtime.Shader.globalKeywords;
             if (passVariants.TryGetValue(key, out var s)) return s;
 
             PropertyBlock.ClearCache();
@@ -259,7 +255,7 @@ namespace Prowl.Runtime
             allKeywords = allKeywords.Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
 
             // Compile Each Pass
-            (uint[], uint) compiledPasses = Shader.Res!.Compile(allKeywords);
+            Shader.CompiledShader compiledPasses = Shader.Res!.Compile(allKeywords);
 
             passVariants[key] = compiledPasses;
             return compiledPasses;

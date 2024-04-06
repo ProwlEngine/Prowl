@@ -6,7 +6,7 @@ Properties
 
 Pass 0
 {
-	RenderMode "Opaque"
+	CullFace Front
 
 	Vertex
 	{

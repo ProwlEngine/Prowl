@@ -1,4 +1,5 @@
 ﻿using Prowl.Runtime;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Utils;
 using System.Text.RegularExpressions;
 using static Prowl.Runtime.Shader;
@@ -48,7 +49,7 @@ namespace Prowl.Editor.Assets
                 var parsedPass = parsedShader.Passes[i];
                 shader.Passes.Add(new ShaderPass
                 {
-                    RenderMode = parsedPass.RenderMode,
+                    State = parsedPass.State,
                     Vertex = parsedPass.Vertex,
                     Fragment = parsedPass.Fragment,
                 });
@@ -57,6 +58,7 @@ namespace Prowl.Editor.Assets
             if (parsedShader.ShadowPass != null)
                 shader.ShadowPass = new ShaderShadowPass
                 {
+                    State = parsedShader.ShadowPass.State,
                     Vertex = parsedShader.ShadowPass.Vertex,
                     Fragment = parsedShader.ShadowPass.Fragment,
                 };
@@ -138,7 +140,7 @@ namespace Prowl.Editor.Assets
                 var shaderPass = new ParsedShaderPass
                 {
                     Order = int.Parse(passMatch.Groups[1].Value),
-                    RenderMode = ParseBlockContent(passContent, "RenderMode"),
+                    State = ParseRasterState(passContent),
                     Vertex = ParseBlockContent(passContent, "Vertex"),
                     Fragment = ParseBlockContent(passContent, "Fragment"),
                 };
@@ -179,6 +181,7 @@ namespace Prowl.Editor.Assets
                 var passContent = passMatch.Groups[2].Value;
                 var shaderPass = new ParsedShaderShadowPass
                 {
+                    State = ParseRasterState(passContent),
                     Vertex = ParseBlockContent(passContent, "Vertex"),
                     Fragment = ParseBlockContent(passContent, "Fragment"),
                 };
@@ -212,6 +215,66 @@ namespace Prowl.Editor.Assets
             return "";
         }
 
+        private static RasterizerState ParseRasterState(string passContent)
+        {
+            var rasterState = new RasterizerState();
+
+            if (GetStateValue(passContent, "DepthTest", out var depthTest))
+                rasterState.depthTest = ConvertToBoolean(depthTest);
+
+            if (GetStateValue(passContent, "DepthWrite", out var depthWrite))
+                rasterState.depthWrite = ConvertToBoolean(depthWrite);
+
+            if (GetStateValue(passContent, "DepthMode", out var depthMode))
+                rasterState.depthMode = (Silk.NET.OpenGL.DepthFunction)Enum.Parse(typeof(Silk.NET.OpenGL.DepthFunction), depthMode, true);
+
+            if (GetStateValue(passContent, "Blend", out var blend))
+                rasterState.doBlend = ConvertToBoolean(blend);
+
+            if (GetStateValue(passContent, "BlendSrc", out var blendSrc))
+                rasterState.blendSrc = (Silk.NET.OpenGL.BlendingFactor)Enum.Parse(typeof(Silk.NET.OpenGL.BlendingFactor), blendSrc, true);
+
+            if (GetStateValue(passContent, "BlendDst", out var blendDst))
+                rasterState.blendDst = (Silk.NET.OpenGL.BlendingFactor)Enum.Parse(typeof(Silk.NET.OpenGL.BlendingFactor), blendDst, true);
+
+            if (GetStateValue(passContent, "BlendEquation", out var blendEquation))
+                rasterState.blendEquation = (Silk.NET.OpenGL.BlendEquationModeEXT)Enum.Parse(typeof(Silk.NET.OpenGL.BlendEquationModeEXT), blendEquation, true);
+
+            if (GetStateValue(passContent, "Cull", out var cull))
+                rasterState.doCull = ConvertToBoolean(cull);
+
+            if (GetStateValue(passContent, "CullFace", out var cullFace))
+                rasterState.cullFace = (Silk.NET.OpenGL.TriangleFace)Enum.Parse(typeof(Silk.NET.OpenGL.TriangleFace), cullFace, true);
+
+            if (GetStateValue(passContent, "Winding", out var winding))
+                rasterState.frontFace = (Silk.NET.OpenGL.FrontFaceDirection)Enum.Parse(typeof(Silk.NET.OpenGL.FrontFaceDirection), winding, true);
+
+            return rasterState;
+        }
+
+        private static bool GetStateValue(string passContent, string name, out string value)
+        {
+            var windingMatch = Regex.Match(passContent, name + @"\s+(\w+)");
+            value = "";
+            if (windingMatch.Success)
+            {
+                value = windingMatch.Groups[1].Value;
+                return true;
+            }
+            return false;
+        }
+
+        // Convert string ("false", "0", "off", "no") or ("true", "1", "on", "yes") to boolean
+        private static bool ConvertToBoolean(string input)
+        {
+            input = input.Trim();
+            input = input.ToLower();
+            return input.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                   input.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+                   input.Equals("on", StringComparison.OrdinalIgnoreCase) ||
+                   input.Equals("yes", StringComparison.OrdinalIgnoreCase);
+        }
+
         public static string ClearAllComments(string input)
         {
             // Remove single-line comments
@@ -234,7 +297,7 @@ namespace Prowl.Editor.Assets
 
         public class ParsedShaderPass
         {
-            public string RenderMode; // Defaults to Opaque
+            public RasterizerState State;
             public string Vertex;
             public string Fragment;
 
@@ -243,6 +306,7 @@ namespace Prowl.Editor.Assets
 
         public class ParsedShaderShadowPass
         {
+            public RasterizerState State;
             public string Vertex;
             public string Fragment;
         }

@@ -67,16 +67,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         {
             renderRT.Begin();
             if (Clear) Graphics.Clear();
-            using (Graphics.UseDepthTest(false))
-            {
-                using (Graphics.UseFaceCull(TriangleFace.Front))
-                {
-                    using (Graphics.UseBlendMode(BlendMode.Additive))
-                    {
-                        Camera.Current.RenderAllOfOrder(RenderingOrder.Lighting);
-                    }
-                }
-            }
+            Camera.Current.RenderAllOfOrder(RenderingOrder.Lighting);
             renderRT.End();
         }
     }
@@ -200,26 +191,20 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             Graphics.Blit(renderRTs[1], Mat, 0, true);
             Mat.SetFloat("u_Threshold", 0.0f);
 
-            using (Graphics.UseBlendMode(BlendMode.Alpha))
+            for (int i = 1; i <= Passes; i++)
             {
-                for (int i = 1; i <= Passes; i++)
-                {
-                    Mat.SetFloat("u_Alpha", 1.0f);
-                    Mat.SetTexture("gColor", renderRTs[0].InternalTextures[0]);
-                    Mat.SetFloat("u_Radius", Math.Clamp(Radius, 0.0f, 32f) + i);
-                    Graphics.Blit(renderRTs[1], Mat, 0, false);
+                Mat.SetFloat("u_Alpha", 1.0f);
+                Mat.SetTexture("gColor", renderRTs[0].InternalTextures[0]);
+                Mat.SetFloat("u_Radius", Math.Clamp(Radius, 0.0f, 32f) + i);
+                Graphics.Blit(renderRTs[1], Mat, 0, false);
 
-                    var tmp = renderRTs[0];
-                    renderRTs[0] = renderRTs[1];
-                    renderRTs[1] = tmp;
-                }
+                var tmp = renderRTs[0];
+                renderRTs[0] = renderRTs[1];
+                renderRTs[1] = tmp;
             }
 
             // Final pass
-            using (Graphics.UseBlendMode(BlendMode.Additive))
-            {
-                Graphics.Blit(renderRTs[0], rt.InternalTextures[0], false);
-            }
+            Graphics.Blit(renderRTs[0], rt.InternalTextures[0], false);
 
 
             //renderRT = rts[currentRenderTextureIndex];
@@ -383,12 +368,9 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             Mat.SetVector("Jitter", Graphics.Jitter);
             Mat.SetVector("PreviousJitter", Graphics.PreviousJitter);
 
-            using (Graphics.UseColorBlend(false))
-            {
-                Graphics.Blit(renderRTs[0], Mat, 0, true);
+            Graphics.Blit(renderRTs[0], Mat, 0, true);
 
-                Graphics.Blit(renderRTs[1], renderRT.InternalTextures[0], true);
-            }
+            Graphics.Blit(renderRTs[1], renderRT.InternalTextures[0], true);
         }
     }
 
