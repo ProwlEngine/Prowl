@@ -8,7 +8,7 @@ Pass 0
 	Blend On
 	BlendSrc SrcAlpha
 	BlendDst OneMinusSrcAlpha
-	BlendEquation FuncAdd
+	BlendMode Add
 	Cull Off
 	// Winding CW
 

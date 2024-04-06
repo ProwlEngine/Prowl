@@ -226,28 +226,28 @@ namespace Prowl.Editor.Assets
                 rasterState.depthWrite = ConvertToBoolean(depthWrite);
 
             if (GetStateValue(passContent, "DepthMode", out var depthMode))
-                rasterState.depthMode = (Silk.NET.OpenGL.DepthFunction)Enum.Parse(typeof(Silk.NET.OpenGL.DepthFunction), depthMode, true);
+                rasterState.depthMode = (RasterizerState.DepthMode)Enum.Parse(typeof(RasterizerState.DepthMode), depthMode, true);
 
             if (GetStateValue(passContent, "Blend", out var blend))
                 rasterState.doBlend = ConvertToBoolean(blend);
 
             if (GetStateValue(passContent, "BlendSrc", out var blendSrc))
-                rasterState.blendSrc = (Silk.NET.OpenGL.BlendingFactor)Enum.Parse(typeof(Silk.NET.OpenGL.BlendingFactor), blendSrc, true);
+                rasterState.blendSrc = (RasterizerState.Blending)Enum.Parse(typeof(RasterizerState.Blending), blendSrc, true);
 
             if (GetStateValue(passContent, "BlendDst", out var blendDst))
-                rasterState.blendDst = (Silk.NET.OpenGL.BlendingFactor)Enum.Parse(typeof(Silk.NET.OpenGL.BlendingFactor), blendDst, true);
+                rasterState.blendDst = (RasterizerState.Blending)Enum.Parse(typeof(RasterizerState.Blending), blendDst, true);
 
-            if (GetStateValue(passContent, "BlendEquation", out var blendEquation))
-                rasterState.blendEquation = (Silk.NET.OpenGL.BlendEquationModeEXT)Enum.Parse(typeof(Silk.NET.OpenGL.BlendEquationModeEXT), blendEquation, true);
+            if (GetStateValue(passContent, "BlendMode", out var blendEquation))
+                rasterState.blendMode = (RasterizerState.BlendMode)Enum.Parse(typeof(RasterizerState.BlendMode), blendEquation, true);
 
             if (GetStateValue(passContent, "Cull", out var cull))
                 rasterState.doCull = ConvertToBoolean(cull);
 
             if (GetStateValue(passContent, "CullFace", out var cullFace))
-                rasterState.cullFace = (Silk.NET.OpenGL.TriangleFace)Enum.Parse(typeof(Silk.NET.OpenGL.TriangleFace), cullFace, true);
+                rasterState.cullFace = (RasterizerState.PolyFace)Enum.Parse(typeof(RasterizerState.PolyFace), cullFace, true);
 
             if (GetStateValue(passContent, "Winding", out var winding))
-                rasterState.frontFace = (Silk.NET.OpenGL.FrontFaceDirection)Enum.Parse(typeof(Silk.NET.OpenGL.FrontFaceDirection), winding, true);
+                rasterState.winding = (RasterizerState.WindingOrder)Enum.Parse(typeof(RasterizerState.WindingOrder), winding, true);
 
             return rasterState;
         }

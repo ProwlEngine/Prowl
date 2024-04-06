@@ -12,17 +12,17 @@ namespace Prowl.Runtime.Rendering.OpenGL
         // Current OpenGL State
         private bool depthTest = true;
         private bool depthWrite = true;
-        private DepthFunction depthMode = DepthFunction.Lequal;
-        
-        private bool doBlend = true;
-        private BlendingFactor blendSrc = BlendingFactor.SrcAlpha;
-        private BlendingFactor blendDst = BlendingFactor.OneMinusSrcAlpha;
-        private BlendEquationModeEXT blendEquation = BlendEquationModeEXT.FuncAdd;
-        
-        private bool doCull = true;
-        private TriangleFace cullFace = TriangleFace.Back;
+        private RasterizerState.DepthMode depthMode = RasterizerState.DepthMode.Lequal;
 
-        private FrontFaceDirection winding = FrontFaceDirection.CW;
+        private bool doBlend = true;
+        private RasterizerState.Blending blendSrc = RasterizerState.Blending.SrcAlpha;
+        private RasterizerState.Blending blendDst = RasterizerState.Blending.OneMinusSrcAlpha;
+        private RasterizerState.BlendMode blendEquation = RasterizerState.BlendMode.Add;
+
+        private bool doCull = true;
+        private RasterizerState.PolyFace cullFace = RasterizerState.PolyFace.Back;
+
+        private RasterizerState.WindingOrder winding = RasterizerState.WindingOrder.CW;
 
         public override void Initialize(bool debug)
         {
@@ -97,7 +97,7 @@ namespace Prowl.Runtime.Rendering.OpenGL
 
             if (depthMode != state.depthMode || force)
             {
-                GL.DepthFunc(state.depthMode);
+                GL.DepthFunc(DepthModeToGL(state.depthMode));
                 depthMode = state.depthMode;
             }
 
@@ -112,15 +112,15 @@ namespace Prowl.Runtime.Rendering.OpenGL
 
             if (blendSrc != state.blendSrc || blendDst != state.blendDst || force)
             {
-                GL.BlendFunc(state.blendSrc, state.blendDst);
+                GL.BlendFunc(BlendingToGL(state.blendSrc), BlendingToGL(state.blendDst));
                 blendSrc = state.blendSrc;
                 blendDst = state.blendDst;
             }
 
-            if (blendEquation != state.blendEquation || force)
+            if (blendEquation != state.blendMode || force)
             {
-                GL.BlendEquation(state.blendEquation);
-                blendEquation = state.blendEquation;
+                GL.BlendEquation(BlendModeToGL(state.blendMode));
+                blendEquation = state.blendMode;
             }
 
             if (doCull != state.doCull || force)
@@ -134,14 +134,14 @@ namespace Prowl.Runtime.Rendering.OpenGL
 
             if (cullFace != state.cullFace || force)
             {
-                GL.CullFace(state.cullFace);
+                GL.CullFace(CullFaceToGL(state.cullFace));
                 cullFace = state.cullFace;
             }
 
-            if (winding != state.frontFace || force)
+            if (winding != state.winding || force)
             {
-                GL.FrontFace(state.frontFace);
-                winding = state.frontFace;
+                GL.FrontFace(WindingToGL(state.winding));
+                winding = state.winding;
             }
         }
 
@@ -154,7 +154,7 @@ namespace Prowl.Runtime.Rendering.OpenGL
                 doBlend = doBlend,
                 blendSrc = blendSrc,
                 blendDst = blendDst,
-                blendEquation = blendEquation,
+                blendMode = blendEquation,
                 doCull = doCull,
                 cullFace = cullFace
             };
@@ -208,9 +208,9 @@ namespace Prowl.Runtime.Rendering.OpenGL
         public override GLEnum CheckFramebufferStatus(FramebufferTarget framebuffer) => GL.CheckFramebufferStatus(framebuffer);
         public override void BindFramebuffer(FramebufferTarget readFramebuffer, uint fboId) => GL.BindFramebuffer(readFramebuffer, fboId);
         public override void DrawBuffers(uint count, GLEnum[] buffers) => GL.DrawBuffers(count, buffers);
-        public override void FramebufferTexture2D(FramebufferTarget framebuffer, FramebufferAttachment framebufferAttachment, TextureTarget type, uint handle, int v) 
+        public override void FramebufferTexture2D(FramebufferTarget framebuffer, FramebufferAttachment framebufferAttachment, TextureTarget type, uint handle, int v)
             => GL.FramebufferTexture2D(framebuffer, framebufferAttachment, type, handle, v);
-        public override void BlitFramebuffer(int v1, int v2, int width, int height, int v3, int v4, int v5, int v6, ClearBufferMask depthBufferBit, BlitFramebufferFilter nearest) 
+        public override void BlitFramebuffer(int v1, int v2, int width, int height, int v3, int v4, int v5, int v6, ClearBufferMask depthBufferBit, BlitFramebufferFilter nearest)
             => GL.BlitFramebuffer(v1, v2, width, height, v3, v4, v5, v6, depthBufferBit, nearest);
         public override void ReadBuffer(ReadBufferMode colorAttachment5) => GL.ReadBuffer(colorAttachment5);
         public override void DeleteFramebuffer(uint fboId) => GL.DeleteFramebuffer(fboId);
@@ -276,5 +276,78 @@ namespace Prowl.Runtime.Rendering.OpenGL
         {
             GL.Dispose();
         }
+
+        #region Private
+
+        private DepthFunction DepthModeToGL(RasterizerState.DepthMode depthMode)
+        {
+            return depthMode switch {
+                RasterizerState.DepthMode.Never => DepthFunction.Never,
+                RasterizerState.DepthMode.Less => DepthFunction.Less,
+                RasterizerState.DepthMode.Equal => DepthFunction.Equal,
+                RasterizerState.DepthMode.Lequal => DepthFunction.Lequal,
+                RasterizerState.DepthMode.Greater => DepthFunction.Greater,
+                RasterizerState.DepthMode.Notequal => DepthFunction.Notequal,
+                RasterizerState.DepthMode.Gequal => DepthFunction.Gequal,
+                RasterizerState.DepthMode.Always => DepthFunction.Always,
+                _ => throw new ArgumentOutOfRangeException(nameof(depthMode), depthMode, null),
+            };
+        }
+
+        private BlendingFactor BlendingToGL(RasterizerState.Blending blending)
+        {
+            return blending switch {
+                RasterizerState.Blending.Zero => BlendingFactor.Zero,
+                RasterizerState.Blending.One => BlendingFactor.One,
+                RasterizerState.Blending.SrcColor => BlendingFactor.SrcColor,
+                RasterizerState.Blending.OneMinusSrcColor => BlendingFactor.OneMinusSrcColor,
+                RasterizerState.Blending.DstColor => BlendingFactor.DstColor,
+                RasterizerState.Blending.OneMinusDstColor => BlendingFactor.OneMinusDstColor,
+                RasterizerState.Blending.SrcAlpha => BlendingFactor.SrcAlpha,
+                RasterizerState.Blending.OneMinusSrcAlpha => BlendingFactor.OneMinusSrcAlpha,
+                RasterizerState.Blending.DstAlpha => BlendingFactor.DstAlpha,
+                RasterizerState.Blending.OneMinusDstAlpha => BlendingFactor.OneMinusDstAlpha,
+                RasterizerState.Blending.ConstantColor => BlendingFactor.ConstantColor,
+                RasterizerState.Blending.OneMinusConstantColor => BlendingFactor.OneMinusConstantColor,
+                RasterizerState.Blending.ConstantAlpha => BlendingFactor.ConstantAlpha,
+                RasterizerState.Blending.OneMinusConstantAlpha => BlendingFactor.OneMinusConstantAlpha,
+                RasterizerState.Blending.SrcAlphaSaturate => BlendingFactor.SrcAlphaSaturate,
+                _ => throw new ArgumentOutOfRangeException(nameof(blending), blending, null),
+            };
+        }
+
+        private BlendEquationModeEXT BlendModeToGL(RasterizerState.BlendMode blendMode)
+        {
+            return blendMode switch {
+                RasterizerState.BlendMode.Add => BlendEquationModeEXT.FuncAdd,
+                RasterizerState.BlendMode.Subtract => BlendEquationModeEXT.FuncSubtract,
+                RasterizerState.BlendMode.ReverseSubtract => BlendEquationModeEXT.FuncReverseSubtract,
+                RasterizerState.BlendMode.Min => BlendEquationModeEXT.Min,
+                RasterizerState.BlendMode.Max => BlendEquationModeEXT.Max,
+                _ => throw new ArgumentOutOfRangeException(nameof(blendMode), blendMode, null),
+            };
+        }
+
+        private TriangleFace CullFaceToGL(RasterizerState.PolyFace cullFace)
+        {
+            return cullFace switch {
+                RasterizerState.PolyFace.Front => TriangleFace.Front,
+                RasterizerState.PolyFace.Back => TriangleFace.Back,
+                RasterizerState.PolyFace.FrontAndBack => TriangleFace.FrontAndBack,
+                _ => throw new ArgumentOutOfRangeException(nameof(cullFace), cullFace, null),
+            };
+        }
+
+        private FrontFaceDirection WindingToGL(RasterizerState.WindingOrder winding)
+        {
+            return winding switch {
+                RasterizerState.WindingOrder.CW => FrontFaceDirection.CW,
+                RasterizerState.WindingOrder.CCW => FrontFaceDirection.Ccw,
+                _ => throw new ArgumentOutOfRangeException(nameof(winding), winding, null),
+            };
+        }
+
+        #endregion
+
     }
 }
