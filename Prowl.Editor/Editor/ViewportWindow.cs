@@ -36,6 +36,9 @@ public class ViewportWindow : EditorWindow
     double moveSpeed = 1;
     bool hasStarted = false;
 
+    enum GridType { None, XZ, XY, YZ }
+    GridType gridType = GridType.XZ;
+
     public ViewportWindow() : base()
     {
         Title = FontAwesome6.Camera + " Viewport";
@@ -167,9 +170,14 @@ public class ViewportWindow : EditorWindow
             if (weak.Target is GameObject go)
                 selectedGOs.Add(go);
 
-        gridMat ??= new Material(Shader.Find("Defaults/Grid.shader"));
-        gridMat.SetTexture("gPositionRoughness", Cam.gBuffer.PositionRoughness);
-        Graphics.Blit(RenderTarget, gridMat, 0, false);
+        if (gridType != GridType.None) {
+            gridMat ??= new Material(Shader.Find("Defaults/Grid.shader"));
+            gridMat.SetTexture("gPositionRoughness", Cam.gBuffer.PositionRoughness);
+            gridMat.SetKeyword("GRID_XZ", gridType == GridType.XZ);
+            gridMat.SetKeyword("GRID_XY", gridType == GridType.XY);
+            gridMat.SetKeyword("GRID_YZ", gridType == GridType.YZ);
+            Graphics.Blit(RenderTarget, gridMat, 0, false);
+        }
 
         DrawGizmos(selectedGOs, view, projection);
 
@@ -204,6 +212,11 @@ public class ViewportWindow : EditorWindow
         if (ImGui.Button($"{FontAwesome6.Camera}"))
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(Cam.GameObject));
         GUIHelper.Tooltip("Viewport Camera Settings");
+
+        ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (174), 5));
+        ImGui.SetNextItemWidth(23);
+        GUIHelper.EnumComboBox("##GridType", $"{FontAwesome6.TableCells}", ref gridType, false);
+        GUIHelper.Tooltip("Grid Type");
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 25));
         ImGui.Text("FPS: " + fps.ToString("0.00"));

@@ -42,10 +42,19 @@ Pass 0
 		uniform sampler2D gPositionRoughness; // Pos
 		
 		float Grid(vec3 ro, vec3 rd, out float d) {
-			d = -ro.y / rd.y;
-			if (d <= 0.0) return 0.0;
-			
-			vec2 p = (ro.xz + rd.xz * d) * 2.0;
+			#ifdef GRID_XZ
+			    d = -ro.y / rd.y;
+			    if (d <= 0.0) return 0.0;
+			    vec2 p = (ro.xz + rd.xz * d) * 2.0;
+			#elif defined(GRID_ZY)
+			    d = -ro.x / rd.x;
+			    if (d <= 0.0) return 0.0;
+			    vec2 p = (ro.zy + rd.zy * d) * 2.0;
+			#elif defined(GRID_XY)
+			    d = -ro.z / rd.z;
+			    if (d <= 0.0) return 0.0;
+			    vec2 p = (ro.xy + rd.xy * d) * 2.0;
+			#endif
 			vec2 e = fwidth(p);
 			vec2 grid = abs(fract(p) - 0.5);
 			vec2 lines = smoothstep(0.5 * e, e, grid);
