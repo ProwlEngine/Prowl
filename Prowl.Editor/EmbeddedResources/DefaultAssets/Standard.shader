@@ -25,6 +25,7 @@ Properties
 Pass 0
 {
 	// Default Raster state
+	Blend Off
 
 	Vertex
 	{
