@@ -31,7 +31,7 @@ namespace Prowl.Runtime
         public static void Sphere(Color color) => Add(new SphereGizmo(color));
         public static void Spotlight(float distance, float angle, Color color) => Add(new SpotlightGizmo(distance, angle, color));
 
-        private static void Add(Gizmo gizmo)
+        public static void Add(Gizmo gizmo)
         {
             gizmos.Add((gizmo, Matrix));
             Matrix = Matrix4x4.Identity;
