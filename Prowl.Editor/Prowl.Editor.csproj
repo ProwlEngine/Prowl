@@ -33,6 +33,7 @@
       <None Remove="EmbeddedResources\DefaultAssets\GBuffercombine.shader.meta" />
       <None Remove="EmbeddedResources\DefaultAssets\Gizmos.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\grid.png" />
+      <None Remove="EmbeddedResources\DefaultAssets\Grid.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Invalid.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\noise.png" />
       <None Remove="EmbeddedResources\DefaultAssets\PBR.glsl" />
@@ -73,6 +74,9 @@
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Capsule.obj" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Cube.obj" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\DefaultRenderPipeline.scriptobj" />
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Grid.shader">
+        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      </EmbeddedResource>
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Quad.obj" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Tonemapper.shader" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Cylinder.obj" />

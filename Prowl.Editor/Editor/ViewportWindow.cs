@@ -9,6 +9,8 @@ using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
 using Silk.NET.Maths;
+using Silk.NET.SDL;
+using System;
 using System.Runtime.CompilerServices;
 
 namespace Prowl.Editor.EditorWindows;
@@ -22,6 +24,7 @@ public class ViewportWindow : EditorWindow
 
 
     Camera Cam;
+    Material gridMat;
     RenderTexture RenderTarget;
     bool IsFocused = false;
     bool IsHovered = false;
@@ -164,7 +167,12 @@ public class ViewportWindow : EditorWindow
             if (weak.Target is GameObject go)
                 selectedGOs.Add(go);
 
+        gridMat ??= new Material(Shader.Find("Defaults/Grid.shader"));
+        gridMat.SetTexture("gPositionRoughness", Cam.gBuffer.PositionRoughness);
+        Graphics.Blit(RenderTarget, gridMat, 0, false);
+
         DrawGizmos(selectedGOs, view, projection);
+
 
         Camera.Current = null;
 
