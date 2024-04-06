@@ -45,7 +45,7 @@ Pass 0
 			d = -ro.y / rd.y;
 			if (d <= 0.0) return 0.0;
 			
-			vec2 p = (ro.xz + rd.xz * d);
+			vec2 p = (ro.xz + rd.xz * d) * 2.0;
 			vec2 e = fwidth(p);
 			vec2 grid = abs(fract(p) - 0.5);
 			vec2 lines = smoothstep(0.5 * e, e, grid);
@@ -64,9 +64,9 @@ Pass 0
             vec3 gPos = textureLod(gPositionRoughness, TexCoords, 0).rgb;
 			
 			float d = 0.0;
-			float g = Grid(Camera_WorldPosition, normalize(vPosition), d);
+			float g = Grid(Camera_WorldPosition * 0.5, normalize(vPosition), d);
 			
-			float depth = length(gPos.xyz);
+			float depth = length(gPos.xyz) * 0.5;
 			
 			if(depth > d || depth == 0.0)
 			{
