@@ -212,7 +212,7 @@ namespace Prowl.Editor
             {
                 ImGui.SameLine();
                 ImGui.SetCursorPosX(cPX + ImGui.GetFontSize() * 0.5f);
-                ImGui.TextUnformatted(FontAwesome6.MagnifyingGlass + " Search...");
+                ImGui.TextDisabled(FontAwesome6.MagnifyingGlass + " Search...");
             }
             return changed;
         }
