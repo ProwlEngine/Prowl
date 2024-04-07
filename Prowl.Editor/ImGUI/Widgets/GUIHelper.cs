@@ -1,6 +1,7 @@
 ﻿using Hexa.NET.ImGui;
 using Prowl.Icons;
 using Prowl.Runtime;
+using System.Runtime.InteropServices;
 
 namespace Prowl.Editor
 {
@@ -57,9 +58,9 @@ namespace Prowl.Editor
             float oldY = ImGui.GetCursorPosY();
             ImGui.SetWindowFontScale(size);
             var ts = ImGui.CalcTextSize(text);
-            ImGui.SetCursorPosX((ImGui.GetWindowWidth() - ts.X) / 2f);
+            ImGui.SetCursorPosX((ImGui.GetWindowWidth() - ts.X) * 0.45f);
             if (vertically)
-                ImGui.SetCursorPosY((ImGui.GetWindowHeight() - ts.Y) / 2f);
+                ImGui.SetCursorPosY((ImGui.GetWindowHeight() - ts.Y) * 0.5f);
             ImGui.Text(text);
             ImGui.SetWindowFontScale(1.0f);
             ImGui.SetCursorPosX(oldX);
@@ -304,6 +305,74 @@ namespace Prowl.Editor
                 fixed (float* v = &value)
                     return ImGui.DragScalar(v1, ImGuiDataType.Float, v, v2, "%g");
             }
+        }
+
+        public static void ShadeVertsLinearColorGradient(ImDrawListPtr drawList, int vertStartIdx, int vertEndIdx, System.Numerics.Vector2 gradientP0, System.Numerics.Vector2 gradientP1, uint col0, uint col1)
+        {
+            var gradientExtent = gradientP1 - gradientP0;
+            float gradientInvLength2 = 1.0f / ImLengthSqr(gradientExtent);
+
+            unsafe
+            {
+                ImDrawVert* vertStart = (ImDrawVert*)drawList.VtxBuffer.Data + vertStartIdx;
+                ImDrawVert* vertEnd = (ImDrawVert*)drawList.VtxBuffer.Data + vertEndIdx;
+
+                int col0R = (int)(col0 >> IM_COL32_R_SHIFT) & 0xFF;
+                int col0G = (int)(col0 >> IM_COL32_G_SHIFT) & 0xFF;
+                int col0B = (int)(col0 >> IM_COL32_B_SHIFT) & 0xFF;
+                int col0A = (int)(col0 >> IM_COL32_A_SHIFT) & 0xFF;
+
+                int col1R = (int)(col1 >> IM_COL32_R_SHIFT) & 0xFF;
+                int col1G = (int)(col1 >> IM_COL32_G_SHIFT) & 0xFF;
+                int col1B = (int)(col1 >> IM_COL32_B_SHIFT) & 0xFF;
+                int col1A = (int)(col1 >> IM_COL32_A_SHIFT) & 0xFF;
+
+                int colDeltaR = col1R - col0R;
+                int colDeltaG = col1G - col0G;
+                int colDeltaB = col1B - col0B;
+                int colDeltaA = col1A - col0A;
+
+                for (ImDrawVert* vert = vertStart; vert < vertEnd; vert++)
+                {
+                    float d = ImDot(vert->pos - gradientP0, gradientExtent);
+                    float t = ImClamp(d * gradientInvLength2, 0.0f, 1.0f);
+
+                    int r = (int)(col0R + colDeltaR * t);
+                    int g = (int)(col0G + colDeltaG * t);
+                    int b = (int)(col0B + colDeltaB * t);
+                    int a = (int)(col0A + colDeltaA * t);
+
+                    vert->col = (uint)((r << IM_COL32_R_SHIFT) | (g << IM_COL32_G_SHIFT) | (b << IM_COL32_B_SHIFT) | (a << IM_COL32_A_SHIFT));
+                }
+            }
+        }
+
+        private static float ImLengthSqr(System.Numerics.Vector2 v)
+        {
+            return v.X * v.X + v.Y * v.Y;
+        }
+
+        private static float ImDot(System.Numerics.Vector2 a, System.Numerics.Vector2 b)
+        {
+            return a.X * b.X + a.Y * b.Y;
+        }
+
+        private static float ImClamp(float value, float min, float max)
+        {
+            return value < min ? min : value > max ? max : value;
+        }
+
+        private const int IM_COL32_R_SHIFT = 0;
+        private const int IM_COL32_G_SHIFT = 8;
+        private const int IM_COL32_B_SHIFT = 16;
+        private const int IM_COL32_A_SHIFT = 24;
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct ImDrawVert
+        {
+            public System.Numerics.Vector2 pos;
+            public System.Numerics.Vector2 uv;
+            public uint col;
         }
     }
 }
