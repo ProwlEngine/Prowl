@@ -172,6 +172,18 @@ public abstract class PropertyDrawer {
             field.SetValue(container, instance);
             changed = true;
         }
+
+        // support looking for components on dropped GameObjects
+        if (field.FieldType == typeof(MonoBehaviour) && DragnDrop.Drop(out GameObject go))
+        {
+            var component = go.GetComponent(field.FieldType);
+            if (component != null)
+            {
+                field.SetValue(container, component);
+                changed = true;
+            }
+        }
+
         ImGui.Columns(1);
         return changed;
     }
@@ -200,11 +212,19 @@ public abstract class PropertyDrawer {
         }
 
         // Drag and drop support
-        if (DragnDrop.Drop(out var instance, field.FieldType))
+        if (DragnDrop.Drop(out Transform instance))
         {
             field.SetValue(container, instance);
             changed = true;
         }
+
+        // support looking for components on dropped GameObjects
+        if (DragnDrop.Drop(out GameObject go))
+        {
+            field.SetValue(container, go.transform);
+            changed = true;
+        }
+
         ImGui.Columns(1);
         return changed;
     }
