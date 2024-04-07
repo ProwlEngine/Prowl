@@ -24,6 +24,7 @@ namespace Prowl.Editor.Editor.Preferences
 
         [Text("Game View:")]
         public bool AutoFocusGameView = true;
+        public bool AutoRefreshGameView = true;
         public GameWindow.Resolutions Resolution = GameWindow.Resolutions.fit;
         [HideInInspector]
         public int CurrentWidth = 1280;

@@ -66,7 +66,7 @@ public class GameWindow : EditorWindow
         // Header Bar with resolution settings, then Image under it
         ImGui.BeginChild("Header", new System.Numerics.Vector2(0, HeaderHeight), ImGuiChildFlags.Border, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
         {
-            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
+            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 3);
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 5);
             ImGui.Text(FontAwesome6.Display);
             ImGui.SameLine();
@@ -93,6 +93,14 @@ public class GameWindow : EditorWindow
                 UpdateResolution(GeneralPreferences.Instance.Resolution);
                 RefreshRenderTexture();
             }
+
+            ImGui.SameLine();
+            // Auto Focus
+            ImGui.SetCursorPosX(ImGui.GetWindowWidth() - 200);
+            ImGui.Checkbox("Auto Focus", ref GeneralPreferences.Instance.AutoFocusGameView);
+            ImGui.SameLine();
+            // Auto Refresh
+            ImGui.Checkbox("Auto Refresh", ref GeneralPreferences.Instance.AutoRefreshGameView);
         }
         ImGui.EndChild();
 
@@ -122,10 +130,14 @@ public class GameWindow : EditorWindow
         }
 
         // We got a camera to visualize
-        if (Application.isPlaying || Time.frameCount % 8 == 0) {
-            mainCam.Target = RenderTarget;
-            mainCam.Render((int)renderSize.X, (int)renderSize.Y);
-            mainCam.Target = null;
+        if (GeneralPreferences.Instance.AutoRefreshGameView)
+        {
+            if (Application.isPlaying || Time.frameCount % 8 == 0)
+            {
+                mainCam.Target = RenderTarget;
+                mainCam.Render((int)renderSize.X, (int)renderSize.Y);
+                mainCam.Target = null;
+            }
         }
 
         // Letter box the image into the render size
