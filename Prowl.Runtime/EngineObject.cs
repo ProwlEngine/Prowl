@@ -25,8 +25,8 @@ namespace Prowl.Runtime
 
         [HideInInspector]
         public string Name;
-        
-        [HideInInspector, SerializeIgnore] 
+
+        [HideInInspector, SerializeIgnore]
         public bool IsDestroyed = false;
 
         public EngineObject() : this(null) { }
@@ -46,12 +46,29 @@ namespace Prowl.Runtime
 
         public virtual void OnValidate() { }
 
-        public static T? FindObjectOfType<T>() where T : EngineObject => 
-            allObjects.FirstOrDefault(o => o.TryGetTarget(out var obj) ? false : obj is T) as T;
-        public static T?[] FindObjectsOfType<T>() where T : EngineObject => 
-            allObjects.Where(o => o.TryGetTarget(out var obj) ? false : obj is T).Select(o => o as T).ToArray();
-        public static T? FindObjectByID<T>(int id) where T : EngineObject => 
-            allObjects.FirstOrDefault(o => o.TryGetTarget(out var obj) ? false : obj is T t && t.InstanceID == id) as T;
+        public static T? FindObjectOfType<T>() where T : EngineObject
+        {
+            foreach (var obj in allObjects)
+                if (obj.TryGetTarget(out var target) && target is T t)
+                    return t;
+            return null;
+        }
+
+        public static T?[] FindObjectsOfType<T>() where T : EngineObject
+        {
+            List<T> objects = new();
+            foreach (var obj in allObjects)
+                if (obj.TryGetTarget(out var target) && target is T t)
+                    objects.Add(t);
+            return objects.ToArray();
+        }
+        public static T? FindObjectByID<T>(int id) where T : EngineObject
+        {
+            foreach (var obj in allObjects)
+                if (obj.TryGetTarget(out var target) && target is T t && t.InstanceID == id)
+                    return t;
+            return null;
+        }
 
         public static void Foreach<T>(Action<T> action) where T : EngineObject
         {
