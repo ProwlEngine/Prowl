@@ -40,6 +40,8 @@ public static class EditorGui
     {
         ImGuiFileDialog.UpdateDialogs();
         ImGuiNotify.RenderNotifications();
+
+        ImGui.ShowStyleEditor();
     }
 
     private static void SetTheme()
@@ -105,11 +107,11 @@ public static class EditorGui
 
         style.WindowPadding = new Vector2(3.0f, 3.0f);
         style.FramePadding = new Vector2(6.0f, 2.0f);
-        style.CellPadding = new Vector2(4.0f, 0.0f);
+        style.CellPadding = new Vector2(0.0f, 0.0f);
         style.ItemSpacing = new Vector2(4.0f, 3.0f);
         style.ItemInnerSpacing = new Vector2(4.0f, 4.0f);
-        style.IndentSpacing = 10.0f;
-        style.ScrollbarSize = 10.0f;
+        style.IndentSpacing = 15.0f;
+        style.ScrollbarSize = 12.0f;
         style.GrabMinSize = 10.0f;
 
         style.WindowBorderSize = 0.0f;
@@ -121,12 +123,12 @@ public static class EditorGui
         style.DockingSeparatorSize = 4f;
 
         style.WindowRounding = 3.0f;
-        style.ChildRounding = 3.0f;
+        style.ChildRounding = 0.0f;
         style.PopupRounding = 3.0f;
         style.FrameRounding = 3.0f;
-        style.GrabRounding = 6.0f;
-        style.TabRounding = 3.0f;
-        style.ScrollbarRounding = 6.0f;
+        style.GrabRounding = 3.0f;
+        style.TabRounding = 0.0f;
+        style.ScrollbarRounding = 2.0f;
 
         style.Alpha = 1.0f;
         style.DisabledAlpha = 0.5f;
