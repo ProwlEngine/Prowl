@@ -134,9 +134,10 @@ public class GameWindow : EditorWindow
         {
             if (Application.isPlaying || Time.frameCount % 8 == 0)
             {
+                var tmp = mainCam.Target;
                 mainCam.Target = RenderTarget;
                 mainCam.Render((int)renderSize.X, (int)renderSize.Y);
-                mainCam.Target = null;
+                mainCam.Target = tmp;
             }
         }
 
