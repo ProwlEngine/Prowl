@@ -3,6 +3,7 @@ using Prowl.Editor.Assets;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Editor.Utilities;
+using Prowl.Icons;
 using Prowl.Runtime;
 using System.Reflection;
 
@@ -33,19 +34,17 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             ImGui.PushID(go.GetHashCode());
             if (go.hideFlags.HasFlag(HideFlags.NotEditable)) ImGui.BeginDisabled();
 
-            // position cursor back to window start
-            ImGui.SetCursorPos(new(66, 28));
-
-            ImGui.SetNextItemWidth(ImGui.GetWindowWidth() - 100);
-            ImGui.InputText("##GOName", ref go.Name, 0x100);
-            ImGui.SameLine();
-
             bool isEnabled = go.enabled;
             ImGui.Checkbox("##GOActive", ref isEnabled);
             if (isEnabled != go.enabled) go.enabled = isEnabled;
             GUIHelper.Tooltip("Is Enabled");
+            ImGui.SameLine();
 
-            ImGui.SetCursorPosY(60);
+            ImGui.SetNextItemWidth(ImGui.GetWindowWidth() - 32);
+            ImGui.InputText("##GOName", ref go.Name, 0x100);
+
+
+            ImGui.SetCursorPosY(85);
 
             //float widthToWorkWith = ImGui.GetWindowWidth() - 24f;
             //ImGui.SetNextItemWidth((widthToWorkWith / 2) - (13));

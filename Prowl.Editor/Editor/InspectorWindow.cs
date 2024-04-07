@@ -13,6 +13,7 @@ public class InspectorWindow : EditorWindow
     private Stack<object> _ForwardStack = new();
 
     private object? Selected = null;
+    private bool lockSelection = false;
 
     (object, ScriptedEditor)? customEditor;
 
@@ -24,6 +25,8 @@ public class InspectorWindow : EditorWindow
 
     private void Selection_OnSelectObject(object n)
     {
+        if (lockSelection) return;
+
         if (n is DirectoryInfo) return; // Dont care about directories
 
         if(n is IAssetRef asset)
@@ -49,6 +52,13 @@ public class InspectorWindow : EditorWindow
         // Move 2 pixels down
         ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 1);
         ForwardBackButtons();
+
+        ImGui.SameLine();
+        // Lock Button
+        ImGui.SetCursorPos(new (ImGui.GetWindowWidth() - 28, 24));
+        if (ImGui.Button(lockSelection? FontAwesome6.Lock : FontAwesome6.Unlock, new System.Numerics.Vector2(25, 25)))
+            lockSelection = !lockSelection;
+
         ImGui.Separator();
         ImGui.Spacing();
 
