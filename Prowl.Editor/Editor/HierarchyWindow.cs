@@ -182,7 +182,7 @@ public class HierarchyWindow : EditorWindow
         // Select
         if (!ImGui.IsItemToggledOpen())
         {
-            SelectHandler.HandleSelectable(index++, new WeakReference(entity));
+            SelectHandler.HandleSelectable(index++, new WeakReference(entity), true);
             if (SelectHandler.Count == 1 && ImGui.IsMouseDoubleClicked(0) && ImGui.IsItemHovered())
             {
                 m_RenamingGO = entity;
