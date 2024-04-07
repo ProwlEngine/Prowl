@@ -57,7 +57,8 @@ public class GameWindow : EditorWindow
 
         if (!previouslyPlaying && Application.isPlaying) {
             previouslyPlaying = true;
-            ImGui.SetWindowFocus();
+            if(GeneralPreferences.Instance.AutoFocusGameView)
+                ImGui.SetWindowFocus();
         } else if (previouslyPlaying && !Application.isPlaying) {
             previouslyPlaying = false;
         }
