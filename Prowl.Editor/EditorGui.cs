@@ -40,8 +40,6 @@ public static class EditorGui
     {
         ImGuiFileDialog.UpdateDialogs();
         ImGuiNotify.RenderNotifications();
-
-        ImGui.ShowStyleEditor();
     }
 
     private static void SetTheme()
