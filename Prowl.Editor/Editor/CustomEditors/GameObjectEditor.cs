@@ -85,9 +85,14 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 ImGui.Separator();
             }
 
-            PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localPosition")!, -1, "Position");
-            PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localEulerAngles")!, -1, "Rotation");
-            PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localScale")!, -1, "Scale");
+            if (ImGui.CollapsingHeader("Transform", ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.OpenOnArrow))
+            {
+                ImGui.Indent();
+                PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localPosition")!, -1, "Position");
+                PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localEulerAngles")!, -1, "Rotation");
+                PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localScale")!, -1, "Scale");
+                ImGui.Unindent();
+            }
 
             // Draw Components
             HashSet<int> editorsNeeded = [];
