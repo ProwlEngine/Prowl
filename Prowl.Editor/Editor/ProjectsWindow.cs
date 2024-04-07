@@ -285,6 +285,13 @@ public class ProjectsWindow : EditorWindow
         {
             SelectedProject = name;
         }
+
+        // Double click to open
+        if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left) && ImGui.IsItemHovered())
+        {
+            Project.Open(name);
+            isOpened = false;
+        }
     }
 
     private string GetFormattedLastModifiedTime(DateTime lastModified)
