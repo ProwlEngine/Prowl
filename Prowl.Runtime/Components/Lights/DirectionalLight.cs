@@ -68,8 +68,9 @@ public class DirectionalLight : MonoBehaviour
 
         Graphics.Blit(lightMat);
 
-        Gizmos.Matrix = GameObject.GlobalCamRelative;
-        Gizmos.DirectionalLight(Color.yellow);
+        Gizmos.Matrix = GameObject.transform.localToWorldMatrix;
+        Gizmos.Color = Color.yellow;
+        Gizmos.DrawDirectionalLight(Vector3.zero);
     }
 
     public void UpdateShadowmap()

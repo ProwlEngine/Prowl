@@ -20,12 +20,9 @@ namespace Prowl.Runtime
 
         public override void DrawGizmosSelected()
         {
-            var mat = Matrix4x4.Identity;
-            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateScale(radius * 1.0025f));
-            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateScale(GameObject.transform.lossyScale));
-            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateTranslation(GameObject.transform.position - Camera.Current.GameObject.transform.position));
-            Gizmos.Matrix = mat;
-            Gizmos.Sphere(Color.yellow);
+            Gizmos.Matrix = GameObject.transform.localToWorldMatrix;
+            Gizmos.Color = Color.yellow;
+            Gizmos.DrawSphere(Vector3.zero, radius * 1.0025f);
         }
     }
 

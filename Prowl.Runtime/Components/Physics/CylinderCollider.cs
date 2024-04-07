@@ -8,7 +8,7 @@ namespace Prowl.Runtime
     public class CylinderCollider : Collider
     {
         public float radius = 1f;
-        public float height = 1f;
+        public float height = 2f;
         public override List<Shape> CreateShapes() => [ new CylinderShape(radius, height) ];
         public override void OnValidate()
         {
@@ -22,11 +22,9 @@ namespace Prowl.Runtime
 
         public override void DrawGizmosSelected()
         {
-            var mat = Matrix4x4.Identity;
-            mat = Matrix4x4.Multiply(mat, Matrix4x4.CreateScale(new Vector3(radius, height, radius) * 1.0025f));
-            mat = Matrix4x4.Multiply(mat, GameObject.GlobalCamRelative);
-            Gizmos.Matrix = mat;
-            Gizmos.Cylinder(Color.yellow);
+            Gizmos.Matrix = GameObject.transform.localToWorldMatrix;
+            Gizmos.Color = Color.yellow;
+            Gizmos.DrawCylinder(Vector3.zero, radius, height);
         }
     }
 

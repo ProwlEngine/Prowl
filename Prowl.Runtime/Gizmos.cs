@@ -10,26 +10,70 @@ namespace Prowl.Runtime
         private static Material mat;
 
         public static Matrix4x4 Matrix = Matrix4x4.Identity;
+        public static Color Color;
 
-        public static void Line(Vector3 pointA, Vector3 pointB, Color color) => Add(new LineGizmo(pointA, pointB, color));
+        public static void DrawLine(Vector3 from, Vector3 to)
+        {
+            from -= Camera.Current.GameObject.transform.position;
+            to -= Camera.Current.GameObject.transform.position;
+            Add(new LineGizmo(from, to, Color));
+        }
 
-        public static void Cube(Color color) => Add(new CubeGizmo(color));
+        public static void DrawCube(Vector3 center, Vector3 size)
+        {
+            center -= Camera.Current.GameObject.transform.position;
+            Matrix = Matrix4x4.CreateScale(size) * Matrix * Matrix4x4.CreateTranslation(center);
+            Add(new CubeGizmo(Color));
+        }
 
-        public static void Triangle(Color color) => Add(new TriangleGizmo(color));
+        public static void DrawPolygon(Vector3[] points, bool closed = false)
+        {
+            for (int i = 0; i < points.Length; i++)
+                points[i] -= Camera.Current.GameObject.transform.position;
+            Add(new PolygonGizmo(points, Color, closed));
+        }
 
-        public static void Quad(Color color) => Add(new QuadGizmo(color));
+        public static void DrawCylinder(Vector3 center, float radius, float height)
+        {
+            center -= Camera.Current.GameObject.transform.position;
+            Matrix = Matrix4x4.CreateScale(new Vector3(radius, height, radius)) * Matrix * Matrix4x4.CreateTranslation(center);
+            Add(new CylinderGizmo(Color));
+        }
 
-        public static void Polygon(Vector3[] points, Color color, bool closed = false) => Add(new PolygonGizmo(points, color, closed));
+        public static void DrawCapsule(Vector3 center, float radius, float height)
+        {
+            center -= Camera.Current.GameObject.transform.position;
+            Matrix = Matrix4x4.CreateScale(new Vector3(radius, height, radius)) * Matrix * Matrix4x4.CreateTranslation(center);
+            Add(new CapsuleGizmo(Color));
+        }
 
-        public static void Cylinder(Color color) => Add(new CylinderGizmo(color));
+        public static void DrawCircle(Vector3 center, float radius)
+        {
+            center -= Camera.Current.GameObject.transform.position;
+            Matrix = Matrix4x4.CreateScale(new Vector3(radius, radius, radius)) * Matrix * Matrix4x4.CreateTranslation(center);
+            Add(new CircleGizmo(Color));
+        }
 
-        public static void Capsule(Color color) => Add(new CapsuleGizmo(color));
+        public static void DrawSphere(Vector3 center, float radius)
+        {
+            center -= Camera.Current.GameObject.transform.position;
+            Matrix = Matrix4x4.CreateScale(new Vector3(radius, radius, radius)) * Matrix * Matrix4x4.CreateTranslation(center);
+            Add(new SphereGizmo(Color));
+        }
 
+        public static void DrawDirectionalLight(Vector3 center)
+        {
+            center -= Camera.Current.GameObject.transform.position;
+            Matrix = Matrix * Matrix4x4.CreateTranslation(center);
+            Add(new DirectionalLightGizmo(Color));
+        }
 
-        public static void Circle(Color color) => Add(new CircleGizmo(color));
-        public static void DirectionalLight(Color color) => Add(new DirectionalLightGizmo(color));
-        public static void Sphere(Color color) => Add(new SphereGizmo(color));
-        public static void Spotlight(float distance, float angle, Color color) => Add(new SpotlightGizmo(distance, angle, color));
+        public static void DrawSpotlight(Vector3 position, float distance, float spotAngle)
+        {
+            position -= Camera.Current.GameObject.transform.position;
+            Matrix = Matrix * Matrix4x4.CreateTranslation(position);
+            Add(new SpotlightGizmo(distance, spotAngle, Color));
+        }
 
         public static void Add(Gizmo gizmo)
         {
@@ -97,29 +141,6 @@ namespace Prowl.Runtime
         {
             base.matrix = m;
             batch.Line(Pos(start), Pos(end), color, color);
-        }
-    }
-
-    public class TriangleGizmo(Vector4 color) : Gizmo
-    {
-        public override void Render(PrimitiveBatch batch, Matrix4x4 m)
-        {
-            base.matrix = m;
-            batch.Line(Pos(new(-0.5, -0.5, 0.0)), Pos(new(0.0, 0.5, 0.0)), color, color);
-            batch.Line(Pos(new(0.0, 0.5, 0.0)), Pos(new(0.5, -0.5, 0.0)), color, color);
-            batch.Line(Pos(new(0.5, -0.5, 0.0)), Pos(new(-0.5, -0.5, 0.0)), color, color);
-        }
-    }
-
-    public class QuadGizmo(Vector4 color) : Gizmo
-    {
-        public override void Render(PrimitiveBatch batch, Matrix4x4 m)
-        {
-            base.matrix = m;
-            batch.Line(Pos(new(-0.5, -0.5, 0.0)), Pos(new(-0.5, 0.5, 0.0)), color, color);
-            batch.Line(Pos(new(-0.5, 0.5, 0.0)), Pos(new(0.5, 0.5, 0.0)), color, color);
-            batch.Line(Pos(new(0.5, 0.5, 0.0)), Pos(new(0.5, -0.5, 0.0)), color, color);
-            batch.Line(Pos(new(0.5, -0.5, 0.0)), Pos(new(-0.5, -0.5, 0.0)), color, color);
         }
     }
 
