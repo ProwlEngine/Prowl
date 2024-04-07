@@ -87,6 +87,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
             if (ImGui.CollapsingHeader("Transform", ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.OpenOnArrow))
             {
+                DragnDrop.Drag(go.transform, typeof(Transform));
                 ImGui.Indent();
                 PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localPosition")!, -1, "Position");
                 PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localEulerAngles")!, -1, "Rotation");

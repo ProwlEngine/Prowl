@@ -59,6 +59,9 @@ public abstract class PropertyDrawer {
             if (fieldInfo.FieldType.IsAssignableTo(typeof(EngineObject)))
                 return DrawEngineObjectField(container, label ?? fieldInfo.Name, fieldInfo, ref width);
 
+            if (fieldInfo.FieldType.IsAssignableTo(typeof(Transform)))
+                return DrawTransformField(container, label ?? fieldInfo.Name, fieldInfo, ref width);
+
             var value = fieldInfo.GetValue(container);
             if (value == null)
             {
@@ -157,6 +160,39 @@ public abstract class PropertyDrawer {
         else
         {
             ImGui.Selectable(value.Name, new System.Numerics.Vector2(width, 21));
+            GUIHelper.ItemRectFilled(0.1f, 0.1f, 0.9f, 0.3f);
+
+            if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                GlobalSelectHandler.Select(value);
+        }
+
+        // Drag and drop support
+        if (DragnDrop.Drop(out var instance, field.FieldType))
+        {
+            field.SetValue(container, instance);
+            changed = true;
+        }
+        ImGui.Columns(1);
+        return changed;
+    }
+
+    protected static bool DrawTransformField(object container, string label, FieldInfo field, ref float width)
+    {
+        bool changed = false;
+        DrawLabel(label, ref width);
+
+        Transform value = (Transform)field.GetValue(container);
+        if (value == null)
+        {
+            var pos = ImGui.GetCursorPos();
+            ImGui.TextDisabled("null");
+            ImGui.SetCursorPos(pos);
+            ImGui.Selectable("##null", new System.Numerics.Vector2(width, 21));
+            GUIHelper.ItemRectFilled(0.9f, 0.1f, 0.1f, 0.3f);
+        }
+        else
+        {
+            ImGui.Selectable(value.gameObject.Name, new System.Numerics.Vector2(width, 21));
             GUIHelper.ItemRectFilled(0.1f, 0.1f, 0.9f, 0.3f);
 
             if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
