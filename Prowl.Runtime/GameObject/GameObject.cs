@@ -34,7 +34,7 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
     internal GameObject? _parent;
 
     [SerializeField]
-    private Transform? _transform;
+    private Transform _transform = new();
 
     #endregion
 
@@ -98,7 +98,6 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
 
     public Transform transform {
         get {
-            _transform ??= new Transform();
             _transform.gameObject = this; // ensure gameobject is this
             return _transform;
         }
@@ -595,12 +594,7 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
 
         compoundTag.Add("HideFlags", new SerializedProperty((int)hideFlags));
 
-        if (_transform != null)
-        {
-            // If the transforms position, rotation and scale are all default we dont need to serialize it
-            if (_transform.localPosition != Vector3.zero || _transform.localRotation != Quaternion.identity || _transform.localScale != Vector3.one)
-                compoundTag.Add("Transform", Serializer.Serialize(_transform, ctx));
-        }
+        compoundTag.Add("Transform", Serializer.Serialize(_transform, ctx));
 
         if (AssetID != Guid.Empty)
         {
