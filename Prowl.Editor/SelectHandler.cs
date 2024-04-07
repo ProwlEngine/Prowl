@@ -101,12 +101,13 @@ public class SelectHandler<T> where T : class
         });
     }
 
-    public void HandleSelectable(int index, T obj)
+    public void HandleSelectable(int index, T obj, bool mouseReleased = false)
     {
         // This is a list of all the objects that are selectable sorted in order that their drawn in
         sorted.Add(index, obj);
 
-        if (ImGui.IsItemClicked(ImGuiMouseButton.Left)) {
+        bool clicked = !mouseReleased ? ImGui.IsItemClicked(ImGuiMouseButton.Left) : (ImGui.IsMouseReleased(ImGuiMouseButton.Left) && ImGui.IsItemHovered());
+        if (clicked) {
             int prevLastIndex = lastSelectedIndex;
             Select(obj);
             if (prevLastIndex != index) {
