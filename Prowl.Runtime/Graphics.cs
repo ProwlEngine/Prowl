@@ -196,7 +196,7 @@ namespace Prowl.Runtime
             {
                 Device.BindVertexArray(mesh.VertexArrayObject);
                 Device.DrawElements(PrimitiveType.Triangles, (uint)mesh.IndexCount, mesh.IndexFormat == IndexFormat.UInt16 ? DrawElementsType.UnsignedShort : DrawElementsType.UnsignedInt, null);
-                Device.BindVertexArray(0);
+                Device.BindVertexArray(null);
             }
         }
 

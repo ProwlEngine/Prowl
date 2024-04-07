@@ -36,6 +36,12 @@ namespace Prowl.Runtime.Rendering
         public RasterizerState() { }
     }
 
+    public abstract class GraphicsVertexArray : IDisposable
+    {
+        public abstract bool IsDisposed { get; protected set; }
+        public abstract void Dispose();
+    }
+
     public abstract class GraphicsDevice
     {
         public abstract void Initialize(bool debug);
@@ -62,12 +68,8 @@ namespace Prowl.Runtime.Rendering
 
         #region Vertex Arrays
 
-        public abstract uint GenVertexArray();
-        public abstract void BindVertexArray(uint vertexArrayObject);
-        public abstract void DeleteVertexArray(uint vertexArrayObject);
-        public abstract void EnableVertexAttribArray(uint index);
-        public abstract unsafe void VertexAttribPointer(uint index, byte count, GLEnum type, bool normalized, uint size, void* offset);
-        public abstract unsafe void VertexAttribIPointer(uint index, byte count, GLEnum type, uint size, void* offset);
+        public abstract GraphicsVertexArray CreateVertexArray(VertexFormat format, GraphicsBuffer vertices, GraphicsBuffer? indices);
+        public abstract void BindVertexArray(GraphicsVertexArray? vertexArrayObject);
 
         #endregion
 

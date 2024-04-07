@@ -122,7 +122,7 @@ namespace Prowl.Runtime
         public int VertexCount => vertices?.Length ?? 0;
         public int IndexCount => indices?.Length ?? 0;
 
-        public uint VertexArrayObject => vertexArrayObject;
+        public GraphicsVertexArray? VertexArrayObject => vertexArrayObject;
         public GraphicsBuffer VertexBuffer => vertexBuffer;
         public GraphicsBuffer IndexBuffer => indexBuffer;
 
@@ -154,7 +154,7 @@ namespace Prowl.Runtime
         IndexFormat indexFormat = IndexFormat.UInt16;
         PrimitiveType meshTopology = PrimitiveType.TriangleStrip;
 
-        uint vertexArrayObject;
+        GraphicsVertexArray? vertexArrayObject;
         GraphicsBuffer vertexBuffer;
         GraphicsBuffer indexBuffer;
 
@@ -180,7 +180,7 @@ namespace Prowl.Runtime
 
         public void Upload()
         {
-            if (changed == false && vertexArrayObject != 0)
+            if (changed == false && vertexArrayObject != null)
                 return;
 
             changed = false;
@@ -227,12 +227,7 @@ namespace Prowl.Runtime
             if (vertexBlob == null)
                 return;
 
-
-            vertexArrayObject = Graphics.Device.GenVertexArray();
-            Graphics.Device.BindVertexArray(vertexArrayObject);
-
             vertexBuffer = Graphics.Device.CreateBuffer(BufferType.VertexBuffer, vertexBlob, false);
-            layout.Bind();
 
             if (indexFormat == IndexFormat.UInt16)
             {
@@ -250,11 +245,11 @@ namespace Prowl.Runtime
                 indexBuffer = Graphics.Device.CreateBuffer(BufferType.ElementsBuffer, indices, false);
             }
 
+            vertexArrayObject = Graphics.Device.CreateVertexArray(layout, vertexBuffer, indexBuffer);
+
             Debug.Log($"VAO: [ID {vertexArrayObject}] Mesh uploaded successfully to VRAM (GPU)");
 
-            Graphics.Device.BindVertexArray(0);
-            GLDevice.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, 0);
-            GLDevice.GL.BindBuffer(BufferTargetARB.ArrayBuffer, 0);
+            Graphics.Device.BindVertexArray(null);
         }
 
         public void RecalculateBounds()
@@ -432,14 +427,12 @@ namespace Prowl.Runtime
 
         private void DeleteGPUBuffers()
         {
-            if (vertexArrayObject != 0)
-                Graphics.Device.DeleteVertexArray(vertexArrayObject);
-            //vertexBuffer?.Dispose();
-            //vertexBuffer = null;
-            //indexBuffer?.Dispose();
-            //indexBuffer = null;
-
-            vertexArrayObject = 0;
+            vertexArrayObject?.Dispose();
+            vertexArrayObject = null;
+            vertexBuffer?.Dispose();
+            vertexBuffer = null;
+            indexBuffer?.Dispose();
+            indexBuffer = null;
         }
 
         private T ReadVertexData<T>(T value)
@@ -931,22 +924,4 @@ public class VertexFormat
     public enum VertexSemantic { Position, TexCoord0, TexCoord1, Normal, Color, Tangent, BoneIndex, BoneWeight }
 
     public enum VertexType { Byte = 5120, UnsignedByte = 5121, Short = 5122, Int = 5124, Float = 5126, }
-
-    public void Bind()
-    {
-        for (var i = 0; i < Elements.Length; i++)
-        {
-            var element = Elements[i];
-            var index = element.Semantic;
-            Graphics.Device.EnableVertexAttribArray(index);
-            int offset = (int)element.Offset;
-            unsafe
-            {
-                if (element.Type == VertexType.Float)
-                    Graphics.Device.VertexAttribPointer(index, element.Count, (GLEnum)element.Type, element.Normalized, (uint)Size, (void*)offset);
-                else
-                    Graphics.Device.VertexAttribIPointer(index, element.Count, (GLEnum)element.Type, (uint)Size, (void*)offset);
-            }
-        }
-    }
 }

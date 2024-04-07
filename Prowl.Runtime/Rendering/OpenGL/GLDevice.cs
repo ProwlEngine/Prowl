@@ -1,9 +1,57 @@
 ﻿using Silk.NET.Core.Native;
 using Silk.NET.OpenGL;
 using System;
+using static VertexFormat;
+using System.Drawing;
 
 namespace Prowl.Runtime.Rendering.OpenGL
 {
+    public sealed unsafe class GLVertexArray : GraphicsVertexArray
+    {
+        public uint Handle { get; private set; }
+
+        public GLVertexArray(VertexFormat format, GraphicsBuffer vertices, GraphicsBuffer? indices)
+        {
+
+            Handle = GLDevice.GL.GenVertexArray();
+            GLDevice.GL.BindVertexArray(Handle);
+
+            BindFormat(format);
+
+            GLDevice.GL.BindBuffer(BufferTargetARB.ArrayBuffer, (vertices as GLBuffer).Handle);
+            if (indices != null)
+                GLDevice.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, (indices as GLBuffer).Handle);
+        }
+
+        void BindFormat(VertexFormat format)
+        {
+            for (var i = 0; i < format.Elements.Length; i++)
+            {
+                var element = format.Elements[i];
+                var index = element.Semantic;
+                GLDevice.GL.EnableVertexAttribArray(index);
+                int offset = (int)element.Offset;
+                unsafe
+                {
+                    if (element.Type == VertexType.Float)
+                        GLDevice.GL.VertexAttribPointer(index, element.Count, (GLEnum)element.Type, element.Normalized, (uint)format.Size, (void*)offset);
+                    else
+                        GLDevice.GL.VertexAttribIPointer(index, element.Count, (GLEnum)element.Type, (uint)format.Size, (void*)offset);
+                }
+            }
+        }
+
+        public override bool IsDisposed { get; protected set; }
+
+        public override void Dispose()
+        {
+            if (IsDisposed)
+                return;
+
+            GLDevice.GL.DeleteVertexArray(Handle);
+            IsDisposed = true;
+        }
+    }
 
     public sealed unsafe class GLDevice : GraphicsDevice
     {
@@ -190,13 +238,19 @@ namespace Prowl.Runtime.Rendering.OpenGL
 
         #region Vertex Arrays
 
-        public override uint GenVertexArray() => GL.GenVertexArray();
-        public override void BindVertexArray(uint vertexArrayObject) => GL.BindVertexArray(vertexArrayObject);
-        public override void DeleteVertexArray(uint vertexArrayObject) => GL.DeleteVertexArray(vertexArrayObject);
-        public override void EnableVertexAttribArray(uint index) => GL.EnableVertexAttribArray(index);
-        public override unsafe void VertexAttribIPointer(uint index, byte count, GLEnum type, uint size, void* offset) => GL.VertexAttribIPointer(index, count, type, size, offset);
-
-        public override unsafe void VertexAttribPointer(uint index, byte count, GLEnum type, bool normalized, uint size, void* offset) => GL.VertexAttribPointer(index, count, type, normalized, size, offset);
+        public override GraphicsVertexArray CreateVertexArray(VertexFormat format, GraphicsBuffer vertices, GraphicsBuffer? indices)
+        {
+            return new GLVertexArray(format, vertices, indices);
+        }
+        public override void BindVertexArray(GraphicsVertexArray? vertexArrayObject)
+        {
+            GL.BindVertexArray((vertexArrayObject as GLVertexArray)?.Handle ?? 0);
+            //if (vertexArrayObject == null)
+            //{
+            //    GLDevice.GL.BindBuffer(BufferTargetARB.ElementArrayBuffer, 0);
+            //    GLDevice.GL.BindBuffer(BufferTargetARB.ArrayBuffer, 0);
+            //}
+        }
 
 
         #endregion

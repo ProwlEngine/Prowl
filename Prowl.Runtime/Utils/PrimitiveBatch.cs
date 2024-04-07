@@ -14,7 +14,7 @@ namespace Prowl.Runtime
             public float r, g, b, a;
         }
 
-        private uint vao;
+        private GraphicsVertexArray? vao;
         private GraphicsBuffer vbo;
         private List<Vertex> vertices = new List<Vertex>(50);
         private Mesh mesh;
@@ -27,14 +27,14 @@ namespace Prowl.Runtime
         {
             this.primitiveType = primitiveType;
 
-            vao = Graphics.Device.GenVertexArray();
-            Graphics.Device.BindVertexArray(vao);
             vbo = Graphics.Device.CreateBuffer(BufferType.VertexBuffer, new byte[0], true);
 
-            new VertexFormat([
+            var format = new VertexFormat([
                 new VertexFormat.Element((uint)0, VertexFormat.VertexType.Float, 3),
                 new VertexFormat.Element((uint)1, VertexFormat.VertexType.Float, 4)
-            ]).Bind();
+            ]);
+
+            vao = Graphics.Device.CreateVertexArray(format, vbo, null);
 
             IsUploaded = false;
         }
@@ -66,7 +66,7 @@ namespace Prowl.Runtime
 
         public void Draw()
         {
-            if (vertices.Count == 0 || vao <= 0) return;
+            if (vertices.Count == 0 || vao == null) return;
 
             Graphics.Device.BindVertexArray(vao);
             Graphics.Device.DrawArrays(primitiveType, 0, (uint)vertices.Count);
