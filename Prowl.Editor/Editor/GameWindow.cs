@@ -1,14 +1,14 @@
 ﻿using Hexa.NET.ImGui;
+using Prowl.Editor.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
-using System.Numerics;
 using System.Reflection;
 
 namespace Prowl.Editor.EditorWindows;
 
 public class GameWindow : EditorWindow
 {
-    enum Resolutions
+    public enum Resolutions
     {
         [Text("Fit")] fit = 0,
         [Text("Custom")] custom,
@@ -25,28 +25,24 @@ public class GameWindow : EditorWindow
         [Text("4:3 2160p")] _2160p_4_3,
         [Text("4:3 4320p")] _4320p_4_3,
     }
-    Resolutions curResolution = Resolutions.fit;
 
     const int HeaderHeight = 27;
 
     RenderTexture RenderTarget;
     bool previouslyPlaying = false;
 
-    int rtWidth;
-    int rtHeight;
-
     public GameWindow() : base()
     {
         Title = FontAwesome6.Gamepad + " Game";
-        rtWidth = Width;
-        rtHeight = Height - HeaderHeight;
+        GeneralPreferences.Instance.CurrentWidth = Width;
+        GeneralPreferences.Instance.CurrentHeight = Height - HeaderHeight;
         RefreshRenderTexture();
     }
 
     public void RefreshRenderTexture()
     {
         RenderTarget?.Dispose();
-        RenderTarget = new RenderTexture(rtWidth, rtHeight);
+        RenderTarget = new RenderTexture(GeneralPreferences.Instance.CurrentWidth, GeneralPreferences.Instance.CurrentHeight);
     }
 
     protected override void PreWindowDraw() =>
@@ -74,26 +70,26 @@ public class GameWindow : EditorWindow
             ImGui.Text(FontAwesome6.Display);
             ImGui.SameLine();
             ImGui.SetNextItemWidth(50);
-            if (ImGui.InputInt("##Width", ref rtWidth, 0, 0, ImGuiInputTextFlags.EnterReturnsTrue)) {
-                rtWidth = Math.Clamp(rtWidth, 1, 7680);
-                curResolution = Resolutions.custom;
+            if (ImGui.InputInt("##Width", ref GeneralPreferences.Instance.CurrentWidth, 0, 0, ImGuiInputTextFlags.EnterReturnsTrue)) {
+                GeneralPreferences.Instance.CurrentWidth = Math.Clamp(GeneralPreferences.Instance.CurrentWidth, 1, 7680);
+                GeneralPreferences.Instance.Resolution = Resolutions.custom;
                 RefreshRenderTexture();
             }
             ImGui.SameLine();
             ImGui.SetNextItemWidth(50);
-            if (ImGui.InputInt("##Height", ref rtHeight, 0, 0, ImGuiInputTextFlags.EnterReturnsTrue)) {
-                rtHeight = Math.Clamp(rtHeight, 1, 4320);
-                curResolution = Resolutions.custom;
+            if (ImGui.InputInt("##Height", ref GeneralPreferences.Instance.CurrentHeight, 0, 0, ImGuiInputTextFlags.EnterReturnsTrue)) {
+                GeneralPreferences.Instance.CurrentHeight = Math.Clamp(GeneralPreferences.Instance.CurrentHeight, 1, 4320);
+                GeneralPreferences.Instance.Resolution = Resolutions.custom;
                 RefreshRenderTexture();
             }
 
             ImGui.SameLine();
             ImGui.SetNextItemWidth(100);
             string[] resolutionNames = Enum.GetValues(typeof(Resolutions)).Cast<Resolutions>().Select(r => GetDescription(r)).ToArray();
-            int currentIndex = (int)curResolution;
+            int currentIndex = (int)GeneralPreferences.Instance.Resolution;
             if (ImGui.Combo("##ResolutionCombo", ref currentIndex, resolutionNames, resolutionNames.Length)) {
-                curResolution = (Resolutions)Enum.GetValues(typeof(Resolutions)).GetValue(currentIndex);
-                UpdateResolution(curResolution);
+                GeneralPreferences.Instance.Resolution = (Resolutions)Enum.GetValues(typeof(Resolutions)).GetValue(currentIndex);
+                UpdateResolution(GeneralPreferences.Instance.Resolution);
                 RefreshRenderTexture();
             }
         }
@@ -116,10 +112,10 @@ public class GameWindow : EditorWindow
             GUIHelper.TextCenter("No Camera found", 2f, true);
             return;
         }
-        if (curResolution == Resolutions.fit) {
+        if (GeneralPreferences.Instance.Resolution == Resolutions.fit) {
             if (renderSize.X != RenderTarget.Width || renderSize.Y != RenderTarget.Height) {
-                rtWidth = (int)renderSize.X;
-                rtHeight = (int)renderSize.Y;
+                GeneralPreferences.Instance.CurrentWidth = (int)renderSize.X;
+                GeneralPreferences.Instance.CurrentHeight = (int)renderSize.Y;
                 RefreshRenderTexture();
             }
         }
@@ -156,52 +152,52 @@ public class GameWindow : EditorWindow
     {
         switch (resolution) {
             case Resolutions._480p:
-                rtWidth = 854;
-                rtHeight = 480;
+                GeneralPreferences.Instance.CurrentWidth = 854;
+                GeneralPreferences.Instance.CurrentHeight = 480;
                 break;
             case Resolutions._720p:
-                rtWidth = 1280;
-                rtHeight = 720;
+                GeneralPreferences.Instance.CurrentWidth = 1280;
+                GeneralPreferences.Instance.CurrentHeight = 720;
                 break;
             case Resolutions._1080p:
-                rtWidth = 1920;
-                rtHeight = 1080;
+                GeneralPreferences.Instance.CurrentWidth = 1920;
+                GeneralPreferences.Instance.CurrentHeight = 1080;
                 break;
             case Resolutions._1440p:
-                rtWidth = 2560;
-                rtHeight = 1440;
+                GeneralPreferences.Instance.CurrentWidth = 2560;
+                GeneralPreferences.Instance.CurrentHeight = 1440;
                 break;
             case Resolutions._2160p:
-                rtWidth = 3840;
-                rtHeight = 2160;
+                GeneralPreferences.Instance.CurrentWidth = 3840;
+                GeneralPreferences.Instance.CurrentHeight = 2160;
                 break;
             case Resolutions._4320p:
-                rtWidth = 7680;
-                rtHeight = 4320;
+                GeneralPreferences.Instance.CurrentWidth = 7680;
+                GeneralPreferences.Instance.CurrentHeight = 4320;
                 break;
             case Resolutions._480p_4_3:
-                rtWidth = 640;
-                rtHeight = 480;
+                GeneralPreferences.Instance.CurrentWidth = 640;
+                GeneralPreferences.Instance.CurrentHeight = 480;
                 break;
             case Resolutions._720p_4_3:
-                rtWidth = 960;
-                rtHeight = 720;
+                GeneralPreferences.Instance.CurrentWidth = 960;
+                GeneralPreferences.Instance.CurrentHeight = 720;
                 break;
             case Resolutions._1080p_4_3:
-                rtWidth = 1440;
-                rtHeight = 1080;
+                GeneralPreferences.Instance.CurrentWidth = 1440;
+                GeneralPreferences.Instance.CurrentHeight = 1080;
                 break;
             case Resolutions._1440p_4_3:
-                rtWidth = 1920;
-                rtHeight = 1440;
+                GeneralPreferences.Instance.CurrentWidth = 1920;
+                GeneralPreferences.Instance.CurrentHeight = 1440;
                 break;
             case Resolutions._2160p_4_3:
-                rtWidth = 2880;
-                rtHeight = 2160;
+                GeneralPreferences.Instance.CurrentWidth = 2880;
+                GeneralPreferences.Instance.CurrentHeight = 2160;
                 break;
             case Resolutions._4320p_4_3:
-                rtWidth = 5760;
-                rtHeight = 4320;
+                GeneralPreferences.Instance.CurrentWidth = 5760;
+                GeneralPreferences.Instance.CurrentHeight = 4320;
                 break;
         }
     }

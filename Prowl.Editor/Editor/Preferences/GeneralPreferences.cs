@@ -20,5 +20,13 @@ namespace Prowl.Editor.Editor.Preferences
         public bool ShowDebugErrors = true;
         [Unindent]
         public bool ShowDebugSuccess = true;
+
+        [Text("Game View:")]
+        public GameWindow.Resolutions Resolution = GameWindow.Resolutions.fit;
+        [HideInInspector]
+        public int CurrentWidth = 1280;
+        [HideInInspector]
+        public int CurrentHeight = 720;
+
     }
 }
