@@ -627,6 +627,7 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
 
         if (value.TryGet("Transform", out SerializedProperty transformTag))
             _transform = Serializer.Deserialize<Transform>(transformTag, ctx);
+        _transform.gameObject = this;
 
         if (value.TryGet("AssetID", out var guid))
             AssetID = Guid.Parse(guid.StringValue);
