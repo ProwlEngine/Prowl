@@ -26,7 +26,11 @@ public class RenderPipelineWindow : EditorWindow
             CurrentRenderPipeline = asset;
         ImGui.SetCursorPos(cStart);
 
-        if (CurrentRenderPipeline.IsAvailable == false) return;
+        if (CurrentRenderPipeline.IsAvailable == false)
+        {
+            GUIHelper.TextCenter("No Render Pipeline selected, Drag & Drop one into this window to start editing it!", 2f, true);
+            return;
+        }
 
         var size = changed ? new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, ImGui.GetContentRegionAvail().Y - 30) : ImGui.GetContentRegionAvail();
         ImGui.BeginChild("RenderPipeline", size, ImGuiChildFlags.Border, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
