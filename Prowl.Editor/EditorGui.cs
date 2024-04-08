@@ -240,8 +240,10 @@ public static class EditorGui
 
                 case GuiAttribType.StartGroup:
                     var group = (imGuiAttribute as StartGroupAttribute);
+                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 10);
                     GUIHelper.TextCenter(group.name, 1f, false);
                     curGroupHeight = ImGui.GetCursorPosY();
+                    ImGui.Separator();
                     ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 3);
                     ImGui.BeginChild(group.name, new System.Numerics.Vector2(-1, group.height), ImGuiChildFlags.Border);
                     ImGui.Indent();
@@ -274,7 +276,7 @@ public static class EditorGui
                     // Draw a background with the color of Seperators
                     float curHeight = ImGui.GetCursorPosY();
                     uint col = ImGui.GetColorU32(ImGuiCol.Separator);
-                    ImGui.GetWindowDrawList().AddRect(new System.Numerics.Vector2(ImGui.GetWindowPos().X + 18, curGroupHeight), new System.Numerics.Vector2(ImGui.GetWindowPos().X + ImGui.GetWindowWidth() - 3, ImGui.GetWindowPos().Y + curHeight), col, 0f, 4);
+                    ImGui.GetWindowDrawList().AddRect(new System.Numerics.Vector2(ImGui.GetWindowPos().X + 18, curGroupHeight), new System.Numerics.Vector2(ImGui.GetWindowPos().X + ImGui.GetWindowWidth() - 3, ImGui.GetWindowPos().Y + curHeight), col, 0f, 2);
 
                     ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
                     break;
