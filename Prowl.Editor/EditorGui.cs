@@ -26,16 +26,6 @@ public static class EditorGui
         //if (OperatingSystem.IsWindows())
         Input.Mice[0].Cursor.CursorMode = Silk.NET.Input.CursorMode.Hidden;
 
-        new EditorMainMenubar();
-        new HierarchyWindow();
-        new ViewportWindow();
-        new GameWindow();
-        new InspectorWindow();
-        new ConsoleWindow();
-        new AssetBrowserWindow();
-        new AssetsWindow();
-        //Program.EditorLayer.OnDraw += RenderDemoWindow;
-
         SetTheme();
     }
 

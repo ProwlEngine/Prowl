@@ -22,6 +22,8 @@ public static class Program
     public static bool IsReloadingExternalAssemblies { get; private set; }
     public static void RegisterReloadOfExternalAssemblies() => IsReloadingExternalAssemblies = true;
 
+    private static bool CreatedDefaultWindows = false;
+
     public static int Main(string[] args)
     {
         Application.Initialize += () => {
@@ -47,6 +49,18 @@ public static class Program
             // Editor-specific update code
             if (Project.HasProject)
             {
+                if (!CreatedDefaultWindows)
+                {
+                    CreatedDefaultWindows = true;
+                    new EditorMainMenubar();
+                    new HierarchyWindow();
+                    new ViewportWindow();
+                    new GameWindow();
+                    new InspectorWindow();
+                    new ConsoleWindow();
+                    new AssetBrowserWindow();
+                    new AssetsWindow();
+                }
 
                 Application.DataPath = Project.ProjectDirectory;
 
