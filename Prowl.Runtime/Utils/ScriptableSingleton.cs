@@ -8,8 +8,25 @@ namespace Prowl.Runtime.Utils
     {
         public enum Location
         {
+            /// <summary>
+            /// Data that is saved to the Application.DataPath
+            /// Good for when you want to extend the path and save to like Application.DataPath/Library/Temp/MyData
+            /// </summary>
             Data,
+            /// <summary>
+            /// Settings that are saved to the Application.DataPath/ProjectSettings
+            /// Intended for settings that are saved to the project and will be built with the project
+            /// </summary>
             Setting,
+            /// <summary>
+            /// Editor Settings that are saved to the Application.DataPath/ProjectSettings/Editor
+            /// Intended for settings that are editor only and per project, they will not be built with the project
+            /// </summary>
+            EditorSetting,
+            /// <summary>
+            /// Editor Preferences that are saved to the Environment.SpecialFolder.ApplicationData/Prowl/Editor
+            /// Intended for settings that are editor only and are shared across all projects/editors
+            /// </summary>
             EditorPreference
         }
 
@@ -25,12 +42,12 @@ namespace Prowl.Runtime.Utils
 
         public void Save()
         {
-            StringTagConverter.WriteToFile(Serializer.Serialize(this), new(GetFilePath()));
+            StringTagConverter.WriteToFile(Serializer.Serialize(this), new(GetFilePath(Application.DataPath)));
         }
 
-        protected string GetFilePath()
+        protected string GetFilePath(string? dataPath)
         {
-            if(Application.DataPath == null)
+            if(dataPath == null)
                 throw new InvalidOperationException("Application.DataPath is null, ensure Application.Run() has been called, and a DataPath has been assigned!");
 
             if (Attribute.GetCustomAttribute(GetType(), typeof(FilePathAttribute)) is FilePathAttribute attribute)
@@ -43,6 +60,12 @@ namespace Prowl.Runtime.Utils
                         break;
                     case FilePathAttribute.Location.Setting:
                         directory = Path.Combine(Application.DataPath, "ProjectSettings");
+                        break;
+                    case FilePathAttribute.Location.EditorSetting:
+                        // Persistent across sessions for a single project
+                        if (Application.isEditor == false)
+                            throw new InvalidOperationException("Editor Settings are only available in the editor");
+                        directory = Path.Combine(Application.DataPath, "ProjectSettings", "Editor");
                         break;
                     case FilePathAttribute.Location.EditorPreference:
                         // Persistent across all projects
@@ -60,7 +83,7 @@ namespace Prowl.Runtime.Utils
 
         private static T LoadOrCreateInstance()
         {
-            string filePath = new T().GetFilePath();
+            string filePath = new T().GetFilePath(Application.DataPath);
 
             if (File.Exists(filePath))
             {
@@ -72,6 +95,18 @@ namespace Prowl.Runtime.Utils
                 newInstance.Save();
                 return newInstance;
             }
+        }
+
+        static void CopyTo(string? dataPath)
+        {
+            if (dataPath == Application.DataPath)
+                throw new InvalidOperationException("Cannot copy to the same directory");
+
+            string cur = Instance.GetFilePath(Application.DataPath);
+            string dest = Instance.GetFilePath(dataPath);
+
+            if (File.Exists(cur))
+                File.Copy(cur, dest, true);
         }
     }
 }

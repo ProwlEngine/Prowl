@@ -2,6 +2,8 @@ using Prowl.Editor.Assets;
 using Prowl.Editor.Editor.ProjectSettings;
 using Prowl.Editor.EditorWindows;
 using Prowl.Runtime;
+using Prowl.Runtime.SceneManagement;
+using Prowl.Runtime.Utils;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Reflection;
@@ -96,6 +98,7 @@ public static class Project
         // Create Config Folder
         string configPath = Path.Combine(projectDir.FullName, @"Config");
         Directory.CreateDirectory(configPath);
+
     }
 
     private static void CreateProjectDirectories(DirectoryInfo projectDir)
@@ -278,10 +281,30 @@ public static class Project
         AssetDatabase.ExportAllBuildPackages(new DirectoryInfo(BuildDataPath));
 
 
-        BoundedLog($"Preparing default scene to {BuildDataPath}...");
+        BoundedLog($"Preparing default scene to...");
         FileInfo StartingScene = new FileInfo(Path.Combine(BuildDataPath, "level.prowl"));
         SerializedProperty tag = Serializer.Serialize(BuildProjectSetting.Instance.InitialScene.Res!);
         BinaryTagConverter.WriteToFile(tag, StartingScene);
+
+
+        BoundedLog($"Preparing projecte settings scene...");
+#warning TODO: Untested, Just slapped togather for now as I have othr things to do that are more important
+        // Find all ScriptableSingletons with the specified location
+        foreach (var type in RuntimeUtils.GetTypesWithAttribute<FilePathAttribute>())
+            if (Attribute.GetCustomAttribute(type, typeof(FilePathAttribute)) is FilePathAttribute attribute)
+                if (attribute.FileLocation == FilePathAttribute.Location.Setting)
+                {
+                    // Use Reflection to find the CopyTo method
+                    MethodInfo copyTo = type.GetMethod("CopyTo", BindingFlags.Static | BindingFlags.NonPublic);
+                    if (copyTo is null)
+                    {
+                        Runtime.Debug.LogError($"Failed to find CopyTo method for {type.Name}");
+                        continue;
+                    }
+
+                    // Invoke the CopyTo method
+                    copyTo.Invoke(null, new object[] { BuildDataPath });
+                }
 
 
         BoundedLog($"Copying standalone player to {buildPath}...");
