@@ -25,7 +25,6 @@ public static class SceneManager
     {
         GameObject.Internal_Constructed += OnGameObjectConstructed;
         GameObject.Internal_DestroyCommitted += OnGameObjectDestroyCommitted;
-        InstantiateNewScene();
     }
 
     public static void StoreScene()

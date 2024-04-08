@@ -66,6 +66,9 @@ public static class Project
         AssetDatabase.AddRootFolder("Assets");
         AssetDatabase.Update(); // Not that all folders are in we can unload anything thats not in the project anymore since last session
 
+#warning TODO: Record last opened scene and try to open it
+        SceneManager.InstantiateNewScene();
+
         OnProjectChanged?.Invoke();
     }
 
