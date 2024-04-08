@@ -30,11 +30,9 @@ namespace Prowl.Editor
             try
             {
 
-                Graphics.Device.BindTexture((TextureTarget)texture.Type, texture.Handle);
                 unsafe
                 {
-                    Graphics.Device.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
-                    Graphics.Device.TexSubImage2D((TextureTarget)texture.Type, 0, 0, 0, (uint)image.Width, (uint)image.Height, texture.PixelFormat, PixelType.UnsignedShort, (void*)pixels);
+                    Graphics.Device.TexSubImage2D(texture.Handle, 0, 0, 0, (uint)image.Width, (uint)image.Height, texture.PixelFormat, PixelType.UnsignedShort, (void*)pixels);
                 }
 
                 if (generateMipmaps)

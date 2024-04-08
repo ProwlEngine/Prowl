@@ -42,6 +42,13 @@ namespace Prowl.Runtime.Rendering
         public abstract void Dispose();
     }
 
+    public abstract class GraphicsTexture : IDisposable
+    {
+        public abstract TextureTarget Type { get; protected set; }
+        public abstract bool IsDisposed { get; protected set; }
+        public abstract void Dispose();
+    }
+
     public abstract class GraphicsDevice
     {
         public abstract void Initialize(bool debug);
@@ -80,9 +87,11 @@ namespace Prowl.Runtime.Rendering
         public abstract void ReadBuffer(ReadBufferMode colorAttachment5);
         public abstract void BindFramebuffer(FramebufferTarget readFramebuffer, uint fboId);
         public abstract void BlitFramebuffer(int v1, int v2, int width, int height, int v3, int v4, int v5, int v6, ClearBufferMask depthBufferBit, BlitFramebufferFilter nearest);
-        public abstract void FramebufferTexture2D(FramebufferTarget framebuffer, FramebufferAttachment framebufferAttachment, TextureTarget type, uint handle, int v);
+        public abstract void FramebufferTexture2D(FramebufferTarget framebuffer, FramebufferAttachment framebufferAttachment, TextureTarget type, GraphicsTexture handle, int v);
         public abstract GLEnum CheckFramebufferStatus(FramebufferTarget framebuffer);
         public abstract void DeleteFramebuffer(uint fboId);
+        public abstract T ReadPixels<T>(int x, int y, uint v1, uint v2, PixelFormat red, PixelType @float) where T : unmanaged;
+        public abstract unsafe void ReadPixels(int x, int y, uint v1, uint v2, PixelFormat rgba, PixelType @float, float* ptr);
 
         #endregion
 
@@ -105,7 +114,6 @@ namespace Prowl.Runtime.Rendering
         public abstract void DeleteProgram(uint shaderProgram);
 
         public abstract void ActiveTexture(TextureUnit textureUnit);
-        public abstract void BindTexture(TextureTarget type, uint handle);
         public abstract int GetUniformLocation(uint shader, string name);
         public abstract void Uniform1(int loc, float value);
         public abstract void Uniform1(int loc, int value);
@@ -119,18 +127,19 @@ namespace Prowl.Runtime.Rendering
 
         #region Textures
 
-        public abstract void TexParameter(TextureTarget type, TextureParameterName textureWrapS, int clampToEdge);
-        public abstract unsafe void TexImage2D(TextureTarget textureCubeMapPositiveX, int v1, int pixelInternalFormat, uint size1, uint size2, int v2, PixelFormat pixelFormat, PixelType pixelType, void* v3);
-        public abstract unsafe void TexSubImage2D(TextureTarget face, int v, int rectX, int rectY, uint rectWidth, uint rectHeight, PixelFormat pixelFormat, PixelType pixelType, void* ptr);
-        public abstract unsafe void GetTexImage(TextureTarget face, int v, PixelFormat pixelFormat, PixelType pixelType, void* ptr);
-        public abstract unsafe void TexSubImage3D(TextureTarget type, int v, int rectX, int rectY, int rectZ, uint rectWidth, uint rectHeight, uint rectDepth, PixelFormat pixelFormat, PixelType pixelType, void* ptr);
-        public abstract unsafe void TexImage3D(TextureTarget type, int v1, int pixelInternalFormat, uint width, uint height, uint depth, int v2, PixelFormat pixelFormat, PixelType pixelType, void* v3);
-        public abstract uint GenTexture();
-        public abstract void GenerateMipmap(TextureTarget type);
-        public abstract void DeleteTexture(uint handle);
-        public abstract T ReadPixels<T>(int x, int y, uint v1, uint v2, PixelFormat red, PixelType @float) where T : unmanaged;
-        public abstract unsafe void ReadPixels(int x, int y, uint v1, uint v2, PixelFormat rgba, PixelType @float, float* ptr);
-        public abstract void PixelStore(PixelStoreParameter unpackAlignment, int v);
+        public abstract GraphicsTexture CreateTexture(TextureTarget type);
+        public abstract void BindTexture(GraphicsTexture texture);
+        public abstract void TexParameter(GraphicsTexture texture, TextureParameterName textureWrapS, int clampToEdge);
+        public abstract void GenerateMipmap(GraphicsTexture texture);
+
+        public abstract unsafe void GetTexImage(GraphicsTexture texture, int mip, PixelFormat pixelFormat, PixelType pixelType, void* data);
+
+        public abstract unsafe void TexImage2D(GraphicsTexture texture, int v1, int pixelInternalFormat, uint size1, uint size2, int v2, PixelFormat pixelFormat, PixelType pixelType, void* v3);
+        public abstract unsafe void TexImage2D(GraphicsTexture texture, TextureCubemap.CubemapFace face, int v1, int pixelInternalFormat, uint size1, uint size2, int v2, PixelFormat pixelFormat, PixelType pixelType, void* v3);
+        public abstract unsafe void TexSubImage2D(GraphicsTexture texture, int v, int rectX, int rectY, uint rectWidth, uint rectHeight, PixelFormat pixelFormat, PixelType pixelType, void* ptr);
+        public abstract unsafe void TexSubImage2D(GraphicsTexture texture, TextureCubemap.CubemapFace face, int v, int rectX, int rectY, uint rectWidth, uint rectHeight, PixelFormat pixelFormat, PixelType pixelType, void* ptr);
+        public abstract unsafe void TexSubImage3D(GraphicsTexture texture, int v, int rectX, int rectY, int rectZ, uint rectWidth, uint rectHeight, uint rectDepth, PixelFormat pixelFormat, PixelType pixelType, void* ptr);
+        public abstract unsafe void TexImage3D(GraphicsTexture texture, int v1, int pixelInternalFormat, uint width, uint height, uint depth, int v2, PixelFormat pixelFormat, PixelType pixelType, void* v3);
 
         #endregion
 

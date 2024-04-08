@@ -4,6 +4,7 @@ using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Icons;
 using Prowl.Runtime;
+using Prowl.Runtime.Rendering.OpenGL;
 
 namespace Prowl.Editor.EditorWindows.CustomEditors
 {
@@ -121,7 +122,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                                     {
                                         var cPos = ImGui.GetCursorScreenPos();
                                         ImGui.SetCursorScreenPos(new System.Numerics.Vector2(cPos.X, cPos.Y + 50));
-                                        ImGui.Image(new ImTextureID((nint)thumbnail.Res!.Handle), new System.Numerics.Vector2(50, -50));
+                                        ImGui.Image(new ImTextureID((nint)(thumbnail.Res!.Handle as GLTexture)!.Handle), new System.Numerics.Vector2(50, -50));
                                         ImGui.SetCursorScreenPos(cPos);
                                     }
                                 }

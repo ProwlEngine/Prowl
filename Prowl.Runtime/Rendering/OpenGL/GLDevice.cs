@@ -2,7 +2,6 @@
 using Silk.NET.OpenGL;
 using System;
 using static VertexFormat;
-using System.Drawing;
 
 namespace Prowl.Runtime.Rendering.OpenGL
 {
@@ -12,7 +11,6 @@ namespace Prowl.Runtime.Rendering.OpenGL
 
         public GLVertexArray(VertexFormat format, GraphicsBuffer vertices, GraphicsBuffer? indices)
         {
-
             Handle = GLDevice.GL.GenVertexArray();
             GLDevice.GL.BindVertexArray(Handle);
 
@@ -50,6 +48,86 @@ namespace Prowl.Runtime.Rendering.OpenGL
 
             GLDevice.GL.DeleteVertexArray(Handle);
             IsDisposed = true;
+        }
+    }
+
+    public sealed unsafe class GLTexture : GraphicsTexture
+    {
+        public uint Handle { get; private set; }
+        public override TextureTarget Type { get; protected set; }
+
+        public GLTexture(TextureTarget type)
+        {
+            Handle = GLDevice.GL.GenTexture();
+            Type = type;
+        }
+        
+        private static uint? currentlyBound = null;
+        public void Bind(bool force = true)
+        {
+            // Unfortunately with textures we have to always bind if a bind is requested
+            // Maybe once Framebuffers are ported over we wont have to
+            if (currentlyBound == Handle)
+                return;
+
+            GLDevice.GL.BindTexture(Type, Handle);
+            currentlyBound = Handle;
+        }
+
+        public void GenerateMipmap()
+        {
+            Bind(false);
+            GLDevice.GL.GenerateMipmap(Type);
+        }
+
+        public void TexParameter(TextureParameterName textureWrapS, int clampToEdge)
+        {
+            Bind(false);
+            GLDevice.GL.TexParameter(Type, textureWrapS, clampToEdge);
+        }
+
+        public void GetTexImage(int level, PixelFormat pixelFormat, PixelType pixelType, void* ptr)
+        {
+            Bind(false);
+            GLDevice.GL.GetTexImage(Type, level, pixelFormat, pixelType, ptr);
+        }
+
+        public override bool IsDisposed { get; protected set; }
+
+        public override void Dispose()
+        {
+            if (IsDisposed)
+                return;
+
+            if(currentlyBound == Handle)
+                currentlyBound = null;
+
+            GLDevice.GL.DeleteTexture(Handle);
+            IsDisposed = true;
+        }
+
+        public void TexImage2D(TextureTarget type, int mip, int pixelInternalFormat, uint width, uint height, int v2, PixelFormat pixelFormat, PixelType pixelType, void* data)
+        {
+            Bind(false);
+            GLDevice.GL.TexImage2D(type, mip, pixelInternalFormat, width, height, v2, pixelFormat, pixelType, data);
+        }
+
+        public void TexImage3D(TextureTarget type, int mip, int pixelInternalFormat, uint width, uint height, uint depth, int v2, PixelFormat pixelFormat, PixelType pixelType, void* data)
+        {
+            Bind(false);
+            GLDevice.GL.TexImage3D(type, mip, pixelInternalFormat, width, height, depth, v2, pixelFormat, pixelType, data);
+        }
+
+        internal void TexSubImage2D(TextureTarget type, int mip, int x, int y, uint width, uint height, PixelFormat pixelFormat, PixelType pixelType, void* data)
+        {
+            Bind(false);
+            GLDevice.GL.TexSubImage2D(type, mip, x, y, width, height, pixelFormat, pixelType, data);
+        }
+
+        internal void TexSubImage3D(TextureTarget type, int mip, int x, int y, int z, uint width, uint height, uint depth, PixelFormat pixelFormat, PixelType pixelType, void* data)
+        {
+            Bind(false);
+            GLDevice.GL.TexSubImage3D(type, mip, x, y, z, width, height, depth, pixelFormat, pixelType, data);
         }
     }
 
@@ -262,12 +340,14 @@ namespace Prowl.Runtime.Rendering.OpenGL
         public override GLEnum CheckFramebufferStatus(FramebufferTarget framebuffer) => GL.CheckFramebufferStatus(framebuffer);
         public override void BindFramebuffer(FramebufferTarget readFramebuffer, uint fboId) => GL.BindFramebuffer(readFramebuffer, fboId);
         public override void DrawBuffers(uint count, GLEnum[] buffers) => GL.DrawBuffers(count, buffers);
-        public override void FramebufferTexture2D(FramebufferTarget framebuffer, FramebufferAttachment framebufferAttachment, TextureTarget type, uint handle, int v)
-            => GL.FramebufferTexture2D(framebuffer, framebufferAttachment, type, handle, v);
+        public override void FramebufferTexture2D(FramebufferTarget framebuffer, FramebufferAttachment framebufferAttachment, TextureTarget type, GraphicsTexture handle, int v)
+            => GL.FramebufferTexture2D(framebuffer, framebufferAttachment, type, (handle as GLTexture)!.Handle, v);
         public override void BlitFramebuffer(int v1, int v2, int width, int height, int v3, int v4, int v5, int v6, ClearBufferMask depthBufferBit, BlitFramebufferFilter nearest)
             => GL.BlitFramebuffer(v1, v2, width, height, v3, v4, v5, v6, depthBufferBit, nearest);
         public override void ReadBuffer(ReadBufferMode colorAttachment5) => GL.ReadBuffer(colorAttachment5);
         public override void DeleteFramebuffer(uint fboId) => GL.DeleteFramebuffer(fboId);
+        public override T ReadPixels<T>(int x, int y, uint v1, uint v2, PixelFormat red, PixelType @float) => GL.ReadPixels<T>(x, y, v1, v2, red, @float);
+        public override unsafe void ReadPixels(int x, int y, uint v1, uint v2, PixelFormat rgba, PixelType @float, float* ptr) => GL.ReadPixels(x, y, v1, v2, rgba, @float, ptr);
 
         #endregion
 
@@ -299,25 +379,25 @@ namespace Prowl.Runtime.Rendering.OpenGL
 
         #region Textures
 
-        public override uint GenTexture() => GL.GenTexture();
-        public override void BindTexture(TextureTarget type, uint handle) => GL.BindTexture(type, handle);
-        public override void TexParameter(TextureTarget type, TextureParameterName textureWrapS, int clampToEdge) => GL.TexParameter(type, textureWrapS, clampToEdge);
-        public override void GenerateMipmap(TextureTarget type) => GL.GenerateMipmap(type);
-        public override unsafe void GetTexImage(TextureTarget face, int v, PixelFormat pixelFormat, PixelType pixelType, void* ptr) => GL.GetTexImage(face, v, pixelFormat, pixelType, ptr);
-        public override T ReadPixels<T>(int x, int y, uint v1, uint v2, PixelFormat red, PixelType @float) => GL.ReadPixels<T>(x, y, v1, v2, red, @float);
-        public override unsafe void TexImage2D(TextureTarget textureCubeMapPositiveX, int v1, int pixelInternalFormat, uint size1, uint size2, int v2, PixelFormat pixelFormat, PixelType pixelType, void* v3)
-            => GL.TexImage2D(textureCubeMapPositiveX, v1, pixelInternalFormat, size1, size2, v2, pixelFormat, pixelType, v3);
-        public override unsafe void TexImage3D(TextureTarget type, int v1, int pixelInternalFormat, uint width, uint height, uint depth, int v2, PixelFormat pixelFormat, PixelType pixelType, void* v3)
-            => GL.TexImage3D(type, v1, pixelInternalFormat, width, height, depth, v2, pixelFormat, pixelType, v3);
-        public override unsafe void TexSubImage2D(TextureTarget face, int v, int rectX, int rectY, uint rectWidth, uint rectHeight, PixelFormat pixelFormat, PixelType pixelType, void* ptr)
-            => GL.TexSubImage2D(face, v, rectX, rectY, rectWidth, rectHeight, pixelFormat, pixelType, ptr);
-        public override unsafe void TexSubImage3D(TextureTarget type, int v, int rectX, int rectY, int rectZ, uint rectWidth, uint rectHeight, uint rectDepth, PixelFormat pixelFormat, PixelType pixelType, void* ptr)
-            => GL.TexSubImage3D(type, v, rectX, rectY, rectZ, rectWidth, rectHeight, rectDepth, pixelFormat, pixelType, ptr);
-        public override unsafe void ReadPixels(int x, int y, uint v1, uint v2, PixelFormat rgba, PixelType @float, float* ptr) => GL.ReadPixels(x, y, v1, v2, rgba, @float, ptr);
-        public override void PixelStore(PixelStoreParameter unpackAlignment, int v) => GL.PixelStore(unpackAlignment, v);
+        public override GraphicsTexture CreateTexture(TextureTarget type) => new GLTexture(type);
+        public override void BindTexture(GraphicsTexture texture) => (texture as GLTexture)!.Bind();
+        public override void TexParameter(GraphicsTexture texture, TextureParameterName textureWrapS, int clampToEdge) => (texture as GLTexture)!.TexParameter(textureWrapS, clampToEdge);
+        public override void GenerateMipmap(GraphicsTexture texture) => (texture as GLTexture)!.GenerateMipmap();
 
+        public override unsafe void GetTexImage(GraphicsTexture texture, int mip, PixelFormat pixelFormat, PixelType pixelType, void* data) => (texture as GLTexture)!.GetTexImage(mip, pixelFormat, pixelType, data);
 
-        public override void DeleteTexture(uint handle) => GL.DeleteTexture(handle);
+        public override unsafe void TexImage2D(GraphicsTexture texture, int mip, int pixelInternalFormat, uint width, uint height, int v2, PixelFormat pixelFormat, PixelType pixelType, void* data)
+            => (texture as GLTexture)!.TexImage2D((texture as GLTexture).Type, mip, pixelInternalFormat, width, height, v2, pixelFormat, pixelType, data);
+        public override unsafe void TexImage2D(GraphicsTexture texture, TextureCubemap.CubemapFace face, int mip, int pixelInternalFormat, uint width, uint height, int v2, PixelFormat pixelFormat, PixelType pixelType, void* data)
+            => (texture as GLTexture)!.TexImage2D((TextureTarget)face, mip, pixelInternalFormat, width, height, v2, pixelFormat, pixelType, data);
+        public override unsafe void TexImage3D(GraphicsTexture texture, int mip, int pixelInternalFormat, uint width, uint height, uint depth, int v2, PixelFormat pixelFormat, PixelType pixelType, void* data)
+            => (texture as GLTexture)!.TexImage3D((texture as GLTexture).Type, mip, pixelInternalFormat, width, height, depth, v2, pixelFormat, pixelType, data);
+        public override unsafe void TexSubImage2D(GraphicsTexture texture, int mip, int x, int y, uint width, uint height, PixelFormat pixelFormat, PixelType pixelType, void* data)
+            => (texture as GLTexture)!.TexSubImage2D((texture as GLTexture).Type, mip, x, y, width, height, pixelFormat, pixelType, data);
+        public override unsafe void TexSubImage2D(GraphicsTexture texture, TextureCubemap.CubemapFace face, int mip, int x, int y, uint width, uint height, PixelFormat pixelFormat, PixelType pixelType, void* data)
+            => (texture as GLTexture)!.TexSubImage2D((TextureTarget)face, mip, x, y, width, height, pixelFormat, pixelType, data);
+        public override unsafe void TexSubImage3D(GraphicsTexture texture, int mip, int x, int y, int z, uint width, uint height, uint depth, PixelFormat pixelFormat, PixelType pixelType, void* data)
+            => (texture as GLTexture)!.TexSubImage3D((texture as GLTexture).Type, mip, x, y, z, width, height, depth, pixelFormat, pixelType, data);
 
         #endregion
 

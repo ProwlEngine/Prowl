@@ -22,8 +22,8 @@ namespace Prowl.Runtime
         {
             RecreateImage(width, height, depth); //this also binds the texture
 
-            Graphics.Device.TexParameter((TextureTarget)Type, TextureParameterName.TextureMinFilter, (int)DefaultMinFilter);
-            Graphics.Device.TexParameter((TextureTarget)Type, TextureParameterName.TextureMagFilter, (int)DefaultMagFilter);
+            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureMinFilter, (int)DefaultMinFilter);
+            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureMagFilter, (int)DefaultMagFilter);
         }
 
         /// <summary>
@@ -41,8 +41,7 @@ namespace Prowl.Runtime
         {
             ValidateRectOperation(rectX, rectY, rectZ, rectWidth, rectHeight, rectDepth);
 
-            Graphics.Device.BindTexture((TextureTarget)Type, Handle);
-            Graphics.Device.TexSubImage3D((TextureTarget)Type, 0, rectX, rectY, rectZ, rectWidth, rectHeight, rectDepth, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
+            Graphics.Device.TexSubImage3D(Handle, 0, rectX, rectY, rectZ, rectWidth, rectHeight, rectDepth, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
         }
 
         /// <summary>
@@ -63,9 +62,8 @@ namespace Prowl.Runtime
             if (data.Length < rectWidth * rectHeight * rectDepth)
                 throw new ArgumentException("Not enough pixel data", nameof(data));
 
-            Graphics.Device.BindTexture((TextureTarget)Type, Handle);
             fixed (void* ptr = data)
-                Graphics.Device.TexSubImage3D((TextureTarget)Type, 0, rectX, rectY, rectZ, rectWidth, rectHeight, rectDepth, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
+                Graphics.Device.TexSubImage3D(Handle, 0, rectX, rectY, rectZ, rectWidth, rectHeight, rectDepth, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
         }
 
         /// <summary>
@@ -87,8 +85,7 @@ namespace Prowl.Runtime
         /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
         public unsafe void GetDataPtr(void* ptr, PixelFormat pixelFormat = 0)
         {
-            Graphics.Device.BindTexture((TextureTarget)Type, Handle);
-            Graphics.Device.GetTexImage((TextureTarget)Type, 0, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
+            Graphics.Device.GetTexImage(Handle, 0, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
         }
 
         /// <summary>
@@ -101,9 +98,8 @@ namespace Prowl.Runtime
             if (data.Length < Width * Height * Depth)
                 throw new ArgumentException("Insufficient space to store the requested pixel data", nameof(data));
 
-            Graphics.Device.BindTexture((TextureTarget)Type, Handle);
             fixed (void* ptr = data)
-                Graphics.Device.GetTexImage((TextureTarget)Type, 0, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
+                Graphics.Device.GetTexImage(Handle, 0, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
         }
 
         /// <summary>
@@ -113,9 +109,8 @@ namespace Prowl.Runtime
         /// <param name="tWrapMode">The wrap mode for the T (or texture-Y) coordinate.</param>
         public void SetWrapModes(TextureWrapMode sWrapMode, TextureWrapMode tWrapMode)
         {
-            Graphics.Device.BindTexture((TextureTarget)Type, Handle);
-            Graphics.Device.TexParameter((TextureTarget)Type, TextureParameterName.TextureWrapS, (int)sWrapMode);
-            Graphics.Device.TexParameter((TextureTarget)Type, TextureParameterName.TextureWrapT, (int)tWrapMode);
+            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureWrapS, (int)sWrapMode);
+            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureWrapT, (int)tWrapMode);
         }
 
         /// <summary>
@@ -140,8 +135,7 @@ namespace Prowl.Runtime
             Height = height;
             Depth = depth;
 
-            Graphics.Device.BindTexture((TextureTarget)Type, Handle);
-            Graphics.Device.TexImage3D((TextureTarget)Type, 0, (int)PixelInternalFormat, width, height, depth, 0, PixelFormat, PixelType, (void*)0);
+            Graphics.Device.TexImage3D(Handle, 0, (int)PixelInternalFormat, width, height, depth, 0, PixelFormat, PixelType, (void*)0);
         }
 
         private void ValidateRectOperation(int rectX, int rectY, int rectZ, uint rectWidth, uint rectHeight, uint rectDepth)

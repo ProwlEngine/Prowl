@@ -1,3 +1,4 @@
+using Prowl.Runtime.Rendering;
 using Silk.NET.OpenGL;
 using System;
 
@@ -56,7 +57,7 @@ namespace Prowl.Runtime
         private protected const TextureMagFilter DefaultMagFilter = TextureMagFilter.Nearest;
 
         /// <summary>The handle for the GL Texture Object.</summary>
-        public readonly uint Handle;
+        public readonly GraphicsTexture Handle;
 
         /// <summary>The type of this <see cref="Texture"/>, such as 1D, 2D, Multisampled 2D, Array 2D, CubeMap, etc.</summary>
         public readonly TextureType Type;
@@ -106,12 +107,11 @@ namespace Prowl.Runtime
             GetTextureFormatEnums(imageFormat, out PixelInternalFormat, out PixelType, out PixelFormat);
             IsMipmapped = false;
             isNotMipmappable = !IsTextureTypeMipmappable(type);
-            Handle = Graphics.Device.GenTexture();
-            Graphics.Device.BindTexture((TextureTarget)Type, Handle);
-            Graphics.Device.TexParameter((TextureTarget)Type, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
-            Graphics.Device.TexParameter((TextureTarget)Type, TextureParameterName.TextureWrapT, (int)TextureWrapMode.Repeat);
-            Graphics.Device.TexParameter((TextureTarget)Type, TextureParameterName.TextureMinFilter, (int)DefaultMinFilter);
-            Graphics.Device.TexParameter((TextureTarget)Type, TextureParameterName.TextureMagFilter, (int)DefaultMagFilter);
+            Handle = Graphics.Device.CreateTexture((TextureTarget)type);
+            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
+            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureWrapT, (int)TextureWrapMode.Repeat);
+            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureMinFilter, (int)DefaultMinFilter);
+            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureMagFilter, (int)DefaultMagFilter);
             MinFilter = DefaultMinFilter;
             MagFilter = DefaultMagFilter;
             WrapMode = TextureWrapMode.Repeat;
@@ -124,9 +124,8 @@ namespace Prowl.Runtime
         /// <param name="magFilter">The desired magnifying filter for the <see cref="Texture"/>.</param>
         public void SetTextureFilters(TextureMinFilter minFilter, TextureMagFilter magFilter)
         {
-            Graphics.Device.BindTexture((TextureTarget)Type, Handle);
-            Graphics.Device.TexParameter((TextureTarget)Type, TextureParameterName.TextureMinFilter, (int)minFilter);
-            Graphics.Device.TexParameter((TextureTarget)Type, TextureParameterName.TextureMagFilter, (int)magFilter);
+            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureMinFilter, (int)minFilter);
+            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureMagFilter, (int)magFilter);
             MinFilter = minFilter;
             MagFilter = magFilter;
         }
@@ -140,14 +139,13 @@ namespace Prowl.Runtime
             if (isNotMipmappable)
                 throw new InvalidOperationException(string.Concat("This texture type is not mipmappable! Type: ", Type.ToString()));
 
-            Graphics.Device.BindTexture((TextureTarget)Type, Handle);
-            Graphics.Device.GenerateMipmap((TextureTarget)Type);
+            Graphics.Device.GenerateMipmap(Handle);
             IsMipmapped = true;
         }
 
         public void Dispose()
         {
-            Graphics.Device.DeleteTexture(Handle);
+            Handle.Dispose();
         }
 
         /// <summary>

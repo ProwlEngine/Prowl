@@ -5,11 +5,13 @@ using Hexa.NET.ImPlot;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.OpenGL;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 using System.Reflection;
+using System.Reflection.Metadata;
 
 namespace Prowl.Editor.ImGUI
 {
@@ -594,12 +596,11 @@ namespace Prowl.Editor.ImGUI
             _gl.GetInteger(GLEnum.TextureBinding2D, out int lastTexture);
 
             _fontTexture = new Texture2D((uint)width, (uint)height, false, Runtime.Texture.TextureImageFormat.Float4);
-            Graphics.Device.BindTexture(TextureTarget.Texture2D, _fontTexture.Handle);
-            Graphics.Device.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, (uint)width, (uint)height, Silk.NET.OpenGL.PixelFormat.Rgba, Silk.NET.OpenGL.PixelType.UnsignedByte, pixels);
+            Graphics.Device.TexSubImage2D(_fontTexture.Handle, 0, 0, 0, (uint)width, (uint)height, Silk.NET.OpenGL.PixelFormat.Rgba, Silk.NET.OpenGL.PixelType.UnsignedByte, pixels);
             _fontTexture.SetTextureFilters(TextureMinFilter.Linear, TextureMagFilter.Linear);
 
             // Store our identifier
-            io.Fonts.SetTexID((IntPtr)_fontTexture.Handle);
+            io.Fonts.SetTexID((IntPtr)(_fontTexture.Handle as GLTexture).Handle);
 
             // Restore state
             _gl.BindTexture(GLEnum.Texture2D, (uint)lastTexture);

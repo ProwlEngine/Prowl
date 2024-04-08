@@ -102,7 +102,7 @@ namespace Prowl.Runtime
         {
             if (fboId <= 0) return;
             foreach (var texture in InternalTextures)
-                Graphics.Device.DeleteTexture(texture.Handle);
+                texture.Dispose();
 
             //if(hasDepthAttachment) // Should auto dispose of Depth
             //    Graphics.GL.DeleteRenderbuffer(InternalDepth.Handle);

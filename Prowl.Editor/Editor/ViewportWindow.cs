@@ -6,6 +6,7 @@ using Prowl.Editor.Editor.Preferences;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
+using Prowl.Runtime.Rendering.OpenGL;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
 using Silk.NET.Maths;
@@ -112,7 +113,7 @@ public class ViewportWindow : EditorWindow
 
         var imagePos = ImGui.GetCursorScreenPos();
         var imageSize = ImGui.GetContentRegionAvail();
-        ImGui.Image((IntPtr)RenderTarget.InternalTextures[0].Handle, imageSize, new Vector2(0, 1), new Vector2(1, 0));
+        ImGui.Image((IntPtr)(RenderTarget.InternalTextures[0].Handle as GLTexture)!.Handle, imageSize, new Vector2(0, 1), new Vector2(1, 0));
         HandleDragnDrop();
 
         mouseUV = (ImGui.GetMousePos() - imagePos) / imageSize;
