@@ -102,5 +102,14 @@ namespace Prowl.Runtime
 
             return Thread.CurrentThread.CurrentCulture.TextInfo.ToTitleCase(result.ToString());
         }
+
+        public static IEnumerable<Type> GetTypesWithAttribute<T>()
+        {
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            foreach (var assembly in assemblies)
+                foreach (var type in assembly.GetTypes())
+                    if (type.GetCustomAttributes(typeof(T), true).Length > 0)
+                        yield return type;
+        }
     }
 }
