@@ -4,7 +4,7 @@ using System.IO;
 namespace Prowl.Runtime.Utils
 {
     [AttributeUsage(AttributeTargets.Class)]
-    public class FilePathAttribute : Attribute
+    public class FilePathAttribute(string filePath, FilePathAttribute.Location fileLocation) : Attribute
     {
         public enum Location
         {
@@ -13,29 +13,15 @@ namespace Prowl.Runtime.Utils
             EditorPreference
         }
 
-        public string FilePath { get; }
-        public Location FileLocation { get; }
-
-        public FilePathAttribute(string filePath, Location fileLocation)
-        {
-            FilePath = filePath;
-            FileLocation = fileLocation;
-        }
+        public string FilePath { get; } = filePath;
+        public Location FileLocation { get; } = fileLocation;
     }
 
     public abstract class ScriptableSingleton<T> where T : ScriptableSingleton<T>, new()
     {
-        private static T instance;
+        private static T? instance;
 
-        public static T Instance {
-            get {
-                if (instance == null)
-                {
-                    instance = LoadOrCreateInstance();
-                }
-                return instance;
-            }
-        }
+        public static T Instance => instance ??= LoadOrCreateInstance();
 
         public void Save()
         {
@@ -47,8 +33,7 @@ namespace Prowl.Runtime.Utils
             if(Application.DataPath == null)
                 throw new InvalidOperationException("Application.DataPath is null, ensure Application.Run() has been called, and a DataPath has been assigned!");
 
-            var attribute = Attribute.GetCustomAttribute(GetType(), typeof(FilePathAttribute)) as FilePathAttribute;
-            if (attribute != null)
+            if (Attribute.GetCustomAttribute(GetType(), typeof(FilePathAttribute)) is FilePathAttribute attribute)
             {
                 string directory = string.Empty;
                 switch (attribute.FileLocation)
@@ -61,7 +46,7 @@ namespace Prowl.Runtime.Utils
                         break;
                     case FilePathAttribute.Location.EditorPreference:
                         // Persistent across all projects
-                        if(Application.isEditor == false)
+                        if (Application.isEditor == false)
                             throw new InvalidOperationException("Preferences are only available in the editor");
                         directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Prowl", "Editor");
                         break;
@@ -79,7 +64,7 @@ namespace Prowl.Runtime.Utils
 
             if (File.Exists(filePath))
             {
-                return Serializer.Deserialize<T>(StringTagConverter.ReadFromFile(new FileInfo(filePath)));
+                return Serializer.Deserialize<T>(StringTagConverter.ReadFromFile(new FileInfo(filePath)))!;
             }
             else
             {
