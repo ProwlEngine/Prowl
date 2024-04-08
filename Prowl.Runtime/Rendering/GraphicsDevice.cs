@@ -115,12 +115,12 @@ namespace Prowl.Runtime.Rendering
 
         public abstract void ActiveTexture(TextureUnit textureUnit);
         public abstract int GetUniformLocation(uint shader, string name);
-        public abstract void Uniform1(int loc, float value);
-        public abstract void Uniform1(int loc, int value);
-        public abstract void Uniform2(int loc, Vector2 value);
-        public abstract void Uniform3(int loc, Vector3 value);
-        public abstract void Uniform4(int loc, Vector4 value);
-        public abstract void UniformMatrix4(int loc, uint length, bool v, in float m11);
+        public abstract void SetUniformF(int loc, float value);
+        public abstract void SetUniformI(int loc, int value);
+        public abstract void SetUniformV2(int loc, Vector2 value);
+        public abstract void SetUniformV3(int loc, Vector3 value);
+        public abstract void SetUniformV4(int loc, Vector4 value);
+        public abstract void SetUniformMatrix(int loc, uint length, bool v, in float m11);
 
 
         #endregion

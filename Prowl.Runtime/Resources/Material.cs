@@ -94,35 +94,35 @@ namespace Prowl.Runtime
 
             foreach (var item in mpb.floats)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.Uniform1(loc, item.Value);
+                    Graphics.Device.SetUniformF(loc, item.Value);
 
             foreach (var item in mpb.ints)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.Uniform1(loc, (int)item.Value);
+                    Graphics.Device.SetUniformI(loc, (int)item.Value);
 
             foreach (var item in mpb.vectors2)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.Uniform2(loc, item.Value);
+                    Graphics.Device.SetUniformV2(loc, item.Value);
             foreach (var item in mpb.vectors3)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.Uniform3(loc, item.Value);
+                    Graphics.Device.SetUniformV3(loc, item.Value);
             foreach (var item in mpb.vectors4)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.Uniform4(loc, item.Value);
+                    Graphics.Device.SetUniformV4(loc, item.Value);
             foreach (var item in mpb.colors)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.Uniform4(loc, new System.Numerics.Vector4(item.Value.r, item.Value.g, item.Value.b, item.Value.a));
+                    Graphics.Device.SetUniformV4(loc, new System.Numerics.Vector4(item.Value.r, item.Value.g, item.Value.b, item.Value.a));
 
             foreach (var item in mpb.matrices)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc)) {
                     var m = item.Value.ToFloat();
-                    Graphics.Device.UniformMatrix4(loc, 1, false, in m.M11);
+                    Graphics.Device.SetUniformMatrix(loc, 1, false, in m.M11);
                 }
 
             foreach (var item in mpb.matrixArr)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc)) {
                     var m = item.Value;
-                    Graphics.Device.UniformMatrix4(loc, (uint)item.Value.Length, false, in m[0].M11);
+                    Graphics.Device.SetUniformMatrix(loc, (uint)item.Value.Length, false, in m[0].M11);
                 }
 
             uint texSlot = 0;
@@ -137,7 +137,7 @@ namespace Prowl.Runtime
                             texSlot++;
                             Graphics.Device.ActiveTexture((TextureUnit)((uint)TextureUnit.Texture0 + texSlot));
                             Graphics.Device.BindTexture(tex.Res!.Handle);
-                            Graphics.Device.Uniform1(loc, (int)texSlot);
+                            Graphics.Device.SetUniformI(loc, (int)texSlot);
                         }
                     }
 

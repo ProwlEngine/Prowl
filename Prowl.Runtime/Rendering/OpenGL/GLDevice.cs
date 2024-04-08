@@ -65,9 +65,7 @@ namespace Prowl.Runtime.Rendering.OpenGL
         private static uint? currentlyBound = null;
         public void Bind(bool force = true)
         {
-            // Unfortunately with textures we have to always bind if a bind is requested
-            // Maybe once Framebuffers are ported over we wont have to
-            if (currentlyBound == Handle)
+            if (!force && currentlyBound == Handle)
                 return;
 
             GLDevice.GL.BindTexture(Type, Handle);
@@ -320,6 +318,7 @@ namespace Prowl.Runtime.Rendering.OpenGL
         {
             return new GLVertexArray(format, vertices, indices);
         }
+
         public override void BindVertexArray(GraphicsVertexArray? vertexArrayObject)
         {
             GL.BindVertexArray((vertexArrayObject as GLVertexArray)?.Handle ?? 0);
@@ -364,12 +363,12 @@ namespace Prowl.Runtime.Rendering.OpenGL
         public override void GetShader(uint fragmentShader, ShaderParameterName compileStatus, out int statusCode) => GL.GetShader(fragmentShader, compileStatus, out statusCode);
         public override void GetShaderInfoLog(uint vertexShader, out string info) => GL.GetShaderInfoLog(vertexShader, out info);
         public override void ActiveTexture(TextureUnit textureUnit) => GL.ActiveTexture(textureUnit);
-        public override void Uniform1(int loc, float value) => GL.Uniform1(loc, value);
-        public override void Uniform1(int loc, int value) => GL.Uniform1(loc, value);
-        public override void Uniform2(int loc, Vector2 value) => GL.Uniform2(loc, value);
-        public override void Uniform3(int loc, Vector3 value) => GL.Uniform3(loc, value);
-        public override void Uniform4(int loc, Vector4 value) => GL.Uniform4(loc, value);
-        public override void UniformMatrix4(int loc, uint length, bool v, in float m11) => GL.UniformMatrix4(loc, length, v, m11);
+        public override void SetUniformF(int loc, float value) => GL.Uniform1(loc, value);
+        public override void SetUniformI(int loc, int value) => GL.Uniform1(loc, value);
+        public override void SetUniformV2(int loc, Vector2 value) => GL.Uniform2(loc, value);
+        public override void SetUniformV3(int loc, Vector3 value) => GL.Uniform3(loc, value);
+        public override void SetUniformV4(int loc, Vector4 value) => GL.Uniform4(loc, value);
+        public override void SetUniformMatrix(int loc, uint length, bool v, in float m11) => GL.UniformMatrix4(loc, length, v, m11);
         public override void UseProgram(uint program) => GL.UseProgram(program);
         public override void ShaderSource(uint vertexShader, string vertexSource) => GL.ShaderSource(vertexShader, vertexSource);
         public override int GetUniformLocation(uint shader, string name) => GL.GetUniformLocation(shader, name);
