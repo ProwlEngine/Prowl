@@ -7,7 +7,7 @@ using Debug = Prowl.Runtime.Debug;
 
 namespace Prowl.Editor.Assets
 {
-    [EditorFilePath("Library/LastWriteTimes.cache", EditorFilePathAttribute.Location.ProjectFolder)]
+    [FilePath("Library/LastWriteTimes.cache", FilePathAttribute.Location.Data)]
     public class LastWriteTimesCache : ScriptableSingleton<LastWriteTimesCache>
     {
         public readonly Dictionary<string, DateTime> fileLastWriteTimes = [];

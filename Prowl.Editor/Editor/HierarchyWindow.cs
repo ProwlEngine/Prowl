@@ -4,8 +4,7 @@ using Prowl.Runtime;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
-using static Prowl.Editor.EditorConfiguration;
-using Prowl.Editor.Assets;
+using Prowl.Editor.Editor.Preferences;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -116,7 +115,7 @@ public class HierarchyWindow : EditorWindow
             if (!SelectHandler.SelectedThisFrame && ImGui.IsItemClicked(0))
                 SelectHandler.Clear();
 
-            if (EditorApplication.IsHotkeyDown("Duplicate", new Hotkey() { Key = Key.D, Ctrl = true }))
+            if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
                 DuplicateSelected();
 
             HandleDragnDrop(null); // Into window

@@ -17,7 +17,7 @@ namespace Prowl.Editor.Assets
             else if (lastReload.AddSeconds(2) > DateTime.UtcNow)
                 return;
 
-            EditorApplication.Instance.RegisterReloadOfExternalAssemblies();
+            Program.RegisterReloadOfExternalAssemblies();
 
             lastReload = DateTime.UtcNow;
 

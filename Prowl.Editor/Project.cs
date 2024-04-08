@@ -52,9 +52,11 @@ public static class Project
 
         Name = projectName;
         HasProject = true;
-        (EditorApplication.Instance as EditorApplication).RegisterReloadOfExternalAssemblies();
+        Program.RegisterReloadOfExternalAssemblies();
 
         CreateProjectDirectories(projectDir);
+
+        Application.DataPath = ProjectDirectory;
 
         CreateDefaults("Defaults");
         AssetDatabase.AddRootFolder("Defaults");

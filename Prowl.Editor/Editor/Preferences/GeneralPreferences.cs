@@ -1,10 +1,11 @@
 ﻿using Prowl.Editor.EditorWindows;
 using Prowl.Editor.Utilities;
 using Prowl.Runtime;
+using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Editor.Preferences
 {
-    [EditorFilePath("General.pref", EditorFilePathAttribute.Location.PreferencesFolder)]
+    [FilePath("General.pref", FilePathAttribute.Location.EditorPreference)]
     public class GeneralPreferences : ScriptableSingleton<GeneralPreferences>
     {
         [Text("General:")]

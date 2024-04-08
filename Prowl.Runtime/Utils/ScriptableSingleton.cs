@@ -1,21 +1,22 @@
-﻿using Prowl.Runtime;
+﻿using System;
+using System.IO;
 
-namespace Prowl.Editor.Utilities
+namespace Prowl.Runtime.Utils
 {
     [AttributeUsage(AttributeTargets.Class)]
-    public class EditorFilePathAttribute : Attribute
+    public class FilePathAttribute : Attribute
     {
         public enum Location
         {
-            ProjectFolder,
-            ProjectSettingsFolder,
-            PreferencesFolder
+            Data,
+            Setting,
+            EditorPreference
         }
 
         public string FilePath { get; }
         public Location FileLocation { get; }
 
-        public EditorFilePathAttribute(string filePath, Location fileLocation)
+        public FilePathAttribute(string filePath, Location fileLocation)
         {
             FilePath = filePath;
             FileLocation = fileLocation;
@@ -43,20 +44,25 @@ namespace Prowl.Editor.Utilities
 
         protected string GetFilePath()
         {
-            var attribute = Attribute.GetCustomAttribute(GetType(), typeof(EditorFilePathAttribute)) as EditorFilePathAttribute;
+            if(Application.DataPath == null)
+                throw new InvalidOperationException("Application.DataPath is null, ensure Application.Run() has been called, and a DataPath has been assigned!");
+
+            var attribute = Attribute.GetCustomAttribute(GetType(), typeof(FilePathAttribute)) as FilePathAttribute;
             if (attribute != null)
             {
                 string directory = string.Empty;
                 switch (attribute.FileLocation)
                 {
-                    case EditorFilePathAttribute.Location.ProjectFolder:
-                        directory = Project.ProjectDirectory;
+                    case FilePathAttribute.Location.Data:
+                        directory = Application.DataPath;
                         break;
-                    case EditorFilePathAttribute.Location.ProjectSettingsFolder:
-                        directory = Path.Combine(Project.ProjectDirectory, "ProjectSettings");
+                    case FilePathAttribute.Location.Setting:
+                        directory = Path.Combine(Application.DataPath, "ProjectSettings");
                         break;
-                    case EditorFilePathAttribute.Location.PreferencesFolder:
+                    case FilePathAttribute.Location.EditorPreference:
                         // Persistent across all projects
+                        if(Application.isEditor == false)
+                            throw new InvalidOperationException("Preferences are only available in the editor");
                         directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Prowl", "Editor");
                         break;
                 }

@@ -23,7 +23,7 @@ public class EditorMainMenubar {
     private bool _dragging;
 
     public EditorMainMenubar() {
-        EditorApplication.OnDrawEditor += Draw;
+        Program.OnDrawEditor += Draw;
     }
 
     private void Draw()
@@ -40,7 +40,7 @@ public class EditorMainMenubar {
                 DrawMenuItems();
 
                 if (ImGui.Button($"{FontAwesome6.ArrowsSpin}"))
-                    EditorApplication.Instance.RegisterReloadOfExternalAssemblies();
+                    Program.RegisterReloadOfExternalAssemblies();
                 GUIHelper.Tooltip("Recompile Project Scripts.");
 
 

@@ -1,37 +1,33 @@
 ﻿using Prowl.Runtime.Audio;
 using Prowl.Runtime.SceneManagement;
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Reflection;
-using System.Text.Json;
 
 namespace Prowl.Runtime;
 
-public abstract class Application
+public static class Application
 {
-    public static bool isRunning { get; protected set; }
-    public static bool isPlaying { get; protected set; } = false;
-    public static bool isActivelyPlaying { get; protected set; } = false;
-    public static bool isEditor { get; protected set; } = false;
+    public static bool isRunning;
+    public static bool isPlaying = false;
+    public static bool isActivelyPlaying = false;
+    public static bool isEditor { get; private set; }
 
-    public static IAssetProvider AssetProvider { get; set; }
+    public static string? DataPath = null;
 
+    public static IAssetProvider AssetProvider;
 
-    
-    protected readonly ExternalAssemblyLoadContextManager _AssemblyManager = new();
-    public IEnumerable<Assembly> ExternalAssemblies => _AssemblyManager.ExternalAssemblies;
+    public static event Action Initialize;
+    public static event Action<double> Update;
+    public static event Action<double> Render;
+    public static event Action Quitting;
 
-    protected double physicsTimer = 0;
-
-    public virtual void Initialize()
+    public static void Run(string title, int width, int height, IAssetProvider assetProvider, bool editor)
     {
+        AssetProvider = assetProvider;
+        isEditor = editor;
+
         Debug.Log("Initializing...");
 
-        // TODO: Load Config Settings from file'
-
-        Window.InitWindow("Prowl", 1920, 1080, Silk.NET.Windowing.WindowState.Normal, true);
+        Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Normal, true);
 
         Window.Load += () => {
             SceneManager.Initialize();
@@ -39,6 +35,8 @@ public abstract class Application
             AudioSystem.Initialize();
 
             AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
+
+            Initialize?.Invoke();
 
             Debug.LogSuccess("Initialization complete");
         };
@@ -49,24 +47,22 @@ public abstract class Application
                 AudioSystem.UpdatePool();
                 Time.Update(delta);
 
-                Physics.Update();
-                SceneManager.Update();
+                Update?.Invoke(delta);
             } catch (Exception e) {
                 Console.WriteLine(e.ToString());
             }
         };
 
         Window.Render += (delta) => {
-            Graphics.StartFrame();
-
-            SceneManager.Draw();
-
-            Graphics.EndFrame();
+            Render?.Invoke(delta);
         };
 
         Window.Closing += () => {
             isRunning = false;
+            Quitting?.Invoke();
             Physics.Dispose();
+            AudioSystem.Dispose();
+            AssemblyManager.Dispose();
             Debug.Log("Is terminating...");
         };
 
@@ -76,37 +72,14 @@ public abstract class Application
         Window.Start();
     }
 
-    protected static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+    static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
-        // Log the exception, display it, etc
-        Console.WriteLine((e.ExceptionObject as Exception).Message);
+        Debug.Log("[Unhandled Exception] " + (e.ExceptionObject as Exception).Message + "\n" + (e.ExceptionObject as Exception).StackTrace);
     }
 
     public static void Quit()
     {
         Window.Stop();
-    }
-
-    public static void ClearTypeDescriptorCache() {
-        var typeConverterAssembly = typeof(TypeConverter).Assembly;
-        
-        var reflectTypeDescriptionProviderType = typeConverterAssembly.GetType("System.ComponentModel.ReflectTypeDescriptionProvider");
-        var reflectTypeDescriptorProviderTable = reflectTypeDescriptionProviderType.GetField("s_attributeCache", BindingFlags.Static | BindingFlags.NonPublic);
-        var attributeCacheTable = (Hashtable)reflectTypeDescriptorProviderTable.GetValue(null);
-        attributeCacheTable?.Clear();
-        
-        var reflectTypeDescriptorType = typeConverterAssembly.GetType("System.ComponentModel.TypeDescriptor");
-        var reflectTypeDescriptorTypeTable = reflectTypeDescriptorType.GetField("s_defaultProviders", BindingFlags.Static | BindingFlags.NonPublic);
-        var defaultProvidersTable = (Hashtable)reflectTypeDescriptorTypeTable.GetValue(null);
-        defaultProvidersTable?.Clear();
-        
-        var providerTableWeakTable = (Hashtable)reflectTypeDescriptorType.GetField("s_providerTable", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-        providerTableWeakTable?.Clear();
-
-        var assembly = typeof(JsonSerializerOptions).Assembly;
-        var updateHandlerType = assembly.GetType("System.Text.Json.JsonSerializerOptionsUpdateHandler");
-        var clearCacheMethod = updateHandlerType?.GetMethod("ClearCache", BindingFlags.Static | BindingFlags.Public);
-        clearCacheMethod?.Invoke(null, new object?[] { null });
     }
     
 }

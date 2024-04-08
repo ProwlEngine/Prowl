@@ -320,7 +320,7 @@ namespace Prowl.Editor.Drawers.NodeSystem
         public static void GenerateLookUp()
         {
             _NodeEditors.Clear();
-            foreach (Assembly editorAssembly in EditorApplication.Instance.ExternalAssemblies.Append(typeof(EditorApplication).Assembly))
+            foreach (Assembly editorAssembly in AssemblyManager.ExternalAssemblies.Append(typeof(Program).Assembly))
             {
                 List<Type> derivedTypes = EditorUtils.GetDerivedTypes(typeof(NodeEditor), editorAssembly);
                 foreach (Type type in derivedTypes)

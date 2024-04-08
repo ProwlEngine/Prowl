@@ -24,8 +24,8 @@ public class EditorWindow {
 
     public EditorWindow() : base()
     {
-        EditorApplication.OnDrawEditor += DrawWindow;
-        EditorApplication.OnUpdateEditor += UpdateWindow;
+        Program.OnDrawEditor += DrawWindow;
+        Program.OnUpdateEditor += UpdateWindow;
         _id = GetHashCode();
 
         var t = this.GetType();
@@ -94,8 +94,8 @@ public class EditorWindow {
 
             if (!isOpened)
             {
-                EditorApplication.OnDrawEditor -= DrawWindow;
-                EditorApplication.OnUpdateEditor -= UpdateWindow;
+                Program.OnDrawEditor -= DrawWindow;
+                Program.OnUpdateEditor -= UpdateWindow;
                 Close();
             }
         }

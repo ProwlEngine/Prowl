@@ -20,7 +20,7 @@ public abstract class PropertyDrawer {
     public static void GenerateLookUp()
     {
         _propertyDrawerLookup.Clear();
-        foreach (Assembly editorAssembly in EditorApplication.Instance.ExternalAssemblies.Append(typeof(EditorApplication).Assembly))
+        foreach (Assembly editorAssembly in AssemblyManager.ExternalAssemblies.Append(typeof(Program).Assembly))
         {
             List<Type> derivedTypes = EditorUtils.GetDerivedTypes(typeof(PropertyDrawer<>), editorAssembly);
             foreach (Type type in derivedTypes)

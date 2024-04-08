@@ -1,18 +1,21 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
+using System.Text.Json;
 
 namespace Prowl.Runtime; 
 
-public class ExternalAssemblyLoadContextManager : IDisposable {
+public static class AssemblyManager {
     
-    private ExternalAssemblyLoadContext1? _externalAssemblyLoadContext;
-    private List<(WeakReference lifetimeDependency, MulticastDelegate @delegate)> _unloadLifetimeDelegates = new();
-    private List<Func<bool>> _unloadDelegates = new();
+    private static ExternalAssemblyLoadContext1? _externalAssemblyLoadContext;
+    private static List<(WeakReference lifetimeDependency, MulticastDelegate @delegate)> _unloadLifetimeDelegates = new();
+    private static List<Func<bool>> _unloadDelegates = new();
     
-    public IEnumerable<Assembly> ExternalAssemblies {
+    public static IEnumerable<Assembly> ExternalAssemblies {
         get {
             if(_externalAssemblyLoadContext is null)
                 yield break;
@@ -22,7 +25,7 @@ public class ExternalAssemblyLoadContextManager : IDisposable {
         }
     }
     
-    public void LoadExternalAssembly(string assemblyPath, bool isDependency) {
+    public static void LoadExternalAssembly(string assemblyPath, bool isDependency) {
         try
         {
             _externalAssemblyLoadContext ??= new ExternalAssemblyLoadContext1();
@@ -38,10 +41,12 @@ public class ExternalAssemblyLoadContextManager : IDisposable {
     }
     
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public void Unload() {
+    public static void Unload() {
         if(_externalAssemblyLoadContext is null)
             return;
-        
+
+        ClearTypeDescriptorCache();
+
         InvokeUnloadDelegate();
         
         UnloadInternal(out WeakReference externalAssemblyLoadContextRef);
@@ -62,7 +67,7 @@ public class ExternalAssemblyLoadContextManager : IDisposable {
     }
     
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private void UnloadInternal(out WeakReference externalAssemblyLoadContextRef) {
+    private static void UnloadInternal(out WeakReference externalAssemblyLoadContextRef) {
         foreach(Assembly assembly in ExternalAssemblies) {
             Debug.Log($"Unloading external assembly from: '{assembly.Location}'...");
         }
@@ -74,15 +79,15 @@ public class ExternalAssemblyLoadContextManager : IDisposable {
         _externalAssemblyLoadContext = null;
     }
     
-    public void AddUnloadTask(Func<bool> @delegate) {
+    public static void AddUnloadTask(Func<bool> @delegate) {
         _unloadDelegates.Add(@delegate);
     }
     
-    public void AddUnloadTaskWithLifetime<T>(T lifetimeDependency, Func<T, bool> @delegate) {
+    public static void AddUnloadTaskWithLifetime<T>(T lifetimeDependency, Func<T, bool> @delegate) {
         _unloadLifetimeDelegates.Add((new WeakReference(lifetimeDependency), @delegate));
     }
     
-    private void InvokeUnloadDelegate() {
+    private static void InvokeUnloadDelegate() {
         foreach((WeakReference lifetimeDependency, MulticastDelegate @delegate) in _unloadLifetimeDelegates) {
             if(!lifetimeDependency.IsAlive)
                 continue;
@@ -100,8 +105,31 @@ public class ExternalAssemblyLoadContextManager : IDisposable {
         }
         _unloadDelegates = new();
     }
-    
-    void IDisposable.Dispose() {
+
+    static void ClearTypeDescriptorCache()
+    {
+        var typeConverterAssembly = typeof(TypeConverter).Assembly;
+
+        var reflectTypeDescriptionProviderType = typeConverterAssembly.GetType("System.ComponentModel.ReflectTypeDescriptionProvider");
+        var reflectTypeDescriptorProviderTable = reflectTypeDescriptionProviderType.GetField("s_attributeCache", BindingFlags.Static | BindingFlags.NonPublic);
+        var attributeCacheTable = (Hashtable)reflectTypeDescriptorProviderTable.GetValue(null);
+        attributeCacheTable?.Clear();
+
+        var reflectTypeDescriptorType = typeConverterAssembly.GetType("System.ComponentModel.TypeDescriptor");
+        var reflectTypeDescriptorTypeTable = reflectTypeDescriptorType.GetField("s_defaultProviders", BindingFlags.Static | BindingFlags.NonPublic);
+        var defaultProvidersTable = (Hashtable)reflectTypeDescriptorTypeTable.GetValue(null);
+        defaultProvidersTable?.Clear();
+
+        var providerTableWeakTable = (Hashtable)reflectTypeDescriptorType.GetField("s_providerTable", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+        providerTableWeakTable?.Clear();
+
+        var assembly = typeof(JsonSerializerOptions).Assembly;
+        var updateHandlerType = assembly.GetType("System.Text.Json.JsonSerializerOptionsUpdateHandler");
+        var clearCacheMethod = updateHandlerType?.GetMethod("ClearCache", BindingFlags.Static | BindingFlags.Public);
+        clearCacheMethod?.Invoke(null, new object?[] { null });
+    }
+
+    public static void Dispose() {
         UnloadInternal(out WeakReference _);
     }
     

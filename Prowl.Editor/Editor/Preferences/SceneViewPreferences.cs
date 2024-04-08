@@ -1,9 +1,10 @@
 ﻿using Prowl.Editor.Utilities;
 using Prowl.Runtime;
+using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Editor.Preferences
 {
-    [EditorFilePath("SceneView.pref", EditorFilePathAttribute.Location.PreferencesFolder)]
+    [FilePath("SceneView.pref", FilePathAttribute.Location.EditorPreference)]
     public class SceneViewPreferences : ScriptableSingleton<SceneViewPreferences>
     {
         [Text("Controls:")]
