@@ -48,12 +48,12 @@ namespace Prowl.Runtime
         public GuiAttribType AttribType() => GuiAttribType.Header;
     }
 
+
     [AttributeUsage(T.Field, AllowMultiple = false)]
-    public class StartGroupAttribute(string name, float height = 100f, float headerSize = 1f, bool collapsable = true) : Attribute, IImGUIAttri
+    public class StartGroupAttribute(string name, float height = 100f, bool collapsable = true) : Attribute, IImGUIAttri
     {
         public string name = name;
         public float height = height;
-        public float headerSize = headerSize;
         public bool collapsable = collapsable;
         public GuiAttribType AttribType() => GuiAttribType.StartGroup;
     }

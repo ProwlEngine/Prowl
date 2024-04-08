@@ -58,7 +58,7 @@ namespace Prowl.Editor
             float oldY = ImGui.GetCursorPosY();
             ImGui.SetWindowFontScale(size);
             var ts = ImGui.CalcTextSize(text);
-            ImGui.SetCursorPosX(Math.Max(0f, (ImGui.GetWindowWidth() - ts.X) * 0.45f));
+            ImGui.SetCursorPosX(Math.Max(0f, (ImGui.GetWindowWidth() - ts.X) * 0.5f));
             if (vertically)
                 ImGui.SetCursorPosY((ImGui.GetWindowHeight() - ts.Y) * 0.5f);
             ImGui.TextWrapped(text);

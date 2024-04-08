@@ -194,7 +194,7 @@ public static class EditorGui
                     break;
 
                 case GuiAttribType.Text:
-                    ImGui.Text((imGuiAttribute as TextAttribute).text);
+                    ImGui.TextWrapped((imGuiAttribute as TextAttribute).text);
                     break;
 
                 case GuiAttribType.Indent:
@@ -233,19 +233,25 @@ public static class EditorGui
                     break;
 
                 case GuiAttribType.Header:
-                    ImGui.CollapsingHeader((imGuiAttribute as HeaderAttribute).name, ImGuiTreeNodeFlags.Leaf);
+                    ImGui.Text((imGuiAttribute as HeaderAttribute).name);
+                    ImGui.Separator();
+                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 8);
                     break;
 
                 case GuiAttribType.StartGroup:
                     var group = (imGuiAttribute as StartGroupAttribute);
-                    GUIHelper.TextCenter(group.name, group.headerSize);
-                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 2);
-                    ImGui.BeginChild(group.name, new System.Numerics.Vector2(-1, group.height), ImGuiChildFlags.Border, group.collapsable ? ImGuiWindowFlags.None : ImGuiWindowFlags.NoCollapse);
+                    GUIHelper.TextCenter(group.name, 1f, false);
+                    curGroupHeight = ImGui.GetCursorPosY();
+                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 3);
+                    ImGui.BeginChild(group.name, new System.Numerics.Vector2(-1, group.height), ImGuiChildFlags.Border);
+                    ImGui.Indent();
                     break;
 
             }
         return true;
     }
+
+    static float curGroupHeight = 0;
 
     public static void HandleEndImGUIAttributes(IEnumerable<IImGUIAttri> attribs)
     {
@@ -262,7 +268,15 @@ public static class EditorGui
                     break;
 
                 case GuiAttribType.EndGroup:
+                    ImGui.Unindent();
                     ImGui.EndChild();
+
+                    // Draw a background with the color of Seperators
+                    float curHeight = ImGui.GetCursorPosY();
+                    uint col = ImGui.GetColorU32(ImGuiCol.Separator);
+                    ImGui.GetWindowDrawList().AddRect(new System.Numerics.Vector2(ImGui.GetWindowPos().X + 18, curGroupHeight), new System.Numerics.Vector2(ImGui.GetWindowPos().X + ImGui.GetWindowWidth() - 3, ImGui.GetWindowPos().Y + curHeight), col, 0f, 4);
+
+                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
                     break;
 
                 case GuiAttribType.Tooltip:
