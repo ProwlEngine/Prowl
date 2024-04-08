@@ -250,10 +250,10 @@ public class HierarchyWindow : EditorWindow
             if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
                 ImGui.OpenPopup("GameObjecTags##" + entity.InstanceID);
         }
-        GUIHelper.Tooltip("Tag: " + TagLayerManager.tags[entity.tagIndex]);
+        GUIHelper.Tooltip("Tag: " + TagLayerManager.Tags[entity.tagIndex]);
 
         if (ImGui.BeginPopup("GameObjecTags##" + entity.InstanceID)) {
-            ImGui.Combo("##Tag", ref entity.tagIndex, TagLayerManager.tags.ToArray(), TagLayerManager.tags.Count);
+            ImGui.Combo("##Tag", ref entity.tagIndex, TagLayerManager.Tags.ToArray(), TagLayerManager.Tags.Count);
             ImGui.EndPopup();
         }
     }
@@ -266,10 +266,10 @@ public class HierarchyWindow : EditorWindow
             if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
                 ImGui.OpenPopup("GameObjectLayers##" + entity.InstanceID);
         }
-        GUIHelper.Tooltip("Layer: " + TagLayerManager.layers[entity.layerIndex]);
+        GUIHelper.Tooltip("Layer: " + TagLayerManager.Layers[entity.layerIndex]);
 
         if (ImGui.BeginPopup("GameObjectLayers##" + entity.InstanceID)) {
-            ImGui.Combo("##Layers", ref entity.layerIndex, TagLayerManager.layers.ToArray(), TagLayerManager.layers.Count);
+            ImGui.Combo("##Layers", ref entity.layerIndex, TagLayerManager.Layers.ToArray(), TagLayerManager.Layers.Count);
             ImGui.EndPopup();
         }
     }

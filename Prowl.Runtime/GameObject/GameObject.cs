@@ -60,13 +60,13 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
 
     /// <summary> The Tag of this GameObject </summary>
     public string tag {
-        get => TagLayerManager.tags[tagIndex];
+        get => TagLayerManager.GetTag(tagIndex);
         set => tagIndex = TagLayerManager.GetTagIndex(value);
     }
 
     /// <summary> The Layer of this GameObject </summary>
     public string layer {
-        get => TagLayerManager.layers[layerIndex];
+        get => TagLayerManager.GetLayer(layerIndex);
         set => layerIndex = TagLayerManager.GetLayerIndex(value);
     }
 

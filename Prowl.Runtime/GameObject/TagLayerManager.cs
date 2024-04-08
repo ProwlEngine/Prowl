@@ -1,11 +1,13 @@
-﻿using System.Collections.Generic;
+﻿using Prowl.Runtime.Utils;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace Prowl.Runtime;
 
-public class TagLayerManager
+[FilePath("TagAndLayers.setting", FilePathAttribute.Location.Setting)]
+public class TagLayerManager : ScriptableSingleton<TagLayerManager>
 {
-    public static List<string> tags =
+    public List<string> tags =
         new List<string>
         {
             "Untagged",
@@ -17,7 +19,7 @@ public class TagLayerManager
             "Game Controller",
         };
 
-    public static List<string> layers =
+    public List<string> layers =
         new List<string>
         {
             "Default",
@@ -26,15 +28,21 @@ public class TagLayerManager
             "Water",
         };
 
-    public static int GetTagIndex(string tag) { return TagLayerManager.tags.IndexOf(tag); }
-    public static int GetLayerIndex(string layer) { return TagLayerManager.layers.IndexOf(layer); }
+    public static List<string> Tags => Instance.tags;
+    public static List<string> Layers => Instance.layers;
+
+    public static string GetTag(int index) { return Instance.tags[index]; }
+    public static string GetLayer(int index) { return Instance.layers[index]; }
+
+    public static int GetTagIndex(string tag) { return Instance.tags.IndexOf(tag); }
+    public static int GetLayerIndex(string layer) { return Instance.layers.IndexOf(layer); }
 
     public static void RemoveTag(int index)
     {
-        foreach (var gameObject in GameObject.FindGameObjectsWithTag(TagLayerManager.tags[index]))
+        foreach (var gameObject in GameObject.FindGameObjectsWithTag(Instance.tags[index]))
             gameObject.tagIndex = 0;
 
-        var tags = TagLayerManager.tags.ToList();
+        var tags = Instance.tags.ToList();
         tags.RemoveAt(index);
         foreach (var gameObject in EngineObject.FindObjectsOfType<GameObject>())
             gameObject.tagIndex = tags.IndexOf(gameObject.tag);
@@ -48,7 +56,7 @@ public class TagLayerManager
                 gameObject.layerIndex = 0;
         }
 
-        var layers = TagLayerManager.layers.ToList();
+        var layers = Instance.layers.ToList();
         layers.RemoveAt(index);
         foreach (var gameObject in EngineObject.FindObjectsOfType<GameObject>())
             gameObject.layerIndex = layers.IndexOf(gameObject.layer);
