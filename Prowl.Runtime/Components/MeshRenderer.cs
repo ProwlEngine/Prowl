@@ -81,3 +81,9 @@ public class MeshRenderer : MonoBehaviour, ISerializable
         mainColor = Serializer.Deserialize<Color>(value["mainColor"], ctx);
     }
 }
+
+[AddComponentMenu($"-/{FontAwesome6.File}  Missing Script")]
+public class MissingMonobehaviour : MonoBehaviour
+{
+    public SerializedProperty ComponentData;
+}

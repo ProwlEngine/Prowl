@@ -625,8 +625,7 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
         layerIndex = value["LayerIndex"].IntValue;
         hideFlags = (HideFlags)value["HideFlags"].IntValue;
 
-        if (value.TryGet("Transform", out SerializedProperty transformTag))
-            _transform = Serializer.Deserialize<Transform>(transformTag, ctx);
+        _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx);
         _transform.gameObject = this;
 
         if (value.TryGet("AssetID", out var guid))
@@ -648,6 +647,29 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
         _components = new();
         foreach (var compTag in comps.List)
         {
+            // Fallback for Missing Type
+            SerializedProperty? typeProperty = compTag.Get("$type");
+            // If the type is missing or string null/whitespace something is wrong, so just let the deserializer handle it, maybe it knows what to do
+            if (typeProperty != null && !string.IsNullOrWhiteSpace(typeProperty.StringValue))
+            {
+                // Look for Monobehaviour Type
+                Type oType = RuntimeUtils.FindType(typeProperty.StringValue);
+                if (oType == null)
+                {
+                    Debug.LogWarning("Missing Monobehaviour Type: " + typeProperty.StringValue + " On " + Name);
+                    MissingMonobehaviour missing = new MissingMonobehaviour();
+                    missing.ComponentData = compTag;
+                    _components.Add(missing);
+                    _componentCache.Add(typeof(MissingMonobehaviour), missing);
+                    continue;
+                }
+                else if (oType == typeof(MissingMonobehaviour))
+                {
+                    HandleMissingComponent(compTag, ctx);
+                    continue;
+                }
+            }
+
             MonoBehaviour? component = Serializer.Deserialize<MonoBehaviour>(compTag, ctx);
             if (component == null) continue;
             _components.Add(component);
@@ -656,6 +678,28 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
         // Attach all components
         foreach (var comp in _components)
             comp.AttachToGameObject(this);
+    }
+
+    private void HandleMissingComponent(SerializedProperty compTag, Serializer.SerializationContext ctx)
+    {
+        // Were missing! see if we can recover
+        MissingMonobehaviour missing = Serializer.Deserialize<MissingMonobehaviour>(compTag, ctx);
+        var oldData = missing.ComponentData;
+        // Try to recover the component
+        if (oldData.TryGet("$type", out var typeProp))
+        {
+            Type oType = RuntimeUtils.FindType(typeProp.StringValue);
+            if (oType != null)
+            {
+                // We have the type! Deserialize it and add it to the components
+                MonoBehaviour? component = Serializer.Deserialize<MonoBehaviour>(oldData);
+                if (component != null)
+                {
+                    _components.Add(component);
+                    _componentCache.Add(component.GetType(), component);
+                }
+            }
+        }
     }
 
     public void OnBeforeSerialize() { }
