@@ -261,7 +261,15 @@ public class ViewportWindow : EditorWindow
             }
         }
 
-        if (count == 0) return;
+        if (count == 0)
+        {
+            var infinity = Matrix4x4.CreateTranslation(Vector3.infinity).ToFloat();
+            unsafe
+            {
+                ImGuizmo.Manipulate(ref view, ref projection, GizmosOperation, GizmosSpace, ref infinity, null, null, null, null);
+            }
+            return;
+        }
         center /= count;
 
         var centerMatrix = Matrix4x4.CreateTranslation(center);
@@ -271,6 +279,7 @@ public class ViewportWindow : EditorWindow
             var go = gameObjects.First();
             centerMatrix = Matrix4x4.CreateScale(go.transform.localScale) * Matrix4x4.CreateFromQuaternion(go.transform.rotation) * Matrix4x4.CreateTranslation(go.transform.position);
         }
+
 
         unsafe
         {
