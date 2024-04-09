@@ -77,10 +77,11 @@ namespace Prowl.Runtime.Utils
         {
             if (obj == null) throw new Exception("Asset cannot be null");
             if (SubAssets.Contains(obj) || ReferenceEquals(Main, obj)) throw new Exception("Asset already contains this object: " + obj);
+            obj.AssetID = Guid;
             obj.FileID = (short)(SubAssets.Count + 1);
             SubAssets.Add(obj);
 
-            return new AssetRef<T>(Guid, obj.FileID);
+            return new AssetRef<T>(obj);
         }
 
         public void SetMainObject(EngineObject obj)
