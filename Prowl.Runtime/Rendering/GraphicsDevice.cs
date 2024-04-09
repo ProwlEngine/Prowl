@@ -82,8 +82,15 @@ namespace Prowl.Runtime.Rendering
 
         #region FrameBuffers
 
-        public abstract void DrawBuffers(uint count, GLEnum[] buffers);
+        //public abstract GraphicsFrameBuffer CreateFrameBuffer();
+        //public abstract void BindFrameBuffer(GraphicsFrameBuffer frameBuffer);
+        //public abstract void ReadFrameBuffer(int attachment);
+        //public abstract void BlitFramebuffer(int v1, int v2, int width, int height, int v3, int v4, int v5, int v6, ClearBufferMask depthBufferBit, BlitFramebufferFilter nearest);
+        //public abstract T ReadPixels<T>(int x, int y, uint v1, uint v2, PixelFormat red, PixelType @float) where T : unmanaged;
+        //public abstract unsafe void ReadPixels(int x, int y, uint v1, uint v2, PixelFormat rgba, PixelType @float, float* ptr);
+
         public abstract uint GenFramebuffer();
+        public abstract void DrawBuffers(uint count, GLEnum[] buffers);
         public abstract void ReadBuffer(ReadBufferMode colorAttachment5);
         public abstract void BindFramebuffer(FramebufferTarget readFramebuffer, uint fboId);
         public abstract void BlitFramebuffer(int v1, int v2, int width, int height, int v3, int v4, int v5, int v6, ClearBufferMask depthBufferBit, BlitFramebufferFilter nearest);

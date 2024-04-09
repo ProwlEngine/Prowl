@@ -1,4 +1,5 @@
 ﻿using Hexa.NET.ImGui;
+using Prowl.Runtime.Utils;
 using System;
 using System.Reflection;
 
@@ -39,12 +40,13 @@ namespace Prowl.Editor
 
         public static Dictionary<string, MenuPath> Menus = new();
 
+        [OnAssemblyUnload]
         public static void ClearMenus()
         {
             Menus.Clear();
         }
 
-        // Returns the Method and Name for this item
+        [OnAssemblyLoad]
         public static void FindAllMenus()
         {
             List<MenuPath> values = new();

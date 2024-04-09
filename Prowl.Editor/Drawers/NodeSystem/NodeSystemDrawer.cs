@@ -4,6 +4,7 @@ using Prowl.Editor.PropertyDrawers;
 using Prowl.Editor.Utilities;
 using Prowl.Runtime;
 using Prowl.Runtime.NodeSystem;
+using Prowl.Runtime.Utils;
 using System.Reflection;
 using System.Text;
 using static Prowl.Runtime.NodeSystem.Node;
@@ -315,8 +316,10 @@ namespace Prowl.Editor.Drawers.NodeSystem
     {
         private static readonly Dictionary<Type, NodeEditor> _NodeEditors = new();
 
+        [OnAssemblyUnload]
         public static void ClearLookUp() => _NodeEditors.Clear();
 
+        [OnAssemblyLoad]
         public static void GenerateLookUp()
         {
             _NodeEditors.Clear();

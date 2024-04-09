@@ -3,8 +3,8 @@ using Prowl.Editor.Assets;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Editor.Utilities;
-using Prowl.Icons;
 using Prowl.Runtime;
+using Prowl.Runtime.Utils;
 using System.Reflection;
 
 namespace Prowl.Editor.EditorWindows.CustomEditors
@@ -19,6 +19,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
         private static MenuItemInfo rootMenuItem;
         private Dictionary<int, ScriptedEditor> compEditors = new();
 
+        [OnAssemblyUnload]
         public static void ClearCache() => rootMenuItem = null;
 
         public override void OnDisable()

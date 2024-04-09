@@ -1,3 +1,4 @@
+using Prowl.Runtime.Utils;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -25,6 +26,12 @@ public static class AssemblyManager {
         }
     }
     
+    public static void Initialize()
+    {
+        OnAssemblyUnloadAttribute.FindAll();
+        OnAssemblyLoadAttribute.FindAll();
+    }
+
     public static void LoadExternalAssembly(string assemblyPath, bool isDependency) {
         try
         {
@@ -44,6 +51,8 @@ public static class AssemblyManager {
     public static void Unload() {
         if(_externalAssemblyLoadContext is null)
             return;
+
+        OnAssemblyUnloadAttribute.Invoke();
 
         ClearTypeDescriptorCache();
 

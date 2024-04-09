@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Prowl.Runtime.Utils;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
@@ -198,6 +199,7 @@ public abstract class MonoBehaviour : EngineObject
         }
     }
 
+    [OnAssemblyUnload]
     public static void ClearCache() => CachedExecuteAlways.Clear();
 
     public Coroutine StartCoroutine(string methodName)

@@ -1,4 +1,5 @@
 ﻿using Prowl.Runtime;
+using Prowl.Runtime.Utils;
 using System.Reflection;
 
 namespace Prowl.Editor.Assets
@@ -19,6 +20,7 @@ namespace Prowl.Editor.Assets
         public static Dictionary<string, Type> extToImporter = new(StringComparer.OrdinalIgnoreCase);
         public static Dictionary<string, string> extToIcon = new(StringComparer.OrdinalIgnoreCase);
 
+        [OnAssemblyLoad]
         public static void GenerateLookUp()
         {
             extToImporter.Clear();
@@ -47,6 +49,7 @@ namespace Prowl.Editor.Assets
                     }
         }
 
+        [OnAssemblyUnload]
         public static void ClearLookUp()
         {
             extToImporter.Clear();
@@ -92,6 +95,7 @@ namespace Prowl.Editor.Assets
 
         public static Dictionary<Type, Type> typeToEditor = new();
 
+        [OnAssemblyLoad]
         public static void GenerateLookUp()
         {
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
@@ -107,6 +111,7 @@ namespace Prowl.Editor.Assets
                     }
         }
 
+        [OnAssemblyUnload]
         public static void ClearLookUp()
         {
             typeToEditor.Clear();

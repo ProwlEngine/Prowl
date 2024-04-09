@@ -8,6 +8,7 @@ using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering.OpenGL;
 using Prowl.Runtime.SceneManagement;
+using Prowl.Runtime.Utils;
 using Silk.NET.Input;
 
 namespace Prowl.Editor;
@@ -136,24 +137,6 @@ public static class Program
 
                 try
                 {
-                    // Destroy all GameObjects
-                    foreach (var go in SceneManager.AllGameObjects)
-                        go.Destroy();
-                    EngineObject.HandleDestroyed();
-
-                    // Clear the Scene
-                    SceneManager.Clear();
-
-                    // Clear the Lookups
-                    PropertyDrawer.ClearLookUp();
-                    ImporterAttribute.ClearLookUp();
-                    CustomEditorAttribute.ClearLookUp();
-                    NodeSystemDrawer.ClearLookUp();
-                    MenuItem.ClearMenus();
-
-                    MonoBehaviour.ClearCache();
-                    GameObjectEditor.ClearCache();
-
                     // Unload External Assemblies
                     AssemblyManager.Unload();
 
@@ -191,13 +174,7 @@ public static class Program
                 }
                 finally
                 {
-                    // Update Property Drawers - Editor project can add them so this goes after
-                    PropertyDrawer.GenerateLookUp();
-                    ImporterAttribute.GenerateLookUp();
-                    CustomEditorAttribute.GenerateLookUp();
-                    NodeSystemDrawer.GenerateLookUp();
-                    MenuItem.FindAllMenus();
-                    CreateAssetMenuHandler.FindAllMenus(); // Injects into Menuitem so doesnt need to Unload
+                    OnAssemblyLoadAttribute.Invoke();
 
                     SceneManager.RestoreScene();
                     SceneManager.ClearStoredScene();

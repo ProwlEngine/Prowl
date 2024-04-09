@@ -2,6 +2,7 @@ using Hexa.NET.ImGui;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Editor.Utilities;
 using Prowl.Runtime;
+using Prowl.Runtime.Utils;
 using System.Reflection;
 namespace Prowl.Editor.PropertyDrawers;
 
@@ -11,12 +12,13 @@ public abstract class PropertyDrawer {
     protected internal abstract Type PropertyType { get; }
     protected internal abstract bool Draw_Internal(string label, ref object value, float width);
 
-
+    [OnAssemblyUnload]
     public static void ClearLookUp()
     {
         _propertyDrawerLookup.Clear();
     }
 
+    [OnAssemblyLoad]
     public static void GenerateLookUp()
     {
         _propertyDrawerLookup.Clear();

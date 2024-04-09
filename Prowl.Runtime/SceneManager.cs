@@ -1,3 +1,4 @@
+using Prowl.Runtime.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -82,6 +83,7 @@ public static class SceneManager
         go.parent?.children.Remove(go);
     }
 
+    [OnAssemblyUnload]
     public static void Clear()
     { 
 #warning TODO: Fix DontDestroyOnLoad

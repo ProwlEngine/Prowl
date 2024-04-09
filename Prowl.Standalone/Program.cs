@@ -1,6 +1,7 @@
 ﻿using Prowl.Runtime;
 using Prowl.Runtime.Rendering.OpenGL;
 using Prowl.Runtime.SceneManagement;
+using Prowl.Runtime.Utils;
 
 namespace Prowl.Standalone;
 
@@ -19,6 +20,7 @@ internal class Program {
 
         Application.Initialize += () => {
             AssemblyManager.LoadExternalAssembly(AssemblyDLL.FullName, true);
+            OnAssemblyLoadAttribute.Invoke();
 
             FileInfo StartingScene = new FileInfo(Path.Combine(Data.FullName, "level.prowl"));
             if (File.Exists(StartingScene.FullName))

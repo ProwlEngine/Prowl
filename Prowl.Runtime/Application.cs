@@ -36,6 +36,8 @@ public static class Application
 
             AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
 
+            AssemblyManager.Initialize();
+
             Initialize?.Invoke();
 
             Debug.LogSuccess("Initialization complete");
