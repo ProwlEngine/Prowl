@@ -39,7 +39,6 @@ public class GBuffer
     public void Begin(bool clear = true)
     {
         Graphics.Device.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, fbo);
-        Graphics.ActivateDrawBuffers(6);
 
         Graphics.Viewport(Width, Height);
 
