@@ -1,59 +1,7 @@
 ﻿using Silk.NET.OpenGL;
-using System;
 
 namespace Prowl.Runtime.Rendering
 {
-    public enum BufferType { VertexBuffer, ElementsBuffer, UniformBuffer, StructuredBuffer, Count }
-
-    public abstract class GraphicsBuffer : IDisposable
-    {
-        public abstract bool IsDisposed { get; protected set; }
-        public abstract void Dispose();
-    }
-
-    public struct RasterizerState
-    {
-        public enum DepthMode { Never, Less, Equal, Lequal, Greater, Notequal, Gequal, Always }
-        public enum Blending { Zero, One, SrcColor, OneMinusSrcColor, DstColor, OneMinusDstColor, SrcAlpha, OneMinusSrcAlpha, DstAlpha, OneMinusDstAlpha, ConstantColor, OneMinusConstantColor, ConstantAlpha, OneMinusConstantAlpha, SrcAlphaSaturate, Src1Color, OneMinusSrc1Color, Src1Alpha, OneMinusSrc1Alpha }
-        public enum BlendMode { Add, Subtract, ReverseSubtract, Min, Max }
-        public enum PolyFace { Front, Back, FrontAndBack }
-        public enum WindingOrder { CW, CCW }
-
-        public bool depthTest = true;
-        public bool depthWrite = true;
-        public DepthMode depthMode = DepthMode.Lequal;
-
-        public bool doBlend = true;
-        public Blending blendSrc = Blending.SrcAlpha;
-        public Blending blendDst = Blending.OneMinusSrcAlpha;
-        public BlendMode blendMode = BlendMode.Add;
-
-        public bool doCull = true;
-        public PolyFace cullFace = PolyFace.Back;
-
-        public WindingOrder winding = WindingOrder.CW;
-
-        public RasterizerState() { }
-    }
-
-    public abstract class GraphicsVertexArray : IDisposable
-    {
-        public abstract bool IsDisposed { get; protected set; }
-        public abstract void Dispose();
-    }
-
-    public abstract class GraphicsTexture : IDisposable
-    {
-        public abstract TextureTarget Type { get; protected set; }
-        public abstract bool IsDisposed { get; protected set; }
-        public abstract void Dispose();
-    }
-
-    public abstract class GraphicsProgram : IDisposable
-    {
-        public abstract bool IsDisposed { get; protected set; }
-        public abstract void Dispose();
-    }
 
     public abstract class GraphicsDevice
     {
@@ -90,30 +38,18 @@ namespace Prowl.Runtime.Rendering
 
         #region FrameBuffers
 
-        //public abstract GraphicsFrameBuffer CreateFrameBuffer();
-        //public abstract void BindFrameBuffer(GraphicsFrameBuffer frameBuffer);
-        //public abstract void ReadFrameBuffer(int attachment);
-        //public abstract void BlitFramebuffer(int v1, int v2, int width, int height, int v3, int v4, int v5, int v6, ClearBufferMask depthBufferBit, BlitFramebufferFilter nearest);
-        //public abstract T ReadPixels<T>(int x, int y, uint v1, uint v2, PixelFormat red, PixelType @float) where T : unmanaged;
-        //public abstract unsafe void ReadPixels(int x, int y, uint v1, uint v2, PixelFormat rgba, PixelType @float, float* ptr);
-
-        public abstract uint GenFramebuffer();
-        public abstract void DrawBuffers(uint count, GLEnum[] buffers);
-        public abstract void ReadBuffer(ReadBufferMode colorAttachment5);
-        public abstract void BindFramebuffer(FramebufferTarget readFramebuffer, uint fboId);
+        public abstract GraphicsFrameBuffer CreateFramebuffer(GraphicsFrameBuffer.Attachment[] attachments);
+        public abstract void UnbindFramebuffer();
+        public abstract void BindFramebuffer(GraphicsFrameBuffer frameBuffer, FramebufferTarget readFramebuffer = FramebufferTarget.Framebuffer);
         public abstract void BlitFramebuffer(int v1, int v2, int width, int height, int v3, int v4, int v5, int v6, ClearBufferMask depthBufferBit, BlitFramebufferFilter nearest);
-        public abstract void FramebufferTexture2D(FramebufferTarget framebuffer, FramebufferAttachment framebufferAttachment, TextureTarget type, GraphicsTexture handle, int v);
-        public abstract GLEnum CheckFramebufferStatus(FramebufferTarget framebuffer);
-        public abstract void DeleteFramebuffer(uint fboId);
-        public abstract T ReadPixels<T>(int x, int y, uint v1, uint v2, PixelFormat red, PixelType @float) where T : unmanaged;
-        public abstract unsafe void ReadPixels(int x, int y, uint v1, uint v2, PixelFormat rgba, PixelType @float, float* ptr);
+        public abstract T ReadPixel<T>(int attachment, int x, int y, PixelFormat red, PixelType @float) where T : unmanaged;
 
         #endregion
 
         #region Shaders
 
         public abstract GraphicsProgram CompileProgram(string fragment, string vertex, string geometry);
-        public abstract void UseProgram(GraphicsProgram program);
+        public abstract void BindProgram(GraphicsProgram program);
 
 
         public abstract int GetUniformLocation(GraphicsProgram program, string name);
@@ -132,7 +68,6 @@ namespace Prowl.Runtime.Rendering
         #region Textures
 
         public abstract GraphicsTexture CreateTexture(TextureTarget type);
-        public abstract void BindTexture(GraphicsTexture texture);
         public abstract void TexParameter(GraphicsTexture texture, TextureParameterName textureWrapS, int clampToEdge);
         public abstract void GenerateMipmap(GraphicsTexture texture);
 

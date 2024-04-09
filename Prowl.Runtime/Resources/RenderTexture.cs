@@ -1,4 +1,5 @@
-﻿using Silk.NET.Maths;
+﻿using Prowl.Runtime.Rendering;
+using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using System;
 
@@ -6,7 +7,7 @@ namespace Prowl.Runtime
 {
     public sealed class RenderTexture : EngineObject, ISerializable
     {
-        public uint fboId { get; private set; }
+        public GraphicsFrameBuffer frameBuffer { get; private set; }
         public Texture2D MainTexture => InternalTextures[0];
         public Texture2D[] InternalTextures { get; private set; }
         public Texture2D InternalDepth { get; private set; }
@@ -46,67 +47,48 @@ namespace Prowl.Runtime
                 this.textureFormats = formats;
             }
 
-            // Generate FBO
-            fboId = Graphics.Device.GenFramebuffer();
-            if (fboId <= 0)
-                throw new Exception("RenderTexture: [ID {fboId}] Failed to generate RenderTexture.");
-
-            Graphics.Device.BindFramebuffer(FramebufferTarget.Framebuffer, fboId);
-
-            unsafe {
-                // Generate textures
-                InternalTextures = new Texture2D[numTextures];
-                if (numTextures > 0) {
-                    for (int i = 0; i < numTextures; i++) {
-                        InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, false, this.textureFormats[i]);
-                        InternalTextures[i].SetTextureFilters(TextureMinFilter.Linear, TextureMagFilter.Linear);
-                        InternalTextures[i].SetWrapModes(TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge);
-                        Graphics.Device.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, (TextureTarget)InternalTextures[i].Type, InternalTextures[i].Handle, 0);
-                    }
-                    Graphics.ActivateDrawBuffers(numTextures);
-                }
-
-                // Generate depth attachment if requested
-                if (hasDepthAttachment) {
-                    var depth = new Texture2D((uint)Width, (uint)Height, false, Texture.TextureImageFormat.Depth24);
-                    InternalDepth = depth;
-                    Graphics.Device.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, depth.Handle, 0);
-
-                }
-
-                if (Graphics.Device.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
-                    throw new Exception("RenderTexture: [ID {fboId}] RenderTexture object creation failed.");
-
-                // Unbind FBO
-                Graphics.Device.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            GraphicsFrameBuffer.Attachment[] attachments = new GraphicsFrameBuffer.Attachment[numTextures + (hasDepthAttachment ? 1 : 0)];
+            InternalTextures = new Texture2D[numTextures];
+            for (int i = 0; i < numTextures; i++)
+            {
+                InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, false, this.textureFormats[i]);
+                InternalTextures[i].SetTextureFilters(TextureMinFilter.Linear, TextureMagFilter.Linear);
+                InternalTextures[i].SetWrapModes(TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge);
+                attachments[i] = new GraphicsFrameBuffer.Attachment { texture = InternalTextures[i].Handle, isDepth = false };
             }
+
+            if (hasDepthAttachment)
+            {
+                InternalDepth = new Texture2D((uint)Width, (uint)Height, false, Texture.TextureImageFormat.Depth24);
+                attachments[numTextures] = new GraphicsFrameBuffer.Attachment { texture = InternalDepth.Handle, isDepth = true };
+            }
+
+            frameBuffer = Graphics.Device.CreateFramebuffer(attachments);
         }
 
         public void Begin()
         {
-            Graphics.Device.BindFramebuffer(FramebufferTarget.Framebuffer, fboId);
+            Graphics.Device.BindFramebuffer(frameBuffer);
             Graphics.Viewport(Width, Height);
             Graphics.FrameBufferSize = new Vector2D<int>(Width, Height);
-
-            Graphics.ActivateDrawBuffers(Math.Max(1, numTextures));
         }
 
         public void End()
         {
-            Graphics.Device.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            Graphics.Device.UnbindFramebuffer();
             Graphics.Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
             Graphics.FrameBufferSize = new Vector2D<int>(Width, Height);
         }
 
         public override void OnDispose()
         {
-            if (fboId <= 0) return;
+            if (frameBuffer == null) return;
             foreach (var texture in InternalTextures)
                 texture.Dispose();
 
             //if(hasDepthAttachment) // Should auto dispose of Depth
             //    Graphics.GL.DeleteRenderbuffer(InternalDepth.Handle);
-            Graphics.Device.DeleteFramebuffer(fboId);
+            frameBuffer.Dispose();
         }
 
         public SerializedProperty Serialize(Serializer.SerializationContext ctx)

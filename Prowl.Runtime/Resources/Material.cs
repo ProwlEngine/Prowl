@@ -218,7 +218,7 @@ namespace Prowl.Runtime
         {
             // Set the shader
             Graphics.Device.SetState(pass.State);
-            Graphics.Device.UseProgram(pass.Program);
+            Graphics.Device.BindProgram(pass.Program); // Ensure the program is in use
 
             if (apply)
                 MaterialPropertyBlock.Apply(PropertyBlock, Graphics.Device.CurrentProgram);

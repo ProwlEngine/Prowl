@@ -1,7 +1,5 @@
-﻿using Silk.NET.OpenGL;
-using System.Reflection.Metadata;
-using System;
-using System.Numerics;
+﻿using Prowl.Runtime.Rendering;
+using Silk.NET.OpenGL;
 
 namespace Prowl.Runtime;
 
@@ -9,7 +7,7 @@ public class GBuffer
 {
     internal RenderTexture buffer;
 
-    public uint fbo { get { return buffer.fboId; } }
+    public GraphicsFrameBuffer frameBuffer { get { return buffer.frameBuffer; } }
     public int Width { get { return buffer.Width; } }
     public int Height { get { return buffer.Height; } }
     public Texture2D AlbedoAO { get { return buffer.InternalTextures[0]; } }
@@ -38,7 +36,7 @@ public class GBuffer
 
     public void Begin(bool clear = true)
     {
-        Graphics.Device.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, fbo);
+        Graphics.Device.BindFramebuffer(frameBuffer);
 
         Graphics.Viewport(Width, Height);
 
@@ -49,16 +47,15 @@ public class GBuffer
 
     public void End()
     {
-        Graphics.Device.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, 0);
+        Graphics.Device.UnbindFramebuffer();
     }
 
     public int GetObjectIDAt(Vector2 uv)
     {
         int x = (int)(uv.x * Width);
         int y = (int)(uv.y * Height);
-        Graphics.Device.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, fbo);
-        Graphics.Device.ReadBuffer(ReadBufferMode.ColorAttachment5);
-        float result = Graphics.Device.ReadPixels<float>(x, y, 1, 1, PixelFormat.Red, PixelType.Float);
+        Graphics.Device.BindFramebuffer(frameBuffer);
+        float result = Graphics.Device.ReadPixel<float>((int)ReadBufferMode.ColorAttachment5, x, y, PixelFormat.Red, PixelType.Float);
         return (int)result;
     }
 
@@ -66,20 +63,14 @@ public class GBuffer
     {
         int x = (int)(uv.x * Width);
         int y = (int)(uv.y * Height);
-        Graphics.Device.BindFramebuffer(Silk.NET.OpenGL.FramebufferTarget.Framebuffer, fbo);
-        Graphics.Device.ReadBuffer(ReadBufferMode.ColorAttachment2);
-        float[] result = new float[4];
-        unsafe {
-            fixed (float* ptr = result) {
-                Graphics.Device.ReadPixels(x, y, 1, 1, PixelFormat.Rgba, PixelType.Float, ptr);
-            }
-        }
-        return new Vector3(result[0], result[1], result[2]);
+        Graphics.Device.BindFramebuffer(frameBuffer);
+        Vector3 result = Graphics.Device.ReadPixel<System.Numerics.Vector3>((int)ReadBufferMode.ColorAttachment2, x, y, PixelFormat.Rgb, PixelType.Float);
+        return result;
     }
 
     public void UnloadGBuffer()
     {
-        if (fbo <= 0) return;
+        if (frameBuffer == null) return;
         AlbedoAO.Dispose();
         NormalMetallic.Dispose();
         PositionRoughness.Dispose();
@@ -87,6 +78,6 @@ public class GBuffer
         Velocity.Dispose();
         ObjectIDs.Dispose();
         Depth.Dispose();
-        Graphics.Device.DeleteFramebuffer(fbo);
+        frameBuffer.Dispose();
     }
 }

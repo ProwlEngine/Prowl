@@ -34,22 +34,6 @@ namespace Prowl.Runtime
         private static Material defaultMat;
         private static AssetRef<Texture2D> defaultNoise;
         internal static Vector2D<int> FrameBufferSize;
-        private static uint activeProgram;
-
-        static readonly GLEnum[] buffers =
-        {
-            GLEnum.ColorAttachment0,  GLEnum.ColorAttachment1,  GLEnum.ColorAttachment2,
-            GLEnum.ColorAttachment3,  GLEnum.ColorAttachment4,  GLEnum.ColorAttachment5,
-            GLEnum.ColorAttachment6,  GLEnum.ColorAttachment7,  GLEnum.ColorAttachment8,
-            GLEnum.ColorAttachment9,  GLEnum.ColorAttachment10, GLEnum.ColorAttachment11,
-            GLEnum.ColorAttachment12, GLEnum.ColorAttachment13, GLEnum.ColorAttachment14,
-            GLEnum.ColorAttachment15, GLEnum.ColorAttachment16, GLEnum.ColorAttachment16,
-            GLEnum.ColorAttachment17, GLEnum.ColorAttachment18, GLEnum.ColorAttachment19,
-            GLEnum.ColorAttachment20, GLEnum.ColorAttachment21, GLEnum.ColorAttachment22,
-            GLEnum.ColorAttachment23, GLEnum.ColorAttachment24, GLEnum.ColorAttachment25,
-            GLEnum.ColorAttachment26, GLEnum.ColorAttachment27, GLEnum.ColorAttachment28,
-            GLEnum.ColorAttachment29, GLEnum.ColorAttachment30, GLEnum.ColorAttachment31
-        };
 
 #warning TODO: Move these to a separate class "GraphicsCapabilities" and add more
         public static int MaxTextureSize { get; internal set; }
@@ -67,11 +51,6 @@ namespace Prowl.Runtime
         {
             Device.Viewport(0, 0, (uint)width, (uint)height);
             Resolution = new Vector2(width, height);
-        }
-
-        public static void ActivateDrawBuffers(int count)
-        {
-            Device.DrawBuffers((uint)count, buffers);
         }
 
         public static void Clear(float r = 0, float g = 0, float b = 0, float a = 1, bool color = true, bool depth = true, bool stencil = true)
@@ -236,14 +215,14 @@ namespace Prowl.Runtime
 
         internal static void BlitDepth(RenderTexture source, RenderTexture? destination)
         {
-            Device.BindFramebuffer(FramebufferTarget.ReadFramebuffer, source.fboId);
-            Device.BindFramebuffer(FramebufferTarget.DrawFramebuffer, destination?.fboId ?? 0);
-            Graphics.Device.BlitFramebuffer(0, 0, source.Width, source.Height,
+            Device.BindFramebuffer(source.frameBuffer, FramebufferTarget.ReadFramebuffer);
+            if(destination != null)
+                Device.BindFramebuffer(destination?.frameBuffer, FramebufferTarget.DrawFramebuffer);
+            Device.BlitFramebuffer(0, 0, source.Width, source.Height,
                                         0, 0, destination?.Width ?? (int)Graphics.Resolution.x, destination?.Height ?? (int)Graphics.Resolution.y,
                                         ClearBufferMask.DepthBufferBit, BlitFramebufferFilter.Nearest
                                         );
-            Device.BindFramebuffer(FramebufferTarget.ReadFramebuffer, 0);
-            Device.BindFramebuffer(FramebufferTarget.DrawFramebuffer, 0);
+            Device.UnbindFramebuffer();
         }
     }
 }

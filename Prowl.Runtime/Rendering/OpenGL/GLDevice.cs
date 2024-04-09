@@ -1,6 +1,8 @@
 ﻿using Silk.NET.Core.Native;
 using Silk.NET.OpenGL;
+using Silk.NET.Vulkan;
 using System;
+using System.Reflection.Metadata;
 using static VertexFormat;
 
 namespace Prowl.Runtime.Rendering.OpenGL
@@ -138,6 +140,83 @@ namespace Prowl.Runtime.Rendering.OpenGL
             GLDevice.GL.TexSubImage3D(type, mip, x, y, z, width, height, depth, pixelFormat, pixelType, data);
         }
 
+    }
+
+    public sealed unsafe class GLFrameBuffer : GraphicsFrameBuffer
+    {
+        public uint Handle { get; private set; }
+
+        static readonly GLEnum[] buffers =
+        {
+            GLEnum.ColorAttachment0,  GLEnum.ColorAttachment1,  GLEnum.ColorAttachment2,
+            GLEnum.ColorAttachment3,  GLEnum.ColorAttachment4,  GLEnum.ColorAttachment5,
+            GLEnum.ColorAttachment6,  GLEnum.ColorAttachment7,  GLEnum.ColorAttachment8,
+            GLEnum.ColorAttachment9,  GLEnum.ColorAttachment10, GLEnum.ColorAttachment11,
+            GLEnum.ColorAttachment12, GLEnum.ColorAttachment13, GLEnum.ColorAttachment14,
+            GLEnum.ColorAttachment15, GLEnum.ColorAttachment16, GLEnum.ColorAttachment16,
+            GLEnum.ColorAttachment17, GLEnum.ColorAttachment18, GLEnum.ColorAttachment19,
+            GLEnum.ColorAttachment20, GLEnum.ColorAttachment21, GLEnum.ColorAttachment22,
+            GLEnum.ColorAttachment23, GLEnum.ColorAttachment24, GLEnum.ColorAttachment25,
+            GLEnum.ColorAttachment26, GLEnum.ColorAttachment27, GLEnum.ColorAttachment28,
+            GLEnum.ColorAttachment29, GLEnum.ColorAttachment30, GLEnum.ColorAttachment31
+        };
+
+        public GLFrameBuffer(Attachment[] attachments)
+        {
+            int numTextures = attachments.Length;
+            if (numTextures < 0 || numTextures > Graphics.MaxFramebufferColorAttachments)
+                throw new Exception("[FrameBuffer] Invalid number of textures! [0-" + Graphics.MaxFramebufferColorAttachments + "]");
+
+            // Generate FBO
+            Handle = GLDevice.GL.GenFramebuffer();
+            if (Handle <= 0)
+                throw new Exception($"[FrameBuffer] Failed to generate new FrameBuffer.");
+
+            GLDevice.GL.BindFramebuffer(FramebufferTarget.Framebuffer, Handle);
+
+            unsafe
+            {
+                // Generate textures
+                if (numTextures > 0)
+                {
+                    for (int i = 0; i < numTextures; i++)
+                    {
+                        if (!attachments[i].isDepth)
+                        {
+                            //InternalTextures[i].SetTextureFilters(TextureMinFilter.Linear, TextureMagFilter.Linear);
+                            //InternalTextures[i].SetWrapModes(TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge);
+                            GLDevice.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, attachments[i].texture.Type, (attachments[i].texture as GLTexture)!.Handle, 0);
+                        }
+                        else
+                        {
+                            GLDevice.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, (attachments[i].texture as GLTexture)!.Handle, 0);
+                        }
+                    }
+                    GLDevice.GL.DrawBuffers((uint)numTextures, buffers);
+                }
+
+                if (GLDevice.GL.CheckFramebufferStatus(FramebufferTarget.Framebuffer) != GLEnum.FramebufferComplete)
+                    throw new Exception("RenderTexture: [ID {fboId}] RenderTexture object creation failed.");
+
+                // Unbind FBO
+                GLDevice.GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            }
+        }
+
+        public override bool IsDisposed { get; protected set; }
+
+        public override void Dispose()
+        {
+            if (IsDisposed)
+                return;
+
+            GLDevice.GL.DeleteFramebuffer(Handle);
+            IsDisposed = true;
+        }
+        public override string ToString()
+        {
+            return Handle.ToString();
+        }
     }
 
     public sealed unsafe class GLDevice : GraphicsDevice
@@ -348,77 +427,74 @@ namespace Prowl.Runtime.Rendering.OpenGL
 
         #region Frame Buffers
 
-        public override uint GenFramebuffer() => GL.GenFramebuffer();
-        public override GLEnum CheckFramebufferStatus(FramebufferTarget framebuffer) => GL.CheckFramebufferStatus(framebuffer);
-        public override void BindFramebuffer(FramebufferTarget readFramebuffer, uint fboId) => GL.BindFramebuffer(readFramebuffer, fboId);
-        public override void DrawBuffers(uint count, GLEnum[] buffers) => GL.DrawBuffers(count, buffers);
-        public override void FramebufferTexture2D(FramebufferTarget framebuffer, FramebufferAttachment framebufferAttachment, TextureTarget type, GraphicsTexture handle, int v)
-            => GL.FramebufferTexture2D(framebuffer, framebufferAttachment, type, (handle as GLTexture)!.Handle, v);
-        public override void BlitFramebuffer(int v1, int v2, int width, int height, int v3, int v4, int v5, int v6, ClearBufferMask depthBufferBit, BlitFramebufferFilter nearest)
-            => GL.BlitFramebuffer(v1, v2, width, height, v3, v4, v5, v6, depthBufferBit, nearest);
-        public override void ReadBuffer(ReadBufferMode colorAttachment5) => GL.ReadBuffer(colorAttachment5);
-        public override void DeleteFramebuffer(uint fboId) => GL.DeleteFramebuffer(fboId);
-        public override T ReadPixels<T>(int x, int y, uint v1, uint v2, PixelFormat red, PixelType @float) => GL.ReadPixels<T>(x, y, v1, v2, red, @float);
-        public override unsafe void ReadPixels(int x, int y, uint v1, uint v2, PixelFormat rgba, PixelType @float, float* ptr) => GL.ReadPixels(x, y, v1, v2, rgba, @float, ptr);
+        public override GraphicsFrameBuffer CreateFramebuffer(GraphicsFrameBuffer.Attachment[] attachments) => new GLFrameBuffer(attachments);
+        public override void UnbindFramebuffer() => GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        public override void BindFramebuffer(GraphicsFrameBuffer frameBuffer, FramebufferTarget readFramebuffer) => GL.BindFramebuffer(readFramebuffer, (frameBuffer as GLFrameBuffer)!.Handle);
+        public override void BlitFramebuffer(int v1, int v2, int width, int height, int v3, int v4, int v5, int v6, ClearBufferMask depthBufferBit, BlitFramebufferFilter nearest) => GL.BlitFramebuffer(v1, v2, width, height, v3, v4, v5, v6, depthBufferBit, nearest);
+        public override T ReadPixel<T>(int attachment, int x, int y, PixelFormat red, PixelType @float)
+        {
+            GL.ReadBuffer((ReadBufferMode)attachment);
+            return GL.ReadPixels<T>(x, y, 1, 1, red, @float);
+        }
 
         #endregion
 
         #region Shaders
 
         public override GraphicsProgram CompileProgram(string fragment, string vertex, string geometry) => new GLProgram(fragment, vertex, geometry);
-        public override void UseProgram(GraphicsProgram program) => (program as GLProgram)!.Use();
+        public override void BindProgram(GraphicsProgram program) => (program as GLProgram)!.Use();
 
         public override int GetUniformLocation(GraphicsProgram program, string name)
         {
-            UseProgram(program);
+            BindProgram(program);
             return GL.GetUniformLocation((program as GLProgram).Handle, name);
         }
 
         public override int GetAttribLocation(GraphicsProgram program, string name)
         {
-            UseProgram(program);
+            BindProgram(program);
             return GL.GetAttribLocation((program as GLProgram).Handle, name);
         }
 
         public override void SetUniformF(GraphicsProgram program, int loc, float value)
         {
-            UseProgram(program);
+            BindProgram(program);
             GL.Uniform1(loc, value);
         }
 
         public override void SetUniformI(GraphicsProgram program, int loc, int value)
         {
-            UseProgram(program);
+            BindProgram(program);
             GL.Uniform1(loc, value);
         }
 
         public override void SetUniformV2(GraphicsProgram program, int loc, Vector2 value)
         {
-            UseProgram(program);
+            BindProgram(program);
             GL.Uniform2(loc, value);
         }
 
         public override void SetUniformV3(GraphicsProgram program, int loc, Vector3 value)
         {
-            UseProgram(program);
+            BindProgram(program);
             GL.Uniform3(loc, value);
         }
 
         public override void SetUniformV4(GraphicsProgram program, int loc, Vector4 value)
         {
-            UseProgram(program);
+            BindProgram(program);
             GL.Uniform4(loc, value);
         }
 
         public override void SetUniformMatrix(GraphicsProgram program, int loc, uint length, bool v, in float m11)
         {
-            UseProgram(program);
+            BindProgram(program);
             GL.UniformMatrix4(loc, length, v, m11);
         }
 
         public override void SetUniformTexture(GraphicsProgram program, int loc, int slot, GraphicsTexture texture)
         {
-            UseProgram(program);
+            BindProgram(program);
             GL.ActiveTexture((TextureUnit)((uint)TextureUnit.Texture0 + slot));
             GL.BindTexture((texture as GLTexture).Type, (texture as GLTexture).Handle);
             GL.Uniform1(loc, slot);
@@ -429,7 +505,6 @@ namespace Prowl.Runtime.Rendering.OpenGL
         #region Textures
 
         public override GraphicsTexture CreateTexture(TextureTarget type) => new GLTexture(type);
-        public override void BindTexture(GraphicsTexture texture) => (texture as GLTexture)!.Bind();
         public override void TexParameter(GraphicsTexture texture, TextureParameterName textureWrapS, int clampToEdge) => (texture as GLTexture)!.TexParameter(textureWrapS, clampToEdge);
         public override void GenerateMipmap(GraphicsTexture texture) => (texture as GLTexture)!.GenerateMipmap();
 
