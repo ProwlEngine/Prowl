@@ -128,6 +128,19 @@ namespace Prowl.Runtime
         {
             instance = null;
             assetID = id;
+            FileID = 0;
+        }
+
+        /// <summary>
+        /// Creates a ContentRef pointing to the <see cref="Resource"/> at the specified id / using 
+        /// the specified alias.
+        /// </summary>
+        /// <param name="id"></param>
+        public AssetRef(Guid id, short fileId)
+        {
+            instance = null;
+            assetID = id;
+            fileID = fileId;
         }
         /// <summary>
         /// Creates a ContentRef pointing to the specified <see cref="Resource"/>.
