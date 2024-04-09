@@ -211,7 +211,7 @@ public class AssetBrowserWindow : EditorWindow
         // Background rect for entire body
         var drawList = ImGui.GetWindowDrawList();
         var min = start;
-        var max = start + size;
+        var max = start + (size * 100f);
         drawList.AddRectFilled(min, max, ImGui.GetColorU32(ImGuiCol.FrameBg), 0f);
     }
 
