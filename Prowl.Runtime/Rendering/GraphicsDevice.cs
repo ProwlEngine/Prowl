@@ -1,66 +1,7 @@
-﻿namespace Prowl.Runtime.Rendering
+﻿using Prowl.Runtime.Rendering.Primitives;
+
+namespace Prowl.Runtime.Rendering
 {
-    public enum FBOTarget { Read, Draw, Framebuffer, }
-    public enum BlitFilter { Nearest, Linear }
-    public enum TextureType
-    {
-        Texture1D,
-        Texture2D,
-        Texture3D,
-        TextureCubeMap,
-        Texture1DArray,
-        Texture2DArray,
-        TextureCubeMapArray,
-        Texture2DMultisample,
-        Texture2DMultisampleArray,
-    }
-
-    public enum TextureImageFormat
-    {
-        Color4b,
-        UnsignedShort4,
-
-        Float,
-        Float2,
-        Float3,
-        Float4,
-        Depth16,
-        Depth24,
-        Depth32f,
-
-        Int,
-        Int2,
-        Int3,
-        Int4,
-
-        UnsignedInt,
-        UnsignedInt2,
-        UnsignedInt3,
-        UnsignedInt4,
-
-        Depth24Stencil8,
-    }
-
-    public enum TextureParameter { WrapS, WrapT, WrapR, MinFilter, MagFilter }
-
-    public enum TextureMin { Nearest, Linear, NearestMipmapNearest, LinearMipmapNearest, NearestMipmapLinear, LinearMipmapLinear }
-
-    public enum TextureMag { Nearest, Linear }
-
-    public enum TextureWrap { Repeat, ClampToBorder, ClampToEdge, MirroredRepeat }
-
-    public enum Topology
-    {
-        Points,
-        Lines,
-        LineLoop,
-        LineStrip,
-        Triangles,
-        TriangleStrip,
-        TriangleFan,
-        Quads
-    }
-
     public abstract class GraphicsDevice
     {
         public abstract void Initialize(bool debug);

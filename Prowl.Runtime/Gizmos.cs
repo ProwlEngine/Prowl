@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Prowl.Runtime.Rendering.Primitives;
 
 namespace Prowl.Runtime
 {
@@ -92,7 +93,7 @@ namespace Prowl.Runtime
                 return; // Happens when no project is loaded (Or no Gizmos shader was found)
             }
 
-            LineBatch ??= new PrimitiveBatch(Rendering.Topology.Lines);
+            LineBatch ??= new PrimitiveBatch(Topology.Lines);
 
             if (LineBatch.IsUploaded == false)
             {

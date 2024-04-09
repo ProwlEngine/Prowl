@@ -1,5 +1,6 @@
 using System;
 using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.Primitives;
 
 namespace Prowl.Runtime
 {

@@ -1,6 +1,6 @@
 ﻿using Hexa.NET.ImGui;
 using Prowl.Runtime;
-using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.Primitives;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Assets

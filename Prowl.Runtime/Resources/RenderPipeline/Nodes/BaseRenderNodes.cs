@@ -1,5 +1,5 @@
 ﻿using Prowl.Runtime.NodeSystem;
-using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.Primitives;
 using System;
 using static Prowl.Runtime.MonoBehaviour;
 

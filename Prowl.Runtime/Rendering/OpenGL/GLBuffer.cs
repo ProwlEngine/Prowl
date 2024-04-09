@@ -1,4 +1,5 @@
-﻿using Silk.NET.OpenGL;
+﻿using Prowl.Runtime.Rendering.Primitives;
+using Silk.NET.OpenGL;
 using System;
 
 namespace Prowl.Runtime.Rendering.OpenGL

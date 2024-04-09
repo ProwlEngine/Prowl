@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Prowl.Runtime.Rendering
+namespace Prowl.Runtime.Rendering.Primitives
 {
     [Flags]
     public enum ClearFlags

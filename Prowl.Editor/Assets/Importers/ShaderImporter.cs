@@ -1,5 +1,5 @@
 ﻿using Prowl.Runtime;
-using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.Primitives;
 using Prowl.Runtime.Utils;
 using System.Text.RegularExpressions;
 using static Prowl.Runtime.Shader;

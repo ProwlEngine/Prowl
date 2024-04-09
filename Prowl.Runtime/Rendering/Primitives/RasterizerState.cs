@@ -1,4 +1,4 @@
-﻿namespace Prowl.Runtime.Rendering
+﻿namespace Prowl.Runtime.Rendering.Primitives
 {
     public struct RasterizerState
     {

@@ -1,6 +1,6 @@
 ﻿using ImageMagick;
 using Prowl.Runtime;
-using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Rendering.Primitives;
 
 namespace Prowl.Editor
 {

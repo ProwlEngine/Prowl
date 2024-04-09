@@ -6,6 +6,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.OpenGL;
+using Prowl.Runtime.Rendering.Primitives;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
