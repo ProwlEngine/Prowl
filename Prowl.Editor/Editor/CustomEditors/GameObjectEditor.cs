@@ -301,6 +301,10 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
             foreach (var (path, type) in items) {
                 string[] parts = path.Split('/');
+
+                // If first part is 'Hidden' then skip this component
+                if (parts[0] == "Hidden") continue;
+
                 MenuItemInfo currentNode = root;
 
                 for (int i = 0; i < parts.Length - 1; i++)  // Skip the last part

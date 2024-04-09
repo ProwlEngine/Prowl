@@ -11,11 +11,3 @@ public class AddComponentMenuAttribute : Attribute
         Path = path;
     }
 }
-
-[AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
-public class ExecuteAlwaysAttribute : Attribute
-{
-    public ExecuteAlwaysAttribute()
-    {
-    }
-}
