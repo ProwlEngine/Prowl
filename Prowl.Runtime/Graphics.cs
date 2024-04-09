@@ -63,15 +63,6 @@ namespace Prowl.Runtime
             Device.Initialize(true);
         }
 
-        public static void UseProgram(uint program)
-        {
-            if (activeProgram != program)
-            {
-                Device.UseProgram(program);
-                activeProgram = program;
-            }
-        }
-
         public static void Viewport(int width, int height)
         {
             Device.Viewport(0, 0, (uint)width, (uint)height);
@@ -108,7 +99,7 @@ namespace Prowl.Runtime
         public static void DrawMeshNow(Mesh mesh, Matrix4x4 transform, Material material, Matrix4x4? oldTransform = null)
         {
             if (Camera.Current == null) throw new Exception("DrawMeshNow must be called during a rendering context like OnRenderObject()!");
-            if (Material.current == null) throw new Exception("Use Material.SetPass first before called DrawMeshNow!");
+            if (Graphics.Device.CurrentProgram == null) throw new Exception("Non Program Assigned, Use Material.SetPass first before calling DrawMeshNow!");
 
             oldTransform ??= transform;
 
@@ -180,7 +171,7 @@ namespace Prowl.Runtime
             material.SetKeyword("HAS_BONEWEIGHTS", mesh.HasBoneWeights);
 
             // All material uniforms have been assigned, its time to properly set them
-            MaterialPropertyBlock.Apply(material.PropertyBlock, Material.current.Value);
+            MaterialPropertyBlock.Apply(material.PropertyBlock, Graphics.Device.CurrentProgram);
 
             DrawMeshNowDirect(mesh);
         }
@@ -188,7 +179,7 @@ namespace Prowl.Runtime
         public static void DrawMeshNowDirect(Mesh mesh)
         {
             if (Camera.Current == null) throw new Exception("DrawMeshNow must be called during a rendering context like OnRenderObject()!");
-            if (Material.current == null) throw new Exception("Use Material.SetPass first before called DrawMeshNow!");
+            if (Graphics.Device.CurrentProgram == null) throw new Exception("Non Program Assigned, Use Material.SetPass first before calling DrawMeshNow!");
 
             mesh.Upload();
 

@@ -1,4 +1,5 @@
-﻿using Silk.NET.OpenGL;
+﻿using Prowl.Runtime.Rendering;
+using Silk.NET.OpenGL;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -75,10 +76,10 @@ namespace Prowl.Runtime
             cachedUniformLocs.Clear();
         }
 
-        private static bool TryGetLoc(uint shader, string name, MaterialPropertyBlock mpb, out int loc)
+        private static bool TryGetLoc(GraphicsProgram shader, string name, MaterialPropertyBlock mpb, out int loc)
         {
             loc = -1;
-            string key = shader + "_" + name;
+            string key = shader.ToString() + "_" + name;
             if (!mpb.cachedUniformLocs.TryGetValue(key, out loc))
             {
                 loc = Graphics.Device.GetUniformLocation(shader, name);
@@ -88,59 +89,55 @@ namespace Prowl.Runtime
             return loc != -1;
         }
 
-        public static void Apply(MaterialPropertyBlock mpb, uint shader)
+        public static void Apply(MaterialPropertyBlock mpb, GraphicsProgram shader)
         {
-            Graphics.UseProgram(shader);
-
             foreach (var item in mpb.floats)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.SetUniformF(loc, item.Value);
+                    Graphics.Device.SetUniformF(shader, loc, item.Value);
 
             foreach (var item in mpb.ints)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.SetUniformI(loc, (int)item.Value);
+                    Graphics.Device.SetUniformI(shader, loc, (int)item.Value);
 
             foreach (var item in mpb.vectors2)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.SetUniformV2(loc, item.Value);
+                    Graphics.Device.SetUniformV2(shader, loc, item.Value);
             foreach (var item in mpb.vectors3)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.SetUniformV3(loc, item.Value);
+                    Graphics.Device.SetUniformV3(shader, loc, item.Value);
             foreach (var item in mpb.vectors4)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.SetUniformV4(loc, item.Value);
+                    Graphics.Device.SetUniformV4(shader, loc, item.Value);
             foreach (var item in mpb.colors)
                 if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.SetUniformV4(loc, new System.Numerics.Vector4(item.Value.r, item.Value.g, item.Value.b, item.Value.a));
+                    Graphics.Device.SetUniformV4(shader, loc, new System.Numerics.Vector4(item.Value.r, item.Value.g, item.Value.b, item.Value.a));
 
             foreach (var item in mpb.matrices)
-                if (TryGetLoc(shader, item.Key, mpb, out var loc)) {
+                if (TryGetLoc(shader, item.Key, mpb, out var loc))
+                {
                     var m = item.Value.ToFloat();
-                    Graphics.Device.SetUniformMatrix(loc, 1, false, in m.M11);
+                    Graphics.Device.SetUniformMatrix(shader, loc, 1, false, in m.M11);
                 }
 
             foreach (var item in mpb.matrixArr)
-                if (TryGetLoc(shader, item.Key, mpb, out var loc)) {
+                if (TryGetLoc(shader, item.Key, mpb, out var loc))
+                {
                     var m = item.Value;
-                    Graphics.Device.SetUniformMatrix(loc, (uint)item.Value.Length, false, in m[0].M11);
+                    Graphics.Device.SetUniformMatrix(shader, loc, (uint)item.Value.Length, false, in m[0].M11);
                 }
 
             uint texSlot = 0;
             var keysToUpdate = new List<(string, AssetRef<Texture2D>)>();
-            foreach (var item in mpb.textures) {
+            foreach (var item in mpb.textures)
+            {
                 var tex = item.Value;
-                if (tex.IsAvailable) {
-
-                    // Get the memory address of the texture slot as void* using unsafe context
-                    unsafe {
-                        if (TryGetLoc(shader, item.Key, mpb, out var loc)) {
-                            texSlot++;
-                            Graphics.Device.ActiveTexture((TextureUnit)((uint)TextureUnit.Texture0 + texSlot));
-                            Graphics.Device.BindTexture(tex.Res!.Handle);
-                            Graphics.Device.SetUniformI(loc, (int)texSlot);
-                        }
+                if (tex.IsAvailable)
+                {
+                    if (TryGetLoc(shader, item.Key, mpb, out var loc))
+                    {
+                        texSlot++;
+                        Graphics.Device.SetUniformTexture(shader, loc, (int)texSlot, tex.Res!.Handle);
                     }
-
 
                     keysToUpdate.Add((item.Key, tex));
                 }
@@ -158,7 +155,6 @@ namespace Prowl.Runtime
         // Key is Shader.GUID + "-" + keywords + "-" + Shader.globalKeywords
         static Dictionary<string, Shader.CompiledShader> passVariants = new();
         HashSet<string> keywords = new();
-        internal static uint? current;
 
         public int PassCount => Shader.IsAvailable ? GetVariant(keywords.ToArray()).passes.Length : 0;
 
@@ -220,16 +216,12 @@ namespace Prowl.Runtime
 
         void InternalSetPass(Shader.CompiledShader.Pass pass, bool apply = false)
         {
-            if (current != pass.Program)
-            {
-                // Set the shader
-                current = pass.Program;
-                Graphics.Device.SetState(pass.State);
-                Graphics.UseProgram(pass.Program);
-            }
+            // Set the shader
+            Graphics.Device.SetState(pass.State);
+            Graphics.Device.UseProgram(pass.Program);
 
             if (apply)
-                MaterialPropertyBlock.Apply(PropertyBlock, current.Value);
+                MaterialPropertyBlock.Apply(PropertyBlock, Graphics.Device.CurrentProgram);
         }
 
         Shader.CompiledShader GetVariant(string[] allKeywords)

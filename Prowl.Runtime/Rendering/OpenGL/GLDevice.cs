@@ -295,6 +295,8 @@ namespace Prowl.Runtime.Rendering.OpenGL
             };
         }
 
+        public override GraphicsProgram CurrentProgram => GLProgram.currentProgram;
+
         #region Buffers
 
         public override GraphicsBuffer CreateBuffer<T>(BufferType bufferType, T[] data, bool dynamic = false)
@@ -363,27 +365,64 @@ namespace Prowl.Runtime.Rendering.OpenGL
 
         #region Shaders
 
-        public override void AttachShader(uint shaderProgram, uint vertexShader) => GL.AttachShader(shaderProgram, vertexShader);
-        public override void CompileShader(uint vertexShader) => GL.CompileShader(vertexShader);
-        public override uint CreateProgram() => GL.CreateProgram();
-        public override uint CreateShader(ShaderType vertexShader) => GL.CreateShader(vertexShader);
-        public override void DeleteProgram(uint shaderProgram) => GL.DeleteProgram(shaderProgram);
-        public override void DeleteShader(uint vertexShader) => GL.DeleteShader(vertexShader);
-        public override void GetProgram(uint shaderProgram, ProgramPropertyARB linkStatus, out int statusCode) => GL.GetProgram(shaderProgram, linkStatus, out statusCode);
-        public override void GetProgramInfoLog(uint shaderProgram, out string info) => GL.GetProgramInfoLog(shaderProgram, out info);
-        public override void GetShader(uint fragmentShader, ShaderParameterName compileStatus, out int statusCode) => GL.GetShader(fragmentShader, compileStatus, out statusCode);
-        public override void GetShaderInfoLog(uint vertexShader, out string info) => GL.GetShaderInfoLog(vertexShader, out info);
-        public override void ActiveTexture(TextureUnit textureUnit) => GL.ActiveTexture(textureUnit);
-        public override void SetUniformF(int loc, float value) => GL.Uniform1(loc, value);
-        public override void SetUniformI(int loc, int value) => GL.Uniform1(loc, value);
-        public override void SetUniformV2(int loc, Vector2 value) => GL.Uniform2(loc, value);
-        public override void SetUniformV3(int loc, Vector3 value) => GL.Uniform3(loc, value);
-        public override void SetUniformV4(int loc, Vector4 value) => GL.Uniform4(loc, value);
-        public override void SetUniformMatrix(int loc, uint length, bool v, in float m11) => GL.UniformMatrix4(loc, length, v, m11);
-        public override void UseProgram(uint program) => GL.UseProgram(program);
-        public override void ShaderSource(uint vertexShader, string vertexSource) => GL.ShaderSource(vertexShader, vertexSource);
-        public override int GetUniformLocation(uint shader, string name) => GL.GetUniformLocation(shader, name);
-        public override void LinkProgram(uint shaderProgram) => GL.LinkProgram(shaderProgram);
+        public override GraphicsProgram CompileProgram(string fragment, string vertex, string geometry) => new GLProgram(fragment, vertex, geometry);
+        public override void UseProgram(GraphicsProgram program) => (program as GLProgram)!.Use();
+
+        public override int GetUniformLocation(GraphicsProgram program, string name)
+        {
+            UseProgram(program);
+            return GL.GetUniformLocation((program as GLProgram).Handle, name);
+        }
+
+        public override int GetAttribLocation(GraphicsProgram program, string name)
+        {
+            UseProgram(program);
+            return GL.GetAttribLocation((program as GLProgram).Handle, name);
+        }
+
+        public override void SetUniformF(GraphicsProgram program, int loc, float value)
+        {
+            UseProgram(program);
+            GL.Uniform1(loc, value);
+        }
+
+        public override void SetUniformI(GraphicsProgram program, int loc, int value)
+        {
+            UseProgram(program);
+            GL.Uniform1(loc, value);
+        }
+
+        public override void SetUniformV2(GraphicsProgram program, int loc, Vector2 value)
+        {
+            UseProgram(program);
+            GL.Uniform2(loc, value);
+        }
+
+        public override void SetUniformV3(GraphicsProgram program, int loc, Vector3 value)
+        {
+            UseProgram(program);
+            GL.Uniform3(loc, value);
+        }
+
+        public override void SetUniformV4(GraphicsProgram program, int loc, Vector4 value)
+        {
+            UseProgram(program);
+            GL.Uniform4(loc, value);
+        }
+
+        public override void SetUniformMatrix(GraphicsProgram program, int loc, uint length, bool v, in float m11)
+        {
+            UseProgram(program);
+            GL.UniformMatrix4(loc, length, v, m11);
+        }
+
+        public override void SetUniformTexture(GraphicsProgram program, int loc, int slot, GraphicsTexture texture)
+        {
+            UseProgram(program);
+            GL.ActiveTexture((TextureUnit)((uint)TextureUnit.Texture0 + slot));
+            GL.BindTexture((texture as GLTexture).Type, (texture as GLTexture).Handle);
+            GL.Uniform1(loc, slot);
+        }
 
         #endregion
 
@@ -415,7 +454,6 @@ namespace Prowl.Runtime.Rendering.OpenGL
         public override void DrawArrays(PrimitiveType primitiveType, int v, uint count) => GL.DrawArrays(primitiveType, v, count);
         public override unsafe void DrawElements(PrimitiveType triangles, uint indexCount, DrawElementsType drawElementsType, void* value) => GL.DrawElements(triangles, indexCount, drawElementsType, value);
 
-        public override void Flush() => GL.Flush();
         public override void Dispose()
         {
             GL.Dispose();

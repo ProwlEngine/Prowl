@@ -37,7 +37,7 @@ namespace Prowl.Editor.ImGUI
         private uint _vertexArrayObject;
 
         private Texture2D _fontTexture;
-        private uint _shader;
+        private GraphicsProgram _shader;
 
         private int _windowWidth;
         private int _windowHeight;
@@ -334,9 +334,8 @@ namespace Prowl.Editor.ImGUI
                 (R + L) / (L - R), (T + B) / (B - T), 0.0f, 1.0f,
             };
 
-            Graphics.UseProgram(_shader);
-            _gl.Uniform1(_attribLocationTex, 0);
-            _gl.UniformMatrix4(_attribLocationProjMtx, 1, false, orthoProjection);
+            Graphics.Device.SetUniformI(_shader, _attribLocationTex, 0);
+            Graphics.Device.SetUniformMatrix(_shader, _attribLocationProjMtx, 1, false, in orthoProjection[0]);
 
             _gl.BindSampler(0, 0);
 
@@ -368,7 +367,6 @@ namespace Prowl.Editor.ImGUI
             _gl.GetInteger(GLEnum.ActiveTexture, out int lastActiveTexture);
             _gl.ActiveTexture(GLEnum.Texture0);
 
-            _gl.GetInteger(GLEnum.CurrentProgram, out int lastProgram);
             _gl.GetInteger(GLEnum.TextureBinding2D, out int lastTexture);
 
             _gl.GetInteger(GLEnum.SamplerBinding, out int lastSampler);
@@ -454,7 +452,6 @@ namespace Prowl.Editor.ImGUI
             _vertexArrayObject = 0;
 
             // Restore modified GL state
-            Graphics.UseProgram((uint)lastProgram);
             _gl.BindTexture(GLEnum.Texture2D, (uint)lastTexture);
 
             _gl.BindSampler(0, (uint)lastSampler);
@@ -560,13 +557,13 @@ namespace Prowl.Editor.ImGUI
             Out_Color = Frag_Color * texture(Texture, Frag_UV.st);
         }";
 
-            _shader = Compile(vertexSource, fragmentSource);
+            _shader = Graphics.Device.CompileProgram(fragmentSource, vertexSource, "");
 
-            _attribLocationTex = _gl.GetUniformLocation(_shader, "Texture");
-            _attribLocationProjMtx = _gl.GetUniformLocation(_shader, "ProjMtx");
-            _attribLocationVtxPos = _gl.GetAttribLocation(_shader, "Position");
-            _attribLocationVtxUV = _gl.GetAttribLocation(_shader, "UV");
-            _attribLocationVtxColor = _gl.GetAttribLocation(_shader, "Color");
+            _attribLocationTex = Graphics.Device.GetUniformLocation(_shader, "Texture");
+            _attribLocationProjMtx = Graphics.Device.GetUniformLocation(_shader, "ProjMtx");
+            _attribLocationVtxPos = Graphics.Device.GetAttribLocation(_shader, "Position");
+            _attribLocationVtxUV = Graphics.Device.GetAttribLocation(_shader, "UV");
+            _attribLocationVtxColor = Graphics.Device.GetAttribLocation(_shader, "Color");
 
             _vboHandle = _gl.GenBuffer();
             _elementsHandle = _gl.GenBuffer();
@@ -619,100 +616,10 @@ namespace Prowl.Editor.ImGUI
             _gl.DeleteVertexArray(_vertexArrayObject);
 
             _fontTexture.Dispose();
-            _gl.DeleteProgram(_shader);
+            _shader.Dispose();
 
             ImNodes.DestroyContext(nodesContext);
             ImGui.DestroyContext(Context);
-        }
-
-        private uint Compile(string vertexSource, string fragmentSource)
-        {
-            // Create the program
-            uint shaderProgram = Graphics.Device.CreateProgram();
-
-            // Initialize compilation log info variables
-            int statusCode = -1;
-            string info = string.Empty;
-
-            // Create vertex shader if requested
-            if (!string.IsNullOrEmpty(vertexSource))
-            {
-                // Create and compile the shader
-                uint vertexShader = Graphics.Device.CreateShader(ShaderType.VertexShader);
-                Graphics.Device.ShaderSource(vertexShader, vertexSource);
-                Graphics.Device.CompileShader(vertexShader);
-
-                // Check the compile log
-                Graphics.Device.GetShaderInfoLog(vertexShader, out info);
-                Graphics.Device.GetShader(vertexShader, ShaderParameterName.CompileStatus, out statusCode);
-
-                // Check the compile log
-                if (statusCode != 1)
-                {
-                    // Delete every handles when compilation failed
-                    Graphics.Device.DeleteShader(vertexShader);
-                    Graphics.Device.DeleteProgram(shaderProgram);
-
-                    throw new InvalidOperationException("Failed to Compile Vertex Shader Source.\n" +
-                        info + "\n\n" +
-                        "Status Code: " + statusCode.ToString());
-                }
-
-                // Attach the shader to the program, and delete it (not needed anymore)
-                Graphics.Device.AttachShader(shaderProgram, vertexShader);
-                Graphics.Device.DeleteShader(vertexShader);
-            }
-
-            // Create fragment shader if requested
-            if (!string.IsNullOrEmpty(fragmentSource))
-            {
-                // Create and compile the shader
-                uint fragmentShader = Graphics.Device.CreateShader(ShaderType.FragmentShader);
-                Graphics.Device.ShaderSource(fragmentShader, fragmentSource);
-                Graphics.Device.CompileShader(fragmentShader);
-
-                // Check the compile log
-                Graphics.Device.GetShaderInfoLog(fragmentShader, out info);
-                Graphics.Device.GetShader(fragmentShader, ShaderParameterName.CompileStatus, out statusCode);
-
-                // Check the compile log
-                if (statusCode != 1)
-                {
-                    // Delete every handles when compilation failed
-                    Graphics.Device.DeleteShader(fragmentShader);
-                    Graphics.Device.DeleteProgram(shaderProgram);
-
-                    throw new InvalidOperationException("Failed to Compile Fragment Shader Source.\n" +
-                        info + "\n\n" +
-                        "Status Code: " + statusCode.ToString());
-                }
-
-                // Attach the shader to the program, and delete it (not needed anymore)
-                Graphics.Device.AttachShader(shaderProgram, fragmentShader);
-                Graphics.Device.DeleteShader(fragmentShader);
-            }
-
-            // Link the compiled program
-            Graphics.Device.LinkProgram(shaderProgram);
-
-            // Check for link status
-            Graphics.Device.GetProgramInfoLog(shaderProgram, out info);
-            Graphics.Device.GetProgram(shaderProgram, ProgramPropertyARB.LinkStatus, out statusCode);
-            if (statusCode != 1)
-            {
-                // Delete the handles when failed to link the program
-                Graphics.Device.DeleteProgram(shaderProgram);
-
-                throw new InvalidOperationException("Failed to Link Shader Program.\n" +
-                        info + "\n\n" +
-                        "Status Code: " + statusCode.ToString());
-            }
-
-            // Force an OpenGL flush, so that the shader will appear updated
-            // in all contexts immediately (solves problems in multi-threaded apps)
-            Graphics.Device.Flush();
-
-            return shaderProgram;
         }
     }
 }

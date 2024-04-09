@@ -35,10 +35,10 @@ namespace Prowl.Runtime
 
         public struct CompiledShader(CompiledShader.Pass[] passes, CompiledShader.Pass shadowPass)
         {
-            public struct Pass(RasterizerState State, uint Program )
+            public struct Pass(RasterizerState State, GraphicsProgram Program )
             {
                 public RasterizerState State = State;
-                public uint Program = Program;
+                public GraphicsProgram Program = Program;
             }
 
             public Pass[] passes = passes;
@@ -79,7 +79,7 @@ namespace Prowl.Runtime
                     try
                     {
                         PrepareFragVert(ref frag, ref vert, defines);
-                        var program = Compile(vert, "", frag);
+                        var program = Graphics.Device.CompileProgram(frag, vert, "");
                         compiledPasses[i] = new(Passes[i].State, program);
                     }
                     catch (Exception e)
@@ -91,7 +91,7 @@ namespace Prowl.Runtime
                         frag = fallback.Res!.Passes[0].Fragment;
                         vert = fallback.Res!.Passes[0].Vertex;
                         PrepareFragVert(ref frag, ref vert, defines);
-                        compiledPasses[i] = new(new(), Compile(vert, "", frag));
+                        compiledPasses[i] = new(new(), Graphics.Device.CompileProgram(frag, vert, ""));
                     }
 
                 }
@@ -104,7 +104,7 @@ namespace Prowl.Runtime
                     string frag = ShadowPass.Fragment;
                     string vert = ShadowPass.Vertex;
                     PrepareFragVert(ref frag, ref vert, defines);
-                    var program = Compile(vert, "", frag);
+                    var program = Graphics.Device.CompileProgram(frag, vert, "");
                     compiledShader.shadowPass = new(ShadowPass.State, program);
                 }
                 else
@@ -114,7 +114,7 @@ namespace Prowl.Runtime
                     string frag = depth.Res!.Passes[0].Fragment;
                     string vert = depth.Res!.Passes[0].Vertex;
                     PrepareFragVert(ref frag, ref vert, defines);
-                    compiledShader.shadowPass = new(new(), Compile(vert, "", frag));
+                    compiledShader.shadowPass = new(new(), Graphics.Device.CompileProgram(frag, vert, ""));
                 }
 
                 return compiledShader;
@@ -145,125 +145,6 @@ namespace Prowl.Runtime
             // Insert the version at the start
             frag = frag.Insert(0, $"#version 410\n");
             vert = vert.Insert(0, $"#version 410\n");
-        }
-
-        private uint Compile(string vertexSource, string geometrySource, string fragmentSource)
-        {
-            // Create the program
-            uint shaderProgram = Graphics.Device.CreateProgram();
-
-            // Initialize compilation log info variables
-            int statusCode = -1;
-            string info = string.Empty;
-
-            // Create vertex shader if requested
-            if (!string.IsNullOrEmpty(vertexSource))
-            {
-                // Create and compile the shader
-                uint vertexShader = Graphics.Device.CreateShader(ShaderType.VertexShader);
-                Graphics.Device.ShaderSource(vertexShader, vertexSource);
-                Graphics.Device.CompileShader(vertexShader);
-
-                // Check the compile log
-                Graphics.Device.GetShaderInfoLog(vertexShader, out info);
-                Graphics.Device.GetShader(vertexShader, ShaderParameterName.CompileStatus, out statusCode);
-
-                // Check the compile log
-                if (statusCode != 1)
-                {
-                    // Delete every handles when compilation failed
-                    Graphics.Device.DeleteShader(vertexShader);
-                    Graphics.Device.DeleteProgram(shaderProgram);
-
-                    throw new InvalidOperationException("Failed to Compile Vertex Shader Source.\n" +
-                        info + "\n\n" +
-                        "Status Code: " + statusCode.ToString());
-                }
-
-                // Attach the shader to the program, and delete it (not needed anymore)
-                Graphics.Device.AttachShader(shaderProgram, vertexShader);
-                Graphics.Device.DeleteShader(vertexShader);
-            }
-
-            // Create geometry shader if requested
-            if (!string.IsNullOrEmpty(geometrySource))
-            {
-                // Create and compile the shader
-                uint geometryShader = Graphics.Device.CreateShader(ShaderType.GeometryShader);
-                Graphics.Device.ShaderSource(geometryShader, geometrySource);
-                Graphics.Device.CompileShader(geometryShader);
-
-                // Check the compile log
-                Graphics.Device.GetShaderInfoLog(geometryShader, out info);
-                Graphics.Device.GetShader(geometryShader, ShaderParameterName.CompileStatus, out statusCode);
-
-                // Check the compile log
-                if (statusCode != 1)
-                {
-                    // Delete every handles when compilation failed
-                    Graphics.Device.DeleteShader(geometryShader);
-                    Graphics.Device.DeleteProgram(shaderProgram);
-
-                    throw new InvalidOperationException("Failed to Compile Geometry Shader Source.\n" +
-                        info + "\n\n" +
-                        "Status Code: " + statusCode.ToString());
-                }
-
-                // Attach the shader to the program, and delete it (not needed anymore)
-                Graphics.Device.AttachShader(shaderProgram, geometryShader);
-                Graphics.Device.DeleteShader(geometryShader);
-            }
-
-            // Create fragment shader if requested
-            if (!string.IsNullOrEmpty(fragmentSource))
-            {
-                // Create and compile the shader
-                uint fragmentShader = Graphics.Device.CreateShader(ShaderType.FragmentShader);
-                Graphics.Device.ShaderSource(fragmentShader, fragmentSource);
-                Graphics.Device.CompileShader(fragmentShader);
-
-                // Check the compile log
-                Graphics.Device.GetShaderInfoLog(fragmentShader, out info);
-                Graphics.Device.GetShader(fragmentShader, ShaderParameterName.CompileStatus, out statusCode);
-
-                // Check the compile log
-                if (statusCode != 1)
-                {
-                    // Delete every handles when compilation failed
-                    Graphics.Device.DeleteShader(fragmentShader);
-                    Graphics.Device.DeleteProgram(shaderProgram);
-
-                    throw new InvalidOperationException("Failed to Compile Fragment Shader Source.\n" +
-                        info + "\n\n" +
-                        "Status Code: " + statusCode.ToString());
-                }
-
-                // Attach the shader to the program, and delete it (not needed anymore)
-                Graphics.Device.AttachShader(shaderProgram, fragmentShader);
-                Graphics.Device.DeleteShader(fragmentShader);
-            }
-
-            // Link the compiled program
-            Graphics.Device.LinkProgram(shaderProgram);
-
-            // Check for link status
-            Graphics.Device.GetProgramInfoLog(shaderProgram, out info);
-            Graphics.Device.GetProgram(shaderProgram, ProgramPropertyARB.LinkStatus, out statusCode);
-            if (statusCode != 1)
-            {
-                // Delete the handles when failed to link the program
-                Graphics.Device.DeleteProgram(shaderProgram);
-
-                throw new InvalidOperationException("Failed to Link Shader Program.\n" +
-                        info + "\n\n" +
-                        "Status Code: " + statusCode.ToString());
-            }
-
-            // Force an OpenGL flush, so that the shader will appear updated
-            // in all contexts immediately (solves problems in multi-threaded apps)
-            Graphics.Device.Flush();
-
-            return shaderProgram;
         }
 
         public static AssetRef<Shader> Find(string path)

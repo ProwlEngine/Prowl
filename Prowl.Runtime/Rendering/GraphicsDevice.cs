@@ -49,6 +49,12 @@ namespace Prowl.Runtime.Rendering
         public abstract void Dispose();
     }
 
+    public abstract class GraphicsProgram : IDisposable
+    {
+        public abstract bool IsDisposed { get; protected set; }
+        public abstract void Dispose();
+    }
+
     public abstract class GraphicsDevice
     {
         public abstract void Initialize(bool debug);
@@ -57,6 +63,8 @@ namespace Prowl.Runtime.Rendering
         public abstract void Clear(float r, float g, float b, float a, ClearFlags v);
         public abstract void SetState(RasterizerState state, bool force = false);
         public abstract RasterizerState GetState();
+
+        public abstract GraphicsProgram CurrentProgram { get; }
 
         #region Buffers
 
@@ -104,30 +112,19 @@ namespace Prowl.Runtime.Rendering
 
         #region Shaders
 
-        public abstract uint CreateProgram();
-        public abstract void UseProgram(uint program);
-        public abstract void AttachShader(uint shaderProgram, uint vertexShader);
-        public abstract void LinkProgram(uint shaderProgram);
-        public abstract void GetProgramInfoLog(uint shaderProgram, out string info);
-        public abstract void GetProgram(uint shaderProgram, ProgramPropertyARB linkStatus, out int statusCode);
+        public abstract GraphicsProgram CompileProgram(string fragment, string vertex, string geometry);
+        public abstract void UseProgram(GraphicsProgram program);
 
-        public abstract uint CreateShader(ShaderType vertexShader);
-        public abstract void ShaderSource(uint vertexShader, string vertexSource);
-        public abstract void CompileShader(uint vertexShader);
-        public abstract void GetShaderInfoLog(uint vertexShader, out string info);
-        public abstract void GetShader(uint fragmentShader, ShaderParameterName compileStatus, out int statusCode);
 
-        public abstract void DeleteShader(uint vertexShader);
-        public abstract void DeleteProgram(uint shaderProgram);
-
-        public abstract void ActiveTexture(TextureUnit textureUnit);
-        public abstract int GetUniformLocation(uint shader, string name);
-        public abstract void SetUniformF(int loc, float value);
-        public abstract void SetUniformI(int loc, int value);
-        public abstract void SetUniformV2(int loc, Vector2 value);
-        public abstract void SetUniformV3(int loc, Vector3 value);
-        public abstract void SetUniformV4(int loc, Vector4 value);
-        public abstract void SetUniformMatrix(int loc, uint length, bool v, in float m11);
+        public abstract int GetUniformLocation(GraphicsProgram program, string name);
+        public abstract int GetAttribLocation(GraphicsProgram program, string name);
+        public abstract void SetUniformF(GraphicsProgram program, int loc, float value);
+        public abstract void SetUniformI(GraphicsProgram program, int loc, int value);
+        public abstract void SetUniformV2(GraphicsProgram program, int loc, Vector2 value);
+        public abstract void SetUniformV3(GraphicsProgram program, int loc, Vector3 value);
+        public abstract void SetUniformV4(GraphicsProgram program, int loc, Vector4 value);
+        public abstract void SetUniformMatrix(GraphicsProgram program, int loc, uint length, bool v, in float m11);
+        public abstract void SetUniformTexture(GraphicsProgram program, int loc, int slot, GraphicsTexture texture);
 
 
         #endregion
@@ -153,7 +150,6 @@ namespace Prowl.Runtime.Rendering
         public abstract void DrawArrays(PrimitiveType primitiveType, int v, uint count);
         public abstract unsafe void DrawElements(PrimitiveType triangles, uint indexCount, DrawElementsType drawElementsType, void* value);
 
-        public abstract void Flush();
         public abstract void Dispose();
     }
 }
