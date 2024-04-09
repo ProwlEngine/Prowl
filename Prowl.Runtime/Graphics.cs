@@ -1,7 +1,6 @@
 ﻿using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.OpenGL;
 using Silk.NET.Maths;
-using Silk.NET.OpenGL;
 using System;
 
 namespace Prowl.Runtime
@@ -10,11 +9,6 @@ namespace Prowl.Runtime
     public static class Graphics
     {
         public static GraphicsDevice Device { get; internal set; }
-
-        public static BlendingFactor CustomBlendSrcFactor { get; set; }
-        public static BlendingFactor CustomBlendDstFactor { get; set; }
-        public static BlendEquationModeEXT CustomBlendEquation { get; set; }
-
 
         public static Vector2 Resolution;
         public static Matrix4x4 MatView;
@@ -165,7 +159,7 @@ namespace Prowl.Runtime
             unsafe
             {
                 Device.BindVertexArray(mesh.VertexArrayObject);
-                Device.DrawElements(PrimitiveType.Triangles, (uint)mesh.IndexCount, mesh.IndexFormat == IndexFormat.UInt16 ? DrawElementsType.UnsignedShort : DrawElementsType.UnsignedInt, null);
+                Device.DrawElements(Topology.Triangles, (uint)mesh.IndexCount, mesh.IndexFormat == IndexFormat.UInt32, null);
                 Device.BindVertexArray(null);
             }
         }
@@ -215,12 +209,12 @@ namespace Prowl.Runtime
 
         internal static void BlitDepth(RenderTexture source, RenderTexture? destination)
         {
-            Device.BindFramebuffer(source.frameBuffer, FramebufferTarget.ReadFramebuffer);
+            Device.BindFramebuffer(source.frameBuffer, FBOTarget.Read);
             if(destination != null)
-                Device.BindFramebuffer(destination?.frameBuffer, FramebufferTarget.DrawFramebuffer);
+                Device.BindFramebuffer(destination?.frameBuffer, FBOTarget.Draw);
             Device.BlitFramebuffer(0, 0, source.Width, source.Height,
                                         0, 0, destination?.Width ?? (int)Graphics.Resolution.x, destination?.Height ?? (int)Graphics.Resolution.y,
-                                        ClearBufferMask.DepthBufferBit, BlitFramebufferFilter.Nearest
+                                        ClearFlags.Depth, BlitFilter.Nearest
                                         );
             Device.UnbindFramebuffer();
         }

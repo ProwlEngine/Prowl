@@ -1,7 +1,5 @@
 using Hexa.NET.ImGui;
 using Hexa.NET.ImGuizmo;
-using Jitter2.LinearMath;
-using Prowl.Editor.Assets;
 using Prowl.Editor.Editor.Preferences;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
@@ -10,10 +8,7 @@ using Prowl.Runtime.Rendering.OpenGL;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
 using Silk.NET.Maths;
-using Silk.NET.SDL;
-using System;
 using System.Runtime.CompilerServices;
-using System.Runtime.Intrinsics.X86;
 
 namespace Prowl.Editor.EditorWindows;
 

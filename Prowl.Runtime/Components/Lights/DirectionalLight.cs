@@ -1,7 +1,5 @@
 ﻿using Prowl.Icons;
 using Prowl.Runtime.SceneManagement;
-using Silk.NET.OpenGL;
-using System;
 
 namespace Prowl.Runtime;
 

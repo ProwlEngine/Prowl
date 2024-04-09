@@ -1,6 +1,5 @@
-using Silk.NET.OpenGL;
+using Prowl.Runtime.Rendering;
 using System;
-using System.IO;
 
 namespace Prowl.Runtime
 {
@@ -32,8 +31,7 @@ namespace Prowl.Runtime
             if (generateMipmaps)
                 GenerateMipmaps();
 
-            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureMinFilter, IsMipmapped ? (int)DefaultMipmapMinFilter : (int)DefaultMinFilter);
-            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureMagFilter, (int)DefaultMagFilter);
+            Graphics.Device.SetTextureFilters(Handle, IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter, DefaultMagFilter);
             MinFilter = IsMipmapped ? DefaultMipmapMinFilter : DefaultMinFilter;
             MagFilter = DefaultMagFilter;
         }
@@ -46,12 +44,11 @@ namespace Prowl.Runtime
         /// <param name="rectY">The Y coordinate of the first pixel to write.</param>
         /// <param name="rectWidth">The width of the rectangle of pixels to write.</param>
         /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
-        /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
-        public unsafe void SetDataPtr(void* ptr, int rectX, int rectY, uint rectWidth, uint rectHeight, Silk.NET.OpenGL.PixelFormat pixelFormat = 0)
+        public unsafe void SetDataPtr(void* ptr, int rectX, int rectY, uint rectWidth, uint rectHeight)
         {
             ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
 
-            Graphics.Device.TexSubImage2D(Handle, 0, rectX, rectY, rectWidth, rectHeight, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
+            Graphics.Device.TexSubImage2D(Handle, 0, rectX, rectY, rectWidth, rectHeight, ptr);
         }
 
         /// <summary>
@@ -63,15 +60,14 @@ namespace Prowl.Runtime
         /// <param name="rectY">The Y coordinate of the first pixel to write.</param>
         /// <param name="rectWidth">The width of the rectangle of pixels to write.</param>
         /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
-        /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
-        public unsafe void SetData<T>(Memory<T> data, int rectX, int rectY, uint rectWidth, uint rectHeight, PixelFormat pixelFormat = 0) where T : unmanaged
+        public unsafe void SetData<T>(Memory<T> data, int rectX, int rectY, uint rectWidth, uint rectHeight) where T : unmanaged
         {
             ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
             if (data.Length < rectWidth * rectHeight)
                 throw new ArgumentException("Not enough pixel data", nameof(data));
 
             fixed (void* ptr = data.Span)
-                Graphics.Device.TexSubImage2D(Handle, 0, rectX, rectY, rectWidth, rectHeight, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
+                Graphics.Device.TexSubImage2D(Handle, 0, rectX, rectY, rectWidth, rectHeight, ptr);
         }
 
         /// <summary>
@@ -80,19 +76,18 @@ namespace Prowl.Runtime
         /// <typeparam name="T">A struct with the same format as this <see cref="Texture2D"/>'s pixels.</typeparam>
         /// <param name="data">A <see cref="ReadOnlySpan{T}"/> containing the new pixel data.</param>
         /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
-        public void SetData<T>(Memory<T> data, PixelFormat pixelFormat = 0) where T : unmanaged
+        public void SetData<T>(Memory<T> data) where T : unmanaged
         {
-            SetData(data, 0, 0, Width, Height, pixelFormat);
+            SetData(data, 0, 0, Width, Height);
         }
 
         /// <summary>
         /// Gets the data of the entire <see cref="Texture2D"/>.
         /// </summary>
         /// <param name="ptr">The pointer to which the pixel data will be written.</param>
-        /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
-        public unsafe void GetDataPtr(void* ptr, PixelFormat pixelFormat = 0)
+        public unsafe void GetDataPtr(void* ptr)
         {
-            Graphics.Device.GetTexImage(Handle, 0, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
+            Graphics.Device.GetTexImage(Handle, 0, ptr);
         }
 
         /// <summary>
@@ -100,14 +95,13 @@ namespace Prowl.Runtime
         /// </summary>
         /// <typeparam name="T">A struct with the same format as this <see cref="Texture2D"/>'s pixels.</typeparam>
         /// <param name="data">A <see cref="Span{T}"/> in which to write the pixel data.</param>
-        /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
-        public unsafe void GetData<T>(Memory<T> data, PixelFormat pixelFormat = 0) where T : unmanaged
+        public unsafe void GetData<T>(Memory<T> data) where T : unmanaged
         {
             if (data.Length < Width * Height)
                 throw new ArgumentException("Insufficient space to store the requested pixel data", nameof(data));
 
             fixed (void* ptr = data.Span)
-                Graphics.Device.GetTexImage(Handle, 0, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
+                Graphics.Device.GetTexImage(Handle, 0, ptr);
         }
 
         public int GetSize()
@@ -126,6 +120,8 @@ namespace Prowl.Runtime
                 case TextureImageFormat.Int3:
                 case TextureImageFormat.Float3:
                     return size * 4 * 3;
+                case TextureImageFormat.UnsignedShort4:
+                    return size * 4 * 2;
                 case TextureImageFormat.UnsignedInt4:
                 case TextureImageFormat.Int4:
                 case TextureImageFormat.Float4:
@@ -145,10 +141,10 @@ namespace Prowl.Runtime
         /// </summary>
         /// <param name="sWrapMode">The wrap mode for the S (or texture-X) coordinate.</param>
         /// <param name="tWrapMode">The wrap mode for the T (or texture-Y) coordinate.</param>
-        public void SetWrapModes(TextureWrapMode sWrapMode, TextureWrapMode tWrapMode)
+        public void SetWrapModes(TextureWrap sWrapMode, TextureWrap tWrapMode)
         {
-            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureWrapS, (int)sWrapMode);
-            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureWrapT, (int)tWrapMode);
+            Graphics.Device.SetWrapS(Handle, sWrapMode);
+            Graphics.Device.SetWrapT(Handle, tWrapMode);
         }
 
         /// <summary>
@@ -164,7 +160,7 @@ namespace Prowl.Runtime
             Width = width;
             Height = height;
 
-            Graphics.Device.TexImage2D(Handle, 0, (int)PixelInternalFormat, Width, Height, 0, PixelFormat, PixelType, (void*)0);
+            Graphics.Device.TexImage2D(Handle, 0, Width, Height, 0, (void*)0);
         }
 
         private void ValidateTextureSize(uint width, uint height)
@@ -201,12 +197,11 @@ namespace Prowl.Runtime
             compoundTag.Add("Height", new((int)Height));
             compoundTag.Add("IsMipMapped", new(IsMipmapped));
             compoundTag.Add("ImageFormat", new((int)ImageFormat));
-            compoundTag.Add("PixelFormat", new((int)PixelFormat));
             compoundTag.Add("MinFilter", new((int)MinFilter));
             compoundTag.Add("MagFilter", new((int)MagFilter));
             compoundTag.Add("Wrap", new((int)WrapMode));
             Memory<byte> memory = new byte[GetSize()];
-            GetData(memory, PixelFormat);
+            GetData(memory);
             compoundTag.Add("Data", new(memory.ToArray()));
 
             return compoundTag;
@@ -218,17 +213,16 @@ namespace Prowl.Runtime
             Height = (uint)value["Height"].IntValue;
             bool isMipMapped = value["IsMipMapped"].BoolValue;
             TextureImageFormat imageFormat = (TextureImageFormat)value["ImageFormat"].IntValue;
-            var PixelFormat = (Silk.NET.OpenGL.PixelFormat)value["PixelFormat"].IntValue;
-            var MinFilter = (TextureMinFilter)value["MinFilter"].IntValue;
-            var MagFilter = (TextureMagFilter)value["MagFilter"].IntValue;
-            var Wrap = (TextureWrapMode)value["Wrap"].IntValue;
+            var MinFilter = (TextureMin)value["MinFilter"].IntValue;
+            var MagFilter = (TextureMag)value["MagFilter"].IntValue;
+            var Wrap = (TextureWrap)value["Wrap"].IntValue;
 
             var param = new[] { typeof(uint), typeof(uint), typeof(bool), typeof(TextureImageFormat) };
             var values = new object[] { Width, Height, false, imageFormat };
             typeof(Texture2D).GetConstructor(param).Invoke(this, values);
 
             Memory<byte> memory = value["Data"].ByteArrayValue;
-            SetData(memory, PixelFormat);
+            SetData(memory);
 
             if(isMipMapped)
                 GenerateMipmaps();

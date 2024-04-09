@@ -1,7 +1,65 @@
-﻿using Silk.NET.OpenGL;
-
-namespace Prowl.Runtime.Rendering
+﻿namespace Prowl.Runtime.Rendering
 {
+    public enum FBOTarget { Read, Draw, Framebuffer, }
+    public enum BlitFilter { Nearest, Linear }
+    public enum TextureType
+    {
+        Texture1D,
+        Texture2D,
+        Texture3D,
+        TextureCubeMap,
+        Texture1DArray,
+        Texture2DArray,
+        TextureCubeMapArray,
+        Texture2DMultisample,
+        Texture2DMultisampleArray,
+    }
+
+    public enum TextureImageFormat
+    {
+        Color4b,
+        UnsignedShort4,
+
+        Float,
+        Float2,
+        Float3,
+        Float4,
+        Depth16,
+        Depth24,
+        Depth32f,
+
+        Int,
+        Int2,
+        Int3,
+        Int4,
+
+        UnsignedInt,
+        UnsignedInt2,
+        UnsignedInt3,
+        UnsignedInt4,
+
+        Depth24Stencil8,
+    }
+
+    public enum TextureParameter { WrapS, WrapT, WrapR, MinFilter, MagFilter }
+
+    public enum TextureMin { Nearest, Linear, NearestMipmapNearest, LinearMipmapNearest, NearestMipmapLinear, LinearMipmapLinear }
+
+    public enum TextureMag { Nearest, Linear }
+
+    public enum TextureWrap { Repeat, ClampToBorder, ClampToEdge, MirroredRepeat }
+
+    public enum Topology
+    {
+        Points,
+        Lines,
+        LineLoop,
+        LineStrip,
+        Triangles,
+        TriangleStrip,
+        TriangleFan,
+        Quads
+    }
 
     public abstract class GraphicsDevice
     {
@@ -40,9 +98,9 @@ namespace Prowl.Runtime.Rendering
 
         public abstract GraphicsFrameBuffer CreateFramebuffer(GraphicsFrameBuffer.Attachment[] attachments);
         public abstract void UnbindFramebuffer();
-        public abstract void BindFramebuffer(GraphicsFrameBuffer frameBuffer, FramebufferTarget readFramebuffer = FramebufferTarget.Framebuffer);
-        public abstract void BlitFramebuffer(int v1, int v2, int width, int height, int v3, int v4, int v5, int v6, ClearBufferMask depthBufferBit, BlitFramebufferFilter nearest);
-        public abstract T ReadPixel<T>(int attachment, int x, int y, PixelFormat red, PixelType @float) where T : unmanaged;
+        public abstract void BindFramebuffer(GraphicsFrameBuffer frameBuffer, FBOTarget readFramebuffer = FBOTarget.Framebuffer);
+        public abstract void BlitFramebuffer(int v1, int v2, int width, int height, int v3, int v4, int v5, int v6, ClearFlags depthBufferBit, BlitFilter nearest);
+        public abstract T ReadPixel<T>(int attachment, int x, int y, TextureImageFormat format) where T : unmanaged;
 
         #endregion
 
@@ -67,23 +125,26 @@ namespace Prowl.Runtime.Rendering
 
         #region Textures
 
-        public abstract GraphicsTexture CreateTexture(TextureTarget type);
-        public abstract void TexParameter(GraphicsTexture texture, TextureParameterName textureWrapS, int clampToEdge);
+        public abstract GraphicsTexture CreateTexture(TextureType type, TextureImageFormat format);
+        public abstract void SetWrapS(GraphicsTexture texture, TextureWrap wrap);
+        public abstract void SetWrapT(GraphicsTexture texture, TextureWrap wrap);
+        public abstract void SetWrapR(GraphicsTexture texture, TextureWrap wrap);
+        public abstract void SetTextureFilters(GraphicsTexture texture, TextureMin min, TextureMag mag);
         public abstract void GenerateMipmap(GraphicsTexture texture);
 
-        public abstract unsafe void GetTexImage(GraphicsTexture texture, int mip, PixelFormat pixelFormat, PixelType pixelType, void* data);
+        public abstract unsafe void GetTexImage(GraphicsTexture texture, int mip, void* data);
 
-        public abstract unsafe void TexImage2D(GraphicsTexture texture, int v1, int pixelInternalFormat, uint size1, uint size2, int v2, PixelFormat pixelFormat, PixelType pixelType, void* v3);
-        public abstract unsafe void TexImage2D(GraphicsTexture texture, TextureCubemap.CubemapFace face, int v1, int pixelInternalFormat, uint size1, uint size2, int v2, PixelFormat pixelFormat, PixelType pixelType, void* v3);
-        public abstract unsafe void TexSubImage2D(GraphicsTexture texture, int v, int rectX, int rectY, uint rectWidth, uint rectHeight, PixelFormat pixelFormat, PixelType pixelType, void* ptr);
-        public abstract unsafe void TexSubImage2D(GraphicsTexture texture, TextureCubemap.CubemapFace face, int v, int rectX, int rectY, uint rectWidth, uint rectHeight, PixelFormat pixelFormat, PixelType pixelType, void* ptr);
-        public abstract unsafe void TexSubImage3D(GraphicsTexture texture, int v, int rectX, int rectY, int rectZ, uint rectWidth, uint rectHeight, uint rectDepth, PixelFormat pixelFormat, PixelType pixelType, void* ptr);
-        public abstract unsafe void TexImage3D(GraphicsTexture texture, int v1, int pixelInternalFormat, uint width, uint height, uint depth, int v2, PixelFormat pixelFormat, PixelType pixelType, void* v3);
+        public abstract unsafe void TexImage2D(GraphicsTexture texture, int v1, uint size1, uint size2, int v2, void* v3);
+        public abstract unsafe void TexImage2D(GraphicsTexture texture, TextureCubemap.CubemapFace face, int v1, uint size1, uint size2, int v2, void* v3);
+        public abstract unsafe void TexSubImage2D(GraphicsTexture texture, int v, int rectX, int rectY, uint rectWidth, uint rectHeight, void* ptr);
+        public abstract unsafe void TexSubImage2D(GraphicsTexture texture, TextureCubemap.CubemapFace face, int v, int rectX, int rectY, uint rectWidth, uint rectHeight, void* ptr);
+        public abstract unsafe void TexSubImage3D(GraphicsTexture texture, int v, int rectX, int rectY, int rectZ, uint rectWidth, uint rectHeight, uint rectDepth, void* ptr);
+        public abstract unsafe void TexImage3D(GraphicsTexture texture, int v1nt, uint width, uint height, uint depth, int v2, void* v3);
 
         #endregion
 
-        public abstract void DrawArrays(PrimitiveType primitiveType, int v, uint count);
-        public abstract unsafe void DrawElements(PrimitiveType triangles, uint indexCount, DrawElementsType drawElementsType, void* value);
+        public abstract void DrawArrays(Topology primitiveType, int v, uint count);
+        public abstract unsafe void DrawElements(Topology triangles, uint indexCount, bool index32bit, void* value);
 
         public abstract void Dispose();
     }

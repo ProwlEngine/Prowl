@@ -1,8 +1,5 @@
 ﻿using Prowl.Runtime.Rendering;
-using Silk.NET.OpenGL;
-using System;
 using System.Collections.Generic;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Prowl.Runtime
 {
@@ -19,11 +16,11 @@ namespace Prowl.Runtime
         private List<Vertex> vertices = new List<Vertex>(50);
         private Mesh mesh;
 
-        private PrimitiveType primitiveType;
+        private Topology primitiveType;
 
         public bool IsUploaded { get; private set; }
 
-        public PrimitiveBatch(PrimitiveType primitiveType)
+        public PrimitiveBatch(Topology primitiveType)
         {
             this.primitiveType = primitiveType;
 

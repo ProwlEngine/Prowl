@@ -1,7 +1,6 @@
 ﻿using ImageMagick;
 using Prowl.Runtime;
-using Silk.NET.OpenGL;
-using static Prowl.Runtime.Texture;
+using Prowl.Runtime.Rendering;
 
 namespace Prowl.Editor
 {
@@ -21,7 +20,7 @@ namespace Prowl.Editor
 
             image.Flip();
 
-            TextureImageFormat format = TextureImageFormat.Color4b;
+            TextureImageFormat format = TextureImageFormat.UnsignedShort4;
             image.ColorType = ColorType.TrueColorAlpha;
 
             var pixels = image.GetPixelsUnsafe().GetAreaPointer(0, 0, image.Width, image.Height);
@@ -32,7 +31,7 @@ namespace Prowl.Editor
 
                 unsafe
                 {
-                    Graphics.Device.TexSubImage2D(texture.Handle, 0, 0, 0, (uint)image.Width, (uint)image.Height, texture.PixelFormat, PixelType.UnsignedShort, (void*)pixels);
+                    Graphics.Device.TexSubImage2D(texture.Handle, 0, 0, 0, (uint)image.Width, (uint)image.Height, (void*)pixels);
                 }
 
                 if (generateMipmaps)

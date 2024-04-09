@@ -1,5 +1,4 @@
 ﻿using Prowl.Runtime.Rendering;
-using Silk.NET.OpenGL;
 using System;
 using System.Collections.Generic;
 

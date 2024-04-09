@@ -92,7 +92,7 @@ namespace Prowl.Runtime
                 return; // Happens when no project is loaded (Or no Gizmos shader was found)
             }
 
-            LineBatch ??= new PrimitiveBatch(Silk.NET.OpenGL.PrimitiveType.Lines);
+            LineBatch ??= new PrimitiveBatch(Rendering.Topology.Lines);
 
             if (LineBatch.IsUploaded == false)
             {

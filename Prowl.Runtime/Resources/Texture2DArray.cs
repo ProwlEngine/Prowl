@@ -1,5 +1,5 @@
+using Prowl.Runtime.Rendering;
 using System;
-using Silk.NET.OpenGL;
 
 namespace Prowl.Runtime
 {
@@ -22,8 +22,7 @@ namespace Prowl.Runtime
         {
             RecreateImage(width, height, depth); //this also binds the texture
 
-            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureMinFilter, (int)DefaultMinFilter);
-            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureMagFilter, (int)DefaultMagFilter);
+            Graphics.Device.SetTextureFilters(Handle, DefaultMinFilter, DefaultMagFilter);
         }
 
         /// <summary>
@@ -36,12 +35,11 @@ namespace Prowl.Runtime
         /// <param name="rectWidth">The width of the rectangle of pixels to write.</param>
         /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
         /// <param name="rectDepth">The depth of the rectangle of pixels to write.</param>
-        /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
-        public unsafe void SetDataPtr(void* ptr, int rectX, int rectY, int rectZ, uint rectWidth, uint rectHeight, uint rectDepth, PixelFormat pixelFormat = 0)
+        public unsafe void SetDataPtr(void* ptr, int rectX, int rectY, int rectZ, uint rectWidth, uint rectHeight, uint rectDepth)
         {
             ValidateRectOperation(rectX, rectY, rectZ, rectWidth, rectHeight, rectDepth);
 
-            Graphics.Device.TexSubImage3D(Handle, 0, rectX, rectY, rectZ, rectWidth, rectHeight, rectDepth, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
+            Graphics.Device.TexSubImage3D(Handle, 0, rectX, rectY, rectZ, rectWidth, rectHeight, rectDepth, ptr);
         }
 
         /// <summary>
@@ -55,15 +53,14 @@ namespace Prowl.Runtime
         /// <param name="rectWidth">The width of the rectangle of pixels to write.</param>
         /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
         /// <param name="rectDepth">The depth of the rectangle of pixels to write.</param>
-        /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
-        public unsafe void SetData<T>(ReadOnlySpan<T> data, int rectX, int rectY, int rectZ, uint rectWidth, uint rectHeight, uint rectDepth, PixelFormat pixelFormat = 0) where T : unmanaged
+        public unsafe void SetData<T>(ReadOnlySpan<T> data, int rectX, int rectY, int rectZ, uint rectWidth, uint rectHeight, uint rectDepth) where T : unmanaged
         {
             ValidateRectOperation(rectX, rectY, rectZ, rectWidth, rectHeight, rectDepth);
             if (data.Length < rectWidth * rectHeight * rectDepth)
                 throw new ArgumentException("Not enough pixel data", nameof(data));
 
             fixed (void* ptr = data)
-                Graphics.Device.TexSubImage3D(Handle, 0, rectX, rectY, rectZ, rectWidth, rectHeight, rectDepth, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
+                Graphics.Device.TexSubImage3D(Handle, 0, rectX, rectY, rectZ, rectWidth, rectHeight, rectDepth, ptr);
         }
 
         /// <summary>
@@ -72,34 +69,31 @@ namespace Prowl.Runtime
         /// <typeparam name="T">A struct with the same format as this <see cref="Texture2DArray"/>'s pixels.</typeparam>
         /// <param name="data">A <see cref="ReadOnlySpan{T}"/> containing the new pixel data.</param>
         /// <param name="depthLevel">The array layer to set the data for.</param>
-        /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
-        public void SetData<T>(ReadOnlySpan<T> data, int depthLevel, PixelFormat pixelFormat = 0) where T : unmanaged
+        public void SetData<T>(ReadOnlySpan<T> data, int depthLevel) where T : unmanaged
         {
-            SetData(data, 0, 0, depthLevel, Width, Height, 1, pixelFormat);
+            SetData(data, 0, 0, depthLevel, Width, Height, 1);
         }
 
         /// <summary>
         /// Gets the data of the entire <see cref="Texture2DArray"/>.
         /// </summary>
         /// <param name="ptr">The pointer to which the pixel data will be written.</param>
-        /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
-        public unsafe void GetDataPtr(void* ptr, PixelFormat pixelFormat = 0)
+        public unsafe void GetDataPtr(void* ptr)
         {
-            Graphics.Device.GetTexImage(Handle, 0, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
+            Graphics.Device.GetTexImage(Handle, 0, ptr);
         }
 
         /// <summary>
         /// Gets the data of the entire <see cref="Texture2DArray"/>.
         /// </summary>
         /// <param name="data">A <see cref="Span{T}"/> in which to write the pixel data.</param>
-        /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
-        public unsafe void GetData<T>(Span<T> data, PixelFormat pixelFormat = 0) where T : unmanaged
+        public unsafe void GetData<T>(Span<T> data) where T : unmanaged
         {
             if (data.Length < Width * Height * Depth)
                 throw new ArgumentException("Insufficient space to store the requested pixel data", nameof(data));
 
             fixed (void* ptr = data)
-                Graphics.Device.GetTexImage(Handle, 0, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
+                Graphics.Device.GetTexImage(Handle, 0, ptr);
         }
 
         /// <summary>
@@ -107,10 +101,10 @@ namespace Prowl.Runtime
         /// </summary>
         /// <param name="sWrapMode">The wrap mode for the S (or texture-X) coordinate.</param>
         /// <param name="tWrapMode">The wrap mode for the T (or texture-Y) coordinate.</param>
-        public void SetWrapModes(TextureWrapMode sWrapMode, TextureWrapMode tWrapMode)
+        public void SetWrapModes(TextureWrap sWrapMode, TextureWrap tWrapMode)
         {
-            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureWrapS, (int)sWrapMode);
-            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureWrapT, (int)tWrapMode);
+            Graphics.Device.SetWrapS(Handle, sWrapMode);
+            Graphics.Device.SetWrapT(Handle, tWrapMode);
         }
 
         /// <summary>
@@ -135,7 +129,7 @@ namespace Prowl.Runtime
             Height = height;
             Depth = depth;
 
-            Graphics.Device.TexImage3D(Handle, 0, (int)PixelInternalFormat, width, height, depth, 0, PixelFormat, PixelType, (void*)0);
+            Graphics.Device.TexImage3D(Handle, 0, width, height, depth, 0, (void*)0);
         }
 
         private void ValidateRectOperation(int rectX, int rectY, int rectZ, uint rectWidth, uint rectHeight, uint rectDepth)

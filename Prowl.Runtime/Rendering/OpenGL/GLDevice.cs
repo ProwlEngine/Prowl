@@ -1,8 +1,6 @@
 ﻿using Silk.NET.Core.Native;
 using Silk.NET.OpenGL;
-using Silk.NET.Vulkan;
 using System;
-using System.Reflection.Metadata;
 using static VertexFormat;
 
 namespace Prowl.Runtime.Rendering.OpenGL
@@ -61,12 +59,34 @@ namespace Prowl.Runtime.Rendering.OpenGL
     public sealed unsafe class GLTexture : GraphicsTexture
     {
         public uint Handle { get; private set; }
-        public override TextureTarget Type { get; protected set; }
+        public override TextureType Type { get; protected set; }
 
-        public GLTexture(TextureTarget type)
+        public readonly TextureTarget Target;
+
+        /// <summary>The internal format of the pixels, such as RGBA, RGB, R32f, or even different depth/stencil formats.</summary>
+        public readonly InternalFormat PixelInternalFormat;
+
+        /// <summary>The data type of the components of the <see cref="Texture"/>'s pixels.</summary>
+        public readonly PixelType PixelType;
+
+        /// <summary>The format of the pixel data.</summary>
+        public readonly PixelFormat PixelFormat;
+
+        public GLTexture(TextureType type, TextureImageFormat format)
         {
             Handle = GLDevice.GL.GenTexture();
             Type = type;
+            Target = type switch {
+                TextureType.Texture1D => TextureTarget.Texture1D,
+                TextureType.Texture2D => TextureTarget.Texture2D,
+                TextureType.Texture3D => TextureTarget.Texture3D,
+                TextureType.TextureCubeMap => TextureTarget.TextureCubeMap,
+                TextureType.Texture2DArray => TextureTarget.Texture2DArray,
+                TextureType.Texture2DMultisample => TextureTarget.Texture2DMultisample,
+                TextureType.Texture2DMultisampleArray => TextureTarget.Texture2DMultisampleArray,
+                _ => throw new ArgumentOutOfRangeException(nameof(type), type, null),
+            };
+            GetTextureFormatEnums(format, out PixelInternalFormat, out PixelType, out PixelFormat);
         }
         
         private static uint? currentlyBound = null;
@@ -75,26 +95,80 @@ namespace Prowl.Runtime.Rendering.OpenGL
             if (!force && currentlyBound == Handle)
                 return;
 
-            GLDevice.GL.BindTexture(Type, Handle);
+            GLDevice.GL.BindTexture(Target, Handle);
             currentlyBound = Handle;
         }
 
         public void GenerateMipmap()
         {
             Bind(false);
-            GLDevice.GL.GenerateMipmap(Type);
+            GLDevice.GL.GenerateMipmap(Target);
         }
 
-        public void TexParameter(TextureParameterName textureWrapS, int clampToEdge)
+        public void SetWrapS(TextureWrap wrap)
         {
             Bind(false);
-            GLDevice.GL.TexParameter(Type, textureWrapS, clampToEdge);
+            var wrapMode = wrap switch {
+                TextureWrap.Repeat => GLEnum.Repeat,
+                TextureWrap.ClampToEdge => GLEnum.ClampToEdge,
+                TextureWrap.MirroredRepeat => GLEnum.MirroredRepeat,
+                TextureWrap.ClampToBorder => GLEnum.ClampToBorder,
+                _ => throw new ArgumentException("Invalid texture wrap mode", nameof(wrap)),
+            };
+            GLDevice.GL.TexParameter(Target, GLEnum.TextureWrapS, (int)wrapMode);
         }
 
-        public void GetTexImage(int level, PixelFormat pixelFormat, PixelType pixelType, void* ptr)
+        public void SetWrapT(TextureWrap wrap)
         {
             Bind(false);
-            GLDevice.GL.GetTexImage(Type, level, pixelFormat, pixelType, ptr);
+            var wrapMode = wrap switch {
+                TextureWrap.Repeat => GLEnum.Repeat,
+                TextureWrap.ClampToEdge => GLEnum.ClampToEdge,
+                TextureWrap.MirroredRepeat => GLEnum.MirroredRepeat,
+                TextureWrap.ClampToBorder => GLEnum.ClampToBorder,
+                _ => throw new ArgumentException("Invalid texture wrap mode", nameof(wrap)),
+            };
+            GLDevice.GL.TexParameter(Target, GLEnum.TextureWrapT, (int)wrapMode);
+        }
+
+        public void SetWrapR(TextureWrap wrap)
+        {
+            Bind(false);
+            var wrapMode = wrap switch {
+                TextureWrap.Repeat => GLEnum.Repeat,
+                TextureWrap.ClampToEdge => GLEnum.ClampToEdge,
+                TextureWrap.MirroredRepeat => GLEnum.MirroredRepeat,
+                TextureWrap.ClampToBorder => GLEnum.ClampToBorder,
+                _ => throw new ArgumentException("Invalid texture wrap mode", nameof(wrap)),
+            };
+            GLDevice.GL.TexParameter(Target, GLEnum.TextureWrapR, (int)wrapMode);
+        }
+
+        public void SetTextureFilters(TextureMin min, TextureMag mag)
+        {
+            Bind(false);
+            var minFilter = min switch {
+                TextureMin.Nearest => GLEnum.Nearest,
+                TextureMin.Linear => GLEnum.Linear,
+                TextureMin.NearestMipmapNearest => GLEnum.NearestMipmapNearest,
+                TextureMin.LinearMipmapNearest => GLEnum.LinearMipmapNearest,
+                TextureMin.NearestMipmapLinear => GLEnum.NearestMipmapLinear,
+                TextureMin.LinearMipmapLinear => GLEnum.LinearMipmapLinear,
+                _ => throw new ArgumentException("Invalid texture min filter", nameof(min)),
+            };
+            var magFilter = mag switch {
+                TextureMag.Nearest => GLEnum.Nearest,
+                TextureMag.Linear => GLEnum.Linear,
+                _ => throw new ArgumentException("Invalid texture mag filter", nameof(mag)),
+            };
+            GLDevice.GL.TexParameter(Target, GLEnum.TextureMinFilter, (int)minFilter);
+            GLDevice.GL.TexParameter(Target, GLEnum.TextureMagFilter, (int)magFilter);
+        }
+
+        public void GetTexImage(int level, void* ptr)
+        {
+            Bind(false);
+            GLDevice.GL.GetTexImage(Target, level, PixelFormat, PixelType, ptr);
         }
 
         public override bool IsDisposed { get; protected set; }
@@ -116,28 +190,106 @@ namespace Prowl.Runtime.Rendering.OpenGL
             return Handle.ToString();
         }
 
-        public void TexImage2D(TextureTarget type, int mip, int pixelInternalFormat, uint width, uint height, int v2, PixelFormat pixelFormat, PixelType pixelType, void* data)
+        public void TexImage2D(TextureTarget type, int mip, uint width, uint height, int v2, void* data)
         {
             Bind(false);
-            GLDevice.GL.TexImage2D(type, mip, pixelInternalFormat, width, height, v2, pixelFormat, pixelType, data);
+            GLDevice.GL.TexImage2D(type, mip, PixelInternalFormat, width, height, v2, PixelFormat, PixelType, data);
         }
 
-        public void TexImage3D(TextureTarget type, int mip, int pixelInternalFormat, uint width, uint height, uint depth, int v2, PixelFormat pixelFormat, PixelType pixelType, void* data)
+        public void TexImage3D(TextureTarget type, int mip, uint width, uint height, uint depth, int v2, void* data)
         {
             Bind(false);
-            GLDevice.GL.TexImage3D(type, mip, pixelInternalFormat, width, height, depth, v2, pixelFormat, pixelType, data);
+            GLDevice.GL.TexImage3D(type, mip, PixelInternalFormat, width, height, depth, v2, PixelFormat, PixelType, data);
         }
 
-        internal void TexSubImage2D(TextureTarget type, int mip, int x, int y, uint width, uint height, PixelFormat pixelFormat, PixelType pixelType, void* data)
+        internal void TexSubImage2D(TextureTarget type, int mip, int x, int y, uint width, uint height, void* data)
         {
             Bind(false);
-            GLDevice.GL.TexSubImage2D(type, mip, x, y, width, height, pixelFormat, pixelType, data);
+            GLDevice.GL.TexSubImage2D(type, mip, x, y, width, height, PixelFormat, PixelType, data);
         }
 
-        internal void TexSubImage3D(TextureTarget type, int mip, int x, int y, int z, uint width, uint height, uint depth, PixelFormat pixelFormat, PixelType pixelType, void* data)
+        internal void TexSubImage3D(TextureTarget type, int mip, int x, int y, int z, uint width, uint height, uint depth, void* data)
         {
             Bind(false);
-            GLDevice.GL.TexSubImage3D(type, mip, x, y, z, width, height, depth, pixelFormat, pixelType, data);
+            GLDevice.GL.TexSubImage3D(type, mip, x, y, z, width, height, depth, PixelFormat, PixelType, data);
+        }
+
+        /// <summary>
+        /// Turns a value from the <see cref="Texture.TextureImageFormat"/> enum into the necessary
+        /// enums to create a <see cref="Texture"/>'s image/storage.
+        /// </summary>
+        /// <param name="imageFormat">The requested image format.</param>
+        /// <param name="pixelInternalFormat">The pixel's internal format.</param>
+        /// <param name="pixelType">The pixel's type.</param>
+        /// <param name="pixelFormat">The pixel's format.</param>
+        public static void GetTextureFormatEnums(TextureImageFormat imageFormat, out InternalFormat pixelInternalFormat, out PixelType pixelType, out PixelFormat pixelFormat)
+        {
+
+            pixelType = imageFormat switch {
+                TextureImageFormat.Color4b => PixelType.UnsignedByte,
+                TextureImageFormat.UnsignedShort4 => PixelType.UnsignedShort,
+                TextureImageFormat.Float => PixelType.Float,
+                TextureImageFormat.Float2 => PixelType.Float,
+                TextureImageFormat.Float3 => PixelType.Float,
+                TextureImageFormat.Float4 => PixelType.Float,
+                TextureImageFormat.Int => PixelType.Int,
+                TextureImageFormat.Int2 => PixelType.Int,
+                TextureImageFormat.Int3 => PixelType.Int,
+                TextureImageFormat.Int4 => PixelType.Int,
+                TextureImageFormat.UnsignedInt => PixelType.UnsignedInt,
+                TextureImageFormat.UnsignedInt2 => PixelType.UnsignedInt,
+                TextureImageFormat.UnsignedInt3 => PixelType.UnsignedInt,
+                TextureImageFormat.UnsignedInt4 => PixelType.UnsignedInt,
+                TextureImageFormat.Depth16 => PixelType.Float,
+                TextureImageFormat.Depth24 => PixelType.Float,
+                TextureImageFormat.Depth32f => PixelType.Float,
+                TextureImageFormat.Depth24Stencil8 => (PixelType)GLEnum.UnsignedInt248,
+                _ => throw new ArgumentException("Image format is not a valid TextureImageFormat value", nameof(imageFormat)),
+            };
+
+            pixelInternalFormat = imageFormat switch {
+                TextureImageFormat.Color4b => InternalFormat.Rgba8,
+                TextureImageFormat.UnsignedShort4 => InternalFormat.Rgba16,
+                TextureImageFormat.Float => InternalFormat.R32f,
+                TextureImageFormat.Float2 => InternalFormat.RG32f,
+                TextureImageFormat.Float3 => InternalFormat.Rgb32f,
+                TextureImageFormat.Float4 => InternalFormat.Rgba32f,
+                TextureImageFormat.Int => InternalFormat.R32i,
+                TextureImageFormat.Int2 => InternalFormat.RG32i,
+                TextureImageFormat.Int3 => InternalFormat.Rgb32i,
+                TextureImageFormat.Int4 => InternalFormat.Rgba32i,
+                TextureImageFormat.UnsignedInt => InternalFormat.R32ui,
+                TextureImageFormat.UnsignedInt2 => InternalFormat.RG32ui,
+                TextureImageFormat.UnsignedInt3 => InternalFormat.Rgb32ui,
+                TextureImageFormat.UnsignedInt4 => InternalFormat.Rgba32ui,
+                TextureImageFormat.Depth16 => InternalFormat.DepthComponent16,
+                TextureImageFormat.Depth24 => InternalFormat.DepthComponent24,
+                TextureImageFormat.Depth32f => InternalFormat.DepthComponent32f,
+                TextureImageFormat.Depth24Stencil8 => InternalFormat.Depth24Stencil8,
+                _ => throw new ArgumentException("Image format is not a valid TextureImageFormat value", nameof(imageFormat)),
+            };
+
+            pixelFormat = imageFormat switch {
+                TextureImageFormat.Color4b => PixelFormat.Rgba,
+                TextureImageFormat.UnsignedShort4 => PixelFormat.Rgba,
+                TextureImageFormat.Float => PixelFormat.Red,
+                TextureImageFormat.Float2 => PixelFormat.RG,
+                TextureImageFormat.Float3 => PixelFormat.Rgb,
+                TextureImageFormat.Float4 => PixelFormat.Rgba,
+                TextureImageFormat.Int => PixelFormat.RgbaInteger,
+                TextureImageFormat.Int2 => PixelFormat.RGInteger,
+                TextureImageFormat.Int3 => PixelFormat.RgbInteger,
+                TextureImageFormat.Int4 => PixelFormat.RgbaInteger,
+                TextureImageFormat.UnsignedInt => PixelFormat.RedInteger,
+                TextureImageFormat.UnsignedInt2 => PixelFormat.RGInteger,
+                TextureImageFormat.UnsignedInt3 => PixelFormat.RgbInteger,
+                TextureImageFormat.UnsignedInt4 => PixelFormat.RgbaInteger,
+                TextureImageFormat.Depth16 => PixelFormat.DepthComponent,
+                TextureImageFormat.Depth24 => PixelFormat.DepthComponent,
+                TextureImageFormat.Depth32f => PixelFormat.DepthComponent,
+                TextureImageFormat.Depth24Stencil8 => PixelFormat.DepthStencil,
+                _ => throw new ArgumentException("Image format is not a valid TextureImageFormat value", nameof(imageFormat)),
+            };
         }
 
     }
@@ -185,7 +337,7 @@ namespace Prowl.Runtime.Rendering.OpenGL
                         {
                             //InternalTextures[i].SetTextureFilters(TextureMinFilter.Linear, TextureMagFilter.Linear);
                             //InternalTextures[i].SetWrapModes(TextureWrapMode.ClampToEdge, TextureWrapMode.ClampToEdge);
-                            GLDevice.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, attachments[i].texture.Type, (attachments[i].texture as GLTexture)!.Handle, 0);
+                            GLDevice.GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0 + i, (attachments[i].texture as GLTexture)!.Target, (attachments[i].texture as GLTexture)!.Handle, 0);
                         }
                         else
                         {
@@ -429,12 +581,39 @@ namespace Prowl.Runtime.Rendering.OpenGL
 
         public override GraphicsFrameBuffer CreateFramebuffer(GraphicsFrameBuffer.Attachment[] attachments) => new GLFrameBuffer(attachments);
         public override void UnbindFramebuffer() => GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-        public override void BindFramebuffer(GraphicsFrameBuffer frameBuffer, FramebufferTarget readFramebuffer) => GL.BindFramebuffer(readFramebuffer, (frameBuffer as GLFrameBuffer)!.Handle);
-        public override void BlitFramebuffer(int v1, int v2, int width, int height, int v3, int v4, int v5, int v6, ClearBufferMask depthBufferBit, BlitFramebufferFilter nearest) => GL.BlitFramebuffer(v1, v2, width, height, v3, v4, v5, v6, depthBufferBit, nearest);
-        public override T ReadPixel<T>(int attachment, int x, int y, PixelFormat red, PixelType @float)
+        public override void BindFramebuffer(GraphicsFrameBuffer frameBuffer, FBOTarget readFramebuffer)
         {
-            GL.ReadBuffer((ReadBufferMode)attachment);
-            return GL.ReadPixels<T>(x, y, 1, 1, red, @float);
+            var target = readFramebuffer switch {
+                FBOTarget.Read => FramebufferTarget.ReadFramebuffer,
+                FBOTarget.Draw => FramebufferTarget.DrawFramebuffer,
+                FBOTarget.Framebuffer => FramebufferTarget.Framebuffer,
+                _ => throw new ArgumentOutOfRangeException(nameof(readFramebuffer), readFramebuffer, null),
+            };
+            GL.BindFramebuffer(target, (frameBuffer as GLFrameBuffer)!.Handle);
+        }
+        public override void BlitFramebuffer(int v1, int v2, int width, int height, int v3, int v4, int v5, int v6, ClearFlags v, BlitFilter filter)
+        {
+            ClearBufferMask clearBufferMask = 0;
+            if (v.HasFlag(ClearFlags.Color))
+                clearBufferMask |= ClearBufferMask.ColorBufferBit;
+            if (v.HasFlag(ClearFlags.Depth))
+                clearBufferMask |= ClearBufferMask.DepthBufferBit;
+            if (v.HasFlag(ClearFlags.Stencil))
+                clearBufferMask |= ClearBufferMask.StencilBufferBit;
+
+            BlitFramebufferFilter nearest = filter switch {
+                BlitFilter.Nearest => BlitFramebufferFilter.Nearest,
+                BlitFilter.Linear => BlitFramebufferFilter.Linear,
+                _ => throw new ArgumentOutOfRangeException(nameof(filter), filter, null),
+            };
+
+            GL.BlitFramebuffer(v1, v2, width, height, v3, v4, v5, v6, clearBufferMask, nearest);
+        }
+        public override T ReadPixel<T>(int attachment, int x, int y, TextureImageFormat format)
+        {
+            GL.ReadBuffer((ReadBufferMode)((int)ReadBufferMode.ColorAttachment0 + attachment));
+            GLTexture.GetTextureFormatEnums(format, out var internalFormat, out var pixelType, out var pixelFormat);
+            return GL.ReadPixels<T>(x, y, 1, 1, pixelFormat, pixelType);
         }
 
         #endregion
@@ -496,7 +675,7 @@ namespace Prowl.Runtime.Rendering.OpenGL
         {
             BindProgram(program);
             GL.ActiveTexture((TextureUnit)((uint)TextureUnit.Texture0 + slot));
-            GL.BindTexture((texture as GLTexture).Type, (texture as GLTexture).Handle);
+            GL.BindTexture((texture as GLTexture).Target, (texture as GLTexture).Handle);
             GL.Uniform1(loc, slot);
         }
 
@@ -504,30 +683,60 @@ namespace Prowl.Runtime.Rendering.OpenGL
 
         #region Textures
 
-        public override GraphicsTexture CreateTexture(TextureTarget type) => new GLTexture(type);
-        public override void TexParameter(GraphicsTexture texture, TextureParameterName textureWrapS, int clampToEdge) => (texture as GLTexture)!.TexParameter(textureWrapS, clampToEdge);
+        public override GraphicsTexture CreateTexture(TextureType type, TextureImageFormat format) => new GLTexture(type, format);
+        public override void SetWrapS(GraphicsTexture texture, TextureWrap wrap) => (texture as GLTexture)!.SetWrapS(wrap);
+
+        public override void SetWrapT(GraphicsTexture texture, TextureWrap wrap) => (texture as GLTexture)!.SetWrapT(wrap);
+        public override void SetWrapR(GraphicsTexture texture, TextureWrap wrap) => (texture as GLTexture)!.SetWrapR(wrap);
+        public override void SetTextureFilters(GraphicsTexture texture, TextureMin min, TextureMag mag) => (texture as GLTexture)!.SetTextureFilters(min, mag);
         public override void GenerateMipmap(GraphicsTexture texture) => (texture as GLTexture)!.GenerateMipmap();
 
-        public override unsafe void GetTexImage(GraphicsTexture texture, int mip, PixelFormat pixelFormat, PixelType pixelType, void* data) => (texture as GLTexture)!.GetTexImage(mip, pixelFormat, pixelType, data);
+        public override unsafe void GetTexImage(GraphicsTexture texture, int mip, void* data) => (texture as GLTexture)!.GetTexImage(mip, data);
 
-        public override unsafe void TexImage2D(GraphicsTexture texture, int mip, int pixelInternalFormat, uint width, uint height, int v2, PixelFormat pixelFormat, PixelType pixelType, void* data)
-            => (texture as GLTexture)!.TexImage2D((texture as GLTexture).Type, mip, pixelInternalFormat, width, height, v2, pixelFormat, pixelType, data);
-        public override unsafe void TexImage2D(GraphicsTexture texture, TextureCubemap.CubemapFace face, int mip, int pixelInternalFormat, uint width, uint height, int v2, PixelFormat pixelFormat, PixelType pixelType, void* data)
-            => (texture as GLTexture)!.TexImage2D((TextureTarget)face, mip, pixelInternalFormat, width, height, v2, pixelFormat, pixelType, data);
-        public override unsafe void TexImage3D(GraphicsTexture texture, int mip, int pixelInternalFormat, uint width, uint height, uint depth, int v2, PixelFormat pixelFormat, PixelType pixelType, void* data)
-            => (texture as GLTexture)!.TexImage3D((texture as GLTexture).Type, mip, pixelInternalFormat, width, height, depth, v2, pixelFormat, pixelType, data);
-        public override unsafe void TexSubImage2D(GraphicsTexture texture, int mip, int x, int y, uint width, uint height, PixelFormat pixelFormat, PixelType pixelType, void* data)
-            => (texture as GLTexture)!.TexSubImage2D((texture as GLTexture).Type, mip, x, y, width, height, pixelFormat, pixelType, data);
-        public override unsafe void TexSubImage2D(GraphicsTexture texture, TextureCubemap.CubemapFace face, int mip, int x, int y, uint width, uint height, PixelFormat pixelFormat, PixelType pixelType, void* data)
-            => (texture as GLTexture)!.TexSubImage2D((TextureTarget)face, mip, x, y, width, height, pixelFormat, pixelType, data);
-        public override unsafe void TexSubImage3D(GraphicsTexture texture, int mip, int x, int y, int z, uint width, uint height, uint depth, PixelFormat pixelFormat, PixelType pixelType, void* data)
-            => (texture as GLTexture)!.TexSubImage3D((texture as GLTexture).Type, mip, x, y, z, width, height, depth, pixelFormat, pixelType, data);
+        public override unsafe void TexImage2D(GraphicsTexture texture, int mip, uint width, uint height, int v2, void* data)
+            => (texture as GLTexture)!.TexImage2D((texture as GLTexture).Target, mip, width, height, v2, data);
+        public override unsafe void TexImage2D(GraphicsTexture texture, TextureCubemap.CubemapFace face, int mip, uint width, uint height, int v2, void* data)
+            => (texture as GLTexture)!.TexImage2D((TextureTarget)face, mip, width, height, v2, data);
+        public override unsafe void TexImage3D(GraphicsTexture texture, int mip, uint width, uint height, uint depth, int v2, void* data)
+            => (texture as GLTexture)!.TexImage3D((texture as GLTexture).Target, mip, width, height, depth, v2, data);
+        public override unsafe void TexSubImage2D(GraphicsTexture texture, int mip, int x, int y, uint width, uint height, void* data)
+            => (texture as GLTexture)!.TexSubImage2D((texture as GLTexture).Target, mip, x, y, width, height, data);
+        public override unsafe void TexSubImage2D(GraphicsTexture texture, TextureCubemap.CubemapFace face, int mip, int x, int y, uint width, uint height, void* data)
+            => (texture as GLTexture)!.TexSubImage2D((TextureTarget)face, mip, x, y, width, height, data);
+        public override unsafe void TexSubImage3D(GraphicsTexture texture, int mip, int x, int y, int z, uint width, uint height, uint depth, void* data)
+            => (texture as GLTexture)!.TexSubImage3D((texture as GLTexture).Target, mip, x, y, z, width, height, depth, data);
 
         #endregion
 
 
-        public override void DrawArrays(PrimitiveType primitiveType, int v, uint count) => GL.DrawArrays(primitiveType, v, count);
-        public override unsafe void DrawElements(PrimitiveType triangles, uint indexCount, DrawElementsType drawElementsType, void* value) => GL.DrawElements(triangles, indexCount, drawElementsType, value);
+        public override void DrawArrays(Topology primitiveType, int v, uint count)
+        {
+            var mode = primitiveType switch {
+                Topology.Points => PrimitiveType.Points,
+                Topology.Lines => PrimitiveType.Lines,
+                Topology.LineLoop => PrimitiveType.LineLoop,
+                Topology.LineStrip => PrimitiveType.LineStrip,
+                Topology.Triangles => PrimitiveType.Triangles,
+                Topology.TriangleStrip => PrimitiveType.TriangleStrip,
+                Topology.TriangleFan => PrimitiveType.TriangleFan,
+                _ => throw new ArgumentOutOfRangeException(nameof(primitiveType), primitiveType, null),
+            };
+            GL.DrawArrays(mode, v, count);
+        }
+        public override unsafe void DrawElements(Topology triangles, uint indexCount, bool index32bit, void* value)
+        {
+            var mode = triangles switch {
+                Topology.Points => PrimitiveType.Points,
+                Topology.Lines => PrimitiveType.Lines,
+                Topology.LineLoop => PrimitiveType.LineLoop,
+                Topology.LineStrip => PrimitiveType.LineStrip,
+                Topology.Triangles => PrimitiveType.Triangles,
+                Topology.TriangleStrip => PrimitiveType.TriangleStrip,
+                Topology.TriangleFan => PrimitiveType.TriangleFan,
+                _ => throw new ArgumentOutOfRangeException(nameof(triangles), triangles, null),
+            };
+            GL.DrawElements(mode, indexCount, index32bit ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort, value);
+        }
 
         public override void Dispose()
         {

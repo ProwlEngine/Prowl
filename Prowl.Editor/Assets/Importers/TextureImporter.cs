@@ -1,7 +1,7 @@
 ﻿using Hexa.NET.ImGui;
 using Prowl.Runtime;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Utils;
-using Silk.NET.OpenGL;
 
 namespace Prowl.Editor.Assets
 {
@@ -11,9 +11,9 @@ namespace Prowl.Editor.Assets
         public static readonly string[] Supported = { ".png", ".bmp", ".jpg", ".jpeg", ".qoi", ".psd", ".tga", ".dds", ".hdr", ".ktx", ".pkm", ".pvr" };
 
         public bool generateMipmaps = true;
-        public TextureWrapMode textureWrap = TextureWrapMode.Repeat;
-        public TextureMinFilter textureMinFilter = TextureMinFilter.LinearMipmapLinear;
-        public TextureMagFilter textureMagFilter = TextureMagFilter.Linear;
+        public TextureWrap textureWrap = TextureWrap.Repeat;
+        public TextureMin textureMinFilter = TextureMin.LinearMipmapLinear;
+        public TextureMag textureMagFilter = TextureMag.Linear;
 
         public override void Import(SerializedAsset ctx, FileInfo assetPath)
         {
@@ -47,13 +47,13 @@ namespace Prowl.Editor.Assets
     [CustomEditor(typeof(TextureImporter))]
     public class TextureEditor : ScriptedEditor
     {
-        private string[] filterNames = Enum.GetNames<TextureMinFilter>();
-        private TextureMinFilter[] filters = Enum.GetValues<TextureMinFilter>();
-        private string[] filterMagNames = Enum.GetNames<TextureMagFilter>();
-        private TextureMagFilter[] filtersMag = Enum.GetValues<TextureMagFilter>();
+        private string[] filterNames = Enum.GetNames<TextureMin>();
+        private TextureMin[] filters = Enum.GetValues<TextureMin>();
+        private string[] filterMagNames = Enum.GetNames<TextureMag>();
+        private TextureMag[] filtersMag = Enum.GetValues<TextureMag>();
 
-        private string[] wrapNames = Enum.GetNames<TextureWrapMode>();
-        private TextureWrapMode[] wraps = Enum.GetValues<TextureWrapMode>();
+        private string[] wrapNames = Enum.GetNames<TextureWrap>();
+        private TextureWrap[] wraps = Enum.GetValues<TextureWrap>();
 
         public override void OnInspectorGUI()
         {

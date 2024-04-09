@@ -1,4 +1,5 @@
 ﻿using Prowl.Runtime.NodeSystem;
+using Prowl.Runtime.Rendering;
 using System;
 using static Prowl.Runtime.MonoBehaviour;
 
@@ -41,7 +42,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
                 for (int i = 0; i < RTCount; i++)
                 {
                     renderRTs[i]?.Dispose();
-                    Texture.TextureImageFormat[] formats = [Texture.TextureImageFormat.Float3];
+                    TextureImageFormat[] formats = [TextureImageFormat.Float3];
                     renderRTs[i] = new RenderTexture(width, height, 1, false, formats);
                 }
             }

@@ -1,6 +1,5 @@
 using System;
 using Prowl.Runtime.Rendering;
-using Silk.NET.OpenGL;
 
 namespace Prowl.Runtime
 {
@@ -32,20 +31,19 @@ namespace Prowl.Runtime
                 throw new ArgumentOutOfRangeException(nameof(size), size, "Cubemap size must be in the range (0, " + Graphics.MaxCubeMapTextureSize + "]");
 
             Size = size;
-            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
-            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
-            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureWrapR, (int)TextureWrapMode.ClampToEdge);
-            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureMinFilter, (int)DefaultMinFilter);
-            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureMagFilter, (int)DefaultMagFilter);
+            Graphics.Device.SetWrapS(Handle, TextureWrap.ClampToEdge);
+            Graphics.Device.SetWrapT(Handle, TextureWrap.ClampToEdge);
+            Graphics.Device.SetWrapR(Handle, TextureWrap.ClampToEdge);
+            Graphics.Device.SetTextureFilters(Handle, DefaultMinFilter, DefaultMagFilter);
 
             unsafe
             {
-                Graphics.Device.TexImage2D(Handle, CubemapFace.PositiveX, 0, (int)PixelInternalFormat, size, size, 0, PixelFormat, PixelType, (void*)0);
-                Graphics.Device.TexImage2D(Handle, CubemapFace.NegativeX, 0, (int)PixelInternalFormat, size, size, 0, PixelFormat, PixelType, (void*)0);
-                Graphics.Device.TexImage2D(Handle, CubemapFace.PositiveY, 0, (int)PixelInternalFormat, size, size, 0, PixelFormat, PixelType, (void*)0);
-                Graphics.Device.TexImage2D(Handle, CubemapFace.NegativeY, 0, (int)PixelInternalFormat, size, size, 0, PixelFormat, PixelType, (void*)0);
-                Graphics.Device.TexImage2D(Handle, CubemapFace.PositiveZ, 0, (int)PixelInternalFormat, size, size, 0, PixelFormat, PixelType, (void*)0);
-                Graphics.Device.TexImage2D(Handle, CubemapFace.NegativeZ, 0, (int)PixelInternalFormat, size, size, 0, PixelFormat, PixelType, (void*)0);
+                Graphics.Device.TexImage2D(Handle, CubemapFace.PositiveX, 0,size, size, 0, (void*)0);
+                Graphics.Device.TexImage2D(Handle, CubemapFace.NegativeX, 0,size, size, 0, (void*)0);
+                Graphics.Device.TexImage2D(Handle, CubemapFace.PositiveY, 0,size, size, 0, (void*)0);
+                Graphics.Device.TexImage2D(Handle, CubemapFace.NegativeY, 0,size, size, 0, (void*)0);
+                Graphics.Device.TexImage2D(Handle, CubemapFace.PositiveZ, 0,size, size, 0, (void*)0);
+                Graphics.Device.TexImage2D(Handle, CubemapFace.NegativeZ, 0,size, size, 0, (void*)0);
             }
         }
 
@@ -58,13 +56,12 @@ namespace Prowl.Runtime
         /// <param name="rectY">The Y coordinate of the first pixel to write.</param>
         /// <param name="rectWidth">The width of the rectangle of pixels to write.</param>
         /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
-        /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
-        public unsafe void SetDataPtr(CubemapFace face, void* ptr, int rectX, int rectY, uint rectWidth, uint rectHeight, PixelFormat pixelFormat = 0)
+        public unsafe void SetDataPtr(CubemapFace face, void* ptr, int rectX, int rectY, uint rectWidth, uint rectHeight)
         {
             ValidateCubemapFace(face);
             ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
 
-            Graphics.Device.TexSubImage2D(Handle, face, 0, rectX, rectY, rectWidth, rectHeight, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
+            Graphics.Device.TexSubImage2D(Handle, face, 0, rectX, rectY, rectWidth, rectHeight, ptr);
         }
 
         /// <summary>
@@ -77,8 +74,7 @@ namespace Prowl.Runtime
         /// <param name="rectY">The Y coordinate of the first pixel to write.</param>
         /// <param name="rectWidth">The width of the rectangle of pixels to write.</param>
         /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
-        /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
-        public unsafe void SetData<T>(CubemapFace face, ReadOnlySpan<T> data, int rectX, int rectY, uint rectWidth, uint rectHeight, PixelFormat pixelFormat = 0) where T : unmanaged
+        public unsafe void SetData<T>(CubemapFace face, ReadOnlySpan<T> data, int rectX, int rectY, uint rectWidth, uint rectHeight) where T : unmanaged
         {
             ValidateCubemapFace(face);
             ValidateRectOperation(rectX, rectY, rectWidth, rectHeight);
@@ -86,7 +82,7 @@ namespace Prowl.Runtime
                 throw new ArgumentException("Not enough pixel data", nameof(data));
 
             fixed (void* ptr = data)
-                Graphics.Device.TexSubImage2D(Handle, face, 0, rectX, rectY, rectWidth, rectHeight, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
+                Graphics.Device.TexSubImage2D(Handle, face, 0, rectX, rectY, rectWidth, rectHeight, ptr);
         }
 
         /// <summary>
@@ -95,10 +91,9 @@ namespace Prowl.Runtime
         /// <typeparam name="T">A struct with the same format as this <see cref="TextureCubemap"/>'s pixels.</typeparam>
         /// <param name="face">The face of the <see cref="TextureCubemap"/> to set data for.</param>
         /// <param name="data">The <see cref="ReadOnlySpan{T}"/> containing the new pixel data.</param>
-        /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
-        public void SetData<T>(CubemapFace face, ReadOnlySpan<T> data, PixelFormat pixelFormat = 0) where T : unmanaged
+        public void SetData<T>(CubemapFace face, ReadOnlySpan<T> data) where T : unmanaged
         {
-            SetData(face, data, 0, 0, Size, Size, pixelFormat);
+            SetData(face, data, 0, 0, Size, Size);
         }
 
         /// <summary>
@@ -106,11 +101,10 @@ namespace Prowl.Runtime
         /// </summary>
         /// <param name="face">The face of the cubemap to set data for.</param>
         /// <param name="ptr">The pointer to which the pixel data will be written.</param>
-        /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
-        public unsafe void GetDataPtr(CubemapFace face, void* ptr, PixelFormat pixelFormat = 0)
+        public unsafe void GetDataPtr(CubemapFace face, void* ptr)
         {
             ValidateCubemapFace(face);
-            Graphics.Device.GetTexImage(Handle, 0, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
+            Graphics.Device.GetTexImage(Handle, 0, ptr);
         }
 
         /// <summary>
@@ -120,14 +114,14 @@ namespace Prowl.Runtime
         /// <param name="face">The face of the <see cref="TextureCubemap"/> to set data for.</param>
         /// <param name="data">The array in which to write the texture data.</param>
         /// <param name="pixelFormat">The pixel format the data will be read as. 0 for this texture's default.</param>
-        public unsafe void GetData<T>(CubemapFace face, Span<T> data, PixelFormat pixelFormat = 0) where T : unmanaged
+        public unsafe void GetData<T>(CubemapFace face, Span<T> data) where T : unmanaged
         {
             ValidateCubemapFace(face);
             if (data.Length < Size * Size)
                 throw new ArgumentException("Insufficient space to store the requested pixel data", nameof(data));
 
             fixed (void* ptr = data)
-                Graphics.Device.GetTexImage(Handle, 0, pixelFormat == 0 ? PixelFormat : pixelFormat, PixelType, ptr);
+                Graphics.Device.GetTexImage(Handle, 0, ptr);
         }
 
         /// <summary>
@@ -136,11 +130,11 @@ namespace Prowl.Runtime
         /// <param name="sWrapMode">The wrap mode for the S (or texture-X) coordinate.</param>
         /// <param name="tWrapMode">The wrap mode for the T (or texture-Y) coordinate.</param>
         /// <param name="rWrapMode">The wrap mode for the R (or texture-Z) coordinate.</param>
-        public void SetWrapModes(TextureWrapMode sWrapMode, TextureWrapMode tWrapMode, TextureWrapMode rWrapMode)
+        public void SetWrapModes(TextureWrap sWrapMode, TextureWrap tWrapMode, TextureWrap rWrapMode)
         {
-            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureWrapS, (int)sWrapMode);
-            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureWrapT, (int)tWrapMode);
-            Graphics.Device.TexParameter(Handle, TextureParameterName.TextureWrapR, (int)rWrapMode);
+            Graphics.Device.SetWrapS(Handle, sWrapMode);
+            Graphics.Device.SetWrapT(Handle, tWrapMode);
+            Graphics.Device.SetWrapR(Handle, rWrapMode);
         }
 
         private void ValidateRectOperation(int rectX, int rectY, uint rectWidth, uint rectHeight)

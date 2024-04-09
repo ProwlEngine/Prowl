@@ -11,7 +11,6 @@ using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 using System.Reflection;
-using System.Reflection.Metadata;
 
 namespace Prowl.Editor.ImGUI
 {
@@ -592,9 +591,9 @@ namespace Prowl.Editor.ImGUI
             // Upload texture to graphics system
             _gl.GetInteger(GLEnum.TextureBinding2D, out int lastTexture);
 
-            _fontTexture = new Texture2D((uint)width, (uint)height, false, Runtime.Texture.TextureImageFormat.Float4);
-            Graphics.Device.TexSubImage2D(_fontTexture.Handle, 0, 0, 0, (uint)width, (uint)height, Silk.NET.OpenGL.PixelFormat.Rgba, Silk.NET.OpenGL.PixelType.UnsignedByte, pixels);
-            _fontTexture.SetTextureFilters(TextureMinFilter.Linear, TextureMagFilter.Linear);
+            _fontTexture = new Texture2D((uint)width, (uint)height, false, TextureImageFormat.Color4b);
+            Graphics.Device.TexSubImage2D(_fontTexture.Handle, 0, 0, 0, (uint)width, (uint)height, pixels);
+            _fontTexture.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
 
             // Store our identifier
             io.Fonts.SetTexID((IntPtr)(_fontTexture.Handle as GLTexture).Handle);

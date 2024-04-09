@@ -1,11 +1,7 @@
-﻿using Prowl.Runtime;
-using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.OpenGL;
-using Silk.NET.OpenGL;
+﻿using Prowl.Runtime.Rendering;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using static VertexFormat;
 
 namespace Prowl.Runtime
@@ -39,7 +35,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary> The mesh's primitive type </summary>
-        public PrimitiveType MeshTopology {
+        public Topology MeshTopology {
             get => meshTopology;
             set {
                 if (isWritable == false) return;
@@ -152,7 +148,7 @@ namespace Prowl.Runtime
         System.Numerics.Vector4[]? boneWeights;
 
         IndexFormat indexFormat = IndexFormat.UInt16;
-        PrimitiveType meshTopology = PrimitiveType.TriangleStrip;
+        Topology meshTopology = Topology.TriangleStrip;
 
         GraphicsVertexArray? vertexArrayObject;
         GraphicsBuffer vertexBuffer;
@@ -195,21 +191,21 @@ namespace Prowl.Runtime
 
             switch (meshTopology)
             {
-                case PrimitiveType.Triangles:
+                case Topology.Triangles:
                     if (indices.Length % 3 != 0)
                         throw new InvalidOperationException($"Triangle mesh doesn't have the right amount of indices. Has: {indices.Length}. Should be a multiple of 3");
                     break;
-                case PrimitiveType.TriangleStrip:
+                case Topology.TriangleStrip:
                     if (indices.Length < 3)
                         throw new InvalidOperationException($"Triangle Strip mesh doesn't have the right amount of indices. Has: {indices.Length}. Should have at least 3");
                     break;
 
-                case PrimitiveType.Lines:
+                case Topology.Lines:
                     if (indices.Length % 2 != 0)
                         throw new InvalidOperationException($"Line mesh doesn't have the right amount of indices. Has: {indices.Length}. Should be a multiple of 2");
                     break;
 
-                case PrimitiveType.LineStrip:
+                case Topology.LineStrip:
                     if (indices.Length < 2)
                         throw new InvalidOperationException($"Line Strip mesh doesn't have the right amount of indices. Has: {indices.Length}. Should have at least 2");
                     break;
@@ -740,7 +736,7 @@ namespace Prowl.Runtime
             using (BinaryReader reader = new BinaryReader(memoryStream))
             {
                 indexFormat = (IndexFormat)reader.ReadByte();
-                meshTopology = (PrimitiveType)reader.ReadByte();
+                meshTopology = (Topology)reader.ReadByte();
 
                 var vertexCount = reader.ReadInt32();
                 vertices = new System.Numerics.Vector3[vertexCount];
