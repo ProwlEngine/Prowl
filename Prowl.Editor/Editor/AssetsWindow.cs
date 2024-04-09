@@ -242,8 +242,13 @@ public class AssetsWindow : EditorWindow
 
         if (isAsset && ImporterAttribute.SupportsExtension(entry.Extension))
         {
-            var serialized = AssetDatabase.LoadAsset(guid);
-            DragnDrop.Drag(serialized.Main, entry);
+            if (DragnDrop.OnBeginDrag())
+            {
+                var serialized = AssetDatabase.LoadAsset(guid);
+                DragnDrop.SetPayload(serialized.Main, entry);
+                DragnDrop.EndDrag();
+            }
+            //DragnDrop.Drag(serialized.Main, entry);
         }
         else
         {
