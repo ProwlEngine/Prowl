@@ -13,6 +13,7 @@ using Silk.NET.Maths;
 using Silk.NET.SDL;
 using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics.X86;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -131,17 +132,30 @@ public class ViewportWindow : EditorWindow
                     var go = EngineObject.FindObjectByID<GameObject>(instanceID);
                     if (go != null)
                     {
-                        if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                        if (!go.IsPartOfPrefab || ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
                         {
                             HierarchyWindow.SelectHandler.Select(new WeakReference(go));
                             HierarchyWindow.Ping(go);
                         }
                         else
                         {
-                            HierarchyWindow.SelectHandler.Select(new WeakReference(go.transform.root.gameObject));
-                            HierarchyWindow.Ping(go.transform.root.gameObject);
+                            // Find Prefab go.IsPrefab
+                            var prefab = go.transform;
+                            while (prefab.parent != null)
+                            {
+                                prefab = prefab.parent;
+                                if (prefab.gameObject.IsPrefab)
+                                    break;
+                            }
+
+                            HierarchyWindow.SelectHandler.Select(new WeakReference(prefab));
+                            HierarchyWindow.Ping(prefab.gameObject);
                         }
                     }
+                }
+                else
+                {
+                    HierarchyWindow.SelectHandler.Clear();
                 }
             }
         }
