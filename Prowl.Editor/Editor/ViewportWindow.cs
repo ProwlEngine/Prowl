@@ -148,7 +148,7 @@ public class ViewportWindow : EditorWindow
                                     break;
                             }
 
-                            HierarchyWindow.SelectHandler.Select(new WeakReference(prefab));
+                            HierarchyWindow.SelectHandler.Select(new WeakReference(prefab.gameObject));
                             HierarchyWindow.Ping(prefab.gameObject);
                         }
                     }
