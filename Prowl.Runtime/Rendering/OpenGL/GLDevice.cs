@@ -49,6 +49,11 @@ namespace Prowl.Runtime.Rendering.OpenGL
             GLDevice.GL.DeleteVertexArray(Handle);
             IsDisposed = true;
         }
+
+        public override string ToString()
+        {
+            return Handle.ToString();
+        }
     }
 
     public sealed unsafe class GLTexture : GraphicsTexture
@@ -104,6 +109,11 @@ namespace Prowl.Runtime.Rendering.OpenGL
             IsDisposed = true;
         }
 
+        public override string ToString()
+        {
+            return Handle.ToString();
+        }
+
         public void TexImage2D(TextureTarget type, int mip, int pixelInternalFormat, uint width, uint height, int v2, PixelFormat pixelFormat, PixelType pixelType, void* data)
         {
             Bind(false);
@@ -127,6 +137,7 @@ namespace Prowl.Runtime.Rendering.OpenGL
             Bind(false);
             GLDevice.GL.TexSubImage3D(type, mip, x, y, z, width, height, depth, pixelFormat, pixelType, data);
         }
+
     }
 
     public sealed unsafe class GLDevice : GraphicsDevice

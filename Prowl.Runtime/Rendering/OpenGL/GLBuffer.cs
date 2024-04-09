@@ -66,6 +66,11 @@ namespace Prowl.Runtime.Rendering.OpenGL
             GLDevice.GL.DeleteBuffer(Handle);
         }
 
+        public override string ToString()
+        {
+            return Handle.ToString();
+        }
+
         private readonly static uint[] boundBuffers = new uint[(int)BufferType.Count];
 
         private void Bind()
