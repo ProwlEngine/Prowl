@@ -94,28 +94,49 @@ namespace Prowl.Editor.ImGUI.Widgets
 
         public static bool Drag(string tag = "", params object[] objs)
         {
-            // Remove Nulls
-            objs = objs.Where(o => o != null).ToArray();
-            if (ImGui.BeginDragDropSource())
+            if (OnBeginDrag())
             {
-                draggedObject = objs;
-                payloadTag = tag;
-                unsafe { ImGui.SetDragDropPayload("heheboobies", null, 0); }
-                // Constract a name from all the types
-                string name = "";
-                foreach (var obj in objs)
-                {
-                    // AssetRef is Special use InstanceType
-                    if (obj is IAssetRef assetRef)
-                        name += assetRef.InstanceType.Name + ", ";
-                    else
-                        name += obj.GetType().Name + ", ";
-                }
-                ImGui.TextUnformatted(name);
-                ImGui.EndDragDropSource();
+                SetPayload(tag, objs);
+                EndDrag();
                 return true;
             }
             return false;
+        }
+
+        public static bool OnBeginDrag()
+        {
+            if (ImGui.BeginDragDropSource())
+            {
+                return true;
+            }
+            return false;
+        }
+
+        public static void SetPayload(params object[] objs) => SetPayload("", objs);
+        public static void SetPayload(string tag = "", params object[] objs)
+        {
+            // Remove Nulls
+            objs = objs.Where(o => o != null).ToArray();
+
+            draggedObject = objs;
+            payloadTag = tag;
+            unsafe { ImGui.SetDragDropPayload("heheboobies", null, 0); }
+            // Constract a name from all the types
+            string name = "";
+            foreach (var obj in objs)
+            {
+                // AssetRef is Special use InstanceType
+                if (obj is IAssetRef assetRef)
+                    name += assetRef.InstanceType.Name + ", ";
+                else
+                    name += obj.GetType().Name + ", ";
+            }
+            ImGui.TextUnformatted(name);
+        }
+
+        public static void EndDrag()
+        {
+            ImGui.EndDragDropSource();
         }
 
 
