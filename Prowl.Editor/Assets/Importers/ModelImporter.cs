@@ -1,11 +1,8 @@
 ﻿using Assimp;
 using Hexa.NET.ImGui;
-using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
-using System.Collections.Generic;
 using static Prowl.Runtime.AnimationClip;
-using static Prowl.Runtime.Mesh;
 using Material = Prowl.Runtime.Material;
 using Mesh = Prowl.Runtime.Mesh;
 using Node = Assimp.Node;
@@ -128,12 +125,12 @@ namespace Prowl.Editor.Assets
                 //    }
                 //}
 
-                List<Material> mats = new();
+                List<AssetRef<Material>> mats = new();
                 if (scene.HasMaterials)
                     LoadMaterials(ctx, scene, parentDir, mats);
 
                 // Animations
-                List<AnimationClip> anims = [];
+                List<AssetRef<AnimationClip>> anims = [];
                 if (scene.HasAnimations)
                     anims = LoadAnimations(ctx, scene, scale);
 
@@ -179,7 +176,7 @@ namespace Prowl.Editor.Assets
                     var anim = rootNode.AddComponent<Runtime.Animation>();
                     foreach (var a in anims)
                         anim.Clips.Add(a);
-                    anim.DefaultClip = new AssetRef<AnimationClip>(anims[0]);
+                    anim.DefaultClip = anims[0];
                 }
 
                 if (CullEmpty)
@@ -209,7 +206,7 @@ namespace Prowl.Editor.Assets
                     var mr = go.AddComponent<SkinnedMeshRenderer>();
                     mr.Mesh = uMeshAndMat.Mesh;
                     mr.Material = uMeshAndMat.Material;
-                    mr.Root = GOs[0].Item1.transform.DeepFind(uMeshAndMat.Mesh.boneNames[0])!.gameObject;
+                    mr.Root = GOs[0].Item1.transform.DeepFind(uMeshAndMat.Mesh.Res.boneNames[0])!.gameObject;
                 }
                 else
                 {
@@ -220,7 +217,7 @@ namespace Prowl.Editor.Assets
             }
         }
 
-        private void LoadMaterials(SerializedAsset ctx, Assimp.Scene? scene, DirectoryInfo? parentDir, List<Material> mats)
+        private void LoadMaterials(SerializedAsset ctx, Assimp.Scene? scene, DirectoryInfo? parentDir, List<AssetRef<Material>> mats)
         {
             foreach (var m in scene.Materials)
             {
@@ -299,12 +296,11 @@ namespace Prowl.Editor.Assets
 
                 name ??= "StandardMat";
                 mat.Name = name;
-                ctx.AddSubObject(mat);
-                mats.Add(mat);
+                mats.Add(ctx.AddSubObject(mat));
             }
         }
 
-        private static void LoadMeshes(SerializedAsset ctx, FileInfo assetPath, Assimp.Scene? scene, double scale, List<Material> mats, List<MeshMaterialBinding> meshMats)
+        private static void LoadMeshes(SerializedAsset ctx, FileInfo assetPath, Assimp.Scene? scene, double scale, List<AssetRef<Material>> mats, List<MeshMaterialBinding> meshMats)
         {
             foreach (var m in scene.Meshes)
             {
@@ -448,14 +444,13 @@ namespace Prowl.Editor.Assets
                 }
 
 
-                ctx.AddSubObject(mesh);
-                meshMats.Add(new MeshMaterialBinding(m.Name, m, mesh, mats[m.MaterialIndex]));
+                meshMats.Add(new MeshMaterialBinding(m.Name, m, ctx.AddSubObject(mesh), mats[m.MaterialIndex]));
             }
         }
 
-        private static List<AnimationClip> LoadAnimations(SerializedAsset ctx, Assimp.Scene? scene, double scale)
+        private static List<AssetRef<AnimationClip>> LoadAnimations(SerializedAsset ctx, Assimp.Scene? scene, double scale)
         {
-            List<AnimationClip> anims = [];
+            List<AssetRef<AnimationClip>> anims = [];
             foreach (var anim in scene.Animations)
             {
                 // Create Animation
@@ -542,8 +537,7 @@ namespace Prowl.Editor.Assets
                 }
 
                 animation.EnsureQuaternionContinuity();
-                anims.Add(animation);
-                ctx.AddSubObject(animation);
+                anims.Add(ctx.AddSubObject(animation));
             }
 
             return anims;
@@ -619,12 +613,12 @@ namespace Prowl.Editor.Assets
         class MeshMaterialBinding
         {
             private string meshName;
-            private Mesh mesh;
+            private AssetRef<Mesh> mesh;
             private Assimp.Mesh aMesh;
-            private Material material;
+            private AssetRef<Material> material;
 
             private MeshMaterialBinding() { }
-            public MeshMaterialBinding(string meshName, Assimp.Mesh aMesh, Mesh mesh, Material material)
+            public MeshMaterialBinding(string meshName, Assimp.Mesh aMesh, AssetRef<Mesh> mesh, AssetRef<Material> material)
             {
                 this.meshName = meshName;
                 this.mesh = mesh;
@@ -632,9 +626,9 @@ namespace Prowl.Editor.Assets
                 this.material = material;
             }
 
-            public Mesh Mesh { get => mesh; }
+            public AssetRef<Mesh> Mesh { get => mesh; }
             public Assimp.Mesh AMesh { get => aMesh; }
-            public Material Material { get => material; }
+            public AssetRef<Material> Material { get => material; }
             public string MeshName { get => meshName; }
         }
     }

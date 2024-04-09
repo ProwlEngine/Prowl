@@ -1,13 +1,13 @@
 ﻿using Prowl.Runtime.NodeSystem;
-using Silk.NET.OpenGL;
 using System;
 using static Prowl.Runtime.MonoBehaviour;
 
 namespace Prowl.Runtime.Resources.RenderPipeline
 {
 
-    // 1. Move Buffers to exist on the Camera's, the camera will then be responsible for their width/height and clearing unused ones after X frames
-    // 2. Combine PBR Deferred and Post PBR Deferred, they dont need to be two nodes
+    // 1. Use a Wrapper around RenderTexture with a Read & Write Dual Buffer method
+    // 2. Simplify RenderPassNode and reduce the amount of RenderTextures used
+    // 3. Way to debug view any RenderPassNode and their render textures
 
     public abstract class RenderPassNode : Node
     {

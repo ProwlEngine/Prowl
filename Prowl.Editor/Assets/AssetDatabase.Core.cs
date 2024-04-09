@@ -339,7 +339,7 @@ namespace Prowl.Editor.Assets
             }
 
             // Import the asset
-            SerializedAsset ctx = new();
+            SerializedAsset ctx = new(meta.guid);
             try
             {
                 meta.importer.Import(ctx, assetFile);
@@ -470,6 +470,7 @@ namespace Prowl.Editor.Assets
                 }
             try {
                 var serializedAsset = SerializedAsset.FromSerializedAsset(serializedAssetPath.FullName);
+                serializedAsset.Guid = assetGuid;
                 serializedAsset.Main.AssetID = assetGuid;
                 serializedAsset.Main.FileID = 0;
                 for (int i = 0; i < serializedAsset.SubAssets.Count; i++)

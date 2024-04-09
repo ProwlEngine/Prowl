@@ -10,7 +10,20 @@ namespace Prowl.Runtime.Utils
         public EngineObject? Main;
         public List<EngineObject> SubAssets = new();
 
+        [SerializeIgnore]
+        public Guid Guid;
+
         public bool HasMain => Main != null;
+
+        // Default constructor for serialization
+        public SerializedAsset()
+        {
+        }
+
+        public SerializedAsset(Guid assetGuid)
+        {
+            Guid = assetGuid;
+        }
 
         public void SaveToFile(FileInfo file, out HashSet<Guid>? dependencies)
         {
@@ -60,12 +73,14 @@ namespace Prowl.Runtime.Utils
             return obj;
         }
 
-        public void AddSubObject(EngineObject obj)
+        public AssetRef<T> AddSubObject<T>(T obj) where T : EngineObject
         {
             if (obj == null) throw new Exception("Asset cannot be null");
             if (SubAssets.Contains(obj) || ReferenceEquals(Main, obj)) throw new Exception("Asset already contains this object: " + obj);
-            obj.FileID = (short)SubAssets.Count;
+            obj.FileID = (short)(SubAssets.Count + 1);
             SubAssets.Add(obj);
+
+            return new AssetRef<T>(Guid, obj.FileID);
         }
 
         public void SetMainObject(EngineObject obj)
