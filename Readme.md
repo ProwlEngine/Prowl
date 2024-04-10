@@ -33,8 +33,6 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
 
 ### [Join our Discord server!](https://discord.gg/BqnJ9Rn4sn) 🎉
 
-**Note:** The Engine is very young and far from production-ready, mainly developed by a single developer in his spare time. **And has only been tested and compiled for Windows!**
-
 ![Sponza screenshot](https://i.imgur.com/RrB7A0a.png)
 
 # <p align="center">✨ Features ✨</p>
@@ -49,7 +47,6 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - Physics ([Jitter Physics 2](https://github.com/notgiven688/jitterphysics2))
       - Colliders: Box, Sphere, Capsule, Cylinder, Mesh Collider, Wheel Collider
       - Rigidbody-based Character Controller
-    - Small! 7k loc for Runtime and 4k for the editor
     - Unity-like Coroutines
     - Playtest directly in Editor
     - ScriptableObjects
@@ -61,7 +58,8 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - Large World Coordinates Support
        - Camera Relative Rendering
     - Scene System
-    - 3D Audio
+    - Modular Audio Backend
+       - OpenAL
        - Currently only supports .wav files
     - Prefabs
     - Build System - Build to Standalone Application
@@ -70,6 +68,8 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - CSG (Constructive Solid Geometry) API (No CSG Level Editor Yet)
 
 -   **Graphics Rendering:**
+    - Modular Graphics Backend
+        - OpenGL
     -  PBR (Physically Based Rendering) using Cook-Torrance BRDF
         - Albedo Map
         - Normal Map
