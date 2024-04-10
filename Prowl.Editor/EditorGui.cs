@@ -12,6 +12,8 @@ public static class EditorGui
 
     public static System.Numerics.Vector4 HoveredColor => new System.Numerics.Vector4(0.19f, 0.37f, 0.55f, 1.00f);
     public static System.Numerics.Vector4 SelectedColor => new System.Numerics.Vector4(0.06f, 0.53f, 0.98f, 1.00f);
+    public static System.Numerics.Vector4 WindowBGColor => new System.Numerics.Vector4(0.17f, 0.17f, 0.18f, 1.00f);
+    public static System.Numerics.Vector4 FrameBGColor => new System.Numerics.Vector4(0.10f, 0.11f, 0.11f, 1.00f);
 
     private static bool hasDockSetup = false;
 
@@ -81,19 +83,19 @@ public static class EditorGui
 
         style.Colors[(int)ImGuiCol.Text] = new(1.00f, 1.00f, 1.00f, 1.00f);
         style.Colors[(int)ImGuiCol.TextDisabled] = new(0.50f, 0.50f, 0.50f, 1.00f);
-        style.Colors[(int)ImGuiCol.WindowBg] = new(0.17f, 0.17f, 0.18f, 1f);
-        style.Colors[(int)ImGuiCol.ChildBg] = new(0.17f, 0.17f, 0.18f, 0.00f);
-        style.Colors[(int)ImGuiCol.PopupBg] = new(0.17f, 0.17f, 0.18f, 1f);
+        style.Colors[(int)ImGuiCol.WindowBg] = WindowBGColor;
+        style.Colors[(int)ImGuiCol.ChildBg] = new(WindowBGColor.X, WindowBGColor.Y, WindowBGColor.Z, 0.00f);
+        style.Colors[(int)ImGuiCol.PopupBg] = WindowBGColor;
         style.Colors[(int)ImGuiCol.Border] = new(0.08f, 0.08f, 0.09f, 1.00f);
         style.Colors[(int)ImGuiCol.BorderShadow] = new(0.08f, 0.08f, 0.09f, 1.00f);
-        style.Colors[(int)ImGuiCol.FrameBg] = new(0.10f, 0.11f, 0.11f, 1.00f);
+        style.Colors[(int)ImGuiCol.FrameBg] = FrameBGColor;
         style.Colors[(int)ImGuiCol.FrameBgHovered] = HoveredColor;
-        style.Colors[(int)ImGuiCol.FrameBgActive] = new(0.10f, 0.11f, 0.11f, 1.00f);
+        style.Colors[(int)ImGuiCol.FrameBgActive] = FrameBGColor;
         style.Colors[(int)ImGuiCol.TitleBg] = new(0.08f, 0.08f, 0.09f, 1.00f);
         style.Colors[(int)ImGuiCol.TitleBgActive] = new(0.08f, 0.08f, 0.09f, 1.00f);
         style.Colors[(int)ImGuiCol.TitleBgCollapsed] = new(0.08f, 0.08f, 0.09f, 1.00f);
         style.Colors[(int)ImGuiCol.MenuBarBg] = new(0.08f, 0.08f, 0.09f, 1.00f);
-        style.Colors[(int)ImGuiCol.ScrollbarBg] = new(0.10f, 0.11f, 0.11f, 1.00f);
+        style.Colors[(int)ImGuiCol.ScrollbarBg] = FrameBGColor;
         style.Colors[(int)ImGuiCol.ScrollbarGrab] = new(0.31f, 0.31f, 0.31f, 1.00f);
         style.Colors[(int)ImGuiCol.ScrollbarGrabHovered] = HoveredColor;
         style.Colors[(int)ImGuiCol.ScrollbarGrabActive] = SelectedColor;
@@ -103,7 +105,7 @@ public static class EditorGui
         style.Colors[(int)ImGuiCol.Button] = new(0.24f, 0.24f, 0.25f, 1.00f);
         style.Colors[(int)ImGuiCol.ButtonHovered] = HoveredColor;
         style.Colors[(int)ImGuiCol.ButtonActive] = SelectedColor;
-        style.Colors[(int)ImGuiCol.Header] = new(0.10f, 0.11f, 0.11f, 1.00f);
+        style.Colors[(int)ImGuiCol.Header] = FrameBGColor;
         style.Colors[(int)ImGuiCol.HeaderHovered] = HoveredColor;
         style.Colors[(int)ImGuiCol.HeaderActive] = SelectedColor;
         style.Colors[(int)ImGuiCol.Separator] = new(0.43f, 0.43f, 0.50f, 0.50f);
@@ -114,9 +116,9 @@ public static class EditorGui
         style.Colors[(int)ImGuiCol.ResizeGripActive] = SelectedColor;
         style.Colors[(int)ImGuiCol.Tab] = new(0.08f, 0.08f, 0.09f, 1.00f);
         style.Colors[(int)ImGuiCol.TabHovered] = HoveredColor;
-        style.Colors[(int)ImGuiCol.TabActive] = new(0.17f, 0.17f, 0.18f, 1.00f);
+        style.Colors[(int)ImGuiCol.TabActive] = WindowBGColor;
         style.Colors[(int)ImGuiCol.TabUnfocused] = new(0.08f, 0.08f, 0.09f, 1.00f);
-        style.Colors[(int)ImGuiCol.TabUnfocusedActive] = new(0.17f, 0.17f, 0.18f, 1.00f);
+        style.Colors[(int)ImGuiCol.TabUnfocusedActive] = WindowBGColor;
         style.Colors[(int)ImGuiCol.DockingPreview] = new(0.26f, 0.59f, 0.98f, 0.70f);
         style.Colors[(int)ImGuiCol.DockingEmptyBg] = new(0.20f, 0.20f, 0.20f, 1.00f);
         style.Colors[(int)ImGuiCol.PlotLines] = new(0.61f, 0.61f, 0.61f, 1.00f);

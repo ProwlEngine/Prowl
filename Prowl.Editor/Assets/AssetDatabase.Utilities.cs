@@ -188,6 +188,29 @@ namespace Prowl.Editor.Assets
             return null;
         }
 
+        public struct SubAssetCache
+        {
+            public string name;
+            public Type? type;
+        }
+
+        public static SubAssetCache[] GetSubAssetsCache(Guid guid)
+        {
+            if (assetGuidToMeta.TryGetValue(guid, out var meta))
+            {
+                SubAssetCache[] result = new SubAssetCache[meta.assetNames.Length];
+                for (int i = 0; i < meta.assetNames.Length; i++)
+                {
+                    result[i] = new SubAssetCache {
+                        name = meta.assetNames[i],
+                        type = RuntimeUtils.FindType(meta.assetTypes[i])
+                    };
+                }
+                return result;
+            }
+            return Array.Empty<SubAssetCache>();
+        }
+
         #endregion
 
         #region Private Methods

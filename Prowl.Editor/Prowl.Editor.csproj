@@ -64,6 +64,7 @@
       <None Remove="EmbeddedResources\NewScript.txt" />
       <None Remove="EmbeddedResources\ShaderIcon.png" />
       <None Remove="EmbeddedResources\Standalone.zip" />
+      <None Remove="EmbeddedResources\SubFileIcon.png" />
       <None Remove="font.ttf" />
     </ItemGroup>
 
@@ -150,6 +151,7 @@
       <EmbeddedResource Include="EmbeddedResources\NewScript.txt" />
       <EmbeddedResource Include="EmbeddedResources\ShaderIcon.png" />
       <EmbeddedResource Include="EmbeddedResources\Standalone.zip" />
+      <EmbeddedResource Include="EmbeddedResources\SubFileIcon.png" />
     </ItemGroup>
 
     <ItemGroup>

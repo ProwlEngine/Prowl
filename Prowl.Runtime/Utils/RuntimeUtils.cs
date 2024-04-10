@@ -18,9 +18,9 @@ namespace Prowl.Runtime
         public static bool IsFreeBSD() => RuntimeInformation.IsOSPlatform(OSPlatform.FreeBSD);
         public static bool IsMac() => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
 
-        public static Type FindType(string qualifiedTypeName)
+        public static Type? FindType(string qualifiedTypeName)
         {
-            Type t = Type.GetType(qualifiedTypeName);
+            Type? t = Type.GetType(qualifiedTypeName);
 
             if (t != null)
             {

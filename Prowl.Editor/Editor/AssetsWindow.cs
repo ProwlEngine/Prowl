@@ -5,7 +5,7 @@ using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
-using static Assimp.Metadata;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -189,8 +189,16 @@ public class AssetsWindow : EditorWindow
             if (!File.Exists(file.FullName))
                 continue;
 
-            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
-            if (AssetsWindow.SelectHandler.IsSelected(file))
+            AssetDatabase.SubAssetCache[] subassets = Array.Empty<AssetDatabase.SubAssetCache>();
+            if (AssetDatabase.TryGetGuid(file, out var guid))
+                subassets = AssetDatabase.GetSubAssetsCache(guid);
+
+            ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
+            if (subassets.Length > 1)
+                flags |= ImGuiTreeNodeFlags.OpenOnArrow;
+            else
+                flags |= ImGuiTreeNodeFlags.Leaf;
+            if (SelectHandler.IsSelected(file))
                 flags |= ImGuiTreeNodeFlags.Selected;
 
             string ext = file.Extension.ToLower().Trim();
@@ -211,8 +219,36 @@ public class AssetsWindow : EditorWindow
             ImGui.SetCursorPos(new System.Numerics.Vector2(curPos.X + 26, curPos.Y));
             ImGui.TextUnformatted(GetIcon(ext));
             ImGui.PopStyleColor();
+
             if (opened)
+            {
+                if (subassets.Length > 1)
+                {
+                    for (int i = 0; i < subassets.Length; i++)
+                    {
+                        if (subassets[i].type == null) continue;
+                        ImGuiTreeNodeFlags subFlags = ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
+
+                        // Disabled text color
+                        curPos = ImGui.GetCursorPos();
+                        ImGui.PushStyleColor(ImGuiCol.Text, GetTypeColor(subassets[i].type!, 0.1f));
+                        bool subOpened = ImGui.TreeNodeEx($"      {subassets[i].name}", subFlags);
+                        if (_treeCounter % 2 == 0)
+                            GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
+                        if (ImGui.IsItemHovered())
+                            HandleFileClick(file, (short)i);
+
+                        GUIHelper.Tooltip(subassets[i].name + " - T:" + subassets[i].type!.Name);
+                        ImGui.SetCursorPos(new System.Numerics.Vector2(curPos.X + 26, curPos.Y));
+                        ImGui.TextUnformatted(GetIconForType(subassets[i].type!));
+                        ImGui.PopStyleColor();
+
+                        if (subOpened)
+                            ImGui.TreePop();
+                    }
+                }
                 ImGui.TreePop();
+            }
 
             if (RenamingEntry == file.FullName)
             {
@@ -235,7 +271,7 @@ public class AssetsWindow : EditorWindow
         }
     }
 
-    public static void HandleFileClick(FileInfo entry)
+    public static void HandleFileClick(FileInfo entry, short fileID = 0)
     {
         Guid guid;
         bool isAsset = AssetDatabase.TryGetGuid(entry, out guid);
@@ -245,15 +281,17 @@ public class AssetsWindow : EditorWindow
             if (DragnDrop.OnBeginDrag())
             {
                 var serialized = AssetDatabase.LoadAsset(guid);
-                DragnDrop.SetPayload(serialized.Main, entry);
+                DragnDrop.SetPayload(serialized.GetAsset(fileID), entry);
                 DragnDrop.EndDrag();
             }
             //DragnDrop.Drag(serialized.Main, entry);
         }
-        else
+        else if(fileID == 0)
         {
             DragnDrop.Drag(entry);
         }
+
+        if (fileID != 0) return;
 
         if (ImGui.IsMouseReleased(0))
             AssetsWindow.SelectHandler.Select(entry);
@@ -396,6 +434,31 @@ public class AssetsWindow : EditorWindow
         }
     }
 
+    public static uint GetTypeColor(Type type, float darkness = 0, float alpha = 0.6f)
+    {
+        byte a = (byte)(alpha * 255);
+        float dark = 1 - darkness;
+        switch (type)
+        {
+            case Type t when t == typeof(Texture2D):
+                return ImGui.GetColorU32(new Color(31, 230, 71, a) * dark);
+            case Type t when t == typeof(Mesh):
+                return ImGui.GetColorU32(new Color(243, 232, 47, a) * dark);
+            case Type t when t == typeof(ScriptableObject):
+                return ImGui.GetColorU32(new Color(245, 245, 1, a) * dark);
+            case Type t when t == typeof(Material):
+                return ImGui.GetColorU32(new Color(43, 211, 212, a) * dark);
+            case Type t when t == typeof(Shader):
+                return ImGui.GetColorU32(new Color(239, 12, 106, a) * dark);
+            case Type t when t == typeof(TextAsset):
+                return ImGui.GetColorU32(new Color(228, 238, 5, a) * dark);
+            case Type t when t == typeof(MonoScript):
+                return ImGui.GetColorU32(new Color(244, 101, 2, a) * dark);
+            default:
+                return ImGui.GetColorU32(new Color(1.0f, 1.0f, 1.0f, alpha) * dark);
+        }
+    }
+
     private static string GetIcon(string ext)
     {
         switch (ext) {
@@ -437,5 +500,24 @@ public class AssetsWindow : EditorWindow
             default:
                 return FontAwesome6.File;
         }
+    }
+
+    public string GetIconForType(Type type)
+    {
+        if (type == typeof(Texture2D))
+            return FontAwesome6.Image;
+        if (type == typeof(Mesh))
+            return FontAwesome6.Cube;
+        if (type == typeof(ScriptableObject))
+            return FontAwesome6.Database;
+        if (type == typeof(Material))
+            return FontAwesome6.Circle;
+        if (type == typeof(Shader))
+            return FontAwesome6.CameraRetro;
+        if (type == typeof(TextAsset))
+            return FontAwesome6.FileLines;
+        if (type == typeof(MonoScript))
+            return FontAwesome6.Code;
+        return FontAwesome6.File;
     }
 }

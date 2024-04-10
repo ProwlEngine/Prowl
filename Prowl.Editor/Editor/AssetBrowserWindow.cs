@@ -217,10 +217,26 @@ public class AssetBrowserWindow : EditorWindow
 
     private void RenderEntry(int rowCount, float itemSize, ref System.Numerics.Vector2 curPos, ref int i, FileSystemInfo entry)
     {
+        AssetDatabase.SubAssetCache[] subAssets = Array.Empty<AssetDatabase.SubAssetCache>();
+        bool drawSubAssets = false;
+        if (entry is FileInfo file)
+        {
+            if (AssetDatabase.TryGetGuid(file, out var guid))
+                subAssets = AssetDatabase.GetSubAssetsCache(guid);
+        }
+
         ImGui.PushID(i);
         ImGui.SetCursorPos(curPos);
         ImGui.BeginChild("ClipBox", new System.Numerics.Vector2(ThumbnailSize, ThumbnailSize), ImGuiChildFlags.None, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
         RenderFileSystemEntry(entry);
+        if (subAssets.Length > 1)
+        {
+            ImGui.SetCursorPos(new System.Numerics.Vector2(itemSize - 33, 0));
+            // hide header background
+            ImGui.PushStyleColor(ImGuiCol.Header, new System.Numerics.Vector4(0, 0, 0, 0));
+            drawSubAssets = ImGui.CollapsingHeader(">");
+            ImGui.PopStyleColor();
+        }
         ImGui.EndChild();
 
         if (_pingTimer > 0 && _pingedFile.FullName.Equals(entry.FullName, StringComparison.OrdinalIgnoreCase))
@@ -236,11 +252,69 @@ public class AssetBrowserWindow : EditorWindow
         }
 
         AssetsWindow.HandleFileContextMenu(entry, CurDirectory, true);
-        ImGui.PopID();
 
         curPos.X = 5 + ((i + 1) % rowCount) * itemSize;
         curPos.Y = 5 + ((i + 1) / rowCount) * itemSize;
         i++;
+
+        if (entry is FileInfo)
+        {
+            if (subAssets.Length > 1 && drawSubAssets)
+            {
+                for (int j = 0; j < subAssets.Length; j++)
+                {
+                    if (subAssets[j].type == null) continue;
+
+                    float thumbnailSize = Math.Min(ThumbnailSize, ImGui.GetContentRegionAvail().X) * 0.8f;
+
+                    ImGui.PushID(j);
+                    ImGui.SetCursorPos(curPos);
+                    ImGui.BeginChild("ClipBox", new System.Numerics.Vector2(thumbnailSize, thumbnailSize), ImGuiChildFlags.None, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+                    ImGui.BeginGroup();
+
+                    ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new System.Numerics.Vector2(0.0f, 4.0f));
+                    ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 0.0f);
+
+                    ImGui.Selectable($"##SubAsset{j}", false, ImGuiSelectableFlags.AllowOverlap, System.Numerics.Vector2.One * thumbnailSize);
+
+                    var gradientStart = AssetsWindow.GetTypeColor(subAssets[j].type, 0.5f);
+                    var gradientEnd = ImGui.GetColorU32(ImGuiCol.FrameBg);
+
+                    var drawList = ImGui.GetWindowDrawList();
+                    var min = ImGui.GetItemRectMin();
+                    var max = ImGui.GetItemRectMax();
+
+                    int vertStartIdx = drawList.VtxBuffer.Size;
+                    drawList.AddRectFilled(min, max, ImGui.GetColorU32(gradientStart), 8f);
+                    int vertEndIdx = drawList.VtxBuffer.Size;
+                    ImGui.ShadeVertsLinearColorGradientKeepAlpha(drawList, vertStartIdx, vertEndIdx, min, new System.Numerics.Vector2(min.X, max.Y), gradientStart, gradientEnd);
+
+                    if (ImGui.IsItemHovered())
+                    {
+                        // Handle sub-asset hover
+                        // You can show a tooltip or perform any desired action
+                        GUIHelper.Tooltip($"{subAssets[j].name} - T:{subAssets[j].type!.Name}");
+                    }
+
+                    ImGui.PopStyleVar(2);
+
+                    var thumbnail = GetEntryThumbnail(entry, true);
+                    if (thumbnail.IsAvailable)
+                        DrawThumbnailForEntry(thumbnail.Res!, thumbnailSize);
+
+                    GUIHelper.TextCenter(subAssets[j].name);
+
+                    ImGui.EndGroup();
+                    ImGui.EndChild();
+                    ImGui.PopID();
+
+                    curPos.X = 5 + ((i + 1) % rowCount) * itemSize;
+                    curPos.Y = 5 + ((i + 1) / rowCount) * itemSize;
+                    i++;
+                }
+            }
+        }
+        ImGui.PopID();
     }
 
     private void RenderFileSystemEntry(FileSystemInfo entry)
@@ -258,20 +332,17 @@ public class AssetBrowserWindow : EditorWindow
         ImGui.Selectable("##" + entry.FullName, isSelected, ImGuiSelectableFlags.AllowOverlap, System.Numerics.Vector2.One * thumbnailSize);
 
         var gradientStart = ImGui.GetColorU32(new System.Numerics.Vector4(0.2f, 0.2f, 0.2f, 0.8f));
-        var gradientEnd = ImGui.GetColorU32(new System.Numerics.Vector4(0.1f, 0.1f, 0.1f, 0.8f));
+        var gradientEnd = ImGui.GetColorU32(ImGuiCol.FrameBg);
         if (entry is FileInfo f)
         {
             gradientStart = AssetsWindow.GetFileColor(f.Extension.ToLower().Trim(), 0.2f);
-            gradientEnd = AssetsWindow.GetFileColor(f.Extension.ToLower().Trim(), 0.8f);
+            gradientEnd = ImGui.GetColorU32(ImGuiCol.FrameBg);
         }
 
         // Draw a gradient background
         var drawList = ImGui.GetWindowDrawList();
         var min = ImGui.GetItemRectMin();
         var max = ImGui.GetItemRectMax();
-        //drawList.AddRectFilledMultiColor(min, max, ImGui.GetColorU32(gradientStart), ImGui.GetColorU32(gradientStart), ImGui.GetColorU32(gradientEnd), ImGui.GetColorU32(gradientEnd));
-        //drawList.AddRectFilledMultiColor
-        //GUIHelper.ItemRectFilled(gradientStart, 0, 8f); 
         
         int vertStartIdx = drawList.VtxBuffer.Size;
         drawList.AddRectFilled(min, max, ImGui.GetColorU32(gradientStart), 8f);
@@ -298,7 +369,7 @@ public class AssetBrowserWindow : EditorWindow
 
         ImGui.PopStyleVar(2);
 
-        var thumbnail = GetEntryThumbnail(entry);
+        var thumbnail = GetEntryThumbnail(entry, false);
         if (thumbnail.IsAvailable)
             DrawThumbnailForEntry(thumbnail.Res!, thumbnailSize);
 
@@ -381,44 +452,51 @@ public class AssetBrowserWindow : EditorWindow
         ImGui.Image((IntPtr)(thumbnail.Handle as GLTexture)!.Handle, new System.Numerics.Vector2(thumbnailWidth, thumbnailSize), System.Numerics.Vector2.UnitY, System.Numerics.Vector2.UnitX);
     }
 
-    private AssetRef<Texture2D> GetEntryThumbnail(FileSystemInfo entry)
+    private AssetRef<Texture2D> GetEntryThumbnail(FileSystemInfo entry, bool subAsset)
     {
         string fileName = "FileIcon.png";
 
-        if (entry is DirectoryInfo directory)
+        if (subAsset)
         {
-            fileName = directory.EnumerateFiles().Any() || directory.EnumerateDirectories().Any() ? "FolderFilledIcon.png" : "FolderEmptyIcon.png";
-            if (!_cachedThumbnails.ContainsKey(fileName))
-            {
-                using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources." + fileName);
-                _cachedThumbnails[fileName] = Texture2DLoader.FromStream(stream);
-            }
+            fileName = "SubFileIcon.png";
         }
-        else if (entry is FileInfo file)
+        else
         {
-            if (_lastGenerated.Item1 != Time.frameCount || !_lastGenerated.Item2)
+            if (entry is DirectoryInfo directory)
             {
-                if (TextureImporter.Supported.Contains(file.Extension, StringComparer.OrdinalIgnoreCase))
+                fileName = directory.EnumerateFiles().Any() || directory.EnumerateDirectories().Any() ? "FolderFilledIcon.png" : "FolderEmptyIcon.png";
+                if (!_cachedThumbnails.ContainsKey(fileName))
                 {
-                    string relativeAssetPath = AssetDatabase.GetRelativePath(file.FullName);
-                    if (_cachedThumbnails.TryGetValue(file.FullName, out var value))
-                        return value;
-
-                    if (relativeAssetPath != null)
+                    using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources." + fileName);
+                    _cachedThumbnails[fileName] = Texture2DLoader.FromStream(stream);
+                }
+            }
+            else if (entry is FileInfo file)
+            {
+                if (_lastGenerated.Item1 != Time.frameCount || !_lastGenerated.Item2)
+                {
+                    if (TextureImporter.Supported.Contains(file.Extension, StringComparer.OrdinalIgnoreCase))
                     {
-                        _lastGenerated = (Time.frameCount, true);
-                        var tex = Application.AssetProvider.LoadAsset<Texture2D>(relativeAssetPath);
-                        if (tex.IsAvailable)
+                        string relativeAssetPath = AssetDatabase.GetRelativePath(file.FullName);
+                        if (_cachedThumbnails.TryGetValue(file.FullName, out var value))
+                            return value;
+
+                        if (relativeAssetPath != null)
                         {
-                            _cachedThumbnails[file.FullName] = tex;
-                            return tex.Res!;
+                            _lastGenerated = (Time.frameCount, true);
+                            var tex = Application.AssetProvider.LoadAsset<Texture2D>(relativeAssetPath);
+                            if (tex.IsAvailable)
+                            {
+                                _cachedThumbnails[file.FullName] = tex;
+                                return tex.Res!;
+                            }
                         }
                     }
+                    else if (ImporterAttribute.SupportsExtension(file.Extension))
+                        fileName = ImporterAttribute.GetIconForExtension(file.Extension);
+                    else if (file.Extension.Equals(".cs", StringComparison.OrdinalIgnoreCase))
+                        fileName = "CSharpIcon.png";
                 }
-                else if (ImporterAttribute.SupportsExtension(file.Extension))
-                    fileName = ImporterAttribute.GetIconForExtension(file.Extension);
-                else if (file.Extension.Equals(".cs", StringComparison.OrdinalIgnoreCase))
-                    fileName = "CSharpIcon.png";
             }
         }
 
