@@ -2,6 +2,8 @@
 using Silk.NET.Core.Native;
 using Silk.NET.OpenGL;
 using System;
+using System.Collections.Generic;
+using System.Xml.Linq;
 
 namespace Prowl.Runtime.Rendering.OpenGL
 {
@@ -255,59 +257,95 @@ namespace Prowl.Runtime.Rendering.OpenGL
 
         #region Shaders
 
+        public static Dictionary<string, int> cachedUniformLocations = [];
+        public static Dictionary<string, int> cachedAttribLocations = [];
+
         public override GraphicsProgram CompileProgram(string fragment, string vertex, string geometry) => new GLProgram(fragment, vertex, geometry);
         public override void BindProgram(GraphicsProgram program) => (program as GLProgram)!.Use();
 
         public override int GetUniformLocation(GraphicsProgram program, string name)
         {
+            string key = program.ToString() + ":" + name;
+            if (cachedUniformLocations.TryGetValue(key, out var loc))
+                return loc;
+
             BindProgram(program);
-            return GL.GetUniformLocation((program as GLProgram).Handle, name);
+            int newLoc = GL.GetUniformLocation((program as GLProgram).Handle, name);
+            cachedUniformLocations[name] = newLoc;
+            return newLoc;
         }
 
         public override int GetAttribLocation(GraphicsProgram program, string name)
         {
+            string key = program.ToString() + ":" + name;
+            if (cachedAttribLocations.TryGetValue(key, out var loc))
+                return loc;
+
             BindProgram(program);
-            return GL.GetAttribLocation((program as GLProgram).Handle, name);
+            int newLoc = GL.GetAttribLocation((program as GLProgram).Handle, name);
+            cachedAttribLocations[name] = newLoc;
+            return newLoc;
         }
 
-        public override void SetUniformF(GraphicsProgram program, int loc, float value)
+        public override void SetUniformF(GraphicsProgram program, string name, float value)
         {
+            int loc = GetUniformLocation(program, name);
+            if (loc == -1) return;
+
             BindProgram(program);
             GL.Uniform1(loc, value);
         }
 
-        public override void SetUniformI(GraphicsProgram program, int loc, int value)
+        public override void SetUniformI(GraphicsProgram program, string name, int value)
         {
+            int loc = GetUniformLocation(program, name);
+            if (loc == -1) return;
+
             BindProgram(program);
             GL.Uniform1(loc, value);
         }
 
-        public override void SetUniformV2(GraphicsProgram program, int loc, Vector2 value)
+        public override void SetUniformV2(GraphicsProgram program, string name, Vector2 value)
         {
+            int loc = GetUniformLocation(program, name);
+            if (loc == -1) return;
+
             BindProgram(program);
             GL.Uniform2(loc, value);
         }
 
-        public override void SetUniformV3(GraphicsProgram program, int loc, Vector3 value)
+        public override void SetUniformV3(GraphicsProgram program, string name, Vector3 value)
         {
+            int loc = GetUniformLocation(program, name);
+            if (loc == -1) return;
+
             BindProgram(program);
             GL.Uniform3(loc, value);
         }
 
-        public override void SetUniformV4(GraphicsProgram program, int loc, Vector4 value)
+        public override void SetUniformV4(GraphicsProgram program, string name, Vector4 value)
         {
+            int loc = GetUniformLocation(program, name);
+            if (loc == -1) return;
+
             BindProgram(program);
             GL.Uniform4(loc, value);
         }
 
-        public override void SetUniformMatrix(GraphicsProgram program, int loc, uint length, bool v, in float m11)
+        public override void SetUniformMatrix(GraphicsProgram program, string name, uint length, bool v, in float m11)
         {
+            int loc = GetUniformLocation(program, name);
+            if (loc == -1) return;
+
             BindProgram(program);
             GL.UniformMatrix4(loc, length, v, m11);
         }
 
-        public override void SetUniformTexture(GraphicsProgram program, int loc, int slot, GraphicsTexture texture)
+        public override void SetUniformTexture(GraphicsProgram program, string name, int slot, GraphicsTexture texture)
         {
+            int loc = GetUniformLocation(program, name);
+            if (loc == -1) return;
+
             BindProgram(program);
             GL.ActiveTexture((TextureUnit)((uint)TextureUnit.Texture0 + slot));
             GL.BindTexture((texture as GLTexture).Target, (texture as GLTexture).Handle);

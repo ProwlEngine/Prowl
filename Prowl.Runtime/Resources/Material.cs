@@ -17,8 +17,6 @@ namespace Prowl.Runtime
         [SerializeField] private Dictionary<string, System.Numerics.Matrix4x4[]> matrixArr = new();
         [SerializeField] private Dictionary<string, AssetRef<Texture2D>> textures = new();
 
-        private Dictionary<string, int> cachedUniformLocs = new();
-
         //private Dictionary<string, int> textureSlots = new();
 
         public MaterialPropertyBlock() { }
@@ -67,63 +65,36 @@ namespace Prowl.Runtime
             vectors3.Clear();
             vectors4.Clear();
             colors.Clear();
-            ClearCache();
-        }
-
-        public void ClearCache()
-        {
-            cachedUniformLocs.Clear();
-        }
-
-        private static bool TryGetLoc(GraphicsProgram shader, string name, MaterialPropertyBlock mpb, out int loc)
-        {
-            loc = -1;
-            string key = shader.ToString() + "_" + name;
-            if (!mpb.cachedUniformLocs.TryGetValue(key, out loc))
-            {
-                loc = Graphics.Device.GetUniformLocation(shader, name);
-                mpb.cachedUniformLocs[key] = loc;
-            }
-            //if (loc == -1) Debug.LogWarning("Shader does not have a uniform named " + name);
-            return loc != -1;
         }
 
         public static void Apply(MaterialPropertyBlock mpb, GraphicsProgram shader)
         {
             foreach (var item in mpb.floats)
-                if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.SetUniformF(shader, loc, item.Value);
+                Graphics.Device.SetUniformF(shader, item.Key, item.Value);
 
             foreach (var item in mpb.ints)
-                if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.SetUniformI(shader, loc, (int)item.Value);
+                Graphics.Device.SetUniformI(shader, item.Key, (int)item.Value);
 
             foreach (var item in mpb.vectors2)
-                if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.SetUniformV2(shader, loc, item.Value);
+                Graphics.Device.SetUniformV2(shader, item.Key, item.Value);
             foreach (var item in mpb.vectors3)
-                if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.SetUniformV3(shader, loc, item.Value);
+                Graphics.Device.SetUniformV3(shader, item.Key, item.Value);
             foreach (var item in mpb.vectors4)
-                if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.SetUniformV4(shader, loc, item.Value);
+                Graphics.Device.SetUniformV4(shader, item.Key, item.Value);
             foreach (var item in mpb.colors)
-                if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    Graphics.Device.SetUniformV4(shader, loc, new System.Numerics.Vector4(item.Value.r, item.Value.g, item.Value.b, item.Value.a));
+                Graphics.Device.SetUniformV4(shader, item.Key, new System.Numerics.Vector4(item.Value.r, item.Value.g, item.Value.b, item.Value.a));
 
             foreach (var item in mpb.matrices)
-                if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                {
-                    var m = item.Value.ToFloat();
-                    Graphics.Device.SetUniformMatrix(shader, loc, 1, false, in m.M11);
-                }
+            {
+                var m = item.Value.ToFloat();
+                Graphics.Device.SetUniformMatrix(shader, item.Key, 1, false, in m.M11);
+            }
 
             foreach (var item in mpb.matrixArr)
-                if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                {
-                    var m = item.Value;
-                    Graphics.Device.SetUniformMatrix(shader, loc, (uint)item.Value.Length, false, in m[0].M11);
-                }
+            {
+                var m = item.Value;
+                Graphics.Device.SetUniformMatrix(shader, item.Key, (uint)item.Value.Length, false, in m[0].M11);
+            }
 
             uint texSlot = 0;
             var keysToUpdate = new List<(string, AssetRef<Texture2D>)>();
@@ -132,11 +103,8 @@ namespace Prowl.Runtime
                 var tex = item.Value;
                 if (tex.IsAvailable)
                 {
-                    if (TryGetLoc(shader, item.Key, mpb, out var loc))
-                    {
-                        texSlot++;
-                        Graphics.Device.SetUniformTexture(shader, loc, (int)texSlot, tex.Res!.Handle);
-                    }
+                    texSlot++;
+                    Graphics.Device.SetUniformTexture(shader, item.Key, (int)texSlot, tex.Res!.Handle);
 
                     keysToUpdate.Add((item.Key, tex));
                 }
@@ -181,7 +149,6 @@ namespace Prowl.Runtime
             if (string.IsNullOrWhiteSpace(key)) return;
             if (keywords.Contains(key)) return;
             keywords.Add(key);
-            PropertyBlock.ClearCache();
         }
 
         public void DisableKeyword(string keyword)
@@ -190,7 +157,6 @@ namespace Prowl.Runtime
             if (string.IsNullOrWhiteSpace(key)) return;
             if (!keywords.Contains(key)) return;
             keywords.Remove(key);
-            PropertyBlock.ClearCache();
         }
 
         public bool IsKeywordEnabled(string keyword) => keywords.Contains(keyword.ToUpper().Replace(" ", "").Replace(";", ""));
@@ -231,8 +197,6 @@ namespace Prowl.Runtime
             string keywords = string.Join("-", allKeywords);
             string key = Shader.Res.InstanceID + "-" + keywords + "-" + Runtime.Shader.globalKeywords;
             if (passVariants.TryGetValue(key, out var s)) return s;
-
-            PropertyBlock.ClearCache();
 
             // Add each global togather making sure to not add duplicates
             string[] globals = Runtime.Shader.globalKeywords.ToArray();

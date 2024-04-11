@@ -27,8 +27,6 @@ namespace Prowl.Editor.ImGUI
         private ImNodesContextPtr nodesContext;
         private ImPlotContextPtr plotContext;
 
-        private int _attribLocationTex;
-        private int _attribLocationProjMtx;
         private int _attribLocationVtxPos;
         private int _attribLocationVtxUV;
         private int _attribLocationVtxColor;
@@ -334,8 +332,8 @@ namespace Prowl.Editor.ImGUI
                 (R + L) / (L - R), (T + B) / (B - T), 0.0f, 1.0f,
             };
 
-            Graphics.Device.SetUniformI(_shader, _attribLocationTex, 0);
-            Graphics.Device.SetUniformMatrix(_shader, _attribLocationProjMtx, 1, false, in orthoProjection[0]);
+            Graphics.Device.SetUniformI(_shader, "Texture", 0);
+            Graphics.Device.SetUniformMatrix(_shader, "ProjMtx", 1, false, in orthoProjection[0]);
 
             _gl.BindSampler(0, 0);
 
@@ -559,8 +557,6 @@ namespace Prowl.Editor.ImGUI
 
             _shader = Graphics.Device.CompileProgram(fragmentSource, vertexSource, "");
 
-            _attribLocationTex = Graphics.Device.GetUniformLocation(_shader, "Texture");
-            _attribLocationProjMtx = Graphics.Device.GetUniformLocation(_shader, "ProjMtx");
             _attribLocationVtxPos = Graphics.Device.GetAttribLocation(_shader, "Position");
             _attribLocationVtxUV = Graphics.Device.GetAttribLocation(_shader, "UV");
             _attribLocationVtxColor = Graphics.Device.GetAttribLocation(_shader, "Color");

@@ -53,13 +53,13 @@ namespace Prowl.Runtime.Rendering
 
         public abstract int GetUniformLocation(GraphicsProgram program, string name);
         public abstract int GetAttribLocation(GraphicsProgram program, string name);
-        public abstract void SetUniformF(GraphicsProgram program, int loc, float value);
-        public abstract void SetUniformI(GraphicsProgram program, int loc, int value);
-        public abstract void SetUniformV2(GraphicsProgram program, int loc, Vector2 value);
-        public abstract void SetUniformV3(GraphicsProgram program, int loc, Vector3 value);
-        public abstract void SetUniformV4(GraphicsProgram program, int loc, Vector4 value);
-        public abstract void SetUniformMatrix(GraphicsProgram program, int loc, uint length, bool v, in float m11);
-        public abstract void SetUniformTexture(GraphicsProgram program, int loc, int slot, GraphicsTexture texture);
+        public abstract void SetUniformF(GraphicsProgram program, string name, float value);
+        public abstract void SetUniformI(GraphicsProgram program, string name, int value);
+        public abstract void SetUniformV2(GraphicsProgram program, string name, Vector2 value);
+        public abstract void SetUniformV3(GraphicsProgram program, string name, Vector3 value);
+        public abstract void SetUniformV4(GraphicsProgram program, string name, Vector4 value);
+        public abstract void SetUniformMatrix(GraphicsProgram program, string name, uint length, bool v, in float m11);
+        public abstract void SetUniformTexture(GraphicsProgram program, string name, int slot, GraphicsTexture texture);
 
 
         #endregion
