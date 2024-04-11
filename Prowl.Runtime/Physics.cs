@@ -37,8 +37,7 @@ namespace Prowl.Runtime
 
         public void Dispose(bool clear = true)
         {
-            // TODO: Causes a crash, seems to be a bug in Jitter2 where Shapes cannot be removed because they still have rigidbodies attatched to them
-            //world.Clear();
+            world.Clear();
             if (clear)
                 Physics.PhysicalSpaces.Remove(this);
         }
