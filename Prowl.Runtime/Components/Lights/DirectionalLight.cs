@@ -9,6 +9,16 @@ public class DirectionalLight : MonoBehaviour
 {
     public override RenderingOrder RenderOrder => RenderingOrder.Lighting;
 
+    public enum Resolution : int
+    {
+        _512 = 512,
+        _1024 = 1024,
+        _2048 = 2048,
+        _4096 = 4096
+    }
+
+    public Resolution shadowResolution = Resolution._1024;
+
     public Color color = Color.white;
     public float intensity = 32f;
     public float qualitySamples = 16;
@@ -76,7 +86,8 @@ public class DirectionalLight : MonoBehaviour
         // Populate Shadowmap
         if (castShadows)
         {
-            shadowMap ??= new RenderTexture(4096, 4096, 0);
+            int res = (int)shadowResolution;
+            shadowMap ??= new RenderTexture(res, res, 0);
 
             // Compute the MVP matrix from the light's point of view
             //Graphics.MatDepthProjection = Matrix4x4.CreateOrthographicOffCenter(-25, 25, -25, 25, 1, 256);
