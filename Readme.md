@@ -33,7 +33,7 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
 
 ### [Join our Discord server!](https://discord.gg/BqnJ9Rn4sn) 🎉
 
-![Sponza screenshot](https://i.imgur.com/RrB7A0a.png)
+![Showcase](https://i.imgur.com/ePlVUPY.png)
 
 # <p align="center">✨ Features ✨</p>
 
@@ -234,6 +234,8 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 # <p align="center">📸 Screenshots 📸</p>
+![image](https://github.com/michaelsakharov/Prowl/assets/8621606/1b376ae7-8f13-41ea-ba1d-a49f777398ac)
+
 ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/2fdad2ea-f956-42f5-a7c6-4c2ae0df4495)
 [![animations](https://i.gyazo.com/2824b4a16a6d6b6ad9b64912e6020271.gif)](https://gyazo.com/2824b4a16a6d6b6ad9b64912e6020271)
 ![Bokeh Depth of Field](https://i.imgur.com/VYs44qq.png)
@@ -241,7 +243,6 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/f755ee5d-eba5-4453-9f31-f61768c2554c)
 ![Flight Model](https://github.com/michaelsakharov/Prowl/assets/8621606/7683759c-5e0c-4689-acba-c733b3a64b5c)
 ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/43d9f1db-1806-4961-bc40-fd77b196043b)
-![Skybox-Aware Fog](https://github.com/michaelsakharov/Prowl/assets/8621606/0cf60c18-b6bc-4190-b458-a92aca29c0d9)
 ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/6bee582a-903d-4b30-8c0b-50023ccc0c4e)
 ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/5108bd1f-a822-47c0-855d-c3c4f4fb29b3)
 
