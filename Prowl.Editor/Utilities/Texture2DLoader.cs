@@ -21,6 +21,7 @@ namespace Prowl.Editor
             image.Flip();
 
             TextureImageFormat format = TextureImageFormat.UnsignedShort4;
+            image.ColorSpace = ColorSpace.sRGB;
             image.ColorType = ColorType.TrueColorAlpha;
 
             var pixels = image.GetPixelsUnsafe().GetAreaPointer(0, 0, image.Width, image.Height);
