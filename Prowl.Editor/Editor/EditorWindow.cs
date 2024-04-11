@@ -94,6 +94,10 @@ public class EditorWindow {
 
             if (!isOpened)
             {
+                var t = this.GetType();
+                if (_WindowCounter.ContainsKey(t))
+                    _WindowCounter[t] = _WindowCounter[t] - 1;
+
                 Program.OnDrawEditor -= DrawWindow;
                 Program.OnUpdateEditor -= UpdateWindow;
                 Close();
