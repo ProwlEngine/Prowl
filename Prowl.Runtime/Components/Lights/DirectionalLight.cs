@@ -80,7 +80,7 @@ public class DirectionalLight : MonoBehaviour
 
             // Compute the MVP matrix from the light's point of view
             //Graphics.MatDepthProjection = Matrix4x4.CreateOrthographicOffCenter(-25, 25, -25, 25, 1, 256);
-            Graphics.MatDepthProjection = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, 0, 100);
+            Graphics.MatDepthProjection = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, 0, shadowDistance);
 
             var forward = GameObject.transform.forward;
             Graphics.MatDepthView = Matrix4x4.CreateLookToLeftHanded(-forward * 50, -forward, GameObject.transform.up);
