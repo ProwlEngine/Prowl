@@ -31,11 +31,29 @@ public class TagLayerManager : ScriptableSingleton<TagLayerManager>
     public static List<string> Tags => Instance.tags;
     public static List<string> Layers => Instance.layers;
 
-    public static string GetTag(int index) { return Instance.tags[index]; }
-    public static string GetLayer(int index) { return Instance.layers[index]; }
+    public static string GetTag(int index) 
+    { 
+        if (index < 0 || index >= Instance.tags.Count)
+            return "Untagged";
+        return Instance.tags[index]; 
+    }
+    public static string GetLayer(int index) 
+    {
+        if (index < 0 || index >= Instance.layers.Count)
+            return "Default";
+        return Instance.layers[index];
+    }
 
-    public static int GetTagIndex(string tag) { return Instance.tags.IndexOf(tag); }
-    public static int GetLayerIndex(string layer) { return Instance.layers.IndexOf(layer); }
+    public static int GetTagIndex(string tag) 
+    {
+        int index = Instance.tags.IndexOf(tag);
+        return index == -1 ? 0 : index;
+    }
+    public static int GetLayerIndex(string layer)
+    {
+        int index = Instance.layers.IndexOf(layer);
+        return index == -1 ? 0 : index;
+    }
 
     public static void RemoveTag(int index)
     {
