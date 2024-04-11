@@ -2,6 +2,8 @@
 using Prowl.Runtime.Rendering.Primitives;
 using Silk.NET.Maths;
 using System;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Prowl.Runtime
 {
@@ -120,5 +122,73 @@ namespace Prowl.Runtime
             var values = new object[] { Width, Height, numTextures, hasDepthAttachment, textureFormats };
             typeof(RenderTexture).GetConstructor(param).Invoke(this, values);
         }
+
+        #region Pool
+
+        private struct RenderTextureKey(int width, int height, TextureImageFormat format)
+        {
+            public int Width = width;
+            public int Height = height;
+            public TextureImageFormat Format = format;
+
+            public override bool Equals([NotNullWhen(true)] object? obj) => obj is RenderTextureKey key && (Width, Height, Format) == (key.Width, key.Height, key.Format);
+            public override int GetHashCode() => HashCode.Combine(Width, Height, Format);
+            public static bool operator ==(RenderTextureKey left, RenderTextureKey right) => left.Equals(right);
+            public static bool operator !=(RenderTextureKey left, RenderTextureKey right) => !(left == right);
+        }
+
+        private static Dictionary<RenderTextureKey, List<(RenderTexture, long frameCreated)>> pool = [];
+        private const int MaxUnusedFrames = 6;
+
+        public static RenderTexture GetTemporaryRT(int width, int height, TextureImageFormat format)
+        {
+            var key = new RenderTextureKey(width, height, format);
+
+            if (pool.TryGetValue(key, out var list) && list.Count > 0)
+            {
+                int i = list.Count - 1;
+                RenderTexture renderTexture = list[i].Item1;
+                list.RemoveAt(i);
+                return renderTexture;
+            }
+
+            return new RenderTexture(width, height, 1, false, [format]);
+        }
+
+        public static void ReleaseTemporaryRT(RenderTexture renderTexture)
+        {
+            var key = new RenderTextureKey(renderTexture.Width, renderTexture.Height, renderTexture.InternalTextures[0].ImageFormat);
+
+            if (!pool.TryGetValue(key, out var list))
+            {
+                list = [];
+                pool[key] = list;
+            }
+
+            list.Add((renderTexture, Time.frameCount));
+        }
+
+        public static void UpdatePool()
+        {
+            var disposableTextures = new List<RenderTexture>();
+            foreach (var pair in pool)
+            {
+                for (int i = pair.Value.Count - 1; i >= 0; i--)
+                {
+                    var (renderTexture, frameCreated) = pair.Value[i];
+                    if (Time.frameCount - frameCreated > MaxUnusedFrames)
+                    {
+                        disposableTextures.Add(renderTexture);
+                        pair.Value.RemoveAt(i);
+                    }
+                }
+            }
+
+            foreach (var renderTexture in disposableTextures)
+                renderTexture.Destroy();
+        }
+
+        #endregion
+
     }
 }

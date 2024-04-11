@@ -59,6 +59,8 @@ namespace Prowl.Runtime
 
         public static void StartFrame()
         {
+            RenderTexture.UpdatePool();
+
             Clear();
             Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
             // Set default states

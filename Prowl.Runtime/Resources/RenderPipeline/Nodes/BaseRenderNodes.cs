@@ -41,9 +41,9 @@ namespace Prowl.Runtime.Resources.RenderPipeline
                 renderRTs ??= new RenderTexture[RTCount];
                 for (int i = 0; i < RTCount; i++)
                 {
-                    renderRTs[i]?.Dispose();
-                    TextureImageFormat[] formats = [TextureImageFormat.Float3];
-                    renderRTs[i] = new RenderTexture(width, height, 1, false, formats);
+                    if(renderRTs[i] != null)
+                        RenderTexture.ReleaseTemporaryRT(renderRTs[i]);
+                    renderRTs[i] = RenderTexture.GetTemporaryRT(width, height, TextureImageFormat.Float3);
                 }
             }
 
