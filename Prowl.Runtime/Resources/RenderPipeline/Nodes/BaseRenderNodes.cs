@@ -100,6 +100,8 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         public override string Title => "Depth Of Field";
         public override float Width => 125;
 
+        public override int Downsample => 1;
+
         [Input(ShowBackingValue.Never), SerializeIgnore] public RenderTexture RenderTexture;
 
         public float FocusStrength = 150f;
