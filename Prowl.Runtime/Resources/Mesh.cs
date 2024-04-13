@@ -133,7 +133,6 @@ namespace Prowl.Runtime
         public bool HasBoneIndices => (boneIndices?.Length ?? 0) > 0;
         public bool HasBoneWeights => (boneWeights?.Length ?? 0) > 0;
 
-        public string[]? boneNames;
         public System.Numerics.Matrix4x4[]? bindPoses;
 
         bool changed = true;
@@ -690,13 +689,6 @@ namespace Prowl.Runtime
                     }
                 }
 
-                writer.Write(boneNames?.Length ?? 0);
-                if (boneNames != null)
-                {
-                    foreach (var boneName in boneNames)
-                        writer.Write(boneName);
-                }
-
                 writer.Write(bindPoses?.Length ?? 0);
                 if (bindPoses != null)
                 {
@@ -817,14 +809,6 @@ namespace Prowl.Runtime
                     boneWeights = new System.Numerics.Vector4[boneWeightCount];
                     for (int i = 0; i < boneWeightCount; i++)
                         boneWeights[i] = new System.Numerics.Vector4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-                }
-
-                var boneNamesCount = reader.ReadInt32();
-                if (boneNamesCount > 0)
-                {
-                    boneNames = new string[boneNamesCount];
-                    for (int i = 0; i < boneNamesCount; i++)
-                        boneNames[i] = reader.ReadString();
                 }
 
                 var bindPosesCount = reader.ReadInt32();

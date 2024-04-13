@@ -10,21 +10,20 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
 {
     public override RenderingOrder RenderOrder => RenderingOrder.Opaque;
 
-    [Header("THIS COMPONENT IS NOT FULLY IMPLEMENTED YET")]
     public AssetRef<Mesh> Mesh;
-    public GameObject Root;
     public AssetRef<Material> Material;
 
-    private System.Numerics.Matrix4x4[] bindPoses;
+    [HideInInspector]
+    public Transform[] Bones = [];
+
     private System.Numerics.Matrix4x4[] boneTransforms;
 
     void GetBoneMatrices()
     {
-        boneTransforms = new System.Numerics.Matrix4x4[Mesh.Res.boneNames.Length];
-        bindPoses = Mesh.Res.bindPoses;
-        for (int i = 0; i < Mesh.Res.boneNames.Length; i++)
+        boneTransforms = new System.Numerics.Matrix4x4[Bones.Length];
+        for (int i = 0; i < Bones.Length; i++)
         {
-            var t = Root.transform.DeepFind(Mesh.Res.boneNames[i]);
+            var t = Bones[i];
             if (t == null)
             {
                 boneTransforms[i] = System.Numerics.Matrix4x4.Identity;
@@ -37,6 +36,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
     }
 
     private Dictionary<int, Matrix4x4> prevMats = new();
+
     public override void OnRenderObject()
     {
         var mat = GameObject.GlobalCamRelative;
@@ -49,7 +49,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
             GetBoneMatrices();
             Material.Res!.EnableKeyword("SKINNED");
             Material.Res!.SetInt("ObjectID", GameObject.InstanceID);
-            Material.Res!.SetMatrices("bindPoses", bindPoses);
+            Material.Res!.SetMatrices("bindPoses", Mesh.Res.bindPoses);
             Material.Res!.SetMatrices("boneTransforms", boneTransforms);
             for (int i = 0; i < Material.Res!.PassCount; i++)
             {
@@ -68,7 +68,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         {
             GetBoneMatrices();
             Material.Res!.EnableKeyword("SKINNED");
-            Material.Res!.SetMatrices("bindPoses", bindPoses);
+            Material.Res!.SetMatrices("bindPoses", Mesh.Res.bindPoses);
             Material.Res!.SetMatrices("boneTransforms", boneTransforms);
 
             var mvp = Matrix4x4.Identity;
@@ -88,7 +88,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         SerializedProperty compoundTag = SerializedProperty.NewCompound();
         compoundTag.Add("Mesh", Serializer.Serialize(Mesh, ctx));
         compoundTag.Add("Material", Serializer.Serialize(Material, ctx));
-        compoundTag.Add("Root", Serializer.Serialize(Root, ctx));
+        compoundTag.Add("Bones", Serializer.Serialize(Bones, ctx));
 
         return compoundTag;
     }
@@ -97,6 +97,6 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
     {
         Mesh = Serializer.Deserialize<AssetRef<Mesh>>(value["Mesh"], ctx);
         Material = Serializer.Deserialize<AssetRef<Material>>(value["Material"], ctx);
-        Root = Serializer.Deserialize<GameObject>(value["Root"], ctx);
+        Bones = Serializer.Deserialize<Transform[]>(value["Bones"], ctx);
     }
 }

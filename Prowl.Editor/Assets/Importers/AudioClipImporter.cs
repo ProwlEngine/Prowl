@@ -3,7 +3,6 @@ using Hexa.NET.ImPlot;
 using Prowl.Runtime;
 using Prowl.Runtime.Audio;
 using Prowl.Runtime.Utils;
-using Silk.NET.SDL;
 using System.Buffers.Binary;
 
 namespace Prowl.Editor.Assets.Importers

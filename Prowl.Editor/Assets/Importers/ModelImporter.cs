@@ -206,7 +206,9 @@ namespace Prowl.Editor.Assets
                     var mr = go.AddComponent<SkinnedMeshRenderer>();
                     mr.Mesh = uMeshAndMat.Mesh;
                     mr.Material = uMeshAndMat.Material;
-                    mr.Root = GOs[0].Item1.transform.DeepFind(uMeshAndMat.Mesh.Res.boneNames[0])!.gameObject;
+                    mr.Bones = new Transform[uMeshAndMat.AMesh.Bones.Count];
+                    for (int i = 0; i < uMeshAndMat.AMesh.Bones.Count; i++)
+                        mr.Bones[i] = GOs[0].Item1.transform.DeepFind(uMeshAndMat.AMesh.Bones[i].Name)!.gameObject.transform;
                 }
                 else
                 {
@@ -370,14 +372,12 @@ namespace Prowl.Editor.Assets
 
                 if (m.HasBones)
                 {
-                    mesh.boneNames = new string[m.Bones.Count];
                     mesh.bindPoses = new System.Numerics.Matrix4x4[m.Bones.Count];
                     mesh.BoneIndices = new System.Numerics.Vector4[vertexCount];
                     mesh.BoneWeights = new System.Numerics.Vector4[vertexCount];
                     for (var i = 0; i < m.Bones.Count; i++)
                     {
                         var bone = m.Bones[i];
-                        mesh.boneNames[i] = bone.Name;
 
                         var offsetMatrix = bone.OffsetMatrix;
                         System.Numerics.Matrix4x4 bindPose = new System.Numerics.Matrix4x4(
@@ -703,7 +703,7 @@ namespace Prowl.Editor.Assets
             // Triangle Count
             ImGui.Text($"Triangle Count: {meshes.Sum(x => (x as Mesh).IndexCount / 3)}");
             // Bone Count
-            ImGui.Text($"Bone Count: {meshes.Sum(x => (x as Mesh).boneNames?.Length ?? 0)}");
+            ImGui.Text($"Bone Count: {meshes.Sum(x => (x as Mesh).BoneIndices?.Length ?? 0)}");
 
 #warning TODO: Support for Exporting sub assets
 #warning TODO: Support for editing Model specific data like Animation data
