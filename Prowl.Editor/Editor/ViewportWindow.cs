@@ -399,19 +399,19 @@ public class ViewportWindow : EditorWindow
             // Version with fixed gimbal lock
             var mouseDelta = Input.MouseDelta;
             var rot = Cam.GameObject.transform.eulerAngles;
-            rot.y += mouseDelta.X * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
-            rot.x += mouseDelta.Y * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
+            rot.y += mouseDelta.x * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
+            rot.x += mouseDelta.y * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
             Cam.GameObject.transform.eulerAngles = rot;
 
-            Input.MousePosition = WindowCenter.ToFloat().ToGeneric();
+            Input.MousePosition = WindowCenter;
         } else {
             moveSpeed = 1;
             if (Input.GetMouseButton(2)) {
 
                 var mouseDelta = Input.MouseDelta;
                 var pos = Cam.GameObject.transform.position;
-                pos -= Cam.GameObject.transform.right * mouseDelta.X * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
-                pos += Cam.GameObject.transform.up * mouseDelta.Y * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
+                pos -= Cam.GameObject.transform.right * mouseDelta.x * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
+                pos += Cam.GameObject.transform.up * mouseDelta.y * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
                 Cam.GameObject.transform.position = pos;
 
             } else if (Input.MouseWheelDelta != 0) {

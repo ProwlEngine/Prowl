@@ -1,5 +1,4 @@
 ﻿using Silk.NET.Input;
-using Silk.NET.Maths;
 using System;
 using System.Collections.Generic;
 
@@ -13,16 +12,20 @@ public static class Input
     public static IReadOnlyList<IMouse> Mice => Context.Mice;
     public static IReadOnlyList<IJoystick> Joysticks => Context.Joysticks;
 
-    public static Vector2D<float> PreviousMousePosition { get; private set; }
-    public static Vector2D<float> MouseDelta => MousePosition - PreviousMousePosition;
-    public static Vector2D<float> MousePosition {
-        get {
-            return Mice[0].Position.ToGeneric();
-        }
+
+    private static Vector2 _currentMousePos;
+    private static Vector2 _prevMousePos;
+
+    public static Vector2 PrevMousePosition => _prevMousePos;
+    public static Vector2 MousePosition {
+        get => _currentMousePos;
         set {
-            Mice[0].Position = value.ToSystem();
+            _prevMousePos = value;
+            _currentMousePos = value;
+            Mice[0].Position = value;
         }
     }
+    public static Vector2 MouseDelta => _currentMousePos - _prevMousePos;
     public static float MouseWheelDelta => Mice[0].ScrollWheels[0].Y;
 
     private static Dictionary<Key, bool> previousKeyStates = new Dictionary<Key, bool>();
@@ -31,7 +34,8 @@ public static class Input
     internal static void Initialize()
     {
         Context = Window.InternalWindow.CreateInput();
-        PreviousMousePosition = MousePosition;
+        _prevMousePos = Mice[0].Position;
+        _currentMousePos = Mice[0].Position;
         UpdateKeyStates();
     }
 
@@ -42,7 +46,8 @@ public static class Input
 
     internal static void LateUpdate()
     {
-        PreviousMousePosition = MousePosition;
+        _prevMousePos = _currentMousePos;
+        _currentMousePos = Mice[0].Position;
         UpdateKeyStates();
     }
 
