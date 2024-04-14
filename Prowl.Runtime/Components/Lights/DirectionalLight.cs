@@ -20,7 +20,7 @@ public class DirectionalLight : MonoBehaviour
     public Resolution shadowResolution = Resolution._1024;
 
     public Color color = Color.white;
-    public float intensity = 32f;
+    public float intensity = 15f;
     public float qualitySamples = 16;
     public float blockerSamples = 16;
     public float shadowDistance = 50f;
