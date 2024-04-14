@@ -13,16 +13,16 @@ public static class Input
     public static IReadOnlyList<IJoystick> Joysticks => Context.Joysticks;
 
 
-    private static Vector2 _currentMousePos;
-    private static Vector2 _prevMousePos;
+    private static Vector2Int _currentMousePos;
+    private static Vector2Int _prevMousePos;
 
-    public static Vector2 PrevMousePosition => _prevMousePos;
-    public static Vector2 MousePosition {
+    public static Vector2Int PrevMousePosition => _prevMousePos;
+    public static Vector2Int MousePosition {
         get => _currentMousePos;
         set {
             _prevMousePos = value;
             _currentMousePos = value;
-            Mice[0].Position = value;
+            Mice[0].Position = (Vector2)value;
         }
     }
     public static Vector2 MouseDelta => _currentMousePos - _prevMousePos;
@@ -34,8 +34,8 @@ public static class Input
     internal static void Initialize()
     {
         Context = Window.InternalWindow.CreateInput();
-        _prevMousePos = Mice[0].Position;
-        _currentMousePos = Mice[0].Position;
+        _prevMousePos = (Vector2Int)Mice[0].Position.ToDouble();
+        _currentMousePos = (Vector2Int)Mice[0].Position.ToDouble();
         UpdateKeyStates();
     }
 
@@ -47,7 +47,7 @@ public static class Input
     internal static void LateUpdate()
     {
         _prevMousePos = _currentMousePos;
-        _currentMousePos = Mice[0].Position;
+        _currentMousePos = (Vector2Int)Mice[0].Position.ToDouble();
         UpdateKeyStates();
     }
 

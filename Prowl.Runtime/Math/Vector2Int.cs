@@ -464,6 +464,12 @@ namespace Prowl.Runtime
             return new Vector2(value.x, value.y);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static implicit operator Vector2Int(Vector2 value)
+        {
+            return new Vector2Int((int)value.x, (int)value.y);
+        }
+
         #endregion Public Static Operators
     }
 }
