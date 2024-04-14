@@ -408,14 +408,14 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
         }
     }
 
-    public T? GetComponentInParent<T>(bool includeSelf = true) where T : MonoBehaviour => (T)GetComponentInParent(typeof(T), includeSelf);
+    public T? GetComponentInParent<T>(bool includeSelf = true, bool includeInactive = false) where T : MonoBehaviour => (T)GetComponentInParent(typeof(T), includeSelf, includeInactive);
 
-    public MonoBehaviour? GetComponentInParent(Type componentType, bool includeSelf = true)
+    public MonoBehaviour? GetComponentInParent(Type componentType, bool includeSelf = true, bool includeInactive = false)
     {
         if (componentType == null) return null;
         // First check the current Object
         MonoBehaviour component;
-        if (includeSelf) {
+        if (includeSelf && enabledInHierarchy) {
             component = GetComponent(componentType);
             if (component != null)
                 return component;
@@ -424,35 +424,39 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
         GameObject parent = this;
         while ((parent = parent.parent) != null)
         {
-            component = parent.GetComponent(componentType);
-            if (component != null)
-                return component;
+            if (parent.enabledInHierarchy || includeInactive)
+            {
+                component = parent.GetComponent(componentType);
+                if (component != null)
+                    return component;
+            }
         }
         return null;
     }
 
-    public IEnumerable<T> GetComponentsInParent<T>(bool includeSelf = true) where T : MonoBehaviour
+    public IEnumerable<T> GetComponentsInParent<T>(bool includeSelf = true, bool includeInactive = false) where T : MonoBehaviour
     {
         // First check the current Object
-        if (includeSelf)
+        if (includeSelf && enabledInHierarchy)
             foreach (var component in GetComponents<T>())
                 yield return component;
         // Now check all parents
         GameObject parent = this;
         while ((parent = parent.parent) != null) {
-            foreach (var component in parent.GetComponents<T>())
-                yield return component;
+            if(parent.enabledInHierarchy || includeInactive)
+                foreach (var component in parent.GetComponents<T>())
+                    yield return component;
         }
     }
 
-    public T? GetComponentInChildren<T>(bool includeSelf = true) where T : MonoBehaviour => (T)GetComponentInChildren(typeof(T), includeSelf);
+    public T? GetComponentInChildren<T>(bool includeSelf = true, bool includeInactive = false) where T : MonoBehaviour => (T)GetComponentInChildren(typeof(T), includeSelf, includeInactive);
 
-    public MonoBehaviour GetComponentInChildren(Type componentType, bool includeSelf = true)
+    public MonoBehaviour GetComponentInChildren(Type componentType, bool includeSelf = true, bool includeInactive = false)
     {
         if (componentType == null) return null;
         // First check the current Object
         MonoBehaviour component;
-        if (includeSelf) {
+        if (includeSelf && enabledInHierarchy) {
             component = GetComponent(componentType);
             if (component != null)
                 return component;
@@ -460,24 +464,29 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
         // Now check all children
         foreach (var child in children)
         {
-            component = child.GetComponent(componentType) ?? child.GetComponentInChildren(componentType);
-            if (component != null)
-                return component;
+            if (parent.enabledInHierarchy || includeInactive)
+            {
+                component = child.GetComponent(componentType) ?? child.GetComponentInChildren(componentType);
+                if (component != null)
+                    return component;
+            }
         }
         return null;
     }
 
 
-    public IEnumerable<T> GetComponentsInChildren<T>(bool includeSelf = true) where T : MonoBehaviour
+    public IEnumerable<T> GetComponentsInChildren<T>(bool includeSelf = true, bool includeInactive = false) where T : MonoBehaviour
     {
         // First check the current Object
-        if (includeSelf)
+        if (includeSelf && enabledInHierarchy)
             foreach (var component in GetComponents<T>())
                 yield return component;
         // Now check all children
-        foreach (var child in children) {
-            foreach (var component in child.GetComponentsInChildren<T>())
-                yield return component;
+        foreach (var child in children)
+        {
+            if (parent.enabledInHierarchy || includeInactive)
+                foreach (var component in child.GetComponentsInChildren<T>())
+                    yield return component;
         }
     }
 
