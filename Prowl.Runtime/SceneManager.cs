@@ -56,7 +56,7 @@ public static class SceneManager
     {
         var go = new GameObject("Directional Light");
         go.AddComponent<DirectionalLight>(); // Will auto add Transform as DirectionLight requires it
-        go.transform.localEulerAngles = new System.Numerics.Vector3(130, 45, 0);
+        go.Transform.localEulerAngles = new System.Numerics.Vector3(130, 45, 0);
         var alGo = new GameObject("Ambient Light");
         var al = alGo.AddComponent<AmbientLight>();
         al.skyIntensity = 0.4f;
@@ -64,7 +64,7 @@ public static class SceneManager
 
         var cam = new GameObject("Main Camera");
         cam.tag = "Main Camera";
-        cam.transform.position = new(0, 0, -10);
+        cam.Transform.position = new(0, 0, -10);
         cam.AddComponent<Camera>();
     }
 

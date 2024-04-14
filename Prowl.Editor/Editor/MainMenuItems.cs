@@ -144,7 +144,7 @@ namespace Prowl.Editor.EditorWindows
             var cam = ViewportWindow.LastFocusedCamera;
             // get position 10 units infront
             var t = cam.GameObject;
-            return t.transform.position + t.transform.forward * 10;
+            return t.Transform.position + t.Transform.forward * 10;
         }
 
         [MenuItem("Template/3D Object/Cube")]
@@ -171,7 +171,7 @@ namespace Prowl.Editor.EditorWindows
             if (original.IsAvailable)
             {
                 var go = GameObject.Instantiate(original.Res!);
-                go.transform.position = GetPosition();
+                go.Transform.position = GetPosition();
                 HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
             }
         }
@@ -189,8 +189,8 @@ namespace Prowl.Editor.EditorWindows
         {
             var go = new GameObject("Directional Light");
             go.AddComponent<DirectionalLight>();
-            go.transform.position = GetPosition();
-            go.transform.localEulerAngles = new System.Numerics.Vector3(45, 70, 0);
+            go.Transform.position = GetPosition();
+            go.Transform.localEulerAngles = new System.Numerics.Vector3(45, 70, 0);
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
@@ -199,7 +199,7 @@ namespace Prowl.Editor.EditorWindows
         {
             var go = new GameObject("Point Light");
             go.AddComponent<PointLight>();
-            go.transform.position = GetPosition();
+            go.Transform.position = GetPosition();
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
@@ -208,7 +208,7 @@ namespace Prowl.Editor.EditorWindows
         {
             var go = new GameObject("Spot Light");
             go.AddComponent<SpotLight>();
-            go.transform.position = GetPosition();
+            go.Transform.position = GetPosition();
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 

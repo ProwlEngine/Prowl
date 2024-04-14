@@ -168,7 +168,7 @@ namespace Prowl.Editor.Assets
 
                 GameObject rootNode = GOs[0].Item1;
                 if (UnitScale != 1f)
-                    rootNode.transform.localScale = Vector3.one * UnitScale;
+                    rootNode.Transform.localScale = Vector3.one * UnitScale;
 
                 // Add Animation Component with all the animations assigned
                 if (anims.Count > 0)
@@ -208,7 +208,7 @@ namespace Prowl.Editor.Assets
                     mr.Material = uMeshAndMat.Material;
                     mr.Bones = new Transform[uMeshAndMat.AMesh.Bones.Count];
                     for (int i = 0; i < uMeshAndMat.AMesh.Bones.Count; i++)
-                        mr.Bones[i] = GOs[0].Item1.transform.DeepFind(uMeshAndMat.AMesh.Bones[i].Name)!.gameObject.transform;
+                        mr.Bones[i] = GOs[0].Item1.Transform.DeepFind(uMeshAndMat.AMesh.Bones[i].Name)!.gameObject.Transform;
                 }
                 else
                 {
@@ -603,9 +603,9 @@ namespace Prowl.Editor.Assets
             var t = node.Transform;
             t.Decompose(out var aSca, out var aRot, out var aPos);
 
-            uOb.transform.localPosition = new Vector3(aPos.X, aPos.Y, aPos.Z) * scale;
-            uOb.transform.localRotation = new Runtime.Quaternion(aRot.X, aRot.Y, aRot.Z, aRot.W);
-            uOb.transform.localScale = new Vector3(aSca.X, aSca.Y, aSca.Z);
+            uOb.Transform.localPosition = new Vector3(aPos.X, aPos.Y, aPos.Z) * scale;
+            uOb.Transform.localRotation = new Runtime.Quaternion(aRot.X, aRot.Y, aRot.Z, aRot.W);
+            uOb.Transform.localScale = new Vector3(aSca.X, aSca.Y, aSca.Z);
 
             return uOb;
         }

@@ -96,7 +96,7 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
 
     #endregion
 
-    public Transform transform {
+    public Transform Transform {
         get {
             _transform.gameObject = this; // ensure gameobject is this
             return _transform;
@@ -107,8 +107,8 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
     /// <summary>Returns a matrix relative/local to the currently rendering camera, Will throw an error if used outside rendering method</summary>
     public Matrix4x4 GlobalCamRelative {
         get {
-            Matrix4x4 t = this.transform.localToWorldMatrix;
-            t.Translation -= Camera.Current.GameObject.transform.position;
+            Matrix4x4 t = this.Transform.localToWorldMatrix;
+            t.Translation -= Camera.Current.GameObject.Transform.position;
             return t;
         }
     }
@@ -155,9 +155,9 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
 
         if (worldPositionStays)
         {
-            worldPosition = this.transform.position;
-            worldRotation = this.transform.rotation;
-            worldScale = this.transform.GetWorldRotationAndScale();
+            worldPosition = this.Transform.position;
+            worldRotation = this.Transform.rotation;
+            worldScale = this.Transform.GetWorldRotationAndScale();
         }
 
         if (NewParent != _parent)
@@ -176,18 +176,18 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
         {
             if (_parent != null)
             {
-                this.transform.localPosition = _parent.transform.InverseTransformPoint(worldPosition);
-                this.transform.localRotation = Quaternion.NormalizeSafe(Quaternion.Inverse(_parent.transform.rotation) * worldRotation);
+                this.Transform.localPosition = _parent.Transform.InverseTransformPoint(worldPosition);
+                this.Transform.localRotation = Quaternion.NormalizeSafe(Quaternion.Inverse(_parent.Transform.rotation) * worldRotation);
             }
             else
             {
-                this.transform.localPosition = worldPosition;
-                this.transform.localRotation = Quaternion.NormalizeSafe(worldRotation);
+                this.Transform.localPosition = worldPosition;
+                this.Transform.localRotation = Quaternion.NormalizeSafe(worldRotation);
             }
 
-            this.transform.localScale = Vector3.one;
-            Matrix4x4 inverseRS = this.transform.GetWorldRotationAndScale().Invert() * worldScale;
-            this.transform.localScale = new Vector3(inverseRS[0, 0], inverseRS[1, 1], inverseRS[2, 2]);
+            this.Transform.localScale = Vector3.one;
+            Matrix4x4 inverseRS = this.Transform.GetWorldRotationAndScale().Invert() * worldScale;
+            this.Transform.localScale = new Vector3(inverseRS[0, 0], inverseRS[1, 1], inverseRS[2, 2]);
         }
 
         HierarchyStateChanged();
@@ -512,8 +512,8 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
     public static GameObject Instantiate(GameObject original, Vector3 position, Quaternion rotation, GameObject? parent) 
     {
         GameObject clone = (GameObject)EngineObject.Instantiate(original, false);
-        clone.transform.position = position;
-        clone.transform.rotation = rotation;
+        clone.Transform.position = position;
+        clone.Transform.rotation = rotation;
         clone.SetParent(parent, true);
         return clone;
     }

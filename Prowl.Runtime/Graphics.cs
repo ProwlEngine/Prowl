@@ -104,7 +104,7 @@ namespace Prowl.Runtime
             //material.SetFloat("DeltaTime", Time.deltaTimeF);
             //material.SetInt("RandomSeed", Random.Shared.Next());
             //material.SetInt("ObjectID", mesh.InstanceID);
-            material.SetVector("Camera_WorldPosition", Camera.Current.GameObject.transform.position);
+            material.SetVector("Camera_WorldPosition", Camera.Current.GameObject.Transform.position);
             //material.SetVector("Camera_NearFarFOV", new Vector3(Camera.Current.NearClip, Camera.Current.FarClip, Camera.Current.FieldOfView));
 
             // Upload view and projection matrices(if locations available)

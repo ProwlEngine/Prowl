@@ -69,9 +69,9 @@ namespace Prowl.Runtime.CSG
             for (int i = 0; i < faces.Length; i++)
             {
                 faces[i].aabb = new AABBCSG();
-                faces[i].aabb.SetPosition(obj.transform.TransformPoint(faces[i].vertices[0]));
-                faces[i].aabb.Encapsulate(obj.transform.TransformPoint(faces[i].vertices[1]));
-                faces[i].aabb.Encapsulate(obj.transform.TransformPoint(faces[i].vertices[2]));
+                faces[i].aabb.SetPosition(obj.Transform.TransformPoint(faces[i].vertices[0]));
+                faces[i].aabb.Encapsulate(obj.Transform.TransformPoint(faces[i].vertices[1]));
+                faces[i].aabb.Encapsulate(obj.Transform.TransformPoint(faces[i].vertices[2]));
             }
         }
 

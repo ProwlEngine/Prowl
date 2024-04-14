@@ -331,15 +331,15 @@ public class HierarchyWindow : EditorWindow
             if (SelectHandler.Count > 0 && ImGui.MenuItem("Align With View")) {
                 SelectHandler.Foreach((go) => {
                     Camera cam = ViewportWindow.LastFocusedCamera;
-                    (go.Target as GameObject).transform.position = cam.GameObject.transform.position;
-                    (go.Target as GameObject).transform.rotation = cam.GameObject.transform.rotation;
+                    (go.Target as GameObject).Transform.position = cam.GameObject.Transform.position;
+                    (go.Target as GameObject).Transform.rotation = cam.GameObject.Transform.rotation;
                 });
             }
 
             if (SelectHandler.Count == 1 && ImGui.MenuItem("Align View With")) {
                 Camera cam = ViewportWindow.LastFocusedCamera;
-                cam.GameObject.transform.position = entity.transform.position;
-                cam.GameObject.transform.rotation = entity.transform.rotation;
+                cam.GameObject.Transform.position = entity.Transform.position;
+                cam.GameObject.Transform.rotation = entity.Transform.rotation;
             }
 
             ImGui.EndPopup();

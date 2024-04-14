@@ -38,7 +38,7 @@ public class PointLight : MonoBehaviour
                 lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
             }
 
-            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.transform.position - Camera.Current.GameObject.transform.position, Graphics.MatView));
+            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.Transform.position - Camera.Current.GameObject.Transform.position, Graphics.MatView));
             lightMat.SetColor("LightColor", color);
             lightMat.SetFloat("LightRadius", radius);
             lightMat.SetFloat("LightIntensity", intensity);
@@ -52,7 +52,7 @@ public class PointLight : MonoBehaviour
             //Camera.Current.Start3D();
         }
 
-        Gizmos.Matrix = GameObject.transform.localToWorldMatrix;
+        Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
         Gizmos.Color = Color.yellow;
         Gizmos.DrawSphere(Vector3.zero, radius);
     }

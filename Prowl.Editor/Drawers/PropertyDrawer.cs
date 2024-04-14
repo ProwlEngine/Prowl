@@ -223,7 +223,7 @@ public abstract class PropertyDrawer {
         // support looking for components on dropped GameObjects
         if (DragnDrop.Drop(out GameObject go))
         {
-            field.SetValue(container, go.transform);
+            field.SetValue(container, go.Transform);
             changed = true;
         }
 

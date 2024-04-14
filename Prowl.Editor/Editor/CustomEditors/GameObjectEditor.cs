@@ -88,11 +88,11 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
             if (ImGui.CollapsingHeader("Transform", ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.OpenOnArrow))
             {
-                DragnDrop.Drag(go.transform, typeof(Transform));
+                DragnDrop.Drag(go.Transform, typeof(Transform));
                 ImGui.Indent();
-                PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localPosition")!, -1, "Position");
-                PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localEulerAngles")!, -1, "Rotation");
-                PropertyDrawer.Draw(go.transform, typeof(Transform).GetProperty("localScale")!, -1, "Scale");
+                PropertyDrawer.Draw(go.Transform, typeof(Transform).GetProperty("localPosition")!, -1, "Position");
+                PropertyDrawer.Draw(go.Transform, typeof(Transform).GetProperty("localEulerAngles")!, -1, "Rotation");
+                PropertyDrawer.Draw(go.Transform, typeof(Transform).GetProperty("localScale")!, -1, "Scale");
                 ImGui.Unindent();
             }
 

@@ -135,9 +135,9 @@ namespace Prowl.Runtime.CSG
         {
             // Convert 3D vertex points to 2D.
             Vector3[] points_3D = {
-                brush_a.obj.transform.InverseTransformPoint(brush.obj.transform.TransformPoint(brush.faces[face_idx].vertices[0])),
-                brush_a.obj.transform.InverseTransformPoint(brush.obj.transform.TransformPoint(brush.faces[face_idx].vertices[1])),
-                brush_a.obj.transform.InverseTransformPoint(brush.obj.transform.TransformPoint(brush.faces[face_idx].vertices[2]))
+                brush_a.obj.Transform.InverseTransformPoint(brush.obj.Transform.TransformPoint(brush.faces[face_idx].vertices[0])),
+                brush_a.obj.Transform.InverseTransformPoint(brush.obj.Transform.TransformPoint(brush.faces[face_idx].vertices[1])),
+                brush_a.obj.Transform.InverseTransformPoint(brush.obj.Transform.TransformPoint(brush.faces[face_idx].vertices[2]))
             };
             plane = new Plane(points_3D[0], points_3D[1], points_3D[2]);
             to_3D = new TransformCSG();
@@ -643,7 +643,7 @@ namespace Prowl.Runtime.CSG
                 if (brush_a == null)
                     point_3D = brush.faces[face_idx].vertices[i];
                 else
-                    point_3D = brush_a.obj.transform.InverseTransformPoint(brush.obj.transform.TransformPoint(brush.faces[face_idx].vertices[i]));
+                    point_3D = brush_a.obj.Transform.InverseTransformPoint(brush.obj.Transform.TransformPoint(brush.faces[face_idx].vertices[i]));
 
                 if (plane.IsOnPlane(point_3D, Mathf.Small))
                 {
@@ -659,7 +659,7 @@ namespace Prowl.Runtime.CSG
                     if (brush_a == null)
                         next_point_3D = brush.faces[face_idx].vertices[(i + 1) % 3];
                     else
-                        next_point_3D = brush_a.obj.transform.InverseTransformPoint(brush.obj.transform.TransformPoint(brush.faces[face_idx].vertices[(i + 1) % 3]));
+                        next_point_3D = brush_a.obj.Transform.InverseTransformPoint(brush.obj.Transform.TransformPoint(brush.faces[face_idx].vertices[(i + 1) % 3]));
 
                     if (plane.IsOnPlane(next_point_3D, Mathf.Small))
                         continue; // Next point is in plane, it will be added separately.

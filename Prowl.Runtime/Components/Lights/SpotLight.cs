@@ -36,8 +36,8 @@ public class SpotLight : MonoBehaviour
                 lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
             }
 
-            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.transform.position - Camera.Current.GameObject.transform.position, Graphics.MatView));
-            lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.transform.forward, Graphics.MatView));
+            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.Transform.position - Camera.Current.GameObject.Transform.position, Graphics.MatView));
+            lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.Transform.forward, Graphics.MatView));
             //lightMat.SetVector("LightDirection",this.GameObject.Forward);
 
             lightMat.SetFloat("LightDistance", distance);
@@ -57,12 +57,12 @@ public class SpotLight : MonoBehaviour
             //Camera.Current.Start3D();
 
 
-            Gizmos.Matrix = GameObject.transform.localToWorldMatrix;
+            Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
             Gizmos.Color = Color.yellow;
             Gizmos.DrawSpotlight(Vector3.zero, distance, (1.0f - angle) * 5f);
             var b = Color.blue;
             b.a = 0.4f;
-            Gizmos.Matrix = GameObject.transform.localToWorldMatrix;
+            Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
             Gizmos.Color = b;
             Gizmos.DrawSpotlight(Vector3.zero, distance, (1.0f - falloff) * 5f);
         }

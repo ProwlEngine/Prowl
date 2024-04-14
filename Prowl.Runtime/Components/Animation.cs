@@ -183,7 +183,7 @@ namespace Prowl.Runtime
             // Find all bone names used by the clip
             foreach (var bone in clip.Bones)
             {
-                var t = this.GameObject.transform.DeepFind(bone.BoneName);
+                var t = this.GameObject.Transform.DeepFind(bone.BoneName);
                 if (t == null)
                     continue;
                 if (!transforms.Contains(t))
@@ -281,7 +281,7 @@ namespace Prowl.Runtime
             if (recursive)
             {
                 foreach (var child in transform.gameObject.children)
-                    AddMixingTransform(child.transform, true);
+                    AddMixingTransform(child.Transform, true);
             }
         }
 
@@ -291,7 +291,7 @@ namespace Prowl.Runtime
             if (recursive)
             {
                 foreach (var child in transform.gameObject.children)
-                    RemoveMixingTransform(child.transform, true);
+                    RemoveMixingTransform(child.Transform, true);
             }
         }
     }

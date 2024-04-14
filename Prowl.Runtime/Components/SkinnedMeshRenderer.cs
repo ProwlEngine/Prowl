@@ -30,7 +30,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
             }
             else
             {
-                boneTransforms[i] = (t.localToWorldMatrix * this.GameObject.transform.worldToLocalMatrix).ToFloat();
+                boneTransforms[i] = (t.localToWorldMatrix * this.GameObject.Transform.worldToLocalMatrix).ToFloat();
             }
         }
     }

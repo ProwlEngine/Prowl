@@ -44,7 +44,7 @@ public class DirectionalLight : MonoBehaviour
     public override void OnRenderObject()
     {
         lightMat ??= new Material(Shader.Find("Defaults/Directionallight.shader"));
-        lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.transform.forward, Graphics.MatView));
+        lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.Transform.forward, Graphics.MatView));
         lightMat.SetColor("LightColor", color);
         lightMat.SetFloat("LightIntensity", intensity);
 
@@ -76,7 +76,7 @@ public class DirectionalLight : MonoBehaviour
 
         Graphics.Blit(lightMat);
 
-        Gizmos.Matrix = GameObject.transform.localToWorldMatrix;
+        Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
         Gizmos.Color = Color.yellow;
         Gizmos.DrawDirectionalLight(Vector3.zero);
     }
@@ -93,8 +93,8 @@ public class DirectionalLight : MonoBehaviour
             //Graphics.MatDepthProjection = Matrix4x4.CreateOrthographicOffCenter(-25, 25, -25, 25, 1, 256);
             Graphics.MatDepthProjection = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, 0, shadowDistance*2);
 
-            var forward = GameObject.transform.forward;
-            Graphics.MatDepthView = Matrix4x4.CreateLookToLeftHanded(-forward * shadowDistance, -forward, GameObject.transform.up);
+            var forward = GameObject.Transform.forward;
+            Graphics.MatDepthView = Matrix4x4.CreateLookToLeftHanded(-forward * shadowDistance, -forward, GameObject.Transform.up);
 
             depthMVP = Matrix4x4.Identity;
             depthMVP = Matrix4x4.Multiply(depthMVP, Graphics.MatDepthView);

@@ -125,7 +125,7 @@ namespace Prowl.Runtime
         }
 
         public Transform parent {
-            get => gameObject._parent?.transform;
+            get => gameObject._parent?.Transform;
             set => gameObject.SetParent(value.gameObject, true);
         }
 
@@ -182,7 +182,7 @@ namespace Prowl.Runtime
         {
             foreach (var child in parent.gameObject.children)
                 if (child.Name == name)
-                    return child.transform;
+                    return child.Transform;
             return null;
         }
 
@@ -192,7 +192,7 @@ namespace Prowl.Runtime
             if (name == gameObject.Name) return this;
             foreach (var child in gameObject.children)
             {
-                var t = child.transform.DeepFind(name);
+                var t = child.Transform.DeepFind(name);
                 if (t != null) return t;
             }
             return null;

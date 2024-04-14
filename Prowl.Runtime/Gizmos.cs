@@ -15,14 +15,14 @@ namespace Prowl.Runtime
 
         public static void DrawLine(Vector3 from, Vector3 to)
         {
-            from -= Camera.Current.GameObject.transform.position;
-            to -= Camera.Current.GameObject.transform.position;
+            from -= Camera.Current.GameObject.Transform.position;
+            to -= Camera.Current.GameObject.Transform.position;
             Add(new LineGizmo(from, to, Color));
         }
 
         public static void DrawCube(Vector3 center, Vector3 size)
         {
-            center -= Camera.Current.GameObject.transform.position;
+            center -= Camera.Current.GameObject.Transform.position;
             Matrix = Matrix4x4.CreateScale(size) * Matrix * Matrix4x4.CreateTranslation(center);
             Add(new CubeGizmo(Color));
         }
@@ -30,48 +30,48 @@ namespace Prowl.Runtime
         public static void DrawPolygon(Vector3[] points, bool closed = false)
         {
             for (int i = 0; i < points.Length; i++)
-                points[i] -= Camera.Current.GameObject.transform.position;
+                points[i] -= Camera.Current.GameObject.Transform.position;
             Add(new PolygonGizmo(points, Color, closed));
         }
 
         public static void DrawCylinder(Vector3 center, float radius, float height)
         {
-            center -= Camera.Current.GameObject.transform.position;
+            center -= Camera.Current.GameObject.Transform.position;
             Matrix = Matrix4x4.CreateScale(new Vector3(radius, height, radius)) * Matrix * Matrix4x4.CreateTranslation(center);
             Add(new CylinderGizmo(Color));
         }
 
         public static void DrawCapsule(Vector3 center, float radius, float height)
         {
-            center -= Camera.Current.GameObject.transform.position;
+            center -= Camera.Current.GameObject.Transform.position;
             Matrix = Matrix4x4.CreateScale(new Vector3(radius, height, radius)) * Matrix * Matrix4x4.CreateTranslation(center);
             Add(new CapsuleGizmo(Color));
         }
 
         public static void DrawCircle(Vector3 center, float radius)
         {
-            center -= Camera.Current.GameObject.transform.position;
+            center -= Camera.Current.GameObject.Transform.position;
             Matrix = Matrix4x4.CreateScale(new Vector3(radius, radius, radius)) * Matrix * Matrix4x4.CreateTranslation(center);
             Add(new CircleGizmo(Color));
         }
 
         public static void DrawSphere(Vector3 center, float radius)
         {
-            center -= Camera.Current.GameObject.transform.position;
+            center -= Camera.Current.GameObject.Transform.position;
             Matrix = Matrix4x4.CreateScale(new Vector3(radius, radius, radius)) * Matrix * Matrix4x4.CreateTranslation(center);
             Add(new SphereGizmo(Color));
         }
 
         public static void DrawDirectionalLight(Vector3 center)
         {
-            center -= Camera.Current.GameObject.transform.position;
+            center -= Camera.Current.GameObject.Transform.position;
             Matrix = Matrix * Matrix4x4.CreateTranslation(center);
             Add(new DirectionalLightGizmo(Color));
         }
 
         public static void DrawSpotlight(Vector3 position, float distance, float spotAngle)
         {
-            position -= Camera.Current.GameObject.transform.position;
+            position -= Camera.Current.GameObject.Transform.position;
             Matrix = Matrix * Matrix4x4.CreateTranslation(position);
             Add(new SpotlightGizmo(distance, spotAngle, Color));
         }

@@ -37,10 +37,10 @@ namespace Prowl.Runtime
             _source = AudioSystem.Engine.CreateAudioSource();
             _source.PositionKind = AudioPositionKind.ListenerRelative;
             // position relative to listener
-            var listener = AudioSystem.Listener.GameObject.transform;
-            var thisPos = GameObject.transform.position;
+            var listener = AudioSystem.Listener.GameObject.Transform;
+            var thisPos = GameObject.Transform.position;
             _source.Position = listener.InverseTransformPoint(thisPos);
-            _source.Direction = GameObject.transform.forward;
+            _source.Direction = GameObject.Transform.forward;
             _source.Gain = Volume;
             _source.Looping = Looping;
             _source.MaxDistance = MaxDistance;
@@ -54,10 +54,10 @@ namespace Prowl.Runtime
         {
             //if (_lastVersion != GameObject.transform.version)
             {
-                var listener = AudioSystem.Listener.GameObject.transform;
-                var thisPos = GameObject.transform.position;
+                var listener = AudioSystem.Listener.GameObject.Transform;
+                var thisPos = GameObject.Transform.position;
                 _source.Position = listener.InverseTransformPoint(thisPos);
-                _source.Direction = GameObject.transform.forward;
+                _source.Direction = GameObject.Transform.forward;
                 //_lastVersion = GameObject.transform.version;
             }
 

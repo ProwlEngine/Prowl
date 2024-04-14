@@ -29,7 +29,7 @@ namespace Prowl.Runtime.CSG
             // Add faces to MeshMerge.
             MeshMerge mesh_merge = new MeshMerge(brush_a.faces.Length + build2DFaceCollection.build2DFacesA.Count, brush_b.faces.Length + build2DFaceCollection.build2DFacesB.Count);
             mesh_merge.vertex_snap = tolerance;
-            mesh_merge.scale_a = brush_a.obj.transform.localScale;
+            mesh_merge.scale_a = brush_a.obj.Transform.localScale;
 
             for (int i = 0; i < brush_a.faces.Length; i++)
             {
@@ -62,7 +62,7 @@ namespace Prowl.Runtime.CSG
                     Vector2[] uvs = new Vector2[3];
                     for (int j = 0; j < 3; j++)
                     {
-                        points[j] = brush_a.obj.transform.InverseTransformPoint(brush_b.obj.transform.TransformPoint(brush_b.faces[i].vertices[j]));
+                        points[j] = brush_a.obj.Transform.InverseTransformPoint(brush_b.obj.Transform.TransformPoint(brush_b.faces[i].vertices[j]));
                         uvs[j] = brush_b.faces[i].uvs[j];
                     }
                     mesh_merge.AddFace(points, uvs, true);
@@ -84,9 +84,9 @@ namespace Prowl.Runtime.CSG
             };
 
             Vector3[] vertices_b = {
-                brush_a.obj.transform.InverseTransformPoint(brush_b.obj.transform.TransformPoint(brush_b.faces[face_idx_b].vertices[0])),
-                brush_a.obj.transform.InverseTransformPoint(brush_b.obj.transform.TransformPoint(brush_b.faces[face_idx_b].vertices[1])),
-                brush_a.obj.transform.InverseTransformPoint(brush_b.obj.transform.TransformPoint(brush_b.faces[face_idx_b].vertices[2]))
+                brush_a.obj.Transform.InverseTransformPoint(brush_b.obj.Transform.TransformPoint(brush_b.faces[face_idx_b].vertices[0])),
+                brush_a.obj.Transform.InverseTransformPoint(brush_b.obj.Transform.TransformPoint(brush_b.faces[face_idx_b].vertices[1])),
+                brush_a.obj.Transform.InverseTransformPoint(brush_b.obj.Transform.TransformPoint(brush_b.faces[face_idx_b].vertices[2]))
             };
 
             // Don't use degenerate faces.

@@ -43,7 +43,7 @@ public class ViewportWindow : EditorWindow
         var CamObject = GameObject.CreateSilently();
         CamObject.Name = "Editor-Camera";
         CamObject.hideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
-        CamObject.transform.position = new Vector3(0, 5, -10);
+        CamObject.Transform.position = new Vector3(0, 5, -10);
         Cam = CamObject.AddComponent<Camera>();
         Cam.ShowGizmos = true;
         LastFocusedCamera = Cam;
@@ -95,7 +95,7 @@ public class ViewportWindow : EditorWindow
         if (renderSize.X != RenderTarget.Width || renderSize.Y != RenderTarget.Height)
             RefreshRenderTexture((int)renderSize.X, (int)renderSize.Y);
 
-        var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.transform.position, Cam.GameObject.transform.forward, Cam.GameObject.transform.up).ToFloat();
+        var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Transform.position, Cam.GameObject.Transform.forward, Cam.GameObject.Transform.up).ToFloat();
         var projection = Cam.GetProjectionMatrix(renderSize.X, renderSize.Y).ToFloat();
 
         WindowCenter = ImGui.GetWindowPos() + new System.Numerics.Vector2(windowSize.X / 2, windowSize.Y / 2);
@@ -135,7 +135,7 @@ public class ViewportWindow : EditorWindow
                         else
                         {
                             // Find Prefab go.IsPrefab
-                            var prefab = go.transform;
+                            var prefab = go.Transform;
                             while (prefab.parent != null)
                             {
                                 prefab = prefab.parent;
@@ -235,8 +235,8 @@ public class ViewportWindow : EditorWindow
         System.Numerics.Matrix4x4.Invert(view, out var iview);
         System.Numerics.Matrix4x4.Decompose(iview, out var scale, out var rot, out var pos);
         //Cam.GameObject.Local = iview.ToDouble();
-        Cam.GameObject.transform.localPosition = pos;
-        Cam.GameObject.transform.localRotation = rot;
+        Cam.GameObject.Transform.localPosition = pos;
+        Cam.GameObject.Transform.localRotation = rot;
         //Cam.GameObject.transform.localScale = scale;
     }
 
@@ -252,8 +252,8 @@ public class ViewportWindow : EditorWindow
         {
             if (go.hideFlags.HasFlag(HideFlags.NoGizmos)) continue;
 
-            center += go.transform.position;
-            originalTransforms[go] = (go.transform.position, go.transform.localScale);
+            center += go.Transform.position;
+            originalTransforms[go] = (go.Transform.position, go.Transform.localScale);
             count++;
         }
 
@@ -286,7 +286,7 @@ public class ViewportWindow : EditorWindow
         {
             // Only 1 thing use its full transform
             var go = gameObjects.First();
-            centerMatrix = Matrix4x4.CreateScale(go.transform.localScale) * Matrix4x4.CreateFromQuaternion(go.transform.rotation) * Matrix4x4.CreateTranslation(go.transform.position);
+            centerMatrix = Matrix4x4.CreateScale(go.Transform.localScale) * Matrix4x4.CreateFromQuaternion(go.Transform.rotation) * Matrix4x4.CreateTranslation(go.Transform.position);
         }
 
 
@@ -310,9 +310,9 @@ public class ViewportWindow : EditorWindow
                 {
                     // Only 1 thing use its full transform
                     var go = gameObjects.First();
-                    go.transform.position = pos;
-                    go.transform.rotation = rot;
-                    go.transform.localScale = scale;
+                    go.Transform.position = pos;
+                    go.Transform.rotation = rot;
+                    go.Transform.localScale = scale;
                 }
                 else
                 {
@@ -326,10 +326,10 @@ public class ViewportWindow : EditorWindow
                         // Calculate new position considering the offset and the transformation
                         Vector3 offset = original.Position - center;
                         offset = Vector3.Transform(offset, rot); // Apply rotation to the offset
-                        go.transform.position = pos + offset * scale; // New position based on central transformation and scaled offset
+                        go.Transform.position = pos + offset * scale; // New position based on central transformation and scaled offset
 
-                        go.transform.rotation *= rot; // Additive rotation
-                        go.transform.localScale = original.Scale * scale; // Apply scale relative to original scale
+                        go.Transform.rotation *= rot; // Additive rotation
+                        go.Transform.localScale = original.Scale * scale; // Apply scale relative to original scale
                     }
                 }
             }
@@ -345,7 +345,7 @@ public class ViewportWindow : EditorWindow
             GameObject go = (GameObject)EngineObject.Instantiate(original, true);
             if (go != null)
             {
-                go.transform.position = Cam.GameObject.transform.position + Cam.GameObject.transform.forward * 10;
+                go.Transform.position = Cam.GameObject.Transform.position + Cam.GameObject.Transform.forward * 10;
             }
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
@@ -355,7 +355,7 @@ public class ViewportWindow : EditorWindow
             var t = go;
             if (t != null)
             {
-                t.transform.position = Cam.GameObject.transform.position + Cam.GameObject.transform.forward * 10;
+                t.Transform.position = Cam.GameObject.Transform.position + Cam.GameObject.Transform.forward * 10;
             }
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
@@ -375,18 +375,18 @@ public class ViewportWindow : EditorWindow
             ImGui.FocusWindow(ImGUIWindow, ImGuiFocusRequestFlags.None);
             ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeAll);
             Vector3 moveDir = Vector3.zero;
-            if (Input.GetKey(Key.W)) moveDir += Cam.GameObject.transform.forward;
-            if (Input.GetKey(Key.S)) moveDir -= Cam.GameObject.transform.forward;
-            if (Input.GetKey(Key.A)) moveDir -= Cam.GameObject.transform.right;
-            if (Input.GetKey(Key.D)) moveDir += Cam.GameObject.transform.right;
-            if (Input.GetKey(Key.E)) moveDir += Cam.GameObject.transform.up;
-            if (Input.GetKey(Key.Q)) moveDir -= Cam.GameObject.transform.up;
+            if (Input.GetKey(Key.W)) moveDir += Cam.GameObject.Transform.forward;
+            if (Input.GetKey(Key.S)) moveDir -= Cam.GameObject.Transform.forward;
+            if (Input.GetKey(Key.A)) moveDir -= Cam.GameObject.Transform.right;
+            if (Input.GetKey(Key.D)) moveDir += Cam.GameObject.Transform.right;
+            if (Input.GetKey(Key.E)) moveDir += Cam.GameObject.Transform.up;
+            if (Input.GetKey(Key.Q)) moveDir -= Cam.GameObject.Transform.up;
 
             if (moveDir != Vector3.zero) {
                 moveDir = Vector3.Normalize(moveDir);
                 if (Input.GetKey(Key.ShiftLeft))
                     moveDir *= 2.0f;
-                Cam.GameObject.transform.position += moveDir * (Time.deltaTimeF * 10f) * moveSpeed;
+                Cam.GameObject.Transform.position += moveDir * (Time.deltaTimeF * 10f) * moveSpeed;
 
                 // Get Exponentially faster
                 moveSpeed += Time.deltaTimeF * 0.0001;
@@ -398,10 +398,10 @@ public class ViewportWindow : EditorWindow
 
             // Version with fixed gimbal lock
             var mouseDelta = Input.MouseDelta;
-            var rot = Cam.GameObject.transform.eulerAngles;
+            var rot = Cam.GameObject.Transform.eulerAngles;
             rot.y += mouseDelta.x * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
             rot.x += mouseDelta.y * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
-            Cam.GameObject.transform.eulerAngles = rot;
+            Cam.GameObject.Transform.eulerAngles = rot;
 
             Input.MousePosition = WindowCenter;
         } else {
@@ -409,10 +409,10 @@ public class ViewportWindow : EditorWindow
             if (Input.GetMouseButton(2)) {
 
                 var mouseDelta = Input.MouseDelta;
-                var pos = Cam.GameObject.transform.position;
-                pos -= Cam.GameObject.transform.right * mouseDelta.x * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
-                pos += Cam.GameObject.transform.up * mouseDelta.y * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
-                Cam.GameObject.transform.position = pos;
+                var pos = Cam.GameObject.Transform.position;
+                pos -= Cam.GameObject.Transform.right * mouseDelta.x * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
+                pos += Cam.GameObject.Transform.up * mouseDelta.y * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
+                Cam.GameObject.Transform.position = pos;
 
             } else if (Input.MouseWheelDelta != 0) {
 
@@ -424,9 +424,9 @@ public class ViewportWindow : EditorWindow
                 if (amount < Cam.NearClip * 2) amount = Cam.NearClip * 2;
 
                 if (dir.sqrMagnitude > 0)
-                    Cam.GameObject.transform.position += Vector3.Normalize(dir) * amount * Input.MouseWheelDelta;
+                    Cam.GameObject.Transform.position += Vector3.Normalize(dir) * amount * Input.MouseWheelDelta;
                 else
-                    Cam.GameObject.transform.position += Cam.GameObject.transform.forward * 1f * Input.MouseWheelDelta;
+                    Cam.GameObject.Transform.position += Cam.GameObject.Transform.forward * 1f * Input.MouseWheelDelta;
 
             } else if (IsFocused) {
 
@@ -447,7 +447,7 @@ public class ViewportWindow : EditorWindow
                     // If only one object is selected, set the camera position to the center of that object
                     if (HierarchyWindow.SelectHandler.Selected.First().Target is GameObject singleObject)
                     {
-                        Cam.GameObject.transform.position = singleObject.transform.position - (Cam.GameObject.transform.forward * defaultZoomFactor);
+                        Cam.GameObject.Transform.position = singleObject.Transform.position - (Cam.GameObject.Transform.forward * defaultZoomFactor);
                         return;
                     }
                 }
@@ -458,7 +458,7 @@ public class ViewportWindow : EditorWindow
                 {
                     if (obj.Target is GameObject go)
                     {
-                        combinedBounds.Encapsulate(go.transform.position);
+                        combinedBounds.Encapsulate(go.Transform.position);
                     }
                 }
 
@@ -467,7 +467,7 @@ public class ViewportWindow : EditorWindow
                 float zoomFactor = boundingBoxSize * defaultZoomFactor;
 
                 Vector3 averagePosition = combinedBounds.center;
-                Cam.GameObject.transform.position = averagePosition - (Cam.GameObject.transform.forward * zoomFactor);
+                Cam.GameObject.Transform.position = averagePosition - (Cam.GameObject.Transform.forward * zoomFactor);
             }
 
         }
