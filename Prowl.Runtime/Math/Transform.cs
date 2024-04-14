@@ -267,6 +267,7 @@ namespace Prowl.Runtime
 
         public Vector3 TransformPoint(Vector3 inPosition) => Vector4.Transform(new Vector4(inPosition, 1.0), localToWorldMatrix).xyz;
         public Vector3 InverseTransformPoint(Vector3 inPosition) => Vector4.Transform(new Vector4(inPosition, 1.0), worldToLocalMatrix).xyz;
+        public Quaternion InverseTransformRotation(Quaternion worldRotation) => Quaternion.Inverse(rotation) * worldRotation;
 
         public Vector3 TransformDirection(Vector3 inDirection) => rotation * inDirection;
         public Vector3 InverseTransformDirection(Vector3 inDirection) => Quaternion.Inverse(rotation) *  inDirection;
@@ -298,6 +299,19 @@ namespace Prowl.Runtime
                 newVector.Scale(InverseSafe(m_LocalScale));
 
             return newVector;
+        }
+
+        public Quaternion TransformRotation(Quaternion inRotation)
+        {
+            Quaternion worldRotation = inRotation;
+
+            Transform cur = this;
+            while (cur != null)
+            {
+                worldRotation = cur.m_LocalRotation * worldRotation;
+                cur = cur.parent;
+            }
+            return worldRotation;
         }
 
         #endregion

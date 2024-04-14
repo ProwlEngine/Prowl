@@ -37,14 +37,14 @@ namespace Prowl.Runtime
         public static void DrawCylinder(Vector3 center, float radius, float height)
         {
             center -= Camera.Current.GameObject.Transform.position;
-            Matrix = Matrix4x4.CreateScale(new Vector3(radius, height, radius)) * Matrix * Matrix4x4.CreateTranslation(center);
+            Matrix = Matrix4x4.CreateScale(new Vector3(radius * 2f, height, radius * 2f)) * Matrix * Matrix4x4.CreateTranslation(center);
             Add(new CylinderGizmo(Color));
         }
 
         public static void DrawCapsule(Vector3 center, float radius, float height)
         {
             center -= Camera.Current.GameObject.Transform.position;
-            Matrix = Matrix4x4.CreateScale(new Vector3(radius, height, radius)) * Matrix * Matrix4x4.CreateTranslation(center);
+            Matrix = Matrix4x4.CreateScale(new Vector3(radius * 2f, height, radius * 2f)) * Matrix * Matrix4x4.CreateTranslation(center);
             Add(new CapsuleGizmo(Color));
         }
 

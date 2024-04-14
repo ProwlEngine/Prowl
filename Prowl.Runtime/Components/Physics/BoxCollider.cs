@@ -1,6 +1,5 @@
-﻿using Jitter2.Collision.Shapes;
+﻿using BepuPhysics.Collidables;
 using Prowl.Icons;
-using System.Collections.Generic;
 
 namespace Prowl.Runtime
 {
@@ -9,19 +8,18 @@ namespace Prowl.Runtime
     {
         public Vector3 size = Vector3.one;
 
-        public override List<Shape> CreateShapes() => [ new BoxShape(size) ];
-        public override void OnValidate()
+        public override void CreateShape()
         {
-            (Shape[0] as BoxShape).Size = size;
-            Shape[0].UpdateShape();
-            var rigid = GetComponentInParent<Rigidbody>();
-            if(rigid != null)
-                rigid.IsActive = true;
+            Vector3 s = size * this.GameObject.Transform.localScale;
+            var box = new Box((float)s.x, (float)s.y, (float)s.z);
+            shape = box;
+            bodyInertia = box.ComputeInertia(mass);
+            shapeIndex = Physics.Sim.Shapes.Add(box);
         }
 
         public override void DrawGizmosSelected()
         {
-            Gizmos.Matrix = GameObject.transform.localToWorldMatrix;
+            Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
             Gizmos.Color = Color.yellow;
             Gizmos.DrawCube(Vector3.zero, size * 1.001f);
         }

@@ -19,6 +19,9 @@ internal class Program {
 
 
         Application.Initialize += () => {
+
+            Physics.Initialize();
+
             AssemblyManager.LoadExternalAssembly(AssemblyDLL.FullName, true);
             OnAssemblyLoadAttribute.Invoke();
 

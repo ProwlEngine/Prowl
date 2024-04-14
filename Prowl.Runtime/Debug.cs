@@ -75,4 +75,14 @@ public static class Debug
             LogError(e.Message);
         }
     }
+
+    internal static void Assert(bool condition, string? message)
+    {
+        System.Diagnostics.Debug.Assert(condition, message);
+    }
+
+    internal static void Assert(bool condition)
+    {
+        System.Diagnostics.Debug.Assert(condition);
+    }
 }

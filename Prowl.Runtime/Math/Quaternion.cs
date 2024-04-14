@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using Jitter2.LinearMath;
 using System;
 using System.Globalization;
 
@@ -818,17 +817,6 @@ namespace Prowl.Runtime
         {
             return new Quaternion(value.X, value.Y, value.Z, value.W);
         }
-
-        public static implicit operator JQuaternion(Quaternion value)
-        {
-            return new JQuaternion((float)value.x, (float)value.y, (float)value.z, (float)value.w);
-        }
-
-        public static implicit operator Quaternion(JQuaternion value)
-        {
-            return new Quaternion(value.X, value.Y, value.Z, value.W);
-        }
-
         /// <summary>
         /// Returns a boolean indicating whether the given Quaternion is equal to this Quaternion instance.
         /// </summary>

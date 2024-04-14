@@ -1,115 +1,92 @@
-﻿using Jitter2;
-using Jitter2.Collision.Shapes;
-using Jitter2.Dynamics;
-using Jitter2.Dynamics.Constraints;
-using Jitter2.LinearMath;
-using Prowl.Icons;
-using Silk.NET.Input;
-using Silk.NET.Vulkan;
+﻿using BepuPhysics;
+using BepuPhysics.Collidables;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Prowl.Runtime
 {
-    [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Gamepad}  Character Controller")]
-    public class CharacterController : MonoBehaviour
+    [RequireComponent(typeof(CapsuleCollider))]
+    public sealed class CharacterController : MonoBehaviour
     {
-        private PhysicalSpace space;
-        public PhysicalSpace Space {
-            get => space ??= Physics.DefaultSpace;
-            set {
-                space = value;
-                if (Body != null)
-                {
-                    space.world.Remove(Body);
-                    Body = null;
-                }
-            }
+        public float speed = 4f;
+        public float jumpVelocity = 6f;
+        public float maxSlope = (MathF.PI * 0.25f).ToDeg();
+
+        public BodyHandle BodyHandle { get; private set; }
+
+        public Vector2 TargetVelocity { get; set; } = Vector2.zero;
+        public bool IsGrounded { get; private set; } = false;
+
+
+        public override void OnEnable()
+        {
+            CapsuleCollider collider = GetComponent<CapsuleCollider>()!;
+            if (collider.shape == null)
+                collider.CreateShape();
+
+            BodyHandle = Physics.Sim.Bodies.Add(
+                BodyDescription.CreateDynamic(this.Transform.position.ToFloat(), new BodyInertia { InverseMass = 1f / collider.mass },
+                new(collider.shapeIndex!.Value, 0.1f, float.MaxValue, ContinuousDetection.Passive), collider.radius * 0.02f));
+            ref var character = ref Physics.Characters.AllocateCharacter(BodyHandle);
+            character.LocalUp = new Vector3(0, 1, 0);
+            character.JumpVelocity = jumpVelocity;
+            character.MaximumVerticalForce = 100;
+            character.MaximumHorizontalForce = 20;
+            character.MinimumSupportDepth = collider.radius * -0.01f;
+            character.MinimumSupportContinuationDepth = -0.1f;
+            character.CosMaximumSlope = MathF.Cos(maxSlope.ToRad());
+
+            character.TargetVelocity = TargetVelocity;
         }
 
-        public float height = 2.0f;
-        public float radius = 0.5f;
-
-        public bool isGrounded { get; private set; } = false;
-        public Shape floor { get; private set; } = null;
-        public Vector3 hitPoint { get; private set; } = Vector3.zero;
-
-        public RigidBody Body { get; private set; }
-
-        private float capsuleHalfHeight;
-        private Vector3 accumulatedMovement;
-
-        public override void Awake()
+        public override void OnDisable()
         {
-            Body = Space.world.CreateRigidBody();
-            var cs = new CapsuleShape(radius, height * 0.5f);
-            Body.AddShape(cs);
-            Body.Position = this.GameObject.transform.position;
-            Body.AffectedByGravity = false;
-
-            // disable velocity damping
-            Body.Damping = (0, 0);
-
-            this.capsuleHalfHeight = cs.Radius + cs.Length * 0.5f;
-
-            // Disable deactivation
-            Body.DeactivationTime = TimeSpan.MaxValue;
-
-            // Make the capsule stand upright, but able to rotate 360 degrees.
-            var ur = Space.world.CreateConstraint<HingeAngle>(Body, Space.world.NullBody);
-            ur.Initialize(JVector.UnitY, AngularLimit.Full);
+            Physics.Sim.Shapes.Remove(new BodyReference(BodyHandle, Physics.Sim.Bodies).Collidable.Shape);
+            Physics.Sim.Bodies.Remove(BodyHandle);
+            Physics.Characters.RemoveCharacterByBodyHandle(BodyHandle);
         }
 
         public override void Update()
         {
-            this.GameObject.transform.position = Body.Position;
-        }
+            ref var character = ref Physics.Characters.GetCharacterByBodyHandle(BodyHandle);
+            var characterBody = new BodyReference(BodyHandle, Physics.Sim.Bodies);
 
-        public override void FixedUpdate()
-        {
-            if (Body == null) return;
-            this.Body.SetActivationState(true);
+            character.CosMaximumSlope = MathF.Cos(maxSlope.ToRad());
+            character.JumpVelocity = jumpVelocity;
 
-            isGrounded = IsOnFloor(out var floor, out var hitPoint);
-            this.floor = floor;
-            this.hitPoint = hitPoint;
-
-            //this.Body.Position += accumulatedMovement;
-            this.Body.AddForce(accumulatedMovement * 30);
-            accumulatedMovement = Vector3.zero;
-
-            if (isGrounded)
-                this.Body.Velocity *= 0.98f;
-        }
-
-        public void Move(Vector3 deltaMove) => accumulatedMovement += deltaMove;
-
-        private World.RayCastFilterPre? preFilter = null;
-        private bool FilterShape(Shape shape)
-        {
-            if (shape.RigidBody != null)
+            if (!characterBody.Awake &&
+                ((character.TryJump && character.Supported) ||
+                TargetVelocity.ToFloat() != character.TargetVelocity ||
+                (TargetVelocity != Vector2.zero && character.ViewDirection != this.Transform.forward.ToFloat())))
             {
-                if (shape.RigidBody == Body) return false;
+                Physics.Sim.Awakener.AwakenBody(character.BodyHandle);
             }
-            return true;
+
+            character.ViewDirection = this.Transform.forward;
+            character.TargetVelocity = TargetVelocity;
+            IsGrounded = character.Supported;
         }
 
-        private bool IsOnFloor(out Shape? floor, out JVector hitPoint)
+        private uint lastVersion = 0;
+        public override void LateUpdate()
         {
-            preFilter ??= FilterShape;
+            var body = new BodyReference(BodyHandle, Physics.Sim.Bodies);
 
-            bool hit = space.world.RayCast(Body.Position, -JVector.UnitY, preFilter, null,
-                out floor, out JVector normal, out float fraction);
+            if (lastVersion != this.GameObject.Transform.version)
+            {
+                body.Pose.Position = this.GameObject.Transform.position;
+                body.Pose.Orientation = this.GameObject.Transform.rotation;
+                body.Velocity.Linear = Vector3.zero;
+                body.Velocity.Angular = Vector3.zero;
+                body.Awake = true;
+                lastVersion = this.GameObject.Transform.version;
+            }
 
-            float delta = fraction - capsuleHalfHeight;
-
-            hitPoint = Body.Position - JVector.UnitY * fraction;
-            return (hit && delta < 0.04f && floor != null);
+            this.GameObject.Transform.position = body.Pose.Position;
+            this.GameObject.Transform.rotation = body.Pose.Orientation;
+            lastVersion = this.GameObject.Transform.version;
         }
 
+        public void TryJump() => Physics.Characters.GetCharacterByBodyHandle(BodyHandle).TryJump = true;
 
     }
 }

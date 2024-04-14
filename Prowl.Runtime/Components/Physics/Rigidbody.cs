@@ -1,11 +1,9 @@
-﻿using Jitter2.Collision.Shapes;
-using Jitter2.LinearMath;
+﻿using BepuPhysics;
+using BepuPhysics.Collidables;
 using Prowl.Icons;
 using System.Collections.Generic;
-using System.Linq;
 
 
-// Partially based on https://github.com/suzuke/JitterPhysicsForUnity
 
 namespace Prowl.Runtime
 {
@@ -13,181 +11,163 @@ namespace Prowl.Runtime
     [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Cubes}  Rigidbody")]
     public class Rigidbody : MonoBehaviour
     {
-        private PhysicalSpace space;
-        public PhysicalSpace Space {
-            get => space ??= Physics.DefaultSpace;
-            set {
-                space = value;
-                if (Body != null) {
-                    space.world.Remove(Body);
-                    Body = null;
-                }
-            }
-        }
-
-
-        internal Jitter2.Dynamics.RigidBody Body { get; private set; }
-
-        private List<Shape> shapes;
-        private List<Shape> Shapes => shapes ??= CreateShapes();
-
-        [SerializeField] private bool affectedByGravity = true;
-        public bool AffectedByGravity {
-            get => affectedByGravity;
-            set {
-                affectedByGravity = value;
-                Body.AffectedByGravity = value;
-            }
-        }
-
-        [SerializeField] private bool isStatic;
-        public bool IsStatic {
-            get => isStatic;
-            set {
-                isStatic = value;
-                Body.IsStatic = value;
-            }
-        }
-
-        [SerializeField] private bool isKinematic;
-        public bool IsKinematic {
-            get => isKinematic;
-            set => isKinematic = value;
-        }
-
-        public bool IsActive {
-            get => Body?.IsActive ?? false;
-            set => Body?.SetActivationState(value);
-        }
-
-        [SerializeField] private bool speculativeContacts;
-        public bool SpeculativeContacts {
-            get => speculativeContacts;
-            set {
-                speculativeContacts = value;
-                Body.EnableSpeculativeContacts = value;
-            }
-        }
-
         [SerializeField]
-        private float mass;
-        public float Mass {
-            get => mass;
-            set {
-                mass = value;
-                Body.SetMassInertia(mass);
-            }
+        private bool kinematic = false;
+
+        //public enum UpdateMode
+        //{
+        //    None,
+        //    Interpolation,
+        //    Extrapolation
+        //}
+        //public UpdateMode updateMode;
+
+        private BodyHandle? bodyHandle;
+        private TypedIndex? compoundShape;
+
+        public Vector3 Position {
+            get => Physics.Sim.Bodies[bodyHandle.Value].Pose.Position;
+            set => Physics.Sim.Bodies[bodyHandle.Value].Pose.Position = value;
         }
 
-        public Vector3 Torque => new(Body.Torque.X, Body.Torque.Y, Body.Torque.Z);
+        public Quaternion Rotation {
+            get => Physics.Sim.Bodies[bodyHandle.Value].Pose.Orientation;
+            set => Physics.Sim.Bodies[bodyHandle.Value].Pose.Orientation = value;
+        }
 
-        public Vector3 Force {
-            get => new(Body.Force.X, Body.Force.Y, Body.Force.Z);
-            set => Body.Force = value;
+        public bool IsKinematic {
+            get => Physics.Sim.Bodies[bodyHandle.Value].Kinematic;
         }
 
         public Vector3 Velocity {
-            get => new(Body.Velocity.X, Body.Velocity.Y, Body.Velocity.Z);
-            set => Body.Velocity = value;
+            get => Physics.Sim.Bodies[bodyHandle.Value].Velocity.Linear;
+            set {
+                Physics.Sim.Bodies[bodyHandle.Value].Velocity.Linear = value;
+            }
         }
 
         public Vector3 AngularVelocity {
-            get => new(Body.AngularVelocity.X, Body.AngularVelocity.Y, Body.AngularVelocity.Z);
-            set => Body.AngularVelocity = value;
+            get => Physics.Sim.Bodies[bodyHandle.Value].Velocity.Angular;
+            set {
+                Physics.Sim.Bodies[bodyHandle.Value].Velocity.Angular = value;
+            }
         }
 
-        public List<Collision> Contacts => Body.Contacts.Select(x => new Collision(this, x)).ToList();
-        public List<Rigidbody> TouchingBodies => Body.Connections.Select(x => (x.Tag as Rigidbody)!).ToList();
-
-
-        public void AddForce(Vector3 force) => Body.AddForce(force);
-
-        public void AddForceAtPosition(Vector3 force, Vector3 position) => Body.AddForce(force, position);
-
-        public Vector3 GetPointVelocity(Vector3 point) => Body.Velocity + JVector.Cross(Body.AngularVelocity, point - Body.Position);
-
-        public void SetTransform(Vector3 position, Quaternion rotation)
+        public void AddForce(Vector3 force)
         {
-            SetPosition(position);
-            SetRotation(rotation);
+            Physics.Sim.Bodies[bodyHandle.Value].ApplyLinearImpulse(force);
         }
 
-        public void SetPosition(Vector3 position) => Body.Position = position;
-
-        public void SetRotation(Quaternion rotation) => Body.Orientation = JMatrix.CreateFromQuaternion(rotation);
-
-        public void Refresh()
+        public void AddTorque(Vector3 torque)
         {
-            if(isKinematic || mass > 0)
-                Mass = isKinematic ? 1e6f : mass;
-            IsStatic = isStatic;
-            AffectedByGravity = isKinematic ? false : affectedByGravity;
-            SpeculativeContacts = speculativeContacts;
-            shapes = CreateShapes();
-
-            IsActive = true;
-
-            SetPosition(GameObject.transform.position);
-            SetRotation(GameObject.transform.rotation);
+            Physics.Sim.Bodies[bodyHandle.Value].ApplyAngularImpulse(torque);
         }
 
-        public void RefreshShape()
+        public void AddForceAtPosition(Vector3 force, Vector3 worldPosition)
         {
-            // TODO: Causes Crash, Shapes get cached and dont appear to support being registered/attached to a body a second time
-            //Body.ClearShapes(false);
-            //shapes = CreateShapes();
-            //Body.AddShape(Shapes);
+            Physics.Sim.Bodies[bodyHandle.Value].ApplyImpulse(force, worldPosition - Position);
         }
 
-        private List<Shape> CreateShapes()
+        public Vector3 GetPointVelocity(Vector3 point) {
+            Physics.Sim.Bodies[bodyHandle.Value].GetVelocityForOffset(point - Position, out var velocity);
+            return velocity;
+        }
+
+        private List<Collider> colliders = [];
+        public void StartBuild() => colliders.Clear();
+        public void AddCollider(Collider collider) => colliders.Add(collider);
+
+        public void Build()
         {
-            var colliders = GetComponentsInChildren<Collider>().ToList();
+            if(bodyHandle != null)
+                Physics.Sim.Bodies.Remove(bodyHandle.Value);
+            bodyHandle = null;
 
-            List<Shape> allShapes = new();
-            foreach (var collider in colliders)
-                allShapes.AddRange(collider.CreateTransformedShape(this));
+            if (colliders.Count == 0) return;
 
-            return allShapes;
+            var shape = ComputeShape(out BodyInertia compoundInertia, out System.Numerics.Vector3 compoundCenter);
+            var collidableDescription = new CollidableDescription(shape, 0.1f);
+            bodyHandle = Physics.Sim.Bodies.Add(BodyDescription.CreateDynamic(new RigidPose(this.Transform.position, this.Transform.rotation), compoundInertia, collidableDescription, 0.01f));
+            if (kinematic)
+                Physics.Sim.Bodies[bodyHandle.Value].BecomeKinematic();
+        }
+
+
+
+        internal TypedIndex ComputeShape(out BodyInertia compoundInertia, out System.Numerics.Vector3 compoundCenter)
+        {
+            // Get all colliders
+            using (var compoundBuilder = new CompoundBuilder(Physics.Pool, Physics.Sim.Shapes, colliders.Count))
+            {
+                foreach (var collider in colliders)
+                {
+                    var target = this.GameObject.Transform;
+                    var localPos = target.InverseTransformPoint(collider.Transform.position) + collider.offset;
+                    var localRot = target.InverseTransformRotation(collider.Transform.rotation);
+                    compoundBuilder.Add(collider.shapeIndex.Value, new RigidPose(localPos, localRot), collider.bodyInertia.Value);
+                }
+                compoundBuilder.BuildDynamicCompound(out var compoundChildren, out compoundInertia, out compoundCenter);
+                compoundBuilder.Reset();
+                compoundShape = Physics.Sim.Shapes.Add(new Compound(compoundChildren));
+                lastVersion = this.GameObject.Transform.version;
+                return compoundShape.Value;
+            }
         }
 
         #region Prowl Methods
-        public override void OnValidate() { if (Application.isPlaying) Refresh(); }
-
-        public override void Awake()
-        {
-            base.Awake();
-        }
 
         public override void OnEnable()
         {
-            Body = Space.world.CreateRigidBody();
-            Body.AddShape(Shapes);
-            Body.Tag = this;
-            Body.AffectedByGravity = AffectedByGravity;
-            Body.IsStatic = IsStatic;
-
-            if (isKinematic) {
-                Body.AffectedByGravity = false;
-                Body.SetMassInertia(1e6f);
-            } else if (Mass > 0) Body.SetMassInertia(Mass);
-            else Body.SetMassInertia();
-
-            SetPosition(GameObject.transform.position);
-            SetRotation(GameObject.transform.rotation);
+            Physics.UpdateHierarchy(this.GameObject.Transform.root);
         }
 
         public override void OnDisable()
         {
-            Space.world.Remove(Body);
-            Body = null;
+            if (bodyHandle != null)
+                Physics.Sim.Bodies.Remove(bodyHandle.Value);
+            bodyHandle = null;
+
+            Physics.UpdateHierarchy(this.GameObject.Transform.root);
         }
 
-        public override void LateUpdate()
+        private uint lastVersion = 0;
+        public override void Update()
         {
-            GameObject.transform.position = Body.Position;
-            GameObject.transform.rotation = JQuaternion.CreateFromMatrix(Body.Orientation);
+            if (bodyHandle == null) return;
+
+            if(lastVersion != this.GameObject.Transform.version)
+            {
+                var body = Physics.Sim.Bodies[bodyHandle.Value];
+                body.Pose.Position = this.GameObject.Transform.position;
+                body.Pose.Orientation = this.GameObject.Transform.rotation;
+                body.Velocity.Linear = Vector3.zero;
+                body.Velocity.Angular = Vector3.zero;
+                body.Awake = true;
+                lastVersion = this.GameObject.Transform.version;
+            }
+
+            //if (updateMode == UpdateMode.Interpolation)
+            //{
+            //    var body = Physics.Sim.Bodies[bodyHandle.Value];
+            //    this.GameObject.Transform.position = body.Pose.Position;
+            //    this.GameObject.Transform.rotation = body.Pose.Orientation;
+            //}
+            //else if (updateMode == UpdateMode.Extrapolation)
+            //{
+            //    var body = Physics.Sim.Bodies[bodyHandle.Value];
+            //    this.GameObject.Transform.position = body.Pose.Position + body.Velocity.Linear * Time.deltaTimeF;
+            //    this.GameObject.Transform.rotation = body.Pose.Orientation.ToDouble() + Quaternion.Euler(body.Velocity.Angular * Time.deltaTimeF);
+            //}
+            //else
+            {
+                var body = Physics.Sim.Bodies[bodyHandle.Value];
+                this.GameObject.Transform.position = body.Pose.Position;
+                this.GameObject.Transform.rotation = body.Pose.Orientation;
+                lastVersion = this.GameObject.Transform.version;
+            }
         }
 
-        #endregion
     }
+
+    #endregion
 }

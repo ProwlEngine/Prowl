@@ -1,37 +1,69 @@
-﻿using Jitter2.Collision.Shapes;
-using Jitter2.LinearMath;
-using System.Collections.Generic;
-using System.Linq;
-
-
-// Partially based on https://github.com/suzuke/JitterPhysicsForUnity
+﻿using BepuPhysics;
+using BepuPhysics.Collidables;
 
 namespace Prowl.Runtime
 {
     public abstract class Collider : MonoBehaviour
     {
-        private List<Shape> shape;
-        public List<Shape> Shape => shape ??= CreateShapes();
-        public override void OnEnable() => GetComponentInParent<Rigidbody>()?.RefreshShape();
-        public override void OnDisable() => GetComponentInParent<Rigidbody>()?.RefreshShape();
-        public abstract List<Shape> CreateShapes();
-        public virtual List<TransformedShape> CreateTransformedShape(Rigidbody body)
+        public float mass = 1f;
+        public Vector3 offset = Vector3.zero;
+
+        public IShape? shape { get; protected set; }
+        public TypedIndex? shapeIndex { get; protected set; }
+        public BodyInertia? bodyInertia { get; protected set; }
+        public StaticHandle? staticHandle { get; private set; }
+        private uint staticLastVersion = 0;
+
+        public override void OnEnable()
         {
-            // Get Position and Rotation of this collider relative to the Rigidbody
-            if(GameObject.InstanceID == body.GameObject.InstanceID)
+            CreateShape();
+            Physics.UpdateHierarchy(this.GameObject.Transform.root);
+        }
+
+        public override void OnDisable()
+        {
+            if (shapeIndex != null)
             {
-                return Shape.Select(x => new TransformedShape(x, Vector3.zero, JMatrix.CreateScale(GameObject.transform.localScale))).ToList();
+                Physics.Sim.Shapes.RemoveAndDispose(shapeIndex.Value, Physics.Pool);
+                shapeIndex = null;
+                bodyInertia = null;
             }
-            else
+            Physics.UpdateHierarchy(this.GameObject.Transform.root);
+        }
+
+        internal void DestroyStatic()
+        {
+            if (staticHandle == null) return;
+            Physics.Sim.Statics.Remove(staticHandle.Value);
+            staticHandle = null;
+        }
+
+        internal void BuildStatic()
+        {
+            if (staticHandle != null) return;
+
+            // Make sure Shape Exists
+
+            // Create Static
+            var pose = new RigidPose(this.GameObject.Transform.position, this.GameObject.Transform.rotation);
+            staticHandle = Physics.Sim.Statics.Add(new StaticDescription(pose, shapeIndex.Value));
+            staticLastVersion = this.GameObject.Transform.version;
+        }
+
+        public override void FixedUpdate()
+        {
+            if (staticHandle == null) return;
+
+            if (staticLastVersion != this.GameObject.Transform.version)
             {
-                var position = GameObject.transform.position - body.GameObject.transform.position;
-                var rotation = GameObject.transform.rotation * body.GameObject.transform.rotation;
-
-                var jMat = JMatrix.CreateFromQuaternion(rotation) * JMatrix.CreateScale(GameObject.transform.localScale);
-
-                return Shape.Select(x => new TransformedShape(x, position, jMat)).ToList();
+                staticLastVersion = this.GameObject.Transform.version;
+                var refStatic = Physics.Sim.Statics.GetStaticReference(staticHandle.Value);
+                refStatic.Pose.Position = this.GameObject.Transform.position;
+                refStatic.Pose.Orientation = this.GameObject.Transform.rotation;
             }
         }
+
+        public abstract void CreateShape();
     }
 
 }

@@ -31,7 +31,6 @@ public static class Application
 
         Window.Load += () => {
             SceneManager.Initialize();
-            Physics.Initialize();
             AudioSystem.Initialize();
 
             AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);

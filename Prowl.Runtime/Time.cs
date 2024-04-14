@@ -7,7 +7,7 @@ public static class Time {
 
     public static double deltaTime { get; private set; }
     public static float deltaTimeF => (float)deltaTime;
-    public static double fixedDeltaTime { get; set; } = 1.0 / PhysicsSetting.Instance.TargetFrameRate;
+    public static double fixedDeltaTime => 1.0 / (PhysicsSetting.Instance?.TargetFrameRate ?? 50);
     public static double time { get; private set; }
 
     public static double smoothUnscaledDeltaTime { get; private set; }

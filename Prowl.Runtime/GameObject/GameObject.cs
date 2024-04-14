@@ -464,7 +464,7 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
         // Now check all children
         foreach (var child in children)
         {
-            if (parent.enabledInHierarchy || includeInactive)
+            if (enabledInHierarchy || includeInactive)
             {
                 component = child.GetComponent(componentType) ?? child.GetComponentInChildren(componentType);
                 if (component != null)
@@ -484,7 +484,7 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
         // Now check all children
         foreach (var child in children)
         {
-            if (parent.enabledInHierarchy || includeInactive)
+            if (enabledInHierarchy || includeInactive)
                 foreach (var component in child.GetComponentsInChildren<T>())
                     yield return component;
         }

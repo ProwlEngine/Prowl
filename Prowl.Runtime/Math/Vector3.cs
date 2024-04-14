@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using Jitter2.LinearMath;
 using System;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -608,18 +607,6 @@ namespace Prowl.Runtime
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static implicit operator Vector3(System.Numerics.Vector3 value)
-        {
-            return new Vector3(value.X, value.Y, value.Z);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static implicit operator JVector(Vector3 value)
-        {
-            return new JVector((float)value.x, (float)value.y, (float)value.z);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static implicit operator Vector3(JVector value)
         {
             return new Vector3(value.X, value.Y, value.Z);
         }

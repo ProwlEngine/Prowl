@@ -1,6 +1,5 @@
-﻿using Jitter2.Collision.Shapes;
+﻿using BepuPhysics.Collidables;
 using Prowl.Icons;
-using System.Collections.Generic;
 
 namespace Prowl.Runtime
 {
@@ -8,19 +7,18 @@ namespace Prowl.Runtime
     public class SphereCollider : Collider
     {
         public float radius = 0.5f;
-        public override List<Shape> CreateShapes() => [ new SphereShape(radius) ];
-        public override void OnValidate()
+
+        public override void CreateShape()
         {
-            (Shape[0] as SphereShape).Radius = radius;
-            Shape[0].UpdateShape();
-            var rigid = GetComponentInParent<Rigidbody>();
-            if (rigid != null)
-                rigid.IsActive = true;
+            var sphere = new Sphere(radius);
+            shape = sphere;
+            bodyInertia = sphere.ComputeInertia(mass);
+            shapeIndex = Physics.Sim.Shapes.Add(sphere);
         }
 
         public override void DrawGizmosSelected()
         {
-            Gizmos.Matrix = GameObject.transform.localToWorldMatrix;
+            Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
             Gizmos.Color = Color.yellow;
             Gizmos.DrawSphere(Vector3.zero, radius * 1.05f);
         }
