@@ -148,30 +148,32 @@ namespace Prowl.Editor.EditorWindows
         }
 
         [MenuItem("Template/3D Object/Cube")]
-        public static void Template3DCube() => CreateDefaultModel("Cube");
+        public static void Template3DCube() => CreateDefaultModel("Cube", typeof(BoxCollider));
 
         [MenuItem("Template/3D Object/Sphere")]
-        public static void Template3DSphere() => CreateDefaultModel("Sphere");
+        public static void Template3DSphere() => CreateDefaultModel("Sphere", typeof(SphereCollider));
 
         [MenuItem("Template/3D Object/Cylinder")]
-        public static void Template3DCylinder() => CreateDefaultModel("Cylinder");
+        public static void Template3DCylinder() => CreateDefaultModel("Cylinder", typeof(CylinderCollider));
 
         [MenuItem("Template/3D Object/Capsule")]
-        public static void Template3DCapsule() => CreateDefaultModel("Capsule");
+        public static void Template3DCapsule() => CreateDefaultModel("Capsule", typeof(CapsuleCollider));
 
         [MenuItem("Template/3D Object/Plane")]
-        public static void Template3DPlane() => CreateDefaultModel("Plane");
+        public static void Template3DPlane() => CreateDefaultModel("Plane", typeof(MeshCollider));
 
         [MenuItem("Template/3D Object/Quad")]
-        public static void Template3DQuad() => CreateDefaultModel("Quad");
+        public static void Template3DQuad() => CreateDefaultModel("Quad", null);
 
-        private static void CreateDefaultModel(string name)
+        private static void CreateDefaultModel(string name, Type? component)
         {
             var original = Application.AssetProvider.LoadAsset<GameObject>($"Defaults/{name}.obj");
             if (original.IsAvailable)
             {
                 var go = GameObject.Instantiate(original.Res!);
                 go.Transform.position = GetPosition();
+                if(component != null)
+                    go.AddComponent(component);
                 HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
             }
         }
