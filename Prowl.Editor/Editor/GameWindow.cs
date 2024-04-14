@@ -32,6 +32,8 @@ public class GameWindow : EditorWindow
     RenderTexture RenderTarget;
     bool previouslyPlaying = false;
 
+    public static bool IsFocused;
+
     public GameWindow() : base()
     {
         Title = FontAwesome6.Gamepad + " Game";
@@ -63,6 +65,8 @@ public class GameWindow : EditorWindow
         } else if (previouslyPlaying && !Application.isPlaying) {
             previouslyPlaying = false;
         }
+
+        IsFocused |= ImGui.IsWindowFocused();
 
         // Header Bar with resolution settings, then Image under it
         ImGui.BeginChild("Header", new System.Numerics.Vector2(0, HeaderHeight), ImGuiChildFlags.Border, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);

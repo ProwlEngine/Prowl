@@ -101,6 +101,7 @@ public static class Program
                 }
             }
 
+            GameWindow.IsFocused = false;
             OnUpdateEditor?.Invoke();
             OnDrawEditor?.Invoke();
         };
