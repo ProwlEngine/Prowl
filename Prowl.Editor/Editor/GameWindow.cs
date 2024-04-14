@@ -67,6 +67,7 @@ public class GameWindow : EditorWindow
         // Header Bar with resolution settings, then Image under it
         ImGui.BeginChild("Header", new System.Numerics.Vector2(0, HeaderHeight), ImGuiChildFlags.Border, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
         {
+            bool changed = false;
             ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 3);
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 5);
             ImGui.Text(FontAwesome6.Display);
@@ -75,6 +76,7 @@ public class GameWindow : EditorWindow
             if (ImGui.InputInt("##Width", ref GeneralPreferences.Instance.CurrentWidth, 0, 0, ImGuiInputTextFlags.EnterReturnsTrue)) {
                 GeneralPreferences.Instance.CurrentWidth = Math.Clamp(GeneralPreferences.Instance.CurrentWidth, 1, 7680);
                 GeneralPreferences.Instance.Resolution = Resolutions.custom;
+                changed = true;
                 RefreshRenderTexture();
             }
             ImGui.SameLine();
@@ -82,6 +84,7 @@ public class GameWindow : EditorWindow
             if (ImGui.InputInt("##Height", ref GeneralPreferences.Instance.CurrentHeight, 0, 0, ImGuiInputTextFlags.EnterReturnsTrue)) {
                 GeneralPreferences.Instance.CurrentHeight = Math.Clamp(GeneralPreferences.Instance.CurrentHeight, 1, 4320);
                 GeneralPreferences.Instance.Resolution = Resolutions.custom;
+                changed = true;
                 RefreshRenderTexture();
             }
 
@@ -92,16 +95,22 @@ public class GameWindow : EditorWindow
             if (ImGui.Combo("##ResolutionCombo", ref currentIndex, resolutionNames, resolutionNames.Length)) {
                 GeneralPreferences.Instance.Resolution = (Resolutions)Enum.GetValues(typeof(Resolutions)).GetValue(currentIndex);
                 UpdateResolution(GeneralPreferences.Instance.Resolution);
+                changed = true;
                 RefreshRenderTexture();
             }
 
             ImGui.SameLine();
             // Auto Focus
             ImGui.SetCursorPosX(ImGui.GetWindowWidth() - 200);
-            ImGui.Checkbox("Auto Focus", ref GeneralPreferences.Instance.AutoFocusGameView);
+            changed |= ImGui.Checkbox("Auto Focus", ref GeneralPreferences.Instance.AutoFocusGameView);
             ImGui.SameLine();
             // Auto Refresh
-            ImGui.Checkbox("Auto Refresh", ref GeneralPreferences.Instance.AutoRefreshGameView);
+            changed |= ImGui.Checkbox("Auto Refresh", ref GeneralPreferences.Instance.AutoRefreshGameView);
+
+            if (changed)
+            {
+                GeneralPreferences.Instance.Save();
+            }
         }
         ImGui.EndChild();
 
