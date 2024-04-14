@@ -32,6 +32,7 @@ public abstract class MonoBehaviour : EngineObject
     private GameObject _go;
 
     public GameObject GameObject => _go;
+    public Transform Transform => _go.Transform;
 
     private bool executeAlways = false;
     private bool hasAwoken = false;
