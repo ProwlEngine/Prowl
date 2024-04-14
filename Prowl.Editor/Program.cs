@@ -93,7 +93,10 @@ public static class Program
 
                 try
                 {
+                    // Only handle input if the game window is focused
+                    Input.Enabled = GameWindow.IsFocused;
                     SceneManager.Update();
+                    Input.Enabled = true;
                 }
                 catch (Exception e)
                 {

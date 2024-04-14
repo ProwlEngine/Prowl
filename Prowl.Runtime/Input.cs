@@ -6,6 +6,9 @@ namespace Prowl.Runtime;
 
 public static class Input
 {
+    public static bool Enabled { get; set; } = true;
+
+
     public static IInputContext Context { get; internal set; }
 
     public static IReadOnlyList<IKeyboard> Keyboards => Context.Keyboards;
@@ -16,17 +19,20 @@ public static class Input
     private static Vector2Int _currentMousePos;
     private static Vector2Int _prevMousePos;
 
-    public static Vector2Int PrevMousePosition => _prevMousePos;
+    public static Vector2Int PrevMousePosition => Enabled ? _prevMousePos : Vector2Int.zero;
     public static Vector2Int MousePosition {
-        get => _currentMousePos;
+        get => Enabled ? _currentMousePos : Vector2Int.zero;
         set {
-            _prevMousePos = value;
-            _currentMousePos = value;
-            Mice[0].Position = (Vector2)value;
+            if (Enabled)
+            {
+                _prevMousePos = value;
+                _currentMousePos = value;
+                Mice[0].Position = (Vector2)value;
+            }
         }
     }
-    public static Vector2 MouseDelta => _currentMousePos - _prevMousePos;
-    public static float MouseWheelDelta => Mice[0].ScrollWheels[0].Y;
+    public static Vector2 MouseDelta => Enabled ? (_currentMousePos - _prevMousePos) : Vector2.zero;
+    public static float MouseWheelDelta => Enabled ? Mice[0].ScrollWheels[0].Y : 0f;
 
     private static Dictionary<Key, bool> previousKeyStates = new Dictionary<Key, bool>();
     private static Dictionary<MouseButton, bool> previousMouseStates = new Dictionary<MouseButton, bool>();
@@ -65,25 +71,31 @@ public static class Input
 
     public static bool GetKey(Key key)
     {
+        if (!Enabled)
+            return false;
+
         foreach (var keyboard in Keyboards)
             if (keyboard.IsKeyPressed(key))
                 return true;
         return false;
     }
 
-    public static bool GetKeyDown(Key key) => GetKey(key) && !previousKeyStates[key];
+    public static bool GetKeyDown(Key key) => Enabled && GetKey(key) && !previousKeyStates[key];
 
-    public static bool GetKeyUp(Key key) => !GetKey(key) && previousKeyStates[key];
+    public static bool GetKeyUp(Key key) => Enabled && !GetKey(key) && previousKeyStates[key];
 
     public static bool GetMouseButton(int button)
     {
+        if (!Enabled)
+            return false;
+
         foreach (var mouse in Mice)
             if (mouse.IsButtonPressed((MouseButton)button))
                 return true;
         return false;
     }
 
-    public static bool GetMouseButtonDown(int button) => GetMouseButton(button) && !previousMouseStates[(MouseButton)button];
+    public static bool GetMouseButtonDown(int button) => Enabled && GetMouseButton(button) && !previousMouseStates[(MouseButton)button];
 
-    public static bool GetMouseButtonUp(int button) => !GetMouseButton(button) && previousMouseStates[(MouseButton)button];
+    public static bool GetMouseButtonUp(int button) => Enabled && !GetMouseButton(button) && previousMouseStates[(MouseButton)button];
 }
