@@ -27,7 +27,7 @@ public class DirectionalLight : MonoBehaviour
     public float shadowRadius = 0.02f;
     public float shadowPenumbra = 80f;
     public float shadowMinimumPenumbra = 0.02f;
-    public float shadowBias = 0.0f;
+    public float shadowBias = 0.00015f;
     public float shadowNormalBias = 0.02f;
     public bool castShadows = true;
 
