@@ -127,7 +127,7 @@ Getting Prowl up and running is super easy!
 ### Engine
 - 🛠️ Cross Platform
   - ✔️ Windows - Fully functional
-  - ✔️ MacOS
+  - ✔️ MacOS - ImGUI asserts cause crashes occasionally
   - 🛠️ Linux
   - ❌ Andriod
   - ❌ iOS
