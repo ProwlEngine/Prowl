@@ -23,53 +23,41 @@ namespace Prowl.Runtime
         //public UpdateMode updateMode;
 
         private BodyHandle? bodyHandle;
+        private BodyReference body;
         private TypedIndex? compoundShape;
 
         public Vector3 Position {
-            get => Physics.Sim.Bodies[bodyHandle.Value].Pose.Position;
-            set => Physics.Sim.Bodies[bodyHandle.Value].Pose.Position = value;
+            get => body.Pose.Position;
+            set => body.Pose.Position = value;
         }
 
         public Quaternion Rotation {
-            get => Physics.Sim.Bodies[bodyHandle.Value].Pose.Orientation;
-            set => Physics.Sim.Bodies[bodyHandle.Value].Pose.Orientation = value;
+            get => body.Pose.Orientation;
+            set => body.Pose.Orientation = value;
         }
 
         public bool IsKinematic {
-            get => Physics.Sim.Bodies[bodyHandle.Value].Kinematic;
+            get => body.Kinematic;
         }
 
         public Vector3 Velocity {
-            get => Physics.Sim.Bodies[bodyHandle.Value].Velocity.Linear;
-            set {
-                Physics.Sim.Bodies[bodyHandle.Value].Velocity.Linear = value;
-            }
+            get => body.Velocity.Linear;
+            set => body.Velocity.Linear = value;
         }
 
         public Vector3 AngularVelocity {
-            get => Physics.Sim.Bodies[bodyHandle.Value].Velocity.Angular;
-            set {
-                Physics.Sim.Bodies[bodyHandle.Value].Velocity.Angular = value;
-            }
+            get => body.Velocity.Angular;
+            set => body.Velocity.Angular = value;
         }
 
-        public void AddForce(Vector3 force)
-        {
-            Physics.Sim.Bodies[bodyHandle.Value].ApplyLinearImpulse(force);
-        }
+        public void AddForce(Vector3 force) => body.ApplyLinearImpulse(force);
 
-        public void AddTorque(Vector3 torque)
-        {
-            Physics.Sim.Bodies[bodyHandle.Value].ApplyAngularImpulse(torque);
-        }
+        public void AddTorque(Vector3 torque) => body.ApplyAngularImpulse(torque);
 
-        public void AddForceAtPosition(Vector3 force, Vector3 worldPosition)
-        {
-            Physics.Sim.Bodies[bodyHandle.Value].ApplyImpulse(force, worldPosition - Position);
-        }
+        public void AddForceAtPosition(Vector3 force, Vector3 worldPosition) => body.ApplyImpulse(force, worldPosition - Position);
 
         public Vector3 GetPointVelocity(Vector3 point) {
-            Physics.Sim.Bodies[bodyHandle.Value].GetVelocityForOffset(point - Position, out var velocity);
+            body.GetVelocityForOffset(point - Position, out var velocity);
             return velocity;
         }
 
@@ -88,8 +76,9 @@ namespace Prowl.Runtime
             var shape = ComputeShape(out BodyInertia compoundInertia, out System.Numerics.Vector3 compoundCenter);
             var collidableDescription = new CollidableDescription(shape, 0.1f);
             bodyHandle = Physics.Sim.Bodies.Add(BodyDescription.CreateDynamic(new RigidPose(this.Transform.position, this.Transform.rotation), compoundInertia, collidableDescription, 0.01f));
+            body = Physics.Sim.Bodies[bodyHandle.Value];
             if (kinematic)
-                Physics.Sim.Bodies[bodyHandle.Value].BecomeKinematic();
+                body.BecomeKinematic();
         }
 
 
@@ -135,9 +124,8 @@ namespace Prowl.Runtime
         {
             if (bodyHandle == null) return;
 
-            if(lastVersion != this.GameObject.Transform.version)
+            if (lastVersion != this.GameObject.Transform.version)
             {
-                var body = Physics.Sim.Bodies[bodyHandle.Value];
                 body.Pose.Position = this.GameObject.Transform.position;
                 body.Pose.Orientation = this.GameObject.Transform.rotation;
                 body.Velocity.Linear = Vector3.zero;
@@ -148,19 +136,16 @@ namespace Prowl.Runtime
 
             //if (updateMode == UpdateMode.Interpolation)
             //{
-            //    var body = Physics.Sim.Bodies[bodyHandle.Value];
             //    this.GameObject.Transform.position = body.Pose.Position;
             //    this.GameObject.Transform.rotation = body.Pose.Orientation;
             //}
             //else if (updateMode == UpdateMode.Extrapolation)
             //{
-            //    var body = Physics.Sim.Bodies[bodyHandle.Value];
             //    this.GameObject.Transform.position = body.Pose.Position + body.Velocity.Linear * Time.deltaTimeF;
             //    this.GameObject.Transform.rotation = body.Pose.Orientation.ToDouble() + Quaternion.Euler(body.Velocity.Angular * Time.deltaTimeF);
             //}
             //else
             {
-                var body = Physics.Sim.Bodies[bodyHandle.Value];
                 this.GameObject.Transform.position = body.Pose.Position;
                 this.GameObject.Transform.rotation = body.Pose.Orientation;
                 lastVersion = this.GameObject.Transform.version;
