@@ -28,6 +28,7 @@ namespace Prowl.Runtime
                 shapeIndex = null;
                 bodyInertia = null;
             }
+            DestroyStatic();
             Physics.UpdateHierarchy(this.GameObject.Transform.root);
         }
 
