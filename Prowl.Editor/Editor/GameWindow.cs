@@ -113,6 +113,7 @@ public class GameWindow : EditorWindow
 
             if (changed)
             {
+                GeneralPreferences.Instance.OnValidate();
                 GeneralPreferences.Instance.Save();
             }
         }

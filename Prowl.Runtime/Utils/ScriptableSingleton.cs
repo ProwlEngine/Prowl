@@ -40,6 +40,8 @@ namespace Prowl.Runtime.Utils
 
         public static T Instance => instance ??= LoadOrCreateInstance();
 
+        public virtual void OnValidate() { }
+
         public void Save()
         {
             StringTagConverter.WriteToFile(Serializer.Serialize(this), new(GetFilePath(Application.DataPath)));
@@ -92,6 +94,7 @@ namespace Prowl.Runtime.Utils
             else
             {
                 var newInstance = new T();
+                newInstance.OnValidate();
                 newInstance.Save();
                 return newInstance;
             }

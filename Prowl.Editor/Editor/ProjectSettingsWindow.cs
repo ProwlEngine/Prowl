@@ -17,6 +17,7 @@ public class ProjectSettingsWindow : SingletonEditorWindow
 
     public override void RenderSideView()
     {
+        RenderSideViewElement(PhysicsSetting.Instance);
         RenderSideViewElement(BuildProjectSetting.Instance);
     }
 }
@@ -98,7 +99,9 @@ public abstract class SingletonEditorWindow : EditorWindow
             // Draw the field using PropertyDrawer.Draw
             if (PropertyDrawer.Draw(setting, field))
             {
-                // Use reflection to find a method "protected void Save()"
+                // Use reflection to find a method "protected void Save()" and Validate
+                MethodInfo? validateMethod = setting.GetType().GetMethod("Validate", BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
+                validateMethod?.Invoke(setting, null);
                 MethodInfo? saveMethod = setting.GetType().GetMethod("Save", BindingFlags.Instance | BindingFlags.Public);
                 saveMethod?.Invoke(setting, null);
             }
