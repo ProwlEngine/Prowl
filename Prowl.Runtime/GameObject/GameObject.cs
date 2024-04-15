@@ -640,7 +640,7 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
         if (value.TryGet("AssetID", out var guid))
             AssetID = Guid.Parse(guid.StringValue);
         if (value.TryGet("FileID", out var fileID))
-            FileID = fileID.ShortValue;
+            FileID = fileID.UShortValue;
 
         var children = value["Children"];
         this.children = new();

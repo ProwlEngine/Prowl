@@ -202,7 +202,7 @@ namespace Prowl.Runtime
             if (value.TryGet("AssetID", out var assetIDTag))
             {
                 AssetID = Guid.Parse(assetIDTag.StringValue);
-                FileID = value.Get("FileID").ShortValue;
+                FileID = value.Get("FileID").UShortValue;
             }
 
             Properties.Clear();

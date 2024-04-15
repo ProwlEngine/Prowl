@@ -387,7 +387,7 @@ namespace Prowl.Editor.Assets
         /// <param name="assetPath">The file path of the asset to load.</param>
         /// <param name="fileID">The file ID of the asset to load.</param>
         /// <returns>The loaded asset, or null if the asset could not be loaded.</returns>
-        public static T? LoadAsset<T>(FileInfo assetPath, short fileID) where T : EngineObject
+        public static T? LoadAsset<T>(FileInfo assetPath, ushort fileID) where T : EngineObject
         {
             ArgumentNullException.ThrowIfNull(assetPath);
             if (TryGetGuid(assetPath, out var guid))
@@ -402,7 +402,7 @@ namespace Prowl.Editor.Assets
         /// <param name="assetGuid">The GUID of the asset to load.</param>
         /// <param name="fileID">The file ID of the asset to load.</param>
         /// <returns>The loaded asset, or null if the asset could not be loaded.</returns>
-        public static T? LoadAsset<T>(Guid assetGuid, short fileID) where T : EngineObject
+        public static T? LoadAsset<T>(Guid assetGuid, ushort fileID) where T : EngineObject
         {
             if (assetGuid == Guid.Empty) throw new ArgumentException("Asset Guid cannot be empty", nameof(assetGuid));
 
@@ -423,7 +423,7 @@ namespace Prowl.Editor.Assets
                     asset = (T)serialized.SubAssets[fileID - 1];
                 }
                 asset.AssetID = assetGuid;
-                asset.FileID = (short)fileID;
+                asset.FileID = (ushort)fileID;
                 return asset;
             } catch (Exception e) {
                 Console.WriteLine(e.ToString());
@@ -476,7 +476,7 @@ namespace Prowl.Editor.Assets
                 for (int i = 0; i < serializedAsset.SubAssets.Count; i++)
                 {
                     serializedAsset.SubAssets[i].AssetID = assetGuid;
-                    serializedAsset.SubAssets[i].FileID = (short)(i + 1);
+                    serializedAsset.SubAssets[i].FileID = (ushort)(i + 1);
                 }
                 guidToAssetData[assetGuid] = serializedAsset;
                 return serializedAsset;

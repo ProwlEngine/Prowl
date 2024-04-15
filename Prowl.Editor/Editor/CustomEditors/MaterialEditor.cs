@@ -13,7 +13,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
     {
         private Action onChange;
         public static Guid assignedGUID;
-        public static short assignedFileID;
+        public static ushort assignedFileID;
         public static int guidAssignedToID = -1;
 
         public MaterialEditor() { }

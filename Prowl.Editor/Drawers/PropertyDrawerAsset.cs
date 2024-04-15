@@ -11,7 +11,7 @@ public class PropertyDrawerAsset : PropertyDrawer<IAssetRef>
 {
     public static PropertyDrawerAsset Selected;
     public static Guid assignedGUID;
-    public static short assignedFileID;
+    public static ushort assignedFileID;
     public static int guidAssignedToID = -1;
 
     protected override bool Draw(string label, ref IAssetRef value, float width)

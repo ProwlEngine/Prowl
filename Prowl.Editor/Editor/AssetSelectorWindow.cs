@@ -8,7 +8,7 @@ public class AssetSelectorWindow : EditorWindow
 {
     private string _searchText = "";
     private Type type;
-    private Action<Guid, short> _onAssetSelected;
+    private Action<Guid, ushort> _onAssetSelected;
 
     protected override ImGuiWindowFlags Flags { get; } = ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.Tooltip | ImGuiWindowFlags.NoDecoration;
     protected override bool Center { get; } = true;
@@ -16,7 +16,7 @@ public class AssetSelectorWindow : EditorWindow
     protected override int Height { get; } = 512;
     protected override bool BackgroundFade { get; } = true;
 
-    public AssetSelectorWindow(Type type, Action<Guid, short> onAssetSelected) : base()
+    public AssetSelectorWindow(Type type, Action<Guid, ushort> onAssetSelected) : base()
     {
         Title = FontAwesome6.Book + " Assets Selection";
         this.type = type;

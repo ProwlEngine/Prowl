@@ -254,7 +254,7 @@ namespace Prowl.Runtime.Utils
                 for (int i = 0; i < asset.SubAssets.Count; i++)
                 {
                     asset.SubAssets[i].AssetID = guid;
-                    asset.SubAssets[i].FileID = (short)i;
+                    asset.SubAssets[i].FileID = (ushort)i;
                 }
                 return true;
             }
@@ -273,7 +273,7 @@ namespace Prowl.Runtime.Utils
                 for (int i = 0; i < asset.SubAssets.Count; i++)
                 {
                     asset.SubAssets[i].AssetID = asset.Main!.AssetID;
-                    asset.SubAssets[i].FileID = (short)i;
+                    asset.SubAssets[i].FileID = (ushort)i;
                 }
                 return true;
             }

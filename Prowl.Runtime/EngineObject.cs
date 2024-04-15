@@ -21,7 +21,7 @@ namespace Prowl.Runtime
 
         // Asset path if we have one
         [HideInInspector]
-        public short FileID = 0;
+        public ushort FileID = 0;
 
         [HideInInspector]
         public string Name;

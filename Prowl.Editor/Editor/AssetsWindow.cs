@@ -236,7 +236,7 @@ public class AssetsWindow : EditorWindow
                         if (_treeCounter % 2 == 0)
                             GUIHelper.ItemRectFilled(0.5f, 0.5f, 0.5f, 0.1f);
                         if (ImGui.IsItemHovered())
-                            HandleFileClick(file, (short)i);
+                            HandleFileClick(file, (ushort)i);
 
                         GUIHelper.Tooltip(subassets[i].name + " - T:" + subassets[i].type!.Name);
                         ImGui.SetCursorPos(new System.Numerics.Vector2(curPos.X + 26, curPos.Y));
@@ -271,7 +271,7 @@ public class AssetsWindow : EditorWindow
         }
     }
 
-    public static void HandleFileClick(FileInfo entry, short fileID = 0)
+    public static void HandleFileClick(FileInfo entry, ushort fileID = 0)
     {
         Guid guid;
         bool isAsset = AssetDatabase.TryGetGuid(entry, out guid);

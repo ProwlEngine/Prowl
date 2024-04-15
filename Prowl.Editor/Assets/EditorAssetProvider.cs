@@ -7,14 +7,14 @@ namespace Prowl.Editor.Assets
     {
         public bool HasAsset(Guid assetID) => AssetDatabase.Contains(assetID);
 
-        public AssetRef<T> LoadAsset<T>(string relativeAssetPath, short fileID = 0) where T : EngineObject
+        public AssetRef<T> LoadAsset<T>(string relativeAssetPath, ushort fileID = 0) where T : EngineObject
         {
             // The Editor is a special case, its just a wrapper around the AssetDatabase
             var fileInfo = AssetDatabase.FromRelativePath(relativeAssetPath);
             return new AssetRef<T>(AssetDatabase.LoadAsset<T>(fileInfo, fileID));
         }
 
-        public AssetRef<T> LoadAsset<T>(Guid guid, short fileID = 0) where T : EngineObject
+        public AssetRef<T> LoadAsset<T>(Guid guid, ushort fileID = 0) where T : EngineObject
         {
             // The Editor is a special case, its just a wrapper around the AssetDatabase
             return new AssetRef<T>(AssetDatabase.LoadAsset<T>(guid, fileID));

@@ -78,7 +78,7 @@ namespace Prowl.Runtime.Utils
             if (obj == null) throw new Exception("Asset cannot be null");
             if (SubAssets.Contains(obj) || ReferenceEquals(Main, obj)) throw new Exception("Asset already contains this object: " + obj);
             obj.AssetID = Guid;
-            obj.FileID = (short)(SubAssets.Count + 1);
+            obj.FileID = (ushort)(SubAssets.Count + 1);
             SubAssets.Add(obj);
 
             return new AssetRef<T>(obj);
@@ -88,7 +88,7 @@ namespace Prowl.Runtime.Utils
         {
             if (obj == null) throw new Exception("Asset cannot be null");
             if (SubAssets.Contains(obj)) throw new Exception("Asset already contains this object: " + obj);
-            obj.FileID = (short)0;
+            obj.FileID = (ushort)0;
             Main = obj;
         }
 
@@ -99,7 +99,7 @@ namespace Prowl.Runtime.Utils
                 obj.DestroyImmediate();
         }
 
-        public object GetAsset(short fileID)
+        public object GetAsset(ushort fileID)
         {
             if (fileID == 0) return Main;
             return SubAssets[fileID - 1];

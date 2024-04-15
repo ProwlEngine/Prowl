@@ -10,7 +10,7 @@ namespace Prowl.Runtime
     {
         private T? instance;
         private Guid assetID = Guid.Empty;
-        private short fileID = 0;
+        private ushort fileID = 0;
 
         /// <summary>
 		/// The actual <see cref="EngineObject"/>. If currently unavailable, it is loaded and then returned.
@@ -27,7 +27,7 @@ namespace Prowl.Runtime
             set
             {
                 assetID = value == null ? Guid.Empty : value.AssetID;
-                fileID = value == null ? (short)0 : value.FileID;
+                fileID = value == null ? (ushort)0 : value.FileID;
                 instance = value;
             }
         }
@@ -58,7 +58,7 @@ namespace Prowl.Runtime
         /// <summary>
         /// The Asset index inside the asset file. 0 is the Main Asset
         /// </summary>
-        public short FileID {
+        public ushort FileID {
             get => fileID;
             set => fileID = value;
         }
@@ -136,7 +136,7 @@ namespace Prowl.Runtime
         /// the specified alias.
         /// </summary>
         /// <param name="id"></param>
-        public AssetRef(Guid id, short fileId)
+        public AssetRef(Guid id, ushort fileId)
         {
             instance = null;
             assetID = id;
@@ -150,7 +150,7 @@ namespace Prowl.Runtime
         {
             instance = res;
             assetID = res != null ? res.AssetID : Guid.Empty;
-            fileID = res != null ? res.FileID : (short)0;
+            fileID = res != null ? res.FileID : (ushort)0;
         }
 
         public object? GetInstance()
@@ -302,7 +302,7 @@ namespace Prowl.Runtime
         public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
             assetID = Guid.Parse(value["AssetID"].StringValue);
-            fileID = value.TryGet("FileID", out SerializedProperty fileTag) ? fileTag.ShortValue : (short)0;
+            fileID = value.TryGet("FileID", out SerializedProperty fileTag) ? fileTag.UShortValue : (ushort)0;
             if (assetID == Guid.Empty && value.TryGet("Instance", out SerializedProperty tag))
                 instance = Serializer.Deserialize<T?>(tag, ctx);
         }
