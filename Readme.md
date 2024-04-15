@@ -225,6 +225,7 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 ### Runtime
 - [Silk.NET](https://github.com/dotnet/Silk.NET)
 - [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2)
+- [Bepu Physics](https://github.com/bepu/bepuphysics2)
 
 ### Editor
 
