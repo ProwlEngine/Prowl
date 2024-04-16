@@ -14,6 +14,7 @@ namespace Prowl.Runtime
         public AssetRef<Mesh> mesh;
     
         public bool convex = false;
+        public bool isClosed = true;
     
         public enum Approximation
         {
@@ -56,7 +57,10 @@ namespace Prowl.Runtime
 
                 var meshCollider = CreateGiantMeshFastWithoutBounds(triangles, this.Transform.lossyScale, Physics.Pool);
                 shape = meshCollider;
-                bodyInertia = meshCollider.ComputeOpenInertia(mass);
+                if(isClosed)
+                    bodyInertia = meshCollider.ComputeClosedInertia(mass);
+                else
+                    bodyInertia = meshCollider.ComputeOpenInertia(mass);
                 shapeIndex = Physics.Sim.Shapes.Add(meshCollider);
             }
             else
