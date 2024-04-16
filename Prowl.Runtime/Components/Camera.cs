@@ -78,11 +78,11 @@ public class Camera : MonoBehaviour
 
     private void OpaquePass()
     {
-        SceneManager.ForeachComponent((x) => Try(x.OnPreRender));
+        SceneManager.ForeachComponent((x) => x.Do(x.OnPreRender));
         gBuffer.Begin();                            // Start
         RenderAllOfOrder(RenderingOrder.Opaque);    // Render
         gBuffer.End();                              // End
-        SceneManager.ForeachComponent((x) => Try(x.OnPostRender));
+        SceneManager.ForeachComponent((x) => x.Do(x.OnPostRender));
     }
 
     Matrix4x4? oldView = null;

@@ -31,7 +31,6 @@ public static class Program
             // Editor-specific initialization code
             imguiController = new(GLDevice.GL, Window.InternalWindow, Input.Context);
             EditorGui.Initialize();
-            MonoBehaviour.PauseLogic = true;
             ImporterAttribute.GenerateLookUp();
 
             // Start with the project window open
@@ -87,11 +86,8 @@ public static class Program
                 else if (Hotkeys.IsHotkeyDown("BuildProject", new() { Key = Key.B, Ctrl = true }))
                     Project.BuildProject();
 
-                Application.isPlaying = PlayMode.Current != PlayMode.Mode.Editing;
-                Application.isActivelyPlaying = PlayMode.Current == PlayMode.Mode.Playing;
+                Application.isPlaying = PlayMode.Current == PlayMode.Mode.Playing;
 
-                if (Application.isActivelyPlaying)
-                    Physics.Update();
 
                 try
                 {

@@ -8,7 +8,6 @@ public static class Application
 {
     public static bool isRunning;
     public static bool isPlaying = false;
-    public static bool isActivelyPlaying = false;
     public static bool isEditor { get; private set; }
 
     public static string? DataPath = null;
@@ -69,7 +68,6 @@ public static class Application
 
         isRunning = true;
         isPlaying = true; // Base application is not the editor, isplaying is always true
-        isActivelyPlaying = true; // Base application is not the editor, isActivelyPlaying is always true
         Window.Start();
     }
 

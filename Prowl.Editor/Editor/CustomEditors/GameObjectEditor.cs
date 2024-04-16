@@ -220,7 +220,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 if (ImGui.MenuItem("Duplicate")) {
                     var serialized = Serializer.Serialize(comp);
                     var copy = Serializer.Deserialize<MonoBehaviour>(serialized);
-                    go.AddComponentDirectly(copy);
+                    go.AddComponent(copy);
                     copy.OnValidate();
                 }
                 if (ImGui.MenuItem("Delete")) toDelete.Add(comp);

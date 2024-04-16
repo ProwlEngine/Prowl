@@ -14,7 +14,6 @@ public static class PlayMode {
 
         Current = Mode.Playing;
         SceneManager.Clear();
-        MonoBehaviour.PauseLogic = false;
         SceneManager.RestoreScene(); // Resets GameObjects and Components to re-trigger things like Awake() and Start()
 
         ImGuiNotify.InsertNotification(new ImGuiToast()
@@ -25,7 +24,6 @@ public static class PlayMode {
     
     public static void Pause() {
         Current = Mode.Paused;
-        MonoBehaviour.PauseLogic = true;
 
         ImGuiNotify.InsertNotification(new ImGuiToast()
         {
@@ -35,7 +33,6 @@ public static class PlayMode {
     
     public static void Resume() {
         Current = Mode.Playing;
-        MonoBehaviour.PauseLogic = false;
 
         ImGuiNotify.InsertNotification(new ImGuiToast()
         {
@@ -46,7 +43,6 @@ public static class PlayMode {
     public static void Stop() {
         Current = Mode.Editing;
         SceneManager.Clear();
-        MonoBehaviour.PauseLogic = true;
 
         SceneManager.RestoreScene();
         SceneManager.ClearStoredScene();

@@ -101,16 +101,21 @@ public static class SceneManager
     {
         EngineObject.HandleDestroyed();
 
+        for (int i = 0; i < _gameObjects.Count; i++)
+            if (_gameObjects[i].enabledInHierarchy)
+                _gameObjects[i].PreUpdate();
+
+        if (Application.isPlaying)
+            Physics.Update();
+
         ForeachComponent((x) => {
 
-            MonoBehaviour.Try(x.Internal_Start);
-            MonoBehaviour.Try(x.UpdateCoroutines);
-            MonoBehaviour.Try(x.Internal_Update);
+            x.Do(x.UpdateCoroutines);
+            x.Do(x.Update);
         });
 
-
-        ForeachComponent((x) => MonoBehaviour.Try(x.Internal_LateUpdate));
-        ForeachComponent((x) => MonoBehaviour.Try(x.UpdateEndOfFrameCoroutines));
+        ForeachComponent((x) => x.Do(x.LateUpdate));
+        ForeachComponent((x) => x.Do(x.UpdateEndOfFrameCoroutines));
     }
 
     public static void ForeachComponent(Action<MonoBehaviour> action)
@@ -125,7 +130,7 @@ public static class SceneManager
     public static void PhysicsUpdate()
     {
         PreFixedUpdate?.Invoke();
-        ForeachComponent((x) => MonoBehaviour.Try(x.Internal_FixedUpdate));
+        ForeachComponent((x) => x.Do(x.FixedUpdate));
         PostFixedUpdate?.Invoke();
     }
 
@@ -143,7 +148,7 @@ public static class SceneManager
         Clear();
         MainScene = scene;
         MainScene.InstantiateScene();
-        ForeachComponent((x) => MonoBehaviour.Try(x.Internal_OnLevelWasLoaded));
+        ForeachComponent((x) => x.Do(x.OnLevelWasLoaded));
     }
 
     public static void LoadScene(AssetRef<Scene> scene)
@@ -152,7 +157,7 @@ public static class SceneManager
         Clear();
         MainScene = scene.Res;
         MainScene.InstantiateScene();
-        ForeachComponent((x) => MonoBehaviour.Try(x.Internal_OnLevelWasLoaded));
+        ForeachComponent((x) => x.Do(x.OnLevelWasLoaded));
     }
 
     /// <summary>

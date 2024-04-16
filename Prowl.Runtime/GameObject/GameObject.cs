@@ -1,7 +1,9 @@
 ﻿using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
+using Silk.NET.Vulkan;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Reflection;
 
@@ -11,7 +13,7 @@ namespace Prowl.Runtime;
 /// The Base Class for all Object/Entities in a Scene.
 /// Holds a collection of Components that contain the logic for this Object/Entity
 /// </summary>
-public class GameObject : EngineObject, ISerializable, ISerializationCallbackReceiver
+public class GameObject : EngineObject, ISerializable
 {
     #region Static Fields/Properties
 
@@ -251,6 +253,21 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
 
     public static GameObject[] FindGameObjectsWithTag(string otherTag) => FindObjectsOfType<GameObject>().Where(gameObject => gameObject.CompareTag(otherTag)).ToArray();
 
+    internal void PreUpdate()
+    {
+        foreach (var component in _components)
+        {
+            if (!component.HasAwoken)
+                component.Do(component.InternalAwake);
+
+            if (!component.HasStarted)
+                if (component.EnabledInHierarchy)
+                {
+                    component.Do(component.InternalStart);
+                }
+        }
+    }
+
     public T AddComponent<T>() where T : MonoBehaviour, new() => AddComponent(typeof(T)) as T;
 
     public MonoBehaviour AddComponent(Type type)
@@ -286,12 +303,16 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
         newComponent.AttachToGameObject(this);
         _components.Add(newComponent);
         _componentCache.Add(type, newComponent);
-        newComponent.TriggerAwake();
+
+        if (enabledInHierarchy)
+        {
+            newComponent.Do(newComponent.InternalAwake);
+        }
 
         return newComponent;
     }
 
-    public void AddComponentDirectly(MonoBehaviour comp)
+    public void AddComponent(MonoBehaviour comp)
     {
         var type = comp.GetType();
         var requireComponentAttribute = type.GetCustomAttribute<RequireComponentAttribute>();
@@ -320,7 +341,10 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
         comp.AttachToGameObject(this);
         _components.Add(comp);
         _componentCache.Add(comp.GetType(), comp);
-        comp.TriggerAwake();
+        if (enabledInHierarchy)
+        {
+            comp.Do(comp.InternalAwake);
+        }
     }
 
     public void RemoveAll<T>() where T : MonoBehaviour
@@ -330,11 +354,11 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
         {
             foreach (MonoBehaviour c in components)
                 if (c.EnabledInHierarchy)
-                    c.Internal_OnDisabled();
+                    c.Do(c.OnDisable);
             foreach (MonoBehaviour c in components)
             {
                 if (c.HasStarted) // OnDestroy is only called if the component has previously been active
-                    c.Internal_OnDestroy();
+                    c.Do(c.OnDestroy);
 
                 _components.Remove(c);
             }
@@ -349,8 +373,8 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
         _components.Remove(component);
         _componentCache.Remove(typeof(T), component);
 
-        if (component.EnabledInHierarchy) component.Internal_OnDisabled();
-        if (component.HasStarted) component.Internal_OnDestroy(); // OnDestroy is only called if the component has previously been active
+        if (component.EnabledInHierarchy) component.Do(component.OnDisable);
+        if (component.HasStarted) component.Do(component.OnDestroy); // OnDestroy is only called if the component has previously been active
     }
 
     public void RemoveComponent(MonoBehaviour component)
@@ -360,8 +384,8 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
         _components.Remove(component);
         _componentCache.Remove(component.GetType(), component);
 
-        if (component.EnabledInHierarchy) component.Internal_OnDisabled();
-        if (component.HasStarted) component.Internal_OnDestroy(); // OnDestroy is only called if the component has previously been active
+        if (component.EnabledInHierarchy) component.Do(component.OnDisable);
+        if (component.HasStarted) component.Do(component.OnDestroy); // OnDestroy is only called if the component has previously been active
     }
 
     public T? GetComponent<T>() where T : MonoBehaviour => (T?)GetComponent(typeof(T));
@@ -536,8 +560,8 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
 
         foreach (var component in _components)
         {
-            if (component.EnabledInHierarchy) component.Internal_OnDisabled();
-            if (component.HasStarted) component.Internal_OnDestroy(); // OnDestroy is only called if the component has previously been active
+            if (component.EnabledInHierarchy) component.Do(component.OnDisable);
+            if (component.HasStarted) component.Do(component.OnDestroy); // OnDestroy is only called if the component has previously been active
             component.Dispose();
         }
         _components.Clear();
@@ -709,14 +733,5 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
                 }
             }
         }
-    }
-
-    public void OnBeforeSerialize() { }
-
-    public void OnAfterDeserialize()
-    {
-        // Trigger awake after everything has been Deserialized
-        foreach (var comp in _components)
-            comp.TriggerAwake();
     }
 }

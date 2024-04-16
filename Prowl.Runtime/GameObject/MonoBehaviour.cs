@@ -2,18 +2,13 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Reflection;
 
 namespace Prowl.Runtime;
 
-// TODO: https://docs.unity3d.com/540/Documentation/Manual/ExecutionOrder.html
-// Need to work on mimicng Unity's Execution Order
-
 public abstract class MonoBehaviour : EngineObject
 {
-    public static bool PauseLogic = false;
-    private static Dictionary<Type, bool> CachedExecuteAlways = new();
-
     [SerializeField, HideInInspector]
     internal protected bool _enabled = true;
     [SerializeField, HideInInspector]
@@ -34,9 +29,9 @@ public abstract class MonoBehaviour : EngineObject
     public GameObject GameObject => _go;
     public Transform Transform => _go.Transform;
 
-    private bool executeAlways = false;
-    private bool hasAwoken = false;
-    public bool HasStarted { get; private set; } = false;
+    public bool ExecuteAlways { get; internal set; } = false;
+    public bool HasAwoken { get; internal set; } = false;
+    public bool HasStarted { get; internal set; } = false;
 
     public string Tag => _go.tag;
 
@@ -87,12 +82,6 @@ public abstract class MonoBehaviour : EngineObject
         _enabledInHierarchy = isEnabled;
     }
 
-    internal void TriggerAwake()
-    {
-        if(_enabledInHierarchy)
-            Try(AwakeAndEnable);
-    }
-
     internal void HierarchyStateChanged()
     {
         bool newState = _enabled && _go.enabledInHierarchy;
@@ -100,11 +89,9 @@ public abstract class MonoBehaviour : EngineObject
         {
             _enabledInHierarchy = newState;
             if (newState)
-            {
-                Try(AwakeAndEnable);
-            }
+                Do(OnEnable);
             else
-                Try(Internal_OnDisabled);
+                Do(OnDisable);
         }
     }
 
@@ -137,62 +124,38 @@ public abstract class MonoBehaviour : EngineObject
     public virtual void OnLevelWasLoaded() { }
     public virtual void OnDestroy() { }
 
-    internal void AwakeAndEnable()
+    internal void InternalAwake()
     {
-        if (!hasAwoken)
-        {
-            var t = GetType();
-            executeAlways = CachedExecuteAlways.TryGetValue(t, out bool value) ? value : (CachedExecuteAlways[t] = t.GetCustomAttribute<ExecuteAlwaysAttribute>() != null);
+        if (HasAwoken) return;
+        HasAwoken = true;
+        Awake();
 
-            if (!PauseLogic || executeAlways)
-            {
-                hasAwoken = true;
-                Awake();
-            }
-        }
-
-        // Always enable
-        if (!PauseLogic || executeAlways) OnEnable();
+        if (EnabledInHierarchy)
+            Do(OnEnable);
     }
-    internal void Internal_OnDisabled()
-    {
-        if (!PauseLogic || executeAlways) OnDisable();
-    }
-    internal void Internal_Start()
+    internal void InternalStart()
     {
         if (HasStarted) return;
-        if (!PauseLogic || executeAlways)
+        HasStarted = true;
+        Start();
+    }
+    
+    private static Dictionary<Type, bool> CachedExecuteAlways = new();
+    internal void Do(Action action)
+    {
+        bool always;
+        if (CachedExecuteAlways.TryGetValue(GetType(), out bool value))
+            always = value;
+        else
         {
-            HasStarted = true;
-            Start();
+            always = GetType().GetCustomAttribute<ExecuteAlwaysAttribute>() != null;
+            CachedExecuteAlways[GetType()] = always;
         }
-    }
-    internal void Internal_FixedUpdate()
-    {
-        if (!PauseLogic || executeAlways) FixedUpdate();
-    }
-    internal void Internal_Update()
-    {
-        if (!PauseLogic || executeAlways) Update();
-    }
-    internal void Internal_LateUpdate()
-    {
-        if (!PauseLogic || executeAlways) LateUpdate();
-    }
-    internal void Internal_OnLevelWasLoaded()
-    {
-        if (!PauseLogic || executeAlways) OnLevelWasLoaded();
-    }
-    internal void Internal_OnDestroy()
-    {
-        if (!PauseLogic || executeAlways) OnDestroy();
-    }
 
-    internal static void Try(Action action)
-    {
         try
         {
-            action();
+            if (Application.isPlaying || always)
+                action();
         }
         catch (Exception e)
         {
