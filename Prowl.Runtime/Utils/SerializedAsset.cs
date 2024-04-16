@@ -56,9 +56,16 @@ namespace Prowl.Runtime.Utils
 
             bool prev = SceneManager.AllowGameObjectConstruction;
             SceneManager.AllowGameObjectConstruction = false;
-            var obj = Serializer.Deserialize<SerializedAsset>(tag);
-            SceneManager.AllowGameObjectConstruction = prev; // Restore state
-            return obj;
+            try
+            {
+                var obj = Serializer.Deserialize<SerializedAsset>(tag);
+                return obj;
+            }
+            catch (Exception e)
+            {
+                SceneManager.AllowGameObjectConstruction = prev; // Restore state
+                throw e;
+            }
         }
 
         public static SerializedAsset FromStream(Stream stream)
@@ -68,9 +75,16 @@ namespace Prowl.Runtime.Utils
 
             bool prev = SceneManager.AllowGameObjectConstruction;
             SceneManager.AllowGameObjectConstruction = false;
-            var obj = Serializer.Deserialize<SerializedAsset>(tag);
-            SceneManager.AllowGameObjectConstruction = prev; // Restore state
-            return obj;
+            try
+            {
+                var obj = Serializer.Deserialize<SerializedAsset>(tag);
+                return obj;
+            }
+            catch (Exception e)
+            {
+                SceneManager.AllowGameObjectConstruction = prev; // Restore state
+                throw e;
+            }
         }
 
         public AssetRef<T> AddSubObject<T>(T obj) where T : EngineObject
