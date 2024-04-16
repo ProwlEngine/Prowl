@@ -103,10 +103,14 @@ namespace Prowl.Runtime
 
         public Vector3 lossyScale {
             get {
-                Matrix4x4 invRotation = Matrix4x4.CreateFromQuaternion(Quaternion.Inverse(rotation));
-                Matrix4x4 scaleAndRotation = GetWorldRotationAndScale();
-                Matrix4x4 rot = invRotation * scaleAndRotation;
-                return new Vector3(rot[0, 0], rot[1, 1], rot[2, 2]);
+                Vector3 scale = localScale;
+                Transform p = parent;
+                while (p != null)
+                {
+                    scale.Scale(p.localScale);
+                    p = p.parent;
+                }
+                return MakeSafe(scale);
             }
         }
 
