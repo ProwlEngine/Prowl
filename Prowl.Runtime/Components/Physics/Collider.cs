@@ -22,13 +22,13 @@ namespace Prowl.Runtime
 
         public override void OnDisable()
         {
+            DestroyStatic();
             if (shapeIndex != null)
             {
                 Physics.Sim.Shapes.RemoveAndDispose(shapeIndex.Value, Physics.Pool);
                 shapeIndex = null;
                 bodyInertia = null;
             }
-            DestroyStatic();
             Physics.UpdateHierarchy(this.GameObject.Transform.root);
         }
 
