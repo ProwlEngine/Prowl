@@ -11,7 +11,9 @@ namespace Prowl.Runtime
 
         public override void CreateShape()
         {
-            var cylinder = new Cylinder(radius, height * 2f);
+            var s = this.GameObject.Transform.lossyScale;
+            float r = radius * (float)s.x;
+            var cylinder = new Cylinder(r, (height * 2f) * (float)s.y);
             shape = cylinder;
             bodyInertia = cylinder.ComputeInertia(mass);
             shapeIndex = Physics.Sim.Shapes.Add(cylinder);

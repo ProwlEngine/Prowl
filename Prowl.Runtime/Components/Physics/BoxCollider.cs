@@ -10,7 +10,7 @@ namespace Prowl.Runtime
 
         public override void CreateShape()
         {
-            Vector3 s = size * this.GameObject.Transform.localScale;
+            Vector3 s = size * this.GameObject.Transform.lossyScale;
             var box = new Box((float)s.x, (float)s.y, (float)s.z);
             shape = box;
             bodyInertia = box.ComputeInertia(mass);

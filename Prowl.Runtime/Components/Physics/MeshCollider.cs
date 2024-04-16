@@ -61,8 +61,11 @@ namespace Prowl.Runtime
             }
             else
             {
-                var points = mesh.Res.Vertices;
-                var convexShape = new ConvexHull(points, Physics.Pool, out _);
+                var copy = new List<System.Numerics.Vector3>(mesh.Res!.Vertices.Length);
+                var s = this.GameObject.Transform.lossyScale.ToFloat();
+                foreach (var v in mesh.Res!.Vertices)
+                    copy.Add(new System.Numerics.Vector3(v.X * s.X, v.Y * s.Y, v.Z * s.Z));
+                var convexShape = new ConvexHull(copy.ToArray(), Physics.Pool, out _);
                 shape = convexShape;
                 bodyInertia = convexShape.ComputeInertia(mass);
                 shapeIndex = Physics.Sim.Shapes.Add(convexShape);

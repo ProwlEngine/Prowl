@@ -10,7 +10,8 @@ namespace Prowl.Runtime
 
         public override void CreateShape()
         {
-            var sphere = new Sphere(radius);
+            var s = this.GameObject.Transform.lossyScale;
+            var sphere = new Sphere(radius * (float)s.magnitude);
             shape = sphere;
             bodyInertia = sphere.ComputeInertia(mass);
             shapeIndex = Physics.Sim.Shapes.Add(sphere);
