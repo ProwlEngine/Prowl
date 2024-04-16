@@ -31,7 +31,7 @@ public class GameObject : EngineObject, ISerializable, ISerializationCallbackRec
 
     // We dont serialize parent, since if we want to serialize X object who is a child to Y object, we dont want to serialize Y object as well.
     // The parent is reconstructed when the object is deserialized for all children.
-    internal GameObject? _parent;
+    private GameObject? _parent;
 
     [SerializeField]
     private Transform _transform = new();

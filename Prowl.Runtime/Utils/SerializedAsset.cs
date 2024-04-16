@@ -59,6 +59,7 @@ namespace Prowl.Runtime.Utils
             try
             {
                 var obj = Serializer.Deserialize<SerializedAsset>(tag);
+                SceneManager.AllowGameObjectConstruction = prev; // Restore state
                 return obj;
             }
             catch (Exception e)
@@ -78,6 +79,7 @@ namespace Prowl.Runtime.Utils
             try
             {
                 var obj = Serializer.Deserialize<SerializedAsset>(tag);
+                SceneManager.AllowGameObjectConstruction = prev; // Restore state
                 return obj;
             }
             catch (Exception e)

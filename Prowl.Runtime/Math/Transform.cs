@@ -125,7 +125,7 @@ namespace Prowl.Runtime
         }
 
         public Transform parent {
-            get => gameObject._parent?.Transform;
+            get => gameObject.parent?.Transform;
             set => gameObject.SetParent(value.gameObject, true);
         }
 
