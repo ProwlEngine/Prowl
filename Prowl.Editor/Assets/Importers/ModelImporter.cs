@@ -16,6 +16,7 @@ namespace Prowl.Editor.Assets
     {
         public static readonly string[] Supported = { ".obj", ".blend", ".dae", ".fbx", ".gltf", ".ply", ".pmx", ".stl" };
 
+        public bool GenerateColliders = false;
         public bool GenerateNormals = true;
         public bool GenerateSmoothNormals = false;
         public bool CalculateTangentSpace = true;
@@ -199,7 +200,7 @@ namespace Prowl.Editor.Assets
                 ctx.SetMainObject(rootNode);
             }
 
-            static void AddMeshComponent(List<(GameObject, Node)> GOs, GameObject go, MeshMaterialBinding uMeshAndMat)
+            void AddMeshComponent(List<(GameObject, Node)> GOs, GameObject go, MeshMaterialBinding uMeshAndMat)
             {
                 if (uMeshAndMat.AMesh.HasBones)
                 {
@@ -215,6 +216,12 @@ namespace Prowl.Editor.Assets
                     var mr = go.AddComponent<MeshRenderer>();
                     mr.Mesh = uMeshAndMat.Mesh;
                     mr.Material = uMeshAndMat.Material;
+                }
+
+                if (GenerateColliders)
+                {
+                    var mc = go.AddComponent<MeshCollider>();
+                    mc.mesh = uMeshAndMat.Mesh;
                 }
             }
         }
@@ -681,6 +688,7 @@ namespace Prowl.Editor.Assets
 
         private static void Meshes(ModelImporter importer, SerializedAsset? serialized)
         {
+            ImGui.Checkbox("Generate Mesh Colliders", ref importer.GenerateColliders);
             ImGui.Checkbox("Generate Normals", ref importer.GenerateNormals);
             if (importer.GenerateNormals)
                 ImGui.Checkbox("Generate Smooth Normals", ref importer.GenerateSmoothNormals);
