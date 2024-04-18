@@ -95,6 +95,15 @@ public class PropertyDrawerVector2 : SimplePropertyDrawer<Runtime.Vector2>
     }
 }
 
+public class PropertyDrawerVector2Int : SimplePropertyDrawer<Runtime.Vector2Int>
+{
+    public override bool DrawControl(ref Runtime.Vector2Int value)
+    {
+        bool changed = ImGui.DragInt2("", ref value.x, 1);
+        return changed;
+    }
+}
+
 public class PropertyDrawerSystemVector2 : SimplePropertyDrawer<System.Numerics.Vector2>
 {
     public override bool DrawControl(ref System.Numerics.Vector2 value) =>  ImGui.DragFloat2("", ref value, 1f);
