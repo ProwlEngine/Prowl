@@ -88,8 +88,10 @@ namespace Prowl.Runtime.Rendering
 
         public void Draw(Topology primitiveType,  uint count) => Draw(primitiveType, 0, count);
         public abstract void Draw(Topology primitiveType, int v, uint count);
-        public unsafe void DrawIndexed(Topology triangles, uint indexCount, bool index32bit) => DrawIndexed(triangles, indexCount, index32bit, null);
-        public abstract unsafe void DrawIndexed(Topology triangles, uint indexCount, bool index32bit, void* value);
+        public unsafe void DrawIndexed(Topology primitiveType, uint indexCount, bool index32bit) => DrawIndexed(primitiveType, indexCount, index32bit, null);
+        public abstract unsafe void DrawIndexed(Topology primitiveType, uint indexCount, bool index32bit, void* value);
+        public abstract unsafe void DrawIndexed(Topology primitiveType, uint indexCount, int startIndex, int baseVertex, bool index32bit);
+        public abstract unsafe void DrawIndexedInstanced(Topology primitiveType, uint indexCount, uint instanceCount, bool index32bit);
 
         public abstract void Dispose();
     }

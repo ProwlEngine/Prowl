@@ -1,4 +1,5 @@
-﻿using Prowl.Runtime.Rendering.Primitives;
+﻿using BepuPhysics.Collidables;
+using Prowl.Runtime.Rendering.Primitives;
 using Silk.NET.Core.Native;
 using Silk.NET.OpenGL;
 using System;
@@ -390,21 +391,43 @@ namespace Prowl.Runtime.Rendering.OpenGL
 
         public override void Draw(Topology primitiveType, int v, uint count)
         {
-            var mode = primitiveType switch {
-                Topology.Points => PrimitiveType.Points,
-                Topology.Lines => PrimitiveType.Lines,
-                Topology.LineLoop => PrimitiveType.LineLoop,
-                Topology.LineStrip => PrimitiveType.LineStrip,
-                Topology.Triangles => PrimitiveType.Triangles,
-                Topology.TriangleStrip => PrimitiveType.TriangleStrip,
-                Topology.TriangleFan => PrimitiveType.TriangleFan,
-                _ => throw new ArgumentOutOfRangeException(nameof(primitiveType), primitiveType, null),
-            };
+            PrimitiveType mode = TopologyToGL(primitiveType);
             GL.DrawArrays(mode, v, count);
         }
-        public override unsafe void DrawIndexed(Topology triangles, uint indexCount, bool index32bit, void* value)
+        public override unsafe void DrawIndexed(Topology primitiveType, uint indexCount, bool index32bit, void* value)
         {
-            var mode = triangles switch {
+            PrimitiveType mode = TopologyToGL(primitiveType);
+            GL.DrawElements(mode, indexCount, index32bit ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort, value);
+        }
+
+        public override unsafe void DrawIndexed(Topology primitiveType, uint indexCount, int startIndex, int baseVertex, bool index32bit)
+        {
+            PrimitiveType mode = TopologyToGL(primitiveType);
+
+            var format = index32bit ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort;
+            var formatSize = index32bit ? sizeof(uint) : sizeof(ushort);
+            GL.DrawElementsBaseVertex(mode, indexCount, format, (void*)(startIndex * formatSize), baseVertex);
+        }
+
+        public override unsafe void DrawIndexedInstanced(Topology primitiveType, uint indexCount, uint instanceCount, bool index32bit)
+        {
+            PrimitiveType mode = TopologyToGL(primitiveType);
+
+            var format = index32bit ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort;
+            GL.DrawElementsInstanced(mode, indexCount, format, null, instanceCount);
+        }
+
+        public override void Dispose()
+        {
+            GL.Dispose();
+        }
+
+        #region Private
+
+
+        private static PrimitiveType TopologyToGL(Topology triangles)
+        {
+            return triangles switch {
                 Topology.Points => PrimitiveType.Points,
                 Topology.Lines => PrimitiveType.Lines,
                 Topology.LineLoop => PrimitiveType.LineLoop,
@@ -414,15 +437,7 @@ namespace Prowl.Runtime.Rendering.OpenGL
                 Topology.TriangleFan => PrimitiveType.TriangleFan,
                 _ => throw new ArgumentOutOfRangeException(nameof(triangles), triangles, null),
             };
-            GL.DrawElements(mode, indexCount, index32bit ? DrawElementsType.UnsignedInt : DrawElementsType.UnsignedShort, value);
         }
-
-        public override void Dispose()
-        {
-            GL.Dispose();
-        }
-
-        #region Private
 
         private DepthFunction DepthModeToGL(RasterizerState.DepthMode depthMode)
         {
