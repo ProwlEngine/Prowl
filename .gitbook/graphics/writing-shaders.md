@@ -28,7 +28,7 @@ Pass 0
     // Pass configuration and shader code
 }
 
-ShadowPass 0
+ShadowPass
 {
     // Shadow pass configuration and shader code
 }
