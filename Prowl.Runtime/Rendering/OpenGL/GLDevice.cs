@@ -191,6 +191,12 @@ namespace Prowl.Runtime.Rendering.OpenGL
                 GL.BindBuffer(glBuffer.Target, glBuffer.Handle);
         }
 
+        public override void BindUniformBuffer(uint bindingSlot, GraphicsBuffer buffer)
+        {
+            if (buffer is GLBuffer glBuffer)
+                GL.BindBufferBase(BufferTargetARB.UniformBuffer, bindingSlot, glBuffer.Handle);
+        }
+
         #endregion
 
         #region Vertex Arrays
@@ -382,7 +388,7 @@ namespace Prowl.Runtime.Rendering.OpenGL
         #endregion
 
 
-        public override void DrawArrays(Topology primitiveType, int v, uint count)
+        public override void Draw(Topology primitiveType, int v, uint count)
         {
             var mode = primitiveType switch {
                 Topology.Points => PrimitiveType.Points,
@@ -396,7 +402,7 @@ namespace Prowl.Runtime.Rendering.OpenGL
             };
             GL.DrawArrays(mode, v, count);
         }
-        public override unsafe void DrawElements(Topology triangles, uint indexCount, bool index32bit, void* value)
+        public override unsafe void DrawIndexed(Topology triangles, uint indexCount, bool index32bit, void* value)
         {
             var mode = triangles switch {
                 Topology.Points => PrimitiveType.Points,

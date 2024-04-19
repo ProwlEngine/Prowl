@@ -26,6 +26,8 @@ namespace Prowl.Runtime.Rendering
 
         public abstract void BindBuffer(GraphicsBuffer buffer);
 
+        public abstract void BindUniformBuffer(uint bindingSlot, GraphicsBuffer buffer);
+
         #endregion
 
         #region Vertex Arrays
@@ -84,8 +86,10 @@ namespace Prowl.Runtime.Rendering
 
         #endregion
 
-        public abstract void DrawArrays(Topology primitiveType, int v, uint count);
-        public abstract unsafe void DrawElements(Topology triangles, uint indexCount, bool index32bit, void* value);
+        public void Draw(Topology primitiveType,  uint count) => Draw(primitiveType, 0, count);
+        public abstract void Draw(Topology primitiveType, int v, uint count);
+        public unsafe void DrawIndexed(Topology triangles, uint indexCount, bool index32bit) => DrawIndexed(triangles, indexCount, index32bit, null);
+        public abstract unsafe void DrawIndexed(Topology triangles, uint indexCount, bool index32bit, void* value);
 
         public abstract void Dispose();
     }
