@@ -1,3 +1,7 @@
 # Table of contents
 
-* [Page](README.md)
+* [Getting Started](README.md)
+
+## Graphics
+
+* [Writing Shaders](graphics/writing-shaders.md)
