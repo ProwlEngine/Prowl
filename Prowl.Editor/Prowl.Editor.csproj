@@ -51,6 +51,7 @@
       <None Remove="EmbeddedResources\DefaultAssets\TAA.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Tonemapper.shader" />
       <None Remove="EmbeddedResources\DefaultAssets\Utilities.glsl" />
+      <None Remove="EmbeddedResources\DefaultAssets\VertexAttributes.glsl" />
       <None Remove="EmbeddedResources\fa-regular-400.ttf" />
       <None Remove="EmbeddedResources\fa-solid-900.ttf" />
       <None Remove="EmbeddedResources\FileIcon.png" />
@@ -99,6 +100,7 @@
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\TAA.shader">
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       </EmbeddedResource>
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\VertexAttributes.glsl" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Utilities.glsl" />
       <EmbeddedResource Include="EmbeddedResources\DefaultAssets\SSR.shader">
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>

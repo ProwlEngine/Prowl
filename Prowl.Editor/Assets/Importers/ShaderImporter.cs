@@ -158,16 +158,19 @@ namespace Prowl.Editor.Assets
         {
             var relativePath = match.Groups[1].Value + ".glsl";
 
-            var combined = Path.Combine(currentAssetPath.Directory!.FullName, relativePath);
-            string absolutePath = Path.GetFullPath(combined);
-            if (!File.Exists(absolutePath))
+            // First check the Defaults path
+            var file = new FileInfo(Path.Combine(Project.ProjectDefaultsDirectory, relativePath));
+            if (!file.Exists)
+                file = new FileInfo(Path.Combine(currentAssetPath.Directory!.FullName, relativePath));
+
+            if (!file.Exists)
             {
-                ImGuiNotify.InsertNotification("Failed to Import Shader.", new(0.8f, 0.1f, 0.1f, 1f), "Include not found: " + absolutePath);
+                ImGuiNotify.InsertNotification("Failed to Import Shader.", new(0.8f, 0.1f, 0.1f, 1f), "Include not found: " + file.FullName);
                 return "";
             }
 
             // Recursively handle Imports
-            var includeScript = _preprocessorIncludeRegex.Replace(File.ReadAllText(absolutePath), ImportReplacer);
+            var includeScript = _preprocessorIncludeRegex.Replace(File.ReadAllText(file.FullName), ImportReplacer);
             // Strip out comments and Multi-like Comments
             includeScript = ClearAllComments(includeScript);
             return includeScript;
