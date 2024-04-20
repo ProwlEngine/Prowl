@@ -43,9 +43,14 @@ namespace Prowl.Runtime.NodeSystem
             return node;
         }
         
-        public Node GetNode<T>() where T : Node
+        public T GetNode<T>() where T : Node
         {
-            return nodes.Where(n => n.GetType() == typeof(T)).FirstOrDefault();
+            return nodes.Where(n => n.GetType() == typeof(T)).FirstOrDefault() as T;
+        }
+        
+        public IEnumerable<T> GetNodes<T>() where T : Node
+        {
+            return nodes.Where(n => n.GetType() == typeof(T)).Cast<T>();
         }
 
         public virtual Node GetNode(int instanceID)
