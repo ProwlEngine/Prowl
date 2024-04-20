@@ -67,7 +67,7 @@ namespace Prowl.Runtime
             if (vertices.Count == 0 || vao == null) return;
 
             Graphics.Device.BindVertexArray(vao);
-            Graphics.Device.DrawArrays(primitiveType, 0, (uint)vertices.Count);
+            Graphics.Device.Draw(primitiveType, 0, (uint)vertices.Count);
         }
     }
 

@@ -162,7 +162,7 @@ namespace Prowl.Runtime
             unsafe
             {
                 Device.BindVertexArray(mesh.VertexArrayObject);
-                Device.DrawElements(Topology.Triangles, (uint)mesh.IndexCount, mesh.IndexFormat == IndexFormat.UInt32, null);
+                Device.DrawIndexed(Topology.Triangles, (uint)mesh.IndexCount, mesh.IndexFormat == IndexFormat.UInt32, null);
                 Device.BindVertexArray(null);
             }
         }
