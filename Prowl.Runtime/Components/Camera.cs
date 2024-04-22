@@ -1,4 +1,5 @@
 ﻿using Prowl.Icons;
+using Prowl.Runtime.Rendering.Primitives;
 using Prowl.Runtime.Resources.RenderPipeline;
 using Prowl.Runtime.SceneManagement;
 using System;
@@ -215,6 +216,8 @@ public class Camera : MonoBehaviour
             Target.Res?.End();
         }
         Current = null;
+    }
+
     public override void LateUpdate()
     {
         UpdateCachedRT();

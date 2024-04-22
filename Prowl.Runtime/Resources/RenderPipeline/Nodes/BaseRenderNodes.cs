@@ -43,7 +43,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
                 {
                     if(renderRTs[i] != null)
                         RenderTexture.ReleaseTemporaryRT(renderRTs[i]);
-                    renderRTs[i] = RenderTexture.GetTemporaryRT(width, height, TextureImageFormat.Float3);
+                    renderRTs[i] = RenderTexture.GetTemporaryRT(width, height, [ TextureImageFormat.Float3 ]);
                 }
             }
 

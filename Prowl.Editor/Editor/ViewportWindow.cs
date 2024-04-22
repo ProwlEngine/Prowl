@@ -160,10 +160,20 @@ public class ViewportWindow : EditorWindow
         ImGuizmo.SetOrthographic(false);
         ImGuizmo.SetRect(ImGui.GetWindowPos().X, ImGui.GetWindowPos().Y, windowSize.X, windowSize.Y);
 
-        Gizmos.SelectedGO.Clear();
-        foreach(var selected in HierarchyWindow.SelectHandler.Selected)
-            if (selected.Target is GameObject go)
-                Gizmos.SelectedGO.Add(go.InstanceID);
+#warning TODO: Camera rendering clears Gizmos untill the rendering overhaul, so gizmos will Flicker here
+        Camera.Current = Cam;
+        foreach (var activeGO in SceneManager.AllGameObjects)
+            if (activeGO.enabledInHierarchy)
+            {
+                if (activeGO.hideFlags.HasFlag(HideFlags.NoGizmos)) continue;
+
+                foreach (var component in activeGO.GetComponents())
+                {
+                    component.DrawGizmos();
+                    if (HierarchyWindow.SelectHandler.IsSelected(new WeakReference(activeGO)))
+                        component.DrawGizmosSelected();
+                }
+            }
 
         var selectedWeaks = HierarchyWindow.SelectHandler.Selected;
         var selectedGOs = new List<GameObject>();
@@ -181,6 +191,8 @@ public class ViewportWindow : EditorWindow
         }
 
         DrawGizmos(selectedGOs, view, projection);
+
+        Camera.Current = null;
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5, 5));
         if (ImGui.Button($"{FontAwesome6.ArrowsUpDownLeftRight}")) GizmosOperation = ImGuizmoOperation.Translate;
