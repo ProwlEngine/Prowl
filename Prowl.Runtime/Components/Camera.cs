@@ -236,7 +236,7 @@ public class Camera : MonoBehaviour
     #region RT Cache
 
     private readonly Dictionary<string, (RenderTexture, long frameCreated)> cachedRenderTextures = [];
-    private const int MaxUnusedFrames = 6;
+    private const int MaxUnusedFrames = 10;
 
     public RenderTexture GetCachedRT(string name, int width, int height, TextureImageFormat[] format)
     {
@@ -257,13 +257,8 @@ public class Camera : MonoBehaviour
     {
         var disposableTextures = new List<(RenderTexture, string)>();
         foreach (var (name, (renderTexture, frameCreated)) in cachedRenderTextures)
-        {
             if (Time.frameCount - frameCreated > MaxUnusedFrames)
-            {
-                renderTexture.Destroy();
                 disposableTextures.Add((renderTexture, name));
-            }
-        }
 
         foreach (var renderTexture in disposableTextures)
         {

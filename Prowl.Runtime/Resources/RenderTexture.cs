@@ -152,7 +152,7 @@ namespace Prowl.Runtime
         }
 
         private static Dictionary<RenderTextureKey, List<(RenderTexture, long frameCreated)>> pool = [];
-        private const int MaxUnusedFrames = 6;
+        private const int MaxUnusedFrames = 10;
 
         public static RenderTexture GetTemporaryRT(int width, int height, TextureImageFormat[] format)
         {
