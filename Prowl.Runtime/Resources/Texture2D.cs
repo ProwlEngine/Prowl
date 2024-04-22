@@ -120,8 +120,6 @@ namespace Prowl.Runtime
                 case TextureImageFormat.Int3:
                 case TextureImageFormat.Float3:
                     return size * 4 * 3;
-                case TextureImageFormat.UnsignedShort4:
-                    return size * 4 * 2;
                 case TextureImageFormat.UnsignedInt4:
                 case TextureImageFormat.Int4:
                 case TextureImageFormat.Float4:
@@ -132,6 +130,20 @@ namespace Prowl.Runtime
                     return size * 3;
                 case TextureImageFormat.Depth32f:
                     return size * 4;
+
+                case TextureImageFormat.Short:
+                case TextureImageFormat.UnsignedShort:
+                    return size * 1 * 2;
+                case TextureImageFormat.Short2:
+                case TextureImageFormat.UnsignedShort2:
+                    return size * 2 * 2;
+                case TextureImageFormat.Short3:
+                case TextureImageFormat.UnsignedShort3:
+                    return size * 3 * 2;
+                case TextureImageFormat.Short4:
+                case TextureImageFormat.UnsignedShort4:
+                    return size * 4 * 2;
+
                 default: return size * 4;
             }
         }

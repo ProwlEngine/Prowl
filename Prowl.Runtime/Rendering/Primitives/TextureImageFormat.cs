@@ -3,7 +3,11 @@
     public enum TextureImageFormat
     {
         Color4b,
-        UnsignedShort4,
+
+        Short,
+        Short2,
+        Short3,
+        Short4,
 
         Float,
         Float2,
@@ -17,6 +21,11 @@
         Int2,
         Int3,
         Int4,
+
+        UnsignedShort,
+        UnsignedShort2,
+        UnsignedShort3,
+        UnsignedShort4,
 
         UnsignedInt,
         UnsignedInt2,
