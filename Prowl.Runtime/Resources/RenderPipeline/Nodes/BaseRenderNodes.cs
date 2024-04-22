@@ -278,6 +278,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
 
         [Input(ShowBackingValue.Never), SerializeIgnore] public RenderTexture RenderTexture;
 
+        public float Threshold = 0.15f;
         public int Steps = 16;
         public int RefineSteps = 4;
 
@@ -295,10 +296,16 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             Mat.SetTexture("gPositionRoughness", gbuffer.PositionRoughness);
             Mat.SetTexture("gDepth", gbuffer.Depth);
 
+            Mat.SetFloat("SSR_THRESHOLD", Math.Clamp(Threshold, 0.0f, 1.0f));
             Mat.SetInt("SSR_STEPS", Math.Clamp(Steps, 16, 32));
             Mat.SetInt("SSR_BISTEPS", Math.Clamp(RefineSteps, 0, 16));
 
             Graphics.Blit(renderRT, Mat, 0, true);
+        public override void OnValidate()
+        {
+            Threshold = Math.Clamp(Threshold, 0.0f, 1.0f);
+            Steps = Math.Clamp(Steps, 16, 32);
+            RefineSteps = Math.Clamp(RefineSteps, 0, 16);
         }
     }
 

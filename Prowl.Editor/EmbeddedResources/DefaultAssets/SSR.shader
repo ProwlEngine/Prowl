@@ -40,6 +40,7 @@ Pass 0
 		uniform float Time;
 		uniform int Frame;
 
+		uniform float SSR_THRESHOLD;
 		uniform int SSR_STEPS; // [16 20 24 28 32]
 		uniform int SSR_BISTEPS; // [0 4 8 16]
 		
@@ -64,17 +65,18 @@ Pass 0
 
 			vec4 viewPosAndRough = texture(gPositionRoughness, texCoords);
 			float smoothness = 1.0 - viewPosAndRough.w;
+			
+			smoothness = smoothness * smoothness;
 
-			if(smoothness > 0.05)
+			if(smoothness > SSR_THRESHOLD)
 			{
 				vec4 normalAndMetallic = texture(gNormalMetallic, texCoords);
 				vec3 normal = normalAndMetallic.xyz;
 				float metallic = normalAndMetallic.w;
 				
-				//vec3 roughNormal = CosineSampleHemisphere(normal);
-				//normal = normalize(mix(normal, roughNormal, viewPosAndRough.w * 0.5));
-				vec3 perturbedNormal = normalize(vec3(RandNextF(), RandNextF(), RandNextF()) * 2.0 - 1.0);
-				normal = normalize(mix(normal, perturbedNormal, viewPosAndRough.w * 0.4));
+				// Per-Pixel Roughness, Works great but needs a Denioser/Blur, TAA Helps but overall looks better without this
+				//vec3 perturbedNormal = normalize(vec3(RandNextF(), RandNextF(), RandNextF()) * 2.0 - 1.0);
+				//normal = normalize(mix(normal, perturbedNormal, viewPosAndRough.w * 0.4));
 
 				vec3 screenPos = getScreenPos(texCoords, gDepth);
 				vec3 viewPos = getViewFromScreenPos(screenPos);
