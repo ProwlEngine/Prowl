@@ -14,49 +14,30 @@ namespace Prowl.Runtime.Resources.RenderPipeline
     {
         public abstract override string Title { get; }
         public abstract override float Width { get; }
+        protected Runtime.RenderPipeline RP => (Runtime.RenderPipeline)this.graph;
 
         [Output, SerializeIgnore] public RenderTexture OutputRT;
-        public bool Clear = true;
-        public virtual int Downsample { get; } = 1;
-        public virtual int RTCount { get; } = 1;
-
-        protected RenderTexture renderRT => renderRTs[0];
-        protected RenderTexture[] renderRTs;
-        long lastRenderedFrame = -1;
-        Camera lastRenderedCam = null;
 
         public override object GetValue(NodePort port)
         {
-            // If we already rendered this frame return that instead
-            if (lastRenderedFrame == Time.frameCount && lastRenderedCam == Camera.Current)
-                return renderRT;
-
-            var gbuffer = Camera.Current.gBuffer;
-
-            int width = gbuffer.Width / Downsample;
-            int height = gbuffer.Height / Downsample;
-
-            if (renderRTs == null || (width != renderRT.Width || height != renderRT.Height))
-            {
-                renderRTs ??= new RenderTexture[RTCount];
-                for (int i = 0; i < RTCount; i++)
-                {
-                    if(renderRTs[i] != null)
-                        RenderTexture.ReleaseTemporaryRT(renderRTs[i]);
-                    renderRTs[i] = RenderTexture.GetTemporaryRT(width, height, [ TextureImageFormat.Float3 ]);
-                }
-            }
-
-            Render();
-
-            lastRenderedFrame = Time.frameCount;
-            lastRenderedCam = Camera.Current;
-
-            return renderRT;
+            return Render();
         }
 
-        public virtual void PreRender(int width, int height) { }
-        public abstract void Render();
+        public virtual void Prepare(int width, int height) { }
+        public abstract RenderTexture Render();
+
+        protected RenderTexture GetRenderTexture(float scale, TextureImageFormat[] format)
+        {
+            var rt = RenderTexture.GetTemporaryRT((int)(RP.Width * scale), (int)(RP.Height * scale), format);
+            RP.UsedRenderTextures.Add(rt);
+            return rt;
+        }
+
+        protected void ReleaseRT(RenderTexture rt)
+        {
+            RP.UsedRenderTextures.Remove(rt);
+            RenderTexture.ReleaseTemporaryRT(rt);
+        }
     }
 
     public class PBRDeferredNode : RenderPassNode
@@ -64,12 +45,18 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         public override string Title => "PBR Deferred Pass";
         public override float Width => 100;
 
-        public override void Render()
+        public TextureImageFormat Format = TextureImageFormat.Short3;
+
+        public float Scale = 1.0f;
+
+        public override RenderTexture Render()
         {
-            renderRT.Begin();
-            if (Clear) Graphics.Clear();
+            var result = GetRenderTexture(Scale, [Format]);
+            result.Begin();
+            Graphics.Clear();
             Camera.Current.RenderAllOfOrder(RenderingOrder.Lighting);
-            renderRT.End();
+            result.End();
+            return result;
         }
     }
 
@@ -82,16 +69,20 @@ namespace Prowl.Runtime.Resources.RenderPipeline
 
         Material? CombineShader = null;
 
-        public override void Render()
+        public override RenderTexture Render()
         {
             var gbuffer = Camera.Current.gBuffer;
-            var lighting = GetInputValue<RenderTexture>("LightingRT");
+            var source = GetInputValue<RenderTexture>("LightingRT");
+            if (source == null) return null;
 
             CombineShader ??= new(Shader.Find("Defaults/GBuffercombine.shader"));
             CombineShader.SetTexture("gAlbedoAO", gbuffer.AlbedoAO);
-            CombineShader.SetTexture("gLighting", lighting.InternalTextures[0]);
+            CombineShader.SetTexture("gLighting", source.InternalTextures[0]);
 
-            Graphics.Blit(renderRT, CombineShader, 0, Clear);
+            var result = GetRenderTexture(1f, [TextureImageFormat.Short3]);
+            Graphics.Blit(result, CombineShader, 0, true);
+            ReleaseRT(source);
+            return result;
         }
     }
 
@@ -100,7 +91,6 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         public override string Title => "Depth Of Field";
         public override float Width => 125;
 
-        public override int Downsample => 1;
 
         [Input(ShowBackingValue.Never), SerializeIgnore] public RenderTexture RenderTexture;
 
@@ -110,21 +100,24 @@ namespace Prowl.Runtime.Resources.RenderPipeline
 
         Material Mat;
 
-        public override void Render()
+        public override RenderTexture Render()
         {
             var gbuffer = Camera.Current.gBuffer;
-            var rt = GetInputValue<RenderTexture>("RenderTexture");
-            if (rt == null) return;
+            var source = GetInputValue<RenderTexture>("RenderTexture");
+            if (source == null) return null;
 
             Mat ??= new Material(Shader.Find("Defaults/DOF.shader"));
-            Mat.SetTexture("gCombined", rt.InternalTextures[0]);
+            Mat.SetTexture("gCombined", source.InternalTextures[0]);
             Mat.SetTexture("gDepth", gbuffer.Depth);
 
             Mat.SetFloat("u_Quality", Math.Clamp(Quality, 0.0f, 0.9f));
             Mat.SetFloat("u_BlurRadius", Math.Clamp(BlurRadius, 2, 40));
             Mat.SetFloat("u_FocusStrength", FocusStrength);
 
-            Graphics.Blit(renderRT, Mat, 0, true);
+            var result = GetRenderTexture(1f, [TextureImageFormat.Short3]);
+            Graphics.Blit(result, Mat, 0, true);
+            ReleaseRT(source);
+            return result;
         }
     }
 
@@ -139,14 +132,14 @@ namespace Prowl.Runtime.Resources.RenderPipeline
 
         Material Mat;
 
-        public override void Render()
+        public override RenderTexture Render()
         {
             var gbuffer = Camera.Current.gBuffer;
-            var rt = GetInputValue<RenderTexture>("RenderTexture");
-            if (rt == null) return;
+            var source = GetInputValue<RenderTexture>("RenderTexture");
+            if (source == null) return null;
 
             Mat ??= new Material(Shader.Find("Defaults/ProcedualSkybox.shader"));
-            Mat.SetTexture("gColor", rt.InternalTextures[0]);
+            Mat.SetTexture("gColor", source.InternalTextures[0]);
             Mat.SetTexture("gPositionRoughness", gbuffer.PositionRoughness);
             Mat.SetFloat("fogDensity", FogDensity);
 
@@ -157,7 +150,10 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             else // Fallback to a reasonable default
                 Mat.SetVector("uSunPos", new Vector3(0.5f, 0.5f, 0.5f));
 
-            Graphics.Blit(renderRT, Mat, 0, true);
+            var result = GetRenderTexture(1f, [TextureImageFormat.Short3]);
+            Graphics.Blit(result, Mat, 0, true);
+            ReleaseRT(source);
+            return result;
         }
     }
 
@@ -168,49 +164,46 @@ namespace Prowl.Runtime.Resources.RenderPipeline
 
         [Input(ShowBackingValue.Never), SerializeIgnore] public RenderTexture RenderTexture;
 
-        public override int Downsample => 1;
-        public override int RTCount => 2;
-
         public float Radius = 10f;
         public float Threshold = 0.5f;
         public int Passes = 10;
 
         Material Mat;
 
-        public override void Render()
+        public override RenderTexture Render()
         {
-            var rt = GetInputValue<RenderTexture>("RenderTexture");
-            if (rt == null) return;
+            var source = GetInputValue<RenderTexture>("RenderTexture");
+            if (source == null) return null;
 
             Mat ??= new Material(Shader.Find("Defaults/Bloom.shader"));
 
-            RenderTexture[] rts = [renderRTs[0], renderRTs[1]];
+            var front = GetRenderTexture(1f, [TextureImageFormat.Short3]);
+            var back = GetRenderTexture(1f, [TextureImageFormat.Short3]);
+            RenderTexture[] rts = [front, back];
 
             Mat.SetFloat("u_Alpha", 1.0f);
-            Mat.SetTexture("gColor", rt.InternalTextures[0]);
+            Mat.SetTexture("gColor", source.InternalTextures[0]);
             Mat.SetFloat("u_Radius", 1.5f);
             Mat.SetFloat("u_Threshold", Math.Clamp(Threshold, 0.0f, 8f));
-            Graphics.Blit(renderRTs[0], Mat, 0, true);
-            Graphics.Blit(renderRTs[1], Mat, 0, true);
+            Graphics.Blit(rts[0], Mat, 0, true);
+            Graphics.Blit(rts[1], Mat, 0, true);
             Mat.SetFloat("u_Threshold", 0.0f);
 
             for (int i = 1; i <= Passes; i++)
             {
                 Mat.SetFloat("u_Alpha", 1.0f);
-                Mat.SetTexture("gColor", renderRTs[0].InternalTextures[0]);
+                Mat.SetTexture("gColor", rts[0].InternalTextures[0]);
                 Mat.SetFloat("u_Radius", Math.Clamp(Radius, 0.0f, 32f) + i);
-                Graphics.Blit(renderRTs[1], Mat, 0, false);
+                Graphics.Blit(rts[1], Mat, 0, false);
 
-                var tmp = renderRTs[0];
-                renderRTs[0] = renderRTs[1];
-                renderRTs[1] = tmp;
+                (rts[1], rts[0]) = (rts[0], rts[1]);
             }
 
             // Final pass
-            Graphics.Blit(renderRTs[0], rt.InternalTextures[0], false);
-
-
-            //renderRT = rts[currentRenderTextureIndex];
+            Graphics.Blit(rts[0], source.InternalTextures[0], false);
+            ReleaseRT(rts[1]);
+            ReleaseRT(source);
+            return rts[0];
         }
     }
 
@@ -230,13 +223,13 @@ namespace Prowl.Runtime.Resources.RenderPipeline
         Material? AcesMat = null;
         Tonemapper? prevTonemapper = null;
 
-        public override void Render()
+        public override RenderTexture Render()
         {
-            var rt = GetInputValue<RenderTexture>("RenderTexture");
-            if (rt == null) return;
+            var source = GetInputValue<RenderTexture>("RenderTexture");
+            if (source == null) return null;
 
             AcesMat ??= new(Shader.Find("Defaults/Tonemapper.shader"));
-            AcesMat.SetTexture("gAlbedo", rt.InternalTextures[0]);
+            AcesMat.SetTexture("gAlbedo", source.InternalTextures[0]);
             AcesMat.SetFloat("Contrast", Math.Clamp(Contrast, 0, 2));
             AcesMat.SetFloat("Saturation", Math.Clamp(Saturation, 0, 2));
 
@@ -267,7 +260,10 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             if (UseGammaCorrection) AcesMat.EnableKeyword("GAMMACORRECTION");
             else AcesMat.DisableKeyword("GAMMACORRECTION");
 
-            Graphics.Blit(renderRT, AcesMat, 0, Clear);
+            var result = GetRenderTexture(1f, [TextureImageFormat.Short3]);
+            Graphics.Blit(result, AcesMat, 0, true);
+            ReleaseRT(source);
+            return result;
         }
     }
 
@@ -284,14 +280,14 @@ namespace Prowl.Runtime.Resources.RenderPipeline
 
         Material Mat;
 
-        public override void Render()
+        public override RenderTexture Render()
         {
             var gbuffer = Camera.Current.gBuffer;
-            var rt = GetInputValue<RenderTexture>("RenderTexture");
-            if (rt == null) return;
+            var source = GetInputValue<RenderTexture>("RenderTexture");
+            if (source == null) return null;
 
             Mat ??= new Material(Shader.Find("Defaults/SSR.shader"));
-            Mat.SetTexture("gColor", rt.InternalTextures[0]);
+            Mat.SetTexture("gColor", source.InternalTextures[0]);
             Mat.SetTexture("gNormalMetallic", gbuffer.NormalMetallic);
             Mat.SetTexture("gPositionRoughness", gbuffer.PositionRoughness);
             Mat.SetTexture("gDepth", gbuffer.Depth);
@@ -300,7 +296,12 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             Mat.SetInt("SSR_STEPS", Math.Clamp(Steps, 16, 32));
             Mat.SetInt("SSR_BISTEPS", Math.Clamp(RefineSteps, 0, 16));
 
-            Graphics.Blit(renderRT, Mat, 0, true);
+            var result = GetRenderTexture(1f, [TextureImageFormat.Short3]);
+            Graphics.Blit(result, Mat, 0, true);
+            ReleaseRT(source);
+            return result;
+        }
+
         public override void OnValidate()
         {
             Threshold = Math.Clamp(Threshold, 0.0f, 1.0f);
@@ -313,7 +314,6 @@ namespace Prowl.Runtime.Resources.RenderPipeline
     {
         public override string Title => "Temporal Anti-Aliasing";
         public override float Width => 125;
-        public override int RTCount => 2;
 
         [Input(ShowBackingValue.Never), SerializeIgnore] public RenderTexture RenderTexture;
 
@@ -343,7 +343,7 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             new Vector2(0.03125f, 0.592593f),
         ];
 
-        public override void PreRender(int width, int height)
+        public override void Prepare(int width, int height)
         {
             // Apply Halton jitter
             long n = Time.frameCount % 16;
@@ -361,14 +361,16 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             Graphics.PreviousJitter = PreviousJitter / new Vector2(width, height);
         }
 
-        public override void Render()
+        public override RenderTexture Render()
         {
-            var rt = GetInputValue<RenderTexture>("RenderTexture");
-            if (rt == null) return;
+            var source = GetInputValue<RenderTexture>("RenderTexture");
+            if(source == null) return null;
+
+            var history = Camera.Current.GetCachedRT("TAA_HISTORY", RP.Width, RP.Height, [TextureImageFormat.Short3]);
 
             Mat ??= new Material(Shader.Find("Defaults/TAA.shader"));
-            Mat.SetTexture("gColor", rt.InternalTextures[0]);
-            Mat.SetTexture("gHistory", renderRTs[1].InternalTextures[0]);
+            Mat.SetTexture("gColor", source.InternalTextures[0]);
+            Mat.SetTexture("gHistory", history.InternalTextures[0]);
             Mat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
             Mat.SetTexture("gVelocity", Camera.Current.gBuffer.Velocity);
             Mat.SetTexture("gDepth", Camera.Current.gBuffer.Depth);
@@ -378,9 +380,10 @@ namespace Prowl.Runtime.Resources.RenderPipeline
             Mat.SetVector("Jitter", Graphics.Jitter);
             Mat.SetVector("PreviousJitter", Graphics.PreviousJitter);
 
-            Graphics.Blit(renderRTs[0], Mat, 0, true);
-
-            Graphics.Blit(renderRTs[1], renderRT.InternalTextures[0], true);
+            var result = GetRenderTexture(1f, [TextureImageFormat.Short3]);
+            Graphics.Blit(result, Mat, 0, true);
+            Graphics.Blit(history, result.InternalTextures[0], true);
+            return result;
         }
     }
 
