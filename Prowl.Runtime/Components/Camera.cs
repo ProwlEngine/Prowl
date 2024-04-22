@@ -134,7 +134,6 @@ public class Camera : MonoBehaviour
         // Set default jitter to false, this is set to true in a TAA pass
         rp.Res!.Prepare(width, height);
 
-        Matrix4x4.Invert(Graphics.MatView, out Graphics.MatViewInverse);
         Matrix4x4.Invert(Graphics.MatProjection, out Graphics.MatProjectionInverse);
 
         OpaquePass();

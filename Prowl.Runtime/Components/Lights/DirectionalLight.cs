@@ -57,7 +57,9 @@ public class DirectionalLight : MonoBehaviour
             lightMat.EnableKeyword("CASTSHADOWS");
             lightMat.SetTexture("shadowMap", shadowMap.InternalDepth);
 
-            lightMat.SetMatrix("matCamViewInverse", Graphics.MatViewInverse);
+            Matrix4x4.Invert(Graphics.MatView, out var viewInverse);
+
+            lightMat.SetMatrix("matCamViewInverse", viewInverse);
             lightMat.SetMatrix("matShadowView", Graphics.MatDepthView);
             lightMat.SetMatrix("matShadowSpace", depthMVP);
 

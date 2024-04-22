@@ -31,9 +31,6 @@ Pass 0
 		
 		uniform mat4 matProjection;
 		uniform mat4 matProjectionInverse;
-		uniform mat4 matOldProjection;
-		uniform mat4 matViewInverse;
-		uniform mat4 matOldView;
 
 		uniform int ClampRadius;
 		uniform vec2 Jitter;

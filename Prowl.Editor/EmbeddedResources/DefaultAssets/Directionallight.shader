@@ -32,7 +32,6 @@ Pass 0
 		
 		uniform mat4 matProjection;
 		uniform mat4 mvpInverse;
-		uniform mat4 matViewInverse;
 		
 		in vec2 TexCoords;
 		
@@ -202,7 +201,6 @@ Pass 0
 			kD *= 1.0 - gMetallic;     
 
 			// shadows
-			//vec4 fragPosLightSpace = matShadowSpace * matViewInverse * vec4(gPos, 1);
 			vec4 fragPosLightSpace = matCamViewInverse * vec4(gPos + (N * u_NormalBias), 1);
 			float shadow = ShadowCalculation(fragPosLightSpace.xyz, gPos, N, L);
 			    

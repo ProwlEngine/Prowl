@@ -13,7 +13,6 @@ namespace Prowl.Runtime
 
         public static Vector2 Resolution;
         public static Matrix4x4 MatView;
-        public static Matrix4x4 MatViewInverse;
         public static Matrix4x4 MatProjection;
         public static Matrix4x4 MatProjectionInverse;
         public static Matrix4x4 OldMatView;
@@ -27,7 +26,6 @@ namespace Prowl.Runtime
         public static bool UseJitter;
 
         private static Material defaultMat;
-        private static AssetRef<Texture2D> defaultNoise;
         internal static Vector2D<int> FrameBufferSize;
 
 #warning TODO: Move these to a separate class "GraphicsCapabilities" and add more
@@ -79,13 +77,6 @@ namespace Prowl.Runtime
 
             oldTransform ??= transform;
 
-            if (defaultNoise.IsAvailable == false)
-            {
-                defaultNoise = Application.AssetProvider.LoadAsset<Texture2D>("Defaults/noise.png");
-            }
-
-            material.SetTexture("DefaultNoise", defaultNoise);
-
             if (UseJitter)
             {
                 material.SetVector("Jitter", Jitter);
@@ -97,27 +88,18 @@ namespace Prowl.Runtime
                 material.SetVector("PreviousJitter", Vector2.zero);
             }
 
-            material.SetVector("Resolution", Graphics.Resolution);
-            //material.SetVector("ScreenResolution", new Vector2(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y));
+            material.SetVector("Resolution", Resolution);
             material.SetFloat("Time", (float)Time.time);
             material.SetInt("Frame", (int)Time.frameCount);
-            //material.SetFloat("DeltaTime", Time.deltaTimeF);
-            //material.SetInt("RandomSeed", Random.Shared.Next());
-            //material.SetInt("ObjectID", mesh.InstanceID);
             material.SetVector("Camera_WorldPosition", Camera.Current.GameObject.Transform.position);
-            //material.SetVector("Camera_NearFarFOV", new Vector3(Camera.Current.NearClip, Camera.Current.FarClip, Camera.Current.FieldOfView));
 
             // Upload view and projection matrices(if locations available)
             material.SetMatrix("matView", MatView);
-            material.SetMatrix("matOldView", OldMatView);
 
             material.SetMatrix("matProjection", MatProjection);
             material.SetMatrix("matProjectionInverse", MatProjectionInverse);
-            material.SetMatrix("matOldProjection", OldMatProjection);
             // Model transformation matrix is sent to shader
             material.SetMatrix("matModel", transform);
-
-            material.SetMatrix("matViewInverse", MatViewInverse);
 
             Matrix4x4 matMVP = Matrix4x4.Identity;
             matMVP = Matrix4x4.Multiply(matMVP, transform);
