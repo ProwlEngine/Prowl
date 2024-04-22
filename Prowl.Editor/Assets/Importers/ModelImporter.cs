@@ -309,7 +309,7 @@ namespace Prowl.Editor.Assets
             }
         }
 
-        private static void LoadMeshes(SerializedAsset ctx, FileInfo assetPath, Assimp.Scene? scene, double scale, List<AssetRef<Material>> mats, List<MeshMaterialBinding> meshMats)
+        private void LoadMeshes(SerializedAsset ctx, FileInfo assetPath, Assimp.Scene? scene, double scale, List<AssetRef<Material>> mats, List<MeshMaterialBinding> meshMats)
         {
             foreach (var m in scene.Meshes)
             {
@@ -334,7 +334,11 @@ namespace Prowl.Editor.Assets
                 {
                     System.Numerics.Vector3[] normals = new System.Numerics.Vector3[vertexCount];
                     for (var i = 0; i < normals.Length; i++)
+                    {
                         normals[i] = new System.Numerics.Vector3(m.Normals[i].X, m.Normals[i].Y, m.Normals[i].Z);
+                        if(InvertNormals)
+                            normals[i] = -normals[i];
+                    }
                     mesh.Normals = normals;
                 }
 
