@@ -2,10 +2,12 @@
 using Prowl.Runtime.Resources.RenderPipeline;
 using Prowl.Runtime.SceneManagement;
 using System;
+using System.Collections.Generic;
 
 namespace Prowl.Runtime;
 
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Camera}  Camera")]
+[ExecuteAlways]
 public class Camera : MonoBehaviour
 {
     public static Camera? Current;
@@ -94,6 +96,7 @@ public class Camera : MonoBehaviour
     {
         if (RenderPipeline.IsAvailable == false)
         {
+            Debug.LogError($"Camera on {GameObject.Name} has no RenderPipeline assigned, Falling back to default.");
             RenderPipeline = Application.AssetProvider.LoadAsset<RenderPipeline>("Defaults/DefaultRenderPipeline.scriptobj");
             if (RenderPipeline.IsAvailable == false)
             {
@@ -212,5 +215,59 @@ public class Camera : MonoBehaviour
             Target.Res?.End();
         }
         Current = null;
+    public override void LateUpdate()
+    {
+        UpdateCachedRT();
     }
+
+    public override void OnDisable()
+    {
+        gBuffer?.UnloadGBuffer();
+
+        // Clear the Cached RenderTextures
+        foreach (var (name, (renderTexture, frameCreated)) in cachedRenderTextures)
+            renderTexture.Destroy();
+        cachedRenderTextures.Clear();
+    }
+
+    #region RT Cache
+
+    private readonly Dictionary<string, (RenderTexture, long frameCreated)> cachedRenderTextures = [];
+    private const int MaxUnusedFrames = 6;
+
+    public RenderTexture GetCachedRT(string name, int width, int height, TextureImageFormat[] format)
+    {
+        if (cachedRenderTextures.ContainsKey(name))
+        {
+            // Update the frame created
+            var cached = cachedRenderTextures[name];
+            cachedRenderTextures[name] = (cached.Item1, Time.frameCount);
+            return cached.Item1;
+        }
+        RenderTexture rt = new(width, height, 1, false, format);
+        rt.Name = name;
+        cachedRenderTextures[name] = (rt, Time.frameCount);
+        return rt;
+    }
+
+    public void UpdateCachedRT()
+    {
+        var disposableTextures = new List<(RenderTexture, string)>();
+        foreach (var (name, (renderTexture, frameCreated)) in cachedRenderTextures)
+        {
+            if (Time.frameCount - frameCreated > MaxUnusedFrames)
+            {
+                renderTexture.Destroy();
+                disposableTextures.Add((renderTexture, name));
+            }
+        }
+
+        foreach (var renderTexture in disposableTextures)
+        {
+            cachedRenderTextures.Remove(renderTexture.Item2);
+            renderTexture.Item1.Destroy();
+        }
+    }
+
+    #endregion
 }
