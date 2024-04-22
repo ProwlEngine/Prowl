@@ -4,6 +4,7 @@ using Silk.NET.Maths;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 
 namespace Prowl.Runtime
 {
@@ -125,13 +126,26 @@ namespace Prowl.Runtime
 
         #region Pool
 
-        private struct RenderTextureKey(int width, int height, TextureImageFormat format)
+        private struct RenderTextureKey(int width, int height, TextureImageFormat[] format)
         {
             public int Width = width;
             public int Height = height;
-            public TextureImageFormat Format = format;
+            public TextureImageFormat[] Format = format;
 
-            public override bool Equals([NotNullWhen(true)] object? obj) => obj is RenderTextureKey key && (Width, Height, Format) == (key.Width, key.Height, key.Format);
+            public override bool Equals([NotNullWhen(true)] object? obj)
+            {
+                if (obj is RenderTextureKey key)
+                {
+                    if (Width == key.Width && Height == key.Height && Format.Length == key.Format.Length)
+                    {
+                        for (int i = 0; i < Format.Length; i++)
+                            if (Format[i] != key.Format[i])
+                                return false;
+                        return true;
+                    }
+                }
+                return false;
+            }
             public override int GetHashCode() => HashCode.Combine(Width, Height, Format);
             public static bool operator ==(RenderTextureKey left, RenderTextureKey right) => left.Equals(right);
             public static bool operator !=(RenderTextureKey left, RenderTextureKey right) => !(left == right);
@@ -140,7 +154,7 @@ namespace Prowl.Runtime
         private static Dictionary<RenderTextureKey, List<(RenderTexture, long frameCreated)>> pool = [];
         private const int MaxUnusedFrames = 6;
 
-        public static RenderTexture GetTemporaryRT(int width, int height, TextureImageFormat format)
+        public static RenderTexture GetTemporaryRT(int width, int height, TextureImageFormat[] format)
         {
             var key = new RenderTextureKey(width, height, format);
 
@@ -152,12 +166,12 @@ namespace Prowl.Runtime
                 return renderTexture;
             }
 
-            return new RenderTexture(width, height, 1, false, [format]);
+            return new RenderTexture(width, height, 1, false, format);
         }
 
         public static void ReleaseTemporaryRT(RenderTexture renderTexture)
         {
-            var key = new RenderTextureKey(renderTexture.Width, renderTexture.Height, renderTexture.InternalTextures[0].ImageFormat);
+            var key = new RenderTextureKey(renderTexture.Width, renderTexture.Height, renderTexture.InternalTextures.Select(t => t.ImageFormat).ToArray());
 
             if (!pool.TryGetValue(key, out var list))
             {
