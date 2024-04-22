@@ -21,5 +21,27 @@ namespace Prowl.Runtime
             typeof(TAANode),
             typeof(OutputNode),
             ];
+        public void Prepare(int width, int height)
+        {
+            foreach (var node in nodes)
+            {
+                if (node is RenderPassNode renderPass)
+                    renderPass.Prepare(width, height);
+            }
+        }
+        public RenderTexture? Render()
+        {
+            RenderTexture? result = null;
+            try
+            {
+                result = GetNode<OutputNode>().GetValue(null) as RenderTexture;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[RenderPipeline] " + e.Message + Environment.NewLine + e.StackTrace);
+            }
+
+            return result;
+        }
     }
 }

@@ -132,11 +132,7 @@ public class Camera : MonoBehaviour
         Graphics.OldMatProjection = oldProjection ?? Graphics.MatProjection;
 
         // Set default jitter to false, this is set to true in a TAA pass
-        foreach (var node in rp.Res!.nodes)
-        {
-            if (node is RenderPassNode renderPass)
-                renderPass.PreRender(width, height);
-        }
+        rp.Res!.Prepare(width, height);
 
         Matrix4x4.Invert(Graphics.MatView, out Graphics.MatViewInverse);
         Matrix4x4.Invert(Graphics.MatProjection, out Graphics.MatProjectionInverse);
@@ -152,7 +148,7 @@ public class Camera : MonoBehaviour
             return;
         }
 
-        RenderTexture result = (RenderTexture)rp.Res!.GetNode<OutputNode>().GetValue(null);
+        RenderTexture? result = rp.Res!.Render();
 
         if (result == null)
         {
