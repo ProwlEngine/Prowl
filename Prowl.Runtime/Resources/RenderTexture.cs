@@ -146,7 +146,15 @@ namespace Prowl.Runtime
                 }
                 return false;
             }
-            public override int GetHashCode() => HashCode.Combine(Width, Height, Format);
+            public override int GetHashCode()
+            {
+                int hash = 17;
+                hash = hash * 23 + Width.GetHashCode();
+                hash = hash * 23 + Height.GetHashCode();
+                foreach (var format in Format)
+                    hash = hash * 23 + ((int)format).GetHashCode();
+                return hash;
+            }
             public static bool operator ==(RenderTextureKey left, RenderTextureKey right) => left.Equals(right);
             public static bool operator !=(RenderTextureKey left, RenderTextureKey right) => !(left == right);
         }
