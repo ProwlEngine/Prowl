@@ -20,16 +20,14 @@ public class GBuffer
     
     public GBuffer(int width, int height)
     {
-#warning TODO: Dont always use 32bits, optomize this and use only whats absolutely needed, some precision loss is ok as long as it doesnt hurt visuals much, normals for example could probably be 16
-#warning TODO: Switch to a singular 16bit "Material" buffer, AO, Rough, Metal, the final channel would be 16 bools, Lit, Fog, etc
         TextureImageFormat[] formats =
         [
-            TextureImageFormat.Float4, // Albedo & AO
-            TextureImageFormat.Float4, // Normal & Metalness
-            TextureImageFormat.Float4, // Position & Roughness
-            TextureImageFormat.Float3, // Emission
-            TextureImageFormat.Float2, // Velocity
-            TextureImageFormat.Float, // ObjectIDs
+            TextureImageFormat.Short4, // Albedo & AO
+            TextureImageFormat.Short4, // Normal & Metalness
+            TextureImageFormat.Short4, // Position & Roughness
+            TextureImageFormat.Short3, // Emission
+            TextureImageFormat.Short2, // Velocity
+            TextureImageFormat.Short, // ObjectIDs
         ];
         buffer = new RenderTexture(width, height, 6, true, formats);
     }
@@ -55,7 +53,7 @@ public class GBuffer
         int x = (int)(uv.x * Width);
         int y = (int)(uv.y * Height);
         Graphics.Device.BindFramebuffer(frameBuffer);
-        float result = Graphics.Device.ReadPixel<float>(5, x, y, TextureImageFormat.Float);
+        float result = Graphics.Device.ReadPixel<float>(5, x, y, TextureImageFormat.Short);
         return (int)result;
     }
 
@@ -64,7 +62,7 @@ public class GBuffer
         int x = (int)(uv.x * Width);
         int y = (int)(uv.y * Height);
         Graphics.Device.BindFramebuffer(frameBuffer);
-        Vector3 result = Graphics.Device.ReadPixel<System.Numerics.Vector3>(2, x, y, TextureImageFormat.Float3);
+        Vector3 result = Graphics.Device.ReadPixel<System.Numerics.Vector3>(2, x, y, TextureImageFormat.Short3);
         return result;
     }
 
