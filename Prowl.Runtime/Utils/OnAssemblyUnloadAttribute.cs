@@ -46,12 +46,9 @@ namespace Prowl.Runtime.Utils
     }
 
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
-    public class OnAssemblyLoadAttribute : Attribute
+    public class OnAssemblyLoadAttribute(int order = 0) : Attribute
     {
-        public OnAssemblyLoadAttribute()
-        {
-        }
-
+        int order = order;
         private static List<MethodInfo> methodInfos = [];
 
         public static void Invoke()
@@ -65,6 +62,7 @@ namespace Prowl.Runtime.Utils
         public static void FindAll()
         {
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            List<(MethodInfo, int)> attribMethods = [];
             foreach (var assembly in assemblies)
             {
                 var types = assembly.GetTypes();
@@ -73,13 +71,18 @@ namespace Prowl.Runtime.Utils
                     var methods = type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
                     foreach (var method in methods)
                     {
-                        var attributes = method.GetCustomAttributes<OnAssemblyLoadAttribute>();
-                        if (attributes.Count() > 0)
+                        var attribute = method.GetCustomAttribute<OnAssemblyLoadAttribute>();
+                        if (attribute != null)
                         {
-                            methodInfos.Add(method);
+                            attribMethods.Add((method, attribute.order));
                         }
                     }
                 }
+            }
+            var ordered = attribMethods.OrderBy(x => x.Item2);
+            foreach (var attribMethod in ordered)
+            {
+                methodInfos.Add(attribMethod.Item1);
             }
         }
 

@@ -9,7 +9,7 @@ namespace Prowl.Editor
 {
     public static class CreateAssetMenuHandler
     {
-        [OnAssemblyLoad]
+        [OnAssemblyLoad(1)]
         public static void FindAllMenus()
         {
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
