@@ -34,8 +34,10 @@ public static class Input
     public static Vector2 MouseDelta => Enabled ? (_currentMousePos - _prevMousePos) : Vector2.zero;
     public static float MouseWheelDelta => Enabled ? Mice[0].ScrollWheels[0].Y : 0f;
 
-    private static Dictionary<Key, bool> previousKeyStates = new Dictionary<Key, bool>();
-    private static Dictionary<MouseButton, bool> previousMouseStates = new Dictionary<MouseButton, bool>();
+    private static Dictionary<Key, bool> wasKeyPressed = new Dictionary<Key, bool>();
+    private static Dictionary<Key, bool> isKeyPressed = new Dictionary<Key, bool>();
+    private static Dictionary<MouseButton, bool> wasMousePressed = new Dictionary<MouseButton, bool>();
+    private static Dictionary<MouseButton, bool> isMousePressed = new Dictionary<MouseButton, bool>();
 
     internal static void Initialize()
     {
@@ -61,41 +63,45 @@ public static class Input
     private static void UpdateKeyStates()
     {
         foreach (Key key in Enum.GetValues(typeof(Key)))
-            if(key != Key.Unknown)
-                previousKeyStates[key] = GetKey(key);
+        {
+            if (key != Key.Unknown)
+            {
+                wasKeyPressed[key] = isKeyPressed[key];
+                isKeyPressed[key] = false;
+                foreach (var keyboard in Keyboards)
+                    if (keyboard.IsKeyPressed(key))
+                    {
+                        isKeyPressed[key] = true;
+                        break;
+                    }
+            }
+        }
 
         foreach (MouseButton button in Enum.GetValues(typeof(MouseButton)))
+        {
             if (button != MouseButton.Unknown)
-                previousMouseStates[button] = GetMouseButton((int)button);
+            {
+                wasMousePressed[button] = isMousePressed[button];
+                isMousePressed[button] = false;
+                foreach (var mouse in Mice)
+                    if (mouse.IsButtonPressed((MouseButton)button))
+                    {
+                        isMousePressed[button] = true;
+                        break;
+                    }
+            }
+        }
     }
 
-    public static bool GetKey(Key key)
-    {
-        if (!Enabled)
-            return false;
+    public static bool GetKey(Key key) => Enabled && isKeyPressed[key];
 
-        foreach (var keyboard in Keyboards)
-            if (keyboard.IsKeyPressed(key))
-                return true;
-        return false;
-    }
+    public static bool GetKeyDown(Key key) => Enabled && isKeyPressed[key] && !wasKeyPressed[key];
 
-    public static bool GetKeyDown(Key key) => Enabled && GetKey(key) && !previousKeyStates[key];
+    public static bool GetKeyUp(Key key) => Enabled && !isKeyPressed[key] && wasKeyPressed[key];
 
-    public static bool GetKeyUp(Key key) => Enabled && !GetKey(key) && previousKeyStates[key];
+    public static bool GetMouseButton(int button) => Enabled && isMousePressed[(MouseButton)button];
 
-    public static bool GetMouseButton(int button)
-    {
-        if (!Enabled)
-            return false;
+    public static bool GetMouseButtonDown(int button) => Enabled && isMousePressed[(MouseButton)button] && !wasMousePressed[(MouseButton)button];
 
-        foreach (var mouse in Mice)
-            if (mouse.IsButtonPressed((MouseButton)button))
-                return true;
-        return false;
-    }
-
-    public static bool GetMouseButtonDown(int button) => Enabled && GetMouseButton(button) && !previousMouseStates[(MouseButton)button];
-
-    public static bool GetMouseButtonUp(int button) => Enabled && !GetMouseButton(button) && previousMouseStates[(MouseButton)button];
+    public static bool GetMouseButtonUp(int button) => Enabled && isMousePressed[(MouseButton)button] && wasMousePressed[(MouseButton)button];
 }
