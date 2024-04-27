@@ -39,12 +39,40 @@ public static class Input
     private static Dictionary<MouseButton, bool> wasMousePressed = new Dictionary<MouseButton, bool>();
     private static Dictionary<MouseButton, bool> isMousePressed = new Dictionary<MouseButton, bool>();
 
+    public static Key LastPressedKeyCode;
+    public static char LastPressedChar;
+
+    public static bool IsAnyKeyDown => Enabled && isKeyPressed.ContainsValue(true);
+
     internal static void Initialize()
     {
         Context = Window.InternalWindow.CreateInput();
         _prevMousePos = (Vector2Int)Mice[0].Position.ToDouble();
         _currentMousePos = (Vector2Int)Mice[0].Position.ToDouble();
-        UpdateKeyStates();
+
+        // initialize key states
+        foreach (Key key in Enum.GetValues(typeof(Key)))
+        {
+            if (key != Key.Unknown)
+            {
+                wasKeyPressed[key] = false;
+                isKeyPressed[key] = false;
+            }
+        }
+
+        foreach (MouseButton button in Enum.GetValues(typeof(MouseButton)))
+        {
+            if (button != MouseButton.Unknown)
+            {
+                wasMousePressed[button] = false;
+                isMousePressed[button] = false;
+            }
+        }
+
+        foreach (var keyboard in Keyboards)
+            keyboard.KeyChar += (keyboard, c) => LastPressedChar = c;
+
+            UpdateKeyStates();
     }
 
     internal static void Dispose()
@@ -71,6 +99,8 @@ public static class Input
                 foreach (var keyboard in Keyboards)
                     if (keyboard.IsKeyPressed(key))
                     {
+                        if(wasKeyPressed[key] == false)
+                            LastPressedKeyCode = key;
                         isKeyPressed[key] = true;
                         break;
                     }
