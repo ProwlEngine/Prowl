@@ -54,8 +54,6 @@ namespace Prowl.Runtime
 
         #region Public Instance methods
 
-        public void Scale(Vector2Int scale) { x *= scale.x; y *= scale.y; }
-
         /// <summary>
         /// Returns the hash code for this instance.
         /// </summary>
@@ -133,22 +131,9 @@ namespace Prowl.Runtime
         public bool IsFinate() => Mathf.IsValid(x) && Mathf.IsValid(y);
         #endregion Public Instance Methods
 
-        #region Public Static Properties
-        public static Vector2 zero { get { return new Vector2(); } }
-        public static Vector2 one { get { return new Vector2(1.0, 1.0); } }
-        public static Vector2 right { get { return new Vector2(1.0, 0.0); } }
-        public static Vector2 left { get { return new Vector2(1.0, 0.0); } }
-        public static Vector2 up { get { return new Vector2(0.0, 1.0); } }
-        public static Vector2 down { get { return new Vector2(0.0, 1.0); } }
-
-        public static Vector2 infinity = new Vector2(Mathf.Infinity, Mathf.Infinity);
-        #endregion Public Static Properties
+        public static Vector2Int zero { get { return new Vector2Int(); } }
 
         #region Public Static Methods
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static double AngleBetween(Vector2 from, Vector2 to) { return Mathf.Acos(Mathf.Clamp(Dot(from.normalized, to.normalized), -1, 1)) * Mathf.Rad2Deg; }
-
 
         /// <summary>
         /// Returns the Euclidean distance between the two given points.
@@ -157,55 +142,14 @@ namespace Prowl.Runtime
         /// <param name="value2">The second point.</param>
         /// <returns>The distance.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static double Distance(Vector2 value1, Vector2 value2)
+        public static double Distance(Vector2Int value1, Vector2Int value2)
         {
             double dx = value1.x - value2.x;
-                double dy = value1.y - value2.y;
+            double dy = value1.y - value2.y;
 
-                double ls = dx * dx + dy * dy;
+            double ls = dx * dx + dy * dy;
 
-                return (double)Math.Sqrt((double)ls);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector2 MoveTowards(Vector2 current, Vector2 target, float maxDistanceDelta)
-        {
-            Vector2 toVector = target - current;
-            double dist = toVector.magnitude;
-            if (dist <= maxDistanceDelta || dist == 0) return target;
-            return current + toVector / dist * maxDistanceDelta;
-        }
-
-        /// <summary>
-        /// Returns a vector with the same direction as the given vector, but with a length of 1.
-        /// </summary>
-        /// <param name="value">The vector to normalize.</param>
-        /// <returns>The normalized vector.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector2 Normalize(Vector2 value)
-        {
-            double ls = value.x * value.x + value.y * value.y;
-                double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
-
-                return new Vector2(
-                    value.x * invNorm,
-                    value.y * invNorm);
-        }
-
-        /// <summary>
-        /// Returns the reflection of a vector off a surface that has the specified normal.
-        /// </summary>
-        /// <param name="vector">The source vector.</param>
-        /// <param name="normal">The normal of the surface being reflected off.</param>
-        /// <returns>The reflected vector.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector2 Reflect(Vector2 vector, Vector2 normal)
-        {
-            double dot = vector.x * normal.x + vector.y * normal.y;
-
-                return new Vector2(
-                    vector.x - 2.0 * dot * normal.x,
-                    vector.y - 2.0 * dot * normal.y);
+            return (double)Math.Sqrt((double)ls);
         }
 
         /// <summary>
@@ -215,99 +159,19 @@ namespace Prowl.Runtime
         /// <param name="min">The minimum value.</param>
         /// <param name="max">The maximum value.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector2 Clamp(Vector2 value1, Vector2 min, Vector2 max)
+        public static Vector2Int Clamp(Vector2Int value1, Vector2Int min, Vector2Int max)
         {
             // This compare order is very important!!!
             // We must follow HLSL behavior in the case user specified min value is bigger than max value.
-            double x = value1.x;
+            int x = value1.x;
             x = (x > max.x) ? max.x : x;
             x = (x < min.x) ? min.x : x;
 
-            double y = value1.y;
+            int y = value1.y;
             y = (y > max.y) ? max.y : y;
             y = (y < min.y) ? min.y : y;
 
-            return new Vector2(x, y);
-        }
-
-        /// <summary>
-        /// Linearly interpolates between two vectors based on the given weighting.
-        /// </summary>
-        /// <param name="value1">The first source vector.</param>
-        /// <param name="value2">The second source vector.</param>
-        /// <param name="amount">Value between 0 and 1 indicating the weight of the second source vector.</param>
-        /// <returns>The interpolated vector.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector2 Lerp(Vector2 value1, Vector2 value2, double amount)
-        {
-            return new Vector2(
-                value1.x + (value2.x - value1.x) * amount,
-                value1.y + (value2.y - value1.y) * amount);
-        }
-
-        /// <summary>
-        /// Transforms a vector by the given matrix.
-        /// </summary>
-        /// <param name="position">The source vector.</param>
-        /// <param name="matrix">The transformation matrix.</param>
-        /// <returns>The transformed vector.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector2 Transform(Vector2 position, Matrix4x4 matrix)
-        {
-            return new Vector2(
-                position.x * matrix.M11 + position.y * matrix.M21 + matrix.M41,
-                position.x * matrix.M12 + position.y * matrix.M22 + matrix.M42);
-        }
-
-        /// <summary>
-        /// Transforms a vector normal by the given matrix.
-        /// </summary>
-        /// <param name="normal">The source vector.</param>
-        /// <param name="matrix">The transformation matrix.</param>
-        /// <returns>The transformed vector.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector2 TransformNormal(Vector2 normal, Matrix4x4 matrix)
-        {
-            return new Vector2(
-                normal.x * matrix.M11 + normal.y * matrix.M21,
-                normal.x * matrix.M12 + normal.y * matrix.M22);
-        }
-
-        /// <summary>
-        /// Transforms a vector by the given Quaternion rotation value.
-        /// </summary>
-        /// <param name="value">The source vector to be rotated.</param>
-        /// <param name="rotation">The rotation to apply.</param>
-        /// <returns>The transformed vector.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector2 Transform(Vector2 value, Quaternion rotation)
-        {
-            double x2 = rotation.x + rotation.x;
-            double y2 = rotation.y + rotation.y;
-            double z2 = rotation.z + rotation.z;
-
-            double wz2 = rotation.w * z2;
-            double xx2 = rotation.x * x2;
-            double xy2 = rotation.x * y2;
-            double yy2 = rotation.y * y2;
-            double zz2 = rotation.z * z2;
-
-            return new Vector2(
-                value.x * (1.0 - yy2 - zz2) + value.y * (xy2 - wz2),
-                value.x * (xy2 + wz2) + value.y * (1.0 - xx2 - zz2));
-        }
-
-        /// <summary>
-        /// Returns the dot product of two vectors.
-        /// </summary>
-        /// <param name="value1">The first vector.</param>
-        /// <param name="value2">The second vector.</param>
-        /// <returns>The dot product.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static double Dot(Vector2 value1, Vector2 value2)
-        {
-            return value1.x * value2.x +
-                   value1.y * value2.y;
+            return new Vector2Int(x, y);
         }
 
         /// <summary>
@@ -317,9 +181,9 @@ namespace Prowl.Runtime
         /// <param name="value2">The second source vector.</param>
         /// <returns>The minimized vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector2 Min(Vector2 value1, Vector2 value2)
+        public static Vector2Int Min(Vector2Int value1, Vector2Int value2)
         {
-            return new Vector2(
+            return new Vector2Int(
                 (value1.x < value2.x) ? value1.x : value2.x,
                 (value1.y < value2.y) ? value1.y : value2.y);
         }
@@ -331,9 +195,9 @@ namespace Prowl.Runtime
         /// <param name="value2">The second source vector</param>
         /// <returns>The maximized vector</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector2 Max(Vector2 value1, Vector2 value2)
+        public static Vector2Int Max(Vector2Int value1, Vector2Int value2)
         {
-            return new Vector2(
+            return new Vector2Int(
                 (value1.x > value2.x) ? value1.x : value2.x,
                 (value1.y > value2.y) ? value1.y : value2.y);
         }
@@ -344,21 +208,11 @@ namespace Prowl.Runtime
         /// <param name="value">The source vector.</param>
         /// <returns>The absolute value vector.</returns>        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector2 Abs(Vector2 value)
+        public static Vector2Int Abs(Vector2Int value)
         {
-            return new Vector2(Math.Abs(value.x), Math.Abs(value.y));
+            return new Vector2Int(Math.Abs(value.x), Math.Abs(value.y));
         }
 
-        /// <summary>
-        /// Returns a vector whose elements are the square root of each of the source vector's elements.
-        /// </summary>
-        /// <param name="value">The source vector.</param>
-        /// <returns>The square root vector.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector2 SquareRoot(Vector2 value)
-        {
-            return new Vector2((Double)Math.Sqrt(value.x), (Double)Math.Sqrt(value.y));
-        }
         #endregion Public Static Methods
 
         #region Public Static Operators
