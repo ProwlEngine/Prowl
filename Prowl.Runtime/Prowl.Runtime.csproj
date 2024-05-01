@@ -35,8 +35,10 @@
     <ItemGroup>
       <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
       <PackageReference Include="BepuPhysics" Version="2.5.0-beta.23" />
+      <PackageReference Include="Pictime.SharpFont.Dependencies" Version="2.6.0" />
       <PackageReference Include="Silk.NET" Version="2.20.0" />
       <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.21.1.2" />
+      <PackageReference Include="SpaceWizards.SharpFont" Version="1.0.2" />
     </ItemGroup>
 
 </Project>

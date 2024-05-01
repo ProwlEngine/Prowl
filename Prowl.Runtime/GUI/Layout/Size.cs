@@ -1,0 +1,73 @@
+﻿namespace Prowl.Runtime.GUI
+{
+
+    public struct Size
+    {
+        public static Size Default => new(0, LayoutValueType.Pixel);
+
+        public static Size Max => new(double.MaxValue, LayoutValueType.Pixel);
+
+        private bool isLerp = false;
+
+        public double Value;
+        public double PixelOffset;
+        public LayoutValueType Type;
+
+        private double _lerpValue;
+        private double _lerpPixelOffset;
+        private double _lerpTime;
+        private LayoutValueType _lerpType;
+
+        public Size() { }
+
+        public Size(double value, LayoutValueType type)
+        {
+            Value = value;
+            Type = type;
+        }
+        public Size(double value, double pixelOffset, LayoutValueType type)
+        {
+            Value = value;
+            PixelOffset = pixelOffset;
+            Type = type;
+        }
+
+        public double ToPixels(double parentValue)
+        {
+            if (isLerp)
+            {
+                Size a = new(Value, PixelOffset, Type);
+                Size b = new(_lerpValue, _lerpPixelOffset, _lerpType);
+                return Mathf.Lerp(a.ToPixels(parentValue), b.ToPixels(parentValue), _lerpTime);
+            }
+            else if(Type == LayoutValueType.Percent)
+                return (Value * parentValue) + PixelOffset;
+            else
+                return Value + PixelOffset;
+        }
+
+        public static Size Percentage(double normalized, double pixelOffset = 0) => new Size(normalized, pixelOffset, LayoutValueType.Percent);
+        public static Size Pixels(double pixels, double pixelOffset = 0) => new Size(pixels, pixelOffset, LayoutValueType.Pixel);
+
+        public static Size Lerp(Size a, Size b, double t)
+        {
+            if (a.isLerp) throw new System.Exception("Cannot lerp a lerp");
+            if (b.isLerp) throw new System.Exception("Cannot lerp a lerp");
+
+            Size lerped = a;
+            lerped.isLerp = true;
+            lerped._lerpValue = b.Value;
+            lerped._lerpPixelOffset = b.PixelOffset;
+            lerped._lerpTime = t;
+            lerped._lerpType = b.Type;
+            return lerped;
+        }
+
+        // Int to Size with type Pixels Cast
+        public static implicit operator Size(int value) => new Size(value, LayoutValueType.Pixel);
+        public static implicit operator Size(float value) => new Size(value, LayoutValueType.Pixel);
+        public static implicit operator Size(double value) => new Size(value, LayoutValueType.Pixel);
+
+    }
+
+}

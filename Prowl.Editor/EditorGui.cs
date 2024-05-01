@@ -24,9 +24,9 @@ public static class EditorGui
         ImGui.GetIO().ConfigInputTextCursorBlink = true;
         ImGui.GetIO().ConfigWindowsResizeFromEdges = true;
         ImGui.GetIO().ConfigWindowsMoveFromTitleBarOnly = true;
-        ImGui.GetIO().MouseDrawCursor = true;
+        //ImGui.GetIO().MouseDrawCursor = true;
         //if (OperatingSystem.IsWindows())
-        Input.Mice[0].Cursor.CursorMode = Silk.NET.Input.CursorMode.Hidden;
+        //Input.Mice[0].Cursor.CursorMode = Silk.NET.Input.CursorMode.Hidden;
 
         SetTheme();
     }

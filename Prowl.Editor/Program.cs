@@ -1,11 +1,10 @@
 ﻿using Prowl.Editor.Assets;
-using Prowl.Editor.Drawers.NodeSystem;
 using Prowl.Editor.Editor.Preferences;
 using Prowl.Editor.EditorWindows;
-using Prowl.Editor.EditorWindows.CustomEditors;
 using Prowl.Editor.ImGUI;
-using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
+using Prowl.Runtime.GUI.Graphics;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.OpenGL;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
@@ -115,6 +114,103 @@ public static class Program
             Graphics.EndFrame();
 
             imguiController.Render();
+
+            if (Project.HasProject) {
+
+                if(UIDrawList._fontAtlas == null)
+                {
+                    UIDrawList.CreateDeviceResources(GLDevice.GL);
+                }
+
+//                var drawlist = new UIDrawList();
+//                drawlist.PushClipRectFullScreen();
+//                drawlist.PushTextureID(UIDrawList._fontAtlas.TexID);
+//
+//                // Test AddLine
+//                drawlist.AddLine(new Vector2(10, 10), new Vector2(100, 100), 0xFF0000FF, 2.0f);
+//
+//                // Test AddRect
+//                drawlist.AddRect(new Vector2(200, 50), new Vector2(350, 150), 0xFF00FF00, 5.0f, 0, 2.0f);
+//
+//                // Test AddRectFilled
+//                drawlist.AddRectFilled(new Vector2(400, 50), new Vector2(550, 150), 0xFFFF0000, 10.0f, 0x0F);
+//
+//                // Test AddRectFilledMultiColor
+//                drawlist.AddRectFilledMultiColor(new Vector2(600, 50), new Vector2(750, 150),
+//                    0xFF0000FF, 0xFF00FF00,
+//                    0xFFFF0000, 0xFF000000);
+//
+//                // Test AddTriangle
+//                drawlist.AddTriangle(new Vector2(50, 200), new Vector2(100, 250), new Vector2(150, 200), 0xFFFF00FF, 2.0f);
+//
+//                // Test AddTriangleFilled
+//                drawlist.AddTriangleFilled(new Vector2(200, 200), new Vector2(250, 250), new Vector2(300, 200), 0xFF00FFFF);
+//
+//                // Test AddCircle
+//                drawlist.AddCircle(new Vector2(400, 225), 50, 0xFFFFFF00, 32, 3.0f);
+//
+//                // Test AddCircleFilled
+//                drawlist.AddCircleFilled(new Vector2(550, 225), 50, 0xFF00FFFF, 32);
+//
+//                // Test AddPolyline
+//                var points = new UIBuffer<Vector2>();
+//                points.Add(new Vector2(50, 300));
+//                points.Add(new Vector2(100, 350));
+//                points.Add(new Vector2(150, 325));
+//                points.Add(new Vector2(200, 350));
+//                points.Add(new Vector2(250, 300));
+//                drawlist.AddPolyline(points, points.Count, 0xFFFF00FF, false, 3.0f, true);
+//
+//                // Test AddConvexPolyFilled
+//                var points2 = new UIBuffer<Vector2>();
+//                points2.Add(new Vector2(350, 300));
+//                points2.Add(new Vector2(400, 350));
+//                points2.Add(new Vector2(450, 325));
+//                points2.Add(new Vector2(475, 275));
+//                points2.Add(new Vector2(425, 250));
+//                drawlist.AddConvexPolyFilled(points2, points2.Count, 0xFF00FF00, true);
+//
+//                // Test AddBezierCurve
+//                drawlist.AddBezierCurve(new Vector2(50, 400), new Vector2(100, 450), new Vector2(150, 350), new Vector2(200, 400), 0xFFFFFFFF, 2.0f, 20);
+//
+//                if (testImage == null) {
+//                    testImage = UIDrawList._fontAtlas.TexID as GraphicsTexture;
+//                    //using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.FileIcon.png"))
+//                    //    testImage = Texture2DLoader.FromStream(stream).Handle;
+//                }
+//
+//                drawlist.AddImage(testImage, new Vector2(350, 350), new Vector2(650, 650));
+//
+//                drawlist.AddText(UIDrawList._fontAtlas.Fonts[0], 20f, new Vector2(1375, 300), 0xFFFFFFFF, @"
+//Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
+//Nam interdum nec ante et condimentum. Aliquam quis viverra 
+//odio. Etiam vel tortor in ante lobortis tristique non in 
+//mauris. Maecenas massa tellus, aliquet vel massa eget, 
+//commodo commodo neque. In at erat ut nisi aliquam 
+//condimentum eu vitae quam. Suspendisse tristique euismod 
+//libero. Cras non massa nibh.
+//
+//Suspendisse id justo nibh. Nam ut diam id nunc ultrices 
+//aliquam cursus at ipsum. Praesent dapibus mauris gravida 
+//massa dapibus, vitae posuere magna finibus. Phasellus 
+//dignissim libero metus, vitae tincidunt massa lacinia eget. 
+//Cras sed viverra tortor. Vivamus iaculis faucibus ex non 
+//suscipit. In fringilla tellus at lorem sollicitudin, ut 
+//placerat nibh mollis. Nullam tortor elit, aliquet ac 
+//efficitur vel, ornare eget nibh. Vivamus condimentum, dui 
+//id vehicula iaculis, velit velit pulvinar nisi, mollis 
+//blandit nibh arcu ut magna. Vivamus condimentum in magna in 
+//aliquam. Donec vitae elementum neque. Nam ac ipsum id orci 
+//finibus fringilla. Nulla non justo a augue congue dictum. 
+//Vestibulum in quam id nibh blandit laoreet.
+//");
+//
+//                drawlist.PopClipRect();
+//                drawlist.PopTextureID();
+//                UIDrawList.Draw(GLDevice.GL, Graphics.Resolution, [drawlist]);
+
+                Runtime.GUI.TestGUI.Test();
+            }
         };
 
         Application.Quitting += () => {
@@ -126,6 +222,8 @@ public static class Program
 
         return 0;
     }
+
+    private static GraphicsTexture testImage;
 
     public static void CheckReloadingAssemblies()
     {

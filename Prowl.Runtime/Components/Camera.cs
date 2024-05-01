@@ -132,7 +132,7 @@ public class Camera : MonoBehaviour
         Graphics.OldMatProjection = oldProjection ?? Graphics.MatProjection;
 
         // Set default jitter to false, this is set to true in a TAA pass
-        rp.Res!.Prepare(width, height);
+        rp.Res!.Prepare("Deferred", width, height);
 
         Matrix4x4.Invert(Graphics.MatProjection, out Graphics.MatProjectionInverse);
 
