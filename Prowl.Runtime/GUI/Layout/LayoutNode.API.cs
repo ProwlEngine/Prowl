@@ -158,7 +158,9 @@
 
         public LayoutNodeScope Enter()
         {
-            return new LayoutNodeScope(this);
+            var scope = new LayoutNodeScope(this);
+            Gui.PushNode(scope);
+            return scope;
         }
 
         public void SetNewParent(LayoutNode newParent)

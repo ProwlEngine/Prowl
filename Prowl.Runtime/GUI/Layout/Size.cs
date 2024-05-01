@@ -1,4 +1,6 @@
-﻿namespace Prowl.Runtime.GUI
+﻿using System;
+
+namespace Prowl.Runtime.GUI
 {
 
     public struct Size
@@ -67,6 +69,19 @@
         public static implicit operator Size(int value) => new Size(value, LayoutValueType.Pixel);
         public static implicit operator Size(float value) => new Size(value, LayoutValueType.Pixel);
         public static implicit operator Size(double value) => new Size(value, LayoutValueType.Pixel);
+
+        public ulong GetHashCode64()
+        {
+            ulong hash = 17;
+            hash = hash * 23 + (ulong)Value.GetHashCode();
+            hash = hash * 23 + (ulong)PixelOffset.GetHashCode();
+            hash = hash * 23 + (ulong)Type.GetHashCode();
+            hash = hash * 23 + (ulong)_lerpValue.GetHashCode();
+            hash = hash * 23 + (ulong)_lerpPixelOffset.GetHashCode();
+            hash = hash * 23 + (ulong)_lerpTime.GetHashCode();
+            hash = hash * 23 + (ulong)_lerpType.GetHashCode();
+            return hash;
+        }
 
     }
 

@@ -36,7 +36,7 @@ namespace Prowl.Runtime.GUI
         }
 
         public static Gui gui;
-        public static bool hoveringTest = false;
+        public static float sizePanelAnim = 0f;
         public static void Test()
         {
             Rect screenRect = new Rect(0, 0, Runtime.Graphics.Resolution.x, Runtime.Graphics.Resolution.y);
@@ -49,12 +49,16 @@ namespace Prowl.Runtime.GUI
                 int columnNodeCount = (int)Mathf.Abs(Mathf.Sin(Time.time) * 10);
                 //int panelWidth = (int)(500 * (1.0 + Mathf.Sin(Time.time) * 0.5));
                 int panelWidth = 500;
-                using (g.Node().Width(panelWidth).Height(500).TopLeft(Offset.Lerp(Offset.Percentage(0.10f), Offset.Percentage(0.20f), (float)Mathf.Sin(Time.time))).Padding(5).Layout(LayoutType.Row).AutoScaleChildren().Enter())
+                using (g.Node().Width(panelWidth).Height(500).TopLeft(Offset.Lerp(Offset.Percentage(0.10f), Offset.Percentage(0.20f), (float)Mathf.Sin(0.0))).Padding(5).Layout(LayoutType.Row).AutoScaleChildren().Enter())
                 {
                     // A
-                    float animatedBool = g.AnimateBool(hoveringTest, 2f, 2f, EaseType.BounceIn, EaseType.BounceOut);
-                    using (g.Node().MaxWidth(60 + (int)((100 * animatedBool))).Height(Size.Percentage(0.90f)).Layout(LayoutType.Grid).Enter())
+                    using (g.Node().Height(Size.Percentage(0.90f)).Layout(LayoutType.Grid).Enter())
                     {
+                        if(g.IsHovering())
+                            g.PreviousNode.MaxWidth(100);
+                        else
+                            g.PreviousNode.MaxWidth(1000);
+
                         g.SetZIndex(1);
                         g.DrawRect(g.CurrentNode.LayoutData.Rect, Color.white, 2f, 4f);
                         g.PushClip(g.CurrentNode.LayoutData.InnerRect);
@@ -179,8 +183,8 @@ namespace Prowl.Runtime.GUI
         public Rect ScreenRect { get; private set; }
         public Pass CurrentPass { get; private set; }
 
-        public LayoutNode CurrentNode => layoutNodeScopes.First.Value;
-        public LayoutNode PreviousNode => layoutNodeScopes.First.Next.Value;
+        public LayoutNode CurrentNode => layoutNodeScopes.First.Value._node;
+        public LayoutNode PreviousNode => layoutNodeScopes.First.Next.Value._node;
         public GuiState CurrentState => guiStateScopes?.First?.Value ?? new GuiState();
 
         public UIDrawList DrawList {
@@ -192,15 +196,18 @@ namespace Prowl.Runtime.GUI
 
 
         internal Dictionary<int, UIDrawList> _drawList = new();
-        internal LinkedList<LayoutNode> layoutNodeScopes = new();
+        internal LinkedList<LayoutNodeScope> layoutNodeScopes = new();
         internal LinkedList<GuiState> guiStateScopes = new();
         internal Stack<ulong> IDStack = new();
+        internal bool layoutDirty = false;
 
         private Dictionary<ulong, LayoutNode> _nodes;
+        private Dictionary<ulong, ulong> _computedNodes;
 
         public Gui()
         {
             _nodes = [];
+            _computedNodes = [];
         }
 
         public void ProcessFrame(Rect screenRect, Action<Gui> gui)
@@ -209,8 +216,6 @@ namespace Prowl.Runtime.GUI
 
             ScreenRect = screenRect;
 
-            //_drawList.Clear(); // We dont clear the draw lists so they are reused
-            _nodes.Clear();
             layoutNodeScopes.Clear();
             guiStateScopes.Clear();
             IDStack.Clear();
@@ -219,36 +224,47 @@ namespace Prowl.Runtime.GUI
             if (!_drawList.ContainsKey(0))
                 _drawList[0] = new UIDrawList(); // Root Draw List
 
-            var root = new LayoutNode(this, 0);
+            LayoutNode root = null;
+            if (!_nodes.TryGetValue(0, out root))
+            {
+                root = new LayoutNode(this, 0);
+                _nodes[0] = root;
+            }
             root.Width(screenRect.width).Height(screenRect.height);
-            _nodes[0] = root;
 
-            PushNode(root);
             // The first pass Produces all the nodes and structure the user wants
             // Draw calls are Ignored
             // Reset Nodes
+            layoutDirty = false;
+            PushNode(new(root));
             DoPass(Pass.BeforeLayout, gui);
+            PopNode();
+
+            // Look for any nodes whos HashCode does not match the previously computed nodes
+            layoutDirty |= MatchHash(root);
 
             // Now that we have the nodes we can properly process their LayoutNode
             // Like if theres a GridLayout node we can process that here
-            //DoPass(Pass.Layout);
-            root.UpdateCache();
-            root.ProcessLayout();
+            if (layoutDirty)
+            {
+                root.UpdateCache();
+                root.ProcessLayout();
+            }
 
             // The second pass handles drawing
             // All the Nodes and such will have the same ID due to Hashing being consistent
             // So We match ID's and this time we Draw
             var keys = _drawList.Keys;
-            // sort keys
             foreach (var index in keys.OrderBy(x => x))
             {
                 _drawList[index].Clear();
                 _drawList[index].PushTextureID(UIDrawList._fontAtlas.TexID);
             }
-                
-            DoPass(Pass.AfterLayout, gui);
 
+            PushNode(new(root));
+            DoPass(Pass.AfterLayout, gui);
             PopNode();
+
 
             UIDrawList.Draw(GLDevice.GL, new(screenRect.width, screenRect.height), [.. _drawList.Values]);
 
@@ -282,6 +298,7 @@ namespace Prowl.Runtime.GUI
         private void DoPass(Pass pass, Action<Gui> gui)
         {
             CurrentPass = pass;
+
             try
             {
                 ActiveGUI = this;
@@ -297,49 +314,43 @@ namespace Prowl.Runtime.GUI
             }
         }
 
+        private bool MatchHash(LayoutNode node)
+        {
+            var newHash = node.GetHashCode64();
+            bool dirty = !_computedNodes.TryGetValue(node.ID, out var hash) || hash != newHash;
+            _computedNodes[node.ID] = newHash;
+            foreach (var child in node.Children)
+                dirty |= MatchHash(child);
+            return dirty;
+        }
+
         public LayoutNode Node([CallerMemberName] string lineMethod = "", [CallerLineNumber] int lineNumber = 0)
         {
-            int nodeId;
-            if(CurrentPass == Pass.BeforeLayout)
+            int nodeId = layoutNodeScopes.First.Value.nodeIndex++;
+
+            if (CurrentNode.Children.Count > nodeId)
             {
-                CurrentNode._nextNodeIndexA++;
-                nodeId = CurrentNode._nextNodeIndexA;
+                return CurrentNode.Children[nodeId];
             }
             else
             {
-                CurrentNode._nextNodeIndexB++;
-                nodeId = CurrentNode._nextNodeIndexB;
-            }
-
-            ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), lineMethod, lineNumber, nodeId);
-
-            // First pass Creates the Nodes for this frame
-            if (CurrentPass == Pass.BeforeLayout)
-            {
-                if(_nodes.ContainsKey(storageHash))
-                    throw new InvalidOperationException("Node ID already exists, Use Gui.PushID() and Gui.PopID() to create a new ID. Note: This can occur naturally due to Hash Collisions.");
-
-                var node = new LayoutNode(this, storageHash);
+                ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), lineMethod, lineNumber, nodeId);
+                var node = new LayoutNode(this, (ulong)storageHash);
                 node.SetNewParent(CurrentNode);
-                _nodes[storageHash] = node;
+                layoutDirty = true;
                 return node;
             }
-
-            if (_nodes.TryGetValue(storageHash, out var existingNode))
-                return existingNode;
-
-            throw new InvalidOperationException("Node ID not found, Did state change during a single GUI Update?");
         }
 
-        internal void PushNode(LayoutNode node)
+        internal void PushNode(LayoutNodeScope scope)
         {
-            layoutNodeScopes.AddFirst(node);
+            layoutNodeScopes.AddFirst(scope);
             guiStateScopes.AddFirst(CurrentState.Clone());
-            IDStack.Push(node.ID);
+            IDStack.Push(scope._node.ID);
 
             if (CurrentPass == Pass.AfterLayout && CurrentNode._clipped != ClipType.None)
             {
-                var rect = node._clipped == ClipType.Inner ? node.LayoutData.InnerRect : node.LayoutData.Rect;
+                var rect = scope._node._clipped == ClipType.Inner ? scope._node.LayoutData.InnerRect : scope._node.LayoutData.Rect;
                 _drawList[CurrentZIndex].PushClipRect(new Vector4(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height));
             }
         }
@@ -362,11 +373,11 @@ namespace Prowl.Runtime.GUI
     public class LayoutNodeScope : IDisposable
     {
         public LayoutNode _node;
+        public int nodeIndex = 0;
 
         public LayoutNodeScope(LayoutNode node)
         {
             _node = node;
-            _node.Gui.PushNode(_node);
         }
 
         public void Dispose()

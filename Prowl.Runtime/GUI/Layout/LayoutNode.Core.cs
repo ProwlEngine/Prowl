@@ -72,11 +72,8 @@ namespace Prowl.Runtime.GUI.Layout
 
         private LayoutType _layout = LayoutType.None;
         internal ClipType _clipped = ClipType.None;
-        internal int _nextNodeIndexA = 1;
-        internal int _nextNodeIndexB = 1;
 
         internal List<LayoutNode> Children = new List<LayoutNode>();
-        //internal int DrawList = -1;
 
         public LayoutNode(Gui gui, ulong storageHash)
         {
@@ -315,6 +312,37 @@ namespace Prowl.Runtime.GUI.Layout
             if (_fitContentY)           
                 _height = _data.ContentRect.height;
             UpdateScaleCache();
+        }
+
+        public ulong GetHashCode64()
+        {
+            ulong hash = 17;
+            hash = hash * 23 + (ulong)ID.GetHashCode();
+            hash = hash * 23 + (ulong)_positionX.GetHashCode64();
+            hash = hash * 23 + (ulong)_positionY.GetHashCode64();
+            hash = hash * 23 + (ulong)_width.GetHashCode64();
+            hash = hash * 23 + (ulong)_height.GetHashCode64();
+            hash = hash * 23 + (ulong)_maxWidth.GetHashCode64();
+            hash = hash * 23 + (ulong)_maxHeight.GetHashCode64();
+            hash = hash * 23 + (ulong)_marginLeft.GetHashCode64();
+            hash = hash * 23 + (ulong)_marginRight.GetHashCode64();
+            hash = hash * 23 + (ulong)_marginTop.GetHashCode64();
+            hash = hash * 23 + (ulong)_marginBottom.GetHashCode64();
+            hash = hash * 23 + (ulong)_paddingLeft.GetHashCode64();
+            hash = hash * 23 + (ulong)_paddingRight.GetHashCode64();
+            hash = hash * 23 + (ulong)_paddingTop.GetHashCode64();
+            hash = hash * 23 + (ulong)_paddingBottom.GetHashCode64();
+            hash = hash * 23 + (ulong)_ignore.GetHashCode();
+            hash = hash * 23 + (ulong)_fitContentX.GetHashCode();
+            hash = hash * 23 + (ulong)_fitContentY.GetHashCode();
+            hash = hash * 23 + (ulong)_centerContent.GetHashCode();
+            hash = hash * 23 + (ulong)_canScaleChildren.GetHashCode();
+            hash = hash * 23 + (ulong)_layout.GetHashCode();
+            hash = hash * 23 + (ulong)_clipped.GetHashCode();
+            //hash = hash * 23 + _nextNodeIndexA.GetHashCode();
+            //hash = hash * 23 + _nextNodeIndexB.GetHashCode();
+            hash = hash * 23 + (ulong)Children.Count.GetHashCode();
+            return hash;
         }
     }
 }

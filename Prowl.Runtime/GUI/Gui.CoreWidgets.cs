@@ -31,7 +31,7 @@
                     else if (IsHovering(barRect)) DrawRectFilled(barRect, Color.blue, 20f);
                     else                          DrawRectFilled(barRect, Color.red, 20f);
 
-                    if (IsHovering() && Input.MouseWheelDelta != 0)
+                    if (IsHovering(n.LayoutData.Rect) && Input.MouseWheelDelta != 0)
                         n.VScroll -= Input.MouseWheelDelta * 10;
 
                     n.VScroll = Mathf.Clamp(n.VScroll, 0, overflowHeight);
