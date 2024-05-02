@@ -28,6 +28,8 @@ SOFTWARE.
 */
 #endregion License
 
+using System;
+
 namespace Prowl.Runtime
 {
     public struct Rect

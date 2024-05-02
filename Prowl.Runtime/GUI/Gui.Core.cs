@@ -3,7 +3,9 @@ using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.Rendering.OpenGL;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace Prowl.Runtime.GUI
@@ -30,14 +32,14 @@ namespace Prowl.Runtime.GUI
                     g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, Color.white, roundness);
 
                 if(label != null)
-                    g.DrawText(label, 18, g.CurrentNode.LayoutData.Rect.Position, Color.black);
+                    g.DrawText(label, 20, g.CurrentNode.LayoutData.Rect.Position, Color.black);
             }
             return false;
         }
 
         public static Gui gui;
         public static float sizePanelAnim = 0f;
-        public static void Test()
+        public static void Test(Font font)
         {
             Rect screenRect = new Rect(0, 0, Runtime.Graphics.Resolution.x, Runtime.Graphics.Resolution.y);
             gui ??= new();
@@ -109,7 +111,7 @@ namespace Prowl.Runtime.GUI
                     }
 
                     // Footer
-                    using (g.Node().Width(Size.Percentage(1.00f)).Height(Size.Percentage(0.10f)).Top(Offset.Percentage(0.90f)).IgnoreLayout().Enter())
+                    using (g.Node().Width(Size.Percentage(1.00f)).Height(Size.Percentage(0.10f)).Top(Offset.Percentage(0.90f)).IgnoreLayout().Clip().Enter())
                     {
                         g.DrawRect(g.CurrentNode.LayoutData.Rect, Color.white, 2f, 4f);
                         if (g.IsHovering())
@@ -121,6 +123,11 @@ namespace Prowl.Runtime.GUI
                         {
                             g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, Color.white, 4f);
                         }
+
+                        var textRect = g.CurrentNode.LayoutData.InnerRect;
+                        textRect.Reduce(new Vector2(5, 5));
+                        g.DrawText(font, @"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam interdum nec ante et condimentum. Aliquam quis viverraodio. Etiam vel tortor in ante lobortis tristique non inmauris. Maecenas massa tellus, aliquet vel massa eget, commodo commodo neque. In at erat ut nisi aliquam condimentum eu vitae quam. Suspendisse tristique euismod libero. Cras non massa nibh.Suspendisse id justo nibh. Nam ut diam id nunc ultrices aliquam cursus at ipsum. Praesent dapibus mauris gravida massa dapibus, vitae posuere magna finibus. Phasellus dignissim libero metus, vitae tincidunt massa lacinia eget. Cras sed viverra tortor. Vivamus iaculis faucibus ex non suscipit. In fringilla tellus at lorem sollicitudin, ut placerat nibh mollis. Nullam tortor elit, aliquet ac efficitur vel, ornare eget nibh. Vivamus condimentum, dui id vehicula iaculis, velit velit pulvinar nisi, mollis blandit nibh arcu ut magna. Vivamus condimentum in magna in aliquam. Donec vitae elementum neque. Nam ac ipsum id orci finibus fringilla. Nulla non justo a augue congue dictum. Vestibulum in quam id nibh blandit laoreet.", 
+                            20, textRect, Color.black);
                     }
                 }
 
@@ -228,7 +235,7 @@ namespace Prowl.Runtime.GUI
             foreach (var index in keys.OrderBy(x => x))
             {
                 _drawList[index].Clear();
-                _drawList[index].PushTextureID(UIDrawList._fontAtlas.TexID);
+                _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
             }
 
             LayoutNode root = null;

@@ -85,10 +85,33 @@ namespace Prowl.Runtime.GUI
         //    _drawList[CurrentZIndex].AddText(UIDrawList._fontAtlas.Fonts[0], fontSize, position, col, text);
         //}
 
-        public void DrawText(string text, float fontSize, Vector2 position, Color color)
+        public void DrawText(string text, double fontSize, Rect rect, Color color)
+        {
+            var pos = new Vector2(rect.x, rect.y);
+            var wrap = rect.width;
+            DrawText(text, fontSize, pos, color, wrap);
+        }
+
+        public void DrawText(Font font, string text, double fontSize, Rect rect, Color color)
+        {
+            var pos = new Vector2(rect.x, rect.y);
+            var wrap = rect.width;
+            DrawText(font, text, fontSize, pos, color, wrap);
+        }
+
+        public void DrawText(string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f)
         {
             uint col = UIDrawList.ColorConvertFloat4ToU32(color);
-            _drawList[CurrentZIndex].AddText(UIDrawList._fontAtlas.Fonts[0], fontSize, position, col, text);
+            _drawList[CurrentZIndex].AddText((float)fontSize, position, col, text, wrap_width: (float)wrapwidth);
+        }
+
+        public void DrawText(Font font, string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f)
+        {
+            uint col = UIDrawList.ColorConvertFloat4ToU32(color);
+            _drawList[CurrentZIndex].PushTextureID(font.Texture.Handle);
+            var test = (Mathf.Sin(Time.time) + 1.0) * 0.5;
+            _drawList[CurrentZIndex].AddText(font, (float)fontSize, position, col, text, wrap_width: (float)wrapwidth);
+            _drawList[CurrentZIndex].PopTextureID();
         }
 
 

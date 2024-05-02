@@ -1,8 +1,9 @@
 ﻿using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.OpenGL;
-using Prowl.Runtime.Rendering.Primitives;
 using Silk.NET.OpenGL;
 using System;
+using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace Prowl.Runtime.GUI.Graphics
@@ -226,7 +227,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
             PrimReserve(6, 4);
 
-            Vector2 uv = _fontAtlas.TexUvWhitePixel;
+            Vector2 uv = DefaultFont.TexUvWhitePixel;
             var b = new Vector2(c.x, a.y);
             var d = new Vector2(a.x, c.y);
             ushort idx = (ushort)_VtxCurrentIdx;
@@ -283,74 +284,14 @@ namespace Prowl.Runtime.GUI.Graphics
             PathFill(col);
         }
 
-        //public void AddText(Vector2 pos, uint col, string text, int text_begin = 0, int text_end = -1)
-        //{
-        //    AddText(ImGui.Instance.Font, ImGui.Instance.FontSize, pos, col, text, text_begin, text_end);
-        //}
-        //
-        //public void AddText(Vector2 pos, uint col, char[] text, int text_begin = 0, int text_end = -1)
-        //{
-        //    AddText(ImGui.Instance.Font, ImGui.Instance.FontSize, pos, col, text, text_begin, text_end);
-        //}
-
-        public void AddText(ImFont font, float font_size, Vector2 pos, uint col, string text, int text_begin = 0, int text_end = -1, float wrap_width = 0.0f, Vector4? cpu_fine_clip_rect = null)
+        public void AddText(float font_size, Vector2 pos, uint col, string text, int text_begin = 0, int text_end = -1, float wrap_width = 0.0f)
         {
-            ArgumentNullException.ThrowIfNull(font);
-
-            if (font_size <= 0.0f)
-                return;
-
-            if (col >> 24 == 0)
-                return;
-
-            if (text_end == -1)
-                text_end = text.Length;
-            if (text_begin == text_end)
-                return;
-
-
-            System.Diagnostics.Debug.Assert(font.ContainerAtlas.TexID == _TextureIdStack[_TextureIdStack.Count - 1]);  // Use high-level ImGui::PushFont() or low-level ImDrawList::PushTextureId() to change font.
-
-            // reserve vertices for worse case (over-reserving is useful and easily amortized)
-            int char_count = text_end - text_begin;
-            int vtx_count_max = char_count * 4;
-            int idx_count_max = char_count * 6;
-            int vtx_begin = VtxBuffer.Count;
-            int idx_begin = IdxBuffer.Count;
-            PrimReserve(idx_count_max, vtx_count_max);
-
-            Vector4 clip_rect = _ClipRectStack[_ClipRectStack.Count - 1];
-            if (cpu_fine_clip_rect.HasValue)
-            {
-                var cfcr = cpu_fine_clip_rect.Value;
-                clip_rect.x = Mathf.Max(clip_rect.x, cfcr.x);
-                clip_rect.y = Mathf.Max(clip_rect.y, cfcr.y);
-                clip_rect.z = Mathf.Min(clip_rect.z, cfcr.z);
-                clip_rect.w = Mathf.Min(clip_rect.w, cfcr.w);
-            }
-            var rect = font.RenderText(font_size, pos, col, clip_rect, text, text_begin, text_end, this, wrap_width, cpu_fine_clip_rect.HasValue);
-
-            // give back unused vertices
-            // FIXME-OPT: clean this up
-            VtxBuffer.resize(_VtxWritePtr);
-            IdxBuffer.resize(_IdxWritePtr);
-            int vtx_unused = vtx_count_max - (VtxBuffer.Count - vtx_begin);
-            int idx_unused = idx_count_max - (IdxBuffer.Count - idx_begin);
-            var curr_cmd = CmdBuffer[CmdBuffer.Count - 1];
-            curr_cmd.ElemCount -= (uint)idx_unused;
-            CmdBuffer[CmdBuffer.Count - 1] = curr_cmd;
-
-            //_VtxWritePtr -= vtx_unused; //this doesn't seem right, vtx/idx are already pointing to the unused spot
-            //_IdxWritePtr -= idx_unused;
-            _VtxCurrentIdx = (uint)VtxBuffer.Count;
-
-            //AddRect(rect.Min, rect.Max, 0xff0000ff);
+            AddText(DefaultFont, font_size, pos, col, text, text_begin, text_end, wrap_width);
         }
-
-        public void AddText(ImFont font, float font_size, Vector2 pos, uint col, char[] text, int text_begin = 0, int text_end = -1, float wrap_width = 0.0f, Vector4? cpu_fine_clip_rect = null)
+        
+        public void AddText(Font font, float font_size, Vector2 pos, uint col, string text, int text_begin = 0, int text_end = -1, float wrap_width = 0.0f, Vector4? cpu_fine_clip_rect = null)
         {
             ArgumentNullException.ThrowIfNull(font);
-
             if (font_size <= 0.0f)
                 return;
 
@@ -362,7 +303,8 @@ namespace Prowl.Runtime.GUI.Graphics
             if (text_begin == text_end)
                 return;
 
-            System.Diagnostics.Debug.Assert(font.ContainerAtlas.TexID == _TextureIdStack[_TextureIdStack.Count - 1]);  // Use high-level ImGui::PushFont() or low-level ImDrawList::PushTextureId() to change font.
+
+            System.Diagnostics.Debug.Assert(font.Texture.Handle == _TextureIdStack[_TextureIdStack.Count - 1]);  // Use high-level ImGui::PushFont() or low-level ImDrawList::PushTextureId() to change font.
 
             // reserve vertices for worse case (over-reserving is useful and easily amortized)
             int char_count = text_end - text_begin;
@@ -427,7 +369,7 @@ namespace Prowl.Runtime.GUI.Graphics
                 return;
 
             //Vector2 uv = ImGui.Instance.FontTexUvWhitePixel;
-            Vector2 uv = _fontAtlas.TexUvWhitePixel;
+            Vector2 uv = DefaultFont.TexUvWhitePixel;
 
             int count = points_count;
             if (!closed)
@@ -610,7 +552,7 @@ namespace Prowl.Runtime.GUI.Graphics
         public void AddConvexPolyFilled(UIBuffer<Vector2> points, int points_count, uint col, bool anti_aliased)
         {
             //Vector2 uv = ImGui.Instance.FontTexUvWhitePixel;
-            Vector2 uv = _fontAtlas.TexUvWhitePixel;
+            Vector2 uv = DefaultFont.TexUvWhitePixel;
 
             if (anti_aliased)
             {
@@ -1013,7 +955,7 @@ namespace Prowl.Runtime.GUI.Graphics
             var b = new Vector2(c.x, a.y);
             var d = new Vector2(a.x, c.y);
             //var uv = new Vector2(-1, -1);
-            Vector2 uv = _fontAtlas.TexUvWhitePixel;
+            Vector2 uv = DefaultFont.TexUvWhitePixel;
             //Vector2 b(c.x, a.y), d(a.x, c.y), uv(GImGui->FontTexUvWhitePixel);
             ushort idx = (ushort)_VtxCurrentIdx;
             IdxBuffer[_IdxWritePtr + 0] = idx; IdxBuffer[_IdxWritePtr + 1] = (ushort)(idx + 1); IdxBuffer[_IdxWritePtr + 2] = (ushort)(idx + 2);
@@ -1363,37 +1305,24 @@ namespace Prowl.Runtime.GUI.Graphics
             _gl.BindVertexArray((uint)lastVertexArray);
         }
 
-        public static ImFontAtlas _fontAtlas = null;
-        static Texture2D _fontTexture;
+        public static Font DefaultFont { get; private set; }
 
         /// <summary>
         /// Creates the texture used to render text.
         /// </summary>
         private static unsafe void RecreateFontDeviceTexture(GL _gl)
         {
-            if (_fontAtlas != null)
-                return;
-
-            _fontAtlas = new();
-
-            // Build texture atlas
-            int width;
-            int height;
-            byte[] pixels = _fontAtlas.GetTexDataAsRGBA32(out width, out height);   // Load as RGBA 32-bit (75% of the memory is wasted, but default font is so small) because it is more likely to be compatible with user's existing shaders. If your ImTextureId represent a higher-level concept than just a GL texture id, consider calling GetTexDataAsAlpha8() instead to save on GPU memory.
-
-            // Upload texture to graphics system
-            _gl.GetInteger(GLEnum.TextureBinding2D, out int lastTexture);
-
-            _fontTexture = new Texture2D((uint)width, (uint)height, false, TextureImageFormat.Color4b);
-            fixed (void* pixelsPtr = pixels)
-                Runtime.Graphics.Device.TexSubImage2D(_fontTexture.Handle, 0, 0, 0, (uint)width, (uint)height, pixelsPtr);
-            _fontTexture.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
-
-            // Store our identifier
-            _fontAtlas.TexID = _fontTexture.Handle;
-
-            // Restore state
-            _gl.BindTexture(GLEnum.Texture2D, (uint)lastTexture);
+            if (DefaultFont == null)
+            {
+                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Prowl.Runtime.EmbeddedResources.font.ttf"))
+                {
+                    using (MemoryStream ms = new())
+                    {
+                        stream.CopyTo(ms);
+                        DefaultFont = Font.CreateFromTTFMemory(ms.ToArray(), 20, 1024, 1024, [Font.CharacterRange.BasicLatin]);
+                    }
+                }
+            }
         }
 
         private static int _attribLocationVtxPos;

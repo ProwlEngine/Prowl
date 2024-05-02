@@ -8,6 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <None Remove="EmbeddedResources\font.ttf" />
       <None Remove="Resources/AudioIcon.png" />
       <None Remove="Resources/Checkerboard.png" />
       <None Remove="Resources/CSharpIcon.png" />
@@ -30,6 +31,10 @@
       <None Remove="Resources/ScreenShader.glsl" />
       <None Remove="Resources/ShaderIcon.png" />
       <None Remove="Resources/standard.glsl" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Include="EmbeddedResources\font.ttf" />
     </ItemGroup>
     
     <ItemGroup>

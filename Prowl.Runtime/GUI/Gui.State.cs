@@ -25,7 +25,7 @@ namespace Prowl.Runtime.GUI
             if (!_drawList.ContainsKey(index))
             {
                 _drawList[index] = new UIDrawList();
-                _drawList[index].PushTextureID(UIDrawList._fontAtlas.TexID);
+                _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
             }
 
             // Copy over the clip rect from the previous list
