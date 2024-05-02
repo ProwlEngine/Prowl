@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using static BepuPhysics.Collidables.CompoundBuilder;
 
 namespace Prowl.Runtime.GUI.Layout
 {
@@ -144,7 +145,6 @@ namespace Prowl.Runtime.GUI.Layout
             UpdatePositionCache();
 
             ApplyLayout();
-            ApplyFitContent();
 
             // Make sure we never exceed max size
             // TODO: Is this needed since we calculate the max in Scale
@@ -195,19 +195,15 @@ namespace Prowl.Runtime.GUI.Layout
                 }
             }
 
-            bool first = true;
-            foreach (var child in Children)
+            if (Children.Count > 0)
             {
-                if (first)
-                {
-                    first = false;
-                    _data.ContentRect = new Rect(child._data.GlobalContentPosition.x, child._data.GlobalContentPosition.y, child._data.GlobalContentWidth, child._data.GlobalContentHeight);
-                }
-                else
-                {
-                    _data.ContentRect = Rect.CombineRect(_data.ContentRect, new Rect(child._data.GlobalContentPosition.x, child._data.GlobalContentPosition.y, child._data.GlobalContentWidth, child._data.GlobalContentHeight));
-                }
-            }
+                _data.ContentRect = Children[0]._data.OuterRect;
+                for (int i = 0; i < Children.Count; i++)
+                        _data.ContentRect = Rect.CombineRect(_data.ContentRect, Children[i]._data.OuterRect);
+            } else _data.ContentRect = new Rect();
+
+
+            ApplyFitContent();
         }
 
         internal void ScaleChildren()
@@ -339,6 +335,8 @@ namespace Prowl.Runtime.GUI.Layout
             hash = hash * 23 + (ulong)_canScaleChildren.GetHashCode();
             hash = hash * 23 + (ulong)_layout.GetHashCode();
             hash = hash * 23 + (ulong)_clipped.GetHashCode();
+            hash = hash * 23 + (ulong)VScroll.GetHashCode();
+            hash = hash * 23 + (ulong)HScroll.GetHashCode();
             //hash = hash * 23 + _nextNodeIndexA.GetHashCode();
             //hash = hash * 23 + _nextNodeIndexB.GetHashCode();
             hash = hash * 23 + (ulong)Children.Count.GetHashCode();

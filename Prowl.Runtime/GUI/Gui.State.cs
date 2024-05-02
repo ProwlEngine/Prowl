@@ -22,8 +22,6 @@ namespace Prowl.Runtime.GUI
 
         public void SetZIndex(int index)
         {
-            if (CurrentPass != Pass.AfterLayout) return;
-
             if (!_drawList.ContainsKey(index))
             {
                 _drawList[index] = new UIDrawList();

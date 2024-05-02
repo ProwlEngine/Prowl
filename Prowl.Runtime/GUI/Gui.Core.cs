@@ -178,10 +178,9 @@ namespace Prowl.Runtime.GUI
     {
         public static Gui ActiveGUI;
 
-        public enum Pass { BeforeLayout, AfterLayout }
+        public enum Pass { AfterLayout }
 
         public Rect ScreenRect { get; private set; }
-        public Pass CurrentPass { get; private set; }
 
         public LayoutNode CurrentNode => layoutNodeScopes.First.Value._node;
         public LayoutNode PreviousNode => layoutNodeScopes.First.Next.Value._node;
@@ -189,7 +188,6 @@ namespace Prowl.Runtime.GUI
 
         public UIDrawList DrawList {
             get {
-                if (CurrentPass == Pass.BeforeLayout) return null;
                 return _drawList[CurrentState.ZIndex];
             }
         }
@@ -219,10 +217,19 @@ namespace Prowl.Runtime.GUI
             layoutNodeScopes.Clear();
             guiStateScopes.Clear();
             IDStack.Clear();
-            CurrentPass = Pass.BeforeLayout;
 
             if (!_drawList.ContainsKey(0))
                 _drawList[0] = new UIDrawList(); // Root Draw List
+
+            // The second pass handles drawing
+            // All the Nodes and such will have the same ID due to Hashing being consistent
+            // So We match ID's and this time we Draw
+            var keys = _drawList.Keys;
+            foreach (var index in keys.OrderBy(x => x))
+            {
+                _drawList[index].Clear();
+                _drawList[index].PushTextureID(UIDrawList._fontAtlas.TexID);
+            }
 
             LayoutNode root = null;
             if (!_nodes.TryGetValue(0, out root))
@@ -237,8 +244,10 @@ namespace Prowl.Runtime.GUI
             // Reset Nodes
             layoutDirty = false;
             PushNode(new(root));
-            DoPass(Pass.BeforeLayout, gui);
+            DoPass(Pass.AfterLayout, gui);
             PopNode();
+
+            UIDrawList.Draw(GLDevice.GL, new(screenRect.width, screenRect.height), [.. _drawList.Values]);
 
             // Look for any nodes whos HashCode does not match the previously computed nodes
             layoutDirty |= MatchHash(root);
@@ -250,55 +259,10 @@ namespace Prowl.Runtime.GUI
                 root.UpdateCache();
                 root.ProcessLayout();
             }
-
-            // The second pass handles drawing
-            // All the Nodes and such will have the same ID due to Hashing being consistent
-            // So We match ID's and this time we Draw
-            var keys = _drawList.Keys;
-            foreach (var index in keys.OrderBy(x => x))
-            {
-                _drawList[index].Clear();
-                _drawList[index].PushTextureID(UIDrawList._fontAtlas.TexID);
-            }
-
-            PushNode(new(root));
-            DoPass(Pass.AfterLayout, gui);
-            PopNode();
-
-
-            UIDrawList.Draw(GLDevice.GL, new(screenRect.width, screenRect.height), [.. _drawList.Values]);
-
-
-            //if (DrawNodeRects)
-            //{
-            //    var drawlist = new UIDrawList();
-            //    drawlist.PushClipRectFullScreen();
-            //    drawlist.PushTextureID(UIDrawList._fontAtlas.TexID);
-            //
-            //    int id = 100;
-            //    var rand = new System.Random(100);
-            //    foreach (var node in _nodes.Values)
-            //    {
-            //        // Unique color per id
-            //        int r = (id & 0xFF);
-            //        int g = ((id >> 8) & 0xFF);
-            //        int b = ((id >> 16) & 0xFF);
-            //        uint col = (uint)(((id & 0xFF) << 16) | (((id >> 8) & 0xFF) << 8) | ((id >> 16) & 0xFF) | 0xFF000000);
-            //        id = rand.Next();
-            //
-            //        drawlist.AddRect(node.LayoutData.GlobalPosition, node.LayoutData.GlobalPosition + node.LayoutData.Scale, col, 0, 0, 1.0f);
-            //    }
-            //
-            //    drawlist.PopClipRect();
-            //    drawlist.PopTextureID();
-            //    UIDrawList.Draw(GLDevice.GL, Runtime.Graphics.Resolution, [drawlist]);
-            //}
         }
 
         private void DoPass(Pass pass, Action<Gui> gui)
         {
-            CurrentPass = pass;
-
             try
             {
                 ActiveGUI = this;
@@ -348,7 +312,7 @@ namespace Prowl.Runtime.GUI
             guiStateScopes.AddFirst(CurrentState.Clone());
             IDStack.Push(scope._node.ID);
 
-            if (CurrentPass == Pass.AfterLayout && CurrentNode._clipped != ClipType.None)
+            if (CurrentNode._clipped != ClipType.None)
             {
                 var rect = scope._node._clipped == ClipType.Inner ? scope._node.LayoutData.InnerRect : scope._node.LayoutData.Rect;
                 _drawList[CurrentZIndex].PushClipRect(new Vector4(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height));
@@ -357,7 +321,7 @@ namespace Prowl.Runtime.GUI
 
         internal void PopNode()
         {
-            if (CurrentPass == Pass.AfterLayout && CurrentNode._clipped != ClipType.None)
+            if (CurrentNode._clipped != ClipType.None)
                 _drawList[CurrentZIndex].PopClipRect();
 
             IDStack.Pop();
