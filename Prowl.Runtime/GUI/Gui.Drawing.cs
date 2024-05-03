@@ -35,6 +35,28 @@ namespace Prowl.Runtime.GUI
             _drawList[CurrentZIndex].AddRectFilled(pos, pos + size, col, roundness, 15);
         }
 
+        public void DrawVerticalShadow(Vector2 top, Vector2 bottom, float x, float strength)
+        {
+            uint a = UIDrawList.ColorConvertFloat4ToU32(new Vector4(0,0,0,strength));
+            uint b = UIDrawList.ColorConvertFloat4ToU32(new Vector4(0,0,0, strength));
+            uint c = UIDrawList.ColorConvertFloat4ToU32(new Vector4(0,0,0,0));
+            uint d = UIDrawList.ColorConvertFloat4ToU32(new Vector4(0,0,0,0));
+            Vector2 posA = new Vector2(top.x, top.y);
+            Vector2 posB = new Vector2(bottom.x + x, bottom.y);
+            _drawList[CurrentZIndex].AddRectFilledMultiColor(posA, posB, a, d, c, b);
+        }
+
+        public void DrawHorizontalShadow(Vector2 left, Vector2 right, float y, float strength)
+        {
+            uint a = UIDrawList.ColorConvertFloat4ToU32(new Vector4(0,0,0,strength));
+            uint b = UIDrawList.ColorConvertFloat4ToU32(new Vector4(0,0,0, strength));
+            uint c = UIDrawList.ColorConvertFloat4ToU32(new Vector4(0,0,0,0));
+            uint d = UIDrawList.ColorConvertFloat4ToU32(new Vector4(0,0,0,0));
+            Vector2 posA = new Vector2(left.x, left.y);
+            Vector2 posB = new Vector2(right.x, right.y + y);
+            _drawList[CurrentZIndex].AddRectFilledMultiColor(posA, posB, d, c, b, a);
+        }
+
         public void DrawLine(Vector2 start, Vector2 end, Color color, float thickness = 1f)
         {
             uint col = UIDrawList.ColorConvertFloat4ToU32(color);
