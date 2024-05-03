@@ -1,12 +1,11 @@
 ﻿using Hexa.NET.ImGui;
 using Prowl.Editor.EditorWindows.CustomEditors;
-using Prowl.Editor.ImGUI.Widgets;
-using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Assets
 {
+
     [Importer("FileIcon.png", typeof(Material), ".mat")]
     public class MaterialImporter : ScriptedImporter
     {
@@ -48,6 +47,7 @@ namespace Prowl.Editor.Assets
                     StringTagConverter.WriteToFile(Serializer.Serialize(mat), (target as MetaFile).AssetPath);
                     AssetDatabase.Reimport((target as MetaFile).AssetPath);
                 });
+                editor.OnInspectorGUI();
             }
             catch
             {
