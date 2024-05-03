@@ -1,4 +1,5 @@
-﻿using Prowl.Runtime.GUI.Layout;
+﻿using Prowl.Runtime.GUI.Graphics;
+using Prowl.Runtime.GUI.Layout;
 
 namespace Prowl.Runtime.GUI
 {
@@ -7,8 +8,9 @@ namespace Prowl.Runtime.GUI
         public const int ScrollVWidth = 6;
         public const int ScrollVPadding = 2;
 
-        public void ScrollV()
+        public void ScrollV(GuiStyle? style = null)
         {
+            style ??= new();
             var n = CurrentNode;
             CurrentNode.VScroll = GetStorage<double>("VScroll");
             //CurrentNode.PaddingRight(ScrollVWidth + padding);
@@ -33,14 +35,14 @@ namespace Prowl.Runtime.GUI
 
                         if (interact.TakeFocus() || interact.IsActive())
                         {
-                            DrawRectFilled(barRect, Color.green, 20f);
+                            DrawRectFilled(barRect, style.ScrollBarActiveColor, style.ScrollBarRoundness);
                             {
                                 n.VScroll += Input.MouseDelta.y * 2f;
                                 layoutDirty = true;
                             }
                         }
-                        else if (interact.IsHovered()) DrawRectFilled(barRect, Color.blue, 20f);
-                        else DrawRectFilled(barRect, Color.red, 20f);
+                        else if (interact.IsHovered()) DrawRectFilled(barRect, style.ScrollBarHoveredColor, (float)style.ScrollBarRoundness);
+                        else DrawRectFilled(barRect, style.WidgetColor, style.ScrollBarRoundness);
 
                         if (IsHovering(n.LayoutData.Rect) && Input.MouseWheelDelta != 0)
                         {
@@ -62,9 +64,10 @@ namespace Prowl.Runtime.GUI
         }
 
 
-        public static bool Button(string? label, Offset x, Offset y, Size width, Size height, float roundness = 2f, bool invisible = false, bool repeat = false) => Button(label, x, y, width, height, out _, roundness, invisible, repeat);
-        public static bool Button(string? label, Offset x, Offset y, Size width, Size height, out LayoutNode node, float roundness = 2f, bool invisible = false, bool repeat = false)
+        public static bool Button(string? label, Offset x, Offset y, Size width, Size height, GuiStyle? style = null, bool invisible = false, bool repeat = false) => Button(label, x, y, width, height, out _, style, invisible, repeat);
+        public static bool Button(string? label, Offset x, Offset y, Size width, Size height, out LayoutNode node, GuiStyle? style = null, bool invisible = false, bool repeat = false)
         {
+            style ??= new();
             var g = Gui.ActiveGUI;
             using ((node = g.Node()).Left(x).Top(y).Width(width).Height(height).Padding(2).Enter())
             {
@@ -74,13 +77,14 @@ namespace Prowl.Runtime.GUI
 
                 if (!invisible)
                 {
-                    var col = g.ActiveID == interact.ID ? Color.green :
-                              g.HoveredID == interact.ID ? Color.blue : Color.red;
+                    var col = g.ActiveID == interact.ID ? style.BtnActiveColor :
+                              g.HoveredID == interact.ID ? style.BtnHoveredColor : style.WidgetColor;
 
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, roundness);
-                    g.DrawRect(g.CurrentNode.LayoutData.Rect, Color.yellow, roundness);
+                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, style.WidgetRoundness);
+                    if (style.BorderThickness > 0)
+                        g.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
                     
-                    g.DrawText(label, 20, g.CurrentNode.LayoutData.InnerRect, Color.black);
+                    g.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, label, style.FontSize, g.CurrentNode.LayoutData.InnerRect, style.TextColor);
                 }
 
                 if (repeat)

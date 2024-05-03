@@ -45,6 +45,25 @@ namespace Prowl.Editor.EditorWindows
             AssetDatabase.Ping(file);
         }
 
+        [MenuItem("Create/GuiStyle")]
+        public static void CreateGuiStyle()
+        {
+            Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+
+            FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New GuiStyle.guistyle"));
+            AssetDatabase.GenerateUniqueAssetPath(ref file);
+
+            GuiStyle style = new GuiStyle();
+            StringTagConverter.WriteToFile(Serializer.Serialize(style), file);
+            if (fromAssetBrowser)
+                AssetBrowserWindow.StartRename(file.FullName);
+            else
+                AssetsWindow.StartRename(file.FullName);
+
+            AssetDatabase.Update();
+            AssetDatabase.Ping(file);
+        }
+
         [MenuItem("Create/Script")]
         public static void CreateScript()
         {

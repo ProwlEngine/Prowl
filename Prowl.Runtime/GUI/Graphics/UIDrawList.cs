@@ -1035,9 +1035,6 @@ namespace Prowl.Runtime.GUI.Graphics
             if (framebufferWidth <= 0 || framebufferHeight <= 0)
                 return;
 
-            if (_shader == null)
-                CreateDeviceResources(_gl);
-
             // Backup GL state
             _gl.GetInteger(GLEnum.ActiveTexture, out int lastActiveTexture);
             _gl.ActiveTexture(GLEnum.Texture0);
@@ -1136,10 +1133,10 @@ namespace Prowl.Runtime.GUI.Graphics
             _gl.BlendEquationSeparate((GLEnum)lastBlendEquationRgb, (GLEnum)lastBlendEquationAlpha);
             _gl.BlendFuncSeparate((GLEnum)lastBlendSrcRgb, (GLEnum)lastBlendDstRgb, (GLEnum)lastBlendSrcAlpha, (GLEnum)lastBlendDstAlpha);
 
-            if (lastSrgb)
-                _gl.Enable(GLEnum.FramebufferSrgb);
-            else
-                _gl.Disable(GLEnum.FramebufferSrgb);
+            //if (lastSrgb)
+            //    _gl.Enable(GLEnum.FramebufferSrgb);
+            //else
+            //    _gl.Disable(GLEnum.FramebufferSrgb);
 
             if (lastEnableBlend)
             {
@@ -1204,7 +1201,7 @@ namespace Prowl.Runtime.GUI.Graphics
         private static unsafe void SetupRenderState(GL _gl, Vector2 DisplaySize, int framebufferWidth, int framebufferHeight)
         {
             // Setup render state: alpha-blending enabled, no face culling, no depth testing, scissor enabled, polygon fill
-            _gl.Enable(EnableCap.FramebufferSrgb);
+            //_gl.Enable(EnableCap.FramebufferSrgb);
             _gl.Enable(GLEnum.Blend);
             _gl.BlendEquation(GLEnum.FuncAdd);
             _gl.BlendFuncSeparate(GLEnum.SrcAlpha, GLEnum.OneMinusSrcAlpha, GLEnum.One, GLEnum.OneMinusSrcAlpha);
@@ -1284,7 +1281,7 @@ namespace Prowl.Runtime.GUI.Graphics
         {
             vec4 color = texture(Texture, Frag_UV);
             // Gamma Correct
-            //color = pow(color, vec4(1.0/1.43));
+            color = pow(color, vec4(1.0/1.43));
             Out_Color = Frag_Color * color;
         }";
 

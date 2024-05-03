@@ -1,4 +1,6 @@
 ﻿using Prowl.Runtime.Audio;
+using Prowl.Runtime.GUI.Graphics;
+using Prowl.Runtime.Rendering.OpenGL;
 using Prowl.Runtime.SceneManagement;
 using System;
 
@@ -28,6 +30,7 @@ public static class Application
 
         Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Normal, true);
 
+
         Window.Load += () => {
             SceneManager.Initialize();
             AudioSystem.Initialize();
@@ -35,6 +38,9 @@ public static class Application
             AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
 
             AssemblyManager.Initialize();
+
+            if (UIDrawList.DefaultFont == null)
+                UIDrawList.CreateDeviceResources(GLDevice.GL);
 
             Initialize?.Invoke();
 

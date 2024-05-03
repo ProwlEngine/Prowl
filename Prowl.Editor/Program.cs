@@ -118,11 +118,6 @@ public static class Program
 
             if (Project.HasProject) {
 
-                if(UIDrawList.DefaultFont == null)
-                {
-                    UIDrawList.CreateDeviceResources(GLDevice.GL);
-                }
-
                 //                var drawlist = new UIDrawList();
                 //                drawlist.PushClipRectFullScreen();
                 //                drawlist.PushTextureID(UIDrawList._fontAtlas.TexID);

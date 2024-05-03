@@ -71,7 +71,7 @@ namespace Prowl.Runtime.GUI
                         if(Gui.Button("test button", 0, 50, 75, 25, out var buttonNode))
                             Debug.Log("Pressed");
 
-                        Gui.InputField(UIDrawList.DefaultFont, 20, ref testString, 999, Gui.InputFieldFlags.None, 0, 100, 300);
+                        Gui.InputField(ref testString, 999, Gui.InputFieldFlags.None, 0, 100, 300);
 
                         //buttonNode.Interaction = (interact) => {
                         //    hoveringTest = interact.IsHovering();

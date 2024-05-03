@@ -28,18 +28,20 @@ namespace Prowl.Runtime.GUI
 
         private static StbTextEditState stb;
 
-        public static bool InputField(Font font, double fontsize, ref string value, uint maxLength, InputFieldFlags flags, Offset x, Offset y, Size width, float roundness = 2f)
+        public static bool InputField(ref string value, uint maxLength, InputFieldFlags flags, Offset x, Offset y, Size width, GuiStyle? style = null)
         {
+            style ??= new();
             var g = Gui.ActiveGUI;
             bool multiline = ((flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline);
-            using (g.Node().Left(x).Top(y).Width(width).Height((multiline ? fontsize * 8 : fontsize) + 2.5).Padding(5).Enter())
+            using (g.Node().Left(x).Top(y).Width(width).Height((multiline ? style.FontSize * 8 : style.FontSize) + 2.5).Padding(5).Enter())
             {
                 Interactable interact = g.GetInteractable(true, true);
 
                 interact.UpdateContext();
 
-                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, Color.red, roundness);
-                g.DrawRect(g.CurrentNode.LayoutData.Rect, Color.yellow, roundness);
+                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.WidgetColor, style.WidgetRoundness);
+                if(style.BorderThickness > 0)
+                    g.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
 
                 interact.TakeFocus();
 
@@ -47,17 +49,17 @@ namespace Prowl.Runtime.GUI
                 var ValueChanged = false;
                 if (g.FocusID == interact.ID || g.ActiveID == interact.ID)
                 {
-                    ValueChanged = OnProcess(font, fontsize, interact, ref value, maxLength, flags);
+                    ValueChanged = OnProcess(style, interact, ref value, maxLength, flags);
                 }
                 else
                 {
-                    OnProcess(font, fontsize, interact, ref value, maxLength, flags | InputFieldFlags.OnlyDisplay);
+                    OnProcess(style, interact, ref value, maxLength, flags | InputFieldFlags.OnlyDisplay);
                 }
                 g.PopClip();
 
                 if (multiline)
                 {
-                    Vector2 textSize = font.CalcTextSize(value, 0, g.CurrentNode.LayoutData.InnerRect.width);
+                    Vector2 textSize = (style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont).CalcTextSize(value, 0, g.CurrentNode.LayoutData.InnerRect.width);
                     // Dummy node to update ContentRect
                     g.Node().Width(textSize.x).Height(textSize.y).IgnoreLayout();
                     g.ScrollV();
@@ -77,10 +79,12 @@ namespace Prowl.Runtime.GUI
             return bufMidLine;
         }
 
-        internal static bool OnProcess(Font font, double fontsize, Interactable interact, ref string Text, uint MaxLength, InputFieldFlags Flags)
+        internal static bool OnProcess(GuiStyle style, Interactable interact, ref string Text, uint MaxLength, InputFieldFlags Flags)
         {
             var g = Gui.ActiveGUI;
             var ID = interact.ID;
+            var font = style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont;
+            var fontsize = style.FontSize;
             var render_pos = new Vector2(g.CurrentNode.LayoutData.InnerRect.x, g.CurrentNode.LayoutData.InnerRect.y);
 
             if (stb == null || stb.ID != ID)
@@ -199,7 +203,7 @@ namespace Prowl.Runtime.GUI
 
             if ((Flags & InputFieldFlags.OnlyDisplay) == InputFieldFlags.OnlyDisplay)
             {
-                uint colb = UIDrawList.ColorConvertFloat4ToU32(Color.black);
+                uint colb = UIDrawList.ColorConvertFloat4ToU32(style.TextColor);
                 g.DrawList.AddText(font, (float)fontsize, render_pos - render_scroll, colb, stb.Text, 0, stb.Text.Length, 0.0f, (is_multiline ? null : (Vector4?)clip_rect));
                 return false;
             }
@@ -212,7 +216,7 @@ namespace Prowl.Runtime.GUI
 
                 float bg_offy_up = is_multiline ? 0.0f : -1.0f;    // FIXME: those offsets should be part of the style? they don't play so well with multi-line selection.
                 float bg_offy_dn = is_multiline ? 0.0f : 2.0f;
-                uint bg_color = UIDrawList.ColorConvertFloat4ToU32(Color.blue);
+                uint bg_color = UIDrawList.ColorConvertFloat4ToU32(style.TextHighlightColor);
                 Vector2 rect_pos = render_pos + select_start_offset - render_scroll;
                 for (int p = text_selected_begin; p < text_selected_end;)
                 {
@@ -241,7 +245,7 @@ namespace Prowl.Runtime.GUI
             }
 
 
-            uint col = UIDrawList.ColorConvertFloat4ToU32(Color.black);
+            uint col = UIDrawList.ColorConvertFloat4ToU32(style.TextColor);
             g.DrawList.AddText(font, (float)fontsize, render_pos - render_scroll, col, stb.Text, 0, stb.Text.Length, 0.0f, (is_multiline ? null : (Vector4?)clip_rect));
             //g.DrawText(font, fontsize, Text, render_pos - render_scroll, Color.black, 0, stb.CurLenA, 0.0f, (is_multiline ? null : (ImVec4?)clip_rect));
 
