@@ -191,18 +191,16 @@ namespace Prowl.Runtime.GUI
 
         public LayoutNode CurrentNode => layoutNodeScopes.First.Value._node;
         public LayoutNode PreviousNode => layoutNodeScopes.First.Next.Value._node;
-        public GuiState CurrentState => guiStateScopes?.First?.Value ?? new GuiState();
 
         public UIDrawList DrawList {
             get {
-                return _drawList[CurrentState.ZIndex];
+                return _drawList[CurrentNode.ZIndex];
             }
         }
 
 
         internal Dictionary<int, UIDrawList> _drawList = new();
         internal LinkedList<LayoutNodeScope> layoutNodeScopes = new();
-        internal LinkedList<GuiState> guiStateScopes = new();
         internal Stack<ulong> IDStack = new();
         internal bool layoutDirty = false;
 
@@ -222,7 +220,6 @@ namespace Prowl.Runtime.GUI
             ScreenRect = screenRect;
 
             layoutNodeScopes.Clear();
-            guiStateScopes.Clear();
             IDStack.Clear();
 
             if (!_drawList.ContainsKey(0))
@@ -241,7 +238,7 @@ namespace Prowl.Runtime.GUI
             LayoutNode root = null;
             if (!_nodes.TryGetValue(0, out root))
             {
-                root = new LayoutNode(this, 0);
+                root = new LayoutNode(null, this, 0);
                 _nodes[0] = root;
             }
             root.Width(screenRect.width).Height(screenRect.height);
@@ -316,7 +313,6 @@ namespace Prowl.Runtime.GUI
         internal void PushNode(LayoutNodeScope scope)
         {
             layoutNodeScopes.AddFirst(scope);
-            guiStateScopes.AddFirst(CurrentState.Clone());
             IDStack.Push(scope._node.ID);
 
             if (CurrentNode._clipped != ClipType.None)
@@ -332,7 +328,6 @@ namespace Prowl.Runtime.GUI
                 _drawList[CurrentZIndex].PopClipRect();
 
             IDStack.Pop();
-            guiStateScopes.RemoveFirst();
             layoutNodeScopes.RemoveFirst();
         }
     }

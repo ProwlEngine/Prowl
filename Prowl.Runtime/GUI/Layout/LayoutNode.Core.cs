@@ -74,12 +74,21 @@ namespace Prowl.Runtime.GUI.Layout
         private LayoutType _layout = LayoutType.None;
         internal ClipType _clipped = ClipType.None;
 
+
+        internal int ZIndex = 0;
+
         internal List<LayoutNode> Children = new List<LayoutNode>();
 
-        public LayoutNode(Gui gui, ulong storageHash)
+        public LayoutNode(LayoutNode? parent, Gui gui, ulong storageHash)
         {
             ID = storageHash;
             Gui = gui;
+            if (parent != null)
+            {
+                ZIndex = parent.ZIndex;
+            }
+        }
+
         }
 
         public void UpdateCache()
