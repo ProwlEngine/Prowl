@@ -6,8 +6,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using static Prowl.Runtime.GUI.Graphics.UIDrawList;
-using static Prowl.Runtime.GUI.Gui;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace Prowl.Runtime
 {
@@ -141,6 +139,49 @@ namespace Prowl.Runtime
                 // Return a default value or handle the case when the character is not found
                 return 10.0f;
             }
+        }
+
+        public Vector2 InputTextCalcTextSizeW(string text, int text_begin, int text_end, ref int? remaining, ref Vector2? out_offset, bool stop_on_new_line = false)
+        {
+            double line_height = FontSize;
+            double scale = line_height / FontSize;
+
+            Vector2 text_size = new Vector2(0, 0);
+            double line_width = 0.0f;
+
+            int s = text_begin;
+            while (s < text_end)
+            {
+                char c = text[s++];
+                if (c == '\n')
+                {
+                    text_size.x = Mathf.Max(text_size.x, line_width);
+                    text_size.y += line_height;
+                    line_width = 0.0f;
+                    if (stop_on_new_line)
+                        break;
+                    continue;
+                }
+                if (c == '\r')
+                    continue;
+
+                double char_width = GetCharAdvance(c) * scale;
+                line_width += char_width;
+            }
+
+            if (text_size.x < line_width)
+                text_size.x = line_width;
+
+            if (out_offset.HasValue)
+                out_offset = new Vector2(line_width, text_size.y + line_height);  // offset allow for the possibility of sitting after a trailing \n
+
+            if (line_width > 0 || text_size.y == 0.0f)                        // whereas size.y will ignore the trailing \n
+                text_size.y += line_height;
+
+            if (remaining.HasValue)
+                remaining = s;
+
+            return text_size;
         }
 
         public Vector2 CalcTextSize(string str, int beginIndex, double wrap_width = -1f)
