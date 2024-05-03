@@ -1,7 +1,6 @@
 ﻿using Silk.NET.Input;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 
 namespace Prowl.Runtime;
 
@@ -47,7 +46,7 @@ public static class Input
     private static Dictionary<MouseButton, bool> wasMousePressed = new Dictionary<MouseButton, bool>();
     private static Dictionary<MouseButton, bool> isMousePressed = new Dictionary<MouseButton, bool>();
 
-    public static char LastPressedChar;
+    public static char? LastPressedChar;
 
     public static event Action<Key, bool> OnKeyEvent;
     public static Action<MouseButton, double, double, bool, bool> OnMouseEvent;
@@ -102,6 +101,8 @@ public static class Input
                 OnMouseEvent?.Invoke(MouseButton.Right, MousePosition.x, MousePosition.y, false, true);
             else if (isMousePressed[MouseButton.Middle])
                 OnMouseEvent?.Invoke(MouseButton.Middle, MousePosition.x, MousePosition.y, false, true);
+            else
+                OnMouseEvent?.Invoke(MouseButton.Unknown, MousePosition.x, MousePosition.y, false, true);
         }
         UpdateKeyStates();
     }
