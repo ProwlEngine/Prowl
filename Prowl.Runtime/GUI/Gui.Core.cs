@@ -203,6 +203,7 @@ namespace Prowl.Runtime.GUI
         internal LinkedList<LayoutNodeScope> layoutNodeScopes = new();
         internal Stack<ulong> IDStack = new();
         internal bool layoutDirty = false;
+        internal ulong frameCount = 0;
 
         private Dictionary<ulong, LayoutNode> _nodes;
         private Dictionary<ulong, ulong> _computedNodes;
@@ -270,7 +271,10 @@ namespace Prowl.Runtime.GUI
             try
             {
                 ActiveGUI = this;
+                StartInputFrame();
+                StartInteractionFrame();
                 gui?.Invoke(this);
+                frameCount++;
             }
             catch(Exception e)
             {
@@ -279,6 +283,8 @@ namespace Prowl.Runtime.GUI
             finally
             {
                 ActiveGUI = null;
+                EndInteractionFrame();
+                EndInputFrame();
             }
         }
 

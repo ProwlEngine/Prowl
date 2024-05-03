@@ -1,11 +1,58 @@
-﻿namespace Prowl.Runtime.GUI
+﻿using Silk.NET.SDL;
+using System.Collections.Generic;
+using static Prowl.Runtime.NodeSystem.NodePort;
+
+namespace Prowl.Runtime.GUI
 {
     public partial class Gui
     {
         private static Vector2 mousePosition => Input.MousePosition;
 
-        public Interactable GetInteractable() => new(this, CurrentNode.LayoutData.InnerRect);
-        public Interactable GetInteractable(Rect rect) => new(this, rect);
+        private Dictionary<ulong, Interactable> _interactables = [];
+
+        internal ulong FocusID = 0;
+        internal ulong? ActiveID = 0;
+        internal ulong HoveredID = 0;
+        internal ulong PreviousInteractableID = 0;
+        internal Rect ActiveRect = Rect.Zero;
+
+        private void StartInteractionFrame()
+        {
+            HoveredID = 0;
+            PreviousInteractableID = 0;
+        }
+
+        private void EndInteractionFrame()
+        {
+            if (!IsPointerDown(Silk.NET.Input.MouseButton.Left))
+            {
+                ActiveID = 0;
+            }
+            else if (ActiveID == 0)
+            {
+                ActiveID = null;
+            }
+        }
+
+        public Interactable GetInteractable() => GetInteractable(CurrentNode.LayoutData.Rect);
+        public Interactable GetInteractable(Rect rect)
+        {
+            ulong interactID = 17;
+            interactID = interactID * 23 + (ulong)CurrentNode.GetNextInteractable();
+            interactID = interactID * 23 + CurrentNode.ID;
+
+            if (!_interactables.TryGetValue(interactID, out Interactable interact))
+                interact = new(this, interactID, rect);
+            interact._rect = rect;
+
+            _interactables[interactID] = interact;
+
+            PreviousInteractableID = interactID;
+
+            interact.UpdateContext();
+
+            return interact;
+        }
 
         public bool IsMouseOverRect(Rect rect) => mousePosition.x >= rect.x && mousePosition.x <= rect.x + rect.width && mousePosition.y >= rect.y && mousePosition.y <= rect.y + rect.height;
         public bool IsHovering(bool inner = false) => IsHovering(inner ? CurrentNode.LayoutData.InnerRect : CurrentNode.LayoutData.Rect);
@@ -17,56 +64,68 @@
 
             return overClip && IsMouseOverRect(rect);
         }
-        public bool IsPressed(bool inner = false) => IsHovering(inner) && Input.GetMouseButton(0);
-        public bool WasPressed(bool inner = false) => IsHovering(inner) && Input.GetMouseButtonUp(0);
-        public bool IsClicked(bool inner = false) => IsHovering(inner) && Input.GetMouseButtonDown(0);
-        public bool IsRightClicked(bool inner = false) => IsHovering(inner) && Input.GetMouseButtonDown(1);
-        public bool IsHeld(bool inner = false) => IsHovering(inner) && Input.GetMouseButton(0) && !Input.GetMouseButtonDown(0);
 
-        public bool IsPressed(Rect rect) => IsHovering(rect) && Input.GetMouseButton(0);
-        public bool WasPressed(Rect rect) => IsHovering(rect) && Input.GetMouseButtonUp(0);
-        public bool IsClicked(Rect rect) => IsHovering(rect) && Input.GetMouseButtonDown(0);
-        public bool IsRightClicked(Rect rect) => IsHovering(rect) && Input.GetMouseButtonDown(1);
-        public bool IsHeld(Rect rect) => IsHovering(rect) && Input.GetMouseButton(0) && !Input.GetMouseButtonDown(0);
+        public bool PreviousControlIsHovered() => HoveredID == PreviousInteractableID;
+        public bool PreviousControlIsActive() => ActiveID == PreviousInteractableID;
+        public void PreviousControlFocus() => FocusID = PreviousInteractableID;
     }
 
     public struct Interactable
     {
-        private bool _hovered;
-        private bool? _pressed;
-        private bool? _clicked;
-        private bool? _rightclicked;
-        private bool? _held;
+        public ulong ID => _id;
 
-        internal Interactable(Gui g, Rect rect)
+        private Gui _gui;
+        internal ulong _id;
+        internal Rect _rect;
+
+        internal Interactable(Gui g, ulong id, Rect rect)
         {
-            _hovered = g.IsHovering(rect);
+            _gui = g;
+            _id = id;
+            _rect = rect;
         }
 
-        public bool OnHover() => _hovered;
-        public bool OnPressed()
+        public void UpdateContext(bool onlyHovered = false)
         {
-            if (!_hovered) return false;
-            _pressed ??= Input.GetMouseButton(0);
-            return _pressed.Value;
+            // Check if mouse is inside the clip rect
+            var clip = _gui._drawList[_gui.CurrentZIndex]._ClipRectStack.Peek();
+            var overClip = _gui.IsMouseOverRect(new(clip.x, clip.y, (clip.z - clip.x), (clip.w - clip.y)));
+            if (!overClip)
+                return;
+
+
+
+            // Make sure mouse is also over our rect
+            if (_gui.IsMouseOverRect(_rect))
+            {
+                _gui.HoveredID = _id;
+
+                if (_gui.ActiveID == 0 && _gui.IsPointerDown(Silk.NET.Input.MouseButton.Left) && !onlyHovered)
+                {
+                    _gui.ActiveID = _id;
+                    _gui.ActiveRect = _rect;
+                }
+            }
         }
-        public bool OnClick()
+
+        public bool TakeFocus()
         {
-            if (!_hovered) return false;
-            _clicked ??= Input.GetMouseButtonDown(0);
-            return _clicked.Value;
+            // Clicking on another Interactable will remove focus
+            if (_gui.FocusID == _id && _gui.HoveredID != _id && _gui.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+                _gui.FocusID = 0;
+
+            // If we are hovered and active, we are focused
+            if (_gui.HoveredID == _id && _gui.ActiveID == _id && !_gui.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+            {
+                _gui.FocusID = _id;
+                return true;
+            }
+
+            return false;
         }
-        public bool OnRightClick()
-        {
-            if (!_hovered) return false;
-            _rightclicked ??= Input.GetMouseButtonDown(1);
-            return _rightclicked.Value;
-        }
-        public bool OnHold()
-        {
-            if (!_hovered) return false;
-            _held ??= Input.GetMouseButton(0) && !Input.GetMouseButtonDown(0);
-            return _held.Value;
-        }
+
+        public bool IsHovered() => _gui.HoveredID == _id;
+        public bool IsActive() => _gui.ActiveID == _id;
+        public bool IsFocused() => _gui.FocusID == _id;
     }
 }

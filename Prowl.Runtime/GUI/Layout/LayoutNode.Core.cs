@@ -118,6 +118,16 @@ namespace Prowl.Runtime.GUI.Layout
             }
             return _nextAnimation++;
         }
+
+        public int GetNextInteractable()
+        {
+            if (_nextInteractableFrame != Gui.frameCount)
+            {
+                // New frame for this node, reset interactable index
+                _nextInteractableFrame = Gui.frameCount;
+                _nextInteractable = 0;
+            }
+            return _nextInteractable++;
         }
 
         public void UpdateCache()
@@ -375,9 +385,9 @@ namespace Prowl.Runtime.GUI.Layout
             hash = hash * 23 + (ulong)_clipped.GetHashCode();
             hash = hash * 23 + (ulong)VScroll.GetHashCode();
             hash = hash * 23 + (ulong)HScroll.GetHashCode();
-            hash = hash * 23 + (ulong)Children.Count.GetHashCode();
             hash = hash * 23 + (ulong)_nextNode.GetHashCode();
             hash = hash * 23 + (ulong)_nextAnimation.GetHashCode();
+            hash = hash * 23 + (ulong)_nextInteractable.GetHashCode();
             return hash;
         }
     }
