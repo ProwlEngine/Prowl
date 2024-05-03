@@ -208,11 +208,12 @@ namespace Prowl.Runtime.GUI
             // The second pass handles drawing
             // All the Nodes and such will have the same ID due to Hashing being consistent
             // So We match ID's and this time we Draw
-            var keys = _drawList.Keys;
-            foreach (var index in keys.OrderBy(x => x))
+            List<UIDrawList> drawListsOrdered = new();
+            foreach (var index in _drawList.Keys.OrderBy(x => x))
             {
                 _drawList[index].Clear();
                 _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
+                drawListsOrdered.Add(_drawList[index]);
             }
 
             LayoutNode root = null;
@@ -231,7 +232,7 @@ namespace Prowl.Runtime.GUI
             DoPass(Pass.AfterLayout, gui);
             PopNode();
 
-            UIDrawList.Draw(GLDevice.GL, new(screenRect.width, screenRect.height), [.. _drawList.Values]);
+            UIDrawList.Draw(GLDevice.GL, new(screenRect.width, screenRect.height), drawListsOrdered.ToArray());
 
             // Look for any nodes whos HashCode does not match the previously computed nodes
             layoutDirty |= MatchHash(root);
