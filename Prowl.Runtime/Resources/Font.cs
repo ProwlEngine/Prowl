@@ -130,6 +130,19 @@ namespace Prowl.Runtime
             return font;
         }
 
+        public float GetCharAdvance(char c)
+        {
+            if (Glyphs.TryGetValue(c, out GlyphInfo glyph))
+            {
+                return glyph.XAdvance;
+            }
+            else
+            {
+                // Return a default value or handle the case when the character is not found
+                return 10.0f;
+            }
+        }
+
         public Vector2 CalcTextSize(string str, int beginIndex, double wrap_width = -1f)
         {
             int text_display_end = str.Length;
