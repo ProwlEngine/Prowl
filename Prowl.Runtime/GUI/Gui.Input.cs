@@ -103,7 +103,7 @@ namespace Prowl.Runtime.GUI
             }
             else
             {
-                if (PointerCurState[Index])
+                if (Index != -1 && PointerCurState[Index])
                 {
                     PointerPreDeltaPos = PointerCurDeltaPos;
                     PointerCurDeltaPos.x = X - PointerClickPos[Index].x;
