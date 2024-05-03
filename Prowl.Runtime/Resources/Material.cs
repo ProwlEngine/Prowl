@@ -5,6 +5,7 @@ using System.Linq;
 
 namespace Prowl.Runtime
 {
+
     public class MaterialPropertyBlock
     {
         [SerializeField] private Dictionary<string, Color> colors = new();

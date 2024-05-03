@@ -29,8 +29,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             var mat = (Material)target;
             mat ??= new Material();
 
-            PropertyDrawer.Draw(mat, typeof(Material).GetField("Shader")!);
-            bool changed = false;
+            bool changed = PropertyDrawer.Draw(mat, typeof(Material).GetField("Shader")!);
             if (mat.Shader.IsAvailable)
             {
                 int id = 0;
