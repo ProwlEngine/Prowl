@@ -166,5 +166,10 @@ namespace Prowl.Runtime
         {
             return new Rect(Left, Top, Right - Left, Bottom - Top);
         }
+
+        public static explicit operator Vector4(Rect v)
+        {
+            return new Vector4((float)v.Min.x, (float)v.Min.y, (float)v.Max.x, (float)v.Max.y);
+        }
     }
 }
