@@ -73,8 +73,6 @@ namespace Prowl.Runtime.GUI
             {
                 Interactable interact = g.GetInteractable();
 
-                interact.UpdateContext();
-
                 if (!invisible)
                 {
                     var col = g.ActiveID == interact.ID ? style.BtnActiveColor :

@@ -37,8 +37,6 @@ namespace Prowl.Runtime.GUI
             {
                 Interactable interact = g.GetInteractable(true, true);
 
-                interact.UpdateContext();
-
                 g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.WidgetColor, style.WidgetRoundness);
                 if(style.BorderThickness > 0)
                     g.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
