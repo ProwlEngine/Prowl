@@ -3,46 +3,27 @@ using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.Rendering.OpenGL;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 
 namespace Prowl.Runtime.GUI
 {
     public static class TestGUI
     {
-        public static bool Button(string? label, Offset x, Offset y, Size width, Size height, float roundness = 2f) => Button(label, x, y, width, height, out _, roundness);
-        public static bool Button(string? label, Offset x, Offset y, Size width, Size height, out LayoutNode node, float roundness = 2f)
-        {
-            var g = Gui.ActiveGUI;
-            using ((node = g.Node()).Left(x).Top(y).Width(width).Height(height).Enter())
-            {
-                Interactable interact = g.GetInteractable();
-                if (interact.OnClick())
-                {
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, Color.green, roundness);
-                    return true;
-                }
-                else if (interact.OnPressed())
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, Color.red, roundness);
-                else if (interact.OnHover())
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, Color.blue, roundness);
-                else
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, Color.white, roundness);
-
-                if(label != null)
-                    g.DrawText(label, 20, g.CurrentNode.LayoutData.Rect.Position, Color.black);
-            }
-            return false;
-        }
 
         public static Gui gui;
         public static float sizePanelAnim = 0f;
+        public static string testString = "boobies yay :D";
         public static void Test(Font font)
         {
             Rect screenRect = new Rect(0, 0, Runtime.Graphics.Resolution.x, Runtime.Graphics.Resolution.y);
-            gui ??= new();
+
+            if (gui == null)
+            {
+                gui = new();
+                Input.OnKeyEvent += gui.SetKeyState;
+                Input.OnMouseEvent += gui.SetPointerState;
+            }
 
             gui.ProcessFrame(screenRect, (g) => {
 
@@ -54,13 +35,9 @@ namespace Prowl.Runtime.GUI
                 using (g.Node().Width(panelWidth).Height(500).TopLeft(Offset.Lerp(Offset.Percentage(0.10f), Offset.Percentage(0.20f), (float)Mathf.Sin(0.0))).Padding(5).Layout(LayoutType.Row).AutoScaleChildren().Enter())
                 {
                     // A
-                    using (g.Node().Height(Size.Percentage(0.90f)).Layout(LayoutType.Grid).Enter())
+                    sizePanelAnim = g.AnimateBool(g.IsHovering(), 0.1f, EaseType.SineInOut);
+                    using (g.Node().MaxWidth(Mathf.Lerp(50, 100, sizePanelAnim)).Height(Size.Percentage(0.90f)).Layout(LayoutType.Grid).Enter())
                     {
-                        if(g.IsHovering())
-                            g.PreviousNode.MaxWidth(100);
-                        else
-                            g.PreviousNode.MaxWidth(1000);
-
                         g.SetZIndex(1);
                         g.DrawRect(g.CurrentNode.LayoutData.Rect, Color.white, 2f, 4f);
                         g.PushClip(g.CurrentNode.LayoutData.InnerRect);
@@ -88,11 +65,13 @@ namespace Prowl.Runtime.GUI
                     {
                         g.DrawRect(g.CurrentNode.LayoutData.Rect, Color.white, 2f, 4f);
 
-                        if (Button("Test", 0, 0, 50, 25))
+                        if (Gui.Button("Test", 0, 0, 50, 25))
                             Debug.Log("Yey");
 
-                        if(Button("test button", 0, 50, 75, 25, out var buttonNode))
+                        if(Gui.Button("test button", 0, 50, 75, 25, out var buttonNode))
                             Debug.Log("Pressed");
+
+                        Gui.InputField(ref testString, 999, Gui.InputFieldFlags.None, 0, 100, 300, 25);
 
                         //buttonNode.Interaction = (interact) => {
                         //    hoveringTest = interact.IsHovering();
@@ -111,12 +90,12 @@ namespace Prowl.Runtime.GUI
                     }
 
                     // Footer
-                    using (g.Node().Width(Size.Percentage(1.00f)).Height(Size.Percentage(0.10f)).Top(Offset.Percentage(0.90f)).IgnoreLayout().Clip().Enter())
+                    using (g.Node().Width(Size.Percentage(1.00f)).Height(Size.Percentage(0.10f)).Top(Offset.Percentage(0.90f)).Padding(5).IgnoreLayout().Enter())
                     {
                         g.DrawRect(g.CurrentNode.LayoutData.Rect, Color.white, 2f, 4f);
                         if (g.IsHovering())
                         {
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, g.IsPressed() ? Color.red  : Color.blue, 4f);
+                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect,  Color.blue, 4f);
                             g.CurrentNode.Height(Size.Percentage(0.20f));
                         }
                         else
@@ -124,10 +103,10 @@ namespace Prowl.Runtime.GUI
                             g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, Color.white, 4f);
                         }
 
-                        var textRect = g.CurrentNode.LayoutData.InnerRect;
-                        textRect.Reduce(new Vector2(5, 5));
+                        g.PushClip(g.CurrentNode.LayoutData.InnerRect);
                         g.DrawText(font, @"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam interdum nec ante et condimentum. Aliquam quis viverraodio. Etiam vel tortor in ante lobortis tristique non inmauris. Maecenas massa tellus, aliquet vel massa eget, commodo commodo neque. In at erat ut nisi aliquam condimentum eu vitae quam. Suspendisse tristique euismod libero. Cras non massa nibh.Suspendisse id justo nibh. Nam ut diam id nunc ultrices aliquam cursus at ipsum. Praesent dapibus mauris gravida massa dapibus, vitae posuere magna finibus. Phasellus dignissim libero metus, vitae tincidunt massa lacinia eget. Cras sed viverra tortor. Vivamus iaculis faucibus ex non suscipit. In fringilla tellus at lorem sollicitudin, ut placerat nibh mollis. Nullam tortor elit, aliquet ac efficitur vel, ornare eget nibh. Vivamus condimentum, dui id vehicula iaculis, velit velit pulvinar nisi, mollis blandit nibh arcu ut magna. Vivamus condimentum in magna in aliquam. Donec vitae elementum neque. Nam ac ipsum id orci finibus fringilla. Nulla non justo a augue congue dictum. Vestibulum in quam id nibh blandit laoreet.", 
-                            20, textRect, Color.black);
+                            20, g.CurrentNode.LayoutData.InnerRect, Color.black);
+                        g.PopClip();
                     }
                 }
 

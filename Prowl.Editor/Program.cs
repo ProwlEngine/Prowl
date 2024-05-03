@@ -218,7 +218,7 @@ public static class Program
                         using (MemoryStream ms = new())
                         {
                             stream.CopyTo(ms);
-                            font = Font.CreateFromTTFMemory(ms.ToArray(), 18, 1024, 1024, [Font.CharacterRange.BasicLatin]);
+                            font = Font.CreateFromTTFMemory(ms.ToArray(), 20, 512, 512, [Font.CharacterRange.BasicLatin]);
                         }
                     }
                 }

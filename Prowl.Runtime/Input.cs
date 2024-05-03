@@ -1,6 +1,7 @@
 ﻿using Silk.NET.Input;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace Prowl.Runtime;
 
@@ -39,8 +40,10 @@ public static class Input
     private static Dictionary<MouseButton, bool> wasMousePressed = new Dictionary<MouseButton, bool>();
     private static Dictionary<MouseButton, bool> isMousePressed = new Dictionary<MouseButton, bool>();
 
-    public static Key LastPressedKeyCode;
     public static char LastPressedChar;
+
+    public static event Action<Key, bool> OnKeyEvent;
+    public static Action<MouseButton, double, double, bool, bool> OnMouseEvent;
 
     public static bool IsAnyKeyDown => Enabled && isKeyPressed.ContainsValue(true);
 
@@ -72,7 +75,7 @@ public static class Input
         foreach (var keyboard in Keyboards)
             keyboard.KeyChar += (keyboard, c) => LastPressedChar = c;
 
-            UpdateKeyStates();
+        UpdateKeyStates();
     }
 
     internal static void Dispose()
@@ -84,6 +87,15 @@ public static class Input
     {
         _prevMousePos = _currentMousePos;
         _currentMousePos = (Vector2Int)Mice[0].Position.ToDouble();
+        if (_prevMousePos != _currentMousePos)
+        {
+            if (isMousePressed[MouseButton.Left])
+                OnMouseEvent?.Invoke(MouseButton.Left, MousePosition.x, MousePosition.y, false, true);
+            else if (isMousePressed[MouseButton.Right])
+                OnMouseEvent?.Invoke(MouseButton.Right, MousePosition.x, MousePosition.y, false, true);
+            else if (isMousePressed[MouseButton.Middle])
+                OnMouseEvent?.Invoke(MouseButton.Middle, MousePosition.x, MousePosition.y, false, true);
+        }
         UpdateKeyStates();
     }
 
@@ -99,11 +111,12 @@ public static class Input
                 foreach (var keyboard in Keyboards)
                     if (keyboard.IsKeyPressed(key))
                     {
-                        if(wasKeyPressed[key] == false)
-                            LastPressedKeyCode = key;
                         isKeyPressed[key] = true;
                         break;
                     }
+
+                if (wasKeyPressed[key] != isKeyPressed[key])
+                    OnKeyEvent?.Invoke(key, isKeyPressed[key]);
             }
         }
 
@@ -119,6 +132,8 @@ public static class Input
                         isMousePressed[button] = true;
                         break;
                     }
+                if (wasMousePressed[button] != isMousePressed[button])
+                    OnMouseEvent?.Invoke(button, MousePosition.x, MousePosition.y, isMousePressed[button], false);
             }
         }
     }

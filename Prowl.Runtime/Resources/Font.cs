@@ -130,15 +130,15 @@ namespace Prowl.Runtime
             return font;
         }
 
-        Vector2 CalcTextSize(string str, int text, double wrap_width = -1f)
+        public Vector2 CalcTextSize(string str, int beginIndex, double wrap_width = -1f)
         {
             int text_display_end = str.Length;
 
             double font_size = FontSize;
-            if (text == text_display_end)
+            if (beginIndex == text_display_end)
                 return new Vector2(0.0f, font_size);
             Vector2 text_size;
-            CalcTextSizeA(out text_size, font_size, double.MaxValue, wrap_width, str, text, text_display_end);
+            CalcTextSizeA(out text_size, font_size, double.MaxValue, wrap_width, str, beginIndex, text_display_end);
 
             // Cancel out character spacing for the last character of a line (it is baked into glyph->XAdvance field)
             double font_scale = font_size / FontSize;
@@ -150,7 +150,7 @@ namespace Prowl.Runtime
             return text_size;
         }
 
-        internal int CalcTextSizeA(out Vector2 textSize, double size, double maxWidth, double wrapWidth, string text, int textBegin, int textEnd = -1)
+        public int CalcTextSizeA(out Vector2 textSize, double size, double maxWidth, double wrapWidth, string text, int textBegin, int textEnd = -1)
         {
             if (textEnd == -1)
                 textEnd = text.Length; // FIXME-OPT: Need to avoid this.
