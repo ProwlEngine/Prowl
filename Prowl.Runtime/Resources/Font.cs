@@ -41,6 +41,7 @@ namespace Prowl.Runtime
         public static Font CreateFromTTFMemory(byte[] ttf, float fontSize, int width, int height, CharacterRange[] characterRanges)
         {
             Font font = new();
+            font.FontSize = fontSize;
             font.Width = width;
             font.Height = height;
             var bitmap = new byte[width * height];
