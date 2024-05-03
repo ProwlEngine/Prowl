@@ -34,7 +34,13 @@ namespace Prowl.Runtime.GUI
             }
         }
 
-        public Interactable GetInteractable() => GetInteractable(CurrentNode.LayoutData.Rect);
+        public Interactable GetInteractable(bool inner = false, bool hasScrollV = false)
+        {
+            Rect rect = inner ? CurrentNode.LayoutData.InnerRect : CurrentNode.LayoutData.Rect;
+            if (hasScrollV)
+                rect.width -= ScrollVWidth + ScrollVPadding;
+            return GetInteractable(rect);
+        }
         public Interactable GetInteractable(Rect rect)
         {
             ulong interactID = 17;
