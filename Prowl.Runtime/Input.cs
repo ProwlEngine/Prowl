@@ -16,6 +16,13 @@ public static class Input
     public static IReadOnlyList<IMouse> Mice => Context.Mice;
     public static IReadOnlyList<IJoystick> Joysticks => Context.Joysticks;
 
+    public static string Clipboard {
+        get => Context.Keyboards[0].ClipboardText;
+        set {
+           Context.Keyboards[0].ClipboardText = value;
+        }
+    }
+
 
     private static Vector2Int _currentMousePos;
     private static Vector2Int _prevMousePos;
