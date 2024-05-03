@@ -5,8 +5,6 @@ namespace Prowl.Runtime.GUI
 
     public partial class Gui
     {
-        public int CurrentZIndex => CurrentState.ZIndex;
-
         public void PushClip(Rect rect)
         {
             _drawList[CurrentZIndex].PushClipRect(new Vector4(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height));

@@ -6,17 +6,7 @@ namespace Prowl.Runtime.GUI
 {
     public partial class Gui
     {
-        public class GuiState
-        {
-            public int ZIndex = 0;
-
-            public GuiState Clone()
-            {
-                return new GuiState() {
-                    ZIndex = ZIndex
-                };
-            }
-        }
+        public int CurrentZIndex => CurrentNode.ZIndex;
 
         private static Dictionary<ulong, Hashtable> _storage = [];
 
@@ -29,10 +19,10 @@ namespace Prowl.Runtime.GUI
             }
 
             // Copy over the clip rect from the previous list
-            var previousList = _drawList[CurrentState.ZIndex];
+            var previousList = _drawList[CurrentNode.ZIndex];
             _drawList[index].PushClipRect(previousList._ClipRectStack.Peek());
 
-            CurrentState.ZIndex = index;
+            CurrentNode.ZIndex = index;
         }
 
         public T GetStorage<T>(string key) where T : unmanaged

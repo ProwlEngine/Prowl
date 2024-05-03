@@ -294,7 +294,7 @@ namespace Prowl.Runtime.GUI
 
         public LayoutNode Node([CallerMemberName] string lineMethod = "", [CallerLineNumber] int lineNumber = 0)
         {
-            int nodeId = layoutNodeScopes.First.Value.nodeIndex++;
+            int nodeId = layoutNodeScopes.First.Value._node.GetNextNode();
 
             if (CurrentNode.Children.Count > nodeId)
             {
@@ -303,7 +303,7 @@ namespace Prowl.Runtime.GUI
             else
             {
                 ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), lineMethod, lineNumber, nodeId);
-                var node = new LayoutNode(this, (ulong)storageHash);
+                var node = new LayoutNode(CurrentNode, this, (ulong)storageHash);
                 node.SetNewParent(CurrentNode);
                 layoutDirty = true;
                 return node;
@@ -339,7 +339,6 @@ namespace Prowl.Runtime.GUI
     public class LayoutNodeScope : IDisposable
     {
         public LayoutNode _node;
-        public int nodeIndex = 0;
 
         public LayoutNodeScope(LayoutNode node)
         {

@@ -47,10 +47,12 @@ namespace Prowl.Runtime.GUI
         public float AnimateBool(bool state, float duration, EaseType easeIn, EaseType easeOut) => AnimateBool(state, duration, state ? easeOut : easeIn);
         public float AnimateBool(bool state, float duration, EaseType type)
         {
-            ulong nodeId = CurrentNode.ID;
+            ulong animId = 17;
+            animId = animId * 23 + (ulong)CurrentNode.GetNextAnimation();
+            animId = animId * 23 + CurrentNode.ID;
 
             BoolAnimation anim;
-            if(_boolAnimations.TryGetValue(nodeId, out anim))
+            if(_boolAnimations.TryGetValue(animId, out anim))
             {
                 anim.CurrentValue = state;
                 anim.Duration = duration;
@@ -65,7 +67,7 @@ namespace Prowl.Runtime.GUI
                     ElapsedTime = state ? 1 : 0
                 };
             }
-            _boolAnimations[nodeId] = anim;
+            _boolAnimations[animId] = anim;
 
             return (float)GetEase(anim.ElapsedTime, anim.EaseType);
         }
