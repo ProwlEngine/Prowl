@@ -520,10 +520,10 @@ namespace Prowl.Runtime
                             {
                                 drawList.IdxBuffer[idxWrite++] = (ushort)vtxCurrentIdx; drawList.IdxBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 1); drawList.IdxBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 2);
                                 drawList.IdxBuffer[idxWrite++] = (ushort)vtxCurrentIdx; drawList.IdxBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 2); drawList.IdxBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 3);
-                                drawList.VtxBuffer[vtxWrite++] = new UIVertex { pos = new Vector2(x1, y1), uv = new Vector2(u1, v1), col = color };
-                                drawList.VtxBuffer[vtxWrite++] = new UIVertex { pos = new Vector2(x2, y1), uv = new Vector2(u2, v1), col = color };
-                                drawList.VtxBuffer[vtxWrite++] = new UIVertex { pos = new Vector2(x2, y2), uv = new Vector2(u2, v2), col = color };
-                                drawList.VtxBuffer[vtxWrite++] = new UIVertex { pos = new Vector2(x1, y2), uv = new Vector2(u1, v2), col = color };
+                                drawList.VtxBuffer[vtxWrite++] = new UIVertex { pos = new Vector3(x1, y1, drawList._primitiveCount), uv = new Vector2(u1, v1), col = color };
+                                drawList.VtxBuffer[vtxWrite++] = new UIVertex { pos = new Vector3(x2, y1, drawList._primitiveCount), uv = new Vector2(u2, v1), col = color };
+                                drawList.VtxBuffer[vtxWrite++] = new UIVertex { pos = new Vector3(x2, y2, drawList._primitiveCount), uv = new Vector2(u2, v2), col = color };
+                                drawList.VtxBuffer[vtxWrite++] = new UIVertex { pos = new Vector3(x1, y2, drawList._primitiveCount), uv = new Vector2(u1, v2), col = color };
                                 vtxCurrentIdx += 4;
                             }
                         }
