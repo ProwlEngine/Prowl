@@ -125,17 +125,6 @@
             return this;
         }
 
-        public LayoutNode PositionRelativeTo(LayoutNode node)
-        {
-            _positionRelativeTo = node;
-            return this;
-        }
-
-        public LayoutNode SizeRelativeTo(LayoutNode node)
-        {
-            _sizeRelativeTo = node;
-            return this;
-        }
 
         public LayoutNodeScope Enter()
         {
@@ -149,9 +138,6 @@
             if (Parent != null)
                 Parent.Children.Remove(this);
             Parent = newParent;
-            _positionRelativeTo = newParent;
-            _sizeRelativeTo = newParent;
-            Parent.Children.Add(this);
         }
 
         public LayoutNode AppendNode() => Gui.Node();

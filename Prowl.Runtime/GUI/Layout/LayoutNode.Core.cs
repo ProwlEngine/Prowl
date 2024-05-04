@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using static BepuPhysics.Collidables.CompoundBuilder;
 
 namespace Prowl.Runtime.GUI.Layout
@@ -40,7 +41,14 @@ namespace Prowl.Runtime.GUI.Layout
         }
 
         public bool HasLayoutData => _data._node == this;
-        public PostLayoutData LayoutData => _data;
+        public PostLayoutData LayoutData {
+            get {
+                return _data;
+            }
+            internal set {
+                _data = value;
+            }
+        }
 
         public Gui Gui { get; private set; }
         public LayoutNode Parent { get; internal set; }
@@ -68,11 +76,11 @@ namespace Prowl.Runtime.GUI.Layout
         private bool _fitContentY = false;
         private bool _centerContent = false;
         private bool _canScaleChildren = false;
-        private LayoutNode _positionRelativeTo;
-        private LayoutNode _sizeRelativeTo;
 
         private LayoutType _layout = LayoutType.None;
         internal ClipType _clipped = ClipType.None;
+
+        internal ulong _lastFrameUsedIn = 0;
 
         internal ulong _nextNodeFrame = 0;
         internal int _nextNode = 0;
@@ -139,16 +147,16 @@ namespace Prowl.Runtime.GUI.Layout
 
             // Then Margin/Paddings (They rely on Scale)
             _data.Margins = new(
-                    _marginLeft.ToPixels(_positionRelativeTo?._data.Scale.x ?? 0),
-                    _marginRight.ToPixels(_positionRelativeTo?._data.Scale.x ?? 0),
-                    _marginTop.ToPixels(_positionRelativeTo?._data.Scale.y ?? 0),
-                    _marginBottom.ToPixels(_positionRelativeTo?._data.Scale.y ?? 0)
+                    _marginLeft.ToPixels(Parent?._data.Scale.x ?? 0),
+                    _marginRight.ToPixels(Parent?._data.Scale.x ?? 0),
+                    _marginTop.ToPixels(Parent?._data.Scale.y ?? 0),
+                    _marginBottom.ToPixels(Parent?._data.Scale.y ?? 0)
                 );
             _data.Paddings = new(
-                    _paddingLeft.ToPixels(_positionRelativeTo?._data.Scale.x ?? 0),
-                    _paddingRight.ToPixels(_positionRelativeTo?._data.Scale.x ?? 0),
-                    _paddingTop.ToPixels(_positionRelativeTo?._data.Scale.y ?? 0),
-                    _paddingBottom.ToPixels(_positionRelativeTo?._data.Scale.y ?? 0)
+                    _paddingLeft.ToPixels(Parent?._data.Scale.x ?? 0),
+                    _paddingRight.ToPixels(Parent?._data.Scale.x ?? 0),
+                    _paddingTop.ToPixels(Parent?._data.Scale.y ?? 0),
+                    _paddingBottom.ToPixels(Parent?._data.Scale.y ?? 0)
                 );
 
             // Then finally position (Relies on Scale and Padding)
@@ -161,31 +169,30 @@ namespace Prowl.Runtime.GUI.Layout
         public void UpdateScaleCache()
         {
             _data.Scale = new(
-                Math.Min(_width.ToPixels(_sizeRelativeTo?._data.GlobalContentWidth ?? 0),
-                         _maxWidth.ToPixels(_sizeRelativeTo?._data.GlobalContentWidth ?? 0)
+                Math.Min(_width.ToPixels(Parent?._data.GlobalContentWidth ?? 0),
+                         _maxWidth.ToPixels(Parent?._data.GlobalContentWidth ?? 0)
                 ),
-                Math.Min(_height.ToPixels(_sizeRelativeTo?._data.GlobalContentHeight ?? 0),
-                         _maxHeight.ToPixels(_sizeRelativeTo?._data.GlobalContentHeight ?? 0)
+                Math.Min(_height.ToPixels(Parent?._data.GlobalContentHeight ?? 0),
+                         _maxHeight.ToPixels(Parent?._data.GlobalContentHeight ?? 0)
                 )
             );
 
             _data.MaxScale = new(
-                _maxWidth.ToPixels(_sizeRelativeTo?._data.GlobalContentWidth ?? 0),
-                _maxHeight.ToPixels(_sizeRelativeTo?._data.GlobalContentHeight ?? 0)
+                _maxWidth.ToPixels(Parent?._data.GlobalContentWidth ?? 0),
+                _maxHeight.ToPixels(Parent?._data.GlobalContentHeight ?? 0)
             );
         }
 
         public void UpdatePositionCache()
         {
             _data.Position = new(
-                    _positionX.ToPixels(_positionRelativeTo?._data.GlobalContentWidth ?? 0),
-                    _positionY.ToPixels(_positionRelativeTo?._data.GlobalContentHeight ?? 0)
+                    _positionX.ToPixels(Parent?._data.GlobalContentWidth ?? 0),
+                    _positionY.ToPixels(Parent?._data.GlobalContentHeight ?? 0)
                 );
         }
 
         public void ProcessLayout()
         {
-
             ScaleChildren();
             foreach (var child in Children)
                 child.ProcessLayout();
@@ -245,9 +252,19 @@ namespace Prowl.Runtime.GUI.Layout
 
             if (Children.Count > 0)
             {
-                _data.ContentRect = Children[0]._data.OuterRect;
-                for (int i = 0; i < Children.Count; i++)
-                        _data.ContentRect = Rect.CombineRect(_data.ContentRect, Children[i]._data.OuterRect);
+                bool first = true;
+                foreach (var child in Children)
+                {
+                    if (first)
+                    {
+                        _data.ContentRect = child._data.OuterRect;
+                        first = false;
+                    }
+                    else
+                    {
+                        _data.ContentRect = Rect.CombineRect(_data.ContentRect, child._data.OuterRect);
+                    }
+                }
             } else _data.ContentRect = new Rect();
 
 

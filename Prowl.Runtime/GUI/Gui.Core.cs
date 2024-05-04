@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using static BepuPhysics.Collidables.CompoundBuilder;
 
 namespace Prowl.Runtime.GUI
 {
@@ -164,7 +165,6 @@ namespace Prowl.Runtime.GUI
     {
         public static Gui ActiveGUI;
 
-        public enum Pass { AfterLayout }
 
         public Rect ScreenRect { get; private set; }
 
@@ -184,6 +184,7 @@ namespace Prowl.Runtime.GUI
         internal bool layoutDirty = false;
         internal ulong frameCount = 0;
 
+        private Dictionary<ulong, LayoutNode.PostLayoutData> _layoutData;
         private Dictionary<ulong, LayoutNode> _nodes;
         private Dictionary<ulong, ulong> _computedNodes;
 
@@ -191,6 +192,7 @@ namespace Prowl.Runtime.GUI
         {
             _nodes = [];
             _computedNodes = [];
+            _layoutData = [];
         }
 
         public void ProcessFrame(Rect screenRect, Action<Gui> gui)
@@ -201,6 +203,7 @@ namespace Prowl.Runtime.GUI
 
             layoutNodeScopes.Clear();
             IDStack.Clear();
+            _nodes.Clear();
 
             if (!_drawList.ContainsKey(0))
                 _drawList[0] = new UIDrawList(); // Root Draw List
@@ -220,6 +223,7 @@ namespace Prowl.Runtime.GUI
             if (!_nodes.TryGetValue(0, out root))
             {
                 root = new LayoutNode(null, this, 0);
+                root._lastFrameUsedIn = frameCount;
                 _nodes[0] = root;
             }
             root.Width(screenRect.width).Height(screenRect.height);
@@ -229,7 +233,7 @@ namespace Prowl.Runtime.GUI
             // Reset Nodes
             layoutDirty = false;
             PushNode(new(root));
-            DoPass(Pass.AfterLayout, gui);
+            DoPass(gui);
             PopNode();
 
             UIDrawList.Draw(GLDevice.GL, new(screenRect.width, screenRect.height), drawListsOrdered.ToArray());
@@ -243,10 +247,21 @@ namespace Prowl.Runtime.GUI
             {
                 root.UpdateCache();
                 root.ProcessLayout();
+                root.UpdateCache();
+                // Cache layout data
+                _layoutData.Clear();
+                CacheLayoutData(root);
             }
         }
 
-        private void DoPass(Pass pass, Action<Gui> gui)
+        private void CacheLayoutData(LayoutNode node)
+        {
+            _layoutData[node.ID] = node.LayoutData;
+            foreach (var child in node.Children)
+                CacheLayoutData(child);
+        }
+
+        private void DoPass(Action<Gui> gui)
         {
             try
             {
@@ -281,19 +296,16 @@ namespace Prowl.Runtime.GUI
         public LayoutNode Node([CallerMemberName] string lineMethod = "", [CallerLineNumber] int lineNumber = 0)
         {
             int nodeId = layoutNodeScopes.First.Value._node.GetNextNode();
+            ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), lineMethod, lineNumber, nodeId);
 
-            if (CurrentNode.Children.Count > nodeId)
-            {
-                return CurrentNode.Children[nodeId];
-            }
-            else
-            {
-                ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), lineMethod, lineNumber, nodeId);
-                var node = new LayoutNode(CurrentNode, this, (ulong)storageHash);
-                node.SetNewParent(CurrentNode);
-                layoutDirty = true;
-                return node;
-            }
+            var node = new LayoutNode(CurrentNode, this, storageHash);
+            node._lastFrameUsedIn = frameCount;
+            node.SetNewParent(CurrentNode);
+            if (_layoutData.TryGetValue(storageHash, out var data))
+                node.LayoutData = data;
+            CurrentNode.Children.Add(node);
+            layoutDirty = true;
+            return node;
         }
 
         internal void PushNode(LayoutNodeScope scope)

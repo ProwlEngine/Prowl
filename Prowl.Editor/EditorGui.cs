@@ -1,9 +1,8 @@
 using Hexa.NET.ImGui;
-using Prowl.Editor.EditorWindows;
 using Prowl.Icons;
 using Prowl.Runtime;
+using Prowl.Runtime.GUI;
 using System.Reflection;
-using System.Reflection.Metadata.Ecma335;
 
 namespace Prowl.Editor;
 
@@ -17,6 +16,9 @@ public static class EditorGui
 
     private static bool hasDockSetup = false;
 
+    public static Runtime.GUI.Gui Gui;
+
+
     public static void Initialize()
     {
         ImGui.GetIO().ConfigFlags = ImGuiConfigFlags.DockingEnable;
@@ -27,6 +29,10 @@ public static class EditorGui
         //ImGui.GetIO().MouseDrawCursor = true;
         //if (OperatingSystem.IsWindows())
         //Input.Mice[0].Cursor.CursorMode = Silk.NET.Input.CursorMode.Hidden;
+
+        Gui = new();
+        Input.OnKeyEvent += Gui.SetKeyState;
+        Input.OnMouseEvent += Gui.SetPointerState;
 
         SetTheme();
     }

@@ -185,10 +185,11 @@ namespace Prowl.Runtime
         }
 
         public Vector2 CalcTextSize(string str, int beginIndex, double wrap_width = -1f)
+            => CalcTextSize(str, FontSize, beginIndex, wrap_width);
+        public Vector2 CalcTextSize(string str, double font_size, int beginIndex, double wrap_width = -1f)
         {
             int text_display_end = str.Length;
 
-            double font_size = FontSize;
             if (beginIndex == text_display_end)
                 return new Vector2(0.0f, font_size);
             Vector2 text_size;

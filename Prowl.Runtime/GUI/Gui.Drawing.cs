@@ -105,17 +105,13 @@ namespace Prowl.Runtime.GUI
         //    _drawList[CurrentZIndex].AddText(UIDrawList._fontAtlas.Fonts[0], fontSize, position, col, text);
         //}
 
-        public void DrawText(string text, double fontSize, Rect rect, Color color)
-        {
-            var pos = new Vector2(rect.x, rect.y);
-            var wrap = rect.width;
-            DrawText(text, fontSize, pos, color, wrap);
-        }
-
         public void DrawText(Font font, string text, double fontSize, Rect rect, Color color)
         {
             var pos = new Vector2(rect.x, rect.y);
             var wrap = rect.width;
+            var textSize = font.CalcTextSize(text, fontSize, 0, (float)wrap);
+            pos.x += (rect.width - textSize.x) * 0.5f;
+            pos.y += (rect.height - (textSize.y * 0.5)) * 0.5f;
             DrawText(font, text, fontSize, pos, color, wrap);
         }
 
