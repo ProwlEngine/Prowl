@@ -36,7 +36,7 @@ public class PreferencesWindow : SingletonEditorWindow
     }
 }
 
-public abstract class SingletonEditorWindow : EditorWindow
+public abstract class SingletonEditorWindow : OldEditorWindow
 {
 
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse;

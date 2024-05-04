@@ -13,7 +13,7 @@ namespace Prowl.Editor.EditorWindows;
 /// Project Assets Tree Window
 /// Shows all Folder and Files in a Tree Format
 /// </summary>
-public class AssetsWindow : EditorWindow
+public class AssetsWindow : OldEditorWindow
 {
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse;
 
@@ -44,7 +44,7 @@ public class AssetsWindow : EditorWindow
         SelectHandler.StartFrame();
 
         float cPX = ImGui.GetCursorPosX();
-        if (GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X))
+        if (GUIHelper.SearchOld("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X))
         {
             SelectHandler.Clear();
             _found.Clear();

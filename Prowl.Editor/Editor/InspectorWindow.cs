@@ -5,7 +5,7 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor.EditorWindows;
 
-public class InspectorWindow : EditorWindow
+public class InspectorWindow : OldEditorWindow
 {
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoCollapse;
 

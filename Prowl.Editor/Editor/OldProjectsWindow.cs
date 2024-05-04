@@ -5,7 +5,7 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor.EditorWindows;
 
-public class ProjectsWindow : EditorWindow
+public class OldProjectsWindow : OldEditorWindow
 {
     public static bool WindowDrawnThisFrame = false;
     public string SelectedProject = "";
@@ -20,7 +20,7 @@ public class ProjectsWindow : EditorWindow
     protected override int Height { get; } = 512;
     protected override bool BackgroundFade { get; } = true;
 
-    public ProjectsWindow() : base()
+    public OldProjectsWindow() : base()
     {
         Title = FontAwesome6.Book + " Project Window";
     }
@@ -163,7 +163,7 @@ public class ProjectsWindow : EditorWindow
         //DrawShadow(0, ImGui.GetWindowHeight());
 
         ImGui.SetCursorPos(new System.Numerics.Vector2(25, 50));
-        GUIHelper.Search("##searchBox", ref _searchText, 150);
+        GUIHelper.SearchOld("##searchBox", ref _searchText, 150);
 
         //ImGui.PushStyleColor(ImGuiCol.ChildBg, ImGui.GetStyle().Colors[(int)ImGuiCol.FrameBg]);
         ImGui.SetCursorPos(new System.Numerics.Vector2(25, 80));

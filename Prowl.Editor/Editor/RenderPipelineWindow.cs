@@ -7,7 +7,7 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor.EditorWindows;
 
-public class RenderPipelineWindow : EditorWindow
+public class RenderPipelineWindow : OldEditorWindow
 {
     AssetRef<RenderPipeline> CurrentRenderPipeline;
     bool changed = false;

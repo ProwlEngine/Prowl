@@ -4,7 +4,7 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor.EditorWindows
 {
-    public class UtilitiesWindow : EditorWindow
+    public class UtilitiesWindow : OldEditorWindow
     {
         public enum Utilities
         {
@@ -71,7 +71,7 @@ namespace Prowl.Editor.EditorWindows
                 IconStrings = icons.ToArray();
             }
 
-            GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X);
+            GUIHelper.SearchOld("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X);
             ImGui.BeginChild("listoficons");
             // Draw a list of all FontAwesome6 Icons
             if (string.IsNullOrEmpty(_searchText))

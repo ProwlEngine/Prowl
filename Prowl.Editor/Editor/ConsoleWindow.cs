@@ -5,7 +5,7 @@ using Prowl.Editor.Editor.Preferences;
 
 namespace Prowl.Editor.EditorWindows;
 
-public class ConsoleWindow : EditorWindow {
+public class ConsoleWindow : OldEditorWindow {
 
     protected override ImGuiWindowFlags Flags { get; } = ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.MenuBar;
     private uint _logCount;

@@ -12,7 +12,7 @@ using System.Runtime.CompilerServices;
 
 namespace Prowl.Editor.EditorWindows;
 
-public class ViewportWindow : EditorWindow
+public class ViewportWindow : OldEditorWindow
 {
     public static Camera LastFocusedCamera;
 

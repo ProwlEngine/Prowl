@@ -7,7 +7,7 @@ using System.Reflection;
 
 namespace Prowl.Editor.EditorWindows;
 
-public class GameWindow : EditorWindow
+public class GameWindow : OldEditorWindow
 {
     public enum Resolutions
     {

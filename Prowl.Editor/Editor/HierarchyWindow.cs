@@ -8,7 +8,7 @@ using Prowl.Editor.Editor.Preferences;
 
 namespace Prowl.Editor.EditorWindows;
 
-public class HierarchyWindow : EditorWindow
+public class HierarchyWindow : OldEditorWindow
 {
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse;
 
@@ -51,7 +51,7 @@ public class HierarchyWindow : EditorWindow
         System.Numerics.Vector2 padding = ImGui.GetStyle().FramePadding;
 
         float filterCursorPosX = ImGui.GetCursorPosX();
-        GUIHelper.Search("##searchBox", ref _searchText, contentWidth - addButtonSize - 7);
+        GUIHelper.SearchOld("##searchBox", ref _searchText, contentWidth - addButtonSize - 7);
 
         ImGui.SameLine();
 

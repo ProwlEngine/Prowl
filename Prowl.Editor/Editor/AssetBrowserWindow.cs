@@ -9,7 +9,7 @@ using System.Reflection;
 
 namespace Prowl.Editor.EditorWindows;
 
-public class AssetBrowserWindow : EditorWindow
+public class AssetBrowserWindow : OldEditorWindow
 {
     public DirectoryInfo CurDirectory;
     public bool Locked = false;
@@ -140,7 +140,7 @@ public class AssetBrowserWindow : EditorWindow
 
         float cPX = ImGui.GetCursorPosX();
         float cPY = ImGui.GetCursorPosY();
-        if (GUIHelper.Search("##searchBox", ref _searchText, searchBarSize))
+        if (GUIHelper.SearchOld("##searchBox", ref _searchText, searchBarSize))
         {
             _found.Clear();
             if (!string.IsNullOrEmpty(_searchText))

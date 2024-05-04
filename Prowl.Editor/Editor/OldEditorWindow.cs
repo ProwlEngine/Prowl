@@ -4,7 +4,7 @@ using System.Numerics;
 
 namespace Prowl.Editor.EditorWindows;
 
-public class EditorWindow {
+public class OldEditorWindow {
 
     protected string Title = "Title";
     private readonly int _id;
@@ -22,7 +22,7 @@ public class EditorWindow {
 
     protected bool isOpened = true;
 
-    public EditorWindow() : base()
+    public OldEditorWindow() : base()
     {
         Program.OnDrawEditor += DrawWindow;
         Program.OnUpdateEditor += UpdateWindow;

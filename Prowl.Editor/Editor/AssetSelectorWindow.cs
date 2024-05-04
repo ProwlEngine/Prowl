@@ -4,7 +4,7 @@ using Prowl.Icons;
 
 namespace Prowl.Editor.EditorWindows;
 
-public class AssetSelectorWindow : EditorWindow
+public class AssetSelectorWindow : OldEditorWindow
 {
     private string _searchText = "";
     private Type type;
@@ -27,7 +27,7 @@ public class AssetSelectorWindow : EditorWindow
     {
         ImGui.BeginChild("assetChild");
 
-        GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X);
+        GUIHelper.SearchOld("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X);
 
         ImGui.PushStyleColor(ImGuiCol.ChildBg, ImGui.GetStyle().Colors[(int)ImGuiCol.FrameBg]);
         ImGui.BeginChild("assetList", new System.Numerics.Vector2(ImGui.GetWindowWidth(), ImGui.GetWindowHeight() - 29));

@@ -200,7 +200,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             ImGui.PushStyleColor(ImGuiCol.PopupBg, new System.Numerics.Vector4(0.1f, 0.1f, 0.1f, 0.6f));
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new System.Numerics.Vector2(6, 6));
             if (ImGui.BeginPopup("AddComponentContextMenu")) {
-                GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X);
+                GUIHelper.SearchOld("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X);
 
                 ImGui.Separator();
 
