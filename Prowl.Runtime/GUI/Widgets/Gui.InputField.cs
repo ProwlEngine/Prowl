@@ -28,7 +28,7 @@ namespace Prowl.Runtime.GUI
 
         private static StbTextEditState stb;
 
-        public static bool InputField(ref string value, uint maxLength, InputFieldFlags flags, Offset x, Offset y, Size width, GuiStyle? style = null)
+        public bool InputField(ref string value, uint maxLength, InputFieldFlags flags, Offset x, Offset y, Size width, GuiStyle? style = null)
         {
             style ??= new();
             var g = Gui.ActiveGUI;

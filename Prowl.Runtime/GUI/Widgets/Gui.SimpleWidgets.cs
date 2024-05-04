@@ -64,8 +64,8 @@ namespace Prowl.Runtime.GUI
         }
 
 
-        public static bool Button(string? label, Offset x, Offset y, Size width, Size height, GuiStyle? style = null, bool invisible = false, bool repeat = false) => Button(label, x, y, width, height, out _, style, invisible, repeat);
-        public static bool Button(string? label, Offset x, Offset y, Size width, Size height, out LayoutNode node, GuiStyle? style = null, bool invisible = false, bool repeat = false)
+        public bool Button(string? label, Offset x, Offset y, Size width, Size height, GuiStyle? style = null, bool invisible = false, bool repeat = false) => Button(label, x, y, width, height, out _, style, invisible, repeat);
+        public bool Button(string? label, Offset x, Offset y, Size width, Size height, out LayoutNode node, GuiStyle? style = null, bool invisible = false, bool repeat = false)
         {
             style ??= new();
             var g = Gui.ActiveGUI;

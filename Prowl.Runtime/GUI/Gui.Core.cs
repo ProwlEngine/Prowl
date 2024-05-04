@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using static BepuPhysics.Collidables.CompoundBuilder;
 
 namespace Prowl.Runtime.GUI
 {
@@ -165,18 +164,12 @@ namespace Prowl.Runtime.GUI
     {
         public static Gui ActiveGUI;
 
-
         public Rect ScreenRect { get; private set; }
 
-        public LayoutNode CurrentNode => layoutNodeScopes.First.Value._node;
-        public LayoutNode PreviousNode => layoutNodeScopes.First.Next.Value._node;
+        public LayoutNode CurrentNode => layoutNodeScopes.First!.Value._node;
+        public LayoutNode? PreviousNode => layoutNodeScopes.First?.Next?.Value._node;
 
-        public UIDrawList DrawList {
-            get {
-                return _drawList[CurrentNode.ZIndex];
-            }
-        }
-
+        public UIDrawList DrawList => _drawList[CurrentNode.ZIndex];
 
         internal Dictionary<int, UIDrawList> _drawList = new();
         internal LinkedList<LayoutNodeScope> layoutNodeScopes = new();
