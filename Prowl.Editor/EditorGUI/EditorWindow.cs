@@ -165,6 +165,7 @@ namespace Prowl.Editor
 
             using (g.Node().Width(565).Height(345).Left(25).Top(80).Layout(LayoutType.Column).Clip().Enter())
             {
+                Directory.CreateDirectory(Project.Projects_Directory);
                 var folders = new DirectoryInfo(Project.Projects_Directory).EnumerateDirectories();
                 folders = folders.OrderByDescending((x) => x.LastWriteTimeUtc);
 
