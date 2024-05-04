@@ -25,7 +25,7 @@ namespace Prowl.Runtime.GUI
                 Input.OnMouseEvent += gui.SetPointerState;
             }
 
-            gui.ProcessFrame(screenRect, (g) => {
+            gui.ProcessFrame(screenRect, 1f, (g) => {
 
                 //int wrapNodeCount = (int)Mathf.Abs(Mathf.Sin(Time.time + 0.5f) * 25);
                 int wrapNodeCount = 16;
@@ -188,10 +188,13 @@ namespace Prowl.Runtime.GUI
             _layoutData = [];
         }
 
-        public void ProcessFrame(Rect screenRect, Action<Gui> gui)
+        public void ProcessFrame(Rect screenRect, float scale, Action<Gui> gui)
         {
             UpdateAnimations(Time.deltaTime);
 
+            scale = 1f / scale;
+            screenRect.width *= scale;
+            screenRect.height *= scale;
             ScreenRect = screenRect;
 
             layoutNodeScopes.Clear();

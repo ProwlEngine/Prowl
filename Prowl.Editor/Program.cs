@@ -110,7 +110,7 @@ public static class Program
             Graphics.EndFrame();
 
             Rect screenRect = new Rect(0, 0, Runtime.Graphics.Resolution.x, Runtime.Graphics.Resolution.y);
-            EditorGui.Gui.ProcessFrame(screenRect, (g) => {
+            EditorGui.Gui.ProcessFrame(screenRect, 2f, (g) => {
                 OnUpdateEditor?.Invoke();
                 OnDrawEditor?.Invoke();
             });
