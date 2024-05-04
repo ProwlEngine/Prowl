@@ -15,8 +15,6 @@ namespace Prowl.Editor;
 
 public static class Program
 {
-    public static ImGUIController imguiController { get; internal set; }
-
     public static event Action? OnDrawEditor;
     public static event Action? OnUpdateEditor;
 
@@ -29,7 +27,6 @@ public static class Program
     {
         Application.Initialize += () => {
             // Editor-specific initialization code
-            imguiController = new(GLDevice.GL, Window.InternalWindow, Input.Context);
             EditorGui.Initialize();
             ImporterAttribute.GenerateLookUp();
 
@@ -39,8 +36,7 @@ public static class Program
         };
 
         Application.Update += (delta) => {
-            imguiController.Update((float)delta);
-            EditorGui.SetupDock();
+            //EditorGui.SetupDock();
 
             AssetDatabase.InternalUpdate();
 
@@ -112,8 +108,6 @@ public static class Program
             EditorGui.Update();
 
             Graphics.EndFrame();
-
-            imguiController.Render();
 
             Rect screenRect = new Rect(0, 0, Runtime.Graphics.Resolution.x, Runtime.Graphics.Resolution.y);
             EditorGui.Gui.ProcessFrame(screenRect, (g) => {
@@ -228,7 +222,6 @@ public static class Program
         };
 
         Application.Quitting += () => {
-            imguiController.Dispose();
         };
 
 

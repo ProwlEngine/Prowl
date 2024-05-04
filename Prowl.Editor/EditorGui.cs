@@ -21,11 +21,11 @@ public static class EditorGui
 
     public static void Initialize()
     {
-        ImGui.GetIO().ConfigFlags = ImGuiConfigFlags.DockingEnable;
-        ImGui.GetIO().BackendFlags = ImGuiBackendFlags.HasMouseCursors | ImGuiBackendFlags.RendererHasVtxOffset;
-        ImGui.GetIO().ConfigInputTextCursorBlink = true;
-        ImGui.GetIO().ConfigWindowsResizeFromEdges = true;
-        ImGui.GetIO().ConfigWindowsMoveFromTitleBarOnly = true;
+        //ImGui.GetIO().ConfigFlags = ImGuiConfigFlags.DockingEnable;
+        //ImGui.GetIO().BackendFlags = ImGuiBackendFlags.HasMouseCursors | ImGuiBackendFlags.RendererHasVtxOffset;
+        //ImGui.GetIO().ConfigInputTextCursorBlink = true;
+        //ImGui.GetIO().ConfigWindowsResizeFromEdges = true;
+        //ImGui.GetIO().ConfigWindowsMoveFromTitleBarOnly = true;
         //ImGui.GetIO().MouseDrawCursor = true;
         //if (OperatingSystem.IsWindows())
         //Input.Mice[0].Cursor.CursorMode = Silk.NET.Input.CursorMode.Hidden;
@@ -34,7 +34,7 @@ public static class EditorGui
         Input.OnKeyEvent += Gui.SetKeyState;
         Input.OnMouseEvent += Gui.SetPointerState;
 
-        SetTheme();
+        //SetTheme();
     }
 
     public static void SetupDock()
@@ -78,8 +78,8 @@ public static class EditorGui
 
     public static void Update()
     {
-        ImGuiFileDialog.UpdateDialogs();
-        ImGuiNotify.RenderNotifications();
+        //ImGuiFileDialog.UpdateDialogs();
+        //ImGuiNotify.RenderNotifications();
     }
 
     private static void SetTheme()
