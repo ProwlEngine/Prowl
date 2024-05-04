@@ -76,6 +76,8 @@ namespace Prowl.Runtime.GUI.Layout
         private bool _fitContentY = false;
         private bool _centerContent = false;
         private bool _canScaleChildren = false;
+        private LayoutNode _positionRelativeTo;
+        private LayoutNode _sizeRelativeTo;
 
         private LayoutType _layout = LayoutType.None;
         internal ClipType _clipped = ClipType.None;
@@ -147,16 +149,16 @@ namespace Prowl.Runtime.GUI.Layout
 
             // Then Margin/Paddings (They rely on Scale)
             _data.Margins = new(
-                    _marginLeft.ToPixels(Parent?._data.Scale.x ?? 0),
-                    _marginRight.ToPixels(Parent?._data.Scale.x ?? 0),
-                    _marginTop.ToPixels(Parent?._data.Scale.y ?? 0),
-                    _marginBottom.ToPixels(Parent?._data.Scale.y ?? 0)
+                    _marginLeft.ToPixels(_positionRelativeTo?._data.Scale.x ?? 0),
+                    _marginRight.ToPixels(_positionRelativeTo?._data.Scale.x ?? 0),
+                    _marginTop.ToPixels(_positionRelativeTo?._data.Scale.y ?? 0),
+                    _marginBottom.ToPixels(_positionRelativeTo?._data.Scale.y ?? 0)
                 );
             _data.Paddings = new(
-                    _paddingLeft.ToPixels(Parent?._data.Scale.x ?? 0),
-                    _paddingRight.ToPixels(Parent?._data.Scale.x ?? 0),
-                    _paddingTop.ToPixels(Parent?._data.Scale.y ?? 0),
-                    _paddingBottom.ToPixels(Parent?._data.Scale.y ?? 0)
+                    _paddingLeft.ToPixels(_positionRelativeTo?._data.Scale.x ?? 0),
+                    _paddingRight.ToPixels(_positionRelativeTo?._data.Scale.x ?? 0),
+                    _paddingTop.ToPixels(_positionRelativeTo?._data.Scale.y ?? 0),
+                    _paddingBottom.ToPixels(_positionRelativeTo?._data.Scale.y ?? 0)
                 );
 
             // Then finally position (Relies on Scale and Padding)
@@ -169,25 +171,25 @@ namespace Prowl.Runtime.GUI.Layout
         public void UpdateScaleCache()
         {
             _data.Scale = new(
-                Math.Min(_width.ToPixels(Parent?._data.GlobalContentWidth ?? 0),
-                         _maxWidth.ToPixels(Parent?._data.GlobalContentWidth ?? 0)
+                Math.Min(_width.ToPixels(_sizeRelativeTo?._data.GlobalContentWidth ?? 0),
+                         _maxWidth.ToPixels(_sizeRelativeTo?._data.GlobalContentWidth ?? 0)
                 ),
-                Math.Min(_height.ToPixels(Parent?._data.GlobalContentHeight ?? 0),
-                         _maxHeight.ToPixels(Parent?._data.GlobalContentHeight ?? 0)
+                Math.Min(_height.ToPixels(_sizeRelativeTo?._data.GlobalContentHeight ?? 0),
+                         _maxHeight.ToPixels(_sizeRelativeTo?._data.GlobalContentHeight ?? 0)
                 )
             );
 
             _data.MaxScale = new(
-                _maxWidth.ToPixels(Parent?._data.GlobalContentWidth ?? 0),
-                _maxHeight.ToPixels(Parent?._data.GlobalContentHeight ?? 0)
+                _maxWidth.ToPixels(_sizeRelativeTo?._data.GlobalContentWidth ?? 0),
+                _maxHeight.ToPixels(_sizeRelativeTo?._data.GlobalContentHeight ?? 0)
             );
         }
 
         public void UpdatePositionCache()
         {
             _data.Position = new(
-                    _positionX.ToPixels(Parent?._data.GlobalContentWidth ?? 0),
-                    _positionY.ToPixels(Parent?._data.GlobalContentHeight ?? 0)
+                    _positionX.ToPixels(_positionRelativeTo?._data.GlobalContentWidth ?? 0),
+                    _positionY.ToPixels(_positionRelativeTo?._data.GlobalContentHeight ?? 0)
                 );
         }
 
