@@ -82,8 +82,8 @@ namespace Prowl.Runtime
                         yOff += ascent * scaleFactor;
 
                         var glyphInfo = new GlyphInfo {
-                            X = cd[i].x0 + 1, // Offset x by 1
-                            Y = cd[i].y0 + 1, // Offset y by 1
+                            X = cd[i].x0,
+                            Y = cd[i].y0,
                             Width = cd[i].x1 - cd[i].x0,
                             Height = cd[i].y1 - cd[i].y0,
                             XOffset = (int)cd[i].xoff,
@@ -112,16 +112,16 @@ namespace Prowl.Runtime
 
             font.Bitmap = new Color32[width * height];
             // Set the first pixel to white (TexUvWhitePixel)
-            font.Bitmap[0] = new Color32 { red = 255, green = 255, blue = 255, alpha = 255 };
-            for (var i = 1; i < bitmap.Length; ++i)
+            for (var i = 0; i < bitmap.Length; ++i)
             {
-                var b = bitmap[i - 1];
+                var b = bitmap[i];
                 font.Bitmap[i].red = b;
                 font.Bitmap[i].green = b;
                 font.Bitmap[i].blue = b;
 
                 font.Bitmap[i].alpha = b;
             }
+            font.Bitmap[0] = new Color32 { red = 255, green = 255, blue = 255, alpha = 255 };
 
             font.CreateResource();
 
