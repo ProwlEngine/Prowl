@@ -1,10 +1,12 @@
-﻿using Prowl.Runtime.Rendering;
+﻿using Prowl.Icons;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.OpenGL;
 using Silk.NET.OpenGL;
 using System;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Xml.Linq;
 
 namespace Prowl.Runtime.GUI.Graphics
 {
@@ -1294,11 +1296,13 @@ namespace Prowl.Runtime.GUI.Graphics
         in vec4 Frag_Color;
         uniform sampler2D Texture;
         layout (location = 0) out vec4 Out_Color;
-        void main()
-        {
+
+        void main() {
             vec4 color = texture(Texture, Frag_UV);
+        
             // Gamma Correct
-            color = pow(color, vec4(1.0/1.43));
+            color = pow(color, vec4(1.0 / 1.43));
+        
             Out_Color = Frag_Color * color;
         }";
 
@@ -1328,14 +1332,32 @@ namespace Prowl.Runtime.GUI.Graphics
         {
             if (DefaultFont == null)
             {
+                var builder = Font.BuildNewFont(1024, 1024);
                 using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Prowl.Runtime.EmbeddedResources.font.ttf"))
                 {
                     using (MemoryStream ms = new())
                     {
                         stream.CopyTo(ms);
-                        DefaultFont = Font.CreateFromTTFMemory(ms.ToArray(), 20, 1024, 1024, [Font.CharacterRange.BasicLatin]);
+                        builder.Add(ms.ToArray(), 20, [Font.CharacterRange.BasicLatin]);
                     }
                 }
+                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Runtime.EmbeddedResources.{FontAwesome6.FontIconFileNameFAR}"))
+                {
+                    using (MemoryStream ms = new())
+                    {
+                        stream.CopyTo(ms);
+                        builder.Add(ms.ToArray(), 20 * 2.0f / 3.0f, [new Font.CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
+                    }
+                }
+                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Runtime.EmbeddedResources.{FontAwesome6.FontIconFileNameFAS}"))
+                {
+                    using (MemoryStream ms = new())
+                    {
+                        stream.CopyTo(ms);
+                        builder.Add(ms.ToArray(), 20 * 2.0f / 3.0f, [new Font.CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
+                    }
+                }
+                DefaultFont = builder.End(20);
             }
         }
 

@@ -1,19 +1,21 @@
 ﻿using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.Rendering.Primitives;
+using Silk.NET.OpenAL;
 using StbTrueTypeSharp;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using static Prowl.Runtime.GUI.Graphics.UIDrawList;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace Prowl.Runtime
 {
     public struct GlyphInfo
     {
-        public int X, Y, Width, Height;
-        public int XOffset, YOffset;
-        public int XAdvance;
+        public float X, Y, Width, Height;
+        public float XOffset, YOffset;
+        public float XAdvance;
     }
 
     public sealed class Font : EngineObject, ISerializable
@@ -36,96 +38,19 @@ namespace Prowl.Runtime
             Texture.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
         }
 
+        public static FontBuilder BuildNewFont(int width, int height)
+        {
+            FontBuilder builder = new();
+            builder.Begin(width, height);
+            return builder;
+        }
+
         public static Font CreateFromTTFMemory(byte[] ttf, float fontSize, int width, int height, CharacterRange[] characterRanges)
         {
-            Font font = new();
-            font.FontSize = fontSize;
-            font.Width = width;
-            font.Height = height;
-            var bitmap = new byte[width * height];
-            font.Glyphs = new Dictionary<uint, GlyphInfo>();
-            var context = new StbTrueType.stbtt_pack_context();
-            unsafe
-            {
-                fixed (byte* pixelsPtr = bitmap)
-                {
-                    StbTrueType.stbtt_PackBegin(context, pixelsPtr, width, height, width, 1, null);
-                }
-
-                //var ttf = File.ReadAllBytes(assetPath.FullName);
-                var fontInfo = StbTrueType.CreateFont(ttf, 0);
-                if (fontInfo == null)
-                    throw new Exception("Failed to init font.");
-
-                var scaleFactor = StbTrueType.stbtt_ScaleForPixelHeight(fontInfo, fontSize);
-
-                int ascent, descent, lineGap;
-                StbTrueType.stbtt_GetFontVMetrics(fontInfo, &ascent, &descent, &lineGap);
-
-                foreach (var range in characterRanges)
-                {
-                    if (range.Start > range.End)
-                        continue;
-
-                    var cd = new StbTrueType.stbtt_packedchar[range.End - range.Start + 1];
-                    fixed (StbTrueType.stbtt_packedchar* chardataPtr = cd)
-                    {
-                        StbTrueType.stbtt_PackFontRange(context, fontInfo.data, 0, fontSize,
-                            range.Start,
-                            range.End - range.Start + 1,
-                            chardataPtr);
-                    }
-
-                    for (uint i = 0; i < cd.Length; ++i)
-                    {
-                        var yOff = cd[i].yoff;
-                        yOff += ascent * scaleFactor;
-
-                        var glyphInfo = new GlyphInfo {
-                            X = cd[i].x0,
-                            Y = cd[i].y0,
-                            Width = cd[i].x1 - cd[i].x0,
-                            Height = cd[i].y1 - cd[i].y0,
-                            XOffset = (int)cd[i].xoff,
-                            YOffset = (int)Math.Round(yOff),
-                            XAdvance = (int)Math.Round(cd[i].xadvance)
-                        };
-
-                        font.Glyphs[i + (uint)range.Start] = glyphInfo;
-                    }
-                }
-            }
-
-            // Offset by minimal offset
-            var minimumOffsetY = 10000;
-            foreach (var pair in font.Glyphs)
-                if (pair.Value.YOffset < minimumOffsetY)
-                    minimumOffsetY = pair.Value.YOffset;
-
-            var keys = font.Glyphs.Keys.ToArray();
-            foreach (var key in keys)
-            {
-                var pc = font.Glyphs[key];
-                pc.YOffset -= minimumOffsetY;
-                font.Glyphs[key] = pc;
-            }
-
-            font.Bitmap = new Color32[width * height];
-            // Set the first pixel to white (TexUvWhitePixel)
-            for (var i = 0; i < bitmap.Length; ++i)
-            {
-                var b = bitmap[i];
-                font.Bitmap[i].red = b;
-                font.Bitmap[i].green = b;
-                font.Bitmap[i].blue = b;
-
-                font.Bitmap[i].alpha = b;
-            }
-            font.Bitmap[0] = new Color32 { red = 255, green = 255, blue = 255, alpha = 255 };
-
-            font.CreateResource();
-
-            return font;
+            FontBuilder builder = new();
+            builder.Begin(width, height);
+            builder.Add(ttf, fontSize, characterRanges);
+            return builder.End(fontSize);
         }
 
         public float GetCharAdvance(char c)
@@ -648,6 +573,121 @@ namespace Prowl.Runtime
 
             public CharacterRange(int single) : this(single, single)
             {
+            }
+        }
+
+        public unsafe class FontBuilder
+        {
+            private byte[] _bitmap;
+            private StbTrueType.stbtt_pack_context _context;
+            private Dictionary<uint, GlyphInfo> _glyphs;
+            private int bitmapWidth, bitmapHeight;
+
+            public void Begin(int width, int height)
+            {
+                bitmapWidth = width;
+                bitmapHeight = height;
+                _bitmap = new byte[width * height];
+                _context = new StbTrueType.stbtt_pack_context();
+
+                fixed (byte* pixelsPtr = _bitmap)
+                {
+                    StbTrueType.stbtt_PackBegin(_context, pixelsPtr, width, height, width, 1, null);
+                }
+
+                _glyphs = [];
+            }
+
+            public void Add(byte[] ttf, float fontsize, IEnumerable<CharacterRange> characterRanges)
+            {
+                if (ttf == null || ttf.Length == 0)
+                    throw new ArgumentNullException(nameof(ttf));
+
+                if (characterRanges == null)
+                    throw new ArgumentNullException(nameof(characterRanges));
+
+                if (!characterRanges.Any())
+                    throw new ArgumentException("characterRanges must have a least one value.");
+
+                var fontInfo = StbTrueType.CreateFont(ttf, 0);
+                if (fontInfo == null)
+                    throw new Exception("Failed to init font.");
+
+                var scaleFactor = StbTrueType.stbtt_ScaleForPixelHeight(fontInfo, (float)fontsize);
+
+                int ascent, descent, lineGap;
+                StbTrueType.stbtt_GetFontVMetrics(fontInfo, &ascent, &descent, &lineGap);
+
+                foreach (var range in characterRanges)
+                {
+                    if (range.Start > range.End)
+                        continue;
+
+                    var cd = new StbTrueType.stbtt_packedchar[range.End - range.Start + 1];
+                    fixed (StbTrueType.stbtt_packedchar* chardataPtr = cd)
+                    {
+                        StbTrueType.stbtt_PackFontRange(_context, fontInfo.data, 0, (float)fontsize,
+                            range.Start,
+                            range.End - range.Start + 1,
+                            chardataPtr);
+                    }
+
+                    for (uint i = 0; i < cd.Length; ++i)
+                    {
+                        var glyphInfo = new GlyphInfo {
+                            X = cd[i].x0,
+                            Y = cd[i].y0,
+                            Width = cd[i].x1 - cd[i].x0,
+                            Height = cd[i].y1 - cd[i].y0,
+                            XOffset = cd[i].xoff,
+                            //YOffset = (float)(cd[i].yoff + Math.Round(MathF.Ceiling(ascent * scaleFactor))),
+                            YOffset = cd[i].yoff, // TODO: Why is this better?
+                            XAdvance = (float)Math.Round(cd[i].xadvance)
+                        };
+
+                        _glyphs[i + (uint)range.Start] = glyphInfo;
+                    }
+                }
+            }
+
+            public Font End(float fontsize)
+            {
+                Font font = new();
+                font.FontSize = fontsize;
+                font.Width = bitmapWidth;
+                font.Height = bitmapHeight;
+                font.Glyphs = _glyphs;
+
+                // Offset by minimal offset
+                var minimumOffsetY = 10000f;
+                foreach (var pair in font.Glyphs)
+                    if (pair.Value.YOffset < minimumOffsetY)
+                        minimumOffsetY = pair.Value.YOffset;
+
+                var keys = font.Glyphs.Keys.ToArray();
+                foreach (var key in keys)
+                {
+                    var pc = font.Glyphs[key];
+                    pc.YOffset -= minimumOffsetY;
+                    font.Glyphs[key] = pc;
+                }
+
+                font.Bitmap = new Color32[bitmapWidth * bitmapHeight];
+                for (var i = 0; i < _bitmap.Length; ++i)
+                {
+                    var b = _bitmap[i];
+                    font.Bitmap[i].red = 255;
+                    font.Bitmap[i].green = 255;
+                    font.Bitmap[i].blue = 255;
+
+                    font.Bitmap[i].alpha = b;
+                }
+                // Set the first pixel to white (TexUvWhitePixel)
+                font.Bitmap[0] = new Color32 { red = 255, green = 255, blue = 255, alpha = 255 };
+
+                font.CreateResource();
+
+                return font;
             }
         }
     }
