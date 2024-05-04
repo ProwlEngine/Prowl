@@ -19,161 +19,162 @@ namespace Prowl.Editor.Drawers.NodeSystem
 
         static NodeEditor()
         {
-            var style = ImNodes.GetStyle();
-            var bg = new System.Numerics.Vector4(0.17f, 0.17f, 0.18f, 1f);
-            style.Colors[(int)ImNodesCol.NodeBackground] = ImGui.GetColorU32(bg);
-            style.Colors[(int)ImNodesCol.NodeBackgroundHovered] = ImGui.GetColorU32(bg * 1.5f);
-            style.Colors[(int)ImNodesCol.NodeBackgroundSelected] = ImGui.GetColorU32(bg * 2f);
-            style.Colors[(int)ImNodesCol.NodeOutline] = ImGui.GetColorU32(new System.Numerics.Vector4(0.10f, 0.11f, 0.11f, 0.75f));
-            style.Colors[(int)ImNodesCol.TitleBar] = ImGui.GetColorU32(bg);
-            style.Colors[(int)ImNodesCol.TitleBarHovered] = ImGui.GetColorU32(bg * 1.5f);
-            style.Colors[(int)ImNodesCol.TitleBarSelected] = ImGui.GetColorU32(bg * 2f);
-            style.Colors[(int)ImNodesCol.Link] = ImGui.GetColorU32(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 1f));
-            style.Colors[(int)ImNodesCol.LinkHovered] = ImGui.GetColorU32(new System.Numerics.Vector4(0.19f, 0.37f, 0.55f, 1f));
-            style.Colors[(int)ImNodesCol.LinkSelected] = ImGui.GetColorU32(new System.Numerics.Vector4(0.06f, 0.53f, 0.98f, 1f));
-            style.Colors[(int)ImNodesCol.Pin] = ImGui.GetColorU32(new System.Numerics.Vector4(0.1f, 0.5f, 0.1f, 1f));
-
-            style.Colors[(int)ImNodesCol.GridBackground] = ImGui.GetColorU32(new System.Numerics.Vector4(0.1f, 0.1f, 0.15f, 1f));
-            style.Colors[(int)ImNodesCol.GridLine] = ImGui.GetColorU32(new System.Numerics.Vector4(1f, 1f, 1f, 0.15f));
-
-            style.NodeBorderThickness = 3f;
+            //var style = ImNodes.GetStyle();
+            //var bg = new System.Numerics.Vector4(0.17f, 0.17f, 0.18f, 1f);
+            //style.Colors[(int)ImNodesCol.NodeBackground] = ImGui.GetColorU32(bg);
+            //style.Colors[(int)ImNodesCol.NodeBackgroundHovered] = ImGui.GetColorU32(bg * 1.5f);
+            //style.Colors[(int)ImNodesCol.NodeBackgroundSelected] = ImGui.GetColorU32(bg * 2f);
+            //style.Colors[(int)ImNodesCol.NodeOutline] = ImGui.GetColorU32(new System.Numerics.Vector4(0.10f, 0.11f, 0.11f, 0.75f));
+            //style.Colors[(int)ImNodesCol.TitleBar] = ImGui.GetColorU32(bg);
+            //style.Colors[(int)ImNodesCol.TitleBarHovered] = ImGui.GetColorU32(bg * 1.5f);
+            //style.Colors[(int)ImNodesCol.TitleBarSelected] = ImGui.GetColorU32(bg * 2f);
+            //style.Colors[(int)ImNodesCol.Link] = ImGui.GetColorU32(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 1f));
+            //style.Colors[(int)ImNodesCol.LinkHovered] = ImGui.GetColorU32(new System.Numerics.Vector4(0.19f, 0.37f, 0.55f, 1f));
+            //style.Colors[(int)ImNodesCol.LinkSelected] = ImGui.GetColorU32(new System.Numerics.Vector4(0.06f, 0.53f, 0.98f, 1f));
+            //style.Colors[(int)ImNodesCol.Pin] = ImGui.GetColorU32(new System.Numerics.Vector4(0.1f, 0.5f, 0.1f, 1f));
+            //
+            //style.Colors[(int)ImNodesCol.GridBackground] = ImGui.GetColorU32(new System.Numerics.Vector4(0.1f, 0.1f, 0.15f, 1f));
+            //style.Colors[(int)ImNodesCol.GridLine] = ImGui.GetColorU32(new System.Numerics.Vector4(1f, 1f, 1f, 0.15f));
+            //
+            //style.NodeBorderThickness = 3f;
         }
 
         #region Graph
 
         public virtual bool Draw(NodeGraph graph)
         {
-            // Set or Create the ImGuizmo context
-            ImNodesEditorContextPtr context;
-            if (!contexts.TryGetValue(graph.InstanceID, out context)) {
-                context = ImNodes.EditorContextCreate();
-                contexts[graph.InstanceID] = context;
-            }
-            ImNodes.EditorContextSet(context);
-
-            bool changed = false;
-            ImNodes.BeginNodeEditor();
-            var drawlist = ImGui.GetWindowDrawList();
-            foreach (var node in graph.nodes)
-            {
-                ImNodes.BeginNode(node.InstanceID);
-
-                ImGui.Dummy(new System.Numerics.Vector2(node.Width, 0));
-
-                ImNodes.BeginNodeTitleBar();
-                changed |= OnDrawTitle(node);
-                // Draw Line as a Seperator without ImGui.Seperator()
-                var cPos = ImGui.GetCursorScreenPos();
-                drawlist.AddLine(new(cPos.X, cPos.Y + 3), new(cPos.X + (ImNodes.GetNodeDimensions(node.InstanceID).X - 15), cPos.Y + 3), ImGui.GetColorU32(ImGuiCol.Text));
-                ImNodes.EndNodeTitleBar();
-
-
-                changed |= OnNodeDraw(node);
-
-                ImNodes.EndNode();
-                var nodePos = ImNodes.GetNodeGridSpacePos(node.InstanceID);
-                if (node.position != default && nodePos == default)
-                {
-                    ImNodes.SetNodeGridSpacePos(node.InstanceID, node.position);
-                    nodePos = node.position;
-                }
-                else
-                {
-                    var newPos = ImNodes.GetNodeGridSpacePos(node.InstanceID);
-                    if (newPos != node.position.ToFloat())
-                    {
-                        changed = true;
-                        node.position = newPos;
-                    }
-                }
-            }
-
-            foreach (var node in graph.nodes)
-                foreach (var output in node.Outputs)
-                {
-                    int connectionCount = output.ConnectionCount;
-                    for (int i = 0; i < connectionCount; i++)
-                    {
-                        var link = output.GetConnection(i);
-                        ImNodes.Link(output.GetConnectionInstanceID(i), output.InstanceID, link.InstanceID);
-                    }
-                }
-
-            if (ImNodes.IsEditorHovered() && ImGui.IsMouseClicked(ImGuiMouseButton.Right))
-                ImGui.OpenPopup("NodeCreatePopup");
-            if (ImGui.BeginPopup("NodeCreatePopup"))
-            {
-                foreach (var nodeType in graph.NodeTypes)
-                    if (ImGui.Selectable(nodeType.Name))
-                    {
-                        changed = true;
-                        graph.AddNode(nodeType);
-                    }
-
-                ImGui.EndPopup();
-            }
-
-            if (ImGui.IsKeyPressed(ImGuiKey.Delete))
-            {
-                int numLinks = ImNodes.NumSelectedLinks();
-                if (numLinks > 0)
-                {
-                    int[] ids = new int[numLinks];
-                    ImNodes.GetSelectedLinks(ref ids[0]);
-                    foreach (var id in ids)
-                    {
-                        var nodeAndID = FindLink(graph, id);
-                        if (nodeAndID.Item1 != null)
-                        {
-                            changed = true;
-                            nodeAndID.Item1.Disconnect(nodeAndID.Item2);
-                        }
-                    }
-                }
-                int numNodes = ImNodes.NumSelectedNodes();
-                if (numNodes > 0)
-                {
-                    int[] ids = new int[numNodes];
-                    ImNodes.GetSelectedNodes(ref ids[0]);
-                    foreach (var id in ids)
-                    {
-                        foreach (var node in graph.nodes)
-                            if (node.InstanceID == id)
-                            {
-                                changed = true;
-                                graph.RemoveNode(node);
-                                break;
-                            }
-                    }
-                }
-            }
-
-            //ImNodes.MiniMap();
-            ImNodes.EndNodeEditor();
-
-            int start_node_id = 0;
-            int start_link_id = 0;
-            int end_node_id = 0;
-            int end_link_id = 0;
-            bool createdFromSnaps = false;
-            if (ImNodes.IsLinkCreatedIntPtr(ref start_node_id, ref start_link_id, ref end_node_id, ref end_link_id, ref createdFromSnaps))
-            {
-                changed = true;
-                var output = graph.GetNode(start_node_id);
-                var end = graph.GetNode(end_node_id);
-                var A = output.GetPort(start_link_id);
-                var B = end.GetPort(end_link_id);
-                if (A.CanConnectTo(B))
-                    A.Connect(B);
-            }
-
-            int link_id = 0;
-            if (ImNodes.IsLinkDestroyed(ref link_id))
-            {
-                Debug.Log("Disconnected Link");
-            }
-
-            return changed;
+            //// Set or Create the ImGuizmo context
+            //ImNodesEditorContextPtr context;
+            //if (!contexts.TryGetValue(graph.InstanceID, out context)) {
+            //    context = ImNodes.EditorContextCreate();
+            //    contexts[graph.InstanceID] = context;
+            //}
+            //ImNodes.EditorContextSet(context);
+            //
+            //bool changed = false;
+            //ImNodes.BeginNodeEditor();
+            //var drawlist = ImGui.GetWindowDrawList();
+            //foreach (var node in graph.nodes)
+            //{
+            //    ImNodes.BeginNode(node.InstanceID);
+            //
+            //    ImGui.Dummy(new System.Numerics.Vector2(node.Width, 0));
+            //
+            //    ImNodes.BeginNodeTitleBar();
+            //    changed |= OnDrawTitle(node);
+            //    // Draw Line as a Seperator without ImGui.Seperator()
+            //    var cPos = ImGui.GetCursorScreenPos();
+            //    drawlist.AddLine(new(cPos.X, cPos.Y + 3), new(cPos.X + (ImNodes.GetNodeDimensions(node.InstanceID).X - 15), cPos.Y + 3), ImGui.GetColorU32(ImGuiCol.Text));
+            //    ImNodes.EndNodeTitleBar();
+            //
+            //
+            //    changed |= OnNodeDraw(node);
+            //
+            //    ImNodes.EndNode();
+            //    var nodePos = ImNodes.GetNodeGridSpacePos(node.InstanceID);
+            //    if (node.position != default && nodePos == default)
+            //    {
+            //        ImNodes.SetNodeGridSpacePos(node.InstanceID, node.position);
+            //        nodePos = node.position;
+            //    }
+            //    else
+            //    {
+            //        var newPos = ImNodes.GetNodeGridSpacePos(node.InstanceID);
+            //        if (newPos != node.position.ToFloat())
+            //        {
+            //            changed = true;
+            //            node.position = newPos;
+            //        }
+            //    }
+            //}
+            //
+            //foreach (var node in graph.nodes)
+            //    foreach (var output in node.Outputs)
+            //    {
+            //        int connectionCount = output.ConnectionCount;
+            //        for (int i = 0; i < connectionCount; i++)
+            //        {
+            //            var link = output.GetConnection(i);
+            //            ImNodes.Link(output.GetConnectionInstanceID(i), output.InstanceID, link.InstanceID);
+            //        }
+            //    }
+            //
+            //if (ImNodes.IsEditorHovered() && ImGui.IsMouseClicked(ImGuiMouseButton.Right))
+            //    ImGui.OpenPopup("NodeCreatePopup");
+            //if (ImGui.BeginPopup("NodeCreatePopup"))
+            //{
+            //    foreach (var nodeType in graph.NodeTypes)
+            //        if (ImGui.Selectable(nodeType.Name))
+            //        {
+            //            changed = true;
+            //            graph.AddNode(nodeType);
+            //        }
+            //
+            //    ImGui.EndPopup();
+            //}
+            //
+            //if (ImGui.IsKeyPressed(ImGuiKey.Delete))
+            //{
+            //    int numLinks = ImNodes.NumSelectedLinks();
+            //    if (numLinks > 0)
+            //    {
+            //        int[] ids = new int[numLinks];
+            //        ImNodes.GetSelectedLinks(ref ids[0]);
+            //        foreach (var id in ids)
+            //        {
+            //            var nodeAndID = FindLink(graph, id);
+            //            if (nodeAndID.Item1 != null)
+            //            {
+            //                changed = true;
+            //                nodeAndID.Item1.Disconnect(nodeAndID.Item2);
+            //            }
+            //        }
+            //    }
+            //    int numNodes = ImNodes.NumSelectedNodes();
+            //    if (numNodes > 0)
+            //    {
+            //        int[] ids = new int[numNodes];
+            //        ImNodes.GetSelectedNodes(ref ids[0]);
+            //        foreach (var id in ids)
+            //        {
+            //            foreach (var node in graph.nodes)
+            //                if (node.InstanceID == id)
+            //                {
+            //                    changed = true;
+            //                    graph.RemoveNode(node);
+            //                    break;
+            //                }
+            //        }
+            //    }
+            //}
+            //
+            ////ImNodes.MiniMap();
+            //ImNodes.EndNodeEditor();
+            //
+            //int start_node_id = 0;
+            //int start_link_id = 0;
+            //int end_node_id = 0;
+            //int end_link_id = 0;
+            //bool createdFromSnaps = false;
+            //if (ImNodes.IsLinkCreatedIntPtr(ref start_node_id, ref start_link_id, ref end_node_id, ref end_link_id, ref createdFromSnaps))
+            //{
+            //    changed = true;
+            //    var output = graph.GetNode(start_node_id);
+            //    var end = graph.GetNode(end_node_id);
+            //    var A = output.GetPort(start_link_id);
+            //    var B = end.GetPort(end_link_id);
+            //    if (A.CanConnectTo(B))
+            //        A.Connect(B);
+            //}
+            //
+            //int link_id = 0;
+            //if (ImNodes.IsLinkDestroyed(ref link_id))
+            //{
+            //    Debug.Log("Disconnected Link");
+            //}
+            //
+            //return changed;
+            return false;
         }
 
         (NodePort, int) FindLink(NodeGraph graph, int link_id)
