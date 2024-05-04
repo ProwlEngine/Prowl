@@ -65,13 +65,13 @@ namespace Prowl.Runtime.GUI
                     {
                         g.DrawRect(g.CurrentNode.LayoutData.Rect, Color.white, 2f, 4f);
 
-                        if (Gui.Button("Test", 0, 0, 50, 25))
+                        if (g.Button("Test", 0, 0, 50, 25))
                             Debug.Log("Yey");
 
-                        if(Gui.Button("test button", 0, 50, 75, 25, out var buttonNode))
+                        if(g.Button("test button", 0, 50, 75, 25, out var buttonNode))
                             Debug.Log("Pressed");
 
-                        Gui.InputField(ref testString, 999, Gui.InputFieldFlags.None, 0, 100, 300);
+                        g.InputField(ref testString, 999, Gui.InputFieldFlags.None, 0, 100, 300);
 
                         //buttonNode.Interaction = (interact) => {
                         //    hoveringTest = interact.IsHovering();

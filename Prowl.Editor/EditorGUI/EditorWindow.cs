@@ -161,7 +161,7 @@ namespace Prowl.Editor
             Vector2 shadowC = new(rect.x, rect.y + rect.height);
             g.DrawVerticalShadow(shadowB, shadowC, 20, 0.25f);
 
-            Gui.InputField(ref _searchText, 0x100, Gui.InputFieldFlags.None, 25, 50, 150);
+            g.InputField(ref _searchText, 0x100, Gui.InputFieldFlags.None, 25, 50, 150);
 
             using (g.Node().Width(565).Height(345).Left(25).Top(80).Layout(LayoutType.Column).Clip().Enter())
             {
@@ -181,7 +181,7 @@ namespace Prowl.Editor
             s.BorderThickness = 0;
             s.BtnHoveredColor = GuiStyle.SelectedColor;
             s.WidgetColor = GuiStyle.HoveredColor;
-            if (Gui.Button("Open", 455, 452, 162, 60, s))
+            if (g.Button("Open", 455, 452, 162, 60, s))
             {
                 Project.Open(SelectedProject);
                 isOpened = false;
@@ -248,7 +248,7 @@ namespace Prowl.Editor
             Vector2 shadowC = new(rect.x, rect.y + rect.height);
             g.DrawVerticalShadow(shadowB, shadowC, 20, 0.25f);
 
-            Gui.InputField(ref createName, 0x100, Gui.InputFieldFlags.None, 30, 450, 340);
+            g.InputField(ref createName, 0x100, Gui.InputFieldFlags.None, 30, 450, 340);
             string path = Project.GetPath(createName).FullName;
             if (path.Length > 48)
                 path = string.Concat("...", path.AsSpan(path.Length - 48));
@@ -259,7 +259,7 @@ namespace Prowl.Editor
             s.BorderThickness = 0;
             s.BtnHoveredColor = GuiStyle.SelectedColor;
             s.WidgetColor = GuiStyle.HoveredColor;
-            if (Gui.Button("Create", 445, 435, 172, 77, s))
+            if (g.Button("Create", 445, 435, 172, 77, s))
             {
                 Project.CreateNew(createName);
                 currentTab = 0;
