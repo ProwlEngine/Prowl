@@ -143,7 +143,7 @@ namespace Prowl.Editor.Assets
             {
                 Reimport(new(file));
                 var color = ImGui.ColorConvertU32ToFloat4(AssetsWindow.GetFileColor(Path.GetExtension(file)));
-                EditorGui.Notify("Imported", $"{ToRelativePath(new(file))}!", color, ImGuiToastType.Success);
+                Debug.Log("Imported: " + $"{ToRelativePath(new(file))}!");
             }
 
             if (doUnload)
@@ -230,7 +230,7 @@ namespace Prowl.Editor.Assets
                 var newMeta = new MetaFile(fileInfo);
                 if (newMeta.importer == null)
                 {
-                    EditorGui.Notify("No Importer Found", $"No importer found for file:\n{fileInfo.FullName}", new Color(0.8f, 0.1f, 0.1f, 1), ImGuiToastType.Error);
+                    Debug.LogError($"No importer found for file:\n{fileInfo.FullName}");
                     return false;
                 }
                 newMeta.Save();
@@ -322,19 +322,19 @@ namespace Prowl.Editor.Assets
             // make sure path exists
             if (!File.Exists(assetFile.FullName))
             {
-                EditorGui.Notify("Import Failed", $"Failed to import {ToRelativePath(assetFile)}. Asset does not exist.", color, ImGuiToastType.Error);
+                Debug.LogError( $"Failed to import {ToRelativePath(assetFile)}. Asset does not exist.");
                 return false;
             }
 
             var meta = MetaFile.Load(assetFile);
             if (meta == null)
             {
-                EditorGui.Notify("Import Failed", $"No valid meta file found for asset: {ToRelativePath(assetFile)}", color, ImGuiToastType.Error);
+                Debug.LogError($"No valid meta file found for asset: {ToRelativePath(assetFile)}");
                 return false;
             }
             if (meta.importer == null)
             {
-                EditorGui.Notify("Import Failed", $"No valid importer found for asset: {ToRelativePath(assetFile)}", color, ImGuiToastType.Error);
+                Debug.LogError($"No valid importer found for asset: {ToRelativePath(assetFile)}");
                 return false;
             }
 
@@ -346,13 +346,13 @@ namespace Prowl.Editor.Assets
             }
             catch (Exception e)
             {
-                EditorGui.Notify("Importer Failed", $"Failed to import {ToRelativePath(assetFile)}. Reason: {e.Message}", color, ImGuiToastType.Error);
+                Debug.LogError($"Failed to import {ToRelativePath(assetFile)}. Reason: {e.Message}");
                 return false; // Import failed
             }
 
             if (!ctx.HasMain)
             {
-                EditorGui.Notify("Importer Failed", $"Failed to import {ToRelativePath(assetFile)}. No main object found.", color, ImGuiToastType.Error);
+                Debug.LogError($"Failed to import {ToRelativePath(assetFile)}. No main object found.");
                 return false; // Import failed no Main Object
             }
 
@@ -465,7 +465,6 @@ namespace Prowl.Editor.Assets
             if (!File.Exists(serializedAssetPath.FullName))
                 if (!Reimport(asset)) {
                     Debug.LogError($"Failed to import {serializedAssetPath.FullName}!");
-                    EditorGui.Notify($"Failed to Import {serializedAssetPath.FullName}", "Reason: Failed to import asset.", new Color(0.8f, 0.1f, 0.1f, 1), ImGuiToastType.Error);
                     throw new Exception($"Failed to import {serializedAssetPath.FullName}");
                 }
             try {
@@ -482,7 +481,6 @@ namespace Prowl.Editor.Assets
                 return serializedAsset;
             } catch {
                 Debug.LogError($"Failed to load serialized asset {serializedAssetPath.FullName}!");
-                EditorGui.Notify($"Failed to load serialized asset {serializedAssetPath.FullName}", "", new Color(0.8f, 0.1f, 0.1f, 1), ImGuiToastType.Error);
                 return null; // Failed file might be in use?
             }
         }

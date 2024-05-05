@@ -1132,6 +1132,8 @@ namespace Prowl.Runtime.GUI.Graphics
 
                     idxoffset += (int)cmdPtr.ElemCount;
                 }
+                // Clear Depth Buffer
+                _gl.Clear(ClearBufferMask.DepthBufferBit);
             }
 
             // Destroy the temporary VAO

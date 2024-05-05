@@ -129,7 +129,7 @@ public class EditorMainMenubar {
 
         if (ImGui.BeginMenu("Window")) {
             if(ImGui.MenuItem("Asset Browser")) { new AssetBrowserWindow(); }
-            if(ImGui.MenuItem("Console")) { new ConsoleWindow(); }
+            if(ImGui.MenuItem("Console")) { new OldConsoleWindow(); }
             if(ImGui.MenuItem("Hierarchy")) { new HierarchyWindow(); }
             if(ImGui.MenuItem("Inspector")) { new InspectorWindow(); }
             if(ImGui.MenuItem("Viewport")) { new ViewportWindow(); }

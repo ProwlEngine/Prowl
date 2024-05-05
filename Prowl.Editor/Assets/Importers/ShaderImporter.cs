@@ -17,13 +17,6 @@ namespace Prowl.Editor.Assets
 
         public override void Import(SerializedAsset ctx, FileInfo assetPath)
         {
-            // Just confirm the format, We should have todo this but technically someone could call ImportShader manually skipping the existing format check
-            if (!Supported.Contains(assetPath.Extension))
-            {
-                ImGuiNotify.InsertNotification("Failed to Import Shader.", new(0.8f, 0.1f, 0.1f, 1f), "Format Not Supported: " + assetPath.Extension);
-                return;
-            }
-
             currentAssetPath = assetPath;
 
             string shaderScript = File.ReadAllText(assetPath.FullName);
@@ -165,7 +158,7 @@ namespace Prowl.Editor.Assets
 
             if (!file.Exists)
             {
-                ImGuiNotify.InsertNotification("Failed to Import Shader.", new(0.8f, 0.1f, 0.1f, 1f), "Include not found: " + file.FullName);
+                Debug.LogError("Failed to Import Shader. Include not found: " + file.FullName);
                 return "";
             }
 

@@ -111,7 +111,7 @@ namespace Prowl.Runtime.GUI
             var wrap = rect.width;
             var textSize = font.CalcTextSize(text, fontSize, 0, (float)wrap);
             pos.x += (rect.width - textSize.x) * 0.5f;
-            pos.y += (rect.height - (textSize.y * 0.5)) * 0.5f;
+            pos.y += (rect.height - (textSize.y * 0.75f)) * 0.5f;
             DrawText(font, text, fontSize, pos, color, wrap);
         }
 

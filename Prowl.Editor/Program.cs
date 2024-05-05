@@ -56,7 +56,21 @@ public static class Program
                     //new ViewportWindow();
                     //new GameWindow();
                     //new InspectorWindow();
-                    //new ConsoleWindow();
+                    var test = new ConsoleWindow();
+                    test._x = 50;
+                    test._y = 50;
+                    test = new ConsoleWindow();
+                    test._x = 150;
+                    test._y = 150;
+                    test = new ConsoleWindow();
+                    test._x = 250;
+                    test._y = 250;
+                    test = new ConsoleWindow();
+                    test._x = 350;
+                    test._y = 350;
+                    test = new ConsoleWindow();
+                    test._x = 450;
+                    test._y = 450;
                     //new AssetBrowserWindow();
                     //new AssetsWindow();
                 }
@@ -108,12 +122,6 @@ public static class Program
             EditorGui.Update();
 
             Graphics.EndFrame();
-
-            Rect screenRect = new Rect(0, 0, Runtime.Graphics.Resolution.x, Runtime.Graphics.Resolution.y);
-            EditorGui.Gui.ProcessFrame(screenRect, 1f, (g) => {
-                OnUpdateEditor?.Invoke();
-                OnDrawEditor?.Invoke();
-            });
 
             //if (Project.HasProject) {
             //
@@ -261,25 +269,11 @@ public static class Program
                     // Reload the External Assemblies
                     AssemblyManager.LoadExternalAssembly(Project.Editor_Assembly_DLL, true);
                     AssemblyManager.LoadExternalAssembly(Project.Assembly_DLL, true);
-
-                    ImGuiNotify.InsertNotification(new ImGuiToast() {
-                        Title = "Project Recompiled!",
-                        Content = "Successfully recompiled project scripts.",
-                        Color = new Vector4(1f),
-                        Type = ImGuiToastType.Success
-                    });
                 }
                 catch (Exception e)
                 {
                     Runtime.Debug.LogError($"Error reloading assemblies: {e.Message}");
                     Runtime.Debug.LogError(e.StackTrace);
-
-                    ImGuiNotify.InsertNotification(new ImGuiToast() {
-                        Title = "Project Failed to Recompiled!",
-                        Content = e.Message,
-                        Color = new Vector4(1f),
-                        Type = ImGuiToastType.Error
-                    });
                 }
                 finally
                 {
@@ -292,13 +286,6 @@ public static class Program
             else
             {
                 Runtime.Debug.LogError("Cannot reload assemblies, No project loaded.");
-
-                ImGuiNotify.InsertNotification(new ImGuiToast() {
-                    Title = "Recompilation Failed!",
-                    Content = "No Project Loaded.",
-                    Color = new Vector4(0.8f, 0.2f, 0.2f, 1),
-                    Type = ImGuiToastType.Error
-                });
             }
         }
     }

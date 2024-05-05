@@ -5,14 +5,14 @@ using Prowl.Editor.Editor.Preferences;
 
 namespace Prowl.Editor.EditorWindows;
 
-public class ConsoleWindow : OldEditorWindow {
+public class OldConsoleWindow : OldEditorWindow {
 
     protected override ImGuiWindowFlags Flags { get; } = ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.MenuBar;
     private uint _logCount;
     private readonly List<LogMessage> _logMessages;
     private int _maxLogs = 100;
 
-    public ConsoleWindow() : base()
+    public OldConsoleWindow() : base()
     {
         Title = FontAwesome6.Terminal + " Console";
         _logMessages = new List<LogMessage>();

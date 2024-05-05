@@ -387,7 +387,7 @@ public class AssetBrowserWindow : OldEditorWindow
                 {
                     string newPath = Path.Combine(file.Directory.FullName, newName);
                     if (File.Exists(newPath))
-                        EditorGui.Notify("A file with the same name already exists.");
+                        Debug.LogError("A file with the same name already exists.");
                     else
                     {
                         AssetDatabase.Rename(file, newName);
@@ -416,7 +416,7 @@ public class AssetBrowserWindow : OldEditorWindow
                 {
                     string newPath = Path.Combine((entry as DirectoryInfo).Parent.FullName, newName);
                     if (Directory.Exists(newPath))
-                        EditorGui.Notify("A directory with the same name already exists.");
+                        Debug.LogError("A directory with the same name already exists.");
                     else
                     {
                         (entry as DirectoryInfo).MoveTo(newPath);

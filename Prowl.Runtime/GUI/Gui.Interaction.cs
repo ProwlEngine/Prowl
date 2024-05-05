@@ -10,11 +10,11 @@ namespace Prowl.Runtime.GUI
 
         private Dictionary<ulong, Interactable> _interactables = [];
 
-        internal ulong FocusID = 0;
-        internal ulong? ActiveID = 0;
-        internal ulong HoveredID = 0;
-        internal ulong PreviousInteractableID = 0;
-        internal Rect ActiveRect = Rect.Zero;
+        public ulong FocusID = 0;
+        public ulong? ActiveID = 0;
+        public ulong HoveredID = 0;
+        public ulong PreviousInteractableID = 0;
+        public Rect ActiveRect = Rect.Zero;
 
         private void StartInteractionFrame()
         {
@@ -117,11 +117,11 @@ namespace Prowl.Runtime.GUI
         public bool TakeFocus()
         {
             // Clicking on another Interactable will remove focus
-            if (_gui.FocusID == _id && _gui.HoveredID != _id && _gui.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+            if (_gui.FocusID == _id && _gui.HoveredID != _id && _gui.IsPointerClick(Silk.NET.Input.MouseButton.Left))
                 _gui.FocusID = 0;
 
             // If we are hovered and active, we are focused
-            if (_gui.HoveredID == _id && _gui.ActiveID == _id && !_gui.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+            if (_gui.HoveredID == _id && _gui.ActiveID == _id && !_gui.IsPointerClick(Silk.NET.Input.MouseButton.Left))
             {
                 _gui.FocusID = _id;
                 return true;

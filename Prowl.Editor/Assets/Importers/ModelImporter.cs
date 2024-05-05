@@ -34,7 +34,7 @@ namespace Prowl.Editor.Assets
 
         void Failed(string reason)
         {
-            ImGuiNotify.InsertNotification("Failed to Import Model.", new(0.8f, 0.1f, 0.1f, 1f), reason);
+            Debug.LogError("Failed to Import Model. Reason: " + reason);
             throw new Exception(reason);
         }
 

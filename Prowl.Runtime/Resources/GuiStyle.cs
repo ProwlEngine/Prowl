@@ -6,6 +6,7 @@ namespace Prowl.Runtime
     {
         public static Color HoveredColor => new(0.19f, 0.37f, 0.55f, 1.00f);
         public static Color SelectedColor => new(0.06f, 0.53f, 0.98f, 1.00f);
+        public static Color HeaderColor => new(0.08f, 0.08f, 0.09f, 1.00f);
         public static Color WindowBGColor => new(0.17f, 0.17f, 0.18f, 1.00f);
         public static Color FrameBGColor => new(0.10f, 0.11f, 0.11f, 1.00f);
 

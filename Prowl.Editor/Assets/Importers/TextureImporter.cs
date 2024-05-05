@@ -17,12 +17,6 @@ namespace Prowl.Editor.Assets
 
         public override void Import(SerializedAsset ctx, FileInfo assetPath)
         {
-            if (!Supported.Contains(assetPath.Extension, StringComparer.OrdinalIgnoreCase))
-            {
-                ImGuiNotify.InsertNotification("Failed to Import Texture.", new(0.8f, 0.1f, 0.1f, 1f), "Format Not Supported: " + assetPath.Extension);
-                return;
-            }
-
             // Load the Texture into a TextureData Object and serialize to Asset Folder
             Texture2D texture = Texture2DLoader.FromFile(assetPath.FullName);
 

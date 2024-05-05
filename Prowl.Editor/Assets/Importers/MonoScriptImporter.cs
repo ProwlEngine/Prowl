@@ -20,8 +20,6 @@ namespace Prowl.Editor.Assets
             Program.RegisterReloadOfExternalAssemblies();
 
             lastReload = DateTime.UtcNow;
-
-            ImGuiNotify.InsertNotification("Scripts Reloaded.", new(0.75f, 0.35f, 0.20f, 1.00f), assetPath.FullName);
         }
     }
 
