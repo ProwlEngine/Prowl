@@ -109,6 +109,7 @@ namespace Prowl.Runtime.GUI
             return false;
         }
 
+        public bool Checkbox(ref bool value, Offset x, Offset y, out LayoutNode node, GuiStyle? style = null)
         {
             style ??= new();
             var g = Gui.ActiveGUI;
