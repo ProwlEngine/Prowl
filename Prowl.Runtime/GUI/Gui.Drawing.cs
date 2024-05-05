@@ -15,8 +15,8 @@ namespace Prowl.Runtime.GUI
             _drawList[CurrentZIndex].PopClipRect();
         }
 
-        public void DrawRect(Rect screenRect, Color color, float thickness = 1f, float roundness = 0.0f) => DrawRect(new(screenRect.x, screenRect.y), new(screenRect.width, screenRect.height), color, thickness, roundness);
-        public void DrawRect(Vector2 topleft, Vector2 size, Color color, float thickness = 1f, float roundness = 0.0f)
+        public void DrawRect(Rect screenRect, Color color, float thickness = 1f, float roundness = 0.0f, int rounded_corners = 15) => DrawRect(new(screenRect.x, screenRect.y), new(screenRect.width, screenRect.height), color, thickness, roundness, rounded_corners);
+        public void DrawRect(Vector2 topleft, Vector2 size, Color color, float thickness = 1f, float roundness = 0.0f, int rounded_corners = 15)
         {
             //if(CurrentNode.DrawList == -1)
             //    CurrentNode.DrawList = CreateDrawList(CurrentNode);
@@ -24,15 +24,15 @@ namespace Prowl.Runtime.GUI
             //var drawlist = drawLists[CurrentNode.DrawList];
             uint col = UIDrawList.ColorConvertFloat4ToU32(color);
             var pos = topleft;
-            _drawList[CurrentZIndex].AddRect(pos, pos + size, col, roundness, 15, thickness);
+            _drawList[CurrentZIndex].AddRect(pos, pos + size, col, roundness, rounded_corners, thickness);
         }
 
-        public void DrawRectFilled(Rect screenRect, Color color, float roundness = 0.0f) => DrawRectFilled(new(screenRect.x, screenRect.y), new(screenRect.width, screenRect.height), color, roundness);
-        public void DrawRectFilled(Vector2 topleft, Vector2 size, Color color, float roundness = 0.0f)
+        public void DrawRectFilled(Rect screenRect, Color color, float roundness = 0.0f, int rounded_corners = 15) => DrawRectFilled(new(screenRect.x, screenRect.y), new(screenRect.width, screenRect.height), color, roundness, rounded_corners);
+        public void DrawRectFilled(Vector2 topleft, Vector2 size, Color color, float roundness = 0.0f, int rounded_corners = 15)
         {
             uint col = UIDrawList.ColorConvertFloat4ToU32(color);
             var pos = topleft;
-            _drawList[CurrentZIndex].AddRectFilled(pos, pos + size, col, roundness, 15);
+            _drawList[CurrentZIndex].AddRectFilled(pos, pos + size, col, roundness, rounded_corners);
         }
 
         public void DrawVerticalShadow(Vector2 top, Vector2 bottom, float x, float strength)
