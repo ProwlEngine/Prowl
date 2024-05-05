@@ -25,7 +25,8 @@ public static class Program
 
     public static int Main(string[] args)
     {
-        Application.Initialize += () => {
+        Application.Initialize += () =>
+        {
             // Editor-specific initialization code
             EditorGui.Initialize();
             ImporterAttribute.GenerateLookUp();
@@ -35,7 +36,8 @@ public static class Program
             new ProjectsWindow();
         };
 
-        Application.Update += (delta) => {
+        Application.Update += (delta) =>
+        {
             //EditorGui.SetupDock();
 
             AssetDatabase.InternalUpdate();
@@ -54,7 +56,7 @@ public static class Program
                     //new EditorMainMenubar();
                     //new HierarchyWindow();
                     //new ViewportWindow();
-                    //new GameWindow();
+                    new GameWindow();
                     //new InspectorWindow();
                     var test = new ConsoleWindow();
                     test._x = 50;
@@ -103,7 +105,7 @@ public static class Program
                 try
                 {
                     // Only handle input if the game window is focused
-                    Input.Enabled = GameWindow.IsFocused;
+                    Input.Enabled = OldGameWindow.IsFocused;
                     SceneManager.Update();
                     Input.Enabled = true;
                 }
@@ -113,10 +115,11 @@ public static class Program
                 }
             }
 
-            GameWindow.IsFocused = false;
+            OldGameWindow.IsFocused = false;
         };
 
-        Application.Render += (delta) => {
+        Application.Render += (delta) =>
+        {
             Graphics.StartFrame();
 
             EditorGui.Update();
@@ -229,7 +232,8 @@ public static class Program
             //}
         };
 
-        Application.Quitting += () => {
+        Application.Quitting += () =>
+        {
         };
 
 
