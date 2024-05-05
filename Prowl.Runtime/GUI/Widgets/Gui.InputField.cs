@@ -1,6 +1,5 @@
 ﻿using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.TextEdit;
-using SharpFont.Fnt;
 using Silk.NET.Input;
 using System;
 

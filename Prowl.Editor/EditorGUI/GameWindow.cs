@@ -59,28 +59,28 @@ public class GameWindow : EditorWindow
         // {
         //     previouslyPlaying = true;
         //     if (GeneralPreferences.Instance.AutoFocusGameView)
-        //         ImGui.SetWindowFocus();
+        //         ImGg.SetWindowFocus();
         // }
         // else if (previouslyPlaying && !Application.isPlaying)
         // {
         //     previouslyPlaying = false;
         // }
 
-        // IsFocused |= ImGui.IsWindowFocused();
+        // IsFocused |= ImGg.IsWindowFocused();
 
-        ui.CurrentNode.Layout(Runtime.GUI.LayoutType.Column).AutoScaleChildren();
+        g.CurrentNode.Layout(Runtime.GUI.LayoutType.Column).AutoScaleChildren();
 
-        using (ui.Node().MaxHeight(HeaderHeight).Enter())
+        using (g.Node().MaxHeight(HeaderHeight).Enter())
         {
-            var innerRect = ui.CurrentNode.LayoutData.InnerRect.Position;
-            ui.DrawText(FontAwesome6.Display, 20, innerRect, Color.white);
+            var innerRect = g.CurrentNode.LayoutData.InnerRect.Position;
+            g.DrawText(FontAwesome6.Display, 20, innerRect, Color.white);
         }
 
-        using (ui.Node().Width(Size.Percentage(1f)).Enter())
+        using (g.Node().Width(Size.Percentage(1f)).Enter())
         {
-            var innerRect = ui.CurrentNode.LayoutData.Rect;
+            var innerRect = g.CurrentNode.LayoutData.Rect;
 
-            ui.DrawRectFilled(innerRect, Color.black);
+            g.DrawRectFilled(innerRect, Color.black);
 
             var renderSize = innerRect;
             renderSize.width = Mathf.Max(renderSize.width, 1);
@@ -95,8 +95,8 @@ public class GameWindow : EditorWindow
 
             if (mainCam == null)
             {
-                ui.DrawRect(innerRect, Color.red);
-                ui.DrawText(UIDrawList.DefaultFont, "No Camera found", 20f, innerRect, Color.red);
+                g.DrawRect(innerRect, Color.red);
+                g.DrawText(UIDrawList.DefaultFont, "No Camera found", 20f, innerRect, Color.red);
                 return;
             }
 
@@ -129,38 +129,38 @@ public class GameWindow : EditorWindow
             {
                 double width = renderSize.width;
                 double height = width / aspect;
-                // ImGui.SetCursorPosY(ImGui.GetCursorPosY() + ((float)(renderSize.height - height) / 2f));
+                // ImGg.SetCursorPosY(ImGg.GetCursorPosY() + ((float)(renderSize.height - height) / 2f));
                 double yMin = innerRect.Position.y + ((renderSize.height - height) / 2f);
-                ui.DrawImage(RenderTarget.InternalTextures[0], new Vector2(innerRect.Min.x, yMin), innerRect.Max, Color.black);
+                g.DrawImage(RenderTarget.InternalTextures[0], new Vector2(innerRect.Min.x, yMin), innerRect.Max, Color.black);
             }
             else
             {
                 double height = renderSize.height;
                 double width = height * aspect;
                 double xMin = innerRect.Position.x + ((renderSize.width - width) / 2f);
-                ui.DrawImage(RenderTarget.InternalTextures[0], new Vector2(xMin, innerRect.Min.y), innerRect.Max, Color.black);
+                g.DrawImage(RenderTarget.InternalTextures[0], new Vector2(xMin, innerRect.Min.y), innerRect.Max, Color.black);
             }
         }
 
         /*
-        ImGui.BeginChild("Header", new System.Numerics.Vector2(0, HeaderHeight), ImGuiChildFlags.Border, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        ImGg.BeginChild("Header", new System.Numerics.Vector2(0, HeaderHeight), ImGuiChildFlags.Border, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
         {
             bool changed = false;
-            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 3);
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 5);
-            ImGui.Text(FontAwesome6.Display);
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth(50);
-            if (ImGui.InputInt("##Width", ref GeneralPreferences.Instance.CurrentWidth, 0, 0, ImGuiInputTextFlags.EnterReturnsTrue))
+            ImGg.SetCursorPosY(ImGg.GetCursorPosY() + 3);
+            ImGg.SetCursorPosX(ImGg.GetCursorPosX() + 5);
+            ImGg.Text(FontAwesome6.Display);
+            ImGg.SameLine();
+            ImGg.SetNextItemWidth(50);
+            if (ImGg.InputInt("##Width", ref GeneralPreferences.Instance.CurrentWidth, 0, 0, ImGuiInputTextFlags.EnterReturnsTrue))
             {
                 GeneralPreferences.Instance.CurrentWidth = Math.Clamp(GeneralPreferences.Instance.CurrentWidth, 1, 7680);
                 GeneralPreferences.Instance.Resolution = Resolutions.custom;
                 changed = true;
                 RefreshRenderTexture();
             }
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth(50);
-            if (ImGui.InputInt("##Height", ref GeneralPreferences.Instance.CurrentHeight, 0, 0, ImGuiInputTextFlags.EnterReturnsTrue))
+            ImGg.SameLine();
+            ImGg.SetNextItemWidth(50);
+            if (ImGg.InputInt("##Height", ref GeneralPreferences.Instance.CurrentHeight, 0, 0, ImGuiInputTextFlags.EnterReturnsTrue))
             {
                 GeneralPreferences.Instance.CurrentHeight = Math.Clamp(GeneralPreferences.Instance.CurrentHeight, 1, 4320);
                 GeneralPreferences.Instance.Resolution = Resolutions.custom;
@@ -168,11 +168,11 @@ public class GameWindow : EditorWindow
                 RefreshRenderTexture();
             }
 
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth(100);
+            ImGg.SameLine();
+            ImGg.SetNextItemWidth(100);
             string[] resolutionNames = Enum.GetValues(typeof(Resolutions)).Cast<Resolutions>().Select(r => GetDescription(r)).ToArray();
             int currentIndex = (int)GeneralPreferences.Instance.Resolution;
-            if (ImGui.Combo("##ResolutionCombo", ref currentIndex, resolutionNames, resolutionNames.Length))
+            if (ImGg.Combo("##ResolutionCombo", ref currentIndex, resolutionNames, resolutionNames.Length))
             {
                 GeneralPreferences.Instance.Resolution = (Resolutions)Enum.GetValues(typeof(Resolutions)).GetValue(currentIndex);
                 UpdateResolution(GeneralPreferences.Instance.Resolution);
@@ -180,13 +180,13 @@ public class GameWindow : EditorWindow
                 RefreshRenderTexture();
             }
 
-            ImGui.SameLine();
+            ImGg.SameLine();
             // Auto Focus
-            ImGui.SetCursorPosX(ImGui.GetWindowWidth() - 200);
-            changed |= ImGui.Checkbox("Auto Focus", ref GeneralPreferences.Instance.AutoFocusGameView);
-            ImGui.SameLine();
+            ImGg.SetCursorPosX(ImGg.GetWindowWidth() - 200);
+            changed |= ImGg.Checkbox("Auto Focus", ref GeneralPreferences.Instance.AutoFocusGameView);
+            ImGg.SameLine();
             // Auto Refresh
-            changed |= ImGui.Checkbox("Auto Refresh", ref GeneralPreferences.Instance.AutoRefreshGameView);
+            changed |= ImGg.Checkbox("Auto Refresh", ref GeneralPreferences.Instance.AutoRefreshGameView);
 
             if (changed)
             {
@@ -194,13 +194,13 @@ public class GameWindow : EditorWindow
                 GeneralPreferences.Instance.Save();
             }
         }
-        ImGui.EndChild();
+        ImGg.EndChild();
 
-        var renderSize = ImGui.GetContentRegionAvail();
+        var renderSize = ImGg.GetContentRegionAvail();
 
-        var min = ImGui.GetCursorScreenPos();
+        var min = ImGg.GetCursorScreenPos();
         var max = new System.Numerics.Vector2(min.X + renderSize.X, min.Y + renderSize.Y);
-        ImGui.GetWindowDrawList().AddRectFilled(min, max, ImGui.GetColorU32(new System.Numerics.Vector4(0, 0, 0, 1)));
+        ImGg.GetWindowDrawList().AddRectFilled(min, max, ImGg.GetColorU32(new System.Numerics.Vector4(0, 0, 0, 1)));
 
         // Find Camera to render
         var allCameras = EngineObject.FindObjectsOfType<Camera>();
@@ -243,15 +243,15 @@ public class GameWindow : EditorWindow
         {
             float width = renderSize.X;
             float height = width / aspect;
-            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + ((renderSize.Y - height) / 2f));
-            ImGui.Image((IntPtr)(RenderTarget.InternalTextures[0].Handle as GLTexture)!.Handle, new System.Numerics.Vector2(width, height), new System.Numerics.Vector2(0, 1), new System.Numerics.Vector2(1, 0));
+            ImGg.SetCursorPosY(ImGg.GetCursorPosY() + ((renderSize.Y - height) / 2f));
+            ImGg.Image((IntPtr)(RenderTarget.InternalTextures[0].Handle as GLTexture)!.Handle, new System.Numerics.Vector2(width, height), new System.Numerics.Vector2(0, 1), new System.Numerics.Vector2(1, 0));
         }
         else
         {
             float height = renderSize.Y;
             float width = height * aspect;
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((renderSize.X - width) / 2f));
-            ImGui.Image((IntPtr)(RenderTarget.InternalTextures[0].Handle as GLTexture)!.Handle, new System.Numerics.Vector2(width, height), new System.Numerics.Vector2(0, 1), new System.Numerics.Vector2(1, 0));
+            ImGg.SetCursorPosX(ImGg.GetCursorPosX() + ((renderSize.X - width) / 2f));
+            ImGg.Image((IntPtr)(RenderTarget.InternalTextures[0].Handle as GLTexture)!.Handle, new System.Numerics.Vector2(width, height), new System.Numerics.Vector2(0, 1), new System.Numerics.Vector2(1, 0));
         }
         */
     }

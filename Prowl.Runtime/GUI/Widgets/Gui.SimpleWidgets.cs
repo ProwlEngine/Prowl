@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Reflection.Emit;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
 
@@ -108,46 +109,35 @@ namespace Prowl.Runtime.GUI
             return false;
         }
 
-        /*
-        public bool InputField(ref string value, uint maxLength, InputFieldFlags flags, Offset x, Offset y, Size width, GuiStyle? style = null)
         {
             style ??= new();
             var g = Gui.ActiveGUI;
-            bool multiline = ((flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline);
-            using (g.Node().Left(x).Top(y).Width(width).Height((multiline ? style.FontSize * 8 : style.FontSize) + 2.5).Padding(5).Enter())
+            using ((node = g.Node()).Left(x).Top(y).Width(20).Height(20).Padding(2).Enter())
             {
-                Interactable interact = g.GetInteractable(true, true);
+                Interactable interact = g.GetInteractable();
 
-                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.WidgetColor, style.WidgetRoundness);
-                if (style.BorderThickness > 0)
-                    g.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
+                    var col = g.ActiveID == interact.ID ? style.BtnActiveColor :
+                              g.HoveredID == interact.ID ? style.BtnHoveredColor : style.WidgetColor;
 
-                interact.TakeFocus();
+                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, style.WidgetRoundness);
+                    if (style.BorderThickness > 0)
+                        g.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
 
-                g.PushClip(g.CurrentNode.LayoutData.InnerRect);
-                var ValueChanged = false;
-                if (g.FocusID == interact.ID || g.ActiveID == interact.ID)
+                if (value)
                 {
-                    ValueChanged = OnProcess(style, interact, ref value, maxLength, flags);
-                }
-                else
-                {
-                    OnProcess(style, interact, ref value, maxLength, flags | InputFieldFlags.OnlyDisplay);
-                }
-                g.PopClip();
-
-                if (multiline)
-                {
-                    Vector2 textSize = (style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont).CalcTextSize(value, 0, g.CurrentNode.LayoutData.InnerRect.width);
-                    // Dummy node to update ContentRect
-                    g.Node().Width(textSize.x).Height(textSize.y).IgnoreLayout();
-                    g.ScrollV();
+                    var check = g.CurrentNode.LayoutData.Rect;
+                    check.Expand(-4);
+                    g.DrawRectFilled(check, style.TextHighlightColor, style.WidgetRoundness);
                 }
 
-                return ValueChanged;
+                if (interact.TakeFocus())
+                {
+                    value = !value;
+                    return true;
+                }
+                return false;
             }
         }
-        */
 
     }
 }
