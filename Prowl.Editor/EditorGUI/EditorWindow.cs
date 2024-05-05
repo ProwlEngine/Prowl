@@ -19,6 +19,8 @@ namespace Prowl.Editor
         protected virtual bool IsDockable { get; } = true;
         protected virtual bool LockSize { get; } = false;
         protected virtual bool BackgroundFade { get; } = false;
+        protected virtual bool RoundCorners { get; } = true;
+        protected virtual double Padding { get; } = 8;
 
         protected bool isOpened = true;
         protected Runtime.GUI.Gui g => Runtime.GUI.Gui.ActiveGUI;
@@ -91,7 +93,7 @@ namespace Prowl.Editor
                     height = DockSize.y;
                 }
 
-                using (g.Node().Width(width).Height(height).Left(_x).Top(_y).Layout(LayoutType.Column).AutoScaleChildren().Enter())
+                using (g.Node().Width(width).Height(height).Padding(Padding).Left(_x).Top(_y).Layout(LayoutType.Column).AutoScaleChildren().Enter())
                 {
                     // TODO: Resize
 
@@ -99,7 +101,7 @@ namespace Prowl.Editor
                     {
                         using (g.Node().Width(Size.Percentage(1f)).MaxHeight(20).Enter())
                         {
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.HeaderColor);
+                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBGColor, 10, RoundCorners ? 3 : 0);
 
                             if (IsDocked && Leaf.LeafWindows.Count > 0)
                             {
@@ -208,13 +210,13 @@ namespace Prowl.Editor
 
                         using (g.Node().Width(Size.Percentage(1f)).Clip().Enter())
                         {
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBGColor);
+                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBGColor, 10, RoundCorners ? 12 : 0);
                             Draw();
                         }
                     }
                     else
                     {
-                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBGColor);
+                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBGColor, 10, RoundCorners ? 12 : 0);
                         Draw();
                     }
                 }
