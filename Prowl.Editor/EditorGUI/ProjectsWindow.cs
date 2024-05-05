@@ -19,6 +19,8 @@ namespace Prowl.Editor
         protected override double Height { get; } = 512;
         protected override bool BackgroundFade { get; } = true;
         protected override bool TitleBar { get; } = false;
+        protected override bool RoundCorners => false;
+        protected override double Padding => 0;
 
         public ProjectsWindow() : base()
         {
