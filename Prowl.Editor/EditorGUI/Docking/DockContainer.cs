@@ -12,7 +12,7 @@ namespace Prowl.Editor.EditorGUI.Docking
 
         public void Update(Rect root)
         {
-            Root.UpdateRecursive(Vector2.zero, root.Size);
+            Root.UpdateRecursive(root.Min, root.Max);
         }
 
         public DockNode TraceLeaf(double x, double y)
