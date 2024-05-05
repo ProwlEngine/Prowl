@@ -59,7 +59,7 @@ namespace Prowl.Editor
 
                     int width = (int)g.CurrentNode.LayoutData.InnerRect.width;
                     var pos = g.CurrentNode.LayoutData.InnerRect.Position;
-                    var size = UIDrawList.DefaultFont.CalcTextSize(_logMessages[i].Message, width);
+                    var size = UIDrawList.DefaultFont.CalcTextSize(_logMessages[i].Message, 0, width);
 
                     var rect = new Rect(pos.x, pos.y + height, width, size.y);
                     g.DrawRectFilled(rect, new(0.2f, 0.2f, 0.2f, 1.0f));
