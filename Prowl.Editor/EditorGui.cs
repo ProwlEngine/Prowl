@@ -81,7 +81,7 @@ public static class EditorGui
             if (DraggingWindow == null) 
             {
                 Vector2 cursorPos = g.PointerPos;
-                if (!g.IsPointerMoving && g.FocusID == 0)
+                if (!g.IsPointerMoving && (g.ActiveID == 0 || g.ActiveID == null))
                 {
                     DockNode node = Container.Root.TraceSeparator(cursorPos.x, cursorPos.y);
                     if (node != null)
