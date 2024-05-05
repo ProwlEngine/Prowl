@@ -61,10 +61,12 @@ public static class EditorGui
         EditorGui.Gui.ProcessFrame(screenRect, 1f, (g) => {
 
             Container ??= new();
-            Container.Update(g.ScreenRect);
+            var rect = g.ScreenRect;
+            rect.Expand(-8);
+            Container.Update(rect);
 
             // Draw Background
-            g.DrawRectFilled(screenRect, new System.Numerics.Vector4(0.1f, 0.1f, 0.1f, 1.00f));
+            g.DrawRectFilled(screenRect, new System.Numerics.Vector4(0.05f, 0.05f, 0.05f, 1.00f));
 
             if (DragSplitter != null)
             {
