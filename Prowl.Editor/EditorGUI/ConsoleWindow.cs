@@ -40,15 +40,15 @@ namespace Prowl.Editor
             g.CurrentNode.Layout(LayoutType.Column);
             g.CurrentNode.AutoScaleChildren();
 
-            using(g.Node().Width(Size.Percentage(1f)).MaxHeight(20).Enter())
-            {
-                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.SelectedColor);
-            }
+            //using(g.Node().Width(Size.Percentage(1f)).MaxHeight(20).Enter())
+            //{
+            //    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.SelectedColor);
+            //}
             if(_logMessages.Count< 1000)
-                _logMessages.Add(new LogMessage("Test", LogSeverity.Normal));
+                _logMessages.Add(new LogMessage("Test printing some larger stuff cause haha yeah i need longer text to see if wrapping looks decent!", LogSeverity.Normal));
             using (g.Node().Width(Size.Percentage(1f)).Padding(0, 3, 3, 3).Clip().Enter())
             {
-                double height = 5;
+                double height = 0;
                 for (int i = _logMessages.Count; i-- > 0;)
                 {
                     var logSeverity = _logMessages[i].LogSeverity;
@@ -59,17 +59,16 @@ namespace Prowl.Editor
 
                     int width = (int)g.CurrentNode.LayoutData.InnerRect.width;
                     var pos = g.CurrentNode.LayoutData.InnerRect.Position;
-                    var size = UIDrawList.DefaultFont.CalcTextSize(_logMessages[i].Message, 0, width);
+                    var size = UIDrawList.DefaultFont.CalcTextSize(_logMessages[i].Message, 0, width - 5);
 
-                    var rect = new Rect(pos.x, pos.y + height, width, size.y);
-                    g.DrawRectFilled(rect, new(0.2f, 0.2f, 0.2f, 1.0f));
+                    g.DrawLine(new(pos.x + 12, pos.y + height), new(pos.x + width - 12, pos.y + height), GuiStyle.Borders, 1);
 
-                    _logMessages[i].Draw(pos + new Vector2(5, height), width);
-                    height += size.y + 5;
+                    _logMessages[i].Draw(pos + new Vector2(12, height + 8), width - 5);
+                    height += size.y + 8;
                 }
 
                 // Dummy node to set the height of the scroll area
-                g.Node().Height(height).IgnoreLayout();
+                g.Node().Width(5).Height(height).IgnoreLayout();
 
                 g.ScrollV();
             }

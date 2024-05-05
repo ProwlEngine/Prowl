@@ -96,24 +96,36 @@ namespace Prowl.Editor
                 using (g.Node().Width(width).Height(height).Padding(Padding).Left(_x).Top(_y).Layout(LayoutType.Column).AutoScaleChildren().Enter())
                 {
                     // TODO: Resize
+                    g.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
 
                     if (TitleBar)
                     {
-                        using (g.Node().Width(Size.Percentage(1f)).MaxHeight(20).Enter())
+                        using (g.Node().Width(Size.Percentage(1f)).MaxHeight(40).Padding(10, 10).Enter())
                         {
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBGColor, 10, RoundCorners ? 3 : 0);
-
                             if (IsDocked && Leaf.LeafWindows.Count > 0)
                             {
                                 // Draw Tabs
                                 var tabWidth = g.CurrentNode.LayoutData.Rect.width / Leaf.LeafWindows.Count;
-                                tabWidth = Math.Min(tabWidth, 75);
+                                tabWidth = Math.Min(tabWidth, 100);
+
+                                // background rect for all tabs
+                                if (Leaf.LeafWindows.Count > 1)
+                                {
+                                    var tabsRect = g.CurrentNode.LayoutData.InnerRect;
+                                    tabsRect.x += 2;
+                                    tabsRect.width = (tabWidth * Leaf.LeafWindows.Count) + 1;
+                                    tabsRect.Expand(6);
+                                    g.DrawRectFilled(tabsRect, GuiStyle.WindowBackground * 0.8f, 10);
+                                }
 
                                 for (int i = 0; i < Leaf.LeafWindows.Count; i++)
                                 {
                                     var window = Leaf.LeafWindows[i];
                                     using (g.Node().Width(tabWidth).Height(20).Left(i * (tabWidth + 5)).Enter())
                                     {
+                                        var tabRect = g.CurrentNode.LayoutData.Rect;
+                                        tabRect.Expand(0, 2);
+
                                         if (window != this)
                                         {
                                             var interact = g.GetInteractable();
@@ -122,7 +134,11 @@ namespace Prowl.Editor
                                                 Leaf.WindowNum = i;
                                             }
                                             if (interact.IsHovered())
-                                                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new(1f, 1f, 1f, 0.5f));
+                                                g.DrawRectFilled(tabRect, GuiStyle.Borders, 10);
+                                        }
+                                        if (window == this)
+                                        {
+                                            g.DrawRectFilled(tabRect, GuiStyle.Indigo, 10);
                                         }
                                         g.DrawText(UIDrawList.DefaultFont, window.Title, 20, g.CurrentNode.LayoutData.Rect, Color.white);
                                     }
@@ -141,7 +157,7 @@ namespace Prowl.Editor
                                     isOpened = false;
                                 if (interact.IsHovered())
                                     g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new(1f, 1f, 1f, 0.5f));
-                                g.DrawText(UIDrawList.DefaultFont, FontAwesome6.X, 20, g.CurrentNode.LayoutData.Rect, Color.white);
+                                g.DrawText(UIDrawList.DefaultFont, FontAwesome6.Xmark, 20, g.CurrentNode.LayoutData.Rect, Color.white);
                             }
 
                             var titleInteract = g.GetInteractable();
@@ -208,17 +224,17 @@ namespace Prowl.Editor
                             }
                         }
 
+
                         using (g.Node().Width(Size.Percentage(1f)).Clip().Enter())
                         {
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBGColor, 10, RoundCorners ? 12 : 0);
                             Draw();
                         }
                     }
                     else
                     {
-                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBGColor, 10, RoundCorners ? 12 : 0);
                         Draw();
                     }
+                    g.DrawRect(g.CurrentNode.LayoutData.InnerRect, GuiStyle.Borders, 2, 10);
                 }
 
 

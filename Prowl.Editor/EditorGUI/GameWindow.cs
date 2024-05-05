@@ -76,9 +76,9 @@ public class GameWindow : EditorWindow
             g.DrawText(FontAwesome6.Display, 20, innerRect, Color.white);
         }
 
-        using (g.Node().Width(Size.Percentage(1f)).Enter())
+        using (g.Node().Width(Size.Percentage(1f)).Padding(5).Enter())
         {
-            var innerRect = g.CurrentNode.LayoutData.Rect;
+            var innerRect = g.CurrentNode.LayoutData.InnerRect;
 
             g.DrawRectFilled(innerRect, Color.black);
 
@@ -131,14 +131,14 @@ public class GameWindow : EditorWindow
                 double height = width / aspect;
                 // ImGg.SetCursorPosY(ImGg.GetCursorPosY() + ((float)(renderSize.height - height) / 2f));
                 double yMin = innerRect.Position.y + ((renderSize.height - height) / 2f);
-                g.DrawImage(RenderTarget.InternalTextures[0], new Vector2(innerRect.Min.x, yMin), innerRect.Max, Color.black);
+                //g.DrawImage(RenderTarget.InternalTextures[0], new Vector2(innerRect.Min.x, yMin), innerRect.Max, Color.black);
             }
             else
             {
                 double height = renderSize.height;
                 double width = height * aspect;
                 double xMin = innerRect.Position.x + ((renderSize.width - width) / 2f);
-                g.DrawImage(RenderTarget.InternalTextures[0], new Vector2(xMin, innerRect.Min.y), innerRect.Max, Color.black);
+                //g.DrawImage(RenderTarget.InternalTextures[0], new Vector2(xMin, innerRect.Min.y), innerRect.Max, Color.black);
             }
         }
 

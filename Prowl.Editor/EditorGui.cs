@@ -66,7 +66,7 @@ public static class EditorGui
             Container.Update(rect);
 
             // Draw Background
-            g.DrawRectFilled(screenRect, new System.Numerics.Vector4(0.05f, 0.05f, 0.05f, 1.00f));
+            g.DrawRectFilled(screenRect, GuiStyle.Background);
 
             if (DragSplitter != null)
             {

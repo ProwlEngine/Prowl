@@ -54,12 +54,12 @@ namespace Prowl.Editor
         private void DrawProjectsTab()
         {
             var rect = g.CurrentNode.LayoutData.Rect;
-            g.DrawRectFilled(rect, GuiStyle.WindowBGColor * 0.25f);
+            g.DrawRectFilled(rect, GuiStyle.WindowBackground * 0.25f, 10);
             Vector2 shadowA = new(rect.x, rect.y);
             Vector2 shadowB = new(rect.x, rect.y + (rect.height - 60));
             g.DrawVerticalShadow(shadowA, shadowB, 30, 0.25f);
             Rect footer = new(shadowB.x, shadowB.y, rect.width, 60);
-            g.DrawRectFilled(footer, GuiStyle.WindowBGColor);
+            g.DrawRectFilled(footer, GuiStyle.WindowBackground, 10, 4);
             Vector2 shadowC = new(rect.x, rect.y + rect.height);
             g.DrawVerticalShadow(shadowB, shadowC, 20, 0.25f);
 
@@ -79,13 +79,13 @@ namespace Prowl.Editor
             }
 
             var s = new GuiStyle();
-            s.WidgetRoundness = 0;
+            s.WidgetRoundness = 10;
             s.BorderThickness = 0;
             if (!string.IsNullOrEmpty(SelectedProject))
             {
                 s.BtnHoveredColor = GuiStyle.SelectedColor;
                 s.WidgetColor = GuiStyle.HoveredColor;
-                if (g.Button("Open", 455, 452, 162, 60, s))
+                if (g.Button("Open", 455, 452, 162, 60, s, false, false, 4))
                 {
                     Project.Open(SelectedProject);
                     isOpened = false;
@@ -95,7 +95,7 @@ namespace Prowl.Editor
             {
                 s.BtnHoveredColor = Color.white * 0.4f;
                 s.WidgetColor = Color.white * 0.4f;
-                g.Button("Open", 455, 452, 162, 60, s);
+                g.Button("Open", 455, 452, 162, 60, s, false, false, 4);
             }
         }
 
@@ -150,12 +150,12 @@ namespace Prowl.Editor
         private void CreateProjectTab()
         {
             var rect = g.CurrentNode.LayoutData.Rect;
-            g.DrawRectFilled(rect, GuiStyle.WindowBGColor * 0.25f);
+            g.DrawRectFilled(rect, GuiStyle.WindowBackground * 0.25f, 10);
             Vector2 shadowA = new(rect.x, rect.y);
             Vector2 shadowB = new(rect.x, rect.y + (rect.height - 77));
             g.DrawVerticalShadow(shadowA, shadowB, 30, 0.25f);
             Rect footer = new(shadowB.x, shadowB.y, rect.width, 77);
-            g.DrawRectFilled(footer, GuiStyle.WindowBGColor);
+            g.DrawRectFilled(footer, GuiStyle.WindowBackground, 10, 4);
             Vector2 shadowC = new(rect.x, rect.y + rect.height);
             g.DrawVerticalShadow(shadowB, shadowC, 20, 0.25f);
 
@@ -166,11 +166,11 @@ namespace Prowl.Editor
             g.DrawText(UIDrawList.DefaultFont, path, 20, rect.Position + new Vector2(30, 480), Color.white * 0.5f);
             
             var s = new GuiStyle();
-            s.WidgetRoundness = 0;
+            s.WidgetRoundness = 10;
             s.BorderThickness = 0;
             s.BtnHoveredColor = GuiStyle.SelectedColor;
             s.WidgetColor = GuiStyle.HoveredColor;
-            if (g.Button("Create", 445, 435, 172, 77, s))
+            if (g.Button("Create", 445, 435, 172, 77, s, false, false, 4))
             {
                 Project.CreateNew(createName);
                 currentTab = 0;
@@ -200,7 +200,7 @@ namespace Prowl.Editor
                             Application.Quit();
                     }
                     else if (interact.IsHovered())
-                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.HoveredColor);
+                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.HoveredColor, i == 3 ? 10 : 0, 8);
 
                     Rect rect = g.CurrentNode.LayoutData.Rect;
                     g.DrawText(UIDrawList.DefaultFont, tabNames[i], 20, rect, Color.white);

@@ -66,8 +66,8 @@ namespace Prowl.Runtime.GUI
         }
 
 
-        public bool Button(string? label, Offset x, Offset y, Size width, Size height, GuiStyle? style = null, bool invisible = false, bool repeat = false) => Button(label, x, y, width, height, out _, style, invisible, repeat);
-        public bool Button(string? label, Offset x, Offset y, Size width, Size height, out LayoutNode node, GuiStyle? style = null, bool invisible = false, bool repeat = false)
+        public bool Button(string? label, Offset x, Offset y, Size width, Size height, GuiStyle? style = null, bool invisible = false, bool repeat = false, int rounded_corners = 15) => Button(label, x, y, width, height, out _, style, invisible, repeat, rounded_corners);
+        public bool Button(string? label, Offset x, Offset y, Size width, Size height, out LayoutNode node, GuiStyle? style = null, bool invisible = false, bool repeat = false, int rounded_corners = 15)
         {
             style ??= new();
             var g = Gui.ActiveGUI;
@@ -80,9 +80,9 @@ namespace Prowl.Runtime.GUI
                     var col = g.ActiveID == interact.ID ? style.BtnActiveColor :
                               g.HoveredID == interact.ID ? style.BtnHoveredColor : style.WidgetColor;
 
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, style.WidgetRoundness);
+                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, style.WidgetRoundness, rounded_corners);
                     if (style.BorderThickness > 0)
-                        g.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
+                        g.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness, rounded_corners);
 
                     g.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, label, style.FontSize, g.CurrentNode.LayoutData.InnerRect, style.TextColor);
                 }
@@ -112,7 +112,7 @@ namespace Prowl.Runtime.GUI
         {
             style ??= new();
             var g = Gui.ActiveGUI;
-            using ((node = g.Node()).Left(x).Top(y).Width(20).Height(20).Padding(2).Enter())
+            using ((node = g.Node()).Left(x).Top(y).Width(20).Height(20).Enter())
             {
                 Interactable interact = g.GetInteractable();
 
