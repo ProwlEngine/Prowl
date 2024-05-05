@@ -312,7 +312,6 @@ namespace Prowl.Editor.Assets
         {
             Debug.Log($"Attempting to Import {Path.GetRelativePath(Project.ProjectDirectory, assetFile.FullName)}!");
             ArgumentNullException.ThrowIfNull(assetFile);
-            var color = ImGui.ColorConvertU32ToFloat4(AssetsWindow.GetFileColor(assetFile.Extension));
 
             // Dispose if we already have it
             if (disposeExisting)
