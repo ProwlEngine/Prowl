@@ -79,12 +79,21 @@ namespace Prowl.Editor
             var s = new GuiStyle();
             s.WidgetRoundness = 0;
             s.BorderThickness = 0;
-            s.BtnHoveredColor = GuiStyle.SelectedColor;
-            s.WidgetColor = GuiStyle.HoveredColor;
-            if (g.Button("Open", 455, 452, 162, 60, s))
+            if (!string.IsNullOrEmpty(SelectedProject))
             {
-                Project.Open(SelectedProject);
-                isOpened = false;
+                s.BtnHoveredColor = GuiStyle.SelectedColor;
+                s.WidgetColor = GuiStyle.HoveredColor;
+                if (g.Button("Open", 455, 452, 162, 60, s))
+                {
+                    Project.Open(SelectedProject);
+                    isOpened = false;
+                }
+            }
+            else
+            {
+                s.BtnHoveredColor = Color.white * 0.4f;
+                s.WidgetColor = Color.white * 0.4f;
+                g.Button("Open", 455, 452, 162, 60, s);
             }
         }
 
