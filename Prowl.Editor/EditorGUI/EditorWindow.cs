@@ -145,7 +145,7 @@ namespace Prowl.Editor
                             var titleInteract = g.GetInteractable();
                             if (EditorGui.DragSplitter == null)
                             {
-                                if (titleInteract.TakeFocus() || (titleInteract.IsFocused() && titleInteract.IsActive()))
+                                if (titleInteract.TakeFocus() || titleInteract.IsActive())
                                 {
                                     _wasDragged = true;
 
