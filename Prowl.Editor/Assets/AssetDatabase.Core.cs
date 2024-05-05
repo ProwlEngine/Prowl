@@ -130,7 +130,7 @@ namespace Prowl.Editor.Assets
                             // File hasent changed but we dont have it in the cache, process it but dont reimport
                             Debug.Log("Asset Found: " + file);
                             ProcessFile(file, out var metaOutdated);
-                            if(metaOutdated)
+                            if (metaOutdated)
                                 toReimport.Add(file);
                         }
                     }
@@ -138,10 +138,9 @@ namespace Prowl.Editor.Assets
             }
 
             // Defer the Reimports untill after all Meta files are loaded/updated
-            foreach(var file in toReimport)
+            foreach (var file in toReimport)
             {
                 Reimport(new(file));
-                var color = ImGui.ColorConvertU32ToFloat4(AssetsWindow.GetFileColor(Path.GetExtension(file)));
                 Debug.Log("Imported: " + $"{ToRelativePath(new(file))}!");
             }
 
@@ -179,7 +178,7 @@ namespace Prowl.Editor.Assets
                 }
             }
 
-            if(cacheModified)
+            if (cacheModified)
                 LastWriteTimesCache.Instance.Save();
 
         }
@@ -252,7 +251,7 @@ namespace Prowl.Editor.Assets
             guid = Guid.Empty;
             ArgumentNullException.ThrowIfNull(file);
             if (!File.Exists(file.FullName)) return false;
-            if(assetPathToMeta.TryGetValue(file.FullName, out var meta))
+            if (assetPathToMeta.TryGetValue(file.FullName, out var meta))
             {
                 guid = meta.guid;
                 return true;
@@ -320,7 +319,7 @@ namespace Prowl.Editor.Assets
             // make sure path exists
             if (!File.Exists(assetFile.FullName))
             {
-                Debug.LogError( $"Failed to import {ToRelativePath(assetFile)}. Asset does not exist.");
+                Debug.LogError($"Failed to import {ToRelativePath(assetFile)}. Asset does not exist.");
                 return false;
             }
 
@@ -356,7 +355,7 @@ namespace Prowl.Editor.Assets
 
             // Delete the old imported asset if it exists
             var serialized = GetSerializedFile(meta.guid);
-            if (File.Exists(serialized.FullName)) 
+            if (File.Exists(serialized.FullName))
                 serialized.Delete();
 
             // Save the asset
@@ -404,7 +403,8 @@ namespace Prowl.Editor.Assets
         {
             if (assetGuid == Guid.Empty) throw new ArgumentException("Asset Guid cannot be empty", nameof(assetGuid));
 
-            try {
+            try
+            {
                 var serialized = LoadAsset(assetGuid);
                 if (serialized == null) return null;
                 T? asset = null;
@@ -423,7 +423,9 @@ namespace Prowl.Editor.Assets
                 asset.AssetID = assetGuid;
                 asset.FileID = (ushort)fileID;
                 return asset;
-            } catch (Exception e) {
+            }
+            catch (Exception e)
+            {
                 Console.WriteLine(e.ToString());
                 throw new InvalidCastException($"Something went wrong loading asset.");
             }
@@ -461,11 +463,13 @@ namespace Prowl.Editor.Assets
 
             FileInfo serializedAssetPath = GetSerializedFile(assetGuid);
             if (!File.Exists(serializedAssetPath.FullName))
-                if (!Reimport(asset)) {
+                if (!Reimport(asset))
+                {
                     Debug.LogError($"Failed to import {serializedAssetPath.FullName}!");
                     throw new Exception($"Failed to import {serializedAssetPath.FullName}");
                 }
-            try {
+            try
+            {
                 var serializedAsset = SerializedAsset.FromSerializedAsset(serializedAssetPath.FullName);
                 serializedAsset.Guid = assetGuid;
                 serializedAsset.Main.AssetID = assetGuid;
@@ -477,7 +481,9 @@ namespace Prowl.Editor.Assets
                 }
                 guidToAssetData[assetGuid] = serializedAsset;
                 return serializedAsset;
-            } catch {
+            }
+            catch
+            {
                 Debug.LogError($"Failed to load serialized asset {serializedAssetPath.FullName}!");
                 return null; // Failed file might be in use?
             }
