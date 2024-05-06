@@ -2,6 +2,8 @@
 
 namespace Prowl.Runtime
 {
+    // TODO: Improve the usage of this, Right now my focus is just getting all the UI and style in, then I can go back and clean up this code and use it properly everywhere for styling
+
     public sealed class GuiStyle : EngineObject
     {
         // Base Colors 

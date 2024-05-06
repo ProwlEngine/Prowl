@@ -1,4 +1,5 @@
 ﻿using Prowl.Runtime.GUI.Graphics;
+using Prowl.Runtime.GUI.Layout;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -25,9 +26,13 @@ namespace Prowl.Runtime.GUI
             CurrentNode.ZIndex = index;
         }
 
-        public T GetStorage<T>(string key) where T : unmanaged
+        public T GetStorage<T>(string key) where T : unmanaged => GetStorage<T>(CurrentNode, key);
+
+        public void SetStorage<T>(string key, T value) where T : unmanaged => SetStorage(CurrentNode, key, value);
+
+        public T GetStorage<T>(LayoutNode node, string key) where T : unmanaged
         {
-            if (!_storage.TryGetValue(CurrentNode.ID, out var storage))
+            if (!_storage.TryGetValue(node.ID, out var storage))
                 return default;
 
             if (storage.ContainsKey(key))
@@ -36,10 +41,10 @@ namespace Prowl.Runtime.GUI
             return default;
         }
 
-        public void SetStorage<T>(string key, T value) where T : unmanaged
+        public void SetStorage<T>(LayoutNode node, string key, T value) where T : unmanaged
         {
-            if (!_storage.TryGetValue(CurrentNode.ID, out var storage))
-                _storage[CurrentNode.ID] = storage = [];
+            if (!_storage.TryGetValue(node.ID, out var storage))
+                _storage[node.ID] = storage = [];
 
             storage[key] = value;
         }
