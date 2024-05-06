@@ -289,17 +289,19 @@ namespace Prowl.Runtime.GUI
             return dirty;
         }
 
-        public LayoutNode Node([CallerMemberName] string lineMethod = "", [CallerLineNumber] int lineNumber = 0)
+        public LayoutNode Node([CallerMemberName] string lineMethod = "", [CallerLineNumber] int lineNumber = 0) => Node(CurrentNode, lineMethod, lineNumber);
+
+        public LayoutNode Node(LayoutNode parent, [CallerMemberName] string lineMethod = "", [CallerLineNumber] int lineNumber = 0)
         {
-            int nodeId = layoutNodeScopes.First.Value._node.GetNextNode();
+            int nodeId = parent.GetNextNode();
             ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), lineMethod, lineNumber, nodeId);
 
-            var node = new LayoutNode(CurrentNode, this, storageHash);
+            var node = new LayoutNode(parent, this, storageHash);
             node._lastFrameUsedIn = frameCount;
-            node.SetNewParent(CurrentNode);
+            node.SetNewParent(parent);
             if (_layoutData.TryGetValue(storageHash, out var data))
                 node.LayoutData = data;
-            CurrentNode.Children.Add(node);
+            parent.Children.Add(node);
             layoutDirty = true;
             return node;
         }
