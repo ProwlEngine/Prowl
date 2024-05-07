@@ -278,11 +278,10 @@ public class AssetsWindow : OldEditorWindow
 
         if (isAsset && ImporterAttribute.SupportsExtension(entry.Extension))
         {
-            if (DragnDrop.OnBeginDrag())
+            if (DragnDrop.OnBeginDrag(out _))
             {
                 var serialized = AssetDatabase.LoadAsset(guid);
                 DragnDrop.SetPayload(serialized.GetAsset(fileID), entry);
-                DragnDrop.EndDrag();
             }
             //DragnDrop.Drag(serialized.Main, entry);
         }

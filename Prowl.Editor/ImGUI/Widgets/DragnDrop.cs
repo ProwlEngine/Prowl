@@ -1,6 +1,8 @@
-﻿using Hexa.NET.ImGui;
-using Prowl.Editor.Assets;
+﻿using Prowl.Icons;
 using Prowl.Runtime;
+using Prowl.Runtime.GUI;
+using Prowl.Runtime.GUI.Graphics;
+using Prowl.Runtime.GUI.Layout;
 
 namespace Prowl.Editor.ImGUI.Widgets
 {
@@ -31,7 +33,7 @@ namespace Prowl.Editor.ImGUI.Widgets
             if (draggedObject == null) return false;
             bool hasTag = !string.IsNullOrEmpty(tag);
             if(hasTag && payloadTag != tag) return false;
-            if (ImGui.BeginDragDropTarget())
+            if (Gui.ActiveGUI.DragDropTarget())
             {
                 foreach (var obj in draggedObject)
                 {
@@ -63,52 +65,47 @@ namespace Prowl.Editor.ImGUI.Widgets
             bool hasTag = !string.IsNullOrEmpty(tag);
             if (hasTag && payloadTag != tag) return false;
 
-            if (ImGui.BeginDragDropTarget())
+            if (Gui.ActiveGUI.DragDropTarget())
             {
                 object? target = null;
                 foreach (var obj in draggedObject)
                     if (obj.GetType().IsAssignableTo(type))
-                    {
-                        ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.25f, 0.25f, 0.25f, 0.25f)));
                         target = obj;
-                    }
+
                 if (target != null)
                 {
-                    ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload("heheboobies");
-                    if (!entityPayload.IsNull)
-                    {
-                        payload = target;
-                        draggedObject = null;
-                        payloadTag = "";
-                        ImGui.EndDragDropTarget();
-                        return true;
-                    }
+                    _ = Gui.ActiveGUI.AcceptDragDrop();
+                    payload = target;
+                    draggedObject = null;
+                    payloadTag = "";
+                    return true;
                 }
-
-                ImGui.EndDragDropTarget();
             }
             return false;
         }
 
         public static bool Drag(params object[] objs) => Drag("", objs);
-
+                                
         public static bool Drag(string tag = "", params object[] objs)
         {
-            if (OnBeginDrag())
+            if (OnBeginDrag(out var node))
             {
+                using (node.Enter())
+                {
+                    node.Width(20).Height(20);
+
+                    Gui.ActiveGUI.DrawText(UIDrawList.DefaultFont, FontAwesome6.BoxesPacking, 20, node.LayoutData.InnerRect.Position, Color.white);
+                }
                 SetPayload(tag, objs);
-                EndDrag();
                 return true;
             }
             return false;
         }
 
-        public static bool OnBeginDrag()
+        public static bool OnBeginDrag(out LayoutNode? node)
         {
-            if (ImGui.BeginDragDropSource())
-            {
+            if (Gui.ActiveGUI.DragDropSource(out node))
                 return true;
-            }
             return false;
         }
 
@@ -120,7 +117,6 @@ namespace Prowl.Editor.ImGUI.Widgets
 
             draggedObject = objs;
             payloadTag = tag;
-            unsafe { ImGui.SetDragDropPayload("heheboobies", null, 0); }
             // Constract a name from all the types
             string name = "";
             foreach (var obj in objs)
@@ -131,114 +127,6 @@ namespace Prowl.Editor.ImGUI.Widgets
                 else
                     name += obj.GetType().Name + ", ";
             }
-            ImGui.TextUnformatted(name);
         }
-
-        public static void EndDrag()
-        {
-            ImGui.EndDragDropSource();
-        }
-
-
-        //private static object draggedObject;
-        //
-        //private const string AssetPayload = "ASSETPAYLOAD_";
-        //private const string ReferencePayload = "REFERENCEPAYLOAD_";
-        //
-        //public static bool ReceiveAsset<T>(out AssetRef<T> droppedAsset) where T : EngineObject
-        //{
-        //    droppedAsset = null;
-        //    if (ImGui.BeginDragDropTarget())
-        //    {
-        //        ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.25f, 0.25f, 0.25f, 0.25f)));
-        //        ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload(AssetPayload + typeof(T).Name);
-        //        if (!entityPayload.IsNull)
-        //        {
-        //            droppedAsset = new AssetRef<T>((Guid)draggedObject);
-        //            ImGui.EndDragDropTarget();
-        //            return true;
-        //        }
-        //
-        //        ImGui.EndDragDropTarget();
-        //    }
-        //    return false;
-        //}
-        //
-        //public static bool ReceiveAsset(out Guid droppedAsset, string typeName)
-        //{
-        //    droppedAsset = Guid.Empty;
-        //    if (ImGui.BeginDragDropTarget())
-        //    {
-        //        ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.25f, 0.25f, 0.25f, 0.25f)));
-        //        ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload(AssetPayload + typeName);
-        //        if (!entityPayload.IsNull)
-        //        {
-        //            droppedAsset = (Guid)draggedObject;
-        //            ImGui.EndDragDropTarget();
-        //            return true;
-        //        }
-        //
-        //        ImGui.EndDragDropTarget();
-        //    }
-        //    return false;
-        //}
-        //
-        //public static bool ReceiveReference<T>(out T droppedObject) where T : class
-        //{
-        //    droppedObject = null;
-        //    if (ImGui.BeginDragDropTarget())
-        //    {
-        //        ImGui.GetWindowDrawList().AddRectFilled(ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), ImGui.GetColorU32(new Vector4(0.25f, 0.25f, 0.25f, 0.25f)));
-        //        ImGuiPayloadPtr entityPayload = ImGui.AcceptDragDropPayload(ReferencePayload + typeof(T).Name);
-        //        if (!entityPayload.IsNull)
-        //        {
-        //            droppedObject = (T)draggedObject;
-        //            ImGui.EndDragDropTarget();
-        //            return true;
-        //        }
-        //
-        //        ImGui.EndDragDropTarget();
-        //    }
-        //    return false;
-        //}
-        //
-        //public static bool OfferAsset<T>(AssetRef<T> offeredAsset) where T : EngineObject
-        //{
-        //    if (ImGui.BeginDragDropSource())
-        //    {
-        //        draggedObject = offeredAsset.AssetID;
-        //        unsafe { ImGui.SetDragDropPayload(AssetPayload + typeof(T).Name, null, 0); }
-        //        ImGui.TextUnformatted(offeredAsset.Name + " - " + offeredAsset.AssetID);
-        //        ImGui.EndDragDropSource();
-        //        return true;
-        //    }
-        //    return false;
-        //}
-        //
-        //public static bool OfferAsset(Guid offeredAsset, string typeName)
-        //{
-        //    if (ImGui.BeginDragDropSource())
-        //    {
-        //        draggedObject = offeredAsset;
-        //        unsafe { ImGui.SetDragDropPayload(AssetPayload + typeName, null, 0); }
-        //        ImGui.TextUnformatted(typeName + " - Asset");
-        //        ImGui.EndDragDropSource();
-        //        return true;
-        //    }
-        //    return false;
-        //}
-        //
-        //public static bool OfferReference<T>(T offeredObject) where T : class
-        //{
-        //    if (ImGui.BeginDragDropSource())
-        //    {
-        //        draggedObject = offeredObject;
-        //        unsafe { ImGui.SetDragDropPayload(ReferencePayload + typeof(T).Name, null, 0); }
-        //        ImGui.TextUnformatted(typeof(T).Name + " - Instance");
-        //        ImGui.EndDragDropSource();
-        //        return true;
-        //    }
-        //    return false;
-        //}
     }
 }
