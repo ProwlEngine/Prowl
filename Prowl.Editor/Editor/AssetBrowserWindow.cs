@@ -5,6 +5,7 @@ using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.Rendering.OpenGL;
+using Silk.NET.Input;
 using System.Reflection;
 
 namespace Prowl.Editor.EditorWindows;
@@ -365,6 +366,12 @@ public class AssetBrowserWindow : EditorWindow
                     CurDirectory = new DirectoryInfo(entry.FullName);
             }
         }
+
+        if (Input.GetKeyDown(Key.F2) && AssetsWindow.SelectHandler.IsSelected(entry))
+        {
+            RenamingEntry = entry.FullName;
+        }
+
         GUIHelper.Tooltip(entry.Name);
 
         ImGui.PopStyleVar(2);

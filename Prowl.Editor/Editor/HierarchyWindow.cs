@@ -147,6 +147,11 @@ public class HierarchyWindow : EditorWindow
             ImGui.PushStyleColor(ImGuiCol.Header, ImGui.GetColorU32(ImGuiCol.HeaderActive));
             ImGui.PushStyleColor(ImGuiCol.HeaderHovered, ImGui.GetColorU32(ImGuiCol.HeaderActive));
             colPushCount += 2;
+
+            if (Input.GetKeyDown(Key.Delete))
+            {
+                entity.Destroy();
+            }
         } else if (isPrefab)
             ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new System.Numerics.Vector4(0.3215f, 0.6352f, 0.9294f, 1.0f)));
         else if (isPartOfPrefab)

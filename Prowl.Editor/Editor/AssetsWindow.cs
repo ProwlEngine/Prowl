@@ -5,6 +5,7 @@ using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
+using Silk.NET.Input;
 using System.Security.Cryptography.X509Certificates;
 
 namespace Prowl.Editor.EditorWindows;
@@ -325,6 +326,11 @@ public class AssetsWindow : EditorWindow
         }
         else if (fileInfo is FileInfo file)
         {
+            if (Input.GetKeyDown(Key.Delete) && SelectHandler.IsSelected(file))
+            {
+                file.Delete();
+            }
+
             if (ImGui.BeginPopupContextItem())
             {
                 if (ImGui.MenuItem("Rename"))
@@ -357,6 +363,11 @@ public class AssetsWindow : EditorWindow
         }
         else if (fileInfo is DirectoryInfo dir)
         {
+            if (Input.GetKeyDown(Key.Delete) && SelectHandler.IsSelected(dir))
+            {
+                dir.Delete(true);
+            }
+
             if (ImGui.BeginPopupContextItem())
             {
                 if (ImGui.MenuItem("Rename"))
