@@ -295,5 +295,20 @@ namespace Prowl.Runtime.GUI
             currentPopupParent = null;
         }
 
+        public bool Search(ref string searchText, Offset x, Offset y, Size width, GuiStyle? style = null)
+        {
+            style ??= new();
+            searchText ??= "";
+            var g = Runtime.GUI.Gui.ActiveGUI;
+
+            var changed = InputField(ref searchText, 32, InputFieldFlags.None, x, y, width, style);
+            if(string.IsNullOrWhiteSpace(searchText) && !g.PreviousControlIsFocus())
+            {
+                var pos = g.PreviousNode.LayoutData.InnerRect.Position + new Vector2(8, 5);
+                g.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, FontAwesome6.MagnifyingGlass + "Search...", style.FontSize, pos, GuiStyle.Base6);
+            }
+            return changed;
+        }
+
     }
 }

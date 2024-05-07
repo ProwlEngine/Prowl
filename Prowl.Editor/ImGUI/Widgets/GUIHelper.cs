@@ -217,22 +217,6 @@ namespace Prowl.Editor
             return changed;
         }
 
-        public static bool Search(string v, ref string searchText, float x)
-        {
-            searchText ??= "";
-            float cPX = ImGui.GetCursorPosX();
-            ImGui.SetNextItemWidth(x);
-            bool changed = ImGui.InputText(v, ref searchText, 0x100);
-            bool isSearching = !string.IsNullOrEmpty(searchText);
-            if (!isSearching)
-            {
-                ImGui.SameLine();
-                ImGui.SetCursorPosX(cPX + ImGui.GetFontSize() * 0.5f);
-                ImGui.TextDisabled(FontAwesome6.MagnifyingGlass + " Search...");
-            }
-            return changed;
-        }
-
         public static bool DragByte(string v1, ref byte value, float v2)
         {
             unsafe
