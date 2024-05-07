@@ -300,7 +300,10 @@ namespace Prowl.Runtime.GUI
             node._lastFrameUsedIn = frameCount;
             node.SetNewParent(parent);
             if (_layoutData.TryGetValue(storageHash, out var data))
+            {
+                data._node = node;
                 node.LayoutData = data;
+            }
             parent.Children.Add(node);
             layoutDirty = true;
             return node;

@@ -68,7 +68,7 @@ namespace Prowl.Editor
                 }
 
                 // Dummy node to set the height of the scroll area
-                g.Node().Width(5).Height(height).IgnoreLayout();
+                g.Node().Width(5).Height(height);
 
                 g.ScrollV();
             }

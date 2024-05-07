@@ -261,6 +261,7 @@ namespace Prowl.Runtime.GUI
                 using ((node = _nodes[0].AppendNode()).Left(pos.x).Top(pos.y).IgnoreLayout().Enter())
                 {
                     SetZIndex(1000);
+                    CreateBlocker(CurrentNode.LayoutData.Rect);
 
                     // Clamp node position so that its always in screen bounds
                     var rect = CurrentNode.LayoutData.Rect;
