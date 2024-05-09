@@ -90,7 +90,6 @@ namespace Prowl.Runtime.GUI
                 stb.ID = ID;
                 stb.SingleLine = !((Flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline);
                 stb.font = font;
-                stb.fontSize = (float)fontsize;
                 stb.Text = Text;
                 if ((Flags & InputFieldFlags.AutoSelectAll) == InputFieldFlags.AutoSelectAll)
                 {

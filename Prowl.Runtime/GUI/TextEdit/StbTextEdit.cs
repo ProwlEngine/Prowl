@@ -35,7 +35,7 @@ namespace Prowl.Runtime.GUI.TextEdit
         public bool CursorFollow;
 
         public Font font;
-        public float fontSize;
+        public float fontSize => (float)font.DisplayFontSize;
 
         public string Text;
         public int Length => Text?.Length ?? 0;
