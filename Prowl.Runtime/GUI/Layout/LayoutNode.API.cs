@@ -150,7 +150,7 @@
             if (Parent != null)
                 Parent.Children.Remove(this);
             Parent = newParent;
-            Parent.GetNextNode();
+            //Parent.GetNextNode();
             _positionRelativeTo = newParent;
             _sizeRelativeTo = newParent;
         }

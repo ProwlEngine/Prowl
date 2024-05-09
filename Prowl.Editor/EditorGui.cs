@@ -140,9 +140,9 @@ public static class EditorGui
                 if (!window.IsDocked || window.Leaf.LeafWindows[window.Leaf.WindowNum] == window)
                 {
                     g.SetZIndex(i);
-                    //g.PushID((ulong)window._id);
+                    g.PushID((ulong)window._id);
                     window.ProcessFrame();
-                    //g.PopID();
+                    g.PopID();
                 }
 
             }

@@ -5,9 +5,9 @@ namespace Prowl.Runtime.GUI
 
     public partial class Gui
     {
-        public void PushClip(Rect rect)
+        public void PushClip(Rect rect, bool force = false)
         {
-            _drawList[CurrentZIndex].PushClipRect(new Vector4(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height));
+            _drawList[CurrentZIndex].PushClipRect(new Vector4(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height), force);
         }
 
         public void PopClip()

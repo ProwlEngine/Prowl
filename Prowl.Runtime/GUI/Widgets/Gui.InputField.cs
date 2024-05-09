@@ -27,12 +27,14 @@ namespace Prowl.Runtime.GUI
 
         private static StbTextEditState stb;
 
-        public bool InputField(ref string value, uint maxLength, InputFieldFlags flags, Offset x, Offset y, Size width, GuiStyle? style = null)
+        public bool InputField(ref string value, uint maxLength, InputFieldFlags flags, Offset x, Offset y, Size width, Size? height = null, GuiStyle? style = null)
         {
             style ??= new();
             var g = Gui.ActiveGUI;
             bool multiline = ((flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline);
-            using (g.Node().Left(x).Top(y).Width(width).Height((multiline ? style.FontSize * 8 : style.FontSize) + 2.5).Padding(5).Enter())
+            Size h = (multiline ? style.FontSize * 8 : style.FontSize) + 2.5;
+            if(height != null) h = height.Value;
+            using (g.Node().Left(x).Top(y).Width(width).Height(h).Padding(5).Enter())
             {
                 Interactable interact = g.GetInteractable(true, true);
 
@@ -83,6 +85,10 @@ namespace Prowl.Runtime.GUI
             var font = style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont;
             var fontsize = style.FontSize;
             var render_pos = new Vector2(g.CurrentNode.LayoutData.InnerRect.x, g.CurrentNode.LayoutData.InnerRect.y);
+            // Center text vertically
+            render_pos.y += (g.CurrentNode.LayoutData.InnerRect.height - fontsize) / 2;
+            render_pos.y += 3;
+            render_pos.x += 5;
 
             if (stb == null || stb.ID != ID)
             {

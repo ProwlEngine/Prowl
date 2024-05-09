@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Reflection.Emit;
 using Microsoft.VisualBasic;
+using Prowl.Icons;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
 using Silk.NET.Vulkan;
@@ -85,9 +86,11 @@ namespace Prowl.Runtime.GUI
                     g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, style.WidgetRoundness, rounded_corners);
                     if (style.BorderThickness > 0)
                         g.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness, rounded_corners);
-
-                    g.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, label, style.FontSize, g.CurrentNode.LayoutData.InnerRect, style.TextColor);
                 }
+
+                if(label != null)
+                    g.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, label, style.FontSize, g.CurrentNode.LayoutData.InnerRect, interact.IsHovered() ? style.TextColor * 0.5f : style.TextColor);
+
 
                 if (repeat)
                     return interact.IsActive();
@@ -98,7 +101,7 @@ namespace Prowl.Runtime.GUI
         public bool InputDouble(ref double value, Offset x, Offset y, Size width, GuiStyle? style = null)
         {
             string textValue = "";
-            var changed = InputField(ref textValue, 16, InputFieldFlags.NumbersOnly, x, y, width, style);
+            var changed = InputField(ref textValue, 16, InputFieldFlags.NumbersOnly, x, y, width, 0, style);
             if (changed && Double.TryParse(textValue, out value)) return true;
             return false;
         }
@@ -106,7 +109,7 @@ namespace Prowl.Runtime.GUI
         public bool InputInt(ref int value, Offset x, Offset y, Size width, GuiStyle? style = null)
         {
             string textValue = "";
-            var changed = InputField(ref textValue, 16, InputFieldFlags.NumbersOnly, x, y, width, style);
+            var changed = InputField(ref textValue, 16, InputFieldFlags.NumbersOnly, x, y, width, 0, style);
             if (changed && int.TryParse(textValue, out value)) return true;
             return false;
         }
@@ -278,8 +281,10 @@ namespace Prowl.Runtime.GUI
 
                     if (!invisible)
                     {
+                        PushClip(ScreenRect, true);
                         DrawRectFilled(CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
                         DrawRect(CurrentNode.LayoutData.InnerRect, GuiStyle.Borders, 2, 10);
+                        PopClip();
                     }
 
                 }
@@ -295,16 +300,18 @@ namespace Prowl.Runtime.GUI
             currentPopupParent = null;
         }
 
-        public bool Search(ref string searchText, Offset x, Offset y, Size width, GuiStyle? style = null)
+        public bool Search(ref string searchText, Offset x, Offset y, Size width, Size? height = null, GuiStyle? style = null)
         {
             style ??= new();
             searchText ??= "";
             var g = Runtime.GUI.Gui.ActiveGUI;
 
-            var changed = InputField(ref searchText, 32, InputFieldFlags.None, x, y, width, style);
+            var changed = InputField(ref searchText, 32, InputFieldFlags.None, x, y, width, height, style);
             if(string.IsNullOrWhiteSpace(searchText) && !g.PreviousControlIsFocus())
             {
-                var pos = g.PreviousNode.LayoutData.InnerRect.Position + new Vector2(8, 5);
+                var pos = g.PreviousNode.LayoutData.InnerRect.Position + new Vector2(8, 3);
+                // Center text vertically
+                pos.y += (g.PreviousNode.LayoutData.InnerRect.height - style.FontSize) / 2;
                 g.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, FontAwesome6.MagnifyingGlass + "Search...", style.FontSize, pos, GuiStyle.Base6);
             }
             return changed;

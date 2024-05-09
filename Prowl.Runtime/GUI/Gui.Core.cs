@@ -167,7 +167,7 @@ namespace Prowl.Runtime.GUI
         public Rect ScreenRect { get; private set; }
 
         public LayoutNode CurrentNode => layoutNodeScopes.First!.Value._node;
-        public LayoutNode? PreviousNode => layoutNodeScopes.First?.Next?.Value._node;
+        public LayoutNode PreviousNode { get; private set; }
 
         public UIDrawList DrawList => _drawList[CurrentNode.ZIndex];
 
@@ -198,6 +198,7 @@ namespace Prowl.Runtime.GUI
             ScreenRect = screenRect;
 
             layoutNodeScopes.Clear();
+            nodeCountPerLine.Clear();
             IDStack.Clear();
             _nodes.Clear();
 
@@ -223,6 +224,7 @@ namespace Prowl.Runtime.GUI
                 _nodes[0] = root;
             }
             root.Width(screenRect.width).Height(screenRect.height);
+            PreviousNode = root;
 
             // The first pass Produces all the nodes and structure the user wants
             // Draw calls are Ignored
@@ -291,10 +293,14 @@ namespace Prowl.Runtime.GUI
 
         public LayoutNode Node([CallerMemberName] string lineMethod = "", [CallerLineNumber] int lineNumber = 0) => Node(CurrentNode, lineMethod, lineNumber);
 
+        private Dictionary<ulong, uint> nodeCountPerLine = [];
         public LayoutNode Node(LayoutNode parent, [CallerMemberName] string lineMethod = "", [CallerLineNumber] int lineNumber = 0)
         {
-            int nodeId = parent.GetNextNode();
-            ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), lineMethod, lineNumber, nodeId);
+            //int nodeId = parent.GetNextNode();
+            ulong lineHash = (ulong)HashCode.Combine(lineMethod, lineNumber);
+            nodeCountPerLine.TryGetValue(lineHash, out var count);
+            nodeCountPerLine[lineHash] = ++count;
+            ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), lineHash, count);
 
             var node = new LayoutNode(parent, this, storageHash);
             node._lastFrameUsedIn = frameCount;
@@ -303,6 +309,18 @@ namespace Prowl.Runtime.GUI
             {
                 data._node = node;
                 node.LayoutData = data;
+            }
+            else
+            {
+                // We can fallback to the current nodes layout data, taht way theres atleast something
+                //var d = new LayoutNode.PostLayoutData(node);
+                //d.Scale = CurrentNode.LayoutData.Scale;
+                //d.MaxScale = CurrentNode.LayoutData.MaxScale;
+                //d.Margins = CurrentNode.LayoutData.Margins;
+                //d.Paddings = CurrentNode.LayoutData.Paddings;
+                //d.Position = CurrentNode.LayoutData.Position;
+                //d.ContentRect = CurrentNode.LayoutData.ContentRect;
+                //node.LayoutData = d;
             }
             parent.Children.Add(node);
             layoutDirty = true;
@@ -325,7 +343,7 @@ namespace Prowl.Runtime.GUI
         {
             if (CurrentNode._clipped != ClipType.None)
                 _drawList[CurrentZIndex].PopClipRect();
-
+            PreviousNode = CurrentNode;
             IDStack.Pop();
             layoutNodeScopes.RemoveFirst();
         }

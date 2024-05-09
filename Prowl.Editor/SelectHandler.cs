@@ -106,28 +106,30 @@ public class SelectHandler<T> where T : class
         // This is a list of all the objects that are selectable sorted in order that their drawn in
         sorted.Add(index, obj);
 
-        bool clicked = !mouseReleased ? ImGui.IsItemClicked(ImGuiMouseButton.Left) : (ImGui.IsMouseReleased(ImGuiMouseButton.Left) && ImGui.IsItemHovered());
-        if (clicked) {
-            int prevLastIndex = lastSelectedIndex;
-            Select(obj);
-            if (prevLastIndex != index) {
-                if (prevLastIndex != -1 && Input.GetKey(Silk.NET.Input.Key.ShiftLeft)) {
-                    // Bulk Select
-                    for (int i = Math.Min(prevLastIndex, index); i <= Math.Max(prevLastIndex, index); i++) {
-                        if (previousFrameSorted.TryGetValue(i, out var o)) {
-                            if (CheckIsDestroyed.Invoke(o)) {
-                                // Always additive so we cant call Select(o) here as that checks if ctrl is down
-                                selected.Add(o);
-                                selectedThisFrame = true;
-                                OnSelectObject?.Invoke(o);
-                                GlobalSelectHandler.Select(o);
-                            }
+        int prevLastIndex = lastSelectedIndex;
+        Select(obj);
+        if (prevLastIndex != index)
+        {
+            if (prevLastIndex != -1 && Input.GetKey(Silk.NET.Input.Key.ShiftLeft))
+            {
+                // Bulk Select
+                for (int i = Math.Min(prevLastIndex, index); i <= Math.Max(prevLastIndex, index); i++)
+                {
+                    if (previousFrameSorted.TryGetValue(i, out var o))
+                    {
+                        if (CheckIsDestroyed.Invoke(o))
+                        {
+                            // Always additive so we cant call Select(o) here as that checks if ctrl is down
+                            selected.Add(o);
+                            selectedThisFrame = true;
+                            OnSelectObject?.Invoke(o);
+                            GlobalSelectHandler.Select(o);
                         }
                     }
                 }
             }
-            lastSelectedIndex = index;
         }
+        lastSelectedIndex = index;
     }
 
     public void SelectIfNot(T obj)
