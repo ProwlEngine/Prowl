@@ -136,12 +136,12 @@ namespace Prowl.Runtime.GUI.Graphics
             PushClipRectFullScreen();
         }
 
-        public void PushClipRect(Vector4 clip_rect)  // Scissoring. Note that the values are (x1,y1,x2,y2) and NOT (x1,y1,w,h). This is passed down to your render function but not used for CPU-side clipping. Prefer using higher-level ImGui::PushClipRect() to affect logic (hit-testing and widget culling)
+        public void PushClipRect(Vector4 clip_rect, bool force = false)  // Scissoring. Note that the values are (x1,y1,x2,y2) and NOT (x1,y1,w,h). This is passed down to your render function but not used for CPU-side clipping. Prefer using higher-level ImGui::PushClipRect() to affect logic (hit-testing and widget culling)
         {
-            if(_ClipRectStack.Count > 0)
+            if(!force && _ClipRectStack.Count > 0)
                 clip_rect = IntersectRects(_ClipRectStack.Peek(), clip_rect);
             _ClipRectStack.Add(clip_rect);
-            UpdateClipRect();
+            UpdateClipRect(force);
         }
 
         private Vector4 IntersectRects(Vector4 rectA, Vector4 rectB)
@@ -921,12 +921,12 @@ namespace Prowl.Runtime.GUI.Graphics
             CmdBuffer.Add(draw_cmd);
         }
 
-        public void UpdateClipRect()
+        public void UpdateClipRect(bool force = false)
         {
             // If current command is used with different settings we need to add a new command
             Vector4 curr_clip_rect = GetCurrentClipRect();
             UIDrawCmd? curr_cmd = GetCurrentDrawCmd();
-            if (!curr_cmd.HasValue || curr_cmd.Value.ElemCount != 0 && curr_cmd.Value.ClipRect != curr_clip_rect)
+            if (!curr_cmd.HasValue || curr_cmd.Value.ElemCount != 0 && curr_cmd.Value.ClipRect != curr_clip_rect || force)
             {
                 AddDrawCmd();
                 return;
@@ -1340,7 +1340,7 @@ namespace Prowl.Runtime.GUI.Graphics
                     using (MemoryStream ms = new())
                     {
                         stream.CopyTo(ms);
-                        builder.Add(ms.ToArray(), 20, [Font.CharacterRange.BasicLatin]);
+                        builder.Add(ms.ToArray(), 40, [Font.CharacterRange.BasicLatin]);
                     }
                 }
                 using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Runtime.EmbeddedResources.{FontAwesome6.FontIconFileNameFAR}"))
@@ -1348,7 +1348,7 @@ namespace Prowl.Runtime.GUI.Graphics
                     using (MemoryStream ms = new())
                     {
                         stream.CopyTo(ms);
-                        builder.Add(ms.ToArray(), 20 * 2.0f / 3.0f, [new Font.CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
+                        builder.Add(ms.ToArray(), 40 * 2.0f / 3.0f, [new Font.CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
                     }
                 }
                 using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Runtime.EmbeddedResources.{FontAwesome6.FontIconFileNameFAS}"))
@@ -1356,10 +1356,10 @@ namespace Prowl.Runtime.GUI.Graphics
                     using (MemoryStream ms = new())
                     {
                         stream.CopyTo(ms);
-                        builder.Add(ms.ToArray(), 20 * 2.0f / 3.0f, [new Font.CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
+                        builder.Add(ms.ToArray(), 40 * 2.0f / 3.0f, [new Font.CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
                     }
                 }
-                DefaultFont = builder.End(20);
+                DefaultFont = builder.End(40, 20);
             }
         }
 

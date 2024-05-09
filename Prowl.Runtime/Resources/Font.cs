@@ -21,6 +21,7 @@ namespace Prowl.Runtime
     public sealed class Font : EngineObject, ISerializable
     {
         public double FontSize = 20.0;
+        public double DisplayFontSize = 20.0;
         public Dictionary<uint, GlyphInfo> Glyphs;
         public Color32[] Bitmap;
         public int Width;
@@ -50,7 +51,7 @@ namespace Prowl.Runtime
             FontBuilder builder = new();
             builder.Begin(width, height);
             builder.Add(ttf, fontSize, characterRanges);
-            return builder.End(fontSize);
+            return builder.End(fontSize, fontSize);
         }
 
         public float GetCharAdvance(char c)
@@ -68,7 +69,7 @@ namespace Prowl.Runtime
 
         public Vector2 InputTextCalcTextSizeW(string text, int text_begin, int text_end, ref int? remaining, ref Vector2? out_offset, bool stop_on_new_line = false)
         {
-            double line_height = FontSize;
+            double line_height = DisplayFontSize;
             double scale = line_height / FontSize;
 
             Vector2 text_size = new Vector2(0, 0);
@@ -110,7 +111,7 @@ namespace Prowl.Runtime
         }
 
         public Vector2 CalcTextSize(string str, int beginIndex, double wrap_width = -1f)
-            => CalcTextSize(str, FontSize, beginIndex, wrap_width);
+            => CalcTextSize(str, DisplayFontSize, beginIndex, wrap_width);
         public Vector2 CalcTextSize(string str, double font_size, int beginIndex, double wrap_width = -1f)
         {
             int text_display_end = str.Length;
@@ -650,10 +651,11 @@ namespace Prowl.Runtime
                 }
             }
 
-            public Font End(float fontsize)
+            public Font End(float fontsize, float targetfontsize)
             {
                 Font font = new();
                 font.FontSize = fontsize;
+                font.DisplayFontSize = targetfontsize;
                 font.Width = bitmapWidth;
                 font.Height = bitmapHeight;
                 font.Glyphs = _glyphs;
