@@ -23,6 +23,9 @@ namespace Prowl.Runtime.GUI
         public Vector2 PointerDelta => new(PointerCurDeltaPos.x - PointerPreDeltaPos.x, PointerCurDeltaPos.y - PointerPreDeltaPos.y);
         public bool IsPointerMoving => PointerDelta.sqrMagnitude > 0;
 
+        public double[] PointerLastPressedTime = new double[(int)MouseButton.Button12];
+        public const double MaxDoubleClickTime = 500; // ms?
+
         void StartInputFrame()
         {
             for (var Index = 0; Index < KeyPressedTime.Length; ++Index)
@@ -47,8 +50,12 @@ namespace Prowl.Runtime.GUI
                 PointerPreState[Index] = PointerCurState[Index];
 
                 if (!PointerCurState[Index])
+                {
+                    PointerLastPressedTime[Index] = PointerPressedTime[Index];
                     PointerPressedTime[Index] = 0.0f;
+                }
             }
+
 
             PointerPreDeltaPos = PointerCurDeltaPos;
             PointerWheel = 0;
@@ -122,8 +129,8 @@ namespace Prowl.Runtime.GUI
         public bool IsPointerDown(MouseButton Btn) => PointerCurState[(int)Btn];
         public bool IsPointerUp(MouseButton Btn) => !PointerCurState[(int)Btn];
         public bool IsPointerClick(MouseButton Btn) => !PointerPreState[(int)Btn] && PointerCurState[(int)Btn];
+        public bool IsPointerDoubleClick(MouseButton Btn) => IsPointerClick(Btn) && PointerLastPressedTime[(int)Btn] <= MaxDoubleClickTime;
         public bool IsPointerPressed(MouseButton Btn) => IsPointerClick(Btn) || (IsPointerDown(Btn) && PointerPressedTime[(int)Btn] >= 0.5f);
         public Vector2 GetPointerClickPos(MouseButton Btn) => PointerClickPos[(int)Btn];
     }
-
 }
