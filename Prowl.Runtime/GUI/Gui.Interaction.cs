@@ -111,6 +111,12 @@ namespace Prowl.Runtime.GUI
         public bool PreviousControlIsActive() => ActiveID == PreviousInteractableID;
         public bool PreviousControlIsFocus() => FocusID == PreviousInteractableID;
 
+        public void FocusPreviousControl()
+        {
+            if (PreviousInteractableID != 0)
+                FocusID = PreviousInteractableID;
+        }
+
 
         public static bool IsDragDropActive = false;
         public static ulong DragDropID;
