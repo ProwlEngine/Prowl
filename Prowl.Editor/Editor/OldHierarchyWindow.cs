@@ -8,11 +8,11 @@ using Prowl.Editor.Editor.Preferences;
 
 namespace Prowl.Editor.EditorWindows;
 
-public class HierarchyWindow : OldEditorWindow
+public class OldHierarchyWindow : OldEditorWindow
 {
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse;
 
-    public HierarchyWindow() : base()
+    public OldHierarchyWindow() : base()
     {
         Title = FontAwesome6.FolderTree + " Hierarchy";
         SelectHandler.OnSelectObject += (obj) => {

@@ -129,8 +129,8 @@ public class ViewportWindow : OldEditorWindow
                     {
                         if (!go.IsPartOfPrefab || ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
                         {
-                            HierarchyWindow.SelectHandler.Select(new WeakReference(go));
-                            HierarchyWindow.Ping(go);
+                            OldHierarchyWindow.SelectHandler.Select(new WeakReference(go));
+                            OldHierarchyWindow.Ping(go);
                         }
                         else
                         {
@@ -143,14 +143,14 @@ public class ViewportWindow : OldEditorWindow
                                     break;
                             }
 
-                            HierarchyWindow.SelectHandler.Select(new WeakReference(prefab.gameObject));
-                            HierarchyWindow.Ping(prefab.gameObject);
+                            OldHierarchyWindow.SelectHandler.Select(new WeakReference(prefab.gameObject));
+                            OldHierarchyWindow.Ping(prefab.gameObject);
                         }
                     }
                 }
                 else
                 {
-                    HierarchyWindow.SelectHandler.Clear();
+                    OldHierarchyWindow.SelectHandler.Clear();
                 }
             }
         }
@@ -170,12 +170,12 @@ public class ViewportWindow : OldEditorWindow
                 foreach (var component in activeGO.GetComponents())
                 {
                     component.DrawGizmos();
-                    if (HierarchyWindow.SelectHandler.IsSelected(new WeakReference(activeGO)))
+                    if (OldHierarchyWindow.SelectHandler.IsSelected(new WeakReference(activeGO)))
                         component.DrawGizmosSelected();
                 }
             }
 
-        var selectedWeaks = HierarchyWindow.SelectHandler.Selected;
+        var selectedWeaks = OldHierarchyWindow.SelectHandler.Selected;
         var selectedGOs = new List<GameObject>();
         foreach (var weak in selectedWeaks)
             if (weak.Target is GameObject go)
@@ -220,7 +220,7 @@ public class ViewportWindow : OldEditorWindow
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (142), 5));
         if (ImGui.Button($"{FontAwesome6.Camera}"))
-            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(Cam.GameObject));
+            OldHierarchyWindow.SelectHandler.SetSelection(new WeakReference(Cam.GameObject));
         GUIHelper.Tooltip("Viewport Camera Settings");
 
         ImGui.SetCursorPos(cStart + new System.Numerics.Vector2(5 + (174), 5));
@@ -347,7 +347,7 @@ public class ViewportWindow : OldEditorWindow
             {
                 go.Transform.position = Cam.GameObject.Transform.position + Cam.GameObject.Transform.forward * 10;
             }
-            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+            OldHierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
         else if (DragnDrop.Drop<Prefab>(out var prefab))
         {
@@ -357,7 +357,7 @@ public class ViewportWindow : OldEditorWindow
             {
                 t.Transform.position = Cam.GameObject.Transform.position + Cam.GameObject.Transform.forward * 10;
             }
-            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+            OldHierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
         else if (DragnDrop.Drop<Scene>(out var scene))
         {
@@ -439,13 +439,13 @@ public class ViewportWindow : OldEditorWindow
 
             }
 
-            if (Input.GetKeyDown(Key.F) && HierarchyWindow.SelectHandler.Selected.Any())
+            if (Input.GetKeyDown(Key.F) && OldHierarchyWindow.SelectHandler.Selected.Any())
             {
                 float defaultZoomFactor = 2f;
-                if (HierarchyWindow.SelectHandler.Selected.Count == 1)
+                if (OldHierarchyWindow.SelectHandler.Selected.Count == 1)
                 {
                     // If only one object is selected, set the camera position to the center of that object
-                    if (HierarchyWindow.SelectHandler.Selected.First().Target is GameObject singleObject)
+                    if (OldHierarchyWindow.SelectHandler.Selected.First().Target is GameObject singleObject)
                     {
                         Cam.GameObject.Transform.position = singleObject.Transform.position - (Cam.GameObject.Transform.forward * defaultZoomFactor);
                         return;
@@ -454,7 +454,7 @@ public class ViewportWindow : OldEditorWindow
 
                 // Calculate the bounding box based on the positions of selected objects
                 Bounds combinedBounds = new Bounds();
-                foreach (var obj in HierarchyWindow.SelectHandler.Selected)
+                foreach (var obj in OldHierarchyWindow.SelectHandler.Selected)
                 {
                     if (obj.Target is GameObject go)
                     {

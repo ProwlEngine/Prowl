@@ -54,7 +54,7 @@ public static class Program
                 {
                     CreatedDefaultWindows = true;
                     //new EditorMainMenubar();
-                    //new HierarchyWindow();
+                    new HierarchyWindow();
                     //new ViewportWindow();
                     new GameWindow();
                     //new InspectorWindow();

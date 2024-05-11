@@ -193,7 +193,7 @@ namespace Prowl.Editor.EditorWindows
                 go.Transform.position = GetPosition();
                 if(component != null)
                     go.AddComponent(component);
-                HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+                OldHierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
             }
         }
 
@@ -202,7 +202,7 @@ namespace Prowl.Editor.EditorWindows
         {
             var go = new GameObject("Ambient Light");
             go.AddComponent<AmbientLight>();
-            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+            OldHierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
         [MenuItem("Template/Lights/Directional Light")]
@@ -212,7 +212,7 @@ namespace Prowl.Editor.EditorWindows
             go.AddComponent<DirectionalLight>();
             go.Transform.position = GetPosition();
             go.Transform.localEulerAngles = new System.Numerics.Vector3(45, 70, 0);
-            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+            OldHierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
         [MenuItem("Template/Lights/Point Light")]
@@ -221,7 +221,7 @@ namespace Prowl.Editor.EditorWindows
             var go = new GameObject("Point Light");
             go.AddComponent<PointLight>();
             go.Transform.position = GetPosition();
-            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+            OldHierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
         [MenuItem("Template/Lights/Spot Light")]
@@ -230,7 +230,7 @@ namespace Prowl.Editor.EditorWindows
             var go = new GameObject("Spot Light");
             go.AddComponent<SpotLight>();
             go.Transform.position = GetPosition();
-            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+            OldHierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
         #endregion
