@@ -1,4 +1,5 @@
 ﻿using Prowl.Icons;
+using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
@@ -74,11 +75,24 @@ namespace Prowl.Editor.ImGUI.Widgets
 
                 if (target != null)
                 {
-                    _ = Gui.ActiveGUI.AcceptDragDrop();
-                    payload = target;
-                    draggedObject = null;
-                    payloadTag = "";
-                    return true;
+                    var oldZ = Gui.ActiveGUI.CurrentZIndex;
+                    Gui.ActiveGUI.DrawList.PushClipRectFullScreen();
+                    Gui.ActiveGUI.SetZIndex(11000);
+
+                    var rect = Gui.ActiveGUI.PreviousInteractableRect;
+                    rect.Expand(1);
+                    Gui.ActiveGUI.DrawRect(rect, GuiStyle.Orange, 2, 8);
+
+                    Gui.ActiveGUI.DrawList.PopClipRect();
+                    Gui.ActiveGUI.SetZIndex(oldZ);
+
+                    if (Gui.ActiveGUI.AcceptDragDrop())
+                    {
+                        payload = target;
+                        draggedObject = null;
+                        payloadTag = "";
+                        return true;
+                    }
                 }
             }
             return false;
