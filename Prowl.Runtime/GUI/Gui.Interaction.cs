@@ -22,6 +22,7 @@ namespace Prowl.Runtime.GUI
         public ulong HoveredID = 0;
         public Vector2 PreviousInteractablePointerPos;
         public ulong PreviousInteractableID = 0;
+        public Rect PreviousInteractableRect = Rect.Zero;
         public Rect ActiveRect = Rect.Zero;
 
         private void StartInteractionFrame()
@@ -90,6 +91,7 @@ namespace Prowl.Runtime.GUI
 
             PreviousInteractablePointerPos = mousePosition;
             PreviousInteractableID = interactID;
+            PreviousInteractableRect = rect;
 
             interact.UpdateContext();
 
