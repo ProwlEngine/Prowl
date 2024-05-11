@@ -25,7 +25,7 @@ namespace Prowl.Runtime.GUI
 
         public double[] PointerLastClickTime = new double[(int)MouseButton.Button12];
         public Vector2[] PointerLastClickPos = new Vector2[(int)MouseButton.Button12];
-        public const double MaxDoubleClickTime = 0.5;
+        public const double MaxDoubleClickTime = 0.25;
 
         void StartInputFrame()
         {
