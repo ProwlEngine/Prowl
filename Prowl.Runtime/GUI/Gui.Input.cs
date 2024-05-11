@@ -23,8 +23,9 @@ namespace Prowl.Runtime.GUI
         public Vector2 PointerDelta => new(PointerCurDeltaPos.x - PointerPreDeltaPos.x, PointerCurDeltaPos.y - PointerPreDeltaPos.y);
         public bool IsPointerMoving => PointerDelta.sqrMagnitude > 0;
 
-        public double[] PointerLastPressedTime = new double[(int)MouseButton.Button12];
-        public const double MaxDoubleClickTime = 500; // ms?
+        public double[] PointerLastClickTime = new double[(int)MouseButton.Button12];
+        public Vector2[] PointerLastClickPos = new Vector2[(int)MouseButton.Button12];
+        public const double MaxDoubleClickTime = 0.5;
 
         void StartInputFrame()
         {
@@ -47,13 +48,16 @@ namespace Prowl.Runtime.GUI
 
             for (var Index = 0; Index < PointerCurState.Length; ++Index)
             {
+                if (PointerPreState[Index] && !PointerCurState[Index]) // Just released
+                {
+                    PointerLastClickTime[Index] = Time.time + MaxDoubleClickTime;
+                    PointerLastClickPos[Index] = mousePosition;
+                }
+
                 PointerPreState[Index] = PointerCurState[Index];
 
                 if (!PointerCurState[Index])
-                {
-                    PointerLastPressedTime[Index] = PointerPressedTime[Index];
                     PointerPressedTime[Index] = 0.0f;
-                }
             }
 
 
@@ -129,7 +133,7 @@ namespace Prowl.Runtime.GUI
         public bool IsPointerDown(MouseButton Btn) => PointerCurState[(int)Btn];
         public bool IsPointerUp(MouseButton Btn) => !PointerCurState[(int)Btn];
         public bool IsPointerClick(MouseButton Btn) => !PointerPreState[(int)Btn] && PointerCurState[(int)Btn];
-        public bool IsPointerDoubleClick(MouseButton Btn) => IsPointerClick(Btn) && PointerLastPressedTime[(int)Btn] <= MaxDoubleClickTime;
+        public bool IsPointerDoubleClick(MouseButton Btn) => IsPointerClick(Btn) && Time.time < PointerLastClickTime[(int)Btn] && (mousePosition - PointerLastClickPos[(int)Btn]).sqrMagnitude < 5;
         public bool IsPointerPressed(MouseButton Btn) => IsPointerClick(Btn) || (IsPointerDown(Btn) && PointerPressedTime[(int)Btn] >= 0.5f);
         public Vector2 GetPointerClickPos(MouseButton Btn) => PointerClickPos[(int)Btn];
     }
