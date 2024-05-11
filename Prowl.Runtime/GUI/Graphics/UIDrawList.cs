@@ -1105,7 +1105,7 @@ namespace Prowl.Runtime.GUI.Graphics
         private const int IM_COL32_A_SHIFT = 24;
 
 
-        public unsafe void Draw(GL _gl, Vector2 DisplaySize, UIDrawList[] lists)
+        public unsafe static void Draw(GL _gl, Vector2 DisplaySize, UIDrawList[] lists)
         {
             int framebufferWidth = (int)DisplaySize.x;
             int framebufferHeight = (int)DisplaySize.y;
