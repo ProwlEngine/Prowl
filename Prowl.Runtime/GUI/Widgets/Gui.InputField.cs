@@ -27,7 +27,7 @@ namespace Prowl.Runtime.GUI
 
         private static StbTextEditState stb;
 
-        public bool InputField(ref string value, uint maxLength, InputFieldFlags flags, Offset x, Offset y, Size width, Size? height = null, GuiStyle? style = null)
+        public bool InputField(ref string value, uint maxLength, InputFieldFlags flags, Offset x, Offset y, Size width, Size? height = null, GuiStyle? style = null, bool invisible = false)
         {
             style ??= new();
             var g = Gui.ActiveGUI;
@@ -38,9 +38,12 @@ namespace Prowl.Runtime.GUI
             {
                 Interactable interact = g.GetInteractable(true, true);
 
-                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.WidgetColor, style.WidgetRoundness);
-                if(style.BorderThickness > 0)
-                    g.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
+                if (!invisible)
+                {
+                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.WidgetColor, style.WidgetRoundness);
+                    if (style.BorderThickness > 0)
+                        g.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
+                }
 
                 interact.TakeFocus();
 
