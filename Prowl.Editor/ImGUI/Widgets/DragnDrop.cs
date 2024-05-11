@@ -94,7 +94,9 @@ namespace Prowl.Editor.ImGUI.Widgets
                 {
                     node.Width(20).Height(20);
 
+                    Gui.ActiveGUI.DrawList.PushClipRectFullScreen();
                     Gui.ActiveGUI.DrawText(UIDrawList.DefaultFont, FontAwesome6.BoxesPacking, 20, node.LayoutData.InnerRect.Position, Color.white);
+                    Gui.ActiveGUI.DrawList.PopClipRect();
                 }
                 SetPayload(tag, objs);
                 return true;
