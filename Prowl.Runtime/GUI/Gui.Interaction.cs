@@ -117,7 +117,7 @@ namespace Prowl.Runtime.GUI
         public bool DragDropSource(out LayoutNode? node)
         {
             node = null;
-            if (PreviousControlIsActive())
+            if (PreviousControlIsActive() && (IsDragDropActive || IsPointerMoving))
             {
                 IsDragDropActive = true;
                 DragDropID = PreviousInteractableID;
