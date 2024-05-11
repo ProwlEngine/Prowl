@@ -95,8 +95,8 @@ public class GameWindow : EditorWindow
 
             if (mainCam == null)
             {
-                g.DrawRect(innerRect, Color.red);
-                g.DrawText(UIDrawList.DefaultFont, "No Camera found", 20f, innerRect, Color.red);
+                g.DrawRect(innerRect, Color.red, 2);
+                g.DrawText(UIDrawList.DefaultFont, "No Camera found", 40f, innerRect, Color.red);
                 return;
             }
 
