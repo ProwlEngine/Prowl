@@ -162,7 +162,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void PushClipRectFullScreen()
         {
-            PushClipRect(GNullClipRect);
+            PushClipRect(GNullClipRect, true);
 
             // FIXME-OPT: This would be more correct but we're not supposed to access ImGuiState from here?
             //ImGuiState& g = *GImGui;
