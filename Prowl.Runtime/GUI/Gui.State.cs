@@ -26,19 +26,20 @@ namespace Prowl.Runtime.GUI
             CurrentNode.ZIndex = index;
         }
 
-        public T GetStorage<T>(string key) where T : unmanaged => GetStorage<T>(CurrentNode, key);
+        public T GetStorage<T>(string key) where T : unmanaged => GetStorage<T>(CurrentNode, key, default);
+        public T GetStorage<T>(string key, T defaultValue) where T : unmanaged => GetStorage<T>(CurrentNode, key, defaultValue);
 
         public void SetStorage<T>(string key, T value) where T : unmanaged => SetStorage(CurrentNode, key, value);
 
-        public T GetStorage<T>(LayoutNode node, string key) where T : unmanaged
+        public T GetStorage<T>(LayoutNode node, string key, T defaultValue) where T : unmanaged
         {
             if (!_storage.TryGetValue(node.ID, out var storage))
-                return default;
+                return defaultValue;
 
             if (storage.ContainsKey(key))
                 return (T)storage[key];
 
-            return default;
+            return defaultValue;
         }
 
         public void SetStorage<T>(LayoutNode node, string key, T value) where T : unmanaged

@@ -237,11 +237,11 @@ namespace Prowl.Runtime.GUI
             UIDrawList.Draw(GLDevice.GL, new(screenRect.width, screenRect.height), drawListsOrdered.ToArray());
 
             // Look for any nodes whos HashCode does not match the previously computed nodes
-            layoutDirty |= MatchHash(root);
+            //layoutDirty |= MatchHash(root);
 
             // Now that we have the nodes we can properly process their LayoutNode
             // Like if theres a GridLayout node we can process that here
-            if (layoutDirty)
+            //if (layoutDirty)
             {
                 root.UpdateCache();
                 root.ProcessLayout();
@@ -291,13 +291,13 @@ namespace Prowl.Runtime.GUI
             return dirty;
         }
 
-        public LayoutNode Node([CallerMemberName] string lineMethod = "", [CallerLineNumber] int lineNumber = 0) => Node(CurrentNode, lineMethod, lineNumber);
+        public LayoutNode Node([CallerMemberName] string stringID = "", [CallerLineNumber] int intID = 0) => Node(CurrentNode, stringID, intID);
 
         private Dictionary<ulong, uint> nodeCountPerLine = [];
-        public LayoutNode Node(LayoutNode parent, [CallerMemberName] string lineMethod = "", [CallerLineNumber] int lineNumber = 0)
+        public LayoutNode Node(LayoutNode parent, [CallerMemberName] string stringID = "", [CallerLineNumber] int intID = 0)
         {
             //int nodeId = parent.GetNextNode();
-            ulong lineHash = (ulong)HashCode.Combine(lineMethod, lineNumber);
+            ulong lineHash = (ulong)HashCode.Combine(stringID, intID);
             nodeCountPerLine.TryGetValue(lineHash, out var count);
             nodeCountPerLine[lineHash] = ++count;
             ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), lineHash, count);
