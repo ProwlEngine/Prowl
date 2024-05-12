@@ -80,6 +80,8 @@ namespace Prowl.Runtime.GUI.Layout
         private LayoutNode _sizeRelativeTo;
 
         private LayoutType _layout = LayoutType.None;
+        private bool _layoutX = false;
+        private bool _layoutY = false;
         internal ClipType _clipped = ClipType.None;
 
         internal ulong _lastFrameUsedIn = 0;
@@ -323,8 +325,8 @@ namespace Prowl.Runtime.GUI.Layout
                     foreach (var child in Children)
                     {
                         if (child._ignore) continue;
-                        child._positionX = 0;
-                        child._positionY = y;
+                        if (_layoutX) child._positionX = 0;
+                        if (_layoutY) child._positionY = y;
                         y += child._data.Margins.Vertical + child._data.Scale.y;
                         child.UpdatePositionCache();
                     }
@@ -333,8 +335,8 @@ namespace Prowl.Runtime.GUI.Layout
                     foreach (var child in Children)
                     {
                         if (child._ignore) continue;
-                        child._positionX = x;
-                        child._positionY = 0;
+                        if (_layoutX) child._positionX = x;
+                        if (_layoutY) child._positionY = 0;
                         x += child._data.Margins.Horizontal + child._data.Scale.x;
                         child.UpdatePositionCache();
                     }
@@ -351,8 +353,8 @@ namespace Prowl.Runtime.GUI.Layout
                             maxY = 0;
                         }
 
-                        child._positionX = x;
-                        child._positionY = y;
+                        if (_layoutX) child._positionX = x;
+                        if (_layoutY) child._positionY = y;
                         x += child._data.Margins.Horizontal + child._data.Scale.x;
 
                         if (child._data.Margins.Vertical + child._data.Scale.y > maxY)

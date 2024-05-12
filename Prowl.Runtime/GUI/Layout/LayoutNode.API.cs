@@ -2,9 +2,11 @@
 {
     public partial class LayoutNode
     {
-        public LayoutNode Layout(LayoutType layout)
+        public LayoutNode Layout(LayoutType layout, bool controlX = true, bool controlY = true)
         {
             _layout = layout;
+            _layoutX = controlX;
+            _layoutY = controlY;
             return this;
         }
 
