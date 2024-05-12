@@ -42,15 +42,12 @@ namespace Prowl.Runtime.GUI
     {
         private Dictionary<ulong, BoolAnimation> _boolAnimations = [];
 
-        public float AnimateBool(bool state, float durationIn, float durationOut, EaseType easeIn, EaseType easeOut) => AnimateBool(state, state ? durationOut : durationIn, state ? easeOut : easeIn);
-        public float AnimateBool(bool state, float durationIn, float durationOut, EaseType type) => AnimateBool(state, state ? durationOut : durationIn, type);
-        public float AnimateBool(bool state, float duration, EaseType easeIn, EaseType easeOut) => AnimateBool(state, duration, state ? easeOut : easeIn);
-        public float AnimateBool(bool state, float duration, EaseType type)
+        public float AnimateBool(bool state, float durationIn, float durationOut, EaseType easeIn, EaseType easeOut) => AnimateBool(GetNextID(), state, state ? durationOut : durationIn, state ? easeOut : easeIn);
+        public float AnimateBool(bool state, float durationIn, float durationOut, EaseType type) => AnimateBool(GetNextID(), state, state ? durationOut : durationIn, type);
+        public float AnimateBool(bool state, float duration, EaseType easeIn, EaseType easeOut) => AnimateBool(GetNextID(), state, duration, state ? easeOut : easeIn);
+        public float AnimateBool(bool state, float duration, EaseType ease) => AnimateBool(GetNextID(), state, duration, ease);
+        public float AnimateBool(ulong animId, bool state, float duration, EaseType type)
         {
-            ulong animId = 17;
-            animId = animId * 23 + (ulong)CurrentNode.GetNextAnimation();
-            animId = animId * 23 + CurrentNode.ID;
-
             BoolAnimation anim;
             if(_boolAnimations.TryGetValue(animId, out anim))
             {
@@ -70,6 +67,13 @@ namespace Prowl.Runtime.GUI
             _boolAnimations[animId] = anim;
 
             return (float)GetEase(anim.ElapsedTime, anim.EaseType);
+        }
+
+        private ulong GetNextID()
+        {
+            ulong animId = 17;
+            animId = animId * 23 + (ulong)CurrentNode.GetNextAnimation();
+            return animId * 23 + CurrentNode.ID;
         }
 
         public void UpdateAnimations(double dt)
