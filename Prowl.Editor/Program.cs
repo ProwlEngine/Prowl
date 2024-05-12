@@ -74,7 +74,7 @@ public static class Program
                     test._x = 450;
                     test._y = 450;
                     //new AssetBrowserWindow();
-                    //new AssetsWindow();
+                    new AssetsTreeWindow();
                 }
 
                 Application.DataPath = Project.ProjectDirectory;

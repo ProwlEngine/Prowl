@@ -32,7 +32,7 @@ public class AssetBrowserWindow : OldEditorWindow
     {
         Title = FontAwesome6.BoxOpen + " Asset Browser";
         Project.OnProjectChanged += Invalidate;
-        AssetsWindow.SelectHandler.OnSelectObject += SelectionChanged;
+        OldAssetsWindow.SelectHandler.OnSelectObject += SelectionChanged;
         AssetDatabase.Pinged += OnAssetPinged;
         Invalidate();
     }
@@ -40,7 +40,7 @@ public class AssetBrowserWindow : OldEditorWindow
     ~AssetBrowserWindow()
     {
         Project.OnProjectChanged -= Invalidate;
-        AssetsWindow.SelectHandler.OnSelectObject -= SelectionChanged;
+        OldAssetsWindow.SelectHandler.OnSelectObject -= SelectionChanged;
         AssetDatabase.Pinged -= OnAssetPinged;
     }
 
@@ -72,7 +72,7 @@ public class AssetBrowserWindow : OldEditorWindow
         ImGui.BeginChild("Body");
         RenderBody();
         ImGui.EndChild();
-        AssetsWindow.HandleFileContextMenu(null, CurDirectory, true);
+        OldAssetsWindow.HandleFileContextMenu(null, CurDirectory, true);
 
         if (DragnDrop.Drop<GameObject>(out var go))
         {
@@ -93,8 +93,8 @@ public class AssetBrowserWindow : OldEditorWindow
             }
         }
 
-        if (!AssetsWindow.SelectHandler.SelectedThisFrame && ImGui.IsItemClicked(0))
-            AssetsWindow.SelectHandler.Clear();
+        if (!OldAssetsWindow.SelectHandler.SelectedThisFrame && ImGui.IsItemClicked(0))
+            OldAssetsWindow.SelectHandler.Clear();
 
         ImGui.PopStyleColor();
     }
@@ -251,7 +251,7 @@ public class AssetBrowserWindow : OldEditorWindow
             GUIHelper.ItemRect(1f, 0.8f, 0.0f, 0.8f, MathF.Sin(_pingTimer) * 6f, 3f, 2.5f);
         }
 
-        AssetsWindow.HandleFileContextMenu(entry, CurDirectory, true);
+        OldAssetsWindow.HandleFileContextMenu(entry, CurDirectory, true);
 
         curPos.X = 5 + ((i + 1) % rowCount) * itemSize;
         curPos.Y = 5 + ((i + 1) / rowCount) * itemSize;
@@ -277,7 +277,7 @@ public class AssetBrowserWindow : OldEditorWindow
 
                     ImGui.Selectable($"##SubAsset{j}", false, ImGuiSelectableFlags.AllowOverlap, System.Numerics.Vector2.One * thumbnailSize);
 
-                    var gradientStart = AssetsWindow.GetTypeColor(subAssets[j].type, 0.5f);
+                    var gradientStart = OldAssetsWindow.GetTypeColor(subAssets[j].type, 0.5f);
                     var gradientEnd = ImGui.GetColorU32(ImGuiCol.FrameBg);
 
                     var drawList = ImGui.GetWindowDrawList();
@@ -322,7 +322,7 @@ public class AssetBrowserWindow : OldEditorWindow
         if (!entry.Exists)
             return;
 
-        bool isSelected = AssetsWindow.SelectHandler.IsSelected(entry);
+        bool isSelected = OldAssetsWindow.SelectHandler.IsSelected(entry);
         float thumbnailSize = Math.Min(ThumbnailSize, ImGui.GetContentRegionAvail().X);
         ImGui.BeginGroup();
 
@@ -335,7 +335,7 @@ public class AssetBrowserWindow : OldEditorWindow
         var gradientEnd = ImGui.GetColorU32(ImGuiCol.FrameBg);
         if (entry is FileInfo f)
         {
-            gradientStart = AssetsWindow.GetFileColor(f.Extension.ToLower().Trim(), 0.2f);
+            gradientStart = OldAssetsWindow.GetFileColor(f.Extension.ToLower().Trim(), 0.2f);
             gradientEnd = ImGui.GetColorU32(ImGuiCol.FrameBg);
         }
 
@@ -352,13 +352,13 @@ public class AssetBrowserWindow : OldEditorWindow
         if (ImGui.IsItemHovered())
         {
             if (entry is FileInfo fileInfo)
-                AssetsWindow.HandleFileClick(fileInfo);
+                OldAssetsWindow.HandleFileClick(fileInfo);
             else
             {
                 if (ImGui.IsMouseClicked(0))
                 {
                     var old = CurDirectory;
-                    AssetsWindow.SelectHandler.Select(entry);
+                    OldAssetsWindow.SelectHandler.Select(entry);
                     CurDirectory = old;
                 }
                 if (ImGui.IsMouseDoubleClicked(0))

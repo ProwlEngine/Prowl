@@ -5,7 +5,6 @@ using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
-using System.Security.Cryptography.X509Certificates;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -13,7 +12,7 @@ namespace Prowl.Editor.EditorWindows;
 /// Project Assets Tree Window
 /// Shows all Folder and Files in a Tree Format
 /// </summary>
-public class AssetsWindow : OldEditorWindow
+public class OldAssetsWindow : OldEditorWindow
 {
     protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse;
 
@@ -25,7 +24,7 @@ public class AssetsWindow : OldEditorWindow
 
     private int _treeCounter = 0;
 
-    public AssetsWindow() : base()
+    public OldAssetsWindow() : base()
     {
         Title = FontAwesome6.FolderTree + " Assets";
     }
@@ -64,7 +63,7 @@ public class AssetsWindow : OldEditorWindow
             foreach (var file in _found)
             {
                 ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding;
-                if (AssetsWindow.SelectHandler.IsSelected(file))
+                if (OldAssetsWindow.SelectHandler.IsSelected(file))
                     flags |= ImGuiTreeNodeFlags.Selected;
 
                 string ext = file.Extension.ToLower().Trim();
@@ -146,7 +145,7 @@ public class AssetsWindow : OldEditorWindow
             if (isLeaf)
                 flags |= ImGuiTreeNodeFlags.Leaf;
 
-            if (AssetsWindow.SelectHandler.IsSelected(subDirectory))
+            if (OldAssetsWindow.SelectHandler.IsSelected(subDirectory))
                 flags |= ImGuiTreeNodeFlags.Selected;
 
             bool opened = ImGui.TreeNodeEx($"{(isLeaf ? FontAwesome6.FolderOpen : FontAwesome6.Folder)} {subDirectory.Name}", flags);
@@ -293,7 +292,7 @@ public class AssetsWindow : OldEditorWindow
         if (fileID != 0) return;
 
         if (ImGui.IsMouseReleased(0))
-            AssetsWindow.SelectHandler.Select(entry);
+            OldAssetsWindow.SelectHandler.Select(entry);
 
         if (isAsset && ImGui.IsMouseDoubleClicked(0))
         {

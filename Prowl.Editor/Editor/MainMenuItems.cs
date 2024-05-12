@@ -23,7 +23,7 @@ namespace Prowl.Editor.EditorWindows
             if (fromAssetBrowser)
                 AssetBrowserWindow.StartRename(dir.FullName);
             else
-                AssetsWindow.StartRename(dir.FullName);
+                OldAssetsWindow.StartRename(dir.FullName);
         }
 
         [MenuItem("Create/Material")]
@@ -39,7 +39,7 @@ namespace Prowl.Editor.EditorWindows
             if (fromAssetBrowser)
                 AssetBrowserWindow.StartRename(file.FullName);
             else
-                AssetsWindow.StartRename(file.FullName);
+                OldAssetsWindow.StartRename(file.FullName);
 
             AssetDatabase.Update();
             AssetDatabase.Ping(file);
@@ -58,7 +58,7 @@ namespace Prowl.Editor.EditorWindows
             if (fromAssetBrowser)
                 AssetBrowserWindow.StartRename(file.FullName);
             else
-                AssetsWindow.StartRename(file.FullName);
+                OldAssetsWindow.StartRename(file.FullName);
 
             AssetDatabase.Update();
             AssetDatabase.Ping(file);
@@ -80,7 +80,7 @@ namespace Prowl.Editor.EditorWindows
             if (fromAssetBrowser)
                 AssetBrowserWindow.StartRename(file.FullName);
             else
-                AssetsWindow.StartRename(file.FullName);
+                OldAssetsWindow.StartRename(file.FullName);
 
             AssetDatabase.Update();
             AssetDatabase.Ping(file);

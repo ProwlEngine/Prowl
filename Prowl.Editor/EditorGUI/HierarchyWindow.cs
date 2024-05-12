@@ -1,5 +1,7 @@
 ﻿using Hexa.NET.ImGui;
+using Hexa.NET.ImGuizmo;
 using Prowl.Editor.Editor.Preferences;
+using Prowl.Editor.EditorWindows;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
@@ -7,10 +9,10 @@ using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
-using Silk.NET.SDL;
 
 namespace Prowl.Editor
 {
+
     public class HierarchyWindow : EditorWindow
     {
         const double entryHeight = 30;
