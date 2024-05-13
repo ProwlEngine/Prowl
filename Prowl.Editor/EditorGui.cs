@@ -21,8 +21,6 @@ public static class EditorGui
 
     static List<EditorWindow> WindowsToRemove = [];
 
-    private static WeakReference? _focusedWindow = null;
-
     public static void Initialize()
     {
         Gui = new();
@@ -32,7 +30,8 @@ public static class EditorGui
 
     public static void FocusWindow(EditorWindow editorWindow)
     {
-        _focusedWindow = new(editorWindow);
+        Windows.Remove(editorWindow);
+        Windows.Add(editorWindow);
     }
 
     internal static void Remove(EditorWindow editorWindow)
@@ -42,20 +41,8 @@ public static class EditorGui
 
     public static void Update()
     {
-        // Ensure the focused window is the first window in the list
-        //if (_focusedWindow != null)
-        //{
-        //    var window = _focusedWindow.Target as EditorWindow;
-        //    if (window != null)
-        //    {
-        //        Windows.Remove(window);
-        //        Windows.Insert(0, window);
-        //    }
-        //    _focusedWindow = null;
-        //}
-
         // Sort by docking as well, Docked windows are guranteed to come first
-        //Windows.Sort((a, b) => b.IsDocked.CompareTo(a.IsDocked));
+        Windows.Sort((a, b) => b.IsDocked.CompareTo(a.IsDocked));
 
         Rect screenRect = new Rect(0, 0, Runtime.Graphics.Resolution.x, Runtime.Graphics.Resolution.y);
         EditorGui.Gui.ProcessFrame(screenRect, 1f, (g) => {
