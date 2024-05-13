@@ -1,9 +1,15 @@
-﻿using Prowl.Editor.Assets;
+﻿using Hexa.NET.ImGui;
+using ImageMagick;
+using Prowl.Editor.Assets;
+using Prowl.Editor.EditorWindows;
+using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
+using Prowl.Runtime.SceneManagement;
 using System.IO;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace Prowl.Editor
 {
@@ -161,9 +167,6 @@ namespace Prowl.Editor
                     {
                         using (g.Node(file.FullName).Top(_treeCounter * (entryHeight + entryPadding)).Width(Size.Percentage(1f)).Height(entryHeight).Enter())
                         {
-                            if (_treeCounter++ % 2 == 0)
-                                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f);
-
                             var interact = g.GetInteractable();
                             if (interact.TakeFocus())
                                 SelectHandler.HandleSelectable(_treeCounter, file, true);
@@ -174,7 +177,6 @@ namespace Prowl.Editor
                                 g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5);
 
                             g.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), GuiStyle.Base4);
-                            _treeCounter++;
                         }
                     }
                 }
@@ -225,12 +227,10 @@ namespace Prowl.Editor
             var directories = directory.GetDirectories();
             foreach (DirectoryInfo subDirectory in directories)
             {
-                if (!subDirectory.Exists)
-                    continue;
-
                 bool expanded = false;
                 var left = depth * entryHeight;
                 ulong subDirID = 0;
+                // Directory Entry
                 using (g.Node(subDirectory.Name, depth).Left(left).Top(_treeCounter * (entryHeight + entryPadding)).Width(Size.Percentage(1f, -left)).Height(entryHeight * scaleHeight).Margin(2, 0).Enter())
                 {
                     subDirID = g.CurrentNode.ID;
@@ -268,16 +268,254 @@ namespace Prowl.Editor
             var files = directory.GetFiles();
             foreach (FileInfo file in files)
             {
-                if (!File.Exists(file.FullName))
+                string ext = file.Extension.ToLower().Trim();
+                if (ext.Equals(".meta", StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 AssetDatabase.SubAssetCache[] subassets = Array.Empty<AssetDatabase.SubAssetCache>();
                 if (AssetDatabase.TryGetGuid(file, out var guid))
                     subassets = AssetDatabase.GetSubAssetsCache(guid);
 
+                bool expanded = false;
+                var left = depth * entryHeight;
+                ulong fileNodeID = 0;
+                // File Entry
+                using (g.Node(file.Name, depth).Left(left).Top(_treeCounter * (entryHeight + entryPadding)).Width(Size.Percentage(1f, -left)).Height(entryHeight * scaleHeight).Margin(2, 0).Enter())
+                {
+                    fileNodeID = g.CurrentNode.ID;
+                    //if (_treeCounter++ % 2 == 0)
+                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GetFileColor(ext) * 0.5f, 4);
+                    //else
+                    //    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GetFileColor(ext, 0.6f, 1f), 4);
 
+                    var interact = g.GetInteractable();
+                    HandleFileClick(interact, file, 0);
+
+                    if (SelectHandler.IsSelected(file))
+                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
+                    else if (interact.IsHovered())
+                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+
+                    if (subassets.Length > 1)
+                    {
+                        expanded = g.GetStorage<bool>(g.CurrentNode.Parent, file.FullName, false);
+                        if (g.Button("ExpandBtn", expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, Offset.Percentage(1f, -entryHeight), 0, entryHeight, entryHeight, null, true))
+                        {
+                            expanded = !expanded;
+                            g.SetStorage(g.CurrentNode.Parent, file.FullName, expanded);
+                        }
+                    }
+
+                    g.DrawText(UIDrawList.DefaultFont, GetIcon(ext), 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + (entryHeight / 2), g.CurrentNode.LayoutData.Rect.y + 7), GetFileColor(ext));
+                    g.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white);
+                }
+
+                // SubAssets
+                if (expanded)
+                {
+                    g.PushID(fileNodeID);
+                    left = (depth + 1) * entryHeight;
+
+                    for (ushort i = 0; i < subassets.Length; i++)
+                    {
+                        if (subassets[i].type == null) continue;
+
+                        // SubAsset Entry
+                        using (g.Node(subassets[i].name, depth + 1 + i).Left(left).Top(_treeCounter * (entryHeight + entryPadding)).Width(Size.Percentage(1f, -left)).Height(entryHeight * scaleHeight).Margin(2, 0).Enter())
+                        {
+                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GetTypeColor(subassets[i].type!) * 0.5f, 4);
+
+                            var interact = g.GetInteractable();
+                            HandleFileClick(interact, file, i);
+
+                            if (SelectHandler.IsSelected(file))
+                                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
+                            else if (interact.IsHovered())
+                                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+
+                            g.DrawText(UIDrawList.DefaultFont, GetIconForType(subassets[i].type!), 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + (entryHeight / 2), g.CurrentNode.LayoutData.Rect.y + 7), GetTypeColor(subassets[i].type!));
+                            g.DrawText(UIDrawList.DefaultFont, subassets[i].name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white);
+                        }
+                    }
+
+                    g.PopID();
+                }
 
             }
         }
+
+        public static void HandleFileClick(Interactable interact, FileInfo entry, ushort fileID = 0)
+        {
+            Guid guid;
+            bool isAsset = AssetDatabase.TryGetGuid(entry, out guid);
+
+            if (isAsset && ImporterAttribute.SupportsExtension(entry.Extension))
+            {
+                if (DragnDrop.OnBeginDrag(out var node))
+                {
+                    var serialized = AssetDatabase.LoadAsset(guid);
+                    using (node.Width(20).Height(20).Enter())
+                    {
+                        Gui.ActiveGUI.DrawList.PushClipRectFullScreen();
+                        Gui.ActiveGUI.DrawText(UIDrawList.DefaultFont, FontAwesome6.BoxesPacking + "  " + GetIcon(entry.Extension) + "  " + serialized.GetAsset(fileID).Name, 30, node.LayoutData.InnerRect.Position, Color.white);
+                        Gui.ActiveGUI.DrawList.PopClipRect();
+                    }
+                    DragnDrop.SetPayload(serialized.GetAsset(fileID), entry);
+                }
+            }
+            else if (fileID == 0)
+            {
+                DragnDrop.Drag(entry);
+            }
+
+            if (fileID != 0) return;
+
+            if (interact.TakeFocus())
+                SelectHandler.Select(entry);
+
+            if (isAsset && interact.IsHovered() && Gui.ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+            {
+                if (entry.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase))
+                    SceneManager.LoadScene(new AssetRef<Runtime.Scene>(guid));
+                else
+                    AssetDatabase.OpenPath(entry);
+            }
+        }
+
+        public static Color GetFileColor(string ext)
+        {
+            switch (ext)
+            {
+                case ".png":
+                case ".bmp":
+                case ".jpg":
+                case ".jpeg":
+                case ".qoi":
+                case ".psd":
+                case ".tga":
+                case ".dds":
+                case ".hdr":
+                case ".ktx":
+                case ".pkm":
+                case ".pvr":
+                    return GuiStyle.Sky;
+                case ".ttf":
+                    return GuiStyle.Pink;
+                case ".obj":
+                case ".blend":
+                case ".dae":
+                case ".fbx":
+                case ".gltf":
+                case ".ply":
+                case ".pmx":
+                case ".stl":
+                    return GuiStyle.Orange;
+                case ".scriptobj":
+                    return GuiStyle.Yellow;
+                case ".mat":
+                    return GuiStyle.Fuchsia;
+                case ".shader":
+                    return GuiStyle.Red;
+                case ".glsl":
+                    return GuiStyle.Red;
+                case ".md":
+                case ".txt":
+                    return GuiStyle.Emerald;
+                case ".cs":
+                    return GuiStyle.Blue;
+                default:
+                    return new Color(1.0f, 1.0f, 1.0f);
+            }
+        }
+
+        public static Color GetTypeColor(Type type)
+        {
+            switch (type)
+            {
+                case Type t when t == typeof(Texture2D):
+                    return GuiStyle.Sky;
+                case Type t when t == typeof(Font):
+                    return GuiStyle.Pink;
+                case Type t when t == typeof(Mesh):
+                    return GuiStyle.Orange;
+                case Type t when t == typeof(ScriptableObject):
+                    return GuiStyle.Yellow;
+                case Type t when t == typeof(Material):
+                    return GuiStyle.Fuchsia;
+                case Type t when t == typeof(Shader):
+                    return GuiStyle.Red;
+                case Type t when t == typeof(TextAsset):
+                    return GuiStyle.Emerald;
+                case Type t when t == typeof(MonoScript):
+                    return GuiStyle.Blue;
+                default:
+                    return new Color(1.0f, 1.0f, 1.0f);
+            }
+        }
+
+        private static string GetIcon(string ext)
+        {
+            switch (ext)
+            {
+                case ".png":
+                case ".bmp":
+                case ".jpg":
+                case ".jpeg":
+                case ".qoi":
+                case ".psd":
+                case ".tga":
+                case ".dds":
+                case ".hdr":
+                case ".ktx":
+                case ".pkm":
+                case ".pvr":
+                    return FontAwesome6.Image;
+                case ".obj":
+                case ".blend":
+                case ".dae":
+                case ".fbx":
+                case ".gltf":
+                case ".ply":
+                case ".pmx":
+                case ".stl":
+                    return FontAwesome6.Cube;
+                case ".scriptobj":
+                    return FontAwesome6.Database;
+                case ".mat":
+                    return FontAwesome6.Circle;
+                case ".shader":
+                    return FontAwesome6.CameraRetro;
+                case ".glsl":
+                    return FontAwesome6.DiagramNext;
+                case ".md":
+                case ".txt":
+                    return FontAwesome6.FileLines;
+                case ".cs":
+                    return FontAwesome6.Code;
+                default:
+                    return FontAwesome6.File;
+            }
+        }
+
+        public string GetIconForType(Type type)
+        {
+            if (type == typeof(Texture2D))
+                return FontAwesome6.Image;
+            if (type == typeof(Mesh))
+                return FontAwesome6.Cube;
+            if (type == typeof(ScriptableObject))
+                return FontAwesome6.Database;
+            if (type == typeof(Material))
+                return FontAwesome6.Circle;
+            if (type == typeof(Shader))
+                return FontAwesome6.CameraRetro;
+            if (type == typeof(TextAsset))
+                return FontAwesome6.FileLines;
+            if (type == typeof(MonoScript))
+                return FontAwesome6.Code;
+            return FontAwesome6.File;
+        }
+
+
     }
 }

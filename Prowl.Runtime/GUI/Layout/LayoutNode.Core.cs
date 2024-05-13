@@ -84,9 +84,6 @@ namespace Prowl.Runtime.GUI.Layout
         private bool _layoutY = false;
         internal ClipType _clipped = ClipType.None;
 
-        internal ulong _nextNodeFrame = 0;
-        internal int _nextNode = 0;
-
         internal ulong _nextAnimationFrame = 0;
         internal int _nextAnimation = 0;
 
@@ -106,17 +103,6 @@ namespace Prowl.Runtime.GUI.Layout
                 SetNewParent(parent);
                 ZIndex = parent.ZIndex;
             }
-        }
-
-        public int GetNextNode()
-        {
-            if (_nextNodeFrame != Gui.frameCount)
-            {
-                // New frame for this node, reset node index
-                _nextNodeFrame = Gui.frameCount;
-                _nextNode = 0;
-            }
-            return _nextNode++;
         }
 
         public int GetNextAnimation()
@@ -405,7 +391,6 @@ namespace Prowl.Runtime.GUI.Layout
             hash = hash * 23 + (ulong)_clipped.GetHashCode();
             hash = hash * 23 + (ulong)VScroll.GetHashCode();
             hash = hash * 23 + (ulong)HScroll.GetHashCode();
-            hash = hash * 23 + (ulong)_nextNode.GetHashCode();
             hash = hash * 23 + (ulong)_nextAnimation.GetHashCode();
             hash = hash * 23 + (ulong)_nextInteractable.GetHashCode();
             return hash;
