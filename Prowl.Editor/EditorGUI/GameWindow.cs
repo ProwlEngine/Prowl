@@ -70,13 +70,13 @@ public class GameWindow : EditorWindow
 
         g.CurrentNode.Layout(Runtime.GUI.LayoutType.Column).AutoScaleChildren();
 
-        using (g.Node().MaxHeight(HeaderHeight).Enter())
+        using (g.Node("MenuBar").MaxHeight(HeaderHeight).Enter())
         {
             var innerRect = g.CurrentNode.LayoutData.InnerRect.Position;
             g.DrawText(FontAwesome6.Display, 20, innerRect, Color.white);
         }
 
-        using (g.Node().Width(Size.Percentage(1f)).Padding(5).Enter())
+        using (g.Node("Main").Width(Size.Percentage(1f)).Padding(5).Enter())
         {
             var innerRect = g.CurrentNode.LayoutData.InnerRect;
 

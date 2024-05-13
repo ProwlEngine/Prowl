@@ -3,6 +3,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
+using System.IO;
 
 namespace Prowl.Editor
 {
@@ -107,9 +108,9 @@ namespace Prowl.Editor
             g.CurrentNode.AutoScaleChildren();
             g.CurrentNode.Padding(0, 10, 10, 10);
 
-            using (g.Node().Width(Size.Percentage(1f)).MaxHeight(entryHeight).Clip().Enter())
+            using (g.Node("Search").Width(Size.Percentage(1f)).MaxHeight(entryHeight).Clip().Enter())
             {
-                if (g.Search(ref _searchText, 0, 0, Size.Percentage(1f, -entryHeight), entryHeight))
+                if (g.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f, -entryHeight), entryHeight))
                 {
                     SelectHandler.Clear();
                     _found.Clear();
@@ -123,7 +124,7 @@ namespace Prowl.Editor
                 }
                 var btnStyle = new GuiStyle();
                 btnStyle.FontSize = 30;
-                if (g.Button(FontAwesome6.CirclePlus, Offset.Percentage(1f, -entryHeight + 3), 0, entryHeight, entryHeight, btnStyle, true))
+                if (g.Button("CreateAssetBtn", FontAwesome6.CirclePlus, Offset.Percentage(1f, -entryHeight + 3), 0, entryHeight, entryHeight, btnStyle, true))
                 {
                     g.OpenPopup("CreateOrImportAsset");
                 }
@@ -139,7 +140,7 @@ namespace Prowl.Editor
             }
 
 
-            using (g.Node().Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column, false).Enter())
+            using (g.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column, false).Enter())
             {
                 //g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.5f, 10, 12);
 
@@ -158,7 +159,7 @@ namespace Prowl.Editor
                 {
                     foreach (var file in _found)
                     {
-                        using (g.Node().Top(_treeCounter * (entryHeight + entryPadding)).Width(Size.Percentage(1f)).Height(entryHeight).Enter())
+                        using (g.Node(file.FullName).Top(_treeCounter * (entryHeight + entryPadding)).Width(Size.Percentage(1f)).Height(entryHeight).Enter())
                         {
                             if (_treeCounter++ % 2 == 0)
                                 g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f);
@@ -191,7 +192,7 @@ namespace Prowl.Editor
         private void RenderRootFolder(bool defaultOpen, DirectoryInfo root, Color col)
         {
             bool expanded = false;
-            using (g.Node().Top(_treeCounter * (entryHeight + entryPadding)).Width(Size.Percentage(1f)).Height(entryHeight).Margin(2, 0).Enter())
+            using (g.Node(root.Name).Top(_treeCounter * (entryHeight + entryPadding)).Width(Size.Percentage(1f)).Height(entryHeight).Margin(2, 0).Enter())
             {
                 g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, 4);
 
@@ -205,7 +206,7 @@ namespace Prowl.Editor
                     g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
                 expanded = g.GetStorage<bool>(root.FullName, defaultOpen);
-                if (g.Button(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 5, 0, entryHeight, entryHeight, null, true))
+                if (g.Button("ExpandBtn", expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 5, 0, entryHeight, entryHeight, null, true))
                 {
                     expanded = !expanded;
                     g.SetStorage(root.FullName, expanded);
@@ -229,8 +230,10 @@ namespace Prowl.Editor
 
                 bool expanded = false;
                 var left = depth * entryHeight;
-                using (g.Node().Left(left).Top(_treeCounter * (entryHeight + entryPadding)).Width(Size.Percentage(1f, -left)).Height(entryHeight * scaleHeight).Margin(2, 0).Enter())
+                ulong subDirID = 0;
+                using (g.Node(subDirectory.Name, depth).Left(left).Top(_treeCounter * (entryHeight + entryPadding)).Width(Size.Percentage(1f, -left)).Height(entryHeight * scaleHeight).Margin(2, 0).Enter())
                 {
+                    subDirID = g.CurrentNode.ID;
                     if (_treeCounter++ % 2 == 0)
                         g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.6f, 4);
                     else
@@ -246,7 +249,7 @@ namespace Prowl.Editor
                         g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
                     expanded = g.GetStorage<bool>(g.CurrentNode.Parent, subDirectory.FullName, false);
-                    if (g.Button(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 5, 0, entryHeight, entryHeight, null, true))
+                    if (g.Button("ExpandBtn", expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 5, 0, entryHeight, entryHeight, null, true))
                     {
                         expanded = !expanded;
                         g.SetStorage(g.CurrentNode.Parent, subDirectory.FullName, expanded);
@@ -255,9 +258,11 @@ namespace Prowl.Editor
                     g.DrawText(UIDrawList.DefaultFont, subDirectory.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white);
                 }
 
+                g.PushID(subDirID);
                 float scaleAnim = g.AnimateBool((ulong)subDirectory.FullName.GetHashCode(), expanded, 0.15f, EaseType.Linear);
                 if (expanded || scaleAnim > 0f)
                     DrawDirectory(subDirectory, depth + 1, scaleAnim);
+                g.PopID();
             }
 
             var files = directory.GetFiles();

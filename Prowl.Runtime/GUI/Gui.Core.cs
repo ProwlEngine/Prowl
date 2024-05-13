@@ -8,158 +8,6 @@ using System.Runtime.CompilerServices;
 
 namespace Prowl.Runtime.GUI
 {
-    public static class TestGUI
-    {
-
-        public static Gui gui;
-        public static float sizePanelAnim = 0f;
-        public static string testString = "boobies yay :D";
-        public static void Test(Font font)
-        {
-            Rect screenRect = new Rect(0, 0, Runtime.Graphics.Resolution.x, Runtime.Graphics.Resolution.y);
-
-            if (gui == null)
-            {
-                gui = new();
-                Input.OnKeyEvent += gui.SetKeyState;
-                Input.OnMouseEvent += gui.SetPointerState;
-            }
-
-            gui.ProcessFrame(screenRect, 1f, (g) => {
-
-                //int wrapNodeCount = (int)Mathf.Abs(Mathf.Sin(Time.time + 0.5f) * 25);
-                int wrapNodeCount = 16;
-                int columnNodeCount = (int)Mathf.Abs(Mathf.Sin(Time.time) * 10);
-                //int panelWidth = (int)(500 * (1.0 + Mathf.Sin(Time.time) * 0.5));
-                int panelWidth = 500;
-                using (g.Node().Width(panelWidth).Height(500).TopLeft(Offset.Lerp(Offset.Percentage(0.10f), Offset.Percentage(0.20f), (float)Mathf.Sin(0.0))).Padding(5).Layout(LayoutType.Row).AutoScaleChildren().Enter())
-                {
-                    // A
-                    sizePanelAnim = g.AnimateBool(g.IsHovering(), 0.1f, EaseType.SineInOut);
-                    using (g.Node().MaxWidth(Mathf.Lerp(50, 100, sizePanelAnim)).Height(Size.Percentage(0.90f)).Layout(LayoutType.Grid).Enter())
-                    {
-                        g.SetZIndex(1);
-                        g.DrawRect(g.CurrentNode.LayoutData.Rect, Color.white, 2f, 4f);
-                        g.PushClip(g.CurrentNode.LayoutData.InnerRect);
-                        for (int i = 0; i < wrapNodeCount; i++)
-                            using (g.Node().Width(50).Height(50).Margin(5).Enter())
-                            {
-                                g.DrawRect(g.CurrentNode.LayoutData.Rect, Color.white, 2f, 4f);
-                            }
-                        g.PopClip();
-
-                        g.ScrollV();
-                    }
-
-                    // B
-                    //using (g.Node().Padding(5).Width(Size.Percentage(0.25f)).Height(Size.Percentage(0.90f)).Layout(LayoutType.Column).AutoScaleChildren().CenterContent().Enter())
-                    //{
-                    //    g.DrawRect(g.CurrentNode.LayoutData.Rect, Color.white, 2f, 4f);
-                    //    for (int i = 0; i < columnNodeCount; i++)
-                    //        using (g.Node().Width(50).Enter())
-                    //            g.DrawRect(g.CurrentNode.LayoutData.Rect, Color.white, 2f, 4f);
-                    //}
-
-                    // C
-                    using (g.Node().Width(Size.Percentage(0.25f)).Height(Size.Percentage(0.90f)).Enter())
-                    {
-                        g.DrawRect(g.CurrentNode.LayoutData.Rect, Color.white, 2f, 4f);
-
-                        if (g.Button("Test", 0, 0, 50, 25))
-                            Debug.Log("Yey");
-
-                        if(g.Button("test button", 0, 50, 75, 25, out var buttonNode))
-                            Debug.Log("Pressed");
-
-                        g.InputField(ref testString, 999, Gui.InputFieldFlags.None, 0, 100, 300);
-
-                        //buttonNode.Interaction = (interact) => {
-                        //    hoveringTest = interact.IsHovering();
-                        //};
-                        //
-                        //buttonNode.Draw = (drawlist) => {
-                        //    drawlist.AddCircle();
-                        //};
-                        //
-                        //float anim = g.AnimateBool(hoveringTest, 0.1f, EaseType.SineInOut);
-                        //buttonNode.Width(50 + (10 * anim));
-                        //buttonNode.Height(50 + (10 * anim));
-
-
-
-                    }
-
-                    // Footer
-                    using (g.Node().Width(Size.Percentage(1.00f)).Height(Size.Percentage(0.10f)).Top(Offset.Percentage(0.90f)).Padding(5).IgnoreLayout().Enter())
-                    {
-                        g.DrawRect(g.CurrentNode.LayoutData.Rect, Color.white, 2f, 4f);
-                        if (g.IsHovering())
-                        {
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect,  Color.blue, 4f);
-                            g.CurrentNode.Height(Size.Percentage(0.20f));
-                        }
-                        else
-                        {
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, Color.white, 4f);
-                        }
-
-                        g.PushClip(g.CurrentNode.LayoutData.InnerRect);
-                        g.DrawText(font, @"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam interdum nec ante et condimentum. Aliquam quis viverraodio. Etiam vel tortor in ante lobortis tristique non inmauris. Maecenas massa tellus, aliquet vel massa eget, commodo commodo neque. In at erat ut nisi aliquam condimentum eu vitae quam. Suspendisse tristique euismod libero. Cras non massa nibh.Suspendisse id justo nibh. Nam ut diam id nunc ultrices aliquam cursus at ipsum. Praesent dapibus mauris gravida massa dapibus, vitae posuere magna finibus. Phasellus dignissim libero metus, vitae tincidunt massa lacinia eget. Cras sed viverra tortor. Vivamus iaculis faucibus ex non suscipit. In fringilla tellus at lorem sollicitudin, ut placerat nibh mollis. Nullam tortor elit, aliquet ac efficitur vel, ornare eget nibh. Vivamus condimentum, dui id vehicula iaculis, velit velit pulvinar nisi, mollis blandit nibh arcu ut magna. Vivamus condimentum in magna in aliquam. Donec vitae elementum neque. Nam ac ipsum id orci finibus fringilla. Nulla non justo a augue congue dictum. Vestibulum in quam id nibh blandit laoreet.", 
-                            20, g.CurrentNode.LayoutData.InnerRect, Color.black);
-                        g.PopClip();
-                    }
-                }
-
-
-
-                //int panelWidth = (int)(500 * (1.0 + Mathf.Sin(Time.time) * 0.5));
-                //using (g.Node().FitContent().Width(panelWidth).TopLeft(Offset.Percentage(0.10f)).Padding(5).Layout(LayoutType.Wrap).Enter())
-                //{
-                //    for (int i = 0; i < 48; i++)
-                //        using (g.Node().Width(50).Height(50).Margin(3).Enter())
-                //        {
-                //            // Draw Here
-                //        }
-                //}
-
-
-                //using (g.Node().Width(500).Height(500).TopLeft(Offset.Percentage(0.10f)).Padding(5).Layout(LayoutType.Row).Enter())
-                //{
-                //    // A
-                //    using (g.Node().Height(Size.Percentage(0.90f)).Enter())
-                //    {
-                //    }
-                //
-                //    // Footer
-                //    using (g.Node().Width(Size.Percentage(1.00f)).Height(Size.Percentage(0.10f)).Top(Offset.Percentage(0.90f)).IgnoreLayout().Enter())
-                //    {
-                //        // Draw Here
-                //    }
-                //}
-
-
-                //using (g.Node().Width(500).Height(500).TopLeft(Offset.Percentage(0.50f)).Padding(5).Layout(LayoutType.Row).Enter())
-                //{
-                //    // A
-                //    using (g.Node().Width(Size.Percentage(1f)).Height(Size.Percentage(0.90f)).Layout(LayoutType.Wrap).Enter())
-                //    {
-                //        g.CurrentScope.CenterContent = true;
-                //        for (int i = 0; i < 60; i++)
-                //            using (g.Node().Width(8).Height(8).Margin(5).Enter())
-                //            {
-                //            }
-                //    }
-                //
-                //    // Footer
-                //    using (g.Node().Width(Size.Percentage(1.00f)).Height(Size.Percentage(0.10f)).Top(Offset.Percentage(0.90f)).IgnoreLayout().Enter())
-                //    {
-                //        // Draw Here
-                //    }
-                //}
-            });
-        }
-    }
-
     public partial class Gui
     {
         public static Gui ActiveGUI;
@@ -177,15 +25,15 @@ namespace Prowl.Runtime.GUI
         internal bool layoutDirty = false;
         internal ulong frameCount = 0;
 
-        private Dictionary<ulong, LayoutNode.PostLayoutData> _layoutData;
-        private Dictionary<ulong, LayoutNode> _nodes;
+        private Dictionary<ulong, LayoutNode.PostLayoutData> _previousLayoutData;
+        private LayoutNode rootNode;
         private Dictionary<ulong, ulong> _computedNodes;
 
         public Gui()
         {
-            _nodes = [];
+            rootNode = null;
             _computedNodes = [];
-            _layoutData = [];
+            _previousLayoutData = [];
         }
 
         public void ProcessFrame(Rect screenRect, float scale, Action<Gui> gui)
@@ -200,7 +48,6 @@ namespace Prowl.Runtime.GUI
             layoutNodeScopes.Clear();
             nodeCountPerLine.Clear();
             IDStack.Clear();
-            _nodes.Clear();
 
             if (!_drawList.ContainsKey(0))
                 _drawList[0] = new UIDrawList(); // Root Draw List
@@ -216,45 +63,39 @@ namespace Prowl.Runtime.GUI
                 drawListsOrdered.Add(_drawList[index]);
             }
 
-            LayoutNode root = null;
-            if (!_nodes.TryGetValue(0, out root))
-            {
-                root = new LayoutNode(null, this, 0);
-                root._lastFrameUsedIn = frameCount;
-                _nodes[0] = root;
-            }
-            root.Width(screenRect.width).Height(screenRect.height);
-            PreviousNode = root;
+            rootNode = new LayoutNode(null, this, 0);
+            rootNode.Width(screenRect.width).Height(screenRect.height);
+            PreviousNode = rootNode;
 
             // The first pass Produces all the nodes and structure the user wants
             // Draw calls are Ignored
             // Reset Nodes
             layoutDirty = false;
-            PushNode(new(root));
+            PushNode(new(rootNode));
             DoPass(gui);
             PopNode();
 
             UIDrawList.Draw(GLDevice.GL, new(screenRect.width, screenRect.height), drawListsOrdered.ToArray());
 
             // Look for any nodes whos HashCode does not match the previously computed nodes
-            //layoutDirty |= MatchHash(root);
+            layoutDirty |= MatchHash(rootNode);
 
             // Now that we have the nodes we can properly process their LayoutNode
             // Like if theres a GridLayout node we can process that here
-            //if (layoutDirty)
+            if (layoutDirty)
             {
-                root.UpdateCache();
-                root.ProcessLayout();
-                root.UpdateCache();
+                rootNode.UpdateCache();
+                rootNode.ProcessLayout();
+                rootNode.UpdateCache();
                 // Cache layout data
-                _layoutData.Clear();
-                CacheLayoutData(root);
+                _previousLayoutData.Clear();
+                CacheLayoutData(rootNode);
             }
         }
 
         private void CacheLayoutData(LayoutNode node)
         {
-            _layoutData[node.ID] = node.LayoutData;
+            _previousLayoutData[node.ID] = node.LayoutData;
             foreach (var child in node.Children)
                 CacheLayoutData(child);
         }
@@ -291,39 +132,29 @@ namespace Prowl.Runtime.GUI
             return dirty;
         }
 
-        public LayoutNode Node([CallerMemberName] string stringID = "", [CallerLineNumber] int intID = 0) => Node(CurrentNode, stringID, intID);
+        public LayoutNode Node(string stringID, [CallerLineNumber] int intID = 0) => Node(CurrentNode, stringID, intID);
 
         private Dictionary<ulong, uint> nodeCountPerLine = [];
-        public LayoutNode Node(LayoutNode parent, [CallerMemberName] string stringID = "", [CallerLineNumber] int intID = 0)
+        public LayoutNode Node(LayoutNode parent, string stringID, [CallerLineNumber] int intID = 0)
         {
-            //int nodeId = parent.GetNextNode();
             ulong lineHash = (ulong)HashCode.Combine(stringID, intID);
-            nodeCountPerLine.TryGetValue(lineHash, out var count);
-            nodeCountPerLine[lineHash] = ++count;
-            ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), lineHash, count);
+            ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), lineHash);
 
-            var node = new LayoutNode(parent, this, storageHash);
-            node._lastFrameUsedIn = frameCount;
-            node.SetNewParent(parent);
-            if (_layoutData.TryGetValue(storageHash, out var data))
+            LayoutNode node = new(parent, this, storageHash);
+            // If we generated data for this node last frame, Use that data instead of having to recompute it
+            // This is actually vital, since we don't store nodes between frames, so even if we didn't do this and recomputed every frame
+            // We would never see the nodes we created/drawn since their data is computed at the end of the frame, after drawing, only to be discarded early next frame before drawing
+            if (_previousLayoutData.TryGetValue(storageHash, out var data))
             {
                 data._node = node;
                 node.LayoutData = data;
             }
             else
             {
-                // We can fallback to the current nodes layout data, taht way theres atleast something
-                //var d = new LayoutNode.PostLayoutData(node);
-                //d.Scale = CurrentNode.LayoutData.Scale;
-                //d.MaxScale = CurrentNode.LayoutData.MaxScale;
-                //d.Margins = CurrentNode.LayoutData.Margins;
-                //d.Paddings = CurrentNode.LayoutData.Paddings;
-                //d.Position = CurrentNode.LayoutData.Position;
-                //d.ContentRect = CurrentNode.LayoutData.ContentRect;
-                //node.LayoutData = d;
+                // We didnt have this node last frame! So we need to recompute layout.
+                layoutDirty = true;
             }
-            parent.Children.Add(node);
-            layoutDirty = true;
+
             return node;
         }
 

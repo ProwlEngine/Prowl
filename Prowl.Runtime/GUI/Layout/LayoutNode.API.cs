@@ -152,11 +152,12 @@
             if (Parent != null)
                 Parent.Children.Remove(this);
             Parent = newParent;
+            Parent.Children.Add(this);
             //Parent.GetNextNode();
             _positionRelativeTo = newParent;
             _sizeRelativeTo = newParent;
         }
 
-        public LayoutNode AppendNode() => Gui.Node(this);
+        public LayoutNode AppendNode(string ID) => Gui.Node(this, ID);
     }
 }

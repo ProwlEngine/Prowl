@@ -84,8 +84,6 @@ namespace Prowl.Runtime.GUI.Layout
         private bool _layoutY = false;
         internal ClipType _clipped = ClipType.None;
 
-        internal ulong _lastFrameUsedIn = 0;
-
         internal ulong _nextNodeFrame = 0;
         internal int _nextNode = 0;
 
@@ -105,6 +103,7 @@ namespace Prowl.Runtime.GUI.Layout
             Gui = gui;
             if (parent != null)
             {
+                SetNewParent(parent);
                 ZIndex = parent.ZIndex;
             }
         }
@@ -382,7 +381,7 @@ namespace Prowl.Runtime.GUI.Layout
         public ulong GetHashCode64()
         {
             ulong hash = 17;
-            hash = hash * 23 + (ulong)ID.GetHashCode();
+            hash = hash * 23 + ID;
             hash = hash * 23 + (ulong)_positionX.GetHashCode64();
             hash = hash * 23 + (ulong)_positionY.GetHashCode64();
             hash = hash * 23 + (ulong)_width.GetHashCode64();

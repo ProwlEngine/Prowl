@@ -92,7 +92,7 @@ namespace Prowl.Editor
                     height = DockSize.y;
                 }
 
-                using (g.Node().Width(width).Height(height).Padding(Padding).Left(_x).Top(_y).Layout(LayoutType.Column).AutoScaleChildren().Enter())
+                using (g.Node("_" + Title, _id).Width(width).Height(height).Padding(Padding).Left(_x).Top(_y).Layout(LayoutType.Column).AutoScaleChildren().Enter())
                 {
                     g.CreateBlocker(g.CurrentNode.LayoutData.InnerRect);
                     g.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
@@ -103,7 +103,7 @@ namespace Prowl.Editor
 
                     if (TitleBar)
                     {
-                        using (g.Node().Width(Size.Percentage(1f)).MaxHeight(40).Padding(10, 10).Enter())
+                        using (g.Node("_Titlebar").Width(Size.Percentage(1f)).MaxHeight(40).Padding(10, 10).Enter())
                         {
                             HandleTitleBarInteraction();
 
@@ -126,7 +126,7 @@ namespace Prowl.Editor
                                 for (int i = 0; i < Leaf.LeafWindows.Count; i++)
                                 {
                                     var window = Leaf.LeafWindows[i];
-                                    using (g.Node().Width(tabWidth).Height(20).Left(i * (tabWidth + 5)).Enter())
+                                    using (g.Node("_" + window.Title, window._id).Width(tabWidth).Height(20).Left(i * (tabWidth + 5)).Enter())
                                     {
                                         var tabRect = g.CurrentNode.LayoutData.Rect;
                                         tabRect.Expand(0, 2);
@@ -137,6 +137,7 @@ namespace Prowl.Editor
                                             if (interact.TakeFocus())
                                             {
                                                 Leaf.WindowNum = i;
+                                                EditorGui.FocusWindow(window);
                                             }
                                             if (interact.IsHovered())
                                                 g.DrawRectFilled(tabRect, GuiStyle.Borders, 10);
@@ -167,7 +168,7 @@ namespace Prowl.Editor
                         }
 
 
-                        using (g.Node().Width(Size.Percentage(1f)).Clip().Enter())
+                        using (g.Node("_Main").Width(Size.Percentage(1f)).Clip().Enter())
                         {
                             Draw();
                         }
@@ -196,7 +197,7 @@ namespace Prowl.Editor
 
         private void DrawAndHandleCloseButton()
         {
-            using (g.Node().Width(20).Height(20).Left(Offset.Percentage(1f, -20)).Enter())
+            using (g.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -20)).Enter())
             {
                 var interact = g.GetInteractable();
                 if (interact.TakeFocus())
@@ -214,43 +215,47 @@ namespace Prowl.Editor
             {
                 if (titleInteract.TakeFocus() || titleInteract.IsActive())
                 {
-                    _wasDragged = true;
-
-                    _x += Input.MouseDelta.x;
-                    _y += Input.MouseDelta.y;
-                    EditorGui.DraggingWindow = this;
-
-                    if (g.IsPointerMoving && IsDocked)
+                    EditorGui.FocusWindow(this);
+                    if (_wasDragged || g.IsPointerMoving)
                     {
-                        EditorGui.Container.DetachWindow(this);
-                        // Position the window so the mouse is over the title bar
-                        _x = g.PointerPos.x - (_width / 2);
-                        _y = g.PointerPos.y - 10;
-                    }
+                        _wasDragged = true;
 
-                    if (IsDockable && !IsDocked)
-                    {
-                        var oldZ = g.CurrentZIndex;
-                        g.SetZIndex(10000);
-                        // Draw Docking Placement
-                        Vector2 cursorPos = g.PointerPos;
-                        DockPlacement placement = EditorGui.Container.GetPlacement(cursorPos.x, cursorPos.y);
-                        if (placement)
+                        _x += Input.MouseDelta.x;
+                        _y += Input.MouseDelta.y;
+                        EditorGui.DraggingWindow = this;
+
+                        if (g.IsPointerMoving && IsDocked)
                         {
-                            g.DrawList.PathLineTo(placement.PolygonVerts[0]);
-                            g.DrawList.PathLineTo(placement.PolygonVerts[1]);
-                            g.DrawList.PathLineTo(placement.PolygonVerts[2]);
-                            g.DrawList.PathLineTo(placement.PolygonVerts[3]);
-                            g.DrawList.PathFill(UIDrawList.ColorConvertFloat4ToU32(Color.yellow * 0.5f));
-
-                            g.DrawList.PathLineTo(placement.PolygonVerts[0]);
-                            g.DrawList.PathLineTo(placement.PolygonVerts[1]);
-                            g.DrawList.PathLineTo(placement.PolygonVerts[2]);
-                            g.DrawList.PathLineTo(placement.PolygonVerts[3]);
-                            //g.DrawList.PathLineTo(placement.PolygonVerts[0]);
-                            g.DrawList.PathStroke(UIDrawList.ColorConvertFloat4ToU32(Color.yellow * 0.5f), true, 2f);
+                            EditorGui.Container.DetachWindow(this);
+                            // Position the window so the mouse is over the title bar
+                            _x = g.PointerPos.x - (_width / 2);
+                            _y = g.PointerPos.y - 10;
                         }
-                        g.SetZIndex(oldZ);
+
+                        if (IsDockable && !IsDocked)
+                        {
+                            var oldZ = g.CurrentZIndex;
+                            g.SetZIndex(10000);
+                            // Draw Docking Placement
+                            Vector2 cursorPos = g.PointerPos;
+                            DockPlacement placement = EditorGui.Container.GetPlacement(cursorPos.x, cursorPos.y);
+                            if (placement)
+                            {
+                                g.DrawList.PathLineTo(placement.PolygonVerts[0]);
+                                g.DrawList.PathLineTo(placement.PolygonVerts[1]);
+                                g.DrawList.PathLineTo(placement.PolygonVerts[2]);
+                                g.DrawList.PathLineTo(placement.PolygonVerts[3]);
+                                g.DrawList.PathFill(UIDrawList.ColorConvertFloat4ToU32(Color.yellow * 0.5f));
+
+                                g.DrawList.PathLineTo(placement.PolygonVerts[0]);
+                                g.DrawList.PathLineTo(placement.PolygonVerts[1]);
+                                g.DrawList.PathLineTo(placement.PolygonVerts[2]);
+                                g.DrawList.PathLineTo(placement.PolygonVerts[3]);
+                                //g.DrawList.PathLineTo(placement.PolygonVerts[0]);
+                                g.DrawList.PathStroke(UIDrawList.ColorConvertFloat4ToU32(Color.yellow * 0.5f), true, 2f);
+                            }
+                            g.SetZIndex(oldZ);
+                        }
                     }
                 }
                 else

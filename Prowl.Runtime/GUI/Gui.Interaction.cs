@@ -129,7 +129,7 @@ namespace Prowl.Runtime.GUI
             {
                 IsDragDropActive = true;
                 DragDropID = PreviousInteractableID;
-                using ((node = _nodes[0].AppendNode()).Left(PointerPos.x).Top(PointerPos.y).IgnoreLayout().Enter())
+                using ((node = rootNode.AppendNode("_DragDrop")).Left(PointerPos.x).Top(PointerPos.y).IgnoreLayout().Enter())
                 {
                     SetZIndex(50000);
 

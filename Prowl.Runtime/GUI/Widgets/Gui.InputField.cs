@@ -27,14 +27,14 @@ namespace Prowl.Runtime.GUI
 
         private static StbTextEditState stb;
 
-        public bool InputField(ref string value, uint maxLength, InputFieldFlags flags, Offset x, Offset y, Size width, Size? height = null, GuiStyle? style = null, bool invisible = false)
+        public bool InputField(string ID, ref string value, uint maxLength, InputFieldFlags flags, Offset x, Offset y, Size width, Size? height = null, GuiStyle? style = null, bool invisible = false)
         {
             style ??= new();
             var g = Gui.ActiveGUI;
             bool multiline = ((flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline);
             Size h = (multiline ? style.FontSize * 8 : style.FontSize) + 2.5;
             if(height != null) h = height.Value;
-            using (g.Node().Left(x).Top(y).Width(width).Height(h).Padding(5).Enter())
+            using (g.Node(ID).Left(x).Top(y).Width(width).Height(h).Padding(5).Enter())
             {
                 Interactable interact = g.GetInteractable(true, true);
 
@@ -63,7 +63,7 @@ namespace Prowl.Runtime.GUI
                 {
                     Vector2 textSize = (style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont).CalcTextSize(value, 0, g.CurrentNode.LayoutData.InnerRect.width);
                     // Dummy node to update ContentRect
-                    g.Node().Width(textSize.x).Height(textSize.y).IgnoreLayout();
+                    g.Node(ID).Width(textSize.x).Height(textSize.y).IgnoreLayout();
                     g.ScrollV();
                 }
 

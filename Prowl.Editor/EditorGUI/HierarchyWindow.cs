@@ -54,12 +54,12 @@ namespace Prowl.Editor
             g.CurrentNode.Padding(0, 10, 10, 10);
 
 
-            using (g.Node().Width(Size.Percentage(1f)).MaxHeight(entryHeight).Clip().Enter())
+            using (g.Node("Search").Width(Size.Percentage(1f)).MaxHeight(entryHeight).Clip().Enter())
             {
-                g.Search(ref _searchText, 0, 0, Size.Percentage(1f, -entryHeight), entryHeight);
+                g.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f, -entryHeight), entryHeight);
                 var btnStyle = new GuiStyle();
                 btnStyle.FontSize = 30;
-                if (g.Button(FontAwesome6.CirclePlus, Offset.Percentage(1f, -entryHeight + 3), 0, entryHeight, entryHeight, btnStyle, true))
+                if (g.Button("CreateGOBtn", FontAwesome6.CirclePlus, Offset.Percentage(1f, -entryHeight + 3), 0, entryHeight, entryHeight, btnStyle, true))
                 {
                     g.OpenPopup("CreateGameObject");
                 }
@@ -73,7 +73,7 @@ namespace Prowl.Editor
                 }
             }
 
-            using (g.Node().Width(Size.Percentage(1f)).MarginTop(5).Enter())
+            using (g.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Enter())
             {
                 //g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.5f, 10, 12);
 
@@ -116,8 +116,10 @@ namespace Prowl.Editor
             bool drawChildren = false;
             bool isPrefab = entity.IsPrefab;
             double left = depth * entryHeight;
-            using (g.Node().Left(left).Top(index * (entryHeight + entryPadding)).Width(Size.Percentage(1f, -(left))).Height(entryHeight).Margin(2, 0).Enter())
+            ulong goNodeID = 0;
+            using (g.Node(entity.GetHashCode().ToString()).Left(left).Top(index * (entryHeight + entryPadding)).Width(Size.Percentage(1f, -(left))).Height(entryHeight).Margin(2, 0).Enter())
             {
+                goNodeID = g.CurrentNode.ID;
                 float colMult = entity.enabledInHierarchy ? 1 : 0.5f;
                 bool isSelected = SelectHandler.IsSelected(new WeakReference(entity));
 
@@ -160,7 +162,7 @@ namespace Prowl.Editor
                 var style = new GuiStyle();
                 if(!entity.enabledInHierarchy)
                     style.TextColor = GuiStyle.Base4;
-                if (g.Button(entity.enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash, 6, 6, 20, 20, style, true))
+                if (g.Button("VisibilityBtn", entity.enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash, 6, 6, 20, 20, style, true))
                     entity.enabled = !entity.enabled;
 
                 // if were pinging we need to open the tree to the pinged object
@@ -183,7 +185,7 @@ namespace Prowl.Editor
                 if (entity.children.Count > 0)
                 {
                     bool expanded = g.GetStorage<bool>(entity.InstanceID.ToString());
-                    if (g.Button(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, maxwidth - entryHeight, 5, 20, 20, style, true))
+                    if (g.Button("ExpandBtn", expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, maxwidth - entryHeight, 5, 20, 20, style, true))
                     {
                         expanded = !expanded;
                         g.SetStorage(entity.InstanceID.ToString(), expanded);
@@ -197,7 +199,7 @@ namespace Prowl.Editor
                 {
                     var inputRect = new Rect(rect.x + 33, rect.y + 4, maxwidth - (entryHeight * 2.25), 21);
                     g.DrawRectFilled(inputRect, GuiStyle.WindowBackground, 8);
-                    g.InputField(ref name, 64, Gui.InputFieldFlags.None, 30, 3, maxwidth - (entryHeight * 2.25), null, null, true);
+                    g.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.None, 30, 3, maxwidth - (entryHeight * 2.25), null, null, true);
                     if (justStartedRename)
                         g.FocusPreviousControl();
                     if (!g.PreviousControlIsFocus())
@@ -215,8 +217,10 @@ namespace Prowl.Editor
             // Open
             if (drawChildren)
             {
+                g.PushID(goNodeID);
                 for (int i = 0; i < entity.children.Count; i++)
                     DrawGameObject(ref index, entity.children[i], depth + 1, isPartOfPrefab || isPrefab);
+                g.PopID();
             }
         }
 

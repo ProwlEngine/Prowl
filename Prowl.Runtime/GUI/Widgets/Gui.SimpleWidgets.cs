@@ -1,10 +1,8 @@
-﻿using System;
-using System.Reflection.Emit;
-using Microsoft.VisualBasic;
-using Prowl.Icons;
+﻿using Prowl.Icons;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
-using Silk.NET.Vulkan;
+using System;
+using System.Reflection.Emit;
 
 namespace Prowl.Runtime.GUI
 {
@@ -20,7 +18,7 @@ namespace Prowl.Runtime.GUI
             CurrentNode.VScroll = GetStorage<double>("VScroll");
             //CurrentNode.PaddingRight(ScrollVWidth + padding);
 
-            using (Node().Width(ScrollVWidth).Height(Size.Percentage(1f, -(ScrollVPadding * 2))).Left(Offset.Percentage(1f, -(ScrollVWidth + ScrollVPadding))).Top(ScrollVPadding).IgnoreLayout().Enter())
+            using (Node("_VScroll").Width(ScrollVWidth).Height(Size.Percentage(1f, -(ScrollVPadding * 2))).Left(Offset.Percentage(1f, -(ScrollVWidth + ScrollVPadding))).Top(ScrollVPadding).IgnoreLayout().Enter())
             {
                 Rect scrollRect = CurrentNode.LayoutData.Rect;
                 if (n.HasLayoutData)
@@ -69,12 +67,12 @@ namespace Prowl.Runtime.GUI
         }
 
 
-        public bool Button(string? label, Offset x, Offset y, Size width, Size height, GuiStyle? style = null, bool invisible = false, bool repeat = false, int rounded_corners = 15) => Button(label, x, y, width, height, out _, style, invisible, repeat, rounded_corners);
-        public bool Button(string? label, Offset x, Offset y, Size width, Size height, out LayoutNode node, GuiStyle? style = null, bool invisible = false, bool repeat = false, int rounded_corners = 15)
+        public bool Button(string ID, string? label, Offset x, Offset y, Size width, Size height, GuiStyle? style = null, bool invisible = false, bool repeat = false, int rounded_corners = 15) => Button(ID, label, x, y, width, height, out _, style, invisible, repeat, rounded_corners);
+        public bool Button(string ID, string? label, Offset x, Offset y, Size width, Size height, out LayoutNode node, GuiStyle? style = null, bool invisible = false, bool repeat = false, int rounded_corners = 15)
         {
             style ??= new();
             var g = Gui.ActiveGUI;
-            using ((node = g.Node()).Left(x).Top(y).Width(width).Height(height).Padding(2).Enter())
+            using ((node = g.Node(ID)).Left(x).Top(y).Width(width).Height(height).Padding(2).Enter())
             {
                 Interactable interact = g.GetInteractable();
 
@@ -98,27 +96,27 @@ namespace Prowl.Runtime.GUI
             }
         }
 
-        public bool InputDouble(ref double value, Offset x, Offset y, Size width, GuiStyle? style = null)
+        public bool InputDouble(string ID, ref double value, Offset x, Offset y, Size width, GuiStyle? style = null)
         {
             string textValue = "";
-            var changed = InputField(ref textValue, 16, InputFieldFlags.NumbersOnly, x, y, width, 0, style);
+            var changed = InputField(ID, ref textValue, 16, InputFieldFlags.NumbersOnly, x, y, width, 0, style);
             if (changed && Double.TryParse(textValue, out value)) return true;
             return false;
         }
 
-        public bool InputInt(ref int value, Offset x, Offset y, Size width, GuiStyle? style = null)
+        public bool InputInt(string ID, ref int value, Offset x, Offset y, Size width, GuiStyle? style = null)
         {
             string textValue = "";
-            var changed = InputField(ref textValue, 16, InputFieldFlags.NumbersOnly, x, y, width, 0, style);
+            var changed = InputField(ID, ref textValue, 16, InputFieldFlags.NumbersOnly, x, y, width, 0, style);
             if (changed && int.TryParse(textValue, out value)) return true;
             return false;
         }
 
-        public bool Combo(string popupName, ref int ItemIndex, string[] Items, Offset x, Offset y, Size width, Size height, GuiStyle? style = null, float PopupHeight = 100)
+        public bool Combo(string ID, string popupName, ref int ItemIndex, string[] Items, Offset x, Offset y, Size width, Size height, GuiStyle? style = null, float PopupHeight = 100)
         {
             style ??= new();
             var g = Gui.ActiveGUI;
-            using (g.Node().Left(x).Top(y).Width(width).Height(height).Padding(2).Enter())
+            using (g.Node(ID).Left(x).Top(y).Width(width).Height(height).Padding(2).Enter())
             {
                 Interactable interact = g.GetInteractable();
         
@@ -174,9 +172,9 @@ namespace Prowl.Runtime.GUI
         
         }
 
-        public bool Checkbox(ref bool value, Offset x, Offset y, out LayoutNode node, GuiStyle? style = null)
+        public bool Checkbox(string ID, ref bool value, Offset x, Offset y, out LayoutNode node, GuiStyle? style = null)
         {
-            using ((node = Node()).Left(x).Top(y).Width(20).Height(20).Enter())
+            using ((node = Node(ID)).Left(x).Top(y).Width(20).Height(20).Enter())
             {
                 Interactable interact = GetInteractable();
 
@@ -216,7 +214,7 @@ namespace Prowl.Runtime.GUI
             }
         }
 
-        public bool Tooltip(out LayoutNode? node, Vector2? topleft = null, bool invisible = false)
+        public bool Tooltip(string ID, out LayoutNode? node, Vector2? topleft = null, bool invisible = false)
         {
             node = null;
             if (!PreviousControlIsHovered())
@@ -224,7 +222,7 @@ namespace Prowl.Runtime.GUI
 
             // Append to Root
             var pos = topleft ?? PointerPos;
-            using ((node = _nodes[0].AppendNode()).Left(pos.x).Top(pos.y).IgnoreLayout().Enter())
+            using ((node = rootNode.AppendNode(ID)).Left(pos.x).Top(pos.y).IgnoreLayout().Enter())
             {
                 SetZIndex(1100);
 
@@ -244,24 +242,24 @@ namespace Prowl.Runtime.GUI
             }
         }
 
-        public void OpenPopup(string name, Vector2? topleft = null)
+        public void OpenPopup(string id, Vector2? topleft = null)
         {
-            SetStorage("PU_" + name, true);
-            SetStorage("PU_POS_" + name, topleft ?? PointerPos);
+            SetStorage("PU_" + id, true);
+            SetStorage("PU_POS_" + id, topleft ?? PointerPos);
         }
 
         private static LayoutNode? currentPopupParent = null;
 
-        public bool BeginPopup(string name, out LayoutNode? node, bool invisible = false)
+        public bool BeginPopup(string id, out LayoutNode? node, bool invisible = false)
         {
             node = null;
-            var show = GetStorage<bool>("PU_" + name);
+            var show = GetStorage<bool>("PU_" + id);
             if (show)
             {
                 currentPopupParent = CurrentNode;
-                var pos = GetStorage<Vector2>("PU_POS_" + name);
+                var pos = GetStorage<Vector2>("PU_POS_" + id);
                 // Append to Root
-                using ((node = _nodes[0].AppendNode()).Left(pos.x).Top(pos.y).IgnoreLayout().Enter())
+                using ((node = rootNode.AppendNode("PU_" + id)).Left(pos.x).Top(pos.y).IgnoreLayout().Enter())
                 {
                     SetZIndex(1000);
                     CreateBlocker(CurrentNode.LayoutData.Rect);
@@ -275,7 +273,7 @@ namespace Prowl.Runtime.GUI
 
                     if (IsPointerDown(Silk.NET.Input.MouseButton.Left) && !node.LayoutData.Rect.Contains(PointerPos))
                     {
-                        ClosePopup(name);
+                        ClosePopup(id);
                         return false;
                     }
 
@@ -300,13 +298,17 @@ namespace Prowl.Runtime.GUI
             currentPopupParent = null;
         }
 
-        public bool Search(ref string searchText, Offset x, Offset y, Size width, Size? height = null, GuiStyle? style = null)
+        public bool Search(string ID, ref string searchText, Offset x, Offset y, Size width, Size? height = null, GuiStyle? style = null)
         {
             style ??= new();
             searchText ??= "";
             var g = Runtime.GUI.Gui.ActiveGUI;
 
-            var changed = InputField(ref searchText, 32, InputFieldFlags.None, x, y, width, height, style);
+            style.WidgetColor = GuiStyle.WindowBackground;
+            style.Border = GuiStyle.Borders;
+            style.WidgetRoundness = 8f;
+            style.BorderThickness = 1f;
+            var changed = InputField(ID, ref searchText, 32, InputFieldFlags.None, x, y, width, height, style);
             if(string.IsNullOrWhiteSpace(searchText) && !g.PreviousControlIsFocus())
             {
                 var pos = g.PreviousNode.LayoutData.InnerRect.Position + new Vector2(8, 3);

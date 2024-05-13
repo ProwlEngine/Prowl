@@ -35,12 +35,12 @@ namespace Prowl.Editor
             g.CurrentNode.Layout(LayoutType.Row);
             g.CurrentNode.AutoScaleChildren();
 
-            using (g.Node().Height(Size.Percentage(1f)).MaxWidth(150).Layout(LayoutType.Column).Enter())
+            using (g.Node("Side").Height(Size.Percentage(1f)).MaxWidth(150).Layout(LayoutType.Column).Enter())
             {
                 DrawSidePanel();
             }
 
-            using (g.Node().Height(Size.Percentage(1f)).Enter())
+            using (g.Node("Main").Height(Size.Percentage(1f)).Enter())
             {
                 g.PushID((ulong)currentTab);
                 if (currentTab == 0) // Projects tab
@@ -63,9 +63,9 @@ namespace Prowl.Editor
             Vector2 shadowC = new(rect.x, rect.y + rect.height);
             g.DrawVerticalShadow(shadowB, shadowC, 20, 0.25f);
 
-            g.InputField(ref _searchText, 0x100, Gui.InputFieldFlags.None, 25, 50, 150);
+            g.InputField("SearchInput", ref _searchText, 0x100, Gui.InputFieldFlags.None, 25, 50, 150);
 
-            using (g.Node().Width(565).Height(345).Left(25).Top(80).Layout(LayoutType.Column).Clip().Enter())
+            using (g.Node("List").Width(565).Height(345).Left(25).Top(80).Layout(LayoutType.Column).Clip().Enter())
             {
                 Directory.CreateDirectory(Project.Projects_Directory);
                 var folders = new DirectoryInfo(Project.Projects_Directory).EnumerateDirectories();
@@ -85,7 +85,7 @@ namespace Prowl.Editor
             {
                 s.BtnHoveredColor = GuiStyle.SelectedColor;
                 s.WidgetColor = GuiStyle.HoveredColor;
-                if (g.Button("Open", 455, 452, 162, 60, s, false, false, 4))
+                if (g.Button("OpenBtn", "Open", 455, 452, 162, 60, s, false, false, 4))
                 {
                     Project.Open(SelectedProject);
                     isOpened = false;
@@ -95,7 +95,7 @@ namespace Prowl.Editor
             {
                 s.BtnHoveredColor = Color.white * 0.4f;
                 s.WidgetColor = Color.white * 0.4f;
-                g.Button("Open", 455, 452, 162, 60, s, false, false, 4);
+                g.Button("OpenBtn", "Open", 455, 452, 162, 60, s, false, false, 4);
             }
         }
 
@@ -103,7 +103,7 @@ namespace Prowl.Editor
         {
             var proj = Project.GetPath(name);
 
-            using (g.Node().Height(48).Width(Size.Percentage(1f, -17)).Margin(5).Enter())
+            using (g.Node(name).Height(48).Width(Size.Percentage(1f, -17)).Margin(5).Enter())
             {
                 var rect = g.CurrentNode.LayoutData.Rect;
                 g.DrawText(UIDrawList.DefaultFont, name, 20, rect.Position + new Vector2(8, 5), Color.white);
@@ -159,7 +159,7 @@ namespace Prowl.Editor
             Vector2 shadowC = new(rect.x, rect.y + rect.height);
             g.DrawVerticalShadow(shadowB, shadowC, 20, 0.25f);
 
-            g.InputField(ref createName, 0x100, Gui.InputFieldFlags.None, 30, 450, 340);
+            g.InputField("CreateInput", ref createName, 0x100, Gui.InputFieldFlags.None, 30, 450, 340);
             string path = Project.GetPath(createName).FullName;
             if (path.Length > 48)
                 path = string.Concat("...", path.AsSpan(path.Length - 48));
@@ -170,7 +170,7 @@ namespace Prowl.Editor
             s.BorderThickness = 0;
             s.BtnHoveredColor = GuiStyle.SelectedColor;
             s.WidgetColor = GuiStyle.HoveredColor;
-            if (g.Button("Create", 445, 435, 172, 77, s, false, false, 4))
+            if (g.Button("CreateBtn", "Create", 445, 435, 172, 77, s, false, false, 4))
             {
                 Project.CreateNew(createName);
                 currentTab = 0;
@@ -179,7 +179,7 @@ namespace Prowl.Editor
 
         private void DrawSidePanel()
         {
-            using (g.Node().Height(40).Width(Size.Percentage(1f)).Enter())
+            using (g.Node("Name").Height(40).Width(Size.Percentage(1f)).Enter())
             {
                 Rect rect = g.CurrentNode.LayoutData.Rect;
                 g.DrawText(UIDrawList.DefaultFont, "Prowl", 40, rect, Color.white);
@@ -188,7 +188,7 @@ namespace Prowl.Editor
             for (int i = 0; i < tabNames.Length; i++)
             {
                 bool isQuit = i == tabNames.Length - 1;
-                using (g.Node().Height(40).Width(Size.Percentage(1f)).Top(Offset.Percentage(isQuit ? 1 : 0, isQuit ? -40 : 0)).Enter())
+                using (g.Node(tabNames[i]).Height(40).Width(Size.Percentage(1f)).Top(Offset.Percentage(isQuit ? 1 : 0, isQuit ? -40 : 0)).Enter())
                 {
                     if (isQuit) g.CurrentNode.IgnoreLayout();
                     var interact = g.GetInteractable();

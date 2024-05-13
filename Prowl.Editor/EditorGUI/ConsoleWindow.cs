@@ -44,9 +44,9 @@ namespace Prowl.Editor
             //{
             //    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.SelectedColor);
             //}
-            if(_logMessages.Count< 1000)
+            if(_logMessages.Count < 100)
                 _logMessages.Add(new LogMessage("Test printing some larger stuff cause haha yeah i need longer text to see if wrapping looks decent!", LogSeverity.Normal));
-            using (g.Node().Width(Size.Percentage(1f)).Padding(0, 3, 3, 3).Clip().Enter())
+            using (g.Node("List").Width(Size.Percentage(1f)).Padding(0, 3, 3, 3).Clip().Enter())
             {
                 double height = 0;
                 for (int i = _logMessages.Count; i-- > 0;)
@@ -68,7 +68,7 @@ namespace Prowl.Editor
                 }
 
                 // Dummy node to set the height of the scroll area
-                g.Node().Width(5).Height(height);
+                g.Node("Dummy").Width(5).Height(height);
 
                 g.ScrollV();
             }
