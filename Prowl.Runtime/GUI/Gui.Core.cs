@@ -28,12 +28,14 @@ namespace Prowl.Runtime.GUI
         private Dictionary<ulong, LayoutNode.PostLayoutData> _previousLayoutData;
         private LayoutNode rootNode;
         private Dictionary<ulong, ulong> _computedNodes;
+        private HashSet<ulong> _createdNodes;
 
         public Gui()
         {
             rootNode = null;
             _computedNodes = [];
             _previousLayoutData = [];
+            _createdNodes = [];
         }
 
         public void ProcessFrame(Rect screenRect, float scale, Action<Gui> gui)
@@ -47,6 +49,7 @@ namespace Prowl.Runtime.GUI
 
             layoutNodeScopes.Clear();
             nodeCountPerLine.Clear();
+            _createdNodes.Clear();
             IDStack.Clear();
 
             if (!_drawList.ContainsKey(0))
@@ -78,7 +81,9 @@ namespace Prowl.Runtime.GUI
             UIDrawList.Draw(GLDevice.GL, new(screenRect.width, screenRect.height), drawListsOrdered.ToArray());
 
             // Look for any nodes whos HashCode does not match the previously computed nodes
-            layoutDirty |= MatchHash(rootNode);
+            layoutDirty |= _createdNodes.Count != _computedNodes.Count;
+            if(!layoutDirty)
+                layoutDirty = MatchHash(rootNode);
 
             // Now that we have the nodes we can properly process their LayoutNode
             // Like if theres a GridLayout node we can process that here
@@ -139,6 +144,10 @@ namespace Prowl.Runtime.GUI
         {
             ulong lineHash = (ulong)HashCode.Combine(stringID, intID);
             ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), lineHash);
+
+            if (_createdNodes.Contains(storageHash))
+                throw new InvalidOperationException("Node already exists with this ID: " + stringID + ":" + intID + " = " + storageHash);
+            _createdNodes.Add(storageHash);
 
             LayoutNode node = new(parent, this, storageHash);
             // If we generated data for this node last frame, Use that data instead of having to recompute it
