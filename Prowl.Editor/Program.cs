@@ -237,7 +237,7 @@ public static class Program
         };
 
 
-        Application.Run("Prowl Editor", 1920, 1080, new EditorAssetProvider(), true);
+        Application.Run("Prowl Editor", 150, 100, new EditorAssetProvider(), true);
 
         return 0;
     }

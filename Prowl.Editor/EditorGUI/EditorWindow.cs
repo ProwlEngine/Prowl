@@ -38,7 +38,8 @@ namespace Prowl.Editor
         private DockNode m_Leaf;
         private Vector2 m_DockPosition;
 
-        public DockNode Leaf {
+        public DockNode Leaf
+        {
             get => m_Leaf;
             internal set => m_Leaf = value;
         }
@@ -84,7 +85,7 @@ namespace Prowl.Editor
 
                 var width = _width;
                 var height = _height;
-                if(IsDocked)
+                if (IsDocked)
                 {
                     _x = DockPosition.x;
                     _y = DockPosition.y;

@@ -40,11 +40,14 @@ namespace Prowl.Runtime
             this.numTextures = numTextures;
             this.hasDepthAttachment = hasDepthAttachment;
 
-            if (formats == null) {
+            if (formats == null)
+            {
                 this.textureFormats = new TextureImageFormat[numTextures];
                 for (int i = 0; i < numTextures; i++)
                     this.textureFormats[i] = TextureImageFormat.Color4b;
-            } else {
+            }
+            else
+            {
                 if (formats.Length != numTextures)
                     throw new ArgumentException("Invalid number of texture formats!");
                 this.textureFormats = formats;
@@ -79,7 +82,7 @@ namespace Prowl.Runtime
         public void End()
         {
             Graphics.Device.UnbindFramebuffer();
-            Graphics.Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
+            Graphics.Viewport(Window.InternalWindow.Size.X, Window.InternalWindow.Size.Y);
             Graphics.FrameBufferSize = new Vector2D<int>(Width, Height);
         }
 

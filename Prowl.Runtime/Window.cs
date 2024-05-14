@@ -22,32 +22,37 @@ namespace Prowl.Runtime
         public static event Action<WindowState>? StateChanged;
         public static event Action<string[]>? FileDrop;
 
-        public static Vector2D<int> Size {
+        public static Vector2D<int> Size
+        {
             get { return InternalWindow.Size; }
-            set { InternalWindow.Size = value; }
         }
 
-        public static bool IsVisible {
+        public static bool IsVisible
+        {
             get { return InternalWindow.IsVisible; }
             set { InternalWindow.IsVisible = value; }
         }
 
-        public static bool VSync {
+        public static bool VSync
+        {
             get { return InternalWindow.VSync; }
             set { InternalWindow.VSync = value; }
         }
 
-        public static double FramesPerSecond {
+        public static double FramesPerSecond
+        {
             get { return InternalWindow.FramesPerSecond; }
             set { InternalWindow.FramesPerSecond = value; InternalWindow.UpdatesPerSecond = value; }
         }
 
-        public static nint Handle {
+        public static nint Handle
+        {
             get { return InternalWindow.Handle; }
         }
 
         private static bool isFocused = true;
-        public static bool IsFocused {
+        public static bool IsFocused
+        {
             get { return isFocused; }
         }
 
