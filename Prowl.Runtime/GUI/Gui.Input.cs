@@ -123,8 +123,8 @@ namespace Prowl.Runtime.GUI
                 if (Index != -1 && PointerCurState[Index])
                 {
                     PointerPreDeltaPos = PointerCurDeltaPos;
-                    PointerCurDeltaPos.x = X - PointerClickPos[Index].x;
-                    PointerCurDeltaPos.y = Y - PointerClickPos[Index].y;
+                    PointerCurDeltaPos.x = (X - PointerClickPos[Index].x) * frameBufferScale.x;
+                    PointerCurDeltaPos.y = (Y - PointerClickPos[Index].y) * frameBufferScale.x;
                 }
 
                 PointerPos.x = X;
