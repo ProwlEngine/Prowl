@@ -38,13 +38,13 @@ namespace Prowl.Runtime.GUI
             _createdNodes = [];
         }
 
-        public void ProcessFrame(Rect screenRect, float scale, Action<Gui> gui)
+        public void ProcessFrame(Rect screenRect, float uiScale, Vector2 frameBufferScale, Action<Gui> gui)
         {
             UpdateAnimations(Time.deltaTime);
 
-            scale = 1f / scale;
-            screenRect.width *= scale;
-            screenRect.height *= scale;
+            uiScale = 1f / uiScale;
+            screenRect.width *= uiScale;
+            screenRect.height *= uiScale;
             ScreenRect = screenRect;
 
             layoutNodeScopes.Clear();
@@ -75,14 +75,14 @@ namespace Prowl.Runtime.GUI
             // Reset Nodes
             layoutDirty = false;
             PushNode(new(rootNode));
-            DoPass(gui);
+            DoPass(gui, frameBufferScale);
             PopNode();
 
             UIDrawList.Draw(GLDevice.GL, new(screenRect.width, screenRect.height), drawListsOrdered.ToArray());
 
             // Look for any nodes whos HashCode does not match the previously computed nodes
             layoutDirty |= _createdNodes.Count != _computedNodes.Count;
-            if(!layoutDirty)
+            if (!layoutDirty)
                 layoutDirty = MatchHash(rootNode);
 
             // Now that we have the nodes we can properly process their LayoutNode
@@ -105,17 +105,17 @@ namespace Prowl.Runtime.GUI
                 CacheLayoutData(child);
         }
 
-        private void DoPass(Action<Gui> gui)
+        private void DoPass(Action<Gui> gui, Vector2 frameBufferScale)
         {
             try
             {
                 ActiveGUI = this;
-                StartInputFrame();
+                StartInputFrame(frameBufferScale);
                 StartInteractionFrame();
                 gui?.Invoke(this);
                 frameCount++;
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 Debug.LogError("Something went wrong in the GUI Update: " + e.Message + "\n" + e.StackTrace);
             }
@@ -147,6 +147,7 @@ namespace Prowl.Runtime.GUI
 
             if (_createdNodes.Contains(storageHash))
                 throw new InvalidOperationException("Node already exists with this ID: " + stringID + ":" + intID + " = " + storageHash);
+
             _createdNodes.Add(storageHash);
 
             LayoutNode node = new(parent, this, storageHash);

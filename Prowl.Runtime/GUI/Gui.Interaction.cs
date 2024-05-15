@@ -9,7 +9,7 @@ namespace Prowl.Runtime.GUI
 {
     public partial class Gui
     {
-        private static Vector2 mousePosition => Input.MousePosition;
+        private Vector2 mousePosition => PointerPos;
 
         internal Dictionary<ulong, Interactable> _oldinteractables = [];
         internal List<(double, Rect)> _oldblockers = [];
@@ -200,7 +200,7 @@ namespace Prowl.Runtime.GUI
         {
             if (Gui.IsDragDropActive && Gui.DragDropID == ID)
             {
-                if(_gui.HoveredID == _id)
+                if (_gui.HoveredID == _id)
                     _gui.HoveredID = 0;
                 return;
             }

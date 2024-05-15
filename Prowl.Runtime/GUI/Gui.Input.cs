@@ -27,8 +27,11 @@ namespace Prowl.Runtime.GUI
         public Vector2[] PointerLastClickPos = new Vector2[(int)MouseButton.Button12];
         public const double MaxDoubleClickTime = 0.25;
 
-        void StartInputFrame()
+        private Vector2 frameBufferScale;
+
+        void StartInputFrame(Vector2 frameBufferScale)
         {
+            this.frameBufferScale = frameBufferScale;
             for (var Index = 0; Index < KeyPressedTime.Length; ++Index)
                 KeyPressedTime[Index] += Time.deltaTime;
 
@@ -102,6 +105,9 @@ namespace Prowl.Runtime.GUI
         {
             var Index = (int)Btn;
             PointerButton = Btn;
+
+            X *= frameBufferScale.x;
+            Y *= frameBufferScale.y;
 
             if (!IsPointerMove)
             {
