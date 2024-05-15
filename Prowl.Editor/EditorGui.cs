@@ -45,7 +45,11 @@ public static class EditorGui
         Windows.Sort((a, b) => b.IsDocked.CompareTo(a.IsDocked));
 
         Rect screenRect = new Rect(0, 0, Runtime.Graphics.Resolution.x, Runtime.Graphics.Resolution.y);
-        EditorGui.Gui.ProcessFrame(screenRect, 1f, (g) => {
+
+        Vector2 framebufferAndInputScale = new((float)Window.InternalWindow.FramebufferSize.X / (float)Window.InternalWindow.Size.X, (float)Window.InternalWindow.FramebufferSize.Y / (float)Window.InternalWindow.Size.Y);
+
+        EditorGui.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, (g) =>
+        {
 
             Container ??= new();
             var rect = g.ScreenRect;
@@ -67,7 +71,7 @@ public static class EditorGui
                     DragSplitter = null;
             }
 
-            if (DraggingWindow == null) 
+            if (DraggingWindow == null)
             {
                 Vector2 cursorPos = g.PointerPos;
                 if (!g.IsPointerMoving && (g.ActiveID == 0 || g.ActiveID == null))
@@ -259,7 +263,8 @@ public static class EditorGui
                     try
                     {
                         method.Invoke(target, null);
-                    }catch (Exception e)
+                    }
+                    catch (Exception e)
                     {
                         Debug.LogError("Error During ImGui Button Execution: " + e.Message + "\n" + e.StackTrace);
                     }

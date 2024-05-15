@@ -278,7 +278,7 @@ namespace Prowl.Editor
                 {
                     fileNodeID = g.CurrentNode.ID;
                     //if (_treeCounter++ % 2 == 0)
-                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GetFileColor(ext) * 0.5f, 4);
+                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GetFileColor(ext) * 0.5f, 4);
                     //else
                     //    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GetFileColor(ext, 0.6f, 1f), 4);
 
