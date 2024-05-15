@@ -6,6 +6,10 @@ namespace Prowl.Runtime
 
     public sealed class GuiStyle : EngineObject
     {
+        // Scales/Offsets
+        public const double ItemHeight = 30;
+        public const double ItemPadding = 4;
+
         // Base Colors 
         public static Color Black => new(0, 0, 0);
         public static Color Background => new(15, 15, 18);
