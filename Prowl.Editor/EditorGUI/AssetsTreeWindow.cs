@@ -1,19 +1,14 @@
-﻿using Hexa.NET.ImGui;
-using ImageMagick;
-using Prowl.Editor.Assets;
-using Prowl.Editor.EditorWindows;
+﻿using Prowl.Editor.Assets;
 using Prowl.Editor.ImGUI.Widgets;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.SceneManagement;
-using System.IO;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace Prowl.Editor
 {
-    // TODO: Cache the directories and files - Do same for AssetBrowserWindow
+    // TODO: Cache the directories and files - Do same for AssetsBrowserWindow
     // Something like:
     //public class DirectoryCache
     //{
@@ -80,7 +75,6 @@ namespace Prowl.Editor
     //            fileAction(file);
     //    }
     //}
-
     public class AssetsTreeWindow : EditorWindow
     {
         const double entryHeight = 30;
@@ -96,7 +90,7 @@ namespace Prowl.Editor
 
         public AssetsTreeWindow() : base()
         {
-            Title = FontAwesome6.FolderTree + " Assets";
+            Title = FontAwesome6.FolderTree + " Asset Tree";
         }
 
         public static void StartRename(string? entry)

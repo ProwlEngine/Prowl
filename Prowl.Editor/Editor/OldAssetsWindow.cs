@@ -328,7 +328,7 @@ public class OldAssetsWindow : OldEditorWindow
                 if (ImGui.MenuItem("Rename"))
                     if(fromAssetBrowser)
                     {
-                        AssetBrowserWindow.StartRename(file.FullName);
+                        OldAssetBrowserWindow.StartRename(file.FullName);
                     }
                     else
                     {
@@ -360,7 +360,7 @@ public class OldAssetsWindow : OldEditorWindow
                 if (ImGui.MenuItem("Rename"))
                     if (fromAssetBrowser)
                     {
-                        AssetBrowserWindow.StartRename(dir.FullName);
+                        OldAssetBrowserWindow.StartRename(dir.FullName);
                     }
                     else
                     {
