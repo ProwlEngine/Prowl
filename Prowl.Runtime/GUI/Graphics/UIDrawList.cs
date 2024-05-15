@@ -42,8 +42,8 @@ namespace Prowl.Runtime.GUI.Graphics
         // This is what you have to render
         internal UIBuffer<UIDrawCmd> CmdBuffer; // Commands. Typically 1 command = 1 gpu draw call.
 
-        internal UIBuffer<ushort> IdxBuffer; // Index buffer. Each command consume ImDrawCmd::ElemCount of those
-        internal UIBuffer<UIVertex> VtxBuffer; // Vertex buffer.
+        public UIBuffer<ushort> IdxBuffer; // Index buffer. Each command consume ImDrawCmd::ElemCount of those
+        public UIBuffer<UIVertex> VtxBuffer; // Vertex buffer.
 
         internal uint _VtxCurrentIdx; // [Internal] == VtxBuffer.Size
         internal int _VtxWritePtr; // [Internal] point within VtxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
@@ -1077,6 +1077,43 @@ namespace Prowl.Runtime.GUI.Graphics
                     int g = (int)(col0G + colDeltaG * t);
                     int b = (int)(col0B + colDeltaB * t);
                     int a = (int)(col0A + colDeltaA * t);
+
+                    vert.col = (uint)((r << IM_COL32_R_SHIFT) | (g << IM_COL32_G_SHIFT) | (b << IM_COL32_B_SHIFT) | (a << IM_COL32_A_SHIFT));
+                    VtxBuffer[idx] = vert;
+                }
+            }
+        }
+
+        public void ShadeVertsLinearColorGradientKeepAlpha(int vertStartIdx, int vertEndIdx, Vector2 gradientP0, Vector2 gradientP1, uint col0, uint col1)
+        {
+            var p0 = new System.Numerics.Vector3(gradientP0, _primitiveCount);
+            var p1 = new System.Numerics.Vector3(gradientP1, _primitiveCount);
+            var gradientExtent = p1 - p0;
+            float gradientInvLength2 = 1.0f / ImLengthSqr(gradientExtent);
+
+            unsafe
+            {
+                int col0R = (int)(col0 >> IM_COL32_R_SHIFT) & 0xFF;
+                int col0G = (int)(col0 >> IM_COL32_G_SHIFT) & 0xFF;
+                int col0B = (int)(col0 >> IM_COL32_B_SHIFT) & 0xFF;
+                int col1R = (int)(col1 >> IM_COL32_R_SHIFT) & 0xFF;
+                int col1G = (int)(col1 >> IM_COL32_G_SHIFT) & 0xFF;
+                int col1B = (int)(col1 >> IM_COL32_B_SHIFT) & 0xFF;
+
+                int colDeltaR = col1R - col0R;
+                int colDeltaG = col1G - col0G;
+                int colDeltaB = col1B - col0B;
+
+                for (int idx = vertStartIdx; idx < vertEndIdx; idx++)
+                {
+                    var vert = VtxBuffer[idx];
+                    float d = ImDot(vert.pos - p0, gradientExtent);
+                    float t = ImClamp(d * gradientInvLength2, 0.0f, 1.0f);
+
+                    int r = (int)(col0R + colDeltaR * t);
+                    int g = (int)(col0G + colDeltaG * t);
+                    int b = (int)(col0B + colDeltaB * t);
+                    int a = (int)(vert.col >> IM_COL32_A_SHIFT) & 0xFF; // Keep the original alpha value
 
                     vert.col = (uint)((r << IM_COL32_R_SHIFT) | (g << IM_COL32_G_SHIFT) | (b << IM_COL32_B_SHIFT) | (a << IM_COL32_A_SHIFT));
                     VtxBuffer[idx] = vert;
