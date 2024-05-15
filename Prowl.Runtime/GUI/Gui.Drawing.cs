@@ -87,15 +87,36 @@ namespace Prowl.Runtime.GUI
             _drawList[CurrentZIndex].AddTriangleFilled(a, b, c, col);
         }
 
-        public void DrawImage(Texture texture, Vector2 position, Vector2 size, Color color)
+        public void DrawImage(Texture2D texture, Vector2 position, Vector2 size, Color color, bool keepAspect = false)
         {
-            uint col = UIDrawList.ColorConvertFloat4ToU32(color);
-            _drawList[CurrentZIndex].AddImage(texture.Handle, position, position + size, new Vector2(0, 0), new Vector2(1, 1), col);
+            DrawImage(texture, position, size, new Vector2(0, 1), new Vector2(1, 0), color, keepAspect);
         }
 
-        public void DrawImage(Texture texture, Vector2 position, Vector2 size, Vector2 uv0, Vector2 uv1, Color color)
+        public void DrawImage(Texture2D texture, Vector2 position, Vector2 size, Vector2 uv0, Vector2 uv1, Color color, bool keepAspect = false)
         {
             uint col = UIDrawList.ColorConvertFloat4ToU32(color);
+            if (keepAspect)
+            {
+                double aspectRatio = (double)texture.Width / texture.Height;
+                double rectAspectRatio = size.x / size.y;
+
+                if (aspectRatio < rectAspectRatio)
+                {
+                    // Fit height, adjust width
+                    double adjustedWidth = size.y * aspectRatio;
+                    double widthDiff = (size.x - adjustedWidth) / 2.0;
+                    position.x += widthDiff;
+                    size.x = adjustedWidth;
+                }
+                else
+                {
+                    // Fit width, adjust height
+                    double adjustedHeight = size.x / aspectRatio;
+                    double heightDiff = (size.y - adjustedHeight) / 2.0;
+                    position.y += heightDiff;
+                    size.y = adjustedHeight;
+                }
+            }
             _drawList[CurrentZIndex].AddImage(texture.Handle, position, position + size, uv0, uv1, col);
         }
 
@@ -105,14 +126,14 @@ namespace Prowl.Runtime.GUI
         //    _drawList[CurrentZIndex].AddText(UIDrawList._fontAtlas.Fonts[0], fontSize, position, col, text);
         //}
 
-        public void DrawText(Font font, string text, double fontSize, Rect rect, Color color)
+        public void DrawText(Font font, string text, double fontSize, Rect rect, Color color, bool dowrap = true, bool doclip = true)
         {
             var pos = new Vector2(rect.x, rect.y);
             var wrap = rect.width;
-            var textSize = font.CalcTextSize(text, fontSize, 0, (float)wrap);
-            pos.x += (rect.width - textSize.x) * 0.5f;
+            var textSize = font.CalcTextSize(text, fontSize, 0, (float)(dowrap ? wrap : -1));
+            pos.x += Mathf.Max((rect.width - textSize.x) * 0.5f, 0.0);
             pos.y += (rect.height - (textSize.y * 0.75f)) * 0.5f;
-            DrawText(font, text, fontSize, pos, color, wrap);
+            DrawText(font, text, fontSize, pos, color, dowrap ? wrap : 0, doclip ? rect : null);
         }
 
         public void DrawText(string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f)
@@ -121,12 +142,15 @@ namespace Prowl.Runtime.GUI
             _drawList[CurrentZIndex].AddText((float)fontSize, position, col, text, wrap_width: (float)wrapwidth);
         }
 
-        public void DrawText(Font font, string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f)
+        public void DrawText(Font font, string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f, Rect? clip = null)
         {
             uint col = UIDrawList.ColorConvertFloat4ToU32(color);
             _drawList[CurrentZIndex].PushTextureID(font.Texture.Handle);
             var test = (Mathf.Sin(Time.time) + 1.0) * 0.5;
-            _drawList[CurrentZIndex].AddText(font, (float)fontSize, position, col, text, wrap_width: (float)wrapwidth);
+            if (clip != null)
+                _drawList[CurrentZIndex].AddText(font, (float)fontSize, position, col, text, wrap_width: (float)wrapwidth, cpu_fine_clip_rect: new Vector4(clip.Value.Position, clip.Value.Position + clip.Value.Size));
+            else
+                _drawList[CurrentZIndex].AddText(font, (float)fontSize, position, col, text, wrap_width: (float)wrapwidth);
             _drawList[CurrentZIndex].PopTextureID();
         }
 
