@@ -59,11 +59,11 @@ namespace Prowl.Editor
 
                     int width = (int)g.CurrentNode.LayoutData.InnerRect.width;
                     var pos = g.CurrentNode.LayoutData.InnerRect.Position;
-                    var size = UIDrawList.DefaultFont.CalcTextSize(_logMessages[i].Message, 0, width - 5);
+                    var size = UIDrawList.DefaultFont.CalcTextSize(_logMessages[i].Message, 0, width - 24);
 
                     g.DrawLine(new(pos.x + 12, pos.y + height), new(pos.x + width - 12, pos.y + height), GuiStyle.Borders, 1);
 
-                    _logMessages[i].Draw(pos + new Vector2(12, height + 8), width - 5);
+                    _logMessages[i].Draw(pos + new Vector2(12, height + 8), width - 24);
                     height += size.y + 8;
                 }
 
