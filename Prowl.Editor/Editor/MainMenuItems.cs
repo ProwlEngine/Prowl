@@ -21,7 +21,7 @@ namespace Prowl.Editor.EditorWindows
             AssetDatabase.GenerateUniqueAssetPath(ref dir);
             dir.Create();
             if (fromAssetBrowser)
-                AssetBrowserWindow.StartRename(dir.FullName);
+                OldAssetBrowserWindow.StartRename(dir.FullName);
             else
                 OldAssetsWindow.StartRename(dir.FullName);
         }
@@ -37,7 +37,7 @@ namespace Prowl.Editor.EditorWindows
             Material mat = new Material(Shader.Find("Defaults/Standard.shader"));
             StringTagConverter.WriteToFile(Serializer.Serialize(mat), file);
             if (fromAssetBrowser)
-                AssetBrowserWindow.StartRename(file.FullName);
+                OldAssetBrowserWindow.StartRename(file.FullName);
             else
                 OldAssetsWindow.StartRename(file.FullName);
 
@@ -56,7 +56,7 @@ namespace Prowl.Editor.EditorWindows
             GuiStyle style = new GuiStyle();
             StringTagConverter.WriteToFile(Serializer.Serialize(style), file);
             if (fromAssetBrowser)
-                AssetBrowserWindow.StartRename(file.FullName);
+                OldAssetBrowserWindow.StartRename(file.FullName);
             else
                 OldAssetsWindow.StartRename(file.FullName);
 
@@ -78,7 +78,7 @@ namespace Prowl.Editor.EditorWindows
             script = script.Replace("%SCRIPTNAME%", EditorUtils.FilterAlpha(Path.GetFileNameWithoutExtension(file.Name)));
             File.WriteAllText(file.FullName, script);
             if (fromAssetBrowser)
-                AssetBrowserWindow.StartRename(file.FullName);
+                OldAssetBrowserWindow.StartRename(file.FullName);
             else
                 OldAssetsWindow.StartRename(file.FullName);
 

@@ -128,7 +128,7 @@ public class EditorMainMenubar {
         MenuItem.DrawMenuRoot("Create");
 
         if (ImGui.BeginMenu("Window")) {
-            if(ImGui.MenuItem("Asset Browser")) { new AssetBrowserWindow(); }
+            if(ImGui.MenuItem("Asset Browser")) { new OldAssetBrowserWindow(); }
             if(ImGui.MenuItem("Console")) { new OldConsoleWindow(); }
             if(ImGui.MenuItem("Hierarchy")) { new OldHierarchyWindow(); }
             if(ImGui.MenuItem("Inspector")) { new InspectorWindow(); }

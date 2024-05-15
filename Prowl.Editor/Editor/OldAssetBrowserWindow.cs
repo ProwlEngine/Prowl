@@ -9,7 +9,7 @@ using System.Reflection;
 
 namespace Prowl.Editor.EditorWindows;
 
-public class AssetBrowserWindow : OldEditorWindow
+public class OldAssetBrowserWindow : OldEditorWindow
 {
     public DirectoryInfo CurDirectory;
     public bool Locked = false;
@@ -28,7 +28,7 @@ public class AssetBrowserWindow : OldEditorWindow
 
     private float ThumbnailSize => (1.0f + AssetPipelinePreferences.Instance.ThumbnailSize) * 90f;
 
-    public AssetBrowserWindow() : base()
+    public OldAssetBrowserWindow() : base()
     {
         Title = FontAwesome6.BoxOpen + " Asset Browser";
         Project.OnProjectChanged += Invalidate;
@@ -37,7 +37,7 @@ public class AssetBrowserWindow : OldEditorWindow
         Invalidate();
     }
 
-    ~AssetBrowserWindow()
+    ~OldAssetBrowserWindow()
     {
         Project.OnProjectChanged -= Invalidate;
         OldAssetsWindow.SelectHandler.OnSelectObject -= SelectionChanged;

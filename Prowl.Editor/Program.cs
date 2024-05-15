@@ -73,8 +73,9 @@ public static class Program
                     test = new ConsoleWindow();
                     test._x = 450;
                     test._y = 450;
-                    //new AssetBrowserWindow();
+                    new AssetsBrowserWindow();
                     new AssetsTreeWindow();
+                    new AssetSelectorWindow(typeof(Texture2D), (guid, fileid) => {  });
                 }
 
                 Application.DataPath = Project.ProjectDirectory;
