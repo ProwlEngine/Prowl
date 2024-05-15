@@ -202,17 +202,27 @@ namespace Prowl.Runtime.GUI
             }
         }
 
-        public void SimpleTooltip(string tip, Vector2? topleft = null, float wrapWidth = 200f, GuiStyle? style = null)
+        public void SimpleTooltip(string tip, Vector2? topleft = null, float wrapWidth = -1, GuiStyle? style = null)
         {
+
+            style ??= new();
             if (PreviousControlIsHovered())
             {
+                var oldZ = Gui.ActiveGUI.CurrentZIndex;
+                Gui.ActiveGUI.DrawList.PushClipRectFullScreen();
+                Gui.ActiveGUI.SetZIndex(11000);
+
                 var font = style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont;
                 var pos = (topleft ?? PointerPos) + new Vector2(10, 10);
                 var size = font.CalcTextSize(tip, style.FontSize, 0, wrapWidth);
                 DrawRectFilled(pos - new Vector2(5), size + new Vector2(10), GuiStyle.WindowBackground, 10);
                 DrawRect(pos - new Vector2(5), size + new Vector2(10), GuiStyle.Borders, 2, 10);
-                DrawText(font, tip, style.FontSize, pos, style.TextColor);
+                DrawText(font, tip, style.FontSize, pos, style.TextColor, wrapWidth);
+
+                Gui.ActiveGUI.DrawList.PopClipRect();
+                Gui.ActiveGUI.SetZIndex(oldZ);
             }
+
         }
 
         public bool Tooltip(string ID, out LayoutNode? node, Vector2? topleft = null, bool invisible = false)
@@ -221,11 +231,14 @@ namespace Prowl.Runtime.GUI
             if (!PreviousControlIsHovered())
                 return false;
 
+
             // Append to Root
             var pos = topleft ?? PointerPos;
             using ((node = rootNode.AppendNode(ID)).Left(pos.x).Top(pos.y).IgnoreLayout().Enter())
             {
-                SetZIndex(1100);
+                var oldZ = Gui.ActiveGUI.CurrentZIndex;
+                Gui.ActiveGUI.DrawList.PushClipRectFullScreen();
+                Gui.ActiveGUI.SetZIndex(11000);
 
                 // Clamp node position so that its always in screen bounds
                 var rect = CurrentNode.LayoutData.Rect;
@@ -239,6 +252,10 @@ namespace Prowl.Runtime.GUI
                     DrawRectFilled(CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
                     DrawRect(CurrentNode.LayoutData.InnerRect, GuiStyle.Borders, 2, 10);
                 }
+
+                Gui.ActiveGUI.DrawList.PopClipRect();
+                Gui.ActiveGUI.SetZIndex(oldZ);
+
                 return true;
             }
         }
