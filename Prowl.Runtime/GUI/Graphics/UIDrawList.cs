@@ -138,7 +138,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void PushClipRect(Vector4 clip_rect, bool force = false)  // Scissoring. Note that the values are (x1,y1,x2,y2) and NOT (x1,y1,w,h). This is passed down to your render function but not used for CPU-side clipping. Prefer using higher-level ImGui::PushClipRect() to affect logic (hit-testing and widget culling)
         {
-            if (!force && _ClipRectStack.Count > 0)
+            if(!force && _ClipRectStack.Count > 0)
                 clip_rect = IntersectRects(_ClipRectStack.Peek(), clip_rect);
             _ClipRectStack.Add(clip_rect);
             UpdateClipRect(force);
@@ -295,7 +295,7 @@ namespace Prowl.Runtime.GUI.Graphics
         {
             AddText(DefaultFont, font_size, pos, col, text, text_begin, text_end, wrap_width);
         }
-
+        
         public void AddText(Font font, float font_size, Vector2 pos, uint col, string text, int text_begin = 0, int text_end = -1, float wrap_width = 0.0f, Vector4? cpu_fine_clip_rect = null)
         {
             ArgumentNullException.ThrowIfNull(font);

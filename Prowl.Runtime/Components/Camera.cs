@@ -49,7 +49,7 @@ public class Camera : MonoBehaviour
     private Vector2 GetRenderTargetSize()
     {
         if (Target.IsAvailable) return new Vector2(Target.Res!.Width, Target.Res!.Height);
-        return new Vector2(Window.InternalWindow.Size.X, Window.InternalWindow.Size.Y);
+        return new Vector2(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
     }
 
     private void CheckGBuffer()
@@ -114,8 +114,8 @@ public class Camera : MonoBehaviour
         }
         else if (width == -1 || height == -1)
         {
-            width = Window.InternalWindow.Size.X;
-            height = Window.InternalWindow.Size.Y;
+            width = Window.InternalWindow.FramebufferSize.X;
+            height = Window.InternalWindow.FramebufferSize.Y;
         }
 
         width = (int)(width * RenderResolution);

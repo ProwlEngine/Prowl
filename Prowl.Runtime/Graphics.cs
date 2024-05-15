@@ -60,7 +60,7 @@ namespace Prowl.Runtime
             RenderTexture.UpdatePool();
 
             Clear();
-            Viewport(Window.InternalWindow.Size.X, Window.InternalWindow.Size.Y);
+            Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
             // Set default states
             Device.SetState(new(), true);
         }
@@ -195,7 +195,7 @@ namespace Prowl.Runtime
         internal static void BlitDepth(RenderTexture source, RenderTexture? destination)
         {
             Device.BindFramebuffer(source.frameBuffer, FBOTarget.Read);
-            if (destination != null)
+            if(destination != null)
                 Device.BindFramebuffer(destination?.frameBuffer, FBOTarget.Draw);
             Device.BlitFramebuffer(0, 0, source.Width, source.Height,
                                         0, 0, destination?.Width ?? (int)Graphics.Resolution.x, destination?.Height ?? (int)Graphics.Resolution.y,
