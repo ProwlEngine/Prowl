@@ -126,7 +126,7 @@ namespace Prowl.Editor
                                 for (int i = 0; i < Leaf.LeafWindows.Count; i++)
                                 {
                                     var window = Leaf.LeafWindows[i];
-                                    using (g.Node("_" + window.Title, window._id).Width(tabWidth).Height(20).Left(i * (tabWidth + 5)).Enter())
+                                    using (g.Node("Tab _" + window.Title, window._id).Width(tabWidth).Height(20).Left(i * (tabWidth + 5)).Enter())
                                     {
                                         var tabRect = g.CurrentNode.LayoutData.Rect;
                                         tabRect.Expand(0, 2);
