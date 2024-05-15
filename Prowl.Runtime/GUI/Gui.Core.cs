@@ -145,8 +145,8 @@ namespace Prowl.Runtime.GUI
             ulong lineHash = (ulong)HashCode.Combine(stringID, intID);
             ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), lineHash);
 
-            if (_createdNodes.Contains(storageHash))
-                throw new InvalidOperationException("Node already exists with this ID: " + stringID + ":" + intID + " = " + storageHash);
+            // if (_createdNodes.Contains(storageHash))
+            //     throw new InvalidOperationException("Node already exists with this ID: " + stringID + ":" + intID + " = " + storageHash);
 
             _createdNodes.Add(storageHash);
 
