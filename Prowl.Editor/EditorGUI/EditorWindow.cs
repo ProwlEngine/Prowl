@@ -221,8 +221,8 @@ namespace Prowl.Editor
                     {
                         _wasDragged = true;
 
-                        _x += Input.MouseDelta.x;
-                        _y += Input.MouseDelta.y;
+                        _x += g.PointerDelta.x;
+                        _y += g.PointerDelta.y;
                         EditorGui.DraggingWindow = this;
 
                         if (g.IsPointerMoving && IsDocked)
