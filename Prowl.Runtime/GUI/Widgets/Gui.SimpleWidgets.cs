@@ -174,6 +174,7 @@ namespace Prowl.Runtime.GUI
 
         public bool Checkbox(string ID, ref bool value, Offset x, Offset y, out LayoutNode node, GuiStyle? style = null)
         {
+            style ??= new();
             using ((node = Node(ID)).Left(x).Top(y).Width(20).Height(20).Enter())
             {
                 Interactable interact = GetInteractable();
