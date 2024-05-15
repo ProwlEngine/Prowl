@@ -10,12 +10,7 @@
             return this;
         }
 
-        public LayoutNode FitContent()
-        {
-            _fitContentX = true;
-            _fitContentY = true;
-            return this;
-        }
+        public LayoutNode FitContent() => FitContentWidth().FitContentHeight();
 
         public LayoutNode FitContentWidth()
         {
@@ -41,6 +36,9 @@
             return this;
         }
 
+        public LayoutNode Scale(Size size) => Width(size).Height(size);
+        public LayoutNode Scale(Size width, Size height) => Width(width).Height(height);
+
         public LayoutNode Width(Size width)
         {
             _width = width;
@@ -64,13 +62,9 @@
             _maxHeight = maxheight;
             return this;
         }
+
         public LayoutNode TopLeft(Offset topleft) => TopLeft(topleft, topleft);
-        public LayoutNode TopLeft(Offset left, Offset top)
-        {
-            _positionX = left;
-            _positionY = top;
-            return this;
-        }
+        public LayoutNode TopLeft(Offset left, Offset top) => Left(left).Top(top);
 
         public LayoutNode Left(Offset left)
         {
