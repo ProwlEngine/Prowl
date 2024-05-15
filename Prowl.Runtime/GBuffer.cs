@@ -17,7 +17,7 @@ public class GBuffer
     public Texture2D Velocity { get { return buffer.InternalTextures[4]; } }
     public Texture2D ObjectIDs { get { return buffer.InternalTextures[5]; } }
     public Texture2D Depth { get { return buffer.InternalDepth; } }
-
+    
     public GBuffer(int width, int height)
     {
         TextureImageFormat[] formats =
@@ -40,7 +40,7 @@ public class GBuffer
 
         // Start with the initial GBuffer Clear
         if (clear)
-            Graphics.Clear(0, 0, 0, 0);
+            Graphics.Clear(0,0,0,0);
     }
 
     public void End()

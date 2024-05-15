@@ -43,6 +43,7 @@ namespace Prowl.Runtime
         public static void Viewport(int width, int height)
         {
             Device.Viewport(0, 0, (uint)width, (uint)height);
+            Resolution = new Vector2(width, height);
         }
 
         public static void Clear(float r = 0, float g = 0, float b = 0, float a = 1, bool color = true, bool depth = true, bool stencil = true)
@@ -59,10 +60,7 @@ namespace Prowl.Runtime
             RenderTexture.UpdatePool();
 
             Clear();
-
-            Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
-            Resolution = new Vector2(Window.InternalWindow.Size.X, Window.InternalWindow.Size.Y);
-
+            Viewport(Window.InternalWindow.Size.X, Window.InternalWindow.Size.Y);
             // Set default states
             Device.SetState(new(), true);
         }
