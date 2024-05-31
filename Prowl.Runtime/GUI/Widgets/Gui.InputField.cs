@@ -2,6 +2,7 @@
 using Prowl.Runtime.GUI.TextEdit;
 using Silk.NET.Input;
 using System;
+using System.Collections.Generic;
 
 namespace Prowl.Runtime.GUI
 {
@@ -24,8 +25,6 @@ namespace Prowl.Runtime.GUI
             Readonly = 1 << 7,
             NoHorizontalScroll = 1 << 8,
         }
-
-        private static StbTextEditState stb;
 
         public bool InputField(string ID, ref string value, uint maxLength, InputFieldFlags flags, Offset x, Offset y, Size width, Size? height = null, GuiStyle? style = null, bool invisible = false)
         {
@@ -55,7 +54,20 @@ namespace Prowl.Runtime.GUI
                 }
                 else
                 {
-                    OnProcess(style, interact, ref value, maxLength, flags | InputFieldFlags.OnlyDisplay);
+                    //OnProcess(style, interact, ref value, maxLength, flags | InputFieldFlags.OnlyDisplay);
+                    var font = style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont;
+                    var fontsize = style.FontSize;
+                    var render_pos = new Vector2(g.CurrentNode.LayoutData.InnerRect.x, g.CurrentNode.LayoutData.InnerRect.y);
+                    // Center text vertically
+                    render_pos.y += (g.CurrentNode.LayoutData.InnerRect.height - fontsize) / 2;
+                    render_pos.y += 3;
+                    render_pos.x += 5;
+
+                    if (multiline)
+                        render_pos.y -= g.CurrentNode.VScroll;
+
+                    uint colb = UIDrawList.ColorConvertFloat4ToU32(style.TextColor);
+                    g.DrawList.AddText(font, (float)fontsize, render_pos, colb, value, 0, value.Length, 0.0f, null);
                 }
                 g.PopClip();
 
@@ -81,10 +93,11 @@ namespace Prowl.Runtime.GUI
             return bufMidLine;
         }
 
+        private static StbTextEditState stb;
+
         internal static bool OnProcess(GuiStyle style, Interactable interact, ref string Text, uint MaxLength, InputFieldFlags Flags)
         {
             var g = Gui.ActiveGUI;
-            var ID = interact.ID;
             var font = style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont;
             var fontsize = style.FontSize;
             var render_pos = new Vector2(g.CurrentNode.LayoutData.InnerRect.x, g.CurrentNode.LayoutData.InnerRect.y);
@@ -93,23 +106,23 @@ namespace Prowl.Runtime.GUI
             render_pos.y += 3;
             render_pos.x += 5;
 
-            if (stb == null || stb.ID != ID)
+            if (stb == null || stb.ID != interact.ID)
             {
                 stb = new();
-                stb.ID = ID;
-                stb.SingleLine = !((Flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline);
-                stb.font = font;
-                stb.Text = Text;
+                stb.ID = interact.ID;
                 if ((Flags & InputFieldFlags.AutoSelectAll) == InputFieldFlags.AutoSelectAll)
                 {
                     stb.SelectStart = 0;
-                    stb.SelectEnd = Text.Length;
+                    stb.SelectEnd = Text.Length - 1;
                 }
+                stb.SingleLine = !((Flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline);
+                stb.font = font;
+                stb.Text = Text;
             }
 
 
-            HandleKeyEvent(MaxLength, Flags);
-            HandleMouseEvent();
+            HandleKeyEvent(stb, MaxLength, Flags);
+            HandleMouseEvent(stb);
 
             //g.DrawText(font, Text, fontsize, render_pos, Color.black);
 
@@ -282,7 +295,7 @@ namespace Prowl.Runtime.GUI
             }
         }
 
-        private static void HandleKeyEvent(uint MaxLength, InputFieldFlags Flags)
+        private static void HandleKeyEvent(StbTextEditState stb, uint MaxLength, InputFieldFlags Flags)
         {
             var g = Gui.ActiveGUI;
             var KeyCode = g.KeyCode;
@@ -309,7 +322,7 @@ namespace Prowl.Runtime.GUI
                 case Key.Tab:
                     if ((Flags & InputFieldFlags.AllowTab) == InputFieldFlags.AllowTab)
                     {
-                        OnTextInput("\t", MaxLength, Flags);
+                        OnTextInput(stb, "\t", MaxLength, Flags);
                     }
                    //else Focus Next Focusable Interactable
                     break;
@@ -348,7 +361,7 @@ namespace Prowl.Runtime.GUI
                 
                     break;
                 case Key.V when Ctrl && IsEditable:
-                    OnTextInput(Input.Clipboard, MaxLength, Flags);
+                    OnTextInput(stb, Input.Clipboard, MaxLength, Flags);
                     break;
                 case Key.Z when Ctrl && IsEditable:
                     stb_key = StbTextEdit.ControlKeys.Undo;
@@ -439,7 +452,7 @@ namespace Prowl.Runtime.GUI
                     break;
                 case Key.KeypadEnter when IsEditable && Multiline:
                 case Key.Enter when IsEditable && Multiline:
-                    OnTextInput("\n", MaxLength, Flags);
+                    OnTextInput(stb, "\n", MaxLength, Flags);
                     break;
             }
 
@@ -451,14 +464,14 @@ namespace Prowl.Runtime.GUI
 
             if(Input.LastPressedChar != null)
             {
-                OnTextInput(Input.LastPressedChar.ToString(), MaxLength, Flags);
+                OnTextInput(stb, Input.LastPressedChar.ToString(), MaxLength, Flags);
                 // Consume the key
                 // TODO: We should have a proper API to recieve Input Characters rather then consuming the only source of input so nothing else can see it
                 Input.LastPressedChar = null;
             }
         }
 
-        protected static bool OnTextInput(string c, uint MaxLength, InputFieldFlags Flags)
+        protected static bool OnTextInput(StbTextEditState stb, string c, uint MaxLength, InputFieldFlags Flags)
         {
             bool IsEditable = !((Flags & InputFieldFlags.Readonly) == InputFieldFlags.Readonly);
             if (c == null || !IsEditable)
@@ -497,7 +510,7 @@ namespace Prowl.Runtime.GUI
             return true;
         }
 
-        private static void HandleMouseEvent()
+        private static void HandleMouseEvent(StbTextEditState stb)
         {
             var g = Gui.ActiveGUI;
             var Pos = g.PointerPos - g.CurrentNode.LayoutData.InnerRect.Position;
