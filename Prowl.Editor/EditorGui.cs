@@ -1,5 +1,5 @@
 using Hexa.NET.ImGui;
-using Prowl.Editor.EditorGUI.Docking;
+using Prowl.Editor.Docking;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using System.Reflection;
@@ -48,6 +48,7 @@ public static class EditorGui
 
         Vector2 framebufferAndInputScale = new((float)Window.InternalWindow.FramebufferSize.X / (float)Window.InternalWindow.Size.X, (float)Window.InternalWindow.FramebufferSize.Y / (float)Window.InternalWindow.Size.Y);
 
+        Gui.PointerWheel = Input.MouseWheelDelta;
         EditorGui.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, (g) =>
         {
 

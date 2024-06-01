@@ -1,13 +1,14 @@
-using Prowl.Runtime;
-using Prowl.Editor.PropertyDrawers;
-using Hexa.NET.ImGui;
-using System.Numerics;
-using System.Reflection;
+using Prowl.Editor.Drawers;
+using Prowl.Editor.Preferences;
+using Prowl.Editor.ProjectSettings;
 using Prowl.Icons;
-using Prowl.Editor.Editor.Preferences;
-using Prowl.Editor.Editor.ProjectSettings;
+using Prowl.Runtime;
+using Prowl.Runtime.GUI;
+using System.Reflection;
+using static Prowl.Editor.EditorGUI;
+using System.Threading.Channels;
 
-namespace Prowl.Editor.EditorWindows;
+namespace Prowl.Editor;
 
 public class ProjectSettingsWindow : SingletonEditorWindow
 {
@@ -27,7 +28,7 @@ public class PreferencesWindow : SingletonEditorWindow
     public PreferencesWindow() : base("Preferences") { }
 
     public PreferencesWindow(Type settingToOpen) : base(settingToOpen) { }
-    
+
     public override void RenderSideView()
     {
         RenderSideViewElement(GeneralPreferences.Instance);
@@ -36,13 +37,10 @@ public class PreferencesWindow : SingletonEditorWindow
     }
 }
 
-public abstract class SingletonEditorWindow : OldEditorWindow
+public abstract class SingletonEditorWindow : EditorWindow
 {
-
-    protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse;
-
-    protected override int Width { get; } = 512;
-    protected override int Height { get; } = 512;
+    protected override double Width { get; } = 512;
+    protected override double Height { get; } = 512;
 
     private Type? currentType;
     private object? currentSingleton;
@@ -53,37 +51,47 @@ public abstract class SingletonEditorWindow : OldEditorWindow
 
     protected override void Draw()
     {
-        const ImGuiTableFlags tableFlags = ImGuiTableFlags.Resizable | ImGuiTableFlags.ContextMenuInBody | ImGuiTableFlags.Resizable;
-        System.Numerics.Vector2 availableRegion = ImGui.GetContentRegionAvail();
-        if (ImGui.BeginTable("MainViewTable", 2, tableFlags, availableRegion))
+        if (!Project.HasProject) return;
+
+        // New UI
+        g.CurrentNode.Layout(LayoutType.Row);
+
+        elementCounter = 0;
+
+        using (g.Node("SidePanel").Padding(5, 10, 10, 10).Width(Size.Percentage(0.2f)).ExpandHeight().Layout(LayoutType.Column).Clip().Enter())
         {
-            ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed, 200);
-            ImGui.TableSetupColumn("", ImGuiTableColumnFlags.None);
+            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
+            RenderSideView();
+        }
 
-            ImGui.TableNextRow();
-            ImGui.TableSetColumnIndex(0);
-
-            ImGui.BeginChild("SettingTypes");
-            if (Project.HasProject) RenderSideView();
-            ImGui.EndChild();
-            ImGui.TableSetColumnIndex(1);
-            ImGui.BeginChild("Settings");
-            if (Project.HasProject) RenderBody();
-            ImGui.EndChild();
-
-            ImGui.EndTable();
+        using (g.Node("ContentPanel").PaddingRight(28).Left(Offset.Percentage(0.2f)).Width(Size.Percentage(0.8f)).ExpandHeight().Enter())
+        {
+            RenderBody();
         }
     }
 
     public abstract void RenderSideView();
 
+    private int elementCounter = 0;
     protected void RenderSideViewElement<T>(T elementInstance)
     {
         Type settingType = elementInstance.GetType();
-        if (ImGui.Selectable(settingType.Name, currentType == settingType))
+        using (g.ButtonNode("Element" + elementCounter++, out var pressed, out var hovered).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
         {
-            currentType = settingType;
-            currentSingleton = elementInstance;
+
+            if (currentType == settingType)
+                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
+            else if (hovered)
+                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 10);
+
+            g.DrawText(settingType.Name, g.CurrentNode.LayoutData.Rect, false);
+
+            if (pressed)
+            {
+                currentType = settingType;
+                currentSingleton = elementInstance;
+            }
+
         }
     }
 
@@ -92,23 +100,18 @@ public abstract class SingletonEditorWindow : OldEditorWindow
         if (currentType == null) return;
 
         // Draw Settings
-        var setting = currentSingleton;
+        object setting = currentSingleton;
 
-        foreach (var field in RuntimeUtils.GetSerializableFields(setting))
+        if (PropertyGrid(currentSingleton.GetType().Name, ref setting, TargetFields.Serializable, PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground))
         {
-            // Draw the field using PropertyDrawer.Draw
-            if (PropertyDrawer.Draw(setting, field))
-            {
-                // Use reflection to find a method "protected void Save()" and Validate
-                MethodInfo? validateMethod = setting.GetType().GetMethod("Validate", BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
-                validateMethod?.Invoke(setting, null);
-                MethodInfo? saveMethod = setting.GetType().GetMethod("Save", BindingFlags.Instance | BindingFlags.Public);
-                saveMethod?.Invoke(setting, null);
-            }
-
+            // Use reflection to find a method "protected void Save()" and Validate
+            MethodInfo? validateMethod = setting.GetType().GetMethod("Validate", BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
+            validateMethod?.Invoke(setting, null);
+            MethodInfo? saveMethod = setting.GetType().GetMethod("Save", BindingFlags.Instance | BindingFlags.Public);
+            saveMethod?.Invoke(setting, null);
         }
 
         // Draw any Buttons
-        EditorGui.HandleAttributeButtons(setting);
+        //EditorGui.HandleAttributeButtons(setting);
     }
 }

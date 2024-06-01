@@ -3,6 +3,7 @@ using Prowl.Icons;
 using Hexa.NET.ImGui;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using Prowl.Editor;
 
 namespace Prowl.Editor.EditorWindows;
 
@@ -131,8 +132,8 @@ public class EditorMainMenubar {
             if(ImGui.MenuItem("Asset Browser")) { new OldAssetBrowserWindow(); }
             if(ImGui.MenuItem("Console")) { new OldConsoleWindow(); }
             if(ImGui.MenuItem("Hierarchy")) { new OldHierarchyWindow(); }
-            if(ImGui.MenuItem("Inspector")) { new InspectorWindow(); }
-            if(ImGui.MenuItem("Viewport")) { new ViewportWindow(); }
+            if(ImGui.MenuItem("Inspector")) { new OldInspectorWindow(); }
+            if(ImGui.MenuItem("Viewport")) { new OldViewportWindow(); }
             if(ImGui.MenuItem("Game")) { new GameWindow(); }
             if(ImGui.MenuItem("Render Pipeline Graph")) { new RenderPipelineWindow(); }
             if(ImGui.MenuItem("Utilities")) { new UtilitiesWindow(); }

@@ -1,5 +1,5 @@
 ﻿using Prowl.Editor.Assets;
-using Prowl.Editor.Editor.Preferences;
+using Prowl.Editor.Preferences;
 using Prowl.Editor.EditorWindows;
 using Prowl.Editor.ImGUI;
 using Prowl.Runtime;
@@ -55,26 +55,14 @@ public static class Program
                     CreatedDefaultWindows = true;
                     //new EditorMainMenubar();
                     new HierarchyWindow();
-                    //new ViewportWindow();
+                    new ViewportWindow();
                     new GameWindow();
-                    //new InspectorWindow();
-                    var test = new ConsoleWindow();
-                    test._x = 50;
-                    test._y = 50;
-                    test = new ConsoleWindow();
-                    test._x = 150;
-                    test._y = 150;
-                    test = new ConsoleWindow();
-                    test._x = 250;
-                    test._y = 250;
-                    test = new ConsoleWindow();
-                    test._x = 350;
-                    test._y = 350;
-                    test = new ConsoleWindow();
-                    test._x = 450;
-                    test._y = 450;
+                    new InspectorWindow();
+                    new ConsoleWindow();
                     new AssetsBrowserWindow();
                     new AssetsTreeWindow();
+                    new ProjectSettingsWindow();
+                    new PreferencesWindow();
                     new AssetSelectorWindow(typeof(Texture2D), (guid, fileid) => {  });
                 }
 

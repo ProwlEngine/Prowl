@@ -1,5 +1,5 @@
 using Prowl.Editor.Assets;
-using Prowl.Editor.Editor.ProjectSettings;
+using Prowl.Editor.ProjectSettings;
 using Prowl.Editor.EditorWindows;
 using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;

@@ -126,6 +126,17 @@ namespace Prowl.Runtime.GUI
         //    _drawList[CurrentZIndex].AddText(UIDrawList._fontAtlas.Fonts[0], fontSize, position, col, text);
         //}
 
+        public void DrawText(string text, Rect rect, Color color, bool dowrap = true, bool doclip = true)
+            => DrawText(UIDrawList.DefaultFont, text, 20, rect, color, dowrap, doclip);
+        public void DrawText(string text, Rect rect, bool dowrap = true, bool doclip = true)
+            => DrawText(UIDrawList.DefaultFont, text, 20, rect, Color.white, dowrap, doclip);
+
+        public void DrawText(string text, double fontSize, Rect rect, bool dowrap = true, bool doclip = true)
+            => DrawText(UIDrawList.DefaultFont, text, fontSize, rect, Color.white, dowrap, doclip);
+
+        public void DrawText(string text, double fontSize, Rect rect, Color color, bool dowrap = true, bool doclip = true)
+            => DrawText(UIDrawList.DefaultFont, text, fontSize, rect, color, dowrap, doclip);
+
         public void DrawText(Font font, string text, double fontSize, Rect rect, Color color, bool dowrap = true, bool doclip = true)
         {
             var pos = new Vector2(rect.x, rect.y);
@@ -135,6 +146,15 @@ namespace Prowl.Runtime.GUI
             pos.y += (rect.height - (textSize.y * 0.75f)) * 0.5f;
             DrawText(font, text, fontSize, pos, color, dowrap ? wrap : 0, doclip ? rect : null);
         }
+
+        public void DrawText(string text, Vector2 position, double wrapwidth = 0.0f)
+            => DrawText(UIDrawList.DefaultFont, text, 20, position, Color.white, wrapwidth);
+
+        public void DrawText(string text, Vector2 position, Color color, double wrapwidth = 0.0f)
+            => DrawText(UIDrawList.DefaultFont, text, 20, position, color, wrapwidth);
+
+        public void DrawText(string text, double fontSize, Vector2 position, double wrapwidth = 0.0f)
+            => DrawText(UIDrawList.DefaultFont, text, fontSize, position, Color.white, wrapwidth);
 
         public void DrawText(string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f)
         {

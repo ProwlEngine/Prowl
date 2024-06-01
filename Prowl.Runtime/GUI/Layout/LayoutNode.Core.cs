@@ -182,19 +182,14 @@ namespace Prowl.Runtime.GUI.Layout
 
         public void ProcessLayout()
         {
-            ScaleChildren();
+            DoScaleChildren();
             foreach (var child in Children)
                 child.ProcessLayout();
-            ScaleChildren();
+            DoScaleChildren();
+
             UpdatePositionCache();
 
             ApplyLayout();
-
-            // Make sure we never exceed max size
-            // TODO: Is this needed since we calculate the max in Scale
-            //_width = Math.Min(Scale.x, _maxWidth.ToPixels(Parent?.GlobalContentWidth ?? 0));
-            //_height = Math.Min(Scale.y, _maxHeight.ToPixels(Parent?.GlobalContentWidth ?? 0));
-            //UpdateScaleCache();
 
             if (_centerContent)
             {
@@ -241,18 +236,12 @@ namespace Prowl.Runtime.GUI.Layout
 
             if (Children.Count > 0)
             {
-                bool first = true;
-                foreach (var child in Children)
+                _data.ContentRect = Children[0]._data.OuterRect;
+                for (int i = 1; i < Children.Count; i++)
                 {
-                    if (first)
-                    {
-                        _data.ContentRect = child._data.OuterRect;
-                        first = false;
-                    }
-                    else
-                    {
-                        _data.ContentRect = Rect.CombineRect(_data.ContentRect, child._data.OuterRect);
-                    }
+                    var child = Children[i];
+                    if (child._ignore) continue;
+                    _data.ContentRect = Rect.CombineRect(_data.ContentRect, child._data.OuterRect);
                 }
             } else _data.ContentRect = new Rect();
 
@@ -260,7 +249,7 @@ namespace Prowl.Runtime.GUI.Layout
             ApplyFitContent();
         }
 
-        internal void ScaleChildren()
+        internal void DoScaleChildren()
         {
             if (!_canScaleChildren) return;
 
@@ -358,9 +347,9 @@ namespace Prowl.Runtime.GUI.Layout
                 return;
 
             if (_fitContentX)
-                _width = _data.ContentRect.width;
+                _width = _data.ContentRect.width + _data.Paddings.Horizontal;
             if (_fitContentY)           
-                _height = _data.ContentRect.height;
+                _height = _data.ContentRect.height + _data.Paddings.Vertical;
             UpdateScaleCache();
         }
 

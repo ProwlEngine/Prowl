@@ -3,6 +3,7 @@ using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.Rendering.OpenGL;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 
@@ -81,9 +82,8 @@ namespace Prowl.Runtime.GUI
             UIDrawList.Draw(GLDevice.GL, new(screenRect.width, screenRect.height), drawListsOrdered.ToArray());
 
             // Look for any nodes whos HashCode does not match the previously computed nodes
-            layoutDirty |= _createdNodes.Count != _computedNodes.Count;
-            if (!layoutDirty)
-                layoutDirty = MatchHash(rootNode);
+            layoutDirty = _createdNodes.Count != _computedNodes.Count;
+            layoutDirty |= MatchHash(rootNode);
 
             // Now that we have the nodes we can properly process their LayoutNode
             // Like if theres a GridLayout node we can process that here
@@ -92,6 +92,7 @@ namespace Prowl.Runtime.GUI
                 rootNode.UpdateCache();
                 rootNode.ProcessLayout();
                 rootNode.UpdateCache();
+                rootNode.ProcessLayout(); // TODO: Why do we need to run the UI twice?
                 // Cache layout data
                 _previousLayoutData.Clear();
                 CacheLayoutData(rootNode);

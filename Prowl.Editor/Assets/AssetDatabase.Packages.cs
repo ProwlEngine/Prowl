@@ -92,7 +92,7 @@ namespace Prowl.Editor.Assets
 #warning TODO: Handle Dependencies
             if (includeDependencies) throw new NotImplementedException("Dependency tracking is not implemented yet.");
 
-            ImFileDialogInfo imFileDialogInfo = new() {
+            ImOldFileDialogInfo imFileDialogInfo = new() {
                 title = "Export Package",
                 directoryPath = new DirectoryInfo(Project.ProjectDirectory),
                 fileName = "New Package.prowlpackage",

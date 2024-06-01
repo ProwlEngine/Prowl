@@ -52,5 +52,9 @@
       <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.21.1.2" />
       <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
     </ItemGroup>
+    
+    <ItemGroup>
+      <Folder Include="GUI\Widgets\Gizmo\" />
+    </ItemGroup>
 
 </Project>

@@ -30,11 +30,15 @@
             return this;
         }
 
-        public LayoutNode AutoScaleChildren()
+        public LayoutNode ScaleChildren()
         {
             _canScaleChildren = true;
             return this;
         }
+
+        public LayoutNode Expand(int xOffset = 0, int yOffset = 0) => Width(Size.Percentage(1f, xOffset)).Height(Size.Percentage(1f, yOffset));
+        public LayoutNode ExpandWidth(int pixelOffset = 0) => Width(Size.Percentage(1f, pixelOffset));
+        public LayoutNode ExpandHeight(int pixelOffset = 0) => Height(Size.Percentage(1f, pixelOffset));
 
         public LayoutNode Scale(Size size) => Width(size).Height(size);
         public LayoutNode Scale(Size width, Size height) => Width(width).Height(height);

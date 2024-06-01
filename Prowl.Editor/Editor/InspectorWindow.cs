@@ -1,197 +1,263 @@
-using Hexa.NET.ImGui;
-using Prowl.Editor.Assets;
+﻿using Prowl.Editor.Assets;
 using Prowl.Icons;
 using Prowl.Runtime;
+using Prowl.Runtime.GUI;
+using Prowl.Runtime.GUI.Layout;
+using System.IO;
 
-namespace Prowl.Editor.EditorWindows;
-
-public class InspectorWindow : OldEditorWindow
+namespace Prowl.Editor
 {
-    protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoCollapse;
-
-    private Stack<object> _BackStack = new();
-    private Stack<object> _ForwardStack = new();
-
-    private object? Selected = null;
-    private bool lockSelection = false;
-
-    (object, ScriptedEditor)? customEditor;
-
-    public InspectorWindow() : base()
+    public class InspectorWindow : EditorWindow
     {
-        Title = FontAwesome6.BookOpen + " Inspector";
-        GlobalSelectHandler.OnGlobalSelectObject += Selection_OnSelectObject;
-    }
 
-    private void Selection_OnSelectObject(object n)
-    {
-        if (lockSelection) return;
+        private Stack<object> _BackStack = new();
+        private Stack<object> _ForwardStack = new();
 
-        if (n is DirectoryInfo) return; // Dont care about directories
+        private object? Selected = null;
+        private bool lockSelection = false;
 
-        if(n is IAssetRef asset)
-            n = asset.GetInstance();
+        (object, ScriptedEditor)? customEditor;
 
-        if (n is WeakReference weak) n = weak.Target;
-
-        if (n == null) return;
-
-        _ForwardStack.Clear();
-        if(Selected != null)
-            _BackStack.Push(Selected);
-        Selected = n;
-    }
-
-    protected override void Close()
-    {
-        GlobalSelectHandler.OnGlobalSelectObject -= Selection_OnSelectObject;
-    }
-
-    protected override void Draw()
-    {
-        // Move 2 pixels down
-        ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 1);
-        ForwardBackButtons();
-
-        ImGui.SameLine();
-        // Lock Button
-        ImGui.SetCursorPos(new (ImGui.GetWindowWidth() - 28, 24));
-        if (ImGui.Button(lockSelection? FontAwesome6.Lock : FontAwesome6.Unlock, new System.Numerics.Vector2(25, 25)))
-            lockSelection = !lockSelection;
-
-        ImGui.Separator();
-        ImGui.Spacing();
-
-        if (Selected == null) return;
-        if (Selected is EngineObject eo1 && eo1.IsDestroyed) return;
-
-        bool destroyCustomEditor = true;
-
-        if (Selected is EngineObject engineObj)
+        public InspectorWindow() : base()
         {
-            if (customEditor == null)
+            Title = FontAwesome6.BookOpen + " Inspector";
+            GlobalSelectHandler.OnGlobalSelectObject += Selection_OnSelectObject;
+        }
+
+
+        private void Selection_OnSelectObject(object n)
+        {
+            if (lockSelection) return;
+
+            if (n is DirectoryInfo) return; // Dont care about directories
+
+            if (n is IAssetRef asset)
+                n = asset.GetInstance();
+
+            if (n is WeakReference weak) n = weak.Target;
+
+            if (n == null) return;
+
+            _ForwardStack.Clear();
+            if (Selected != null)
+                _BackStack.Push(Selected);
+            Selected = n;
+        }
+
+        protected override void Close()
+        {
+            GlobalSelectHandler.OnGlobalSelectObject -= Selection_OnSelectObject;
+        }
+
+        protected override void Draw()
+        {
+            g.CurrentNode.Layout(Runtime.GUI.LayoutType.Column);
+            g.CurrentNode.ScaleChildren();
+
+            using (g.Node("Header").ExpandWidth().MaxHeight(GuiStyle.ItemHeight).Layout(Runtime.GUI.LayoutType.Row).Padding(0, 10, 10, 10).Enter())
             {
-                // Just selected a new object create the editor
-                Type? editorType = CustomEditorAttribute.GetEditor(engineObj.GetType());
-                if (editorType != null)
+                ForwardBackButtons();
+
+                using (g.ButtonNode("LockBtn", out var lockPressed, out var lockHovered).Scale(GuiStyle.ItemHeight).IgnoreLayout().Left(Offset.Percentage(1f, -GuiStyle.ItemHeight)).Enter())
                 {
-                    customEditor = (engineObj, (ScriptedEditor)Activator.CreateInstance(editorType));
-                    customEditor.Value.Item2.target = Selected;
-                    customEditor.Value.Item2.OnEnable();
-                    destroyCustomEditor = false;
+                    g.DrawText(lockSelection ? FontAwesome6.Lock : FontAwesome6.LockOpen, g.CurrentNode.LayoutData.InnerRect, GuiStyle.Base4, false);
+
+                    if (lockPressed)
+                    {
+                        lockSelection = !lockSelection;
+
+                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
+                    }
+                    else if (lockHovered)
+                    {
+                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
+                    }
                 }
             }
-            else if (customEditor.Value.Item1 == engineObj)
+
+            using (g.Node("Content").ExpandWidth().Padding(5, 10, 10, 10).Enter())
             {
-                // We are still editing the same object
-                customEditor.Value.Item2.OnInspectorGUI();
-                destroyCustomEditor = false;
-            }
-        }
-        else if (Selected is FileInfo path)
-        {
-            if (customEditor == null)
-            {
-                string? relativeAssetPath = AssetDatabase.GetRelativePath(path.FullName);
-                if (relativeAssetPath != null)
+                if (Selected == null)
                 {
-                    // The selected object is a path in our asset database, load its meta data and display a custom editor for the Importer if ones found
-                    if (AssetDatabase.TryGetGuid(path, out var id))
+                    g.DrawRect(g.CurrentNode.LayoutData.InnerRect, GuiStyle.Red, 2, 6);
+                    DrawInspectorLabel("Nothing Selecting.");
+                    return;
+                }
+                if (Selected is EngineObject eo1 && eo1.IsDestroyed)
+                {
+                    g.DrawRect(g.CurrentNode.LayoutData.InnerRect, GuiStyle.Red, 2, 6);
+                    DrawInspectorLabel("Object Destroyed.");
+                    return;
+                }
+
+                bool destroyCustomEditor = true;
+
+                if (Selected is EngineObject engineObj)
+                {
+                    if (customEditor == null)
                     {
-                        var meta = MetaFile.Load(path);
-                        if (meta != null)
+                        // Just selected a new object create the editor
+                        Type? editorType = CustomEditorAttribute.GetEditor(engineObj.GetType());
+                        if (editorType != null)
                         {
-                            Type? editorType = CustomEditorAttribute.GetEditor(meta.importer.GetType());
-                            if (editorType != null)
+                            customEditor = (engineObj, (ScriptedEditor)Activator.CreateInstance(editorType));
+                            customEditor.Value.Item2.target = Selected;
+                            customEditor.Value.Item2.OnEnable();
+                            destroyCustomEditor = false;
+                        }
+                    }
+                    else if (customEditor.Value.Item1 == engineObj)
+                    {
+                        // We are still editing the same object
+                        customEditor.Value.Item2.OnInspectorGUI();
+                        destroyCustomEditor = false;
+                    }
+                }
+                else if (Selected is FileInfo path)
+                {
+                    if (customEditor == null)
+                    {
+                        string? relativeAssetPath = AssetDatabase.GetRelativePath(path.FullName);
+                        if (relativeAssetPath != null)
+                        {
+                            // The selected object is a path in our asset database, load its meta data and display a custom editor for the Importer if ones found
+                            if (AssetDatabase.TryGetGuid(path, out var id))
                             {
-                                customEditor = (path, (ScriptedEditor)Activator.CreateInstance(editorType));
-                                customEditor.Value.Item2.target = meta;
-                                customEditor.Value.Item2.OnEnable();
-                                destroyCustomEditor = false;
+                                var meta = MetaFile.Load(path);
+                                if (meta != null)
+                                {
+                                    Type? editorType = CustomEditorAttribute.GetEditor(meta.importer.GetType());
+                                    if (editorType != null)
+                                    {
+                                        customEditor = (path, (ScriptedEditor)Activator.CreateInstance(editorType));
+                                        customEditor.Value.Item2.target = meta;
+                                        customEditor.Value.Item2.OnEnable();
+                                        destroyCustomEditor = false;
+                                    }
+                                    else
+                                    {
+                                        // Dummy Node
+                                        DrawInspectorLabel("No Editor Found: " + path.FullName);
+                                    }
+                                }
+                                else
+                                {
+                                    DrawInspectorLabel("No Meta File: " + path.FullName);
+                                }
                             }
                             else
                             {
-                                ImGui.Text("No Editor Found: " + path.FullName);
+                                DrawInspectorLabel("File in Assets folder: " + path.FullName);
                             }
                         }
                         else
                         {
-                            ImGui.Text("No Meta File: " + path.FullName);
+                            DrawInspectorLabel("FileInfo: " + path.FullName);
                         }
                     }
-                    else
+                    else if (customEditor.Value.Item1.Equals(path))
                     {
-                        ImGui.Text("File in Assets folder: " + path.FullName);
+                        // We are still editing the same asset path
+                        customEditor.Value.Item2.OnInspectorGUI();
+                        destroyCustomEditor = false;
                     }
                 }
                 else
                 {
-                    ImGui.Text("FileInfo: " + path.FullName);
+                    DrawInspectorLabel("Object: " + Selected != null ? Selected.ToString() : "Null");
+                }
+
+                if (destroyCustomEditor)
+                {
+                    customEditor?.Item2.OnDisable();
+                    customEditor = null;
+                }
+
+                g.ScrollV();
+            }
+        }
+
+        private void DrawInspectorLabel(string message)
+        {
+            g.Node("DummyForText").ExpandWidth().Height(GuiStyle.ItemHeight * 10);
+            g.DrawText(message, g.CurrentNode.LayoutData.Rect);
+        }
+
+        private void ForwardBackButtons()
+        {
+            // remove nulls or destroyed
+            while (_BackStack.Count > 0)
+            {
+                var peek = _BackStack.Peek();
+                if (peek == null || (peek is EngineObject eo2 && eo2.IsDestroyed) || ReferenceEquals(peek, Selected))
+                    _BackStack.Pop();
+                else
+                    break;
+            }
+
+            LayoutNode backNode;
+            bool backNodePressed = false;
+            bool backNodeHovered = false;
+            if (_BackStack.Count == 0)
+                backNode = g.Node("BackBtn");
+            else 
+                backNode = g.ButtonNode("BackBtn", out backNodePressed, out backNodeHovered);
+
+            using (backNode.Scale(GuiStyle.ItemHeight).Enter())
+            {
+                Color backCol = _BackStack.Count == 0 ? Color.white * 0.7f : Color.white;
+                g.DrawText(FontAwesome6.ArrowLeft, g.CurrentNode.LayoutData.InnerRect, backCol, false);
+
+                if (backNodePressed)
+                {
+                    _BackStack.Push(Selected);
+                    Selected = _ForwardStack.Pop();
+
+                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
+                }
+                else if (backNodeHovered)
+                {
+                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
                 }
             }
-            else if (customEditor.Value.Item1.Equals(path))
+
+
+            // remove nulls or destroyed
+            while (_ForwardStack.Count > 0)
             {
-                // We are still editing the same asset path
-                customEditor.Value.Item2.OnInspectorGUI();
-                destroyCustomEditor = false;
+                var peek = _ForwardStack.Peek();
+                if (peek == null || (peek is EngineObject eo3 && eo3.IsDestroyed) || ReferenceEquals(peek, Selected))
+                    _ForwardStack.Pop();
+                else
+                    break;
             }
-        }
-        else
-        {
-            ImGui.Text("Object: " + Selected != null ? Selected.ToString() : "Null");
-        }
 
-        if (destroyCustomEditor)
-        {
-            customEditor?.Item2.OnDisable();
-            customEditor = null;
-        }
-
-    }
-
-    private void ForwardBackButtons()
-    {
-
-        // remove nulls or destroyed
-        while (_BackStack.Count > 0)
-        {
-            var peek = _BackStack.Peek();
-            if (peek == null || (peek is EngineObject eo2 && eo2.IsDestroyed) || ReferenceEquals(peek, Selected))
-                _BackStack.Pop();
+            LayoutNode forwardNode;
+            bool forwardNodePressed = false;
+            bool forwardNodeHovered = false;
+            if (_ForwardStack.Count == 0)
+                forwardNode = g.Node("ForwardBtn");
             else
-                break;
-        }
+                forwardNode = g.ButtonNode("ForwardBtn", out forwardNodePressed, out forwardNodeHovered);
 
-        if (_BackStack.Count == 0) ImGui.BeginDisabled();
-        {
-            if (ImGui.Button(FontAwesome6.ArrowLeft))
+            using (forwardNode.Scale(GuiStyle.ItemHeight).Enter())
             {
-                _ForwardStack.Push(Selected);
-                Selected = _BackStack.Pop();
+                Color forwardCol = _BackStack.Count == 0 ? Color.white * 0.7f : Color.white;
+                g.DrawText(FontAwesome6.ArrowRight, g.CurrentNode.LayoutData.InnerRect, forwardCol, false);
+
+                if (forwardNodePressed)
+                {
+                    _BackStack.Push(Selected);
+                    Selected = _ForwardStack.Pop();
+
+                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
+                }
+                else if (forwardNodeHovered)
+                {
+                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
+                }
             }
         }
-        if (_BackStack.Count == 0) ImGui.EndDisabled();
 
-        ImGui.SameLine();
-
-        // remove nulls or destroyed
-        while (_ForwardStack.Count > 0)
-        {
-            var peek = _ForwardStack.Peek();
-            if (peek == null || (peek is EngineObject eo3 && eo3.IsDestroyed) || ReferenceEquals(peek, Selected))
-                _ForwardStack.Pop();
-            else
-                break;
-        }
-
-        if (_ForwardStack.Count == 0) ImGui.BeginDisabled();
-        {
-            if (ImGui.Button(FontAwesome6.ArrowRight))
-            {
-                _BackStack.Push(Selected);
-                Selected = _ForwardStack.Pop();
-            }
-        }
-        if (_ForwardStack.Count == 0) ImGui.EndDisabled();
     }
 }

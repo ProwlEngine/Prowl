@@ -168,9 +168,20 @@ namespace Prowl.Runtime
             return new Rect(Left, Top, Right - Left, Bottom - Top);
         }
 
+        internal bool IsFinite()
+        {
+            return Min.IsFinate() && Max.IsFinate();
+        }
+
         public static explicit operator Vector4(Rect v)
         {
             return new Vector4((float)v.Min.x, (float)v.Min.y, (float)v.Max.x, (float)v.Max.y);
         }
+
+        public static bool operator ==(Rect a, Rect b) => a.Min == b.Min && a.Max == b.Max;
+        public static bool operator !=(Rect a, Rect b) => a.Min != b.Min || a.Max != b.Max;
+
+        public override bool Equals(object obj) => obj is Rect r && r == this;
+        public override int GetHashCode() => Min.GetHashCode() ^ Max.GetHashCode();
     }
 }

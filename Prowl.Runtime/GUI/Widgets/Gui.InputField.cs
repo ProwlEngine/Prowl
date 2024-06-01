@@ -31,7 +31,7 @@ namespace Prowl.Runtime.GUI
             style ??= new();
             var g = Gui.ActiveGUI;
             bool multiline = ((flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline);
-            Size h = (multiline ? style.FontSize * 8 : style.FontSize) + 2.5;
+            Size h = (multiline ? style.FontSize * 8 : GuiStyle.ItemHeight);
             if(height != null) h = height.Value;
             using (g.Node(ID).Left(x).Top(y).Width(width).Height(h).Padding(5).Enter())
             {

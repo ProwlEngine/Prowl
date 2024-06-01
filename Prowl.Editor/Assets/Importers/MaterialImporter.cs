@@ -1,5 +1,5 @@
 ﻿using Hexa.NET.ImGui;
-using Prowl.Editor.EditorWindows.CustomEditors;
+using Prowl.Editor.ScriptedEditors;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
@@ -49,9 +49,10 @@ namespace Prowl.Editor.Assets
                 });
                 editor.OnInspectorGUI();
             }
-            catch
+            catch (Exception e)
             {
-                ImGui.LabelText("Failed to Deserialize Material", "The material file is invalid.");
+                g.Node("DummyForText").ExpandWidth().Height(GuiStyle.ItemHeight * 10);
+                g.DrawText("Failed to Deserialize Material: " + e.Message + "\n" + e.StackTrace, g.CurrentNode.LayoutData.Rect);
             }
         }
     }

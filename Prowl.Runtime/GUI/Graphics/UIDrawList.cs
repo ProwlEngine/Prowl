@@ -1432,7 +1432,7 @@ namespace Prowl.Runtime.GUI.Graphics
         {
             if (DefaultFont == null)
             {
-                var builder = Font.BuildNewFont(1024, 1024);
+                var builder = Font.BuildNewFont(2048, 2048);
                 using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Prowl.Runtime.EmbeddedResources.font.ttf"))
                 {
                     using (MemoryStream ms = new())

@@ -1,8 +1,10 @@
 ﻿using Prowl.Icons;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
+using Silk.NET.Vulkan;
 using System;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 
 namespace Prowl.Runtime.GUI
 {
@@ -40,16 +42,16 @@ namespace Prowl.Runtime.GUI
                         {
                             DrawRectFilled(barRect, style.ScrollBarActiveColor, style.ScrollBarRoundness);
                             {
-                                n.VScroll += Input.MouseDelta.y * 2f;
+                                n.VScroll += PointerDelta.y * 2f;
                                 layoutDirty = true;
                             }
                         }
                         else if (interact.IsHovered()) DrawRectFilled(barRect, style.ScrollBarHoveredColor, (float)style.ScrollBarRoundness);
                         else DrawRectFilled(barRect, style.WidgetColor, style.ScrollBarRoundness);
 
-                        if (IsHovering(n.LayoutData.Rect) && Input.MouseWheelDelta != 0)
+                        if (IsHovering(n.LayoutData.Rect) && PointerWheel != 0)
                         {
-                            n.VScroll -= Input.MouseWheelDelta * 10;
+                            n.VScroll -= PointerWheel * 10;
                             layoutDirty = true;
                         }
 
@@ -66,8 +68,41 @@ namespace Prowl.Runtime.GUI
             SetStorage("VScroll", CurrentNode.VScroll);
         }
 
+        /// <summary>
+        /// A Shortcut to an Interactable Node
+        /// This creates a node with an Interactable and outputs the pressed and hovered states
+        /// </summary>
+        public LayoutNode ButtonNode(string ID, out bool pressed, out bool hovered) => ButtonNode(ID, out pressed, out _, out hovered);
+        /// <summary>
+        /// A Shortcut to an Interactable Node
+        /// This creates a node with an Interactable and outputs the pressed, active and hovered states
+        /// </summary>
+        public LayoutNode ButtonNode(string ID, out bool pressed, out bool active, out bool hovered)
+        {
+            LayoutNode node = Node(ID);
+            using (node.Enter())
+            {
+                Interactable interact = GetInteractable();
 
+                pressed = interact.TakeFocus();
+                active = interact.IsActive();
+                hovered = interact.IsHovered();
+            }
+            return node;
+        }
+
+        public LayoutNode TextNode(string id, string text, Font? font = null)
+        {
+            using (Node("#_Text_" + id).Enter())
+            {
+                DrawText(font ?? UIDrawList.DefaultFont, text, 20, CurrentNode.LayoutData.InnerRect, Color.white);
+                return CurrentNode;
+            }
+        }
+
+        [Obsolete("Use ButtonNode instead")]
         public bool Button(string ID, string? label, Offset x, Offset y, Size width, Size height, GuiStyle? style = null, bool invisible = false, bool repeat = false, int rounded_corners = 15) => Button(ID, label, x, y, width, height, out _, style, invisible, repeat, rounded_corners);
+        [Obsolete("Use ButtonNode instead")]
         public bool Button(string ID, string? label, Offset x, Offset y, Size width, Size height, out LayoutNode node, GuiStyle? style = null, bool invisible = false, bool repeat = false, int rounded_corners = 15)
         {
             style ??= new();
@@ -96,23 +131,7 @@ namespace Prowl.Runtime.GUI
             }
         }
 
-        public bool InputDouble(string ID, ref double value, Offset x, Offset y, Size width, GuiStyle? style = null)
-        {
-            string textValue = "";
-            var changed = InputField(ID, ref textValue, 16, InputFieldFlags.NumbersOnly, x, y, width, 0, style);
-            if (changed && Double.TryParse(textValue, out value)) return true;
-            return false;
-        }
-
-        public bool InputInt(string ID, ref int value, Offset x, Offset y, Size width, GuiStyle? style = null)
-        {
-            string textValue = "";
-            var changed = InputField(ID, ref textValue, 16, InputFieldFlags.NumbersOnly, x, y, width, 0, style);
-            if (changed && int.TryParse(textValue, out value)) return true;
-            return false;
-        }
-
-        public bool Combo(string ID, string popupName, ref int ItemIndex, string[] Items, Offset x, Offset y, Size width, Size height, GuiStyle? style = null, float PopupHeight = 100)
+        public bool Combo(string ID, string popupName, ref int ItemIndex, string[] Items, Offset x, Offset y, Size width, Size height, GuiStyle? style = null, string? label = null)
         {
             style ??= new();
             var g = Gui.ActiveGUI;
@@ -127,8 +146,12 @@ namespace Prowl.Runtime.GUI
                 if (style.BorderThickness > 0)
                     g.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
         
-                g.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, Items[ItemIndex], style.FontSize, g.CurrentNode.LayoutData.InnerRect, style.TextColor);
-        
+                if(label == null)
+                    g.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, Items[ItemIndex], style.FontSize, g.CurrentNode.LayoutData.InnerRect, style.TextColor);
+                else
+                    g.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, label, style.FontSize, g.CurrentNode.LayoutData.InnerRect, style.TextColor);
+
+                var popupWidth = g.CurrentNode.LayoutData.Rect.width;
                 if (interact.TakeFocus())
                     g.OpenPopup(popupName, g.CurrentNode.LayoutData.Rect.BottomLeft);
         
@@ -136,11 +159,21 @@ namespace Prowl.Runtime.GUI
                 var NewIndex = ItemIndex;
                 if (g.BeginPopup(popupName, out var node))
                 {
-                    using (node.Width(width).Height(Items.Length * 30).Enter())
+                    int longestText = 0;
+                    for (var Index = 0; Index < Items.Length; ++Index)
+                    {
+                        var textSize = style.Font.IsAvailable ? style.Font.Res.CalcTextSize(Items[Index], style.FontSize, 0) : UIDrawList.DefaultFont.CalcTextSize(Items[Index], style.FontSize, 0);
+                        if (textSize.x > longestText)
+                            longestText = (int)textSize.x;
+                    }
+
+                    popupWidth = Math.Max(popupWidth, longestText + 20);
+
+                    using (node.Width(popupWidth).Height(Items.Length * GuiStyle.ItemHeight).Enter())
                     {
                         for (var Index = 0; Index < Items.Length; ++Index)
                         {
-                            var rect = new Rect(node.LayoutData.Rect.x, node.LayoutData.Rect.y + Index * 30, node.LayoutData.Rect.width, 25);
+                            var rect = new Rect(node.LayoutData.Rect.x, node.LayoutData.Rect.y + Index * GuiStyle.ItemHeight, node.LayoutData.Rect.width, 25);
                             var element = g.GetInteractable(rect);
                             if (element.TakeFocus())
                             {
@@ -175,7 +208,9 @@ namespace Prowl.Runtime.GUI
         public bool Checkbox(string ID, ref bool value, Offset x, Offset y, out LayoutNode node, GuiStyle? style = null)
         {
             style ??= new();
-            using ((node = Node(ID)).Left(x).Top(y).Width(20).Height(20).Enter())
+            x.PixelOffset += 5;
+            y.PixelOffset += 5;
+            using ((node = Node(ID)).Left(x).Top(y).Scale(GuiStyle.ItemHeight - 10).Enter())
             {
                 Interactable interact = GetInteractable();
 
@@ -260,6 +295,39 @@ namespace Prowl.Runtime.GUI
             }
         }
 
+        public LayoutNode SeperatorHNode(float thickness = 1f, Color? color = null, [CallerLineNumber] int intID = 0)
+        {
+            color ??= Color.white;
+            using (Node("#_Sep", intID).ExpandWidth().Height(thickness).Enter())
+            {
+                var rect = CurrentNode.LayoutData.Rect;
+                var start = new Vector2(rect.Left, (rect.Top + rect.Bottom) / 2f);
+                var end = new Vector2(rect.Right, (rect.Top + rect.Bottom) / 2f);
+                DrawLine(start, end, color.Value, thickness);
+                return CurrentNode;
+            }
+        }
+
+        public LayoutNode ToggleNode(string id, ref bool value)
+        {
+            using (Node(id).Enter())
+            {
+                Interactable interact = GetInteractable();
+                if (interact.TakeFocus())
+                    value = !value;
+
+                return CurrentNode;
+            }
+        }
+
+        public LayoutNode OpenCloseNode(string id, out bool opened, bool openByDefault = true)
+        {
+            opened = GetStorage<bool>("H_" + id, openByDefault);
+            var result = ToggleNode(id, ref opened);
+            SetStorage("H_" + id, opened);
+            return result;
+        }
+
         public void OpenPopup(string id, Vector2? topleft = null)
         {
             SetStorage("PU_" + id, true);
@@ -283,11 +351,11 @@ namespace Prowl.Runtime.GUI
                     CreateBlocker(CurrentNode.LayoutData.Rect);
 
                     // Clamp node position so that its always in screen bounds
-                    var rect = CurrentNode.LayoutData.Rect;
-                    if (rect.x + rect.width > ScreenRect.width)
-                        CurrentNode.Left(ScreenRect.width - rect.width);
-                    if (rect.y + rect.height > ScreenRect.height)
-                        CurrentNode.Top(ScreenRect.height - rect.height);
+                    //var rect = CurrentNode.LayoutData.Rect;
+                    //if (rect.x + rect.width > ScreenRect.width)
+                    //    CurrentNode.Left(ScreenRect.width - rect.width);
+                    //if (rect.y + rect.height > ScreenRect.height)
+                    //    CurrentNode.Top(ScreenRect.height - rect.height);
 
                     if (IsPointerDown(Silk.NET.Input.MouseButton.Left) && !node.LayoutData.Rect.Contains(PointerPos))
                     {
@@ -298,8 +366,8 @@ namespace Prowl.Runtime.GUI
                     if (!invisible)
                     {
                         PushClip(ScreenRect, true);
-                        DrawRectFilled(CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
-                        DrawRect(CurrentNode.LayoutData.InnerRect, GuiStyle.Borders, 2, 10);
+                        DrawRectFilled(CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground, 10);
+                        DrawRect(CurrentNode.LayoutData.Rect, GuiStyle.Borders, 2, 10);
                         PopClip();
                     }
 

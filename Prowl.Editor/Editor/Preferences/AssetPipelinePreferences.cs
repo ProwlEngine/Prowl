@@ -1,8 +1,7 @@
-﻿using Prowl.Editor.Utilities;
-using Prowl.Runtime;
+﻿using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
-namespace Prowl.Editor.Editor.Preferences
+namespace Prowl.Editor.Preferences
 {
     [FilePath("AssetPipeline.pref", FilePathAttribute.Location.EditorPreference)]
     public class AssetPipelinePreferences : ScriptableSingleton<AssetPipelinePreferences>
