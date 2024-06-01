@@ -170,7 +170,9 @@ namespace Prowl.Editor
                             else if (interact.IsHovered())
                                 g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5);
 
-                            g.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), GuiStyle.Base4);
+                            var textRect = g.CurrentNode.LayoutData.Rect;
+                            textRect.width -= entryHeight;
+                            g.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), GuiStyle.Base4, 0, textRect);
                         }
                     }
                 }
@@ -300,8 +302,11 @@ namespace Prowl.Editor
                         }
                     }
 
-                    g.DrawText(UIDrawList.DefaultFont, GetIcon(ext), 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + (entryHeight / 2), g.CurrentNode.LayoutData.Rect.y + 7), GetFileColor(ext));
-                    g.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white);
+                    var textRect = g.CurrentNode.LayoutData.Rect;
+                    if (subassets.Length > 1)
+                        textRect.width -= entryHeight;
+                    g.DrawText(UIDrawList.DefaultFont, GetIcon(ext), 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + (entryHeight / 2), g.CurrentNode.LayoutData.Rect.y + 7), GetFileColor(ext), 0, textRect);
+                    g.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white, 0, textRect);
                 }
 
                 // SubAssets

@@ -205,7 +205,9 @@ namespace Prowl.Editor
                 }
                 else
                 {
-                    g.DrawText(UIDrawList.DefaultFont, name, 20, new Vector2(rect.x + 40, rect.y + 7), style.TextColor);
+                    var textRect = rect;
+                    textRect.width -= entryHeight;
+                    g.DrawText(UIDrawList.DefaultFont, name, 20, new Vector2(rect.x + 40, rect.y + 7), style.TextColor, 0, textRect);
                 }
 
                 index++;
