@@ -210,8 +210,8 @@ namespace Prowl.Editor
 
                 if (backNodePressed)
                 {
-                    _BackStack.Push(Selected);
-                    Selected = _ForwardStack.Pop();
+                    _ForwardStack.Push(Selected);
+                    Selected = _BackStack.Pop();
 
                     g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
                 }
@@ -242,7 +242,7 @@ namespace Prowl.Editor
 
             using (forwardNode.Scale(GuiStyle.ItemHeight).Enter())
             {
-                Color forwardCol = _BackStack.Count == 0 ? Color.white * 0.7f : Color.white;
+                Color forwardCol = _ForwardStack.Count == 0 ? Color.white * 0.7f : Color.white;
                 g.DrawText(FontAwesome6.ArrowRight, g.CurrentNode.LayoutData.InnerRect, forwardCol, false);
 
                 if (forwardNodePressed)
