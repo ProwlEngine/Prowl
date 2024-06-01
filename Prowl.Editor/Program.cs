@@ -61,9 +61,9 @@ public static class Program
                     new ConsoleWindow();
                     new AssetsBrowserWindow();
                     new AssetsTreeWindow();
-                    new ProjectSettingsWindow();
-                    new PreferencesWindow();
-                    new AssetSelectorWindow(typeof(Texture2D), (guid, fileid) => {  });
+                    //new ProjectSettingsWindow();
+                    //new PreferencesWindow();
+                    //new AssetSelectorWindow(typeof(Texture2D), (guid, fileid) => {  });
                 }
 
                 Application.DataPath = Project.ProjectDirectory;

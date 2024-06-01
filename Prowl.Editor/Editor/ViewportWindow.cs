@@ -90,7 +90,6 @@ public class ViewportWindow : EditorWindow
         var imagePos = g.CurrentNode.LayoutData.Rect.Position;
         var imageSize = g.CurrentNode.LayoutData.Rect.Size;
         g.DrawImage(RenderTarget.InternalTextures[0], imagePos, imageSize, Color.white);
-        HandleDragnDrop();
 
 
 #warning TODO: Camera rendering clears Gizmos untill the rendering overhaul, so gizmos will Flicker here
@@ -134,6 +133,8 @@ public class ViewportWindow : EditorWindow
         mouseUV.y = 1.0 - mouseUV.y;
 
         var viewportInteractable = g.GetInteractable();
+
+        HandleDragnDrop();
 
         if (viewportInteractable.IsHovered())
         {
