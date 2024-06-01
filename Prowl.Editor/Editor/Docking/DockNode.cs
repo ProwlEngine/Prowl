@@ -194,41 +194,4 @@ namespace Prowl.Editor.Docking
             Child[1].GetWindows(widgetList);
         }
     }
-
-    public class UIDockWidget
-    {
-        //protected override void PostDraw(Canvas canvas)
-        //{
-        //    Vector2 mins = new Vector2(Geometry.Maxs.X - 10, Geometry.Mins.Y);
-        //    Vector2 maxs = mins + 10.0f;
-        //
-        //    canvas.DrawTriangleFilled(
-        //        mins,
-        //        new Vector2(maxs.x, mins.y),
-        //        maxs,
-        //        new Color(0, 0, 0, 0.9f)
-        //    );
-        //}
-
-        //protected override bool OnChildrenMouseButtonEvent(MouseButtonEvent ev, double timeStamp)
-        //{
-        //    if (ev.Button == 0 && ev.Action == InputAction.Press)
-        //    {
-        //        UIDesktop desktop = GetDesktop();
-        //        if (desktop != null)
-        //        {
-        //            Float2 mins = new Float2(Geometry.Maxs.X - 10, Geometry.Mins.Y);
-        //            Float2 maxs = mins + 10.0f;
-        //
-        //            Float2 p = GUIManager.CursorPosition;
-        //            if (BvPointInRect(mins, maxs, p.X, p.Y))
-        //            {
-        //                desktop.SetDragWidget(this);
-        //                return true;
-        //            }
-        //        }
-        //    }
-        //    return false;
-        //}
-    }
 }
