@@ -228,6 +228,46 @@ public class Camera : MonoBehaviour
         cachedRenderTextures.Clear();
     }
 
+    public Ray ScreenPointToRay(Vector2 screenPoint)
+    {
+        // Get the render target size
+        Vector2 renderTargetSize = GetRenderTargetSize();
+
+        // Normalize screen coordinates to [-1, 1]
+        Vector2 ndc = new Vector2(
+            (screenPoint.x / renderTargetSize.x) * 2.0f - 1.0f,
+            1.0f - (screenPoint.y / renderTargetSize.y) * 2.0f
+        );
+
+        // Create the near and far points in NDC
+        Vector4 nearPointNDC = new Vector4(ndc.x, ndc.y, 0.0f, 1.0f);
+        Vector4 farPointNDC = new Vector4(ndc.x, ndc.y, 1.0f, 1.0f);
+
+        // Get the view and projection matrices
+        Matrix4x4 viewMatrix = Matrix4x4.CreateLookToLeftHanded(GameObject.Transform.position, GameObject.Transform.forward, GameObject.Transform.up);
+        Matrix4x4 projectionMatrix = GetProjectionMatrix((int)renderTargetSize.x, (int)renderTargetSize.y);
+
+        // Calculate the inverse view-projection matrix
+        Matrix4x4 viewProjectionMatrix = viewMatrix * projectionMatrix;
+        Matrix4x4.Invert(viewProjectionMatrix, out Matrix4x4 inverseViewProjectionMatrix);
+
+        // Unproject the near and far points to world space
+        Vector4 nearPointWorld = Vector4.Transform(nearPointNDC, inverseViewProjectionMatrix);
+        Vector4 farPointWorld = Vector4.Transform(farPointNDC, inverseViewProjectionMatrix);
+        Console.WriteLine(nearPointNDC);
+
+        // Perform perspective divide
+        nearPointWorld /= nearPointWorld.w;
+        farPointWorld /= farPointWorld.w;
+
+        // Create the ray
+        Vector3 rayOrigin = new Vector3(nearPointWorld.x, nearPointWorld.y, nearPointWorld.z);
+        Vector3 rayDirection = Vector3.Normalize(new Vector3(farPointWorld.x, farPointWorld.y, farPointWorld.z) - rayOrigin);
+
+        return new Ray(rayOrigin, rayDirection);
+    }
+
+
     #region RT Cache
 
     private readonly Dictionary<string, (RenderTexture, long frameCreated)> cachedRenderTextures = [];
