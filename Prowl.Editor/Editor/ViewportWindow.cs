@@ -231,18 +231,9 @@ public class ViewportWindow : EditorWindow
                 }
                 else if (Input.MouseWheelDelta != 0)
                 {
-
-                    Matrix4x4.Invert(Cam.View, out var viewInv);
-                    var dir = Vector3.Transform(Cam.gBuffer.GetViewPositionAt(mouseUV), viewInv);
                     // Larger distance more zoom, but clamped
-                    double amount = dir.magnitude * 0.05 * SceneViewPreferences.Instance.ZoomSensitivity;
-                    if (amount > dir.magnitude * .9) amount = dir.magnitude * .9;
-                    if (amount < Cam.NearClip * 2) amount = Cam.NearClip * 2;
-
-                    if (dir.sqrMagnitude > 0)
-                        Cam.GameObject.Transform.position += Vector3.Normalize(dir) * amount * Input.MouseWheelDelta;
-                    else
-                        Cam.GameObject.Transform.position += Cam.GameObject.Transform.forward * 1f * Input.MouseWheelDelta;
+                    double amount = 1f * SceneViewPreferences.Instance.ZoomSensitivity;
+                    Cam.GameObject.Transform.position += mouseRay.direction * amount * Input.MouseWheelDelta;
 
                 }
                 else
