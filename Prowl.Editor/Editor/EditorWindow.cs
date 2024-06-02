@@ -112,7 +112,7 @@ namespace Prowl.Editor
                             {
                                 // Draw Tabs
                                 var tabWidth = (g.CurrentNode.LayoutData.InnerRect.width - 35) / Leaf.LeafWindows.Count;
-                                tabWidth = Math.Min(tabWidth, 100);
+                                tabWidth = Math.Min(tabWidth, 115);
 
                                 // background rect for all tabs
                                 if (Leaf.LeafWindows.Count > 1)
