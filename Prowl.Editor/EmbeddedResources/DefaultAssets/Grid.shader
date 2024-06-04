@@ -77,7 +77,7 @@ Pass 0
 			float sg = Grid(Camera_WorldPosition, 1.0, normalize(vPosition), d);
 			float bg = Grid(Camera_WorldPosition, 4.0, normalize(vPosition), d);
 			
-			float depth = length(gPos.xyz) * 0.5;
+			float depth = length(gPos.xyz) * 0.25;
 			
 			if(depth > d || depth == 0.0)
 			{
