@@ -62,7 +62,7 @@ public class GBuffer
         int x = (int)(uv.x * Width);
         int y = (int)(uv.y * Height);
         Graphics.Device.BindFramebuffer(frameBuffer);
-        Vector3 result = Graphics.Device.ReadPixel<System.Numerics.Vector3>(2, x, y, TextureImageFormat.Short3);
+        Vector3 result = Graphics.Device.ReadPixel<System.Numerics.Vector3>(2, x, y, TextureImageFormat.Float3);
         return result;
     }
 
