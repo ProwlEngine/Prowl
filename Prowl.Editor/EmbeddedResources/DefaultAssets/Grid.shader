@@ -43,11 +43,7 @@ Pass 0
 		
 		float Grid(vec3 ro, float scale, vec3 rd, out float d) {
 			ro /= scale;
-			#ifdef GRID_XZ
-			    d = -ro.y / rd.y;
-			    if (d <= 0.0) return 0.0;
-			    vec2 p = (ro.xz + rd.xz * d);
-			#elif defined(GRID_ZY)
+			#ifdef GRID_YZ
 			    d = -ro.x / rd.x;
 			    if (d <= 0.0) return 0.0;
 			    vec2 p = (ro.zy + rd.zy * d);
@@ -55,6 +51,10 @@ Pass 0
 			    d = -ro.z / rd.z;
 			    if (d <= 0.0) return 0.0;
 			    vec2 p = (ro.xy + rd.xy * d);
+			#else
+			    d = -ro.y / rd.y;
+			    if (d <= 0.0) return 0.0;
+			    vec2 p = (ro.xz + rd.xz * d);
 			#endif
 			vec2 e = fwidth(p);
 			vec2 grid = abs(fract(p - 0.5) - 0.5);
