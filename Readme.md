@@ -128,11 +128,11 @@ Getting Prowl up and running is super easy!
 - 🛠️ Cross Platform
   - ✔️ Windows - Fully functional
   - ✔️ MacOS - ImGUI asserts cause crashes occasionally
-  - 🛠️ Linux
+  - ✔️ Linux - Should work but isn't actually tested
   - ❌ Andriod
   - ❌ iOS
   - ❌ Web
-- ❌ UI Engine
+- 🛠️ UI Engine
 - ❌ VR Support
 - ❌ Navmesh and AI Agents
 - ❌ Networking Solution
@@ -151,7 +151,7 @@ Getting Prowl up and running is super easy!
 - ❌ Live Collaborative Tools
 - ❌ Visual Scripting
 - ❌ Material Node Editor
-- ❌ 2D Support
+- ❌ Basic 2D Support
 
 
 See the [open issues](https://github.com/michaelsakharov/prowl/issues) for a full list of proposed features (and known issues).
