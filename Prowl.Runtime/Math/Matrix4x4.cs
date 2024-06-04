@@ -146,6 +146,14 @@ namespace Prowl.Runtime
             this.M4 = new(m41, m42, m43, m44);
         }
 
+        public Matrix4x4(Vector4 row1, Vector4 row2, Vector4 row3, Vector4 row4)
+        {
+            M1 = row1;
+            M2 = row2;
+            M3 = row3;
+            M4 = row4;
+        }
+
         public System.Numerics.Matrix4x4 ToFloat()
         {
             System.Numerics.Matrix4x4 result;
