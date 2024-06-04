@@ -254,7 +254,6 @@ public class Camera : MonoBehaviour
         // Unproject the near and far points to world space
         Vector4 nearPointWorld = Vector4.Transform(nearPointNDC, inverseViewProjectionMatrix);
         Vector4 farPointWorld = Vector4.Transform(farPointNDC, inverseViewProjectionMatrix);
-        Console.WriteLine(nearPointNDC);
 
         // Perform perspective divide
         nearPointWorld /= nearPointWorld.w;
