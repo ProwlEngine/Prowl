@@ -173,7 +173,11 @@ public static class EditorGuiManager
         });
 
         foreach (var window in WindowsToRemove)
+        {
+            if(FocusedWindow != null && FocusedWindow.Target == window)
+                FocusedWindow = null;
             Windows.Remove(window);
+        }
         WindowsToRemove.Clear();
     }
 
