@@ -25,6 +25,8 @@ public static class Program
 
     public static int Main(string[] args)
     {
+        // set global Culture to invariant
+        Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
         Application.Initialize += () =>
         {
             // Editor-specific initialization code

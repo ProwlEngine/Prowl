@@ -339,7 +339,15 @@ public class SceneViewWindow : EditorWindow
         
         centerOfAll /= selectedGOs.Count;
         
-        gizmo.SetTransform(centerOfAll, Quaternion.identity, Vector3.one);
+        Quaternion rotation = Quaternion.identity;
+        Vector3 scale = Vector3.one;
+        if (selectedGOs.Count == 1)
+        {
+            rotation = selectedGOs[0].Transform.rotation;
+            scale = selectedGOs[0].Transform.localScale;
+        }
+        
+        gizmo.SetTransform(centerOfAll, rotation, scale);
         var result = gizmo.Update(mouseRay, g.PointerPos);
         if (result.HasValue)
         {
