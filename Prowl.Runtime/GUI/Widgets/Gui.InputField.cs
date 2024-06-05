@@ -35,7 +35,7 @@ namespace Prowl.Runtime.GUI
             if(height != null) h = height.Value;
             using (g.Node(ID).Left(x).Top(y).Width(width).Height(h).Padding(5).Enter())
             {
-                Interactable interact = g.GetInteractable(true, true);
+                Interactable interact = g.GetInteractable();
 
                 if (!invisible)
                 {
