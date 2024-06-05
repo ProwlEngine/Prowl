@@ -53,7 +53,7 @@ public abstract class OldPropertyDrawer
 
         var attributes = fieldInfo.GetCustomAttributes(true);
         var imGuiAttributes = attributes.Where(attr => attr is IImGUIAttri).Cast<IImGUIAttri>();
-        bool doDraw = EditorGui.HandleBeginImGUIAttributes(container, imGuiAttributes);
+        bool doDraw = EditorGuiManager.HandleBeginImGUIAttributes(container, imGuiAttributes);
         bool changed = false;
         if (doDraw)
         {
@@ -75,7 +75,7 @@ public abstract class OldPropertyDrawer
             changed = Draw(label ?? fieldInfo.Name, ref value, fieldInfo.FieldType, width);
             if (changed) fieldInfo.SetValue(container, value);
         }
-        EditorGui.HandleEndImGUIAttributes(imGuiAttributes);
+        EditorGuiManager.HandleEndImGUIAttributes(imGuiAttributes);
         return changed;
     }
 
@@ -136,7 +136,7 @@ public abstract class OldPropertyDrawer
                             changed |= Draw(value, field);
                         ImGui.Unindent();
 
-                        changed |= EditorGui.HandleAttributeButtons(value);
+                        changed |= EditorGuiManager.HandleAttributeButtons(value);
                         ImGui.TreePop();
                     }
                 }

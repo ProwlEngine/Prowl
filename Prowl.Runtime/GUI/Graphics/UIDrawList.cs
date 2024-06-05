@@ -559,6 +559,9 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void AddConvexPolyFilled(UIBuffer<Vector2> points, int points_count, uint col, bool anti_aliased)
         {
+            if (points_count < 3 || (col & 0x00ffffff) == 0)
+                return;
+
             //Vector2 uv = ImGui.Instance.FontTexUvWhitePixel;
             Vector2 uv = DefaultFont.TexUvWhitePixel;
 
@@ -616,7 +619,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
                     // Add vertices
                     VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new(points[i1] - dm, _primitiveCount), uv = uv, col = col };
-                    VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new(points[i1] + dm, _primitiveCount), uv = uv, col = col_trans };
+                    VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new(points[i1] + dm, _primitiveCount), uv = uv, col = col_trans};
 
                     // Add indexes for fringes
 

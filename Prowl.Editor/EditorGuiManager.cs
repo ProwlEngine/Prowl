@@ -1,12 +1,14 @@
 using Hexa.NET.ImGui;
 using Prowl.Editor.Docking;
+using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
+using Silk.NET.Core;
 using System.Reflection;
 
 namespace Prowl.Editor;
 
-public static class EditorGui
+public static class EditorGuiManager
 {
     public static System.Numerics.Vector4 SelectedColor => new System.Numerics.Vector4(0.06f, 0.53f, 0.98f, 1.00f);
 
@@ -49,16 +51,16 @@ public static class EditorGui
         Vector2 framebufferAndInputScale = new((float)Window.InternalWindow.FramebufferSize.X / (float)Window.InternalWindow.Size.X, (float)Window.InternalWindow.FramebufferSize.Y / (float)Window.InternalWindow.Size.Y);
 
         Gui.PointerWheel = Input.MouseWheelDelta;
-        EditorGui.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, (g) =>
-        {
-
-            Container ??= new();
-            var rect = g.ScreenRect;
-            rect.Expand(-8);
-            Container.Update(rect);
+        EditorGuiManager.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, (g) => {
 
             // Draw Background
             g.DrawRectFilled(screenRect, GuiStyle.Background);
+
+            Container ??= new();
+            var rect = screenRect;
+            rect.Expand(-8);
+            Container.Update(rect);
+
 
             if (DragSplitter != null)
             {

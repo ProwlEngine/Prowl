@@ -45,7 +45,7 @@ namespace Prowl.Editor
 
         public EditorWindow() : base()
         {
-            EditorGui.Windows.Add(this);
+            EditorGuiManager.Windows.Add(this);
             _id = GetHashCode();
 
             _width = Width;
@@ -72,7 +72,7 @@ namespace Prowl.Editor
                     g.CreateBlocker(g.ScreenRect);
                     g.DrawRectFilled(g.ScreenRect, new System.Numerics.Vector4(0, 0, 0, 0.5f));
                     // Ensure were at the start of the EditorWindows List
-                    EditorGui.FocusWindow(this);
+                    EditorGuiManager.FocusWindow(this);
 
                 }
 
@@ -89,6 +89,9 @@ namespace Prowl.Editor
                 {
                     _x = DockPosition.x;
                     _y = DockPosition.y;
+                    // Dock is Relative to Node, Convert to Screen Space
+                    _x -= g.CurrentNode.LayoutData.Rect.x;
+                    _y -= g.CurrentNode.LayoutData.Rect.y;
                     width = DockSize.x;
                     height = DockSize.y;
                 }
@@ -138,7 +141,7 @@ namespace Prowl.Editor
                                             if (interact.TakeFocus())
                                             {
                                                 Leaf.WindowNum = i;
-                                                EditorGui.FocusWindow(window);
+                                                EditorGuiManager.FocusWindow(window);
                                             }
                                             if (interact.IsHovered())
                                                 g.DrawRectFilled(tabRect, GuiStyle.Borders, 10);
@@ -185,8 +188,8 @@ namespace Prowl.Editor
                 if (!isOpened)
                 {
                     if (IsDocked)
-                        EditorGui.Container.DetachWindow(this);
-                    EditorGui.Remove(this);
+                        EditorGuiManager.Container.DetachWindow(this);
+                    EditorGuiManager.Remove(this);
                     Close();
                 }
             }
@@ -212,22 +215,22 @@ namespace Prowl.Editor
         private void HandleTitleBarInteraction()
         {
             var titleInteract = g.GetInteractable();
-            if (EditorGui.DragSplitter == null)
+            if (EditorGuiManager.DragSplitter == null)
             {
                 if (titleInteract.TakeFocus() || titleInteract.IsActive())
                 {
-                    EditorGui.FocusWindow(this);
+                    EditorGuiManager.FocusWindow(this);
                     if (_wasDragged || g.IsPointerMoving)
                     {
                         _wasDragged = true;
 
                         _x += g.PointerDelta.x;
                         _y += g.PointerDelta.y;
-                        EditorGui.DraggingWindow = this;
+                        EditorGuiManager.DraggingWindow = this;
 
                         if (g.IsPointerMoving && IsDocked)
                         {
-                            EditorGui.Container.DetachWindow(this);
+                            EditorGuiManager.Container.DetachWindow(this);
                             // Position the window so the mouse is over the title bar
                             _x = g.PointerPos.x - (_width / 2);
                             _y = g.PointerPos.y - 10;
@@ -239,7 +242,7 @@ namespace Prowl.Editor
                             g.SetZIndex(10000);
                             // Draw Docking Placement
                             Vector2 cursorPos = g.PointerPos;
-                            DockPlacement placement = EditorGui.Container.GetPlacement(cursorPos.x, cursorPos.y);
+                            DockPlacement placement = EditorGuiManager.Container.GetPlacement(cursorPos.x, cursorPos.y);
                             if (placement)
                             {
                                 g.DrawList.PathLineTo(placement.PolygonVerts[0]);
@@ -267,13 +270,13 @@ namespace Prowl.Editor
                         if (IsDockable && !IsDocked)
                         {
                             Vector2 cursorPos = g.PointerPos;
-                            EditorGui.Container.AttachWindowAt(this, cursorPos.x, cursorPos.y);
+                            EditorGuiManager.Container.AttachWindowAt(this, cursorPos.x, cursorPos.y);
                         }
                     }
 
-                    if (EditorGui.DraggingWindow == this)
+                    if (EditorGuiManager.DraggingWindow == this)
                     {
-                        EditorGui.DraggingWindow = null;
+                        EditorGuiManager.DraggingWindow = null;
                     }
                 }
             }

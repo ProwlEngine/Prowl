@@ -39,7 +39,7 @@ public class OldAssetsWindow : OldEditorWindow
         if (!Project.HasProject)
             return;
 
-        ImGui.PushStyleColor(ImGuiCol.Header, EditorGui.SelectedColor);
+        ImGui.PushStyleColor(ImGuiCol.Header, EditorGuiManager.SelectedColor);
         SelectHandler.StartFrame();
 
         float cPX = ImGui.GetCursorPosX();

@@ -36,6 +36,33 @@ namespace Prowl.Editor
             }
         }
 
+        public static bool QuickButton(string label, double width, double height, bool border = true, Color? textcolor = null)
+        {
+            var g = ActiveGUI;
+            using (g.ButtonNode(label, out var p, out var h).Width(width).Height(height).Enter())
+            {
+                if(border)
+                    g.DrawRect(g.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 10);
+
+                g.DrawText(label, g.CurrentNode.LayoutData.Rect, textcolor ?? GuiStyle.Base11);
+
+                var interact = g.GetInteractable();
+                if (interact.TakeFocus())
+                {
+                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
+                    return true;
+                }
+
+                var hovCol = GuiStyle.Base11;
+                hovCol.a = 0.25f;
+                if (interact.IsHovered())
+                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
+
+
+                return false;
+            }
+        }
+
         public static bool InputDouble(string ID, ref double value, Offset x, Offset y, Size width, GuiStyle? style = null)
         {
             string textValue = value.ToString();

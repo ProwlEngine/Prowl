@@ -143,8 +143,7 @@ namespace Prowl.Runtime.GUI
         private Dictionary<ulong, uint> nodeCountPerLine = [];
         public LayoutNode Node(LayoutNode parent, string stringID, [CallerLineNumber] int intID = 0)
         {
-            ulong lineHash = (ulong)HashCode.Combine(stringID, intID);
-            ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), lineHash);
+            ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), stringID, intID);
 
             if (_createdNodes.Contains(storageHash))
                 throw new InvalidOperationException("Node already exists with this ID: " + stringID + ":" + intID + " = " + storageHash);

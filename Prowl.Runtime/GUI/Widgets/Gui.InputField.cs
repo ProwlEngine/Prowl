@@ -501,7 +501,8 @@ namespace Prowl.Runtime.GUI
             for (int i = 0; i < count; i++)
             {
                 if ((NumbersOnly && !char.IsNumber(c[i])) || c[i] == '\r')
-                    continue;
+                    if (c[i] != '.')
+                        continue;
 
                 StbTextEdit.InputChar(stb, c[i]);
                 stb.CursorFollow = true;

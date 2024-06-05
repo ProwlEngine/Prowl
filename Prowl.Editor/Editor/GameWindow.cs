@@ -3,9 +3,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
-using Prowl.Runtime.Rendering.OpenGL;
 using System.Reflection;
-using System.Threading.Channels;
 using static Prowl.Editor.EditorGUI;
 
 namespace Prowl.Editor;
@@ -115,6 +113,8 @@ public class GameWindow : EditorWindow
                 GeneralPreferences.Instance.OnValidate();
                 GeneralPreferences.Instance.Save();
             }
+
+            DrawPlayMode();
         }
 
         using (g.Node("Main").Width(Size.Percentage(1f)).Padding(5).Enter())
@@ -174,123 +174,38 @@ public class GameWindow : EditorWindow
             g.DrawImage(RenderTarget.InternalTextures[0], innerRect.Position, innerRect.Size, Color.white, true);
         }
 
-        /*
-        ImGg.BeginChild("Header", new System.Numerics.Vector2(0, HeaderHeight), ImGuiChildFlags.Border, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
-        {
-            bool changed = false;
-            ImGg.SetCursorPosY(ImGg.GetCursorPosY() + 3);
-            ImGg.SetCursorPosX(ImGg.GetCursorPosX() + 5);
-            ImGg.Text(FontAwesome6.Display);
-            ImGg.SameLine();
-            ImGg.SetNextItemWidth(50);
-            if (ImGg.InputInt("##Width", ref GeneralPreferences.Instance.CurrentWidth, 0, 0, ImGuiInputTextFlags.EnterReturnsTrue))
-            {
-                GeneralPreferences.Instance.CurrentWidth = Math.Clamp(GeneralPreferences.Instance.CurrentWidth, 1, 7680);
-                GeneralPreferences.Instance.Resolution = Resolutions.custom;
-                changed = true;
-                RefreshRenderTexture();
-            }
-            ImGg.SameLine();
-            ImGg.SetNextItemWidth(50);
-            if (ImGg.InputInt("##Height", ref GeneralPreferences.Instance.CurrentHeight, 0, 0, ImGuiInputTextFlags.EnterReturnsTrue))
-            {
-                GeneralPreferences.Instance.CurrentHeight = Math.Clamp(GeneralPreferences.Instance.CurrentHeight, 1, 4320);
-                GeneralPreferences.Instance.Resolution = Resolutions.custom;
-                changed = true;
-                RefreshRenderTexture();
-            }
-
-            ImGg.SameLine();
-            ImGg.SetNextItemWidth(100);
-            string[] resolutionNames = Enum.GetValues(typeof(Resolutions)).Cast<Resolutions>().Select(r => GetDescription(r)).ToArray();
-            int currentIndex = (int)GeneralPreferences.Instance.Resolution;
-            if (ImGg.Combo("##ResolutionCombo", ref currentIndex, resolutionNames, resolutionNames.Length))
-            {
-                GeneralPreferences.Instance.Resolution = (Resolutions)Enum.GetValues(typeof(Resolutions)).GetValue(currentIndex);
-                UpdateResolution(GeneralPreferences.Instance.Resolution);
-                changed = true;
-                RefreshRenderTexture();
-            }
-
-            ImGg.SameLine();
-            // Auto Focus
-            ImGg.SetCursorPosX(ImGg.GetWindowWidth() - 200);
-            changed |= ImGg.Checkbox("Auto Focus", ref GeneralPreferences.Instance.AutoFocusGameView);
-            ImGg.SameLine();
-            // Auto Refresh
-            changed |= ImGg.Checkbox("Auto Refresh", ref GeneralPreferences.Instance.AutoRefreshGameView);
-
-            if (changed)
-            {
-                GeneralPreferences.Instance.OnValidate();
-                GeneralPreferences.Instance.Save();
-            }
-        }
-        ImGg.EndChild();
-
-        var renderSize = ImGg.GetContentRegionAvail();
-
-        var min = ImGg.GetCursorScreenPos();
-        var max = new System.Numerics.Vector2(min.X + renderSize.X, min.Y + renderSize.Y);
-        ImGg.GetWindowDrawList().AddRectFilled(min, max, ImGg.GetColorU32(new System.Numerics.Vector4(0, 0, 0, 1)));
-
-        // Find Camera to render
-        var allCameras = EngineObject.FindObjectsOfType<Camera>();
-        // Remove disabled ones
-        allCameras = allCameras.Where(c => c.EnabledInHierarchy && !c.GameObject.Name.Equals("Editor-Camera", StringComparison.OrdinalIgnoreCase)).ToArray();
-        // Find MainCamera
-        var mainCam = allCameras.FirstOrDefault(c => c.GameObject.CompareTag("Main Camera") && c.Target.IsExplicitNull, allCameras.Length > 0 ? allCameras[0] : null);
-
-        if (mainCam == null)
-        {
-            GUIHelper.TextCenter("No Camera found", 2f, true);
-            return;
-        }
-        if (GeneralPreferences.Instance.Resolution == Resolutions.fit)
-        {
-            if (renderSize.X != RenderTarget.Width || renderSize.Y != RenderTarget.Height)
-            {
-                GeneralPreferences.Instance.CurrentWidth = (int)renderSize.X;
-                GeneralPreferences.Instance.CurrentHeight = (int)renderSize.Y;
-                RefreshRenderTexture();
-            }
-        }
-
-        // We got a camera to visualize
-        if (GeneralPreferences.Instance.AutoRefreshGameView)
-        {
-            if (Application.isPlaying || Time.frameCount % 8 == 0)
-            {
-                var tmp = mainCam.Target;
-                mainCam.Target = RenderTarget;
-                mainCam.Render((int)renderSize.X, (int)renderSize.Y);
-                mainCam.Target = tmp;
-            }
-        }
-
-        // Letter box the image into the render size
-        float aspect = (float)RenderTarget.Width / (float)RenderTarget.Height;
-        float renderAspect = renderSize.X / renderSize.Y;
-        if (aspect > renderAspect)
-        {
-            float width = renderSize.X;
-            float height = width / aspect;
-            ImGg.SetCursorPosY(ImGg.GetCursorPosY() + ((renderSize.Y - height) / 2f));
-            ImGg.Image((IntPtr)(RenderTarget.InternalTextures[0].Handle as GLTexture)!.Handle, new System.Numerics.Vector2(width, height), new System.Numerics.Vector2(0, 1), new System.Numerics.Vector2(1, 0));
-        }
-        else
-        {
-            float height = renderSize.Y;
-            float width = height * aspect;
-            ImGg.SetCursorPosX(ImGg.GetCursorPosX() + ((renderSize.X - width) / 2f));
-            ImGg.Image((IntPtr)(RenderTarget.InternalTextures[0].Handle as GLTexture)!.Handle, new System.Numerics.Vector2(width, height), new System.Numerics.Vector2(0, 1), new System.Numerics.Vector2(1, 0));
-        }
-        */
     }
 
-    protected override void Update()
+    private void DrawPlayMode()
     {
+        using (g.Node("PSP").FitContentWidth().Height(GuiStyle.ItemHeight).Top(5).Layout(LayoutType.Row).Enter())
+        {
+            // Center
+            g.CurrentNode.Left(Offset.Percentage(0.5f, -(g.CurrentNode.LayoutData.Rect.width / 2)));
 
+            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
+
+            switch (PlayMode.Current)
+            {
+                case PlayMode.Mode.Editing:
+                    if (EditorGUI.QuickButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                        PlayMode.Start();
+                    break;
+                case PlayMode.Mode.Playing:
+                    if (EditorGUI.QuickButton(FontAwesome6.Pause, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                        PlayMode.Pause();
+                    if (EditorGUI.QuickButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
+                        PlayMode.Stop();
+                    break;
+                case PlayMode.Mode.Paused:
+                    if (EditorGUI.QuickButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                        PlayMode.Resume();
+                    if (EditorGUI.QuickButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
+                        PlayMode.Stop();
+                    break;
+
+            }
+        }
     }
 
     void UpdateResolution(Resolutions resolution)

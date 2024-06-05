@@ -28,7 +28,7 @@ public static class Program
         Application.Initialize += () =>
         {
             // Editor-specific initialization code
-            EditorGui.Initialize();
+            EditorGuiManager.Initialize();
             ImporterAttribute.GenerateLookUp();
 
             // Start with the project window open
@@ -55,7 +55,7 @@ public static class Program
                     CreatedDefaultWindows = true;
                     //new EditorMainMenubar();
                     new HierarchyWindow();
-                    new ViewportWindow();
+                    new SceneViewWindow();
                     new GameWindow();
                     new InspectorWindow();
                     new ConsoleWindow();
@@ -111,7 +111,7 @@ public static class Program
         {
             Graphics.StartFrame();
 
-            EditorGui.Update();
+            EditorGuiManager.Update();
 
             Graphics.EndFrame();
 

@@ -867,18 +867,18 @@ namespace Prowl.Runtime
             Vector3 zaxis = Vector3.Normalize(cameraPosition - cameraTarget);
             Vector3 xaxis = Vector3.Normalize(Vector3.Cross(cameraUpVector, zaxis));
             Vector3 yaxis = Vector3.Cross(zaxis, xaxis);
-
+            
             Matrix4x4 result = new();
-
+            
             result.M1 = new Vector4(xaxis.x, yaxis.x, zaxis.x, 0.0);
             result.M2 = new Vector4(xaxis.y, yaxis.y, zaxis.y, 0.0);
             result.M3 = new Vector4(xaxis.z, yaxis.z, zaxis.z, 0.0);
-
+            
             result.M41 = -Vector3.Dot(xaxis, cameraPosition);
             result.M42 = -Vector3.Dot(yaxis, cameraPosition);
             result.M43 = -Vector3.Dot(zaxis, cameraPosition);
             result.M44 = 1.0;
-
+            
             return result;
         }
 

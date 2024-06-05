@@ -61,7 +61,7 @@ public class OldAssetBrowserWindow : OldEditorWindow
         if (!Project.HasProject)
             return;
 
-        ImGui.PushStyleColor(ImGuiCol.Header, EditorGui.SelectedColor);
+        ImGui.PushStyleColor(ImGuiCol.Header, EditorGuiManager.SelectedColor);
         // Ensure we always have a Directory, if the current one is deleted move to its parent
         // if theres no parent move to the Assets Directory
         // If theres no project directory well why the hell are we here? the line above should have stopped us
