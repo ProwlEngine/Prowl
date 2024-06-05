@@ -515,6 +515,7 @@ namespace Prowl.Runtime.GUI
         {
             var g = Gui.ActiveGUI;
             var Pos = g.PointerPos - g.CurrentNode.LayoutData.InnerRect.Position;
+            Pos.x -= 5; // Account for padding in text rendering
             Pos.x += stb.ScrollX;
             Pos.y += g.CurrentNode.VScroll;
             if (g.IsPointerClick(Silk.NET.Input.MouseButton.Left))
