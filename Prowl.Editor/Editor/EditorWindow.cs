@@ -42,6 +42,10 @@ namespace Prowl.Editor
             get => m_Leaf;
             internal set => m_Leaf = value;
         }
+        public Rect Rect {
+            get;
+            private set;
+        }
 
         public EditorWindow() : base()
         {
@@ -101,9 +105,9 @@ namespace Prowl.Editor
                     g.CreateBlocker(g.CurrentNode.LayoutData.InnerRect);
                     g.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
 
+                    Rect = g.CurrentNode.LayoutData.InnerRect;
+
                     // TODO: Resize
-                    // TODO: Docking needs a way to allow floating windows to be created
-                    // TODO: Docking needs a way to allow docking to the root node for easier layout management
 
                     if (TitleBar)
                     {
