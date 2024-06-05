@@ -20,8 +20,6 @@ public class SceneViewWindow : EditorWindow
     Camera Cam;
     Material gridMat;
     RenderTexture RenderTarget;
-    bool IsFocused = false;
-    bool IsHovered = false;
     Vector2 WindowCenter;
     Vector2 mouseUV;
     int frames = 0;
@@ -76,8 +74,6 @@ public class SceneViewWindow : EditorWindow
 
         if (!Project.HasProject) return;
         g.CurrentNode.Padding(5);
-
-        IsHovered = g.IsHovering(g.CurrentNode.LayoutData.Rect);
 
         var renderSize = g.CurrentNode.LayoutData.Rect.Size;
         if (renderSize.x == 0 || renderSize.y == 0) return;
