@@ -23,8 +23,11 @@ namespace Prowl.Editor.Docking
             return Root.TraceLeaf(x, y);
         }
 
-        public DockPlacement GetPlacement(double x, double y)
+        public DockPlacement GetPlacement(double x, double y, out List<Rect> possibleAreas, out Rect hovered)
         {
+            possibleAreas = null;
+            hovered = Rect.Zero;
+
             x -= PaddedMins.x;
             y -= PaddedMins.y;
 
@@ -32,25 +35,18 @@ namespace Prowl.Editor.Docking
             if (leaf == null)
                 return default;
 
-            // Translate X, Y to normalized window space 0..1
-            x -= leaf.Mins.x;
-            y -= leaf.Mins.y;
+            Vector2 cen = (leaf.Mins + leaf.Maxs) * 0.5f;
+            Vector2 size = new Vector2(100, 100);
+            // TODO: Why do we need to remove half of the size? Shouldn't ((min + max) / 2) be the center already?
+            cen.x -= size.x / 2;
+            cen.y -= size.y / 2;
+            Rect main = new Rect(cen, size);
 
-            double w = leaf.Maxs.x - leaf.Mins.x;
-            double h = leaf.Maxs.y - leaf.Mins.y;
-
-            x /= w;
-            y /= h;
-
-            double areaWidth = Math.Min(w, h) * 0.3f / w;
-
-            double aspect = w / h;
-
-            double xmin = areaWidth;
-            double xmax = 1.0f - xmin;
-
-            double ymin = areaWidth * aspect;
-            double ymax = 1.0f - ymin;
+            Rect left = new Rect(cen - new Vector2(size.x + 5, 0), size);
+            Rect right = new Rect(cen + new Vector2(size.x + 5, 0), size);
+            Rect top = new Rect(cen - new Vector2(0, size.y + 5), size);
+            Rect bottom = new Rect(cen + new Vector2(0, size.y + 5), size);
+            possibleAreas = new List<Rect> { main, left, right, top, bottom };
 
             DockPlacement placement = new DockPlacement();
             placement.Leaf = leaf;
@@ -58,66 +54,165 @@ namespace Prowl.Editor.Docking
 
             while (true)
             {
-                placement.PolygonVerts[0] = new Vector2(0, 0);
-                placement.PolygonVerts[1] = new Vector2(xmin, ymin);
-                placement.PolygonVerts[2] = new Vector2(xmin, ymax);
-                placement.PolygonVerts[3] = new Vector2(0, 1);
+                placement.PolygonVerts[0] = new Vector2(left.Min.x, left.Min.y);
+                placement.PolygonVerts[1] = new Vector2(left.Max.x, left.Min.y);
+                placement.PolygonVerts[2] = new Vector2(left.Max.x, left.Max.y);
+                placement.PolygonVerts[3] = new Vector2(left.Min.x, left.Max.y);
 
                 if (PointInPoly(placement.PolygonVerts, 4, x, y))
                 {
                     placement.Zone = DockZone.Left;
+                    hovered = left;
                     break;
                 }
 
-                placement.PolygonVerts[0] = new Vector2(1, 0);
-                placement.PolygonVerts[1] = new Vector2(1, 1);
-                placement.PolygonVerts[2] = new Vector2(xmax, ymax);
-                placement.PolygonVerts[3] = new Vector2(xmax, ymin);
+                placement.PolygonVerts[0] = new Vector2(right.Min.x, right.Min.y);
+                placement.PolygonVerts[1] = new Vector2(right.Max.x, right.Min.y);
+                placement.PolygonVerts[2] = new Vector2(right.Max.x, right.Max.y);
+                placement.PolygonVerts[3] = new Vector2(right.Min.x, right.Max.y);
 
                 if (PointInPoly(placement.PolygonVerts, 4, x, y))
                 {
                     placement.Zone = DockZone.Right;
+                    hovered = right;
                     break;
                 }
 
-                placement.PolygonVerts[0] = new Vector2(0, 0);
-                placement.PolygonVerts[1] = new Vector2(1, 0);
-                placement.PolygonVerts[2] = new Vector2(xmax, ymin);
-                placement.PolygonVerts[3] = new Vector2(xmin, ymin);
+                placement.PolygonVerts[0] = new Vector2(top.Min.x, top.Min.y);
+                placement.PolygonVerts[1] = new Vector2(top.Max.x, top.Min.y);
+                placement.PolygonVerts[2] = new Vector2(top.Max.x, top.Max.y);
+                placement.PolygonVerts[3] = new Vector2(top.Min.x, top.Max.y);
 
                 if (PointInPoly(placement.PolygonVerts, 4, x, y))
                 {
                     placement.Zone = DockZone.Top;
+                    hovered = top;
                     break;
                 }
 
-                placement.PolygonVerts[0] = new Vector2(xmin, ymax);
-                placement.PolygonVerts[1] = new Vector2(xmax, ymax);
-                placement.PolygonVerts[2] = new Vector2(1, 1);
-                placement.PolygonVerts[3] = new Vector2(0, 1);
+                placement.PolygonVerts[0] = new Vector2(bottom.Min.x, bottom.Min.y);
+                placement.PolygonVerts[1] = new Vector2(bottom.Max.x, bottom.Min.y);
+                placement.PolygonVerts[2] = new Vector2(bottom.Max.x, bottom.Max.y);
+                placement.PolygonVerts[3] = new Vector2(bottom.Min.x, bottom.Max.y);
 
                 if (PointInPoly(placement.PolygonVerts, 4, x, y))
                 {
                     placement.Zone = DockZone.Bottom;
+                    hovered = bottom;
                     break;
                 }
 
-                placement.PolygonVerts[0] = new Vector2(0, 0);
-                placement.PolygonVerts[1] = new Vector2(1, 0);
-                placement.PolygonVerts[2] = new Vector2(1, 1);
-                placement.PolygonVerts[3] = new Vector2(0, 1);
-                placement.Zone = DockZone.Center;
-                break;
+                placement.PolygonVerts[0] = new Vector2(main.Min.x, main.Min.y);
+                placement.PolygonVerts[1] = new Vector2(main.Max.x, main.Min.y);
+                placement.PolygonVerts[2] = new Vector2(main.Max.x, main.Max.y);
+                placement.PolygonVerts[3] = new Vector2(main.Min.x, main.Max.y);
+
+                if (PointInPoly(placement.PolygonVerts, 4, x, y))
+                {
+                    placement.Zone = DockZone.Center;
+                    hovered = main;
+                    break;
+                }
+
+                return default;
             }
 
             // Convert polygon vertices from normalized coordinates
-            for (int i = 0; i < placement.PolygonVerts.Length; i++)
-            {
-                placement.PolygonVerts[i] *= new Vector2(w, h);
-                placement.PolygonVerts[i] += PaddedMins + leaf.Mins;
-            }
+            //for (int i = 0; i < placement.PolygonVerts.Length; i++)
+            //{
+            //    placement.PolygonVerts[i] *= new Vector2(w, h);
+            //    placement.PolygonVerts[i] += PaddedMins + leaf.Mins;
+            //}
 
             return placement;
+
+
+            //// Translate X, Y to normalized window space 0..1
+            //x -= leaf.Mins.x;
+            //y -= leaf.Mins.y;
+
+            //double w = leaf.Maxs.x - leaf.Mins.x;
+            //double h = leaf.Maxs.y - leaf.Mins.y;
+            //
+            //x /= w;
+            //y /= h;
+            //
+            //double areaWidth = Math.Min(w, h) * 0.3f / w;
+            //
+            //double aspect = w / h;
+            //
+            //double xmin = areaWidth;
+            //double xmax = 1.0f - xmin;
+            //
+            //double ymin = areaWidth * aspect;
+            //double ymax = 1.0f - ymin;
+            //
+            //DockPlacement placement = new DockPlacement();
+            //placement.Leaf = leaf;
+            //placement.PolygonVerts = new Vector2[4];
+            //
+            //while (true)
+            //{
+            //    placement.PolygonVerts[0] = new Vector2(0, 0);
+            //    placement.PolygonVerts[1] = new Vector2(xmin, ymin);
+            //    placement.PolygonVerts[2] = new Vector2(xmin, ymax);
+            //    placement.PolygonVerts[3] = new Vector2(0, 1);
+            //
+            //    if (PointInPoly(placement.PolygonVerts, 4, x, y))
+            //    {
+            //        placement.Zone = DockZone.Left;
+            //        break;
+            //    }
+            //
+            //    placement.PolygonVerts[0] = new Vector2(1, 0);
+            //    placement.PolygonVerts[1] = new Vector2(1, 1);
+            //    placement.PolygonVerts[2] = new Vector2(xmax, ymax);
+            //    placement.PolygonVerts[3] = new Vector2(xmax, ymin);
+            //
+            //    if (PointInPoly(placement.PolygonVerts, 4, x, y))
+            //    {
+            //        placement.Zone = DockZone.Right;
+            //        break;
+            //    }
+            //
+            //    placement.PolygonVerts[0] = new Vector2(0, 0);
+            //    placement.PolygonVerts[1] = new Vector2(1, 0);
+            //    placement.PolygonVerts[2] = new Vector2(xmax, ymin);
+            //    placement.PolygonVerts[3] = new Vector2(xmin, ymin);
+            //
+            //    if (PointInPoly(placement.PolygonVerts, 4, x, y))
+            //    {
+            //        placement.Zone = DockZone.Top;
+            //        break;
+            //    }
+            //
+            //    placement.PolygonVerts[0] = new Vector2(xmin, ymax);
+            //    placement.PolygonVerts[1] = new Vector2(xmax, ymax);
+            //    placement.PolygonVerts[2] = new Vector2(1, 1);
+            //    placement.PolygonVerts[3] = new Vector2(0, 1);
+            //
+            //    if (PointInPoly(placement.PolygonVerts, 4, x, y))
+            //    {
+            //        placement.Zone = DockZone.Bottom;
+            //        break;
+            //    }
+            //
+            //    placement.PolygonVerts[0] = new Vector2(0, 0);
+            //    placement.PolygonVerts[1] = new Vector2(1, 0);
+            //    placement.PolygonVerts[2] = new Vector2(1, 1);
+            //    placement.PolygonVerts[3] = new Vector2(0, 1);
+            //    placement.Zone = DockZone.Center;
+            //    break;
+            //}
+            //
+            //// Convert polygon vertices from normalized coordinates
+            //for (int i = 0; i < placement.PolygonVerts.Length; i++)
+            //{
+            //    placement.PolygonVerts[i] *= new Vector2(w, h);
+            //    placement.PolygonVerts[i] += PaddedMins + leaf.Mins;
+            //}
+            //
+            //return placement;
         }
 
         static bool PointInPoly(Vector2[] polygon, int vertexCount, double x, double y)
@@ -265,8 +360,8 @@ namespace Prowl.Editor.Docking
             if (window == null)
                 return false;
 
-            DockPlacement placement = GetPlacement(x, y);
-            if (placement)
+            DockPlacement placement = GetPlacement(x, y, out _, out _);
+            if (placement != default)
                 if (AttachWindow(window, placement.Leaf, placement.Zone) != null)
                     return true;
 

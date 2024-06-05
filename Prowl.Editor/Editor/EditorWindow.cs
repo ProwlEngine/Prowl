@@ -238,25 +238,18 @@ namespace Prowl.Editor
 
                         if (IsDockable && !IsDocked)
                         {
+                            // Draw Docking Placement
                             var oldZ = g.CurrentZIndex;
                             g.SetZIndex(10000);
-                            // Draw Docking Placement
-                            Vector2 cursorPos = g.PointerPos;
-                            DockPlacement placement = EditorGuiManager.Container.GetPlacement(cursorPos.x, cursorPos.y);
-                            if (placement)
+                            _ = EditorGuiManager.Container.GetPlacement(g.PointerPos.x, g.PointerPos.y, out var placements, out var hovered);
+                            if (placements != null)
                             {
-                                g.DrawList.PathLineTo(placement.PolygonVerts[0]);
-                                g.DrawList.PathLineTo(placement.PolygonVerts[1]);
-                                g.DrawList.PathLineTo(placement.PolygonVerts[2]);
-                                g.DrawList.PathLineTo(placement.PolygonVerts[3]);
-                                g.DrawList.PathFill(UIDrawList.ColorConvertFloat4ToU32(Color.yellow * 0.5f));
-
-                                g.DrawList.PathLineTo(placement.PolygonVerts[0]);
-                                g.DrawList.PathLineTo(placement.PolygonVerts[1]);
-                                g.DrawList.PathLineTo(placement.PolygonVerts[2]);
-                                g.DrawList.PathLineTo(placement.PolygonVerts[3]);
-                                //g.DrawList.PathLineTo(placement.PolygonVerts[0]);
-                                g.DrawList.PathStroke(UIDrawList.ColorConvertFloat4ToU32(Color.yellow * 0.5f), true, 2f);
+                                foreach (var possible in placements)
+                                {
+                                    g.DrawRectFilled(possible, GuiStyle.Blue * 0.6f, 10);
+                                    g.DrawRect(possible, GuiStyle.Blue * 0.6f, 4, 10);
+                                }
+                                g.DrawRect(hovered, Color.yellow, 4, 10);
                             }
                             g.SetZIndex(oldZ);
                         }
