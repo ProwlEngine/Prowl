@@ -57,7 +57,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                 // Create a View matrix looking at 0,0,0
                 Matrix4x4 view = Matrix4x4.CreateLookToLeftHanded(Vector3.zero, camForward, Vector3.up);
                 //Matrix4x4 projection = Matrix4x4.CreatePerspectiveFieldOfView(Mathf.PI / 4, 1, 0.1f, 1000f);
-                Matrix4x4 projection = Matrix4x4.CreateOrthographicOffCenter(-2.25, 2.25, -2.25, 2.25, 0.1f, 1000f);
+                Matrix4x4 projection = System.Numerics.Matrix4x4.CreateOrthographicOffCenterLeftHanded(-2.25f, 2.25f, -2.25f, 2.25f, 0.1f, 1000f).ToDouble();
 
                 var viewProjection = view * projection;
 
@@ -90,16 +90,16 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                         // TODO: Switching between perspective and orthographic, Its super janky right now, not really usable
 
                         isHovering = true;
-                        //var hovCol = GuiStyle.Base11;
-                        //hovCol.a = 0.25f;
-                        //_gui.DrawCircleFilled(rect.Center, (float)rect.width / 2, hovCol, 48);
-                        //
-                        //if (_gui.IsPointerClick(Silk.NET.Input.MouseButton.Left))
-                        //{
-                        //    // Toggle Perspective / Orthographic
-                        //    isOrthographic = !isOrthographic;
-                        //    return true;
-                        //}
+                        var hovCol = GuiStyle.Base11;
+                        hovCol.a = 0.25f;
+                        _gui.DrawCircleFilled(rect.Center, (float)rect.width / 2, hovCol, 48);
+                        
+                        if (_gui.IsPointerClick(Silk.NET.Input.MouseButton.Left))
+                        {
+                            // Toggle Perspective / Orthographic
+                            isOrthographic = !isOrthographic;
+                            return true;
+                        }
                     }
                 }
             }

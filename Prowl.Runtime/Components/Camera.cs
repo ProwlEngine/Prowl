@@ -17,6 +17,7 @@ public class Camera : MonoBehaviour
     public bool DoClear = true;
     public Color ClearColor = new Color(0f, 0f, 0f, 1f);
     public float FieldOfView = 60f;
+    public float OrthographicSize = 0.5f;
     public int DrawOrder = 0;
     public float NearClip = 0.01f;
     public float FarClip = 1000f;
@@ -40,7 +41,8 @@ public class Camera : MonoBehaviour
     public Matrix4x4 GetProjectionMatrix(float width, float height)
     {
         if (projectionType == ProjectionType.Orthographic)
-            return System.Numerics.Matrix4x4.CreateOrthographicLeftHanded(width, height, NearClip, FarClip).ToDouble();
+            //return System.Numerics.Matrix4x4.CreateOrthographicLeftHanded(width, height, NearClip, FarClip).ToDouble();
+            return System.Numerics.Matrix4x4.CreateOrthographicOffCenterLeftHanded(-OrthographicSize, OrthographicSize, -OrthographicSize, OrthographicSize, NearClip, FarClip).ToDouble();
         else
             return System.Numerics.Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(FieldOfView.ToRad(), width / height, NearClip, FarClip).ToDouble();
     }
