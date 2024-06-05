@@ -47,6 +47,8 @@ namespace Prowl.Editor
             private set;
         }
 
+        public bool IsFocused => EditorGuiManager.FocusedWindow != null && EditorGuiManager.FocusedWindow.Target == this;
+
         public EditorWindow() : base()
         {
             EditorGuiManager.Windows.Add(this);

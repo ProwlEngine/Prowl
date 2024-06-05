@@ -80,8 +80,9 @@ namespace Prowl.Editor
                 if (!SelectHandler.SelectedThisFrame && dropInteract.TakeFocus())
                     SelectHandler.Clear();
 
-                if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
-                    DuplicateSelected();
+                if(IsFocused)
+                    if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
+                        DuplicateSelected();
 
 
                 double height = 0;
@@ -137,8 +138,9 @@ namespace Prowl.Editor
                     m_RenamingGO = entity;
                 }
 
-                if(isSelected && Input.GetKeyDown(Key.Delete))
-                    entity.Destroy();
+                if (IsFocused)
+                    if (isSelected && Input.GetKeyDown(Key.Delete))
+                        entity.Destroy();
 
                 // Drag n Drop
                 // Dropping uses the current nodes rect by default

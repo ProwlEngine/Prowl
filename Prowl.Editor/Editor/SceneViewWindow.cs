@@ -211,7 +211,7 @@ public class SceneViewWindow : EditorWindow
 
         HandleDragnDrop();
 
-        if (viewportInteractable.IsHovered())
+        if (IsFocused && viewportInteractable.IsHovered())
         {
             if (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) && !gizmo.IsOver && !viewManipulator.IsOver)
             {
