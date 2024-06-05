@@ -1,9 +1,12 @@
-﻿using Silk.NET.Input;
+﻿using System;
+using Silk.NET.Input;
 
 namespace Prowl.Runtime.GUI
 {
     public partial class Gui
     {
+        public event Action<Vector2> OnPointerPosSet;
+        public event Action<bool> OnCursorVisibilitySet;
         internal bool[] KeyCurState = new bool[(int)Key.Menu];
         internal bool[] KeyPreState = new bool[(int)Key.Menu];
         internal double[] KeyPressedTime = new double[(int)Key.Menu];
@@ -15,7 +18,17 @@ namespace Prowl.Runtime.GUI
         internal Vector2[] PointerClickPos = new Vector2[(int)MouseButton.Button12];
         internal MouseButton PointerButton = MouseButton.Unknown;
         public Vector2 PreviousPointerPos = Vector2.zero;
-        public Vector2 PointerPos = Vector2.zero;
+
+        private Vector2 _pointerPos;
+        public Vector2 PointerPos
+        {
+            get => _pointerPos;
+            set
+            {
+                _pointerPos = value;
+                OnPointerPosSet?.Invoke(_pointerPos / frameBufferScale);
+            }
+        }
         public float PointerWheel = 0;
 
         public Vector2 PointerDelta => PointerPos - PreviousPointerPos;
@@ -114,8 +127,7 @@ namespace Prowl.Runtime.GUI
             }
             else
             {
-                PointerPos.x = X;
-                PointerPos.y = Y;
+                PointerPos = new Vector2(X, Y);
             }
         }
 
@@ -129,5 +141,6 @@ namespace Prowl.Runtime.GUI
         public bool IsPointerDoubleClick(MouseButton Btn) => IsPointerClick(Btn) && Time.time < PointerLastClickTime[(int)Btn] && (mousePosition - PointerLastClickPos[(int)Btn]).sqrMagnitude < 5;
         public bool IsPointerPressed(MouseButton Btn) => IsPointerClick(Btn) || (IsPointerDown(Btn) && PointerPressedTime[(int)Btn] >= 0.5f);
         public Vector2 GetPointerClickPos(MouseButton Btn) => PointerClickPos[(int)Btn];
+        public void SetCursorVisibility(bool Visible) => OnCursorVisibilitySet?.Invoke(Visible);
     }
 }

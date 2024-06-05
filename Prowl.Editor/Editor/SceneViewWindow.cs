@@ -168,7 +168,7 @@ public class SceneViewWindow : EditorWindow
         var viewportInteractable = g.GetInteractable();
 
         HandleDragnDrop();
-
+        g.SetCursorVisibility(true);
         if (IsFocused && viewportInteractable.IsHovered())
         {
             if (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) && !gizmo.IsOver && !viewManipulator.IsOver)
@@ -212,6 +212,7 @@ public class SceneViewWindow : EditorWindow
             }
             else if (g.IsPointerDown(Silk.NET.Input.MouseButton.Right))
             {
+                g.SetCursorVisibility(false);
                 Vector3 moveDir = Vector3.zero;
                 if (g.IsKeyDown(Key.W)) moveDir += Cam.GameObject.Transform.forward;
                 if (g.IsKeyDown(Key.S)) moveDir -= Cam.GameObject.Transform.forward;
@@ -239,7 +240,7 @@ public class SceneViewWindow : EditorWindow
 
                 if (g.IsPointerMoving)
                 {
-                    var mouseDelta = Input.MouseDelta;
+                    var mouseDelta = g.PointerDelta;
                     if (SceneViewPreferences.Instance.InvertLook)
                         mouseDelta.y = -mouseDelta.y;
                     camY += mouseDelta.x * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
@@ -247,7 +248,8 @@ public class SceneViewWindow : EditorWindow
                     camX = Mathf.Clamp(camX, -89.9f, 89.9f);
                     Cam.GameObject.Transform.eulerAngles = new Vector3(camX, camY, 0);
 
-                    Input.MousePosition = WindowCenter;
+                    g.PointerPos = WindowCenter;
+                    // Input.MousePosition = WindowCenter;
                 }
             }
             else
@@ -255,30 +257,13 @@ public class SceneViewWindow : EditorWindow
                 moveSpeed = 1;
                 if (g.IsPointerDown(MouseButton.Middle))
                 {
-
-                    var mouseDelta = Input.MouseDelta;
+                    g.SetCursorVisibility(false);
+                    var mouseDelta = g.PointerDelta;
                     var pos = Cam.GameObject.Transform.position;
                     pos -= Cam.GameObject.Transform.right * mouseDelta.x * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
                     pos += Cam.GameObject.Transform.up * mouseDelta.y * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
                     Cam.GameObject.Transform.position = pos;
-
-                }
-                else if (Input.MouseWheelDelta != 0)
-                {
-                    // Larger distance more zoom, but clamped
-                    double amount = 1f * SceneViewPreferences.Instance.ZoomSensitivity;
-                    Cam.GameObject.Transform.position += mouseRay.direction * amount * Input.MouseWheelDelta;
-
-                }
-                else
-                {
-
-                    // If not looking around Viewport Keybinds are used instead
-                    //if (g.IsKeyDown(Key.Q)) GizmosOperation = ImGuizmoOperation.Translate;
-                    //else if (g.IsKeyDown(Key.W)) GizmosOperation = ImGuizmoOperation.Rotate;
-                    //else if (g.IsKeyDown(Key.E)) GizmosOperation = ImGuizmoOperation.Scale;
-                    //else if (g.IsKeyDown(Key.R)) GizmosOperation = ImGuizmoOperation.Universal;
-                    //else if (g.IsKeyDown(Key.T)) GizmosOperation = ImGuizmoOperation.Bounds;
+                    g.PointerPos = WindowCenter;
 
                 }
 
@@ -290,7 +275,8 @@ public class SceneViewWindow : EditorWindow
                         // If only one object is selected, set the camera position to the center of that object
                         if (HierarchyWindow.SelectHandler.Selected.First().Target is GameObject singleObject)
                         {
-                            Cam.GameObject.Transform.position = singleObject.Transform.position - (Cam.GameObject.Transform.forward * defaultZoomFactor);
+                            Cam.GameObject.Transform.position = singleObject.Transform.position -
+                                                                (Cam.GameObject.Transform.forward * defaultZoomFactor);
                             return;
                         }
                     }
@@ -306,12 +292,22 @@ public class SceneViewWindow : EditorWindow
                     }
 
                     // Calculate the zoom factor based on the size of the bounding box
-                    float boundingBoxSize = (float)Mathf.Max(combinedBounds.size.x, combinedBounds.size.y, combinedBounds.size.z);
+                    float boundingBoxSize = (float)Mathf.Max(combinedBounds.size.x, combinedBounds.size.y,
+                        combinedBounds.size.z);
                     float zoomFactor = boundingBoxSize * defaultZoomFactor;
 
                     Vector3 averagePosition = combinedBounds.center;
-                    Cam.GameObject.Transform.position = averagePosition - (Cam.GameObject.Transform.forward * zoomFactor);
+                    Cam.GameObject.Transform.position =
+                        averagePosition - (Cam.GameObject.Transform.forward * zoomFactor);
                 }
+            }
+            
+            if (g.PointerWheel != 0)
+            {
+                // Larger distance more zoom, but clamped
+                double amount = 1f * SceneViewPreferences.Instance.ZoomSensitivity;
+                Cam.GameObject.Transform.position += mouseRay.direction * amount * g.PointerWheel;
+
             }
         }
 
