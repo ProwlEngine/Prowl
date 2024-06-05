@@ -251,11 +251,12 @@ namespace Prowl.Runtime.GUI
         public bool TakeFocus()
         {
             // Clicking on another Interactable will remove focus
-            if (_gui.FocusID == _id && _gui.HoveredID != _id && _gui.IsPointerDown(Silk.NET.Input.MouseButton.Left))
-                _gui.FocusID = 0;
+            //if (_gui.FocusID == _id && _gui.HoveredID != _id && _gui.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+            //    _gui.FocusID = 0;
 
             // If we are hovered and active, we are focused
-            if (_gui.HoveredID == _id && _gui.ActiveID == _id && !_gui.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+            //if (_gui.HoveredID == _id && _gui.ActiveID == _id && !_gui.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+            if (_gui.HoveredID == _id && _gui.ActiveID == _id && _gui.IsPointerClick(Silk.NET.Input.MouseButton.Left))
             {
                 _gui.FocusID = _id;
                 return true;
