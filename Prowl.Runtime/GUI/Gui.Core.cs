@@ -146,7 +146,11 @@ namespace Prowl.Runtime.GUI
             ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), stringID, intID);
 
             if (_createdNodes.Contains(storageHash))
-                throw new InvalidOperationException("Node already exists with this ID: " + stringID + ":" + intID + " = " + storageHash);
+            {
+                Debug.LogWarning("Node already exists with this ID: " + stringID + ":" + intID + " = " + storageHash + "\nForcing a new ID, This may cause increased flickering in the UI.");
+                storageHash = (ulong)HashCode.Combine(storageHash, storageHash);
+                //throw new InvalidOperationException("Node already exists with this ID: " + stringID + ":" + intID + " = " + storageHash);
+            }
 
             _createdNodes.Add(storageHash);
 
