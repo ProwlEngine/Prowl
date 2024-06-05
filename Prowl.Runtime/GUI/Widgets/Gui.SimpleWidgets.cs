@@ -357,7 +357,9 @@ namespace Prowl.Runtime.GUI
                     //if (rect.y + rect.height > ScreenRect.height)
                     //    CurrentNode.Top(ScreenRect.height - rect.height);
 
-                    if (IsPointerDown(Silk.NET.Input.MouseButton.Left) && !node.LayoutData.Rect.Contains(PointerPos))
+                    if (IsPointerDown(Silk.NET.Input.MouseButton.Left) && 
+                        !node.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Popup
+                        !currentPopupParent.LayoutData.Rect.Contains(PointerPos)) // Mouse not in Parent
                     {
                         ClosePopup(id);
                         return false;
