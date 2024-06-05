@@ -7,8 +7,7 @@ namespace Prowl.Runtime;
 public static class Input
 {
     public static bool Enabled { get; set; } = true;
-
-
+    
     public static IInputContext Context { get; internal set; }
 
     public static IReadOnlyList<IKeyboard> Keyboards => Context.Keyboards;
@@ -157,4 +156,6 @@ public static class Input
     public static bool GetMouseButtonDown(int button) => Enabled && isMousePressed[(MouseButton)button] && !wasMousePressed[(MouseButton)button];
 
     public static bool GetMouseButtonUp(int button) => Enabled && isMousePressed[(MouseButton)button] && wasMousePressed[(MouseButton)button];
+    
+    public static void SetCursorVisible(bool visible, int miceIndex = 0) => Mice[miceIndex].Cursor.CursorMode = visible ? CursorMode.Normal : CursorMode.Hidden;
 }

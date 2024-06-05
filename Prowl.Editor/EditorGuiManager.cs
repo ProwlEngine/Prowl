@@ -30,6 +30,8 @@ public static class EditorGuiManager
         Gui = new();
         Input.OnKeyEvent += Gui.SetKeyState;
         Input.OnMouseEvent += Gui.SetPointerState;
+        Gui.OnPointerPosSet += (pos) => { Input.MousePosition = pos; };
+        Gui.OnCursorVisibilitySet += (visible) => { Input.SetCursorVisible(visible); };
     }
 
     public static void FocusWindow(EditorWindow editorWindow)
