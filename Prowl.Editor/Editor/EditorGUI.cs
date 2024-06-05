@@ -66,14 +66,14 @@ namespace Prowl.Editor
         public static bool InputDouble(string ID, ref double value, Offset x, Offset y, Size width, GuiStyle? style = null)
         {
             string textValue = value.ToString();
-            var changed = ActiveGUI.InputField(ID, ref textValue, 16, InputFieldFlags.NumbersOnly, x, y, width, null, style);
+            var changed = ActiveGUI.InputField(ID, ref textValue, 255, InputFieldFlags.NumbersOnly, x, y, width, null, style);
             if (changed && Double.TryParse(textValue, out value)) return true;
             return false;
         }
         public static bool InputFloat(string ID, ref float value, Offset x, Offset y, Size width, GuiStyle? style = null)
         {
             string textValue = value.ToString();
-            var changed = ActiveGUI.InputField(ID, ref textValue, 16, InputFieldFlags.NumbersOnly, x, y, width, null, style);
+            var changed = ActiveGUI.InputField(ID, ref textValue, 255, InputFieldFlags.NumbersOnly, x, y, width, null, style);
             if (changed && float.TryParse(textValue, out value)) return true;
             return false;
         }
@@ -81,7 +81,7 @@ namespace Prowl.Editor
         public static bool InputLong(string ID, ref long value, Offset x, Offset y, Size width, GuiStyle? style = null)
         {
             string textValue = value.ToString();
-            var changed = ActiveGUI.InputField(ID, ref textValue, 16, InputFieldFlags.NumbersOnly, x, y, width, null, style);
+            var changed = ActiveGUI.InputField(ID, ref textValue, 255, InputFieldFlags.NumbersOnly, x, y, width, null, style);
             if (changed && long.TryParse(textValue, out value)) return true;
             return false;
         }
