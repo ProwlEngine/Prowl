@@ -44,8 +44,6 @@ namespace Prowl.Editor
             //{
             //    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.SelectedColor);
             //}
-            if(_logMessages.Count < 100)
-                _logMessages.Add(new LogMessage("Test printing some larger stuff cause haha yeah i need longer text to see if wrapping looks decent!", LogSeverity.Normal));
             using (g.Node("List").Width(Size.Percentage(1f)).Padding(0, 3, 3, 3).Clip().Enter())
             {
                 double height = 0;
