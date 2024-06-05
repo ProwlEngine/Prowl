@@ -19,6 +19,8 @@ public static class EditorGuiManager
     private static Vector2 m_DragPos;
     private static double m_StartSplitPos;
 
+    public static WeakReference FocusedWindow;
+
     public static List<EditorWindow> Windows = [];
 
     static List<EditorWindow> WindowsToRemove = [];
@@ -34,6 +36,7 @@ public static class EditorGuiManager
     {
         Windows.Remove(editorWindow);
         Windows.Add(editorWindow);
+        FocusedWindow = new WeakReference(editorWindow);
     }
 
     internal static void Remove(EditorWindow editorWindow)
@@ -43,6 +46,9 @@ public static class EditorGuiManager
 
     public static void Update()
     {
+        if (FocusedWindow != null && FocusedWindow.Target != null)
+            FocusWindow(FocusedWindow.Target as EditorWindow); // Ensure focused window is always on top (But below floating windows if docked)
+
         // Sort by docking as well, Docked windows are guranteed to come first
         Windows.Sort((a, b) => b.IsDocked.CompareTo(a.IsDocked));
 
@@ -137,6 +143,29 @@ public static class EditorGuiManager
                     g.PushID((ulong)window._id);
                     window.ProcessFrame();
                     g.PopID();
+
+                    // Focus Window
+                    // If your pointer is over the window and left/right click is down, and no window's rect is above this window's rect
+                    // Focus it
+                    if (g.IsHovering(window.Rect) && (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) || g.IsPointerClick(Silk.NET.Input.MouseButton.Right)))
+                    {
+                        bool focus = true;
+                        for (int j = i + 1; j < Windows.Count; j++)
+                        {
+                            var nextWindow = Windows[j];
+                            if (!nextWindow.IsDocked || nextWindow.Leaf.LeafWindows[nextWindow.Leaf.WindowNum] == nextWindow)
+                                if (g.IsHovering(Windows[j].Rect))
+                                {
+                                    focus = false;
+                                    break;
+                                }
+                        }
+                        if (focus)
+                        {
+                            FocusWindow(window);
+                        }
+                    }
+
                 }
 
             }
