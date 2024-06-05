@@ -153,13 +153,12 @@ namespace Prowl.Editor
                 //if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
                 //    DuplicateSelected();
 
-
                 _treeCounter = 0;
                 if (!string.IsNullOrEmpty(_searchText))
                 {
                     foreach (var file in _found)
                     {
-                        using (g.Node(file.FullName).Top(_treeCounter * (entryHeight + entryPadding)).Width(Size.Percentage(1f)).Height(entryHeight).Enter())
+                        using (g.Node(file.FullName).Top(_treeCounter * (entryHeight + entryPadding)).ExpandWidth(-g.VScrollBarWidth()).Height(entryHeight).Enter())
                         {
                             var interact = g.GetInteractable();
                             if (interact.TakeFocus())
@@ -190,7 +189,7 @@ namespace Prowl.Editor
         private void RenderRootFolder(bool defaultOpen, DirectoryInfo root, Color col)
         {
             bool expanded = false;
-            using (g.Node(root.Name).Top(_treeCounter * (entryHeight + entryPadding)).Width(Size.Percentage(1f)).Height(entryHeight).Margin(2, 0).Enter())
+            using (g.Node(root.Name).Top(_treeCounter * (entryHeight + entryPadding)).ExpandWidth(-g.VScrollBarWidth()).Height(entryHeight).Margin(2, 0).Enter())
             {
                 g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, 4);
 
@@ -227,7 +226,7 @@ namespace Prowl.Editor
                 var left = depth * entryHeight;
                 ulong subDirID = 0;
                 // Directory Entry
-                using (g.Node(subDirectory.Name, depth).Left(left).Top(_treeCounter * (entryHeight + entryPadding)).Width(Size.Percentage(1f, -left)).Height(entryHeight * scaleHeight).Margin(2, 0).Enter())
+                using (g.Node(subDirectory.Name, depth).Left(left).Top(_treeCounter * (entryHeight + entryPadding)).ExpandWidth(-(left + g.VScrollBarWidth())).Height(entryHeight * scaleHeight).Margin(2, 0).Enter())
                 {
                     subDirID = g.CurrentNode.ID;
                     if (_treeCounter++ % 2 == 0)
@@ -276,7 +275,7 @@ namespace Prowl.Editor
                 var left = depth * entryHeight;
                 ulong fileNodeID = 0;
                 // File Entry
-                using (g.Node(file.Name, depth).Left(left).Top(_treeCounter * (entryHeight + entryPadding)).Width(Size.Percentage(1f, -left)).Height(entryHeight * scaleHeight).Margin(2, 0).Enter())
+                using (g.Node(file.Name, depth).Left(left).Top(_treeCounter * (entryHeight + entryPadding)).ExpandWidth(-(left + g.VScrollBarWidth())).Height(entryHeight * scaleHeight).Margin(2, 0).Enter())
                 {
                     fileNodeID = g.CurrentNode.ID;
                     //if (_treeCounter++ % 2 == 0)

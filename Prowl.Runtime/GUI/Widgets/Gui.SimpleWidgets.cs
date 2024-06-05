@@ -1,9 +1,7 @@
 ﻿using Prowl.Icons;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
-using Silk.NET.Vulkan;
 using System;
-using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
 
 namespace Prowl.Runtime.GUI
@@ -12,6 +10,8 @@ namespace Prowl.Runtime.GUI
     {
         public const int ScrollVWidth = 6;
         public const int ScrollVPadding = 2;
+
+        public double VScrollBarWidth() => CurrentNode.LayoutData.ContentRect.height > CurrentNode.LayoutData.Rect.height ? ScrollVWidth + (ScrollVPadding * 2) : 0;
 
         public void ScrollV(GuiStyle? style = null)
         {
