@@ -13,14 +13,12 @@ namespace Prowl.Runtime.GUI
         internal bool[] PointerPreState = new bool[(int)MouseButton.Button12];
         internal double[] PointerPressedTime = new double[(int)MouseButton.Button12];
         internal Vector2[] PointerClickPos = new Vector2[(int)MouseButton.Button12];
-        internal Vector2 PointerCurDeltaPos = Vector2.zero;
-        internal Vector2 PointerPreDeltaPos = Vector2.zero;
         internal MouseButton PointerButton = MouseButton.Unknown;
+        public Vector2 PreviousPointerPos = Vector2.zero;
         public Vector2 PointerPos = Vector2.zero;
         public float PointerWheel = 0;
 
-        public Vector2 PointerMovePos => PointerCurDeltaPos;
-        public Vector2 PointerDelta => new(PointerCurDeltaPos.x - PointerPreDeltaPos.x, PointerCurDeltaPos.y - PointerPreDeltaPos.y);
+        public Vector2 PointerDelta => PointerPos - PreviousPointerPos;
         public bool IsPointerMoving => PointerDelta.sqrMagnitude > 0;
 
         public double[] PointerLastClickTime = new double[(int)MouseButton.Button12];
@@ -64,8 +62,8 @@ namespace Prowl.Runtime.GUI
             }
 
 
-            PointerPreDeltaPos = PointerCurDeltaPos;
             PointerWheel = 0;
+            PreviousPointerPos = PointerPos;
         }
 
         public void ClearInput()
@@ -87,9 +85,8 @@ namespace Prowl.Runtime.GUI
                 PointerClickPos[Index] = Vector2.zero;
             }
 
-            PointerCurDeltaPos = Vector2.zero;
-            PointerPreDeltaPos = Vector2.zero;
             PointerButton = MouseButton.Unknown;
+            PreviousPointerPos = PointerPos;
             PointerPos = Vector2.zero;
             PointerWheel = 0;
         }
@@ -114,19 +111,9 @@ namespace Prowl.Runtime.GUI
                 PointerPreState[Index] = PointerCurState[Index];
                 PointerCurState[Index] = IsPointerBtnDown;
                 PointerClickPos[Index] = new Vector2(X, Y);
-
-                PointerPreDeltaPos = PointerCurDeltaPos;
-                PointerCurDeltaPos = Vector2.zero;
             }
             else
             {
-                if (Index != -1 && PointerCurState[Index])
-                {
-                    PointerPreDeltaPos = PointerCurDeltaPos;
-                    PointerCurDeltaPos.x = X - PointerClickPos[Index].x;
-                    PointerCurDeltaPos.y = Y - PointerClickPos[Index].y;
-                }
-
                 PointerPos.x = X;
                 PointerPos.y = Y;
             }
