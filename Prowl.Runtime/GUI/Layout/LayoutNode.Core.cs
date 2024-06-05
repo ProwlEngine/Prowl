@@ -12,6 +12,10 @@ namespace Prowl.Runtime.GUI.Layout
         {
             internal LayoutNode _node = node;
 
+            // Keep the Scrolls cached
+            public double VScroll = node.VScroll;
+            public double HScroll = node.HScroll;
+
             public readonly Rect InnerRect => new(GlobalContentPosition, new(GlobalContentWidth, GlobalContentHeight));
             public readonly Rect Rect => new(GlobalPosition, new(Scale.x, Scale.y));
             public readonly Rect OuterRect => new(GlobalPosition - Margins.TopLeft, new(Scale.x + Margins.Horizontal, Scale.y + Margins.Vertical));
@@ -52,8 +56,14 @@ namespace Prowl.Runtime.GUI.Layout
 
         public Gui Gui { get; private set; }
         public LayoutNode Parent { get; internal set; }
-        public double VScroll { get; set; } = 0;
-        public double HScroll { get; set; } = 0;
+        public double VScroll {
+            get => _data.VScroll;
+            set => _data.VScroll = value;
+        }
+        public double HScroll {
+            get => _data.HScroll;
+            set => _data.HScroll = value;
+        }
         public ulong ID { get; private set; } = 0;
 
         private PostLayoutData _data;

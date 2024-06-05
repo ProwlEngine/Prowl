@@ -140,7 +140,7 @@ namespace Prowl.Editor
             }
 
 
-            using (g.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column, false).Enter())
+            using (g.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column, false).Clip().Enter())
             {
                 //g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.5f, 10, 12);
 

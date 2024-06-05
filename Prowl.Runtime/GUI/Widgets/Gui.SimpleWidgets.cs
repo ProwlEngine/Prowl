@@ -18,7 +18,7 @@ namespace Prowl.Runtime.GUI
             style ??= new();
             var n = CurrentNode;
             CurrentNode.VScroll = GetStorage<double>("VScroll");
-            //CurrentNode.PaddingRight(ScrollVWidth + padding);
+            //CurrentNode.PaddingRight(ScrollVWidth + ScrollVPadding);
 
             using (Node("_VScroll").Width(ScrollVWidth).Height(Size.Percentage(1f, -(ScrollVPadding * 2))).Left(Offset.Percentage(1f, -(ScrollVWidth + ScrollVPadding))).Top(ScrollVPadding).IgnoreLayout().Enter())
             {
