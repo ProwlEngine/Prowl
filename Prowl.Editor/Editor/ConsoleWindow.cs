@@ -59,6 +59,7 @@ namespace Prowl.Editor
 
                     int width = (int)g.CurrentNode.LayoutData.InnerRect.width;
                     var pos = g.CurrentNode.LayoutData.InnerRect.Position;
+                    pos.y -= g.CurrentNode.LayoutData.VScroll;
                     var size = UIDrawList.DefaultFont.CalcTextSize(_logMessages[i].Message, 0, width - 24);
 
                     g.DrawLine(new(pos.x + 12, pos.y + height), new(pos.x + width - 12, pos.y + height), GuiStyle.Borders, 1);
