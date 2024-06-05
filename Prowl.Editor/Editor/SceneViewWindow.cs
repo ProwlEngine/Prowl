@@ -127,52 +127,10 @@ public class SceneViewWindow : EditorWindow
 
         var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Transform.position, Cam.GameObject.Transform.forward, Cam.GameObject.Transform.up);
         var projection = Cam.GetProjectionMatrix((float)renderSize.x, (float)renderSize.y);
-        //DrawGizmos(selectedGOs, view, projection);
-
-        gizmo.UpdateCamera(g.CurrentNode.LayoutData.Rect, view, projection, Cam.GameObject.Transform.up, Cam.GameObject.Transform.forward, Cam.GameObject.Transform.right);
-
-        gizmo.Snapping = Input.GetKey(Key.ControlLeft);
-        gizmo.SnapDistance = SceneViewPreferences.Instance.SnapDistance;
-        gizmo.SnapAngle = SceneViewPreferences.Instance.SnapAngle;
 
         Ray mouseRay = Cam.ScreenPointToRay(g.PointerPos - imagePos);
-        //Ray mouseRay = new Ray(Cam.GameObject.Transform.position, Cam.GameObject.Transform.forward);
-
-        for (int i = 0; i < selectedGOs.Count; i++)
-        {
-            var selectedGO = selectedGOs[i];
-
-            gizmo.SetTransform(selectedGO.Transform.position, selectedGO.Transform.rotation, selectedGO.Transform.localScale);
-            var result = gizmo.Update(mouseRay, g.PointerPos);
-
-            if (result.HasValue)
-            {
-
-                if (result.Value.TranslationDelta.HasValue)
-                    selectedGO.Transform.position += result.Value.TranslationDelta.Value;
-                if (result.Value.RotationAxis.HasValue)
-                {
-                    var axis = result.Value.RotationAxis.Value;
-                    var delta = result.Value.RotationDelta.Value;
-                    selectedGO.Transform.rotation = Quaternion.AngleAxis(delta, axis) * selectedGO.Transform.rotation;
-                    //selectedGO.Transform.rotation = result.Value.Rotation.Value;
-                }
-                if (result.Value.Scale.HasValue)
-                    selectedGO.Transform.localScale = result.Value.StartScale.Value * result.Value.Scale.Value;
-            }
-
-            gizmo.Draw();
-
-            // Draw Gizmo
-            // var model = selectedGO.Transform.localToWorldMatrix.ToFloat();
-            //var mvp = (model * view * projection);
-
-            //g.Draw3D.Setup3DObject(mvp.ToDouble(), g.CurrentNode.LayoutData.Rect);
-            //g.Draw3D.Arc(1, 0, 90f, new Runtime.GUI.Stroke() { Color = Color.green, Thickness = 4f, AntiAliased = true });
-
-            //g.Draw3D.Arrow(Vector3.zero, Vector3.up, new Runtime.GUI.Stroke() { Color = Color.green, Thickness = 54f, AntiAliased = true });
-            //g.Draw3D.FilledCircle(1f, new Runtime.GUI.Stroke() { Color = Color.red, Thickness = 4f, AntiAliased = true });
-        }
+        
+        HandleGizmos(selectedGOs, mouseRay, view, projection);
 
         Camera.Current = null;
 
@@ -365,6 +323,50 @@ public class SceneViewWindow : EditorWindow
             //g.DrawRectFilled(imagePos + new Vector2(5, imageSize.y - 25), new Vector2(75, 20), new Color(0, 0, 0, 0.25f));
             g.DrawText($"FPS: {fps:0.0}", imagePos + new Vector2(10, imageSize.y - 22));
         }
+    }
+
+    private void HandleGizmos(List<GameObject> selectedGOs, Ray mouseRay, Matrix4x4 view, Matrix4x4 projection)
+    {
+        gizmo.UpdateCamera(g.CurrentNode.LayoutData.Rect, view, projection, Cam.GameObject.Transform.up, Cam.GameObject.Transform.forward, Cam.GameObject.Transform.right);
+
+        gizmo.Snapping = Input.GetKey(Key.ControlLeft);
+        gizmo.SnapDistance = SceneViewPreferences.Instance.SnapDistance;
+        gizmo.SnapAngle = SceneViewPreferences.Instance.SnapAngle;
+        
+        Vector3 centerOfAll = Vector3.zero;
+        
+        for (int i = 0; i < selectedGOs.Count; i++)
+        {
+            var selectedGo = selectedGOs[i];
+            centerOfAll += selectedGo.Transform.position;
+        }
+        
+        centerOfAll /= selectedGOs.Count;
+        
+        gizmo.SetTransform(centerOfAll, Quaternion.identity, Vector3.one);
+        var result = gizmo.Update(mouseRay, g.PointerPos);
+        if (result.HasValue)
+        {
+            foreach (var selectedGo in selectedGOs)
+            {
+                if (result.Value.TranslationDelta.HasValue)
+                    selectedGo.Transform.position += result.Value.TranslationDelta.Value;
+
+                if (result.Value.RotationDelta.HasValue && result.Value.RotationAxis.HasValue)
+                {
+                    Vector3 centerToSelected = selectedGo.Transform.position - centerOfAll;
+                    Vector3 rotated =
+                        Quaternion.AngleAxis(result.Value.RotationDelta.Value, result.Value.RotationAxis.Value) *
+                        centerToSelected;
+                    selectedGo.Transform.position = centerOfAll + rotated;
+                    Quaternion rotationDelta = Quaternion.AngleAxis(result.Value.RotationDelta.Value,
+                        result.Value.RotationAxis.Value);
+
+                    selectedGo.Transform.rotation = rotationDelta * selectedGo.Transform.rotation;
+                }
+            }
+        }
+        gizmo.Draw();
     }
 
     private void HandleDragnDrop()
