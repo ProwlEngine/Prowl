@@ -59,7 +59,7 @@ namespace Prowl.Runtime.GUI
 
             _zInteractableCounter[zIndex] = count + 1;
 
-            // ZIndex.count - supports up to 1k interactables per layer
+            // ZIndex.count - supports up to 1k interactables per Z Index
             return zIndex + (count / 1000.0);
         }
 
@@ -75,6 +75,7 @@ namespace Prowl.Runtime.GUI
                 rect.width -= ScrollVWidth + ScrollVPadding;
             return GetInteractable(rect);
         }
+
         public Interactable GetInteractable(Rect rect)
         {
             ulong interactID = 17;
@@ -96,6 +97,44 @@ namespace Prowl.Runtime.GUI
             interact.UpdateContext();
 
             return interact;
+        }
+
+        public bool IsBlocked(Vector2 pos, double zIndex = -1, ulong ignoreID = 0)
+        {
+            if (zIndex == -1)
+            {
+                if (!_zInteractableCounter.TryGetValue((int)CurrentZIndex, out int count))
+                    count = 0;
+
+                // ZIndex.count - supports up to 1k interactables per Z Index
+                zIndex = CurrentZIndex + (count / 1000.0);
+                Console.WriteLine($"ZIndex: {zIndex}");
+            }
+
+                // Check if there is any interactable with a higher ZIndex that intersects the current position
+                bool isObstructed = false;
+            foreach (var interactable in _oldinteractables.Values)
+            {
+                if (interactable._id != ignoreID && interactable.zIndex > zIndex && interactable._rect.Contains(pos))
+                {
+                    isObstructed = true;
+                    break;
+                }
+            }
+
+            if (!isObstructed)
+            {
+                foreach (var blocker in _oldblockers)
+                {
+                    if (blocker.Item1 > zIndex && blocker.Item2.Contains(pos))
+                    {
+                        isObstructed = true;
+                        break;
+                    }
+                }
+            }
+
+            return isObstructed;
         }
 
         public bool IsMouseOverRect(Rect rect) => mousePosition.x >= rect.x && mousePosition.x <= rect.x + rect.width && mousePosition.y >= rect.y && mousePosition.y <= rect.y + rect.height;
@@ -214,28 +253,7 @@ namespace Prowl.Runtime.GUI
             // Make sure mouse is also over our rect
             if (_gui.IsMouseOverRect(_rect))
             {
-
-                // Check if there is any interactable with a higher ZIndex that intersects the current position
-                bool isObstructed = false;
-                foreach (var interactable in _gui._oldinteractables.Values)
-                {
-                    if (interactable._id != _id && interactable.zIndex > zIndex && _gui.IsMouseOverRect(interactable._rect))
-                    {
-                        isObstructed = true;
-                        break;
-                    }
-                }
-
-                foreach (var blocker in _gui._oldblockers)
-                {
-                    if (blocker.Item1 > zIndex && _gui.IsMouseOverRect(blocker.Item2))
-                    {
-                        isObstructed = true;
-                        break;
-                    }
-                }
-
-                if (!isObstructed)
+                if (!_gui.IsBlocked(_gui.PointerPos, zIndex, _id))
                 {
                     _gui.HoveredID = _id;
 
