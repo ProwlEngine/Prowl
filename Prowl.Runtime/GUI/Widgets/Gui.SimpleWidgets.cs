@@ -335,6 +335,7 @@ namespace Prowl.Runtime.GUI
         }
 
         private static LayoutNode? currentPopupParent = null;
+        private static int nextPopupIndex;
 
         public bool BeginPopup(string id, out LayoutNode? node, bool invisible = false)
         {
@@ -347,7 +348,7 @@ namespace Prowl.Runtime.GUI
                 // Append to Root
                 using ((node = rootNode.AppendNode("PU_" + id)).Left(pos.x).Top(pos.y).IgnoreLayout().Enter())
                 {
-                    SetZIndex(1000, false);
+                    SetZIndex(1000 + nextPopupIndex++, false);
                     CreateBlocker(CurrentNode.LayoutData.Rect);
 
                     // Clamp node position so that its always in screen bounds
