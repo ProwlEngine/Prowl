@@ -4,7 +4,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
 using System.Reflection;
 
-namespace Prowl.Editor.EditorWindows
+namespace Prowl.Editor
 {
     public static class MainMenuItems
     {
@@ -12,18 +12,18 @@ namespace Prowl.Editor.EditorWindows
         public static DirectoryInfo? Directory { get; set; }
         public static bool fromAssetBrowser = false;
 
-        [MenuItem("Create/Folder")]
-        public static void CreateFolder()
+        [MenuItem("Create/Fer")]
+        public static void CreateFer()
         {
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
 
-            DirectoryInfo dir = new(Path.Combine(Directory.FullName, "New Folder"));
+            DirectoryInfo dir = new(Path.Combine(Directory.FullName, "New Fer"));
             AssetDatabase.GenerateUniqueAssetPath(ref dir);
             dir.Create();
             if (fromAssetBrowser)
-                OldAssetBrowserWindow.StartRename(dir.FullName);
+                AssetsBrowserWindow.StartRename(dir.FullName);
             else
-                OldAssetsWindow.StartRename(dir.FullName);
+                AssetsTreeWindow.StartRename(dir.FullName);
         }
 
         [MenuItem("Create/Material")]
@@ -37,9 +37,9 @@ namespace Prowl.Editor.EditorWindows
             Material mat = new Material(Shader.Find("Defaults/Standard.shader"));
             StringTagConverter.WriteToFile(Serializer.Serialize(mat), file);
             if (fromAssetBrowser)
-                OldAssetBrowserWindow.StartRename(file.FullName);
+                AssetsBrowserWindow.StartRename(file.FullName);
             else
-                OldAssetsWindow.StartRename(file.FullName);
+                AssetsTreeWindow.StartRename(file.FullName);
 
             AssetDatabase.Update();
             AssetDatabase.Ping(file);
@@ -56,9 +56,9 @@ namespace Prowl.Editor.EditorWindows
             GuiStyle style = new GuiStyle();
             StringTagConverter.WriteToFile(Serializer.Serialize(style), file);
             if (fromAssetBrowser)
-                OldAssetBrowserWindow.StartRename(file.FullName);
+                AssetsBrowserWindow.StartRename(file.FullName);
             else
-                OldAssetsWindow.StartRename(file.FullName);
+                AssetsTreeWindow.StartRename(file.FullName);
 
             AssetDatabase.Update();
             AssetDatabase.Ping(file);
@@ -78,9 +78,9 @@ namespace Prowl.Editor.EditorWindows
             script = script.Replace("%SCRIPTNAME%", EditorUtils.FilterAlpha(Path.GetFileNameWithoutExtension(file.Name)));
             File.WriteAllText(file.FullName, script);
             if (fromAssetBrowser)
-                OldAssetBrowserWindow.StartRename(file.FullName);
+                AssetsBrowserWindow.StartRename(file.FullName);
             else
-                OldAssetsWindow.StartRename(file.FullName);
+                AssetsTreeWindow.StartRename(file.FullName);
 
             AssetDatabase.Update();
             AssetDatabase.Ping(file);
@@ -160,7 +160,7 @@ namespace Prowl.Editor.EditorWindows
         static Vector3 GetPosition()
         {
             // Last Focused Editor camera
-            var cam = OldViewportWindow.LastFocusedCamera;
+            var cam = SceneViewWindow.LastFocusedCamera;
             // get position 10 units infront
             var t = cam.GameObject;
             return t.Transform.position + t.Transform.forward * 10;
@@ -193,7 +193,7 @@ namespace Prowl.Editor.EditorWindows
                 go.Transform.position = GetPosition();
                 if(component != null)
                     go.AddComponent(component);
-                OldHierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+                HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
             }
         }
 
@@ -202,7 +202,7 @@ namespace Prowl.Editor.EditorWindows
         {
             var go = new GameObject("Ambient Light");
             go.AddComponent<AmbientLight>();
-            OldHierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
         [MenuItem("Template/Lights/Directional Light")]
@@ -212,7 +212,7 @@ namespace Prowl.Editor.EditorWindows
             go.AddComponent<DirectionalLight>();
             go.Transform.position = GetPosition();
             go.Transform.localEulerAngles = new System.Numerics.Vector3(45, 70, 0);
-            OldHierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
         [MenuItem("Template/Lights/Point Light")]
@@ -221,7 +221,7 @@ namespace Prowl.Editor.EditorWindows
             var go = new GameObject("Point Light");
             go.AddComponent<PointLight>();
             go.Transform.position = GetPosition();
-            OldHierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
         [MenuItem("Template/Lights/Spot Light")]
@@ -230,7 +230,7 @@ namespace Prowl.Editor.EditorWindows
             var go = new GameObject("Spot Light");
             go.AddComponent<SpotLight>();
             go.Transform.position = GetPosition();
-            OldHierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
 
         #endregion
