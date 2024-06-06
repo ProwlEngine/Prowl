@@ -53,6 +53,8 @@ namespace Prowl.Runtime.GUI
             _createdNodes.Clear();
             IDStack.Clear();
 
+            nextPopupIndex = 0;
+
             if (!_drawList.ContainsKey(0))
                 _drawList[0] = new UIDrawList(); // Root Draw List
 
