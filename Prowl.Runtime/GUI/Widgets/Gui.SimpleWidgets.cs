@@ -348,7 +348,7 @@ namespace Prowl.Runtime.GUI
                 // Append to Root
                 using ((node = rootNode.AppendNode("PU_" + id)).Left(pos.x).Top(pos.y).IgnoreLayout().Enter())
                 {
-                    SetZIndex(1000 + nextPopupIndex, false);
+                    SetZIndex(50000 + nextPopupIndex, false);
                     CreateBlocker(CurrentNode.LayoutData.Rect);
 
                     // Clamp node position so that its always in screen bounds
@@ -369,7 +369,7 @@ namespace Prowl.Runtime.GUI
                     if (IsPointerDown(Silk.NET.Input.MouseButton.Left) && 
                         !node.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Popup
                         !currentPopupParent.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
-                        !IsBlocked(PointerPos, 1000 + nextPopupIndex)) // Not blocked by any interactables above this popup
+                        !IsBlocked(PointerPos, 50000 + nextPopupIndex)) // Not blocked by any interactables above this popup
                     {
                         ClosePopup(id);
                         return false;
