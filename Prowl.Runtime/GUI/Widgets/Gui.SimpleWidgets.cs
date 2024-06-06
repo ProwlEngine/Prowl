@@ -395,6 +395,7 @@ namespace Prowl.Runtime.GUI
             currentPopupParent = null;
         }
 
+        public bool IsPopupOpen(string name) => GetStorage<bool>("PU_" + name);
         public bool Search(string ID, ref string searchText, Offset x, Offset y, Size width, Size? height = null, GuiStyle? style = null)
         {
             style ??= new();
