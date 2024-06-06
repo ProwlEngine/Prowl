@@ -330,21 +330,20 @@ namespace Prowl.Runtime.GUI
 
         public void OpenPopup(string id, Vector2? topleft = null)
         {
-            SetStorage("PU_" + id, true);
-            SetStorage("PU_POS_" + id, topleft ?? PointerPos);
+            SetGlobalStorage("PU_" + id, true);
+            SetGlobalStorage("PU_POS_" + id, topleft ?? PointerPos);
         }
 
-        private static LayoutNode? currentPopupParent = null;
         private static int nextPopupIndex;
 
         public bool BeginPopup(string id, out LayoutNode? node, bool invisible = false)
         {
             node = null;
-            var show = GetStorage<bool>("PU_" + id);
+            var show = GetGlobalStorage<bool>("PU_" + id);
             if (show)
             {
-                currentPopupParent = CurrentNode;
-                var pos = GetStorage<Vector2>("PU_POS_" + id);
+                var pos = GetGlobalStorage<Vector2>("PU_POS_" + id);
+                var parentNode = CurrentNode;
                 // Append to Root
                 using ((node = rootNode.AppendNode("PU_" + id)).Left(pos.x).Top(pos.y).IgnoreLayout().Enter())
                 {
@@ -357,18 +356,18 @@ namespace Prowl.Runtime.GUI
                     {
                         CurrentNode.Left(ScreenRect.width - rect.width);
                         pos.x = ScreenRect.width - rect.width;
-                        SetStorage("PU_POS_" + id, pos);
+                        SetGlobalStorage("PU_POS_" + id, pos);
                     }
                     if (pos.y + rect.height > ScreenRect.height)
                     {
                         CurrentNode.Top(ScreenRect.height - rect.height);
                         pos.y = ScreenRect.height - rect.height;
-                        SetStorage("PU_POS_" + id, pos);
+                        SetGlobalStorage("PU_POS_" + id, pos);
                     }
 
                     if (IsPointerDown(Silk.NET.Input.MouseButton.Left) && 
                         !node.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Popup
-                        !currentPopupParent.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
+                        !parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
                         !IsBlocked(PointerPos, 50000 + nextPopupIndex)) // Not blocked by any interactables above this popup
                     {
                         ClosePopup(id);
@@ -391,13 +390,10 @@ namespace Prowl.Runtime.GUI
 
         public void ClosePopup(string name)
         {
-            if(currentPopupParent == null)
-                throw new Exception("Attempting to close a popup that is not open.");
-            SetStorage(currentPopupParent, "PU_" + name, false);
-            currentPopupParent = null;
+            SetGlobalStorage("PU_" + name, false);
         }
 
-        public bool IsPopupOpen(string name) => GetStorage<bool>("PU_" + name);
+        public bool IsPopupOpen(string name) => GetGlobalStorage<bool>("PU_" + name);
         public bool Search(string ID, ref string searchText, Offset x, Offset y, Size width, Size? height = null, GuiStyle? style = null)
         {
             style ??= new();
