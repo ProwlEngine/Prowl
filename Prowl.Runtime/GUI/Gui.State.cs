@@ -11,7 +11,7 @@ namespace Prowl.Runtime.GUI
 
         private static Dictionary<ulong, Hashtable> _storage = [];
 
-        public void SetZIndex(int index, bool keepClipSpace = true)
+        public void SetZIndex(int index, bool keepClipSpace = false)
         {
             if (!_drawList.ContainsKey(index))
             {
