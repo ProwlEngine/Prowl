@@ -11,7 +11,7 @@ namespace Prowl.Runtime.GUI
 
         private static Dictionary<ulong, Hashtable> _storage = [];
 
-        public void SetZIndex(int index)
+        public void SetZIndex(int index, bool keepClipSpace = true)
         {
             if (!_drawList.ContainsKey(index))
             {
@@ -20,8 +20,11 @@ namespace Prowl.Runtime.GUI
             }
 
             // Copy over the clip rect from the previous list
-            var previousList = _drawList[CurrentNode.ZIndex];
-            _drawList[index].PushClipRect(previousList._ClipRectStack.Peek());
+            if (keepClipSpace)
+            {
+                var previousList = _drawList[CurrentNode.ZIndex];
+                _drawList[index].PushClipRect(previousList._ClipRectStack.Peek());
+            }
 
             CurrentNode.ZIndex = index;
         }
