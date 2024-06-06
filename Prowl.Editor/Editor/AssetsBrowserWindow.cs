@@ -171,7 +171,7 @@ namespace Prowl.Editor
 
         public void RenderBody()
         {
-            using (g.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Grid).Enter())
+            using (g.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Grid).Clip().Enter())
             {
                 var dropInteract = g.GetInteractable();
                 //HandleDrop();
