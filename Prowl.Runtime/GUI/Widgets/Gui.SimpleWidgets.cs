@@ -347,7 +347,7 @@ namespace Prowl.Runtime.GUI
                 // Append to Root
                 using ((node = rootNode.AppendNode("PU_" + id)).Left(pos.x).Top(pos.y).IgnoreLayout().Enter())
                 {
-                    SetZIndex(1000);
+                    SetZIndex(1000, false);
                     CreateBlocker(CurrentNode.LayoutData.Rect);
 
                     // Clamp node position so that its always in screen bounds
