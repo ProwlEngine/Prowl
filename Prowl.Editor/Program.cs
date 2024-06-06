@@ -1,15 +1,11 @@
 ﻿using Prowl.Editor.Assets;
-using Prowl.Editor.Preferences;
 using Prowl.Editor.EditorWindows;
-using Prowl.Editor.ImGUI;
+using Prowl.Editor.Preferences;
 using Prowl.Runtime;
-using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.OpenGL;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
 using Silk.NET.Input;
-using System.Reflection;
 
 namespace Prowl.Editor;
 

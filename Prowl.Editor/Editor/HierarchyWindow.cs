@@ -63,12 +63,13 @@ namespace Prowl.Editor
 
                 if (g.BeginPopup("CreateGameObject", out var node))
                 {
-                    using (node.Width(100).Height(200).Layout(LayoutType.Column).FitContent().Enter())
+                    using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
                     {
-                        //DrawContextMenu();
+                        DrawContextMenu(null);
                     }
                 }
             }
+
 
             using (g.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Clip().Enter())
             {
@@ -97,6 +98,20 @@ namespace Prowl.Editor
 
                 g.ScrollV();
             }
+        }
+
+        private void DrawContextMenu(GameObject? parent)
+        {
+            if (EditorGUI.QuickButton("New GameObject"))
+            {
+                var go = new GameObject("New GameObject");
+                if(parent != null)
+                    go.SetParent(parent);
+                go.Transform.localPosition = Vector3.zero;
+                SelectHandler.SetSelection(new WeakReference(go));
+            }
+
+            MenuItem.DrawMenuRoot("Template");
         }
 
         public void DrawGameObject(ref int index, GameObject entity, uint depth, bool isPartOfPrefab)

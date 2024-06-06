@@ -1,9 +1,6 @@
-using Prowl.Runtime;
-using Prowl.Icons;
 using Hexa.NET.ImGui;
-using System.Numerics;
-using System.Runtime.InteropServices;
-using Prowl.Editor;
+using Prowl.Icons;
+using Prowl.Runtime;
 
 namespace Prowl.Editor.EditorWindows;
 
