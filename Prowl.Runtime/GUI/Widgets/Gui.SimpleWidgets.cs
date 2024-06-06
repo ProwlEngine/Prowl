@@ -351,11 +351,19 @@ namespace Prowl.Runtime.GUI
                     CreateBlocker(CurrentNode.LayoutData.Rect);
 
                     // Clamp node position so that its always in screen bounds
-                    //var rect = CurrentNode.LayoutData.Rect;
-                    //if (rect.x + rect.width > ScreenRect.width)
-                    //    CurrentNode.Left(ScreenRect.width - rect.width);
-                    //if (rect.y + rect.height > ScreenRect.height)
-                    //    CurrentNode.Top(ScreenRect.height - rect.height);
+                    var rect = CurrentNode.LayoutData.Rect;
+                    if (pos.x + rect.width > ScreenRect.width)
+                    {
+                        CurrentNode.Left(ScreenRect.width - rect.width);
+                        pos.x = ScreenRect.width - rect.width;
+                        SetStorage("PU_POS_" + id, pos);
+                    }
+                    if (pos.y + rect.height > ScreenRect.height)
+                    {
+                        CurrentNode.Top(ScreenRect.height - rect.height);
+                        pos.y = ScreenRect.height - rect.height;
+                        SetStorage("PU_POS_" + id, pos);
+                    }
 
                     if (IsPointerDown(Silk.NET.Input.MouseButton.Left) && 
                         !node.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Popup
