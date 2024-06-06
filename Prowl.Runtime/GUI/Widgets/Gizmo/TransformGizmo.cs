@@ -219,12 +219,12 @@ namespace Prowl.Runtime.GUI
                 _subGizmos.Add(new TranslationSubGizmo(this, new() { Mode = TransformGizmoMode.TranslateYZ, Direction = GizmoDirection.Z, TransformKind = TransformKind.Plane }));
         }
 
-        public GizmoResult? Update(Ray ray, Vector2 screenPos)
+        public GizmoResult? Update(Ray ray, Vector2 screenPos, bool blockPicking)
         {
             foreach (var subGizmo in _subGizmos)
                 subGizmo.SetFocused(false);
 
-            if (focusedGizmo == null)
+            if (focusedGizmo == null && !blockPicking)
             {
                 hoveredGizmo = null;
 

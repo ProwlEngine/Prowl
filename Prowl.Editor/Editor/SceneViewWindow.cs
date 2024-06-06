@@ -129,8 +129,9 @@ public class SceneViewWindow : EditorWindow
         var projection = Cam.GetProjectionMatrix((float)renderSize.x, (float)renderSize.y);
 
         Ray mouseRay = Cam.ScreenPointToRay(g.PointerPos - imagePos);
-        
-        HandleGizmos(selectedGOs, mouseRay, view, projection);
+
+        bool blockPicking = g.IsBlocked(g.PointerPos);
+        HandleGizmos(selectedGOs, mouseRay, view, projection, blockPicking);
 
         Camera.Current = null;
 
@@ -142,7 +143,7 @@ public class SceneViewWindow : EditorWindow
         viewManipulator.SetRect(rect);
         viewManipulator.SetCamera(Cam.Transform.forward, Cam.Transform.up, Cam.projectionType == Camera.ProjectionType.Orthographic);
 
-        if (viewManipulator.Update(out Vector3 newForward, out bool isOrtho))
+        if (viewManipulator.Update(blockPicking, out Vector3 newForward, out bool isOrtho))
         {
             //Cam.Transform.forward = newForward;
             if (newForward != Vector3.zero)
@@ -321,7 +322,7 @@ public class SceneViewWindow : EditorWindow
         }
     }
 
-    private void HandleGizmos(List<GameObject> selectedGOs, Ray mouseRay, Matrix4x4 view, Matrix4x4 projection)
+    private void HandleGizmos(List<GameObject> selectedGOs, Ray mouseRay, Matrix4x4 view, Matrix4x4 projection, bool blockPicking)
     {
         gizmo.UpdateCamera(g.CurrentNode.LayoutData.Rect, view, projection, Cam.GameObject.Transform.up, Cam.GameObject.Transform.forward, Cam.GameObject.Transform.right);
 
@@ -348,7 +349,7 @@ public class SceneViewWindow : EditorWindow
         }
         
         gizmo.SetTransform(centerOfAll, rotation, scale);
-        var result = gizmo.Update(mouseRay, g.PointerPos);
+        var result = gizmo.Update(mouseRay, g.PointerPos, blockPicking);
         if (result.HasValue)
         {
             foreach (var selectedGo in selectedGOs)

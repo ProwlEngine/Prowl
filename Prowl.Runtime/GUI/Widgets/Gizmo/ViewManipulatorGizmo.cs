@@ -39,7 +39,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
             _orthographic = orthographic;
         }
 
-        public bool Update(out Vector3 newCamForward, out bool isOrthographic)
+        public bool Update(bool blockPicking, out Vector3 newCamForward, out bool isOrthographic)
         {
             isHovering = false;
             newCamForward = camForward;
@@ -65,6 +65,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
 
                 if (hoveringCube)
                 {
+                    if (blockPicking) return false;
                     isHovering = true;
                     if (_gui.IsPointerClick(Silk.NET.Input.MouseButton.Left))
                     {
@@ -87,8 +88,8 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                     var mouse = _gui.PointerPos;
                     if (Vector2.Distance(mouse, rect.Center) < rect.width / 2)
                     {
+                        if (blockPicking) return false;
                         // TODO: Switching between perspective and orthographic, Its super janky right now, not really usable
-
                         isHovering = true;
                         var hovCol = GuiStyle.Base11;
                         hovCol.a = 0.25f;
