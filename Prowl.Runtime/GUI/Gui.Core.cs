@@ -1,11 +1,13 @@
 ﻿using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.Rendering.OpenGL;
+using Silk.NET.Maths;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using static System.Formats.Asn1.AsnWriter;
 
 namespace Prowl.Runtime.GUI
 {
@@ -18,9 +20,8 @@ namespace Prowl.Runtime.GUI
         public LayoutNode CurrentNode => layoutNodeScopes.First!.Value._node;
         public LayoutNode PreviousNode { get; private set; }
 
-        public UIDrawList DrawList => _drawList[CurrentNode.ZIndex];
+        public Draw2D Draw2D;
 
-        internal Dictionary<int, UIDrawList> _drawList = new();
         internal LinkedList<LayoutNodeScope> layoutNodeScopes = new();
         internal Stack<ulong> IDStack = new();
         internal bool layoutDirty = false;
@@ -37,6 +38,8 @@ namespace Prowl.Runtime.GUI
             _computedNodes = [];
             _previousLayoutData = [];
             _createdNodes = [];
+
+            Draw2D = new(this);
         }
 
         public void ProcessFrame(Rect screenRect, float uiScale, Vector2 frameBufferScale, Action<Gui> gui)
@@ -55,19 +58,7 @@ namespace Prowl.Runtime.GUI
 
             nextPopupIndex = 0;
 
-            if (!_drawList.ContainsKey(0))
-                _drawList[0] = new UIDrawList(); // Root Draw List
-
-            // The second pass handles drawing
-            // All the Nodes and such will have the same ID due to Hashing being consistent
-            // So We match ID's and this time we Draw
-            List<UIDrawList> drawListsOrdered = new();
-            foreach (var index in _drawList.Keys.OrderBy(x => x))
-            {
-                _drawList[index].Clear();
-                _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
-                drawListsOrdered.Add(_drawList[index]);
-            }
+            Draw2D.BeginFrame();
 
             rootNode = new LayoutNode(null, this, 0);
             rootNode.Width(screenRect.width).Height(screenRect.height);
@@ -81,7 +72,7 @@ namespace Prowl.Runtime.GUI
             DoPass(gui, frameBufferScale);
             PopNode();
 
-            UIDrawList.Draw(GLDevice.GL, new(screenRect.width, screenRect.height), drawListsOrdered.ToArray());
+            Draw2D.EndFrame(screenRect);
 
             // Look for any nodes whos HashCode does not match the previously computed nodes
             layoutDirty = _createdNodes.Count != _computedNodes.Count;
@@ -182,14 +173,14 @@ namespace Prowl.Runtime.GUI
             if (CurrentNode._clipped != ClipType.None)
             {
                 var rect = scope._node._clipped == ClipType.Inner ? scope._node.LayoutData.InnerRect : scope._node.LayoutData.Rect;
-                _drawList[CurrentZIndex].PushClipRect(new Vector4(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height));
+                Draw2D.PushClip(rect);
             }
         }
 
         internal void PopNode()
         {
             if (CurrentNode._clipped != ClipType.None)
-                _drawList[CurrentZIndex].PopClipRect();
+                Draw2D.PopClip();
             PreviousNode = CurrentNode;
             IDStack.Pop();
             layoutNodeScopes.RemoveFirst();

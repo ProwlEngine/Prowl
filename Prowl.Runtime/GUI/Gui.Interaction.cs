@@ -146,9 +146,9 @@ namespace Prowl.Runtime.GUI
         /// </summary>
         public bool IsPointerHovering(Rect rect)
         {
-            var clip = _drawList[CurrentZIndex]._ClipRectStack.Peek();
+            var clip = Draw2D.PeekClip();
 
-            var overClip = IsPointerOver(new(clip.x, clip.y, (clip.z - clip.x), (clip.w - clip.y)));
+            var overClip = IsPointerOver(clip);
 
             return overClip && IsPointerOver(rect);
         }
@@ -264,8 +264,8 @@ namespace Prowl.Runtime.GUI
             }
 
             // Check if mouse is inside the clip rect
-            var clip = _gui._drawList[_gui.CurrentZIndex]._ClipRectStack.Peek();
-            var overClip = _gui.IsPointerOver(new(clip.x, clip.y, (clip.z - clip.x), (clip.w - clip.y)));
+            var clip = _gui.Draw2D.PeekClip();
+            var overClip = _gui.IsPointerOver(clip);
             if (!overClip)
                 return;
 

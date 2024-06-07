@@ -59,7 +59,7 @@ public abstract class SingletonEditorWindow : EditorWindow
 
         using (g.Node("SidePanel").Padding(5, 10, 10, 10).Width(150).ExpandHeight().Layout(LayoutType.Column).Clip().Enter())
         {
-            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
+            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
             RenderSideView();
         }
 
@@ -79,13 +79,13 @@ public abstract class SingletonEditorWindow : EditorWindow
         {
 
             if (currentType == settingType)
-                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
+                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
             else if (hovered)
-                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 10);
+                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 10);
 
             // remove 'Preferences'
             string name = settingType.Name.Replace("Preferences", "");
-            g.DrawText(name, g.CurrentNode.LayoutData.Rect, false);
+            g.Draw2D.DrawText(name, g.CurrentNode.LayoutData.Rect, false);
 
             if (pressed || currentType == settingType)
             {

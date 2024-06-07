@@ -121,7 +121,7 @@ public class GameWindow : EditorWindow
         {
             var innerRect = g.CurrentNode.LayoutData.InnerRect;
 
-            g.DrawRectFilled(innerRect, Color.black);
+            g.Draw2D.DrawRectFilled(innerRect, Color.black);
 
             var renderSize = innerRect.Size;
             renderSize.x = Mathf.Max(renderSize.x, 1);
@@ -136,8 +136,8 @@ public class GameWindow : EditorWindow
 
             if (mainCam == null)
             {
-                g.DrawRect(innerRect, Color.red, 2);
-                g.DrawText(UIDrawList.DefaultFont, "No Camera found", 40f, innerRect, Color.red);
+                g.Draw2D.DrawRect(innerRect, Color.red, 2);
+                g.Draw2D.DrawText(UIDrawList.DefaultFont, "No Camera found", 40f, innerRect, Color.red);
                 return;
             }
 
@@ -171,7 +171,7 @@ public class GameWindow : EditorWindow
             }
 
             // Letter box the image into the render size
-            g.DrawImage(RenderTarget.InternalTextures[0], innerRect.Position, innerRect.Size, Color.white, true);
+            g.Draw2D.DrawImage(RenderTarget.InternalTextures[0], innerRect.Position, innerRect.Size, Color.white, true);
         }
 
     }
@@ -183,7 +183,7 @@ public class GameWindow : EditorWindow
             // Center
             g.CurrentNode.Left(Offset.Percentage(0.5f, -(g.CurrentNode.LayoutData.Rect.width / 2)));
 
-            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
+            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
 
             switch (PlayMode.Current)
             {
@@ -261,13 +261,6 @@ public class GameWindow : EditorWindow
                 GeneralPreferences.Instance.CurrentHeight = 4320;
                 break;
         }
-    }
-
-    string GetDescription(Enum value)
-    {
-        FieldInfo field = value.GetType().GetField(value.ToString());
-        TextAttribute attribute = Attribute.GetCustomAttribute(field, typeof(TextAttribute)) as TextAttribute;
-        return attribute == null ? value.ToString() : attribute.text;
     }
 
 }

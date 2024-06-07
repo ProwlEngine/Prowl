@@ -52,7 +52,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
             {
                 // Draw Circle
                 var rect = _gui.CurrentNode.LayoutData.Rect;
-                _gui.DrawCircleFilled(rect.Center, (float)rect.width / 2, new Color(0.1f, 0.1f, 0.1f, 0.5f), 48);
+                _gui.Draw2D.DrawCircleFilled(rect.Center, (float)rect.width / 2, new Color(0.1f, 0.1f, 0.1f, 0.5f), 48);
 
                 // Create a View matrix looking at 0,0,0
                 Matrix4x4 view = Matrix4x4.CreateLookToLeftHanded(Vector3.zero, camForward, Vector3.up);
@@ -93,7 +93,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                         isHovering = true;
                         var hovCol = GuiStyle.Base11;
                         hovCol.a = 0.25f;
-                        _gui.DrawCircleFilled(rect.Center, (float)rect.width / 2, hovCol, 48);
+                        _gui.Draw2D.DrawCircleFilled(rect.Center, (float)rect.width / 2, hovCol, 48);
                         
                         if (_gui.IsPointerClick(Silk.NET.Input.MouseButton.Left))
                         {
@@ -175,7 +175,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
 
                     if (screenPoints.Count >= 3)
                     {
-                        _gui.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, faceColors[i].GetUInt(), true);
+                        _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, faceColors[i].GetUInt(), true);
 
                         // If mouse inside convex poly
                         var mouse = _gui.PointerPos;
@@ -183,7 +183,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                         {
                             var hovCol = GuiStyle.Base11;
                             hovCol.a = 0.25f;
-                            _gui.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, ((Color32)hovCol).GetUInt(), true);
+                            _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, ((Color32)hovCol).GetUInt(), true);
                             //_gui.DrawList.AddPolyline(screenPoints, screenPoints.Count, hovCol.GetUInt(), true, 1, true);
                             hovering = true;
                             axis = faceNormal;

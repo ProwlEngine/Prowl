@@ -60,17 +60,17 @@ namespace Prowl.Editor
 
                 using (g.ButtonNode("LockBtn", out var lockPressed, out var lockHovered).Scale(GuiStyle.ItemHeight).IgnoreLayout().Left(Offset.Percentage(1f, -GuiStyle.ItemHeight)).Enter())
                 {
-                    g.DrawText(lockSelection ? FontAwesome6.Lock : FontAwesome6.LockOpen, g.CurrentNode.LayoutData.InnerRect, GuiStyle.Base4, false);
+                    g.Draw2D.DrawText(lockSelection ? FontAwesome6.Lock : FontAwesome6.LockOpen, g.CurrentNode.LayoutData.InnerRect, GuiStyle.Base4, false);
 
                     if (lockPressed)
                     {
                         lockSelection = !lockSelection;
 
-                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
+                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
                     }
                     else if (lockHovered)
                     {
-                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
+                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
                     }
                 }
             }
@@ -79,13 +79,13 @@ namespace Prowl.Editor
             {
                 if (Selected == null)
                 {
-                    g.DrawRect(g.CurrentNode.LayoutData.InnerRect, GuiStyle.Red, 2, 6);
+                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, GuiStyle.Red, 2, 6);
                     DrawInspectorLabel("Nothing Selecting.");
                     return;
                 }
                 if (Selected is EngineObject eo1 && eo1.IsDestroyed)
                 {
-                    g.DrawRect(g.CurrentNode.LayoutData.InnerRect, GuiStyle.Red, 2, 6);
+                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, GuiStyle.Red, 2, 6);
                     DrawInspectorLabel("Object Destroyed.");
                     return;
                 }
@@ -180,7 +180,7 @@ namespace Prowl.Editor
         private void DrawInspectorLabel(string message)
         {
             g.Node("DummyForText").ExpandWidth().Height(GuiStyle.ItemHeight * 10);
-            g.DrawText(message, g.CurrentNode.LayoutData.Rect);
+            g.Draw2D.DrawText(message, g.CurrentNode.LayoutData.Rect);
         }
 
         private void ForwardBackButtons()
@@ -206,18 +206,18 @@ namespace Prowl.Editor
             using (backNode.Scale(GuiStyle.ItemHeight).Enter())
             {
                 Color backCol = _BackStack.Count == 0 ? Color.white * 0.7f : Color.white;
-                g.DrawText(FontAwesome6.ArrowLeft, g.CurrentNode.LayoutData.InnerRect, backCol, false);
+                g.Draw2D.DrawText(FontAwesome6.ArrowLeft, g.CurrentNode.LayoutData.InnerRect, backCol, false);
 
                 if (backNodePressed)
                 {
                     _ForwardStack.Push(Selected);
                     Selected = _BackStack.Pop();
 
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
                 }
                 else if (backNodeHovered)
                 {
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
                 }
             }
 
@@ -243,18 +243,18 @@ namespace Prowl.Editor
             using (forwardNode.Scale(GuiStyle.ItemHeight).Enter())
             {
                 Color forwardCol = _ForwardStack.Count == 0 ? Color.white * 0.7f : Color.white;
-                g.DrawText(FontAwesome6.ArrowRight, g.CurrentNode.LayoutData.InnerRect, forwardCol, false);
+                g.Draw2D.DrawText(FontAwesome6.ArrowRight, g.CurrentNode.LayoutData.InnerRect, forwardCol, false);
 
                 if (forwardNodePressed)
                 {
                     _BackStack.Push(Selected);
                     Selected = _ForwardStack.Pop();
 
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
                 }
                 else if (forwardNodeHovered)
                 {
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
                 }
             }
         }

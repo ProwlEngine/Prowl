@@ -1,52 +1,111 @@
 ﻿using Prowl.Runtime.GUI.Graphics;
+using Prowl.Runtime.Rendering.OpenGL;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Prowl.Runtime.GUI
 {
-
-    public partial class Gui
+    public class Draw2D
     {
+        public UIDrawList DrawList => _drawList[currentZIndex];
+
+        internal Dictionary<int, UIDrawList> _drawList = new();
+
+        private int currentZIndex => _gui.CurrentZIndex;
+
+        private Gui _gui;
+        List<UIDrawList> drawListsOrdered = new();
+
+        public Draw2D(Gui gui)
+        {
+            _gui = gui;
+            _drawList[0] = new UIDrawList(); // Root Draw List
+        }
+
+        public void BeginFrame()
+        {
+            if (!_drawList.ContainsKey(0))
+                _drawList[0] = new UIDrawList(); // Root Draw List
+
+            drawListsOrdered.Clear();
+            foreach (var index in _drawList.Keys.OrderBy(x => x))
+            {
+                _drawList[index].Clear();
+                _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
+                drawListsOrdered.Add(_drawList[index]);
+            }
+        }
+
+        public void EndFrame(Rect screenRect)
+        {
+            UIDrawList.Draw(GLDevice.GL, new(screenRect.width, screenRect.height), drawListsOrdered.ToArray());
+        }
+
         /// <summary>
         /// Push a Clipping/Scissoring Rect
         /// This will Intersect with the last active clip rect
         /// All drawing operations applied after this will be cut off by the clip rect and only draw inside it
         /// </summary>
         /// <param name="overwrite">Overwrite all current clip rects instead of using Intersection</param>
-        public void PushClip(Rect rect, bool overwrite = false) 
-            => _drawList[CurrentZIndex].PushClipRect(new(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height), overwrite);
+        public void PushClip(Rect rect, bool overwrite = false)
+            => _drawList[currentZIndex].PushClipRect(new(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height), overwrite);
 
         /// <summary> Pop the last clip rect </summary>
-        public void PopClip() => _drawList[CurrentZIndex].PopClipRect();
+        public void PopClip() => _drawList[currentZIndex].PopClipRect();
+
+        /// <summary> Peek at the current clip rect </summary>
+        public Rect PeekClip()
+        {
+            var clip = _drawList[currentZIndex]._ClipRectStack.Peek();
+            return new(clip.x, clip.y, (clip.z - clip.x), (clip.w - clip.y));
+        }
+
+        public void SetZIndex(int index, bool keepClipSpace)
+        {
+            if (!_drawList.ContainsKey(index))
+            {
+                _drawList[index] = new UIDrawList();
+                _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
+            }
+
+            // Copy over the clip rect from the previous list
+            if (keepClipSpace)
+            {
+                var previousList = _drawList[currentZIndex];
+                _drawList[index].PushClipRect(previousList._ClipRectStack.Peek());
+            }
+        }
 
         public void DrawVerticalBlackGradient(Vector2 top, Vector2 bottom, float right, float strength)
         {
             uint col = new Color(0, 0, 0, strength).GetUInt();
-            _drawList[CurrentZIndex].AddRectFilledMultiColor(new(top.x, top.y), new(bottom.x + right, bottom.y), col, Color.clear.GetUInt(), Color.clear.GetUInt(), col);
+            _drawList[currentZIndex].AddRectFilledMultiColor(new(top.x, top.y), new(bottom.x + right, bottom.y), col, Color.clear.GetUInt(), Color.clear.GetUInt(), col);
         }
 
         public void DrawHorizontalBlackGradient(Vector2 left, Vector2 right, float down, float strength)
         {
-            uint col = new Color(0,0,0, strength).GetUInt();
-            _drawList[CurrentZIndex].AddRectFilledMultiColor(new(left.x, left.y), new(right.x, right.y + down), Color.clear.GetUInt(), Color.clear.GetUInt(), col, col);
+            uint col = new Color(0, 0, 0, strength).GetUInt();
+            _drawList[currentZIndex].AddRectFilledMultiColor(new(left.x, left.y), new(right.x, right.y + down), Color.clear.GetUInt(), Color.clear.GetUInt(), col, col);
         }
 
         public void DrawRect(Rect screenRect, Color color, float thickness = 1f, float roundness = 0.0f, int rounded_corners = 15)
             => DrawRect(new(screenRect.x, screenRect.y), new(screenRect.width, screenRect.height), color, thickness, roundness, rounded_corners);
         public void DrawRect(Vector2 topleft, Vector2 size, Color color, float thickness = 1f, float roundness = 0.0f, int rounded_corners = 15)
-            => _drawList[CurrentZIndex].AddRect(topleft, topleft + size, color.GetUInt(), roundness, rounded_corners, thickness);
+            => _drawList[currentZIndex].AddRect(topleft, topleft + size, color.GetUInt(), roundness, rounded_corners, thickness);
         public void DrawRectFilled(Rect screenRect, Color color, float roundness = 0.0f, int rounded_corners = 15)
             => DrawRectFilled(new(screenRect.x, screenRect.y), new(screenRect.width, screenRect.height), color, roundness, rounded_corners);
         public void DrawRectFilled(Vector2 topleft, Vector2 size, Color color, float roundness = 0.0f, int rounded_corners = 15)
-            => _drawList[CurrentZIndex].AddRectFilled(topleft, topleft + size, color.GetUInt(), roundness, rounded_corners);
-        public void DrawLine(Vector2 start, Vector2 end, Color color, float thickness = 1f) 
-            => _drawList[CurrentZIndex].AddLine(start, end, color.GetUInt(), thickness);
-        public void DrawCircle(Vector2 center, float radius, Color color, int segments = 12, float thickness = 1f) 
-            => _drawList[CurrentZIndex].AddCircle(center, radius, color.GetUInt(), segments, thickness);
-        public void DrawCircleFilled(Vector2 center, float radius, Color color, int segments = 12) 
-            => _drawList[CurrentZIndex].AddCircleFilled(center, radius, color.GetUInt(), segments);
-        public void DrawTriangle(Vector2 a, Vector2 b, Vector2 c, Color color, float thickness = 1f) 
-            => _drawList[CurrentZIndex].AddTriangle(a, b, c, color.GetUInt(), thickness);
-        public void DrawTriangleFilled(Vector2 a, Vector2 b, Vector2 c, Color color) 
-            => _drawList[CurrentZIndex].AddTriangleFilled(a, b, c, color.GetUInt());
+            => _drawList[currentZIndex].AddRectFilled(topleft, topleft + size, color.GetUInt(), roundness, rounded_corners);
+        public void DrawLine(Vector2 start, Vector2 end, Color color, float thickness = 1f)
+            => _drawList[currentZIndex].AddLine(start, end, color.GetUInt(), thickness);
+        public void DrawCircle(Vector2 center, float radius, Color color, int segments = 12, float thickness = 1f)
+            => _drawList[currentZIndex].AddCircle(center, radius, color.GetUInt(), segments, thickness);
+        public void DrawCircleFilled(Vector2 center, float radius, Color color, int segments = 12)
+            => _drawList[currentZIndex].AddCircleFilled(center, radius, color.GetUInt(), segments);
+        public void DrawTriangle(Vector2 a, Vector2 b, Vector2 c, Color color, float thickness = 1f)
+            => _drawList[currentZIndex].AddTriangle(a, b, c, color.GetUInt(), thickness);
+        public void DrawTriangleFilled(Vector2 a, Vector2 b, Vector2 c, Color color)
+            => _drawList[currentZIndex].AddTriangleFilled(a, b, c, color.GetUInt());
 
 
         #region DrawImage
@@ -86,7 +145,7 @@ namespace Prowl.Runtime.GUI
                     size.y = adjustedHeight;
                 }
             }
-            _drawList[CurrentZIndex].AddImage(texture.Handle, position, position + size, uv0, uv1, color.GetUInt());
+            _drawList[currentZIndex].AddImage(texture.Handle, position, position + size, uv0, uv1, color.GetUInt());
         }
 
         #endregion
@@ -122,18 +181,18 @@ namespace Prowl.Runtime.GUI
         public void DrawText(string text, double fontSize, Vector2 position, double wrapwidth = 0.0f)
             => DrawText(UIDrawList.DefaultFont, text, fontSize, position, Color.white, wrapwidth);
 
-        public void DrawText(string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f) 
-            => _drawList[CurrentZIndex].AddText((float)fontSize, position, color.GetUInt(), text, wrap_width: (float)wrapwidth);
+        public void DrawText(string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f)
+            => _drawList[currentZIndex].AddText((float)fontSize, position, color.GetUInt(), text, wrap_width: (float)wrapwidth);
 
         public void DrawText(Font font, string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f, Rect? clip = null)
         {
-            _drawList[CurrentZIndex].PushTextureID(font.Texture.Handle);
+            _drawList[currentZIndex].PushTextureID(font.Texture.Handle);
             if (clip != null)
-                _drawList[CurrentZIndex].AddText(font, (float)fontSize, position, color.GetUInt(), text, wrap_width: (float)wrapwidth, cpu_fine_clip_rect: new Vector4(clip.Value.Position, clip.Value.Position + clip.Value.Size));
+                _drawList[currentZIndex].AddText(font, (float)fontSize, position, color.GetUInt(), text, wrap_width: (float)wrapwidth, cpu_fine_clip_rect: new Vector4(clip.Value.Position, clip.Value.Position + clip.Value.Size));
             else
-                _drawList[CurrentZIndex].AddText(font, (float)fontSize, position, color.GetUInt(), text, wrap_width: (float)wrapwidth);
-            _drawList[CurrentZIndex].PopTextureID();
+                _drawList[currentZIndex].AddText(font, (float)fontSize, position, color.GetUInt(), text, wrap_width: (float)wrapwidth);
+            _drawList[currentZIndex].PopTextureID();
         }
-
     }
+
 }

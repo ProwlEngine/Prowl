@@ -130,7 +130,7 @@ namespace Prowl.Editor
                 {
                     if (g.IsNodePressed())
                         g.OpenPopup("CreateOrImportAsset");
-                    g.DrawText(FontAwesome6.CirclePlus, 30, g.CurrentNode.LayoutData.Rect, (g.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base5));
+                    g.Draw2D.DrawText(FontAwesome6.CirclePlus, 30, g.CurrentNode.LayoutData.Rect, (g.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base5));
                 }
 
 
@@ -169,13 +169,13 @@ namespace Prowl.Editor
                                 SelectHandler.HandleSelectable(_treeCounter, file, true);
 
                             if (SelectHandler.IsSelected(file))
-                                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
+                                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
                             else if (interact.IsHovered())
-                                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5);
+                                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5);
 
                             var textRect = g.CurrentNode.LayoutData.Rect;
                             textRect.width -= GuiStyle.ItemHeight;
-                            g.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), GuiStyle.Base4, 0, textRect);
+                            g.Draw2D.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), GuiStyle.Base4, 0, textRect);
                         }
                     }
                 }
@@ -270,16 +270,16 @@ namespace Prowl.Editor
             bool expanded = false;
             using (g.Node(root.Name).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-g.VScrollBarWidth()).Height(GuiStyle.ItemHeight).Margin(2, 0).Enter())
             {
-                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, 4);
+                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, 4);
 
                 var interact = g.GetInteractable();
                 if (interact.TakeFocus())
                     SelectHandler.HandleSelectable(_treeCounter++, root);
 
                 if (SelectHandler.IsSelected(root))
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
                 else if (interact.IsHovered())
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
                 expanded = g.GetStorage<bool>(root.FullName, defaultOpen);
                 using (g.Node("ExpandBtn").TopLeft(5, 0).Scale(GuiStyle.ItemHeight).Enter())
@@ -289,10 +289,10 @@ namespace Prowl.Editor
                         expanded = !expanded;
                         g.SetStorage(g.CurrentNode.Parent, root.FullName, expanded);
                     }
-                    g.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
+                    g.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
                 }
 
-                g.DrawText(UIDrawList.DefaultFont, root.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white);
+                g.Draw2D.DrawText(UIDrawList.DefaultFont, root.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white);
             }
 
             float scaleAnim = g.AnimateBool((ulong)root.FullName.GetHashCode(), expanded, 0.15f, EaseType.Linear);
@@ -313,18 +313,18 @@ namespace Prowl.Editor
                 {
                     subDirID = g.CurrentNode.ID;
                     if (_treeCounter++ % 2 == 0)
-                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.6f, 4);
+                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.6f, 4);
                     else
-                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
+                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
 
                     var interact = g.GetInteractable();
                     if (interact.TakeFocus())
                         SelectHandler.HandleSelectable(_treeCounter, subDirectory);
 
                     if (SelectHandler.IsSelected(subDirectory))
-                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
+                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
                     else if (interact.IsHovered())
-                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
                     expanded = g.GetStorage<bool>(g.CurrentNode.Parent, subDirectory.FullName, false);
                     using (g.Node("ExpandBtn").TopLeft(5, 0).Scale(GuiStyle.ItemHeight).Enter())
@@ -334,10 +334,10 @@ namespace Prowl.Editor
                             expanded = !expanded;
                             g.SetStorage(g.CurrentNode.Parent.Parent, subDirectory.FullName, expanded);
                         }
-                        g.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
+                        g.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
                     }
 
-                    g.DrawText(UIDrawList.DefaultFont, subDirectory.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white);
+                    g.Draw2D.DrawText(UIDrawList.DefaultFont, subDirectory.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white);
                 }
 
                 g.PushID(subDirID);
@@ -366,7 +366,7 @@ namespace Prowl.Editor
                 {
                     fileNodeID = g.CurrentNode.ID;
                     //if (_treeCounter++ % 2 == 0)
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GetFileColor(ext) * 0.5f, 4);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GetFileColor(ext) * 0.5f, 4);
                     //else
                     //    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GetFileColor(ext, 0.6f, 1f), 4);
 
@@ -374,9 +374,9 @@ namespace Prowl.Editor
                     HandleFileClick(interact, file, 0);
 
                     if (SelectHandler.IsSelected(file))
-                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
+                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
                     else if (interact.IsHovered())
-                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
                     if (subassets.Length > 1)
                     {
@@ -388,15 +388,15 @@ namespace Prowl.Editor
                                 expanded = !expanded;
                                 g.SetStorage(g.CurrentNode.Parent.Parent, file.FullName, expanded);
                             }
-                            g.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
+                            g.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
                         }
                     }
 
                     var textRect = g.CurrentNode.LayoutData.Rect;
                     if (subassets.Length > 1)
                         textRect.width -= GuiStyle.ItemHeight;
-                    g.DrawText(UIDrawList.DefaultFont, GetIcon(ext), 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + (GuiStyle.ItemHeight / 2), g.CurrentNode.LayoutData.Rect.y + 7), GetFileColor(ext), 0, textRect);
-                    g.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white, 0, textRect);
+                    g.Draw2D.DrawText(UIDrawList.DefaultFont, GetIcon(ext), 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + (GuiStyle.ItemHeight / 2), g.CurrentNode.LayoutData.Rect.y + 7), GetFileColor(ext), 0, textRect);
+                    g.Draw2D.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white, 0, textRect);
                 }
 
                 // SubAssets
@@ -412,18 +412,18 @@ namespace Prowl.Editor
                         // SubAsset Entry
                         using (g.Node(subassets[i].name, depth + 1 + i).Left(left).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).Width(Size.Percentage(1f, -left)).Height(GuiStyle.ItemHeight * scaleHeight).Margin(2, 0).Enter())
                         {
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GetTypeColor(subassets[i].type!) * 0.5f, 4);
+                            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GetTypeColor(subassets[i].type!) * 0.5f, 4);
 
                             var interact = g.GetInteractable();
                             HandleFileClick(interact, file, i);
 
                             if (SelectHandler.IsSelected(file))
-                                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
+                                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
                             else if (interact.IsHovered())
-                                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+                                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
-                            g.DrawText(UIDrawList.DefaultFont, GetIconForType(subassets[i].type!), 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + (GuiStyle.ItemHeight / 2), g.CurrentNode.LayoutData.Rect.y + 7), GetTypeColor(subassets[i].type!));
-                            g.DrawText(UIDrawList.DefaultFont, subassets[i].name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white);
+                            g.Draw2D.DrawText(UIDrawList.DefaultFont, GetIconForType(subassets[i].type!), 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + (GuiStyle.ItemHeight / 2), g.CurrentNode.LayoutData.Rect.y + 7), GetTypeColor(subassets[i].type!));
+                            g.Draw2D.DrawText(UIDrawList.DefaultFont, subassets[i].name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white);
                         }
                     }
 
@@ -445,9 +445,9 @@ namespace Prowl.Editor
                     var serialized = AssetDatabase.LoadAsset(guid);
                     using (node.Width(20).Height(20).Enter())
                     {
-                        Gui.ActiveGUI.DrawList.PushClipRectFullScreen();
-                        Gui.ActiveGUI.DrawText(UIDrawList.DefaultFont, FontAwesome6.BoxesPacking + "  " + GetIcon(entry.Extension) + "  " + serialized.GetAsset(fileID).Name, 30, node.LayoutData.InnerRect.Position, Color.white);
-                        Gui.ActiveGUI.DrawList.PopClipRect();
+                        Gui.ActiveGUI.Draw2D.DrawList.PushClipRectFullScreen();
+                        Gui.ActiveGUI.Draw2D.DrawText(UIDrawList.DefaultFont, FontAwesome6.BoxesPacking + "  " + GetIcon(entry.Extension) + "  " + serialized.GetAsset(fileID).Name, 30, node.LayoutData.InnerRect.Position, Color.white);
+                        Gui.ActiveGUI.Draw2D.DrawList.PopClipRect();
                     }
                     DragnDrop.SetPayload(serialized.GetAsset(fileID), entry);
                 }

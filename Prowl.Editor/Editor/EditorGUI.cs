@@ -21,7 +21,7 @@ namespace Prowl.Editor
                 var start = g.CurrentNode.LayoutData.GlobalContentPosition;
                 start.y += g.CurrentNode.LayoutData.Rect.height / 2;
                 var end = start + new Vector2(g.CurrentNode.LayoutData.Rect.width, 0);
-                g.DrawLine(start, end, GuiStyle.Borders, thickness);
+                g.Draw2D.DrawLine(start, end, GuiStyle.Borders, thickness);
             }
         }
 
@@ -30,7 +30,7 @@ namespace Prowl.Editor
             var g = ActiveGUI;
             using (g.Node(text, line).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
             {
-                g.DrawText(text, g.CurrentNode.LayoutData.Rect, GuiStyle.Base11);
+                g.Draw2D.DrawText(text, g.CurrentNode.LayoutData.Rect, GuiStyle.Base11);
             }
         }
 
@@ -39,18 +39,18 @@ namespace Prowl.Editor
             var g = ActiveGUI;
             using (g.ButtonNode(label, out var p, out var h).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
             {
-                g.DrawRect(g.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 10);
+                g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 10);
 
-                g.DrawText(label, g.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
+                g.Draw2D.DrawText(label, g.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
                 
                 if (p)
                 {
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
                     return true;
                 }
 
                 if (h)
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5 * 0.5f, 10);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5 * 0.5f, 10);
 
 
                 return false;
@@ -63,20 +63,20 @@ namespace Prowl.Editor
             using (g.ButtonNode(label, out var p, out var h).Width(width).Height(height).Enter())
             {
                 if(border)
-                    g.DrawRect(g.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 10);
+                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 10);
 
-                g.DrawText(label, g.CurrentNode.LayoutData.Rect, textcolor ?? GuiStyle.Base11);
+                g.Draw2D.DrawText(label, g.CurrentNode.LayoutData.Rect, textcolor ?? GuiStyle.Base11);
                 
                 if (p)
                 {
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
                     return true;
                 }
 
                 var hovCol = GuiStyle.Base11;
                 hovCol.a = 0.25f;
                 if (h)
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
 
 
                 return false;
@@ -197,7 +197,7 @@ namespace Prowl.Editor
 
                 using (ActiveGUI.Node(ID + "ColIcon").MaxWidth(22.5f).Height(22.5f).Enter())
                 {
-                    ActiveGUI.DrawRectFilled(ActiveGUI.CurrentNode.LayoutData.Rect, value);
+                    ActiveGUI.Draw2D.DrawRectFilled(ActiveGUI.CurrentNode.LayoutData.Rect, value);
                 }
 
                 return changed;
@@ -227,7 +227,7 @@ namespace Prowl.Editor
                     changed = true;
                 }
 
-                ActiveGUI.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 2);
+                ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 2);
 
                 bool p = false;
                 bool h = false;
@@ -235,7 +235,7 @@ namespace Prowl.Editor
                 {
                     var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
                     pos += new Vector2(8, 8);
-                    ActiveGUI.DrawText(FontAwesome6.MagnifyingGlass, pos, GuiStyle.Base11 * (h ? 1f : 0.8f));
+                    ActiveGUI.Draw2D.DrawText(FontAwesome6.MagnifyingGlass, pos, GuiStyle.Base11 * (h ? 1f : 0.8f));
                     if (p)
                     {
                         Selected = assetDrawerID;
@@ -253,13 +253,13 @@ namespace Prowl.Editor
                         var col = GuiStyle.Base11 * (h ? 1f : 0.8f);
                         if(value.IsExplicitNull)
                             col = GuiStyle.Red * (h ? 1f : 0.8f);
-                        ActiveGUI.DrawText(text, pos, col);
+                        ActiveGUI.Draw2D.DrawText(text, pos, col);
                         if (p)
                             Selected = assetDrawerID;
                     }
                     else if (AssetDatabase.TryGetFile(value.AssetID, out var assetPath))
                     {
-                        ActiveGUI.DrawText(AssetDatabase.ToRelativePath(assetPath), pos, GuiStyle.Base11 * (h ? 1f : 0.8f));
+                        ActiveGUI.Draw2D.DrawText(AssetDatabase.ToRelativePath(assetPath), pos, GuiStyle.Base11 * (h ? 1f : 0.8f));
                         if (p)
                         {
                             Selected = assetDrawerID;
@@ -331,10 +331,10 @@ namespace Prowl.Editor
             {
                 // Draw the Background & Borders
                 if (!config.HasFlag(PropertyGridConfig.NoBackground))
-                    ActiveGUI.DrawRectFilled(node.LayoutData.Rect, GuiStyle.FrameBGColor);
+                    ActiveGUI.Draw2D.DrawRectFilled(node.LayoutData.Rect, GuiStyle.FrameBGColor);
 
                 if (!config.HasFlag(PropertyGridConfig.NoBorder))
-                    ActiveGUI.DrawRect(node.LayoutData.Rect, GuiStyle.Borders);
+                    ActiveGUI.Draw2D.DrawRect(node.LayoutData.Rect, GuiStyle.Borders);
 
                 if (!config.HasFlag(PropertyGridConfig.NoHeader))
                 {
@@ -343,9 +343,9 @@ namespace Prowl.Editor
                     // Draw the header
                     var headerRect = new Rect(node.LayoutData.GlobalPosition, new Vector2(node.LayoutData.Rect.width, GuiStyle.ItemHeight));
                     if (!config.HasFlag(PropertyGridConfig.NoBackground))
-                        ActiveGUI.DrawRectFilled(headerRect, GuiStyle.Indigo);
+                        ActiveGUI.Draw2D.DrawRectFilled(headerRect, GuiStyle.Indigo);
 
-                    ActiveGUI.DrawText(UIDrawList.DefaultFont, name, 20, headerRect, GuiStyle.Base11, false);
+                    ActiveGUI.Draw2D.DrawText(UIDrawList.DefaultFont, name, 20, headerRect, GuiStyle.Base11, false);
                 }
 
                 DrawProperties(ref target, targetFields, config);
@@ -414,7 +414,7 @@ namespace Prowl.Editor
                         //pos.x += hasHeader ? 28 : 5;
                         pos.x += 28;
                         pos.y += 5;
-                        ActiveGUI.DrawText(name, pos, GuiStyle.Base8);
+                        ActiveGUI.Draw2D.DrawText(name, pos, GuiStyle.Base8);
                     }
                 }
 
@@ -424,7 +424,7 @@ namespace Prowl.Editor
                     bool changed = false;
                     if (fieldValue == null)
                     {
-                        ActiveGUI.DrawText(UIDrawList.DefaultFont, "null", 20, Gui.ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Base11, false);
+                        ActiveGUI.Draw2D.DrawText(UIDrawList.DefaultFont, "null", 20, Gui.ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Base11, false);
                     }
                     else
                     {
@@ -504,7 +504,7 @@ namespace Prowl.Editor
                             var pos = ActiveGUI.CurrentNode.LayoutData.Rect.Min;
                             pos.x += 1;
                             pos.y += 5;
-                            ActiveGUI.DrawText("Unsupported Type", pos, GuiStyle.Base11);
+                            ActiveGUI.Draw2D.DrawText("Unsupported Type", pos, GuiStyle.Base11);
                         }
                     }
 

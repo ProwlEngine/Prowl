@@ -52,7 +52,7 @@ namespace Prowl.Editor.Assets
             catch (Exception e)
             {
                 g.Node("DummyForText").ExpandWidth().Height(GuiStyle.ItemHeight * 10);
-                g.DrawText("Failed to Deserialize Material: " + e.Message + "\n" + e.StackTrace, g.CurrentNode.LayoutData.Rect);
+                g.Draw2D.DrawText("Failed to Deserialize Material: " + e.Message + "\n" + e.StackTrace, g.CurrentNode.LayoutData.Rect);
             }
         }
     }

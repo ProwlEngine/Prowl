@@ -37,7 +37,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
         {
             var go = target as GameObject;
             if (go.hideFlags.HasFlag(HideFlags.NotEditable))
-                g.DrawText("This GameObject is not editable", g.CurrentNode.LayoutData.InnerRect);
+                g.Draw2D.DrawText("This GameObject is not editable", g.CurrentNode.LayoutData.InnerRect);
 
             bool isEnabled = go.enabled;
             if(g.Checkbox("IsEnabledChk", ref isEnabled, 0, 0, out _))
@@ -67,36 +67,36 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     {
                         if (pressed)
                         {
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10, 9);
+                            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10, 9);
                             AssetDatabase.Ping(go.AssetID);
                         }
                         else if (hovered)
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f, 10, 9);
+                            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f, 10, 9);
                         else
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Blue, 10, 9);
-                        g.DrawText("Select", g.CurrentNode.LayoutData.InnerRect, GuiStyle.Base11, false);
+                            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Blue, 10, 9);
+                        g.Draw2D.DrawText("Select", g.CurrentNode.LayoutData.InnerRect, GuiStyle.Base11, false);
                     }
 
                     using (g.ButtonNode("#_RevertBtn", out pressed, out hovered).ExpandHeight().Margin(0, 4).Enter())
                     {
                         if (pressed)
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
+                            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
                         else if (hovered)
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
+                            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
                         else
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Red);
-                        g.DrawText("Revert", g.CurrentNode.LayoutData.InnerRect, GuiStyle.Base11, false);
+                            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Red);
+                        g.Draw2D.DrawText("Revert", g.CurrentNode.LayoutData.InnerRect, GuiStyle.Base11, false);
                     }
 
                     using (g.ButtonNode("#_ApplyBtn", out pressed, out hovered).ExpandHeight().Margin(0, 4).Enter())
                     {
                         if (pressed)
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10, 6);
+                            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10, 6);
                         else if (hovered)
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f, 10, 6);
+                            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f, 10, 6);
                         else
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Green, 10, 6);
-                        g.DrawText("Apply", g.CurrentNode.LayoutData.InnerRect, GuiStyle.Base11, false);
+                            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Green, 10, 6);
+                        g.Draw2D.DrawText("Apply", g.CurrentNode.LayoutData.InnerRect, GuiStyle.Base11, false);
                     }
                 }
             }
@@ -110,8 +110,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 bool opened;
                 using (g.OpenCloseNode("#_TransformH", out opened, true).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
                 {
-                    g.DrawText((opened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), g.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, 8));
-                    g.DrawText("Transform", 23, g.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, 7));
+                    g.Draw2D.DrawText((opened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), g.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, 8));
+                    g.Draw2D.DrawText("Transform", 23, g.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, 7));
 
                     DragnDrop.Drag(go.Transform, typeof(Transform));
                 }
@@ -130,7 +130,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                                 var pos = ActiveGUI.CurrentNode.LayoutData.Rect.Min;
                                 pos.x += 28;
                                 pos.y += 5;
-                                ActiveGUI.DrawText("Position", pos, GuiStyle.Base8);
+                                ActiveGUI.Draw2D.DrawText("Position", pos, GuiStyle.Base8);
                             }
 
                             // Value
@@ -148,7 +148,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                                 var pos = ActiveGUI.CurrentNode.LayoutData.Rect.Min;
                                 pos.x += 28;
                                 pos.y += 5;
-                                ActiveGUI.DrawText("Rotation", pos, GuiStyle.Base8);
+                                ActiveGUI.Draw2D.DrawText("Rotation", pos, GuiStyle.Base8);
                             }
 
                             // Value
@@ -166,7 +166,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                                 var pos = ActiveGUI.CurrentNode.LayoutData.Rect.Min;
                                 pos.x += 28;
                                 pos.y += 5;
-                                ActiveGUI.DrawText("Scale", pos, GuiStyle.Base8);
+                                ActiveGUI.Draw2D.DrawText("Scale", pos, GuiStyle.Base8);
                             }
 
                             // Value
@@ -198,8 +198,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     using (g.OpenCloseNode("#_CompH_" + comp.InstanceID, out compOpened, true).ExpandWidth().Height(GuiStyle.ItemHeight).MarginTop(10).Enter())
                     {
                         //g.SeperatorHNode(1f, GuiStyle.Base4 * 0.8f);
-                        g.DrawText((compOpened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), g.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, 8));
-                        g.DrawText(GetComponentDisplayName(cType), 23, g.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, 7));
+                        g.Draw2D.DrawText((compOpened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), g.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, 8));
+                        g.Draw2D.DrawText(GetComponentDisplayName(cType), 23, g.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, 7));
                         isEnabled = comp.Enabled;
                         if (g.Checkbox("IsEnabledChk", ref isEnabled, Offset.Percentage(1f, -25), 0, out var chkNode))
                             comp.Enabled = isEnabled;

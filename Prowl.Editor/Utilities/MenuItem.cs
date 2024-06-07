@@ -133,7 +133,7 @@ namespace Prowl.Editor
                     Rect rect = Gui.ActiveGUI.CurrentNode.LayoutData.Rect;
                     rect.x = rect.x + rect.width - 25;
                     rect.width = 20;
-                    Gui.ActiveGUI.DrawText(FontAwesome6.ChevronRight, rect, Color.white);
+                    Gui.ActiveGUI.Draw2D.DrawText(FontAwesome6.ChevronRight, rect, Color.white);
                 }
 
                 if (Gui.ActiveGUI.BeginPopup(menu.Path + "Popup", out var node))

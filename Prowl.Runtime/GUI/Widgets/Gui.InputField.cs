@@ -39,14 +39,14 @@ namespace Prowl.Runtime.GUI
 
                 if (!invisible)
                 {
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.WidgetColor, style.WidgetRoundness);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.WidgetColor, style.WidgetRoundness);
                     if (style.BorderThickness > 0)
-                        g.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
+                        g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
                 }
 
                 interact.TakeFocus();
 
-                g.PushClip(g.CurrentNode.LayoutData.InnerRect);
+                g.Draw2D.PushClip(g.CurrentNode.LayoutData.InnerRect);
                 var ValueChanged = false;
                 if (g.FocusID == interact.ID || g.ActiveID == interact.ID)
                 {
@@ -67,9 +67,9 @@ namespace Prowl.Runtime.GUI
                         render_pos.y -= g.CurrentNode.VScroll;
 
                     uint colb = UIDrawList.ColorConvertFloat4ToU32(style.TextColor);
-                    g.DrawList.AddText(font, (float)fontsize, render_pos, colb, value, 0, value.Length, 0.0f, null);
+                    g.Draw2D.DrawList.AddText(font, (float)fontsize, render_pos, colb, value, 0, value.Length, 0.0f, null);
                 }
-                g.PopClip();
+                g.Draw2D.PopClip();
 
                 if (multiline)
                 {
@@ -222,7 +222,7 @@ namespace Prowl.Runtime.GUI
             if ((Flags & InputFieldFlags.OnlyDisplay) == InputFieldFlags.OnlyDisplay)
             {
                 uint colb = UIDrawList.ColorConvertFloat4ToU32(style.TextColor);
-                g.DrawList.AddText(font, (float)fontsize, render_pos - render_scroll, colb, stb.Text, 0, stb.Text.Length, 0.0f, (is_multiline ? null : (Vector4?)clip_rect));
+                g.Draw2D.DrawList.AddText(font, (float)fontsize, render_pos - render_scroll, colb, stb.Text, 0, stb.Text.Length, 0.0f, (is_multiline ? null : (Vector4?)clip_rect));
                 return false;
             }
 
@@ -255,7 +255,7 @@ namespace Prowl.Runtime.GUI
                         Rect rect = new Rect(rect_pos + new Vector2(0.0f, bg_offy_up - fontsize), new Vector2(rect_size.x, bg_offy_dn + fontsize));
                         rect.Clip(clip_rect);
                         if (rect.Overlaps(clip_rect))
-                            g.DrawList.AddRectFilled(rect.Min, rect.Max, bg_color);
+                            g.Draw2D.DrawList.AddRectFilled(rect.Min, rect.Max, bg_color);
                     }
                     rect_pos.x = render_pos.x - render_scroll.x;
                     rect_pos.y += fontsize;
@@ -264,14 +264,14 @@ namespace Prowl.Runtime.GUI
 
 
             uint col = UIDrawList.ColorConvertFloat4ToU32(style.TextColor);
-            g.DrawList.AddText(font, (float)fontsize, render_pos - render_scroll, col, stb.Text, 0, stb.Text.Length, 0.0f, (is_multiline ? null : (Vector4?)clip_rect));
+            g.Draw2D.DrawList.AddText(font, (float)fontsize, render_pos - render_scroll, col, stb.Text, 0, stb.Text.Length, 0.0f, (is_multiline ? null : (Vector4?)clip_rect));
             //g.DrawText(font, fontsize, Text, render_pos - render_scroll, Color.black, 0, stb.CurLenA, 0.0f, (is_multiline ? null : (ImVec4?)clip_rect));
 
             // Draw blinking cursor
             Vector2 cursor_screen_pos = render_pos + cursor_offset - render_scroll;
             bool cursor_is_visible = (stb.cursorAnim <= 0.0f) || (stb.cursorAnim % 1.20f) <= 0.80f;
             if (cursor_is_visible)
-                g.DrawList.AddLine(cursor_screen_pos + new Vector2(0.0f, -fontsize - 4f), cursor_screen_pos + new Vector2(0.0f, -5f), col);
+                g.Draw2D.DrawList.AddLine(cursor_screen_pos + new Vector2(0.0f, -fontsize - 4f), cursor_screen_pos + new Vector2(0.0f, -5f), col);
 
 
             if ((Flags & InputFieldFlags.EnterReturnsTrue) == InputFieldFlags.EnterReturnsTrue)

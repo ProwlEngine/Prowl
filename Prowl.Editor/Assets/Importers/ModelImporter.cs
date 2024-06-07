@@ -761,7 +761,7 @@ namespace Prowl.Editor.Assets
 
             using (g.Node("MaterialList").ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Enter())
             {
-                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
+                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
                 for (int i=0; i<materials.Count(); i++)
                 {
                     g.TextNode("mat" + i, materials.ElementAt(i).Name).ExpandWidth().Height(GuiStyle.ItemHeight);
@@ -780,7 +780,7 @@ namespace Prowl.Editor.Assets
 
             using (g.Node("AnimationList").Padding(10).ExpandWidth().MaxHeight(300).Clip().FitContentHeight().Layout(LayoutType.Column).Enter())
             {
-                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
+                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
                 for (int i = 0; i < animations.Count(); i++)
                 {
                     if (EditorGUI.QuickButton(i + ": " +  animations.ElementAt(i).Name))
@@ -804,7 +804,7 @@ namespace Prowl.Editor.Assets
 
                 using (g.Node("BoneList").Padding(10).ExpandWidth().MaxHeight(300).Clip().FitContentHeight().Layout(LayoutType.Column).Enter())
                 {
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
                     for (int i = 0; i < anim.Bones.Count; i++)
                     {
                         if (EditorGUI.QuickButton(i + ": " + anim.Bones[i].BoneName))

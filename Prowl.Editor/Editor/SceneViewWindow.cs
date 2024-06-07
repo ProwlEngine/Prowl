@@ -93,7 +93,7 @@ public class SceneViewWindow : EditorWindow
 
         var imagePos = g.CurrentNode.LayoutData.Rect.Position;
         var imageSize = g.CurrentNode.LayoutData.Rect.Size;
-        g.DrawImage(RenderTarget.InternalTextures[0], imagePos, imageSize, Color.white);
+        g.Draw2D.DrawImage(RenderTarget.InternalTextures[0], imagePos, imageSize, Color.white);
 
 #warning TODO: Camera rendering clears Gizmos untill the rendering overhaul, so gizmos will Flicker here
         Camera.Current = Cam;
@@ -326,7 +326,7 @@ public class SceneViewWindow : EditorWindow
         if (SceneViewPreferences.Instance.ShowFPS)
         {
             //g.DrawRectFilled(imagePos + new Vector2(5, imageSize.y - 25), new Vector2(75, 20), new Color(0, 0, 0, 0.25f));
-            g.DrawText($"FPS: {fps:0.0}", imagePos + new Vector2(10, imageSize.y - 22));
+            g.Draw2D.DrawText($"FPS: {fps:0.0}", imagePos + new Vector2(10, imageSize.y - 22));
         }
     }
 
@@ -429,7 +429,7 @@ public class SceneViewWindow : EditorWindow
             // Center
             g.CurrentNode.Left(Offset.Percentage(0.5f, -(g.CurrentNode.LayoutData.Rect.width / 2)));
 
-            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
+            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
 
             switch (PlayMode.Current)
             {
@@ -468,7 +468,7 @@ public class SceneViewWindow : EditorWindow
 
         using (g.Node("VpSettings").TopLeft(5).Scale(width, height).Padding(GuiStyle.ItemPadding).Layout(vertical ? LayoutType.Column : LayoutType.Row).Enter())
         {
-            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
+            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
 
             using (g.ButtonNode("EditorCam", out var pressed, out var hovered).Scale(buttonSize).Enter())
             {
@@ -479,7 +479,7 @@ public class SceneViewWindow : EditorWindow
                 var hovCol = GuiStyle.Base11;
                 hovCol.a = 0.25f;
                 if (hovered)
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
             }
             g.Tooltip("Select Editor Camera");
 
@@ -500,7 +500,7 @@ public class SceneViewWindow : EditorWindow
                 var hovCol = GuiStyle.Base11;
                 hovCol.a = 0.25f;
                 if (hovered)
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
             }
             g.Tooltip("Gizmo Mode: " + (gizmo.Orientation == 0 ? "World" : "Local"));
 
@@ -513,7 +513,7 @@ public class SceneViewWindow : EditorWindow
                 var hovCol = GuiStyle.Base11;
                 hovCol.a = 0.25f;
                 if (hovered)
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
             }
             g.Tooltip("Open SceneView Preferences");
         }

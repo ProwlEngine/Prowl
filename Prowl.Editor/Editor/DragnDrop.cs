@@ -82,14 +82,14 @@ namespace Prowl.Editor
                 if (target != null)
                 {
                     var oldZ = Gui.ActiveGUI.CurrentZIndex;
-                    Gui.ActiveGUI.DrawList.PushClipRectFullScreen();
+                    Gui.ActiveGUI.Draw2D.DrawList.PushClipRectFullScreen();
                     Gui.ActiveGUI.SetZIndex(11000);
 
                     var rect = Gui.ActiveGUI.PreviousInteractable!.Value.Rect;
                     rect.Expand(1);
-                    Gui.ActiveGUI.DrawRect(rect, GuiStyle.Orange, 2, 8);
+                    Gui.ActiveGUI.Draw2D.DrawRect(rect, GuiStyle.Orange, 2, 8);
 
-                    Gui.ActiveGUI.DrawList.PopClipRect();
+                    Gui.ActiveGUI.Draw2D.DrawList.PopClipRect();
                     Gui.ActiveGUI.SetZIndex(oldZ);
 
                     if (Gui.ActiveGUI.DragDrop_Accept())
@@ -117,9 +117,9 @@ namespace Prowl.Editor
                 {
                     node.Width(20).Height(20);
 
-                    Gui.ActiveGUI.DrawList.PushClipRectFullScreen();
-                    Gui.ActiveGUI.DrawText(UIDrawList.DefaultFont, FontAwesome6.BoxesPacking, 20, node.LayoutData.InnerRect.Position, Color.white);
-                    Gui.ActiveGUI.DrawList.PopClipRect();
+                    Gui.ActiveGUI.Draw2D.DrawList.PushClipRectFullScreen();
+                    Gui.ActiveGUI.Draw2D.DrawText(UIDrawList.DefaultFont, FontAwesome6.BoxesPacking, 20, node.LayoutData.InnerRect.Position, Color.white);
+                    Gui.ActiveGUI.Draw2D.DrawList.PopClipRect();
                 }
                 SetPayload(tag, objs);
                 return true;

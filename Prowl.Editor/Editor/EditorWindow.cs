@@ -76,7 +76,7 @@ namespace Prowl.Editor
                 if (BackgroundFade)
                 {
                     g.BlockInteractables(g.ScreenRect);
-                    g.DrawRectFilled(g.ScreenRect, new System.Numerics.Vector4(0, 0, 0, 0.5f));
+                    g.Draw2D.DrawRectFilled(g.ScreenRect, new System.Numerics.Vector4(0, 0, 0, 0.5f));
                     // Ensure were at the start of the EditorWindows List
                     EditorGuiManager.FocusWindow(this);
 
@@ -105,7 +105,7 @@ namespace Prowl.Editor
                 using (g.Node("_" + Title, _id).Width(width).Height(height).Padding(Padding).Left(_x).Top(_y).Layout(LayoutType.Column).ScaleChildren().Enter())
                 {
                     g.BlockInteractables(g.CurrentNode.LayoutData.InnerRect);
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
 
                     Rect = g.CurrentNode.LayoutData.InnerRect;
 
@@ -130,7 +130,7 @@ namespace Prowl.Editor
                                     tabsRect.x += 2;
                                     tabsRect.width = (tabWidth * Leaf.LeafWindows.Count) + 1;
                                     tabsRect.Expand(6);
-                                    g.DrawRectFilled(tabsRect, GuiStyle.WindowBackground * 0.8f, 10);
+                                    g.Draw2D.DrawRectFilled(tabsRect, GuiStyle.WindowBackground * 0.8f, 10);
                                 }
 
                                 for (int i = 0; i < Leaf.LeafWindows.Count; i++)
@@ -150,11 +150,11 @@ namespace Prowl.Editor
                                                 EditorGuiManager.FocusWindow(window);
                                             }
                                             if (interact.IsHovered())
-                                                g.DrawRectFilled(tabRect, GuiStyle.Borders, 10);
+                                                g.Draw2D.DrawRectFilled(tabRect, GuiStyle.Borders, 10);
                                         }
                                         if (window == this)
                                         {
-                                            g.DrawRectFilled(tabRect, GuiStyle.Indigo, 10);
+                                            g.Draw2D.DrawRectFilled(tabRect, GuiStyle.Indigo, 10);
                                         }
 
                                         var textSize = UIDrawList.DefaultFont.CalcTextSize(window.Title, 0);
@@ -162,16 +162,16 @@ namespace Prowl.Editor
                                         pos.x += (tabRect.width - textSize.x) * 0.5f;
                                         pos.y += (tabRect.height - (textSize.y)) * 0.5f;
                                         if (textSize.x < tabWidth - 10)
-                                            g.DrawText(UIDrawList.DefaultFont, window.Title, 20, pos, Color.white);
+                                            g.Draw2D.DrawText(UIDrawList.DefaultFont, window.Title, 20, pos, Color.white);
                                         else
-                                            g.DrawText(UIDrawList.DefaultFont, "...", 20, new Vector2(tabRect.x + (tabRect.width * 0.5) - 5, pos.y), Color.white);
+                                            g.Draw2D.DrawText(UIDrawList.DefaultFont, "...", 20, new Vector2(tabRect.x + (tabRect.width * 0.5) - 5, pos.y), Color.white);
 
                                     }
                                 }
                             }
                             else
                             {
-                                g.DrawText(UIDrawList.DefaultFont, Title, 20, g.CurrentNode.LayoutData.Rect, Color.white);
+                                g.Draw2D.DrawText(UIDrawList.DefaultFont, Title, 20, g.CurrentNode.LayoutData.Rect, Color.white);
                             }
 
                             DrawAndHandleCloseButton();
@@ -187,7 +187,7 @@ namespace Prowl.Editor
                     {
                         Draw();
                     }
-                    g.DrawRect(g.CurrentNode.LayoutData.InnerRect, GuiStyle.Borders, 2, 10);
+                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, GuiStyle.Borders, 2, 10);
                 }
 
 
@@ -213,8 +213,8 @@ namespace Prowl.Editor
                 if (interact.TakeFocus())
                     isOpened = false;
                 if (interact.IsHovered())
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new(1f, 1f, 1f, 0.5f));
-                g.DrawText(UIDrawList.DefaultFont, FontAwesome6.Xmark, 20, g.CurrentNode.LayoutData.Rect, Color.white);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new(1f, 1f, 1f, 0.5f));
+                g.Draw2D.DrawText(UIDrawList.DefaultFont, FontAwesome6.Xmark, 20, g.CurrentNode.LayoutData.Rect, Color.white);
             }
         }
 
@@ -252,10 +252,10 @@ namespace Prowl.Editor
                             {
                                 foreach (var possible in placements)
                                 {
-                                    g.DrawRectFilled(possible, GuiStyle.Blue * 0.6f, 10);
-                                    g.DrawRect(possible, GuiStyle.Blue * 0.6f, 4, 10);
+                                    g.Draw2D.DrawRectFilled(possible, GuiStyle.Blue * 0.6f, 10);
+                                    g.Draw2D.DrawRect(possible, GuiStyle.Blue * 0.6f, 4, 10);
                                 }
-                                g.DrawRect(hovered, Color.yellow, 4, 10);
+                                g.Draw2D.DrawRect(hovered, Color.yellow, 4, 10);
                             }
                             g.SetZIndex(oldZ);
                         }

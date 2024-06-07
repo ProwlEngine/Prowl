@@ -40,14 +40,14 @@ namespace Prowl.Runtime.GUI
 
                         if (interact.TakeFocus() || interact.IsActive())
                         {
-                            DrawRectFilled(barRect, style.ScrollBarActiveColor, style.ScrollBarRoundness);
+                            Draw2D.DrawRectFilled(barRect, style.ScrollBarActiveColor, style.ScrollBarRoundness);
                             {
                                 n.VScroll += PointerDelta.y * 2f;
                                 layoutDirty = true;
                             }
                         }
-                        else if (interact.IsHovered()) DrawRectFilled(barRect, style.ScrollBarHoveredColor, (float)style.ScrollBarRoundness);
-                        else DrawRectFilled(barRect, style.WidgetColor, style.ScrollBarRoundness);
+                        else if (interact.IsHovered()) Draw2D.DrawRectFilled(barRect, style.ScrollBarHoveredColor, (float)style.ScrollBarRoundness);
+                        else Draw2D.DrawRectFilled(barRect, style.WidgetColor, style.ScrollBarRoundness);
 
                         if (IsPointerHovering(n.LayoutData.Rect) && PointerWheel != 0)
                         {
@@ -95,7 +95,7 @@ namespace Prowl.Runtime.GUI
         {
             using (Node("#_Text_" + id).Enter())
             {
-                DrawText(font ?? UIDrawList.DefaultFont, text, 20, CurrentNode.LayoutData.InnerRect, Color.white);
+                Draw2D.DrawText(font ?? UIDrawList.DefaultFont, text, 20, CurrentNode.LayoutData.InnerRect, Color.white);
                 return CurrentNode;
             }
         }
@@ -111,14 +111,14 @@ namespace Prowl.Runtime.GUI
                 var col = g.ActiveID == interact.ID ? style.BtnActiveColor :
                           g.HoveredID == interact.ID ? style.BtnHoveredColor : style.WidgetColor;
         
-                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, style.WidgetRoundness);
+                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, style.WidgetRoundness);
                 if (style.BorderThickness > 0)
-                    g.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
+                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
         
                 if(label == null)
-                    g.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, Items[ItemIndex], style.FontSize, g.CurrentNode.LayoutData.InnerRect, style.TextColor);
+                    g.Draw2D.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, Items[ItemIndex], style.FontSize, g.CurrentNode.LayoutData.InnerRect, style.TextColor);
                 else
-                    g.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, label, style.FontSize, g.CurrentNode.LayoutData.InnerRect, style.TextColor);
+                    g.Draw2D.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, label, style.FontSize, g.CurrentNode.LayoutData.InnerRect, style.TextColor);
 
                 var popupWidth = g.CurrentNode.LayoutData.Rect.width;
                 if (interact.TakeFocus())
@@ -126,7 +126,7 @@ namespace Prowl.Runtime.GUI
         
                 y.PixelOffset = 1;
                 var NewIndex = ItemIndex;
-                if (g.BeginPopup(popupName, out var node))
+                if (g.BeginPopup(popupName, out var popupNode))
                 {
                     int longestText = 0;
                     for (var Index = 0; Index < Items.Length; ++Index)
@@ -138,7 +138,7 @@ namespace Prowl.Runtime.GUI
 
                     popupWidth = Math.Max(popupWidth, longestText + 20);
 
-                    using (node.Width(popupWidth).Height(Items.Length * GuiStyle.ItemHeight).Layout(LayoutType.Column).Enter())
+                    using (popupNode.Width(popupWidth).Height(Items.Length * GuiStyle.ItemHeight).Layout(LayoutType.Column).Enter())
                     {
                         for (var Index = 0; Index < Items.Length; ++Index)
                         {
@@ -147,12 +147,12 @@ namespace Prowl.Runtime.GUI
                                 if (g.IsNodePressed())
                                 {
                                     NewIndex = Index;
-                                    g.ClosePopup(popupName);
+                                    g.ClosePopup(popupNode.Parent);
                                 }
                                 else if (g.IsNodeHovered())
-                                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.BtnHoveredColor, style.WidgetRoundness);
+                                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.BtnHoveredColor, style.WidgetRoundness);
 
-                                g.DrawText(Items[Index], g.CurrentNode.LayoutData.Rect, style.TextColor);
+                                g.Draw2D.DrawText(Items[Index], g.CurrentNode.LayoutData.Rect, style.TextColor);
                             }
                         }
                     }
@@ -181,15 +181,15 @@ namespace Prowl.Runtime.GUI
                     var col = ActiveID == interact.ID ? style.BtnActiveColor :
                               HoveredID == interact.ID ? style.BtnHoveredColor : style.WidgetColor;
 
-                    DrawRectFilled(CurrentNode.LayoutData.Rect, col, style.WidgetRoundness);
-                    if (style.BorderThickness > 0)
-                        DrawRect(CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
+                Draw2D.DrawRectFilled(CurrentNode.LayoutData.Rect, col, style.WidgetRoundness);
+                if (style.BorderThickness > 0)
+                    Draw2D.DrawRect(CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
 
                 if (value)
                 {
                     var check = CurrentNode.LayoutData.Rect;
                     check.Expand(-4);
-                    DrawRectFilled(check, style.TextHighlightColor, style.WidgetRoundness);
+                    Draw2D.DrawRectFilled(check, style.TextHighlightColor, style.WidgetRoundness);
                 }
 
                 if (interact.TakeFocus())
@@ -208,17 +208,17 @@ namespace Prowl.Runtime.GUI
             if (PreviousInteractableIsHovered())
             {
                 var oldZ = Gui.ActiveGUI.CurrentZIndex;
-                Gui.ActiveGUI.DrawList.PushClipRectFullScreen();
+                Gui.ActiveGUI.Draw2D.DrawList.PushClipRectFullScreen();
                 Gui.ActiveGUI.SetZIndex(11000);
 
                 var font = style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont;
                 var pos = (topleft ?? PointerPos) + new Vector2(10, 10);
                 var size = font.CalcTextSize(tip, style.FontSize, 0, wrapWidth);
-                DrawRectFilled(pos - new Vector2(5), size + new Vector2(10), GuiStyle.WindowBackground, 10);
-                DrawRect(pos - new Vector2(5), size + new Vector2(10), GuiStyle.Borders, 2, 10);
-                DrawText(font, tip, style.FontSize, pos, style.TextColor, wrapWidth);
+                Draw2D.DrawRectFilled(pos - new Vector2(5), size + new Vector2(10), GuiStyle.WindowBackground, 10);
+                Draw2D.DrawRect(pos - new Vector2(5), size + new Vector2(10), GuiStyle.Borders, 2, 10);
+                Draw2D.DrawText(font, tip, style.FontSize, pos, style.TextColor, wrapWidth);
 
-                Gui.ActiveGUI.DrawList.PopClipRect();
+                Gui.ActiveGUI.Draw2D.DrawList.PopClipRect();
                 Gui.ActiveGUI.SetZIndex(oldZ);
             }
 
@@ -242,19 +242,23 @@ namespace Prowl.Runtime.GUI
 
         public void OpenPopup(string id, Vector2? topleft = null)
         {
-            SetGlobalStorage("PU_" + id, true);
-            SetGlobalStorage("PU_POS_" + id, topleft ?? PointerPos);
+            SetStorage("Popup", true);
+            SetStorage("Popup_ID", id.GetHashCode());
+            SetStorage("PU_POS_" + id, topleft ?? PointerPos);
         }
+
 
         private static int nextPopupIndex;
 
         public bool BeginPopup(string id, out LayoutNode? node, bool invisible = false)
         {
             node = null;
-            var show = GetGlobalStorage<bool>("PU_" + id);
+            var show = GetStorage<bool>("Popup");
+            show &= GetStorage<int>("Popup_ID") == id.GetHashCode();
+            // If this node is showing a Popup and the Popup ID is the same as this ID
             if (show)
             {
-                var pos = GetGlobalStorage<Vector2>("PU_POS_" + id);
+                var pos = GetStorage<Vector2>("PU_POS_" + id);
                 var parentNode = CurrentNode;
                 // Append to Root
                 using ((node = rootNode.AppendNode("PU_" + id)).Left(pos.x).Top(pos.y).IgnoreLayout().Enter())
@@ -268,13 +272,13 @@ namespace Prowl.Runtime.GUI
                     {
                         CurrentNode.Left(ScreenRect.width - rect.width);
                         pos.x = ScreenRect.width - rect.width;
-                        SetGlobalStorage("PU_POS_" + id, pos);
+                        SetStorage(parentNode, "PU_POS_" + id, pos);
                     }
                     if (pos.y + rect.height > ScreenRect.height)
                     {
                         CurrentNode.Top(ScreenRect.height - rect.height);
                         pos.y = ScreenRect.height - rect.height;
-                        SetGlobalStorage("PU_POS_" + id, pos);
+                        SetStorage(parentNode, "PU_POS_" + id, pos);
                     }
 
                     if (IsPointerDown(Silk.NET.Input.MouseButton.Left) && 
@@ -282,16 +286,16 @@ namespace Prowl.Runtime.GUI
                         !parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
                         !IsBlockedByInteractable(PointerPos, 50000 + nextPopupIndex)) // Not blocked by any interactables above this popup
                     {
-                        ClosePopup(id);
+                        ClosePopup(parentNode);
                         return false;
                     }
 
                     if (!invisible)
                     {
-                        PushClip(ScreenRect, true);
-                        DrawRectFilled(CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground, 10);
-                        DrawRect(CurrentNode.LayoutData.Rect, GuiStyle.Borders, 2, 10);
-                        PopClip();
+                        Draw2D.PushClip(ScreenRect, true);
+                        Draw2D.DrawRectFilled(CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground, 10);
+                        Draw2D.DrawRect(CurrentNode.LayoutData.Rect, GuiStyle.Borders, 2, 10);
+                        Draw2D.PopClip();
                     }
 
                     nextPopupIndex++;
@@ -300,12 +304,12 @@ namespace Prowl.Runtime.GUI
             return show;
         }
 
-        public void ClosePopup(string name)
+        public void ClosePopup(LayoutNode? popupHolder = null)
         {
-            SetGlobalStorage("PU_" + name, false);
+            SetStorage(popupHolder ?? CurrentNode, "Popup", false);
+            SetStorage(popupHolder ?? CurrentNode, "Popup_ID", -1);
         }
 
-        public bool IsPopupOpen(string name) => GetGlobalStorage<bool>("PU_" + name);
         public bool Search(string ID, ref string searchText, Offset x, Offset y, Size width, Size? height = null, GuiStyle? style = null)
         {
             style ??= new();
@@ -322,7 +326,7 @@ namespace Prowl.Runtime.GUI
                 var pos = g.PreviousNode.LayoutData.InnerRect.Position + new Vector2(8, 3);
                 // Center text vertically
                 pos.y += (g.PreviousNode.LayoutData.InnerRect.height - style.FontSize) / 2;
-                g.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, FontAwesome6.MagnifyingGlass + "Search...", style.FontSize, pos, GuiStyle.Base6);
+                g.Draw2D.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, FontAwesome6.MagnifyingGlass + "Search...", style.FontSize, pos, GuiStyle.Base6);
             }
             return changed;
         }

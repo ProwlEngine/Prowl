@@ -50,9 +50,9 @@ namespace Prowl.Editor
                     }
 
                     if (interact.IsHovered())
-                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5);
+                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5);
 
-                    g.DrawText(UIDrawList.DefaultFont, "None", 20, new Vector2(xPos, g.CurrentNode.LayoutData.Rect.y + 7), GuiStyle.Base10);
+                    g.Draw2D.DrawText(UIDrawList.DefaultFont, "None", 20, new Vector2(xPos, g.CurrentNode.LayoutData.Rect.y + 7), GuiStyle.Base10);
                 }
 
                 var assets = AssetDatabase.GetAllAssetsOfType(type);
@@ -74,9 +74,9 @@ namespace Prowl.Editor
                                 }
 
                                 if (interact.IsHovered())
-                                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5);
+                                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5);
 
-                                g.DrawText(UIDrawList.DefaultFont, AssetDatabase.GetRelativePath(file.FullName) + "." + asset.Item1, 20, new Vector2(xPos, g.CurrentNode.LayoutData.Rect.y + 7), GuiStyle.Base10);
+                                g.Draw2D.DrawText(UIDrawList.DefaultFont, AssetDatabase.GetRelativePath(file.FullName) + "." + asset.Item1, 20, new Vector2(xPos, g.CurrentNode.LayoutData.Rect.y + 7), GuiStyle.Base10);
                             }
                         }
                     }

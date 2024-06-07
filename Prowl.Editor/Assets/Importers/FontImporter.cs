@@ -2,6 +2,7 @@
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
+using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Assets
@@ -36,7 +37,7 @@ namespace Prowl.Editor.Assets
                     var pos = g.CurrentNode.LayoutData.Rect.Min;
                     pos.x += 28;
                     pos.y += 5;
-                    g.DrawText(name, pos, GuiStyle.Base8);
+                    g.Draw2D.DrawText(name, pos, GuiStyle.Base8);
                 }
 
                 // Value
@@ -55,7 +56,7 @@ namespace Prowl.Editor.Assets
                     var pos = g.CurrentNode.LayoutData.Rect.Min;
                     pos.x += 28;
                     pos.y += 5;
-                    g.DrawText(name, pos, GuiStyle.Base8);
+                    g.Draw2D.DrawText(name, pos, GuiStyle.Base8);
                 }
 
                 // Value
@@ -64,24 +65,25 @@ namespace Prowl.Editor.Assets
             }
         }
 
-        public bool QuickButton(string label)
+        public bool QuickButton(string label, LayoutNode popupHolder)
         {
             using (g.ButtonNode(label, out var p, out var h).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
             {
-                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
+                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
 
-                g.DrawText(label, g.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
+                g.Draw2D.DrawText(label, g.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
 
                 var interact = g.GetInteractable();
                 if (interact.TakeFocus())
                 {
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
-                    g.ClosePopup("AddRangePopup");
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
+                    if(popupHolder != null)
+                        g.ClosePopup(popupHolder);
                     return true;
                 }
 
                 if (interact.IsHovered())
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
 
                 return false;
@@ -100,26 +102,26 @@ namespace Prowl.Editor.Assets
 
             using (g.Node("Ranges").ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Enter())
             {
-                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
+                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
 
                 int rangeIndex = 0;
                 foreach (var range in importer.characterRanges)
                 {
                     using (g.ButtonNode("DelRange" + rangeIndex++, out var pressed, out var hovered).Scale(GuiStyle.ItemHeight).Enter())
                     {
-                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
+                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
 
-                        g.DrawText("X", g.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, 8), GuiStyle.Base8);
+                        g.Draw2D.DrawText("X", g.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, 8), GuiStyle.Base8);
 
                         if (hovered)
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+                            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
                         if (pressed)
                         {
                             importer.characterRanges.Remove(range);
                         }
                         var pos = new Vector2(g.CurrentNode.LayoutData.Rect.Right, ((g.CurrentNode.LayoutData.Rect.Top + g.CurrentNode.LayoutData.Rect.Bottom) / 2) - 15);
-                        g.DrawText($"{range.Start:X} - {range.End:X}", pos + new Vector2(8, 8), GuiStyle.Base8);
+                        g.Draw2D.DrawText($"{range.Start:X} - {range.End:X}", pos + new Vector2(8, 8), GuiStyle.Base8);
                     }
                 }
             }
@@ -127,12 +129,12 @@ namespace Prowl.Editor.Assets
 
             using (g.ButtonNode("AddRange", out var p, out var h).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
             {
-                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
+                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
 
-                g.DrawText("Add Range", g.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
+                g.Draw2D.DrawText("Add Range", g.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
 
                 if (h)
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
                 if(p)
                     g.OpenPopup("AddRangePopup");
@@ -141,37 +143,37 @@ namespace Prowl.Editor.Assets
                 {
                     using (popupNode.Width(250).FitContentHeight().Layout(LayoutType.Column).Padding(10).Enter())
                     {
-                        if (QuickButton("Add Basic Latin"))
+                        if (QuickButton("Add Basic Latin", popupNode.Parent))
                             importer.characterRanges.Add(Font.CharacterRange.BasicLatin);
-                        if (QuickButton("Add Latin1 Supplement"))
+                        if (QuickButton("Add Latin1 Supplement", popupNode.Parent))
                             importer.characterRanges.Add(Font.CharacterRange.Latin1Supplement);
-                        if (QuickButton("Add Latin Extended A"))
+                        if (QuickButton("Add Latin Extended A", popupNode.Parent))
                             importer.characterRanges.Add(Font.CharacterRange.LatinExtendedA);
-                        if (QuickButton("Add Latin Extended B"))
+                        if (QuickButton("Add Latin Extended B", popupNode.Parent))
                             importer.characterRanges.Add(Font.CharacterRange.LatinExtendedB);
-                        if (QuickButton("Add Cyrillic"))
+                        if (QuickButton("Add Cyrillic", popupNode.Parent))
                             importer.characterRanges.Add(Font.CharacterRange.Cyrillic);
-                        if (QuickButton("Add Cyrillic Supplement"))
+                        if (QuickButton("Add Cyrillic Supplement", popupNode.Parent))
                             importer.characterRanges.Add(Font.CharacterRange.CyrillicSupplement);
-                        if (QuickButton("Add Hiragana"))
+                        if (QuickButton("Add Hiragana", popupNode.Parent))
                             importer.characterRanges.Add(Font.CharacterRange.Hiragana);
-                        if (QuickButton("Add Katakana"))
+                        if (QuickButton("Add Katakana", popupNode.Parent))
                             importer.characterRanges.Add(Font.CharacterRange.Katakana);
-                        if (QuickButton("Add Greek"))
+                        if (QuickButton("Add Greek", popupNode.Parent))
                             importer.characterRanges.Add(Font.CharacterRange.Greek);
-                        if (QuickButton("Add Cjk Symbols And Punctuation"))
+                        if (QuickButton("Add Cjk Symbols And Punctuation", popupNode.Parent))
                             importer.characterRanges.Add(Font.CharacterRange.CjkSymbolsAndPunctuation);
-                        if (QuickButton("Add Cjk Unified Ideographs"))
+                        if (QuickButton("Add Cjk Unified Ideographs", popupNode.Parent))
                             importer.characterRanges.Add(Font.CharacterRange.CjkUnifiedIdeographs);
-                        if (QuickButton("Add Hangul Compatibility Jamo"))
+                        if (QuickButton("Add Hangul Compatibility Jamo", popupNode.Parent))
                             importer.characterRanges.Add(Font.CharacterRange.HangulCompatibilityJamo);
-                        if (QuickButton("Add Hangul Syllables"))
+                        if (QuickButton("Add Hangul Syllables", popupNode.Parent))
                             importer.characterRanges.Add(Font.CharacterRange.HangulSyllables);
                     }
                 }
             }
 
-            if (QuickButton("Save"))
+            if (QuickButton("Save", null))
             {
                 (target as MetaFile).Save();
                 AssetDatabase.Reimport((target as MetaFile).AssetPath);

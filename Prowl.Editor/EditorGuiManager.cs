@@ -62,7 +62,7 @@ public static class EditorGuiManager
         EditorGuiManager.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, (g) => {
 
             // Draw Background
-            g.DrawRectFilled(screenRect, GuiStyle.Background);
+            g.Draw2D.DrawRectFilled(screenRect, GuiStyle.Background);
 
             Container ??= new();
             var rect = screenRect;
@@ -75,7 +75,7 @@ public static class EditorGuiManager
                 DragSplitter.GetSplitterBounds(out var bmins, out var bmaxs, 4);
 
                 g.SetZIndex(11000);
-                g.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
+                g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
                 g.SetZIndex(0);
 
                 if (!g.IsPointerDown(Silk.NET.Input.MouseButton.Left))
@@ -93,7 +93,7 @@ public static class EditorGuiManager
                         node.GetSplitterBounds(out var bmins, out var bmaxs, 4);
 
                         g.SetZIndex(11000);
-                        g.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
+                        g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
                         g.SetZIndex(0);
 
                         if (g.IsPointerDown(Silk.NET.Input.MouseButton.Left))

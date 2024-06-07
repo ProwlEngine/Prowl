@@ -42,7 +42,7 @@ namespace Prowl.Editor.ScriptedEditors
                     var pos = g.CurrentNode.LayoutData.Rect.Min;
                     pos.x += 28;
                     pos.y += 5;
-                    g.DrawText("Shader", pos, GuiStyle.Base8);
+                    g.Draw2D.DrawText("Shader", pos, GuiStyle.Base8);
                 }
 
                 // Value
@@ -69,7 +69,7 @@ namespace Prowl.Editor.ScriptedEditors
                                 var pos = g.CurrentNode.LayoutData.Rect.Min;
                                 pos.x += 28;
                                 pos.y += 5;
-                                g.DrawText(property.DisplayName, pos, GuiStyle.Base8);
+                                g.Draw2D.DrawText(property.DisplayName, pos, GuiStyle.Base8);
                             }
 
                             using (g.Node("#_Value").ExpandHeight().Enter())
@@ -127,7 +127,7 @@ namespace Prowl.Editor.ScriptedEditors
                                                 changed = true;
                                             }
 
-                                            g.DrawRect(g.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 2);
+                                            g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 2);
 
                                             bool p = false;
                                             bool h = false;
@@ -135,7 +135,7 @@ namespace Prowl.Editor.ScriptedEditors
                                             {
                                                 var pos = g.CurrentNode.LayoutData.GlobalContentPosition;
                                                 pos += new Vector2(8, 8);
-                                                g.DrawText(FontAwesome6.MagnifyingGlass, pos, GuiStyle.Base11 * (h ? 1f : 0.8f));
+                                                g.Draw2D.DrawText(FontAwesome6.MagnifyingGlass, pos, GuiStyle.Base11 * (h ? 1f : 0.8f));
                                                 if (p)
                                                 {
                                                     Selected = assetDrawerID;
@@ -153,13 +153,13 @@ namespace Prowl.Editor.ScriptedEditors
                                                     var col = GuiStyle.Base11 * (h ? 1f : 0.8f);
                                                     if (tex.IsExplicitNull)
                                                         col = GuiStyle.Red * (h ? 1f : 0.8f);
-                                                    g.DrawText(text, pos, col);
+                                                    g.Draw2D.DrawText(text, pos, col);
                                                     if (p)
                                                         Selected = assetDrawerID;
                                                 }
                                                 else if (AssetDatabase.TryGetFile(tex.AssetID, out var assetPath))
                                                 {
-                                                    g.DrawText(AssetDatabase.ToRelativePath(assetPath), pos, GuiStyle.Base11 * (h ? 1f : 0.8f));
+                                                    g.Draw2D.DrawText(AssetDatabase.ToRelativePath(assetPath), pos, GuiStyle.Base11 * (h ? 1f : 0.8f));
                                                     if (p)
                                                     {
                                                         Selected = assetDrawerID;

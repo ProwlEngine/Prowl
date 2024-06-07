@@ -19,19 +19,7 @@ namespace Prowl.Runtime.GUI
         /// </summary>
         public void SetZIndex(int index, bool keepClipSpace = false)
         {
-            if (!_drawList.ContainsKey(index))
-            {
-                _drawList[index] = new UIDrawList();
-                _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
-            }
-
-            // Copy over the clip rect from the previous list
-            if (keepClipSpace)
-            {
-                var previousList = _drawList[CurrentNode.ZIndex];
-                _drawList[index].PushClipRect(previousList._ClipRectStack.Peek());
-            }
-
+            Draw2D.SetZIndex(index, keepClipSpace);
             CurrentNode.ZIndex = index;
         }
 

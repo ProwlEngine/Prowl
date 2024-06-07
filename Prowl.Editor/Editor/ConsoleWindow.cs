@@ -60,7 +60,7 @@ namespace Prowl.Editor
                     pos.y -= g.CurrentNode.LayoutData.VScroll;
                     var size = UIDrawList.DefaultFont.CalcTextSize(_logMessages[i].Message, 0, width - 24);
 
-                    g.DrawLine(new(pos.x + 12, pos.y + height), new(pos.x + width - 12, pos.y + height), GuiStyle.Borders, 1);
+                    g.Draw2D.DrawLine(new(pos.x + 12, pos.y + height), new(pos.x + width - 12, pos.y + height), GuiStyle.Borders, 1);
 
                     _logMessages[i].Draw(pos + new Vector2(12, height + 8), width - 24);
                     height += size.y + 8;
@@ -81,7 +81,7 @@ namespace Prowl.Editor
             public void Draw(Vector2 position, double wrapWidth)
             {
                 var color = ToColor(LogSeverity);
-                Gui.ActiveGUI.DrawText(UIDrawList.DefaultFont, Message, 20, position, color, wrapWidth);
+                Gui.ActiveGUI.Draw2D.DrawText(UIDrawList.DefaultFont, Message, 20, position, color, wrapWidth);
             }
 
             private static System.Numerics.Vector4 ToColor(LogSeverity logSeverity) => logSeverity switch {

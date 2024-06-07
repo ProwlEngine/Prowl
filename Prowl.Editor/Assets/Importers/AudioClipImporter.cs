@@ -163,9 +163,9 @@ namespace Prowl.Editor.Assets.Importers
                 {
                     using (g.ButtonNode("StopBtn", out var p, out var h).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
                     {
-                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
+                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
 
-                        g.DrawText("Stop", g.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
+                        g.Draw2D.DrawText("Stop", g.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
 
                         var interact = g.GetInteractable();
                         if (interact.TakeFocus())
@@ -175,23 +175,23 @@ namespace Prowl.Editor.Assets.Importers
                         }
 
                         if (interact.IsHovered())
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+                            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
                     }
                 }
                 else
                 {
                     using (g.ButtonNode("PlayBtn", out var p, out var h).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
                     {
-                        g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
+                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
 
-                        g.DrawText("Play", g.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
+                        g.Draw2D.DrawText("Play", g.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
 
                         var interact = g.GetInteractable();
                         if (interact.TakeFocus())
                             preview = AudioSystem.PlaySound(audioClip);
 
                         if (interact.IsHovered())
-                            g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+                            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
                     }
                 }
 
