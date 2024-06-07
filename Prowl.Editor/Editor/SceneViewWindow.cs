@@ -481,7 +481,7 @@ public class SceneViewWindow : EditorWindow
                 if (hovered)
                     g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
             }
-            g.SimpleTooltip("Select Editor Camera");
+            g.Tooltip("Select Editor Camera");
 
             var gridType = SceneViewPreferences.Instance.GridType;
             int gridTypeIndex = (int)gridType;
@@ -502,7 +502,7 @@ public class SceneViewWindow : EditorWindow
                 if (hovered)
                     g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
             }
-            g.SimpleTooltip("Gizmo Mode: " + (gizmo.Orientation == 0 ? "World" : "Local"));
+            g.Tooltip("Gizmo Mode: " + (gizmo.Orientation == 0 ? "World" : "Local"));
 
             using (g.ButtonNode("OpenPreferences", out var pressed, out var hovered).Scale(buttonSize).Enter())
             {
@@ -515,7 +515,7 @@ public class SceneViewWindow : EditorWindow
                 if (hovered)
                     g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
             }
-            g.SimpleTooltip("Open SceneView Preferences");
+            g.Tooltip("Open SceneView Preferences");
         }
     }
 

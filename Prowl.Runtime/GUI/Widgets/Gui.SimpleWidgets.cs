@@ -237,7 +237,7 @@ namespace Prowl.Runtime.GUI
             }
         }
 
-        public void SimpleTooltip(string tip, Vector2? topleft = null, float wrapWidth = -1, GuiStyle? style = null)
+        public void Tooltip(string tip, Vector2? topleft = null, float wrapWidth = -1, GuiStyle? style = null)
         {
 
             style ??= new();
@@ -258,54 +258,6 @@ namespace Prowl.Runtime.GUI
                 Gui.ActiveGUI.SetZIndex(oldZ);
             }
 
-        }
-
-        public bool Tooltip(string ID, out LayoutNode? node, Vector2? topleft = null, bool invisible = false)
-        {
-            node = null;
-            if (!PreviousControlIsHovered())
-                return false;
-
-
-            // Append to Root
-            var pos = topleft ?? PointerPos;
-            using ((node = rootNode.AppendNode(ID)).Left(pos.x).Top(pos.y).IgnoreLayout().Enter())
-            {
-                var oldZ = Gui.ActiveGUI.CurrentZIndex;
-                Gui.ActiveGUI.DrawList.PushClipRectFullScreen();
-                Gui.ActiveGUI.SetZIndex(11000);
-
-                // Clamp node position so that its always in screen bounds
-                var rect = CurrentNode.LayoutData.Rect;
-                if (rect.x + rect.width > ScreenRect.width)
-                    CurrentNode.Left(ScreenRect.width - rect.width);
-                if (rect.y + rect.height > ScreenRect.height)
-                    CurrentNode.Top(ScreenRect.height - rect.height);
-
-                if (!invisible)
-                {
-                    DrawRectFilled(CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
-                    DrawRect(CurrentNode.LayoutData.InnerRect, GuiStyle.Borders, 2, 10);
-                }
-
-                Gui.ActiveGUI.DrawList.PopClipRect();
-                Gui.ActiveGUI.SetZIndex(oldZ);
-
-                return true;
-            }
-        }
-
-        public LayoutNode SeperatorHNode(float thickness = 1f, Color? color = null, [CallerLineNumber] int intID = 0)
-        {
-            color ??= Color.white;
-            using (Node("#_Sep", intID).ExpandWidth().Height(thickness).Enter())
-            {
-                var rect = CurrentNode.LayoutData.Rect;
-                var start = new Vector2(rect.Left, (rect.Top + rect.Bottom) / 2f);
-                var end = new Vector2(rect.Right, (rect.Top + rect.Bottom) / 2f);
-                DrawLine(start, end, color.Value, thickness);
-                return CurrentNode;
-            }
         }
 
         public LayoutNode ToggleNode(string id, ref bool value)

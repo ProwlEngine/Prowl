@@ -42,7 +42,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             bool isEnabled = go.enabled;
             if(g.Checkbox("IsEnabledChk", ref isEnabled, 0, 0, out _))
                 go.enabled = isEnabled;
-            g.SimpleTooltip("Is Enabled");
+            g.Tooltip("Is Enabled");
 
             GuiStyle style = new();
             style.WidgetColor = GuiStyle.WindowBackground;
@@ -203,7 +203,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         isEnabled = comp.Enabled;
                         if (g.Checkbox("IsEnabledChk", ref isEnabled, Offset.Percentage(1f, -25), 0, out var chkNode))
                             comp.Enabled = isEnabled;
-                        g.SimpleTooltip("Is Component Enabled?");
+                        g.Tooltip("Is Component Enabled?");
 
                         DragnDrop.Drag(comp, cType);
 

@@ -305,7 +305,7 @@ namespace Prowl.Editor
             //    rect.Expand(-10);
             var entrySize = rect.width;
 
-            g.SimpleTooltip(hasSubAsset ? subAsset.Value.name : entry.FullName);
+            g.Tooltip(hasSubAsset ? subAsset.Value.name : entry.FullName);
 
             var color = GuiStyle.Borders;
             if (entry is FileInfo f)
