@@ -10,6 +10,7 @@ using System.IO;
 using Prowl.Editor.EditorWindows;
 using System.Reflection;
 using Prowl.Runtime.GUI.Layout;
+using Prowl.Editor.Preferences;
 
 namespace Prowl.Editor
 {
@@ -212,6 +213,13 @@ namespace Prowl.Editor
                 MainMenuItems.Directory = new DirectoryInfo(Project.ProjectAssetDirectory);
                 MainMenuItems.fromAssetBrowser = fromAssetBrowser;
                 MenuItem.DrawMenuRoot("Create");
+
+                EditorGUI.Separator();
+                EditorGUI.Text("Project");
+                if (closePopup |= EditorGUI.QuickButton("Open Project Settings"))
+                    new ProjectSettingsWindow();
+                if (closePopup |= EditorGUI.QuickButton("Build Project"))
+                    Project.BuildProject();
             }
             else if (fileInfo is FileInfo file)
             {
@@ -239,6 +247,13 @@ namespace Prowl.Editor
                 EditorGUI.Separator();
                 if (closePopup |= EditorGUI.QuickButton("Reimport All"))
                     AssetDatabase.ReimportAll();
+
+                EditorGUI.Separator();
+                EditorGUI.Text("Project");
+                if (closePopup |= EditorGUI.QuickButton("Open Project Settings"))
+                    new ProjectSettingsWindow();
+                if (closePopup |= EditorGUI.QuickButton("Build Project"))
+                    Project.BuildProject();
             }
             else if (fileInfo is DirectoryInfo dir)
             {
@@ -266,6 +281,13 @@ namespace Prowl.Editor
                 EditorGUI.Separator();
                 if (closePopup |= EditorGUI.QuickButton("Reimport All"))
                     AssetDatabase.ReimportAll();
+
+                EditorGUI.Separator();
+                EditorGUI.Text("Project");
+                if (closePopup |= EditorGUI.QuickButton("Open Project Settings"))
+                    new ProjectSettingsWindow();
+                if (closePopup |= EditorGUI.QuickButton("Build Project"))
+                    Project.BuildProject();
             }
 
             if (closePopup)
