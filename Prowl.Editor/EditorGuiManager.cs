@@ -147,8 +147,8 @@ public static class EditorGuiManager
                     g.PopID();
 
                     // Focus Window
-                    if (g.IsHovering(window.Rect) && (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) || g.IsPointerClick(Silk.NET.Input.MouseButton.Right)))
-                        if (!g.IsBlocked(g.PointerPos))
+                    if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) || g.IsPointerClick(Silk.NET.Input.MouseButton.Right)))
+                        if (!g.IsBlockedByInteractable(g.PointerPos))
                             FocusWindow(window);
 
                 }

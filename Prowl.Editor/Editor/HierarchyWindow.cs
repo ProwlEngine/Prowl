@@ -56,11 +56,12 @@ namespace Prowl.Editor
             using (g.Node("Search").Width(Size.Percentage(1f)).MaxHeight(entryHeight).Clip().Enter())
             {
                 g.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f, -entryHeight), entryHeight);
-                var btnStyle = new GuiStyle();
-                btnStyle.FontSize = 30;
-                if (g.Button("CreateGOBtn", FontAwesome6.CirclePlus, Offset.Percentage(1f, -entryHeight + 3), 0, entryHeight, entryHeight, btnStyle, true))
+
+                using (g.Node("CreateGOBtn").Left(Offset.Percentage(1f, -entryHeight + 3)).Scale(entryHeight).Enter())
                 {
-                    g.OpenPopup("CreateGameObject");
+                    if(g.IsNodePressed())
+                        g.OpenPopup("CreateGameObject");
+                    g.DrawText(FontAwesome6.CirclePlus, 30, g.CurrentNode.LayoutData.Rect, GuiStyle.Base11);
                 }
 
                 if (g.BeginPopup("CreateGameObject", out var node))
@@ -238,11 +239,12 @@ namespace Prowl.Editor
                     g.DrawLine(new Vector2(rect.x + entryHeight + 1, rect.y - 1), new Vector2(rect.x + entryHeight + 1, rect.y + entryHeight - 1), lineColor, 3);
                 }
 
-                var style = new GuiStyle();
-                if(!entity.enabledInHierarchy)
-                    style.TextColor = GuiStyle.Base4;
-                if (g.Button("VisibilityBtn", entity.enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash, 6, 6, 20, 20, style, true))
-                    entity.enabled = !entity.enabled;
+                using (g.Node("VisibilityBtn").TopLeft(6).Scale(20).Enter())
+                {
+                    if (g.IsNodePressed())
+                        entity.enabled = !entity.enabled;
+                    g.DrawText(entity.enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash, 20, g.CurrentNode.LayoutData.Rect, entity.enabledInHierarchy ? GuiStyle.Base11 : GuiStyle.Base4);
+                }
 
                 // if were pinging we need to open the tree to the pinged object
                 if (pingTimer > 0 && pingedGO != null && pingedGO.Target is GameObject go)
@@ -264,10 +266,14 @@ namespace Prowl.Editor
                 if (entity.children.Count > 0)
                 {
                     bool expanded = g.GetStorage<bool>(entity.InstanceID.ToString());
-                    if (g.Button("ExpandBtn", expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, maxwidth - entryHeight, 5, 20, 20, style, true))
+                    using (g.Node("VisibilityBtn").TopLeft(maxwidth - entryHeight, 5).Scale(20).Enter())
                     {
-                        expanded = !expanded;
-                        g.SetStorage(entity.InstanceID.ToString(), expanded);
+                        if (g.IsNodePressed())
+                        {
+                            expanded = !expanded;
+                            g.SetStorage(g.CurrentNode.Parent, entity.InstanceID.ToString(), expanded);
+                        }
+                        g.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, g.CurrentNode.LayoutData.Rect, entity.enabledInHierarchy ? GuiStyle.Base11 : GuiStyle.Base4);
                     }
                     drawChildren = expanded;
                 }
@@ -280,8 +286,8 @@ namespace Prowl.Editor
                     g.DrawRectFilled(inputRect, GuiStyle.WindowBackground, 8);
                     g.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.None, 30, 3, maxwidth - (entryHeight * 2.25), null, null, true);
                     if (justStartedRename)
-                        g.FocusPreviousControl();
-                    if (!g.PreviousControlIsFocus())
+                        g.FocusPreviousInteractable();
+                    if (!g.PreviousInteractableIsFocus())
                         m_RenamingGO = null;
                     entity.Name = name;
                 }
@@ -289,7 +295,7 @@ namespace Prowl.Editor
                 {
                     var textRect = rect;
                     textRect.width -= entryHeight;
-                    g.DrawText(UIDrawList.DefaultFont, name, 20, new Vector2(rect.x + 40, rect.y + 7), style.TextColor, 0, textRect);
+                    g.DrawText(UIDrawList.DefaultFont, name, 20, new Vector2(rect.x + 40, rect.y + 7), GuiStyle.Base11, 0, textRect);
                 }
 
                 index++;

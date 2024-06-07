@@ -1,34 +1,29 @@
 ﻿using Prowl.Runtime.GUI.Layout;
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-using System.Security.Cryptography;
-using System.Xml.Linq;
 
 namespace Prowl.Runtime.GUI
 {
     public partial class Gui
     {
-        private Vector2 mousePosition => PointerPos;
+        public ulong FocusID { get; internal set; } = 0;
+        public ulong? ActiveID { get; internal set; } = 0;
+        public ulong HoveredID { get; internal set; } = 0;
+        public Rect ActiveRect { get; internal set; } = Rect.Zero;
+        public Interactable? PreviousInteractable { get; private set; }
 
-        internal Dictionary<ulong, Interactable> _oldinteractables = [];
-        internal List<(double, Rect)> _oldblockers = [];
-        internal Dictionary<ulong, Interactable> _interactables = [];
-        internal List<(double, Rect)> _blockers = [];
-        internal Dictionary<int, int> _zInteractableCounter = [];
 
-        public ulong FocusID = 0;
-        public ulong? ActiveID = 0;
-        public ulong HoveredID = 0;
-        public Vector2 PreviousInteractablePointerPos;
-        public ulong PreviousInteractableID = 0;
-        public Rect PreviousInteractableRect = Rect.Zero;
-        public Rect ActiveRect = Rect.Zero;
+        private Dictionary<ulong, Interactable> _oldinteractables = [];
+        private List<(double, Rect)> _oldblockers = [];
+        private Dictionary<ulong, Interactable> _interactables = [];
+        private List<(double, Rect)> _blockers = [];
+        private Dictionary<int, int> _zInteractableCounter = [];
+
 
         private void StartInteractionFrame()
         {
             HoveredID = 0;
-            PreviousInteractableID = 0;
+            PreviousInteractable = null;
         }
 
         private void EndInteractionFrame()
@@ -36,7 +31,7 @@ namespace Prowl.Runtime.GUI
             if (!IsPointerDown(Silk.NET.Input.MouseButton.Left))
             {
                 ActiveID = 0;
-                ClearDragDrop();
+                DragDrop_Clear();
             }
             else if (ActiveID == 0)
             {
@@ -63,43 +58,45 @@ namespace Prowl.Runtime.GUI
             return zIndex + (count / 1000.0);
         }
 
-        public void CreateBlocker(Rect rect)
+        /// <summary>
+        /// Block all interactables in the given rect below this ZIndex/Node
+        /// Usefull for Popups/Windows when you want to prevent interaction with things below/behind it
+        /// </summary>
+        public void BlockInteractables(Rect rect) 
+            => _blockers.Add((GetNextInteractableLayer(CurrentZIndex), rect));
+
+        /// <summary>
+        /// Get an interactable for the current node
+        /// Creates a new interactable if one does not exist
+        /// Otherwise returned the existing one found on this node
+        /// </summary>
+        /// <returns></returns>
+        public Interactable GetInteractable(Rect? interactArea = null)
         {
-            _blockers.Add((GetNextInteractableLayer(CurrentZIndex), rect));
-        }
+            var rect = interactArea ?? CurrentNode.LayoutData.Rect;
 
-        public Interactable GetInteractable(bool inner = false, bool hasScrollV = false)
-        {
-            Rect rect = inner ? CurrentNode.LayoutData.InnerRect : CurrentNode.LayoutData.Rect;
-            if (hasScrollV)
-                rect.width -= ScrollVWidth + ScrollVPadding;
-            return GetInteractable(rect);
-        }
+            if (_interactables.ContainsKey(CurrentNode.ID))
+                return _interactables[CurrentNode.ID];
 
-        public Interactable GetInteractable(Rect rect)
-        {
-            ulong interactID = 17;
-            interactID = interactID * 23 + (ulong)CurrentNode.GetNextInteractable();
-            interactID = interactID * 23 + CurrentNode.ID;
+            if (!_oldinteractables.TryGetValue(CurrentNode.ID, out Interactable interact))
+                interact = new(this, CurrentNode.ID, rect, GetNextInteractableLayer(CurrentZIndex));
+            else
+            {
+                interact._rect = rect;
+                interact.zIndex = GetNextInteractableLayer(CurrentZIndex);
+            }
 
-            var z = GetNextInteractableLayer(CurrentZIndex);
-            if (!_oldinteractables.TryGetValue(interactID, out Interactable interact))
-                interact = new(this, interactID, rect, z);
-            interact._rect = rect;
-            interact.zIndex = z;
-
-            _interactables[interactID] = interact;
-
-            PreviousInteractablePointerPos = mousePosition;
-            PreviousInteractableID = interactID;
-            PreviousInteractableRect = rect;
-
+            _interactables[CurrentNode.ID] = interact;
             interact.UpdateContext();
-
+            PreviousInteractable = interact;
             return interact;
         }
 
-        public bool IsBlocked(Vector2 pos, double zIndex = -1, ulong ignoreID = 0)
+        /// <summary>
+        /// Check if the a position is blocked by any interactable or blocker that is above the given ZIndex
+        /// If no ZIndex is given, it will use the current ZIndex
+        /// </summary>
+        public bool IsBlockedByInteractable(Vector2 pos, double zIndex = -1, ulong ignoreID = 0)
         {
             if (zIndex == -1)
             {
@@ -137,37 +134,56 @@ namespace Prowl.Runtime.GUI
             return isObstructed;
         }
 
-        public bool IsMouseOverRect(Rect rect) => mousePosition.x >= rect.x && mousePosition.x <= rect.x + rect.width && mousePosition.y >= rect.y && mousePosition.y <= rect.y + rect.height;
-        public bool IsHovering(bool inner = false) => IsHovering(inner ? CurrentNode.LayoutData.InnerRect : CurrentNode.LayoutData.Rect);
-        public bool IsHovering(Rect rect)
+        internal bool IsPointerOver(Rect rect) => PointerPos.x >= rect.x && PointerPos.x <= rect.x + rect.width && PointerPos.y >= rect.y && PointerPos.y <= rect.y + rect.height;
+        /// <inheritdoc cref="IsPointerHovering(Rect)"/>
+        public bool IsPointerHovering() => IsPointerHovering(CurrentNode.LayoutData.Rect);
+        /// <summary>
+        /// Checks if the pointer is hovering over the given rect
+        /// Taking into account the current clip rect
+        /// It does not however take into account Interactables that may be blocking the pointer
+        /// For that use <see cref="IsBlockedByInteractable(Vector2, double, ulong)"/>
+        /// If your looking for a way to check if the pointer can interact with something, use <see cref="IsNodeHovered(Rect?)"/> or <see cref="GetInteractable(Rect?)"/>.IsHovered()
+        /// </summary>
+        public bool IsPointerHovering(Rect rect)
         {
             var clip = _drawList[CurrentZIndex]._ClipRectStack.Peek();
 
-            var overClip = IsMouseOverRect(new(clip.x, clip.y, (clip.z - clip.x), (clip.w - clip.y)));
+            var overClip = IsPointerOver(new(clip.x, clip.y, (clip.z - clip.x), (clip.w - clip.y)));
 
-            return overClip && IsMouseOverRect(rect);
+            return overClip && IsPointerOver(rect);
         }
 
-        public bool PreviousControlIsHovered() => HoveredID == PreviousInteractableID;
-        public bool PreviousControlIsActive() => ActiveID == PreviousInteractableID;
-        public bool PreviousControlIsFocus() => FocusID == PreviousInteractableID;
+        /// <summary> A Shortcut to <see cref="GetInteractable(Rect?)"/>.TakeFocus() </summary>
+        public bool IsNodePressed(Rect? interactArea = null) => GetInteractable(interactArea).TakeFocus();
+        /// <summary> A Shortcut to <see cref="GetInteractable(Rect?)"/>.IsHovered() </summary>
+        public bool IsNodeHovered(Rect? interactArea = null) => GetInteractable(interactArea).IsHovered();
+        /// <summary> A Shortcut to <see cref="GetInteractable(Rect?)"/>.IsFocused() </summary>
+        public bool IsNodeFocused(Rect? interactArea = null) => GetInteractable(interactArea).IsFocused();
+        /// <summary> A Shortcut to <see cref="GetInteractable(Rect?)"/>.IsActive() </summary>
+        public bool IsNodeActive(Rect? interactArea = null) => GetInteractable(interactArea).IsActive();
 
-        public void FocusPreviousControl()
+        public bool PreviousInteractableIsHovered() => HoveredID == (PreviousInteractable?.ID ?? 0);
+        public bool PreviousInteractableIsActive() => ActiveID == (PreviousInteractable?.ID);
+        public bool PreviousInteractableIsFocus() => FocusID == (PreviousInteractable?.ID);
+
+        public void FocusPreviousInteractable()
         {
-            if (PreviousInteractableID != 0)
-                FocusID = PreviousInteractableID;
+            if ((PreviousInteractable?.ID ?? 0) != 0)
+                FocusID = PreviousInteractable!.Value.ID;
         }
 
+        #region Drag & Drop
 
-        public static bool IsDragDropActive = false;
-        public static ulong DragDropID;
-        public bool DragDropSource(out LayoutNode? node)
+        internal static bool IsDragDropActive = false;
+        internal static ulong DragDropID;
+
+        public bool DragDrop_Source(out LayoutNode? node)
         {
             node = null;
-            if (PreviousControlIsActive() && (IsDragDropActive || IsPointerMoving))
+            if (PreviousInteractableIsActive() && (IsDragDropActive || IsPointerMoving))
             {
                 IsDragDropActive = true;
-                DragDropID = PreviousInteractableID;
+                DragDropID = PreviousInteractable?.ID ?? 0;
                 using ((node = rootNode.AppendNode("_DragDrop")).Left(PointerPos.x).Top(PointerPos.y).IgnoreLayout().Enter())
                 {
                     SetZIndex(50000);
@@ -185,7 +201,7 @@ namespace Prowl.Runtime.GUI
             return false;
         }
 
-        public static void ClearDragDrop()
+        public static void DragDrop_Clear()
         {
             if (IsDragDropActive)
             {
@@ -194,19 +210,19 @@ namespace Prowl.Runtime.GUI
             }
         }
 
-        public bool DragDropTarget()
+        public bool DragDrop_Target()
         {
             if (IsDragDropActive)
-                if (PreviousControlIsHovered())
+                if (PreviousInteractableIsHovered())
                     return true;
             return false;
         }
 
-        public bool AcceptDragDrop()
+        public bool DragDrop_Accept()
         {
             if (IsDragDropActive)
             {
-                if (PreviousControlIsHovered() && !IsPointerDown(Silk.NET.Input.MouseButton.Left))
+                if (PreviousInteractableIsHovered() && !IsPointerDown(Silk.NET.Input.MouseButton.Left))
                 {
                     IsDragDropActive = false;
                     DragDropID = 0;
@@ -216,11 +232,14 @@ namespace Prowl.Runtime.GUI
             return false;
         }
 
+        #endregion
     }
 
     public struct Interactable
     {
         public ulong ID => _id;
+        public Rect Rect => _rect;
+        public double ZIndex => zIndex;
 
         private Gui _gui;
         internal ulong _id;
@@ -235,7 +254,7 @@ namespace Prowl.Runtime.GUI
             zIndex = z;
         }
 
-        public void UpdateContext(bool onlyHovered = false)
+        internal void UpdateContext(bool onlyHovered = false)
         {
             if (Gui.IsDragDropActive && Gui.DragDropID == ID)
             {
@@ -246,14 +265,14 @@ namespace Prowl.Runtime.GUI
 
             // Check if mouse is inside the clip rect
             var clip = _gui._drawList[_gui.CurrentZIndex]._ClipRectStack.Peek();
-            var overClip = _gui.IsMouseOverRect(new(clip.x, clip.y, (clip.z - clip.x), (clip.w - clip.y)));
+            var overClip = _gui.IsPointerOver(new(clip.x, clip.y, (clip.z - clip.x), (clip.w - clip.y)));
             if (!overClip)
                 return;
 
             // Make sure mouse is also over our rect
-            if (_gui.IsMouseOverRect(_rect))
+            if (_gui.IsPointerOver(_rect))
             {
-                if (!_gui.IsBlocked(_gui.PointerPos, zIndex, _id))
+                if (!_gui.IsBlockedByInteractable(_gui.PointerPos, zIndex, _id))
                 {
                     _gui.HoveredID = _id;
 
@@ -266,6 +285,10 @@ namespace Prowl.Runtime.GUI
             }
         }
 
+        /// <summary>
+        /// Check if the Interactable is hovered and clicked on if it is, it will take focus
+        /// </summary>
+        /// <returns>True on the frame the Interactable took focus, Great for Buttons: if(Interactable.TakeFocus())</returns>
         public bool TakeFocus()
         {
             // Clicking on another Interactable will remove focus
@@ -283,8 +306,11 @@ namespace Prowl.Runtime.GUI
             return false;
         }
 
+        /// <summary> Check if the Interactable is hovered </summary>
         public bool IsHovered() => _gui.HoveredID == _id;
+        /// <summary> Check if the Interactable is active </summary>
         public bool IsActive() => _gui.ActiveID == _id;
+        /// <summary> Check if the Interactable is focused </summary>
         public bool IsFocused() => _gui.FocusID == _id;
     }
 }

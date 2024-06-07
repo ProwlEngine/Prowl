@@ -81,7 +81,6 @@ namespace Prowl.Editor
     //}
     public class AssetsTreeWindow : EditorWindow
     {
-        const double entryHeight = 30;
         const double entryPadding = 4;
 
         private string _searchText = "";
@@ -112,9 +111,9 @@ namespace Prowl.Editor
             g.CurrentNode.ScaleChildren();
             g.CurrentNode.Padding(0, 10, 10, 10);
 
-            using (g.Node("Search").Width(Size.Percentage(1f)).MaxHeight(entryHeight).Clip().Enter())
+            using (g.Node("Search").Width(Size.Percentage(1f)).MaxHeight(GuiStyle.ItemHeight).Clip().Enter())
             {
-                if (g.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f, -entryHeight), entryHeight))
+                if (g.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f, -GuiStyle.ItemHeight), GuiStyle.ItemHeight))
                 {
                     SelectHandler.Clear();
                     _found.Clear();
@@ -126,12 +125,14 @@ namespace Prowl.Editor
                         _found.RemoveAll(f => f.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase) || !f.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
                     }
                 }
-                var btnStyle = new GuiStyle();
-                btnStyle.FontSize = 30;
-                if (g.Button("CreateAssetBtn", FontAwesome6.CirclePlus, Offset.Percentage(1f, -entryHeight + 3), 0, entryHeight, entryHeight, btnStyle, true))
+
+                using (g.Node("CreateAssetBtn").Left(Offset.Percentage(1f, -GuiStyle.ItemHeight + 3)).Scale(GuiStyle.ItemHeight).Enter())
                 {
-                    g.OpenPopup("CreateOrImportAsset");
+                    if (g.IsNodePressed())
+                        g.OpenPopup("CreateOrImportAsset");
+                    g.DrawText(FontAwesome6.CirclePlus, 30, g.CurrentNode.LayoutData.Rect, (g.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base5));
                 }
+
 
                 if (g.BeginPopup("CreateOrImportAsset", out var node))
                 {
@@ -161,7 +162,7 @@ namespace Prowl.Editor
                 {
                     foreach (var file in _found)
                     {
-                        using (g.Node(file.FullName).Top(_treeCounter * (entryHeight + entryPadding)).ExpandWidth(-g.VScrollBarWidth()).Height(entryHeight).Enter())
+                        using (g.Node(file.FullName).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-g.VScrollBarWidth()).Height(GuiStyle.ItemHeight).Enter())
                         {
                             var interact = g.GetInteractable();
                             if (interact.TakeFocus())
@@ -173,7 +174,7 @@ namespace Prowl.Editor
                                 g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5);
 
                             var textRect = g.CurrentNode.LayoutData.Rect;
-                            textRect.width -= entryHeight;
+                            textRect.width -= GuiStyle.ItemHeight;
                             g.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), GuiStyle.Base4, 0, textRect);
                         }
                     }
@@ -267,7 +268,7 @@ namespace Prowl.Editor
         private void RenderRootFolder(bool defaultOpen, DirectoryInfo root, Color col)
         {
             bool expanded = false;
-            using (g.Node(root.Name).Top(_treeCounter * (entryHeight + entryPadding)).ExpandWidth(-g.VScrollBarWidth()).Height(entryHeight).Margin(2, 0).Enter())
+            using (g.Node(root.Name).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-g.VScrollBarWidth()).Height(GuiStyle.ItemHeight).Margin(2, 0).Enter())
             {
                 g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, 4);
 
@@ -281,10 +282,14 @@ namespace Prowl.Editor
                     g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
                 expanded = g.GetStorage<bool>(root.FullName, defaultOpen);
-                if (g.Button("ExpandBtn", expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 5, 0, entryHeight, entryHeight, null, true))
+                using (g.Node("ExpandBtn").TopLeft(5, 0).Scale(GuiStyle.ItemHeight).Enter())
                 {
-                    expanded = !expanded;
-                    g.SetStorage(root.FullName, expanded);
+                    if (g.IsNodePressed())
+                    {
+                        expanded = !expanded;
+                        g.SetStorage(g.CurrentNode.Parent, root.FullName, expanded);
+                    }
+                    g.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
                 }
 
                 g.DrawText(UIDrawList.DefaultFont, root.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white);
@@ -301,10 +306,10 @@ namespace Prowl.Editor
             foreach (DirectoryInfo subDirectory in directories)
             {
                 bool expanded = false;
-                var left = depth * entryHeight;
+                var left = depth * GuiStyle.ItemHeight;
                 ulong subDirID = 0;
                 // Directory Entry
-                using (g.Node(subDirectory.Name, depth).Left(left).Top(_treeCounter * (entryHeight + entryPadding)).ExpandWidth(-(left + g.VScrollBarWidth())).Height(entryHeight * scaleHeight).Margin(2, 0).Enter())
+                using (g.Node(subDirectory.Name, depth).Left(left).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-(left + g.VScrollBarWidth())).Height(GuiStyle.ItemHeight * scaleHeight).Margin(2, 0).Enter())
                 {
                     subDirID = g.CurrentNode.ID;
                     if (_treeCounter++ % 2 == 0)
@@ -322,10 +327,14 @@ namespace Prowl.Editor
                         g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
                     expanded = g.GetStorage<bool>(g.CurrentNode.Parent, subDirectory.FullName, false);
-                    if (g.Button("ExpandBtn", expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 5, 0, entryHeight, entryHeight, null, true))
+                    using (g.Node("ExpandBtn").TopLeft(5, 0).Scale(GuiStyle.ItemHeight).Enter())
                     {
-                        expanded = !expanded;
-                        g.SetStorage(g.CurrentNode.Parent, subDirectory.FullName, expanded);
+                        if (g.IsNodePressed())
+                        {
+                            expanded = !expanded;
+                            g.SetStorage(g.CurrentNode.Parent.Parent, subDirectory.FullName, expanded);
+                        }
+                        g.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
                     }
 
                     g.DrawText(UIDrawList.DefaultFont, subDirectory.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white);
@@ -350,10 +359,10 @@ namespace Prowl.Editor
                     subassets = AssetDatabase.GetSubAssetsCache(guid);
 
                 bool expanded = false;
-                var left = depth * entryHeight;
+                var left = depth * GuiStyle.ItemHeight;
                 ulong fileNodeID = 0;
                 // File Entry
-                using (g.Node(file.Name, depth).Left(left).Top(_treeCounter * (entryHeight + entryPadding)).ExpandWidth(-(left + g.VScrollBarWidth())).Height(entryHeight * scaleHeight).Margin(2, 0).Enter())
+                using (g.Node(file.Name, depth).Left(left).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-(left + g.VScrollBarWidth())).Height(GuiStyle.ItemHeight * scaleHeight).Margin(2, 0).Enter())
                 {
                     fileNodeID = g.CurrentNode.ID;
                     //if (_treeCounter++ % 2 == 0)
@@ -372,17 +381,21 @@ namespace Prowl.Editor
                     if (subassets.Length > 1)
                     {
                         expanded = g.GetStorage<bool>(g.CurrentNode.Parent, file.FullName, false);
-                        if (g.Button("ExpandBtn", expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, Offset.Percentage(1f, -entryHeight), 0, entryHeight, entryHeight, null, true))
+                        using (g.Node("ExpandBtn").TopLeft(Offset.Percentage(1f, -GuiStyle.ItemHeight), 0).Scale(GuiStyle.ItemHeight).Enter())
                         {
-                            expanded = !expanded;
-                            g.SetStorage(g.CurrentNode.Parent, file.FullName, expanded);
+                            if (g.IsNodePressed())
+                            {
+                                expanded = !expanded;
+                                g.SetStorage(g.CurrentNode.Parent.Parent, file.FullName, expanded);
+                            }
+                            g.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
                         }
                     }
 
                     var textRect = g.CurrentNode.LayoutData.Rect;
                     if (subassets.Length > 1)
-                        textRect.width -= entryHeight;
-                    g.DrawText(UIDrawList.DefaultFont, GetIcon(ext), 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + (entryHeight / 2), g.CurrentNode.LayoutData.Rect.y + 7), GetFileColor(ext), 0, textRect);
+                        textRect.width -= GuiStyle.ItemHeight;
+                    g.DrawText(UIDrawList.DefaultFont, GetIcon(ext), 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + (GuiStyle.ItemHeight / 2), g.CurrentNode.LayoutData.Rect.y + 7), GetFileColor(ext), 0, textRect);
                     g.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white, 0, textRect);
                 }
 
@@ -390,14 +403,14 @@ namespace Prowl.Editor
                 if (expanded)
                 {
                     g.PushID(fileNodeID);
-                    left = (depth + 1) * entryHeight;
+                    left = (depth + 1) * GuiStyle.ItemHeight;
 
                     for (ushort i = 0; i < subassets.Length; i++)
                     {
                         if (subassets[i].type == null) continue;
 
                         // SubAsset Entry
-                        using (g.Node(subassets[i].name, depth + 1 + i).Left(left).Top(_treeCounter * (entryHeight + entryPadding)).Width(Size.Percentage(1f, -left)).Height(entryHeight * scaleHeight).Margin(2, 0).Enter())
+                        using (g.Node(subassets[i].name, depth + 1 + i).Left(left).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).Width(Size.Percentage(1f, -left)).Height(GuiStyle.ItemHeight * scaleHeight).Margin(2, 0).Enter())
                         {
                             g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GetTypeColor(subassets[i].type!) * 0.5f, 4);
 
@@ -409,7 +422,7 @@ namespace Prowl.Editor
                             else if (interact.IsHovered())
                                 g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
-                            g.DrawText(UIDrawList.DefaultFont, GetIconForType(subassets[i].type!), 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + (entryHeight / 2), g.CurrentNode.LayoutData.Rect.y + 7), GetTypeColor(subassets[i].type!));
+                            g.DrawText(UIDrawList.DefaultFont, GetIconForType(subassets[i].type!), 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + (GuiStyle.ItemHeight / 2), g.CurrentNode.LayoutData.Rect.y + 7), GetTypeColor(subassets[i].type!));
                             g.DrawText(UIDrawList.DefaultFont, subassets[i].name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white);
                         }
                     }

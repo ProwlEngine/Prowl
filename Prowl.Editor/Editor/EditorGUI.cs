@@ -66,9 +66,8 @@ namespace Prowl.Editor
                     g.DrawRect(g.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 10);
 
                 g.DrawText(label, g.CurrentNode.LayoutData.Rect, textcolor ?? GuiStyle.Base11);
-
-                var interact = g.GetInteractable();
-                if (interact.TakeFocus())
+                
+                if (p)
                 {
                     g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
                     return true;
@@ -76,7 +75,7 @@ namespace Prowl.Editor
 
                 var hovCol = GuiStyle.Base11;
                 hovCol.a = 0.25f;
-                if (interact.IsHovered())
+                if (h)
                     g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
 
 

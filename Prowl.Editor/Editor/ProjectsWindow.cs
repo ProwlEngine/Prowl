@@ -1,7 +1,10 @@
-﻿using Prowl.Icons;
+﻿using Hexa.NET.ImGuizmo;
+using ImageMagick;
+using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
+using System.Reflection.Emit;
 
 namespace Prowl.Editor
 {
@@ -57,11 +60,11 @@ namespace Prowl.Editor
             g.DrawRectFilled(rect, GuiStyle.WindowBackground * 0.25f, 10);
             Vector2 shadowA = new(rect.x, rect.y);
             Vector2 shadowB = new(rect.x, rect.y + (rect.height - 60));
-            g.DrawVerticalShadow(shadowA, shadowB, 30, 0.25f);
+            g.DrawVerticalBlackGradient(shadowA, shadowB, 30, 0.25f);
             Rect footer = new(shadowB.x, shadowB.y, rect.width, 60);
             g.DrawRectFilled(footer, GuiStyle.WindowBackground, 10, 4);
             Vector2 shadowC = new(rect.x, rect.y + rect.height);
-            g.DrawVerticalShadow(shadowB, shadowC, 20, 0.25f);
+            g.DrawVerticalBlackGradient(shadowB, shadowC, 20, 0.25f);
 
             g.InputField("SearchInput", ref _searchText, 0x100, Gui.InputFieldFlags.None, 25, 50, 150);
 
@@ -78,36 +81,36 @@ namespace Prowl.Editor
                 g.ScrollV();
             }
 
-            var s = new GuiStyle();
-            s.WidgetRoundness = 10;
-            s.BorderThickness = 0;
-            if (!string.IsNullOrEmpty(SelectedProject))
+            using (g.Node("OpenBtn").TopLeft(455, 452).Scale(162, 60).Enter())
             {
-                s.BtnHoveredColor = GuiStyle.SelectedColor;
-                s.WidgetColor = GuiStyle.HoveredColor;
-                if (g.Button("OpenBtn", "Open", 455, 452, 162, 60, s, false, false, 4))
+                if (!string.IsNullOrEmpty(SelectedProject))
                 {
-                    Project.Open(SelectedProject);
-                    isOpened = false;
+                    if (g.IsNodePressed())
+                    {
+                        Project.Open(SelectedProject);
+                        isOpened = false;
+                    }
+
+                    var col = g.IsNodeActive() ? GuiStyle.SelectedColor :
+                              g.IsNodeHovered() ? GuiStyle.HoveredColor * 0.8f : GuiStyle.HoveredColor;
+
+                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, 10, 4);
+                    g.DrawText("Open", g.CurrentNode.LayoutData.Rect);
+                }
+                else
+                {
+                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, Color.white * 0.4f, 10, 4);
+                    g.DrawText("Open", g.CurrentNode.LayoutData.Rect);
                 }
             }
-            else
-            {
-                s.BtnHoveredColor = Color.white * 0.4f;
-                s.WidgetColor = Color.white * 0.4f;
-                g.Button("OpenBtn", "Open", 455, 452, 162, 60, s, false, false, 4);
-            }
         }
-
         private void DisplayProject(string name)
         {
             var proj = Project.GetPath(name);
-
             using (g.Node(name).Height(48).Width(Size.Percentage(1f, -17)).Margin(5).Enter())
             {
                 var rect = g.CurrentNode.LayoutData.Rect;
                 g.DrawText(UIDrawList.DefaultFont, name, 20, rect.Position + new Vector2(8, 5), Color.white);
-                
                 string path = proj.FullName;
                 // Cut of the path if it's too long
                 if (path.Length > 48)
@@ -153,27 +156,30 @@ namespace Prowl.Editor
             g.DrawRectFilled(rect, GuiStyle.WindowBackground * 0.25f, 10);
             Vector2 shadowA = new(rect.x, rect.y);
             Vector2 shadowB = new(rect.x, rect.y + (rect.height - 77));
-            g.DrawVerticalShadow(shadowA, shadowB, 30, 0.25f);
+            g.DrawVerticalBlackGradient(shadowA, shadowB, 30, 0.25f);
             Rect footer = new(shadowB.x, shadowB.y, rect.width, 77);
             g.DrawRectFilled(footer, GuiStyle.WindowBackground, 10, 4);
             Vector2 shadowC = new(rect.x, rect.y + rect.height);
-            g.DrawVerticalShadow(shadowB, shadowC, 20, 0.25f);
+            g.DrawVerticalBlackGradient(shadowB, shadowC, 20, 0.25f);
 
             g.InputField("CreateInput", ref createName, 0x100, Gui.InputFieldFlags.None, 30, 450, 340);
             string path = Project.GetPath(createName).FullName;
             if (path.Length > 48)
                 path = string.Concat("...", path.AsSpan(path.Length - 48));
             g.DrawText(UIDrawList.DefaultFont, path, 20, rect.Position + new Vector2(30, 480), Color.white * 0.5f);
-            
-            var s = new GuiStyle();
-            s.WidgetRoundness = 10;
-            s.BorderThickness = 0;
-            s.BtnHoveredColor = GuiStyle.SelectedColor;
-            s.WidgetColor = GuiStyle.HoveredColor;
-            if (g.Button("CreateBtn", "Create", 445, 435, 172, 77, s, false, false, 4))
+
+            using (g.Node("CreateBtn").TopLeft(445, 435).Scale(172, 77).Enter())
             {
-                Project.CreateNew(createName);
-                currentTab = 0;
+                if (g.IsNodePressed())
+                {
+                    Project.CreateNew(createName);
+                    currentTab = 0;
+                }
+                var col = g.IsNodeActive() ? GuiStyle.Indigo :
+                          g.IsNodeHovered() ? GuiStyle.SelectedColor * 0.8f : GuiStyle.HoveredColor;
+
+                g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, 10, 4);
+                g.DrawText("Create", g.CurrentNode.LayoutData.Rect);
             }
         }
 

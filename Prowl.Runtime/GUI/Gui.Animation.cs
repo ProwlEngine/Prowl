@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using Prowl.Runtime.Utils;
+using System.Collections.Generic;
 
 namespace Prowl.Runtime.GUI
 {
@@ -41,10 +42,27 @@ namespace Prowl.Runtime.GUI
     {
         private Dictionary<ulong, BoolAnimation> _boolAnimations = [];
 
-        public float AnimateBool(bool state, float durationIn, float durationOut, EaseType easeIn, EaseType easeOut) => AnimateBool(GetNextID(), state, state ? durationOut : durationIn, state ? easeOut : easeIn);
-        public float AnimateBool(bool state, float durationIn, float durationOut, EaseType type) => AnimateBool(GetNextID(), state, state ? durationOut : durationIn, type);
-        public float AnimateBool(bool state, float duration, EaseType easeIn, EaseType easeOut) => AnimateBool(GetNextID(), state, duration, state ? easeOut : easeIn);
-        public float AnimateBool(bool state, float duration, EaseType ease) => AnimateBool(GetNextID(), state, duration, ease);
+        /// <inheritdoc cref="AnimateBool(ulong, bool, float, EaseType)"/>
+        public float AnimateBool(bool state, float durationIn, float durationOut, EaseType easeIn, EaseType easeOut) 
+            => AnimateBool(GetNextID(), state, state ? durationOut : durationIn, state ? easeOut : easeIn);
+        public float AnimateBool(bool state, float durationIn, float durationOut, EaseType type) 
+            => AnimateBool(GetNextID(), state, state ? durationOut : durationIn, type);
+        /// <inheritdoc cref="AnimateBool(ulong, bool, float, EaseType)"/>
+        public float AnimateBool(bool state, float duration, EaseType easeIn, EaseType easeOut) 
+            => AnimateBool(GetNextID(), state, duration, state ? easeOut : easeIn);
+        /// <inheritdoc cref="AnimateBool(ulong, bool, float, EaseType)"/>
+        public float AnimateBool(bool state, float duration, EaseType ease) 
+            => AnimateBool(GetNextID(), state, duration, ease);
+
+        /// <summary>
+        /// Create and animate a bool value over time
+        /// This is useful for creating animations based on bool values
+        /// 
+        /// An ID will be assigned based on the current Node and the next available ID
+        /// You can manually assign an ID if you want it to persist across nodes
+        /// </summary>
+        /// <returns>Returns a Float value between 0 and 1 which is animated over time based on the EaseType
+        /// A state of true will animate to 1, a state of false will animate to 0</returns>
         public float AnimateBool(ulong animId, bool state, float duration, EaseType type)
         {
             BoolAnimation anim;
@@ -68,12 +86,7 @@ namespace Prowl.Runtime.GUI
             return (float)GetEase(anim.ElapsedTime, anim.EaseType);
         }
 
-        private ulong GetNextID()
-        {
-            ulong animId = 17;
-            animId = animId * 23 + (ulong)CurrentNode.GetNextAnimation();
-            return animId * 23 + CurrentNode.ID;
-        }
+        private ulong GetNextID() => ProwlHash.Combine(CurrentNode.ID, CurrentNode.GetNextAnimation());
 
         private void UpdateAnimations(double dt)
         {

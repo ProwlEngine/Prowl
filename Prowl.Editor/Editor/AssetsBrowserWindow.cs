@@ -101,9 +101,13 @@ namespace Prowl.Editor
                     || CurDirectory.FullName.Equals(Project.ProjectDefaultsDirectory, StringComparison.OrdinalIgnoreCase)
                     || CurDirectory.FullName.Equals(Project.ProjectPackagesDirectory, StringComparison.OrdinalIgnoreCase)
                     || CurDirectory.Parent == null;
-                if (g.Button("DirUpBtn", FontAwesome6.ArrowUp, 0, 0, itemHeight, itemHeight, cantGoUp ? new GuiStyle() { TextColor = Color.grey } : null, true))
-                    if(!cantGoUp)
+
+                using (g.Node("DirUpBtn").Scale(itemHeight).Enter())
+                {
+                    if (!cantGoUp && g.IsNodePressed())
                         CurDirectory = CurDirectory.Parent!;
+                    g.DrawText(FontAwesome6.ArrowUp, 30, g.CurrentNode.LayoutData.Rect, cantGoUp ? GuiStyle.Base4 : (g.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base5));
+                }
 
                 if (g.Search("SearchInput", ref _searchText, itemHeight + itemPadding, 0, 200, itemHeight))
                 {
@@ -152,20 +156,26 @@ namespace Prowl.Editor
                 for (; i < nodes.Length; i++)
                 {
                     var textSize = nodeSizes[i];
-                    if (g.Button($"PathNode{i}", nodes[i], pathPos.x, 0, textSize, itemHeight, null, true))
+
+                    using (g.Node($"PathNode{i}").Left(pathPos.x).Scale(textSize, itemHeight).Enter())
                     {
-                        string newPath = Project.ProjectDirectory + "/" + string.Join("/", nodes.Take(i + 1));
-                        CurDirectory = new DirectoryInfo(newPath);
+                        if (g.IsNodePressed())
+                            CurDirectory = new(Project.ProjectDirectory + "/" + string.Join("/", nodes.Take(i + 1)));
+
+                        g.DrawText(nodes[i], 20, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base5);
                     }
-                    g.DrawText(UIDrawList.DefaultFont, "/", 20, g.CurrentNode.LayoutData.GlobalContentPosition + pathPos + new Vector2(textSize, 6), GuiStyle.Base11);
+
+                    g.DrawText(UIDrawList.DefaultFont, "/", 20, g.CurrentNode.LayoutData.GlobalContentPosition + pathPos + new Vector2(textSize, 6), GuiStyle.Base5);
                     pathPos.x += textSize + 5;
                 }
 
-                var btnStyle = new GuiStyle();
-                btnStyle.FontSize = 30;
-                btnStyle.TextColor = GuiStyle.Base4;
-                if (g.Button("LockBtn", Locked ? FontAwesome6.Lock : FontAwesome6.LockOpen, Offset.Percentage(1f, -itemHeight + 3), 0, itemHeight, itemHeight, btnStyle, true))
-                    Locked = !Locked;
+                using (g.Node("LockBtn").Left(Offset.Percentage(1f, -itemHeight + 3)).Scale(itemHeight).Enter())
+                {
+                    if (g.IsNodePressed())
+                        Locked = !Locked;
+
+                    g.DrawText(Locked ? FontAwesome6.Lock : FontAwesome6.LockOpen, 30, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base5);
+                }
             }
         }
 
@@ -272,10 +282,15 @@ namespace Prowl.Editor
                     if (subAssets.Length > 1)
                     {
                         expanded = g.GetStorage<bool>(g.CurrentNode.Parent, file.FullName, false);
-                        if (g.Button("ExpandBtn", expanded ? FontAwesome6.ChevronRight : FontAwesome6.ChevronLeft, Offset.Percentage(1f, -(itemHeight * 0.5)), 2, itemHeight * 0.5, itemHeight * 0.5, null, true))
+
+                        using (g.Node("ExpandBtn").TopLeft(Offset.Percentage(1f, -(itemHeight * 0.5)), 2).Scale(itemHeight * 0.5).Enter())
                         {
-                            expanded = !expanded;
-                            g.SetStorage(g.CurrentNode.Parent, file.FullName, expanded);
+                            if (g.IsNodePressed())
+                            {
+                                expanded = !expanded;
+                                g.SetStorage(g.CurrentNode.Parent.Parent, file.FullName, expanded);
+                            }
+                            g.DrawText(expanded ? FontAwesome6.ChevronRight : FontAwesome6.ChevronLeft, 20, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base5);
                         }
                     }
 

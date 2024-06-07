@@ -11,6 +11,12 @@ namespace Prowl.Runtime.GUI
 
         private static Dictionary<ulong, Hashtable> _storage = [];
 
+        /// <summary>
+        /// Set the ZIndex for the current node
+        /// ZIndex is used to determine the order in which nodes are drawn
+        /// Think of them as layers in Photoshop
+        /// They can also affect the order in which nodes receive input
+        /// </summary>
         public void SetZIndex(int index, bool keepClipSpace = false)
         {
             if (!_drawList.ContainsKey(index))
@@ -29,15 +35,16 @@ namespace Prowl.Runtime.GUI
             CurrentNode.ZIndex = index;
         }
 
+        /// <summary> Get a value from the global GUI storage this persists across Nodes </summary>
         public T GetGlobalStorage<T>(string key) where T : unmanaged => GetStorage<T>(rootNode, key, default);
+        /// <summary> Set a value in the global GUI storage this persists across Nodes </summary>
         public void SetGlobalStorage<T>(string key, T value) where T : unmanaged => SetStorage(rootNode, key, value);
 
-        public T GetStorage<T>(string key) where T : unmanaged => GetStorage<T>(CurrentNode, key, default);
-        public T GetStorage<T>(string key, T defaultValue) where T : unmanaged => GetStorage<T>(CurrentNode, key, defaultValue);
+        /// <summary> Get a value from the current node's storage </summary>
+        public T GetStorage<T>(string key, T defaultValue = default) where T : unmanaged => GetStorage<T>(CurrentNode, key, defaultValue);
 
-        public void SetStorage<T>(string key, T value) where T : unmanaged => SetStorage(CurrentNode, key, value);
-
-        public T GetStorage<T>(LayoutNode node, string key, T defaultValue) where T : unmanaged
+        /// <summary> Get a value from the current node's storage </summary>
+        public T GetStorage<T>(LayoutNode node, string key, T defaultValue = default) where T : unmanaged
         {
             if (!_storage.TryGetValue(node.ID, out var storage))
                 return defaultValue;
@@ -48,6 +55,9 @@ namespace Prowl.Runtime.GUI
             return defaultValue;
         }
 
+        /// <summary> Set a value in the current node's storage </summary>
+        public void SetStorage<T>(string key, T value) where T : unmanaged => SetStorage(CurrentNode, key, value);
+        /// <summary> Set a value in the current node's storage </summary>
         public void SetStorage<T>(LayoutNode node, string key, T value) where T : unmanaged
         {
             if (!_storage.TryGetValue(node.ID, out var storage))
@@ -56,6 +66,12 @@ namespace Prowl.Runtime.GUI
             storage[key] = value;
         }
 
+        /// <summary>
+        /// Push an ID onto the ID stack
+        /// Useful for when you want to use the same string ID for multiple nodes that would otherwise conflict
+        /// Or maybe you dont have control like a List of User-Created Nodes, you PushID(Index) and PopID() when done
+        /// </summary>
+        /// <param name="id"></param>
         public void PushID(ulong id) => IDStack.Push(id);
         public void PopID() => IDStack.Pop();
 

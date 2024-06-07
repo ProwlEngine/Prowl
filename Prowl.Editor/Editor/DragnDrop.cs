@@ -30,11 +30,14 @@ namespace Prowl.Editor
         /// </summary>
         public static bool Peek(out object? payload, Type type, string tag = "")
         {
+            if (Gui.ActiveGUI.PreviousInteractable == null)
+                throw new System.Exception("No Previous Interactable");
+
             payload = default;
             if (draggedObject == null) return false;
             bool hasTag = !string.IsNullOrEmpty(tag);
             if (hasTag && payloadTag != tag) return false;
-            if (Gui.ActiveGUI.DragDropTarget())
+            if (Gui.ActiveGUI.DragDrop_Target())
             {
                 foreach (var obj in draggedObject)
                 {
@@ -61,12 +64,15 @@ namespace Prowl.Editor
 
         public static bool Drop(out object? payload, Type type, string tag = "")
         {
+            if(Gui.ActiveGUI.PreviousInteractable == null)
+                throw new System.Exception("No Previous Interactable");
+
             payload = default;
             if (draggedObject == null) return false;
             bool hasTag = !string.IsNullOrEmpty(tag);
             if (hasTag && payloadTag != tag) return false;
 
-            if (Gui.ActiveGUI.DragDropTarget())
+            if (Gui.ActiveGUI.DragDrop_Target())
             {
                 object? target = null;
                 foreach (var obj in draggedObject)
@@ -79,14 +85,14 @@ namespace Prowl.Editor
                     Gui.ActiveGUI.DrawList.PushClipRectFullScreen();
                     Gui.ActiveGUI.SetZIndex(11000);
 
-                    var rect = Gui.ActiveGUI.PreviousInteractableRect;
+                    var rect = Gui.ActiveGUI.PreviousInteractable!.Value.Rect;
                     rect.Expand(1);
                     Gui.ActiveGUI.DrawRect(rect, GuiStyle.Orange, 2, 8);
 
                     Gui.ActiveGUI.DrawList.PopClipRect();
                     Gui.ActiveGUI.SetZIndex(oldZ);
 
-                    if (Gui.ActiveGUI.AcceptDragDrop())
+                    if (Gui.ActiveGUI.DragDrop_Accept())
                     {
                         payload = target;
                         draggedObject = null;
@@ -102,6 +108,9 @@ namespace Prowl.Editor
 
         public static bool Drag(string tag = "", params object[] objs)
         {
+            if (Gui.ActiveGUI.PreviousInteractable == null)
+                throw new System.Exception("No Previous Interactable");
+
             if (OnBeginDrag(out var node))
             {
                 using (node.Enter())
@@ -120,7 +129,10 @@ namespace Prowl.Editor
 
         public static bool OnBeginDrag(out LayoutNode? node)
         {
-            if (Gui.ActiveGUI.DragDropSource(out node))
+            if (Gui.ActiveGUI.PreviousInteractable == null)
+                throw new System.Exception("No Previous Interactable");
+
+            if (Gui.ActiveGUI.DragDrop_Source(out node))
                 return true;
             return false;
         }

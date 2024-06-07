@@ -75,7 +75,7 @@ namespace Prowl.Editor
 
                 if (BackgroundFade)
                 {
-                    g.CreateBlocker(g.ScreenRect);
+                    g.BlockInteractables(g.ScreenRect);
                     g.DrawRectFilled(g.ScreenRect, new System.Numerics.Vector4(0, 0, 0, 0.5f));
                     // Ensure were at the start of the EditorWindows List
                     EditorGuiManager.FocusWindow(this);
@@ -104,7 +104,7 @@ namespace Prowl.Editor
 
                 using (g.Node("_" + Title, _id).Width(width).Height(height).Padding(Padding).Left(_x).Top(_y).Layout(LayoutType.Column).ScaleChildren().Enter())
                 {
-                    g.CreateBlocker(g.CurrentNode.LayoutData.InnerRect);
+                    g.BlockInteractables(g.CurrentNode.LayoutData.InnerRect);
                     g.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
 
                     Rect = g.CurrentNode.LayoutData.InnerRect;

@@ -49,7 +49,7 @@ namespace Prowl.Runtime.GUI
                         else if (interact.IsHovered()) DrawRectFilled(barRect, style.ScrollBarHoveredColor, (float)style.ScrollBarRoundness);
                         else DrawRectFilled(barRect, style.WidgetColor, style.ScrollBarRoundness);
 
-                        if (IsHovering(n.LayoutData.Rect) && PointerWheel != 0)
+                        if (IsPointerHovering(n.LayoutData.Rect) && PointerWheel != 0)
                         {
                             n.VScroll -= PointerWheel * 10;
                             layoutDirty = true;
@@ -100,37 +100,6 @@ namespace Prowl.Runtime.GUI
             }
         }
 
-        [Obsolete("Use ButtonNode instead")]
-        public bool Button(string ID, string? label, Offset x, Offset y, Size width, Size height, GuiStyle? style = null, bool invisible = false, bool repeat = false, int rounded_corners = 15) => Button(ID, label, x, y, width, height, out _, style, invisible, repeat, rounded_corners);
-        [Obsolete("Use ButtonNode instead")]
-        public bool Button(string ID, string? label, Offset x, Offset y, Size width, Size height, out LayoutNode node, GuiStyle? style = null, bool invisible = false, bool repeat = false, int rounded_corners = 15)
-        {
-            style ??= new();
-            var g = Gui.ActiveGUI;
-            using ((node = g.Node(ID)).Left(x).Top(y).Width(width).Height(height).Padding(2).Enter())
-            {
-                Interactable interact = g.GetInteractable();
-
-                if (!invisible)
-                {
-                    var col = g.ActiveID == interact.ID ? style.BtnActiveColor :
-                              g.HoveredID == interact.ID ? style.BtnHoveredColor : style.WidgetColor;
-
-                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, style.WidgetRoundness, rounded_corners);
-                    if (style.BorderThickness > 0)
-                        g.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness, rounded_corners);
-                }
-
-                if(label != null)
-                    g.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, label, style.FontSize, g.CurrentNode.LayoutData.InnerRect, interact.IsHovered() ? style.TextColor * 0.5f : style.TextColor);
-
-
-                if (repeat)
-                    return interact.IsActive();
-                return interact.TakeFocus();
-            }
-        }
-
         public bool Combo(string ID, string popupName, ref int ItemIndex, string[] Items, Offset x, Offset y, Size width, Size height, GuiStyle? style = null, string? label = null)
         {
             style ??= new();
@@ -169,27 +138,22 @@ namespace Prowl.Runtime.GUI
 
                     popupWidth = Math.Max(popupWidth, longestText + 20);
 
-                    using (node.Width(popupWidth).Height(Items.Length * GuiStyle.ItemHeight).Enter())
+                    using (node.Width(popupWidth).Height(Items.Length * GuiStyle.ItemHeight).Layout(LayoutType.Column).Enter())
                     {
                         for (var Index = 0; Index < Items.Length; ++Index)
                         {
-                            var rect = new Rect(node.LayoutData.Rect.x, node.LayoutData.Rect.y + Index * GuiStyle.ItemHeight, node.LayoutData.Rect.width, 25);
-                            var element = g.GetInteractable(rect);
-                            if (element.TakeFocus())
+                            using (g.Node(popupName + "_Item_" + Index).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
                             {
-                                NewIndex = Index;
-                                g.ClosePopup(popupName);
+                                if (g.IsNodePressed())
+                                {
+                                    NewIndex = Index;
+                                    g.ClosePopup(popupName);
+                                }
+                                else if (g.IsNodeHovered())
+                                    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.BtnHoveredColor, style.WidgetRoundness);
+
+                                g.DrawText(Items[Index], g.CurrentNode.LayoutData.Rect, style.TextColor);
                             }
-                            else if (element.IsHovered())
-                            {
-                                g.DrawRectFilled(rect, style.BtnHoveredColor, style.WidgetRoundness);
-                            }
-                            g.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, Items[Index], style.FontSize, rect, style.TextColor);
-                            //if (LGuiSelectable.OnProcess(Items[Index], ItemIndex == Index, 0, 20 * (Index + 5), width, 20))
-                            //{
-                            //    NewIndex = Index;
-                            //    g.ClosePopup(PopupID);
-                            //}
                         }
                     }
                 }
@@ -241,7 +205,7 @@ namespace Prowl.Runtime.GUI
         {
 
             style ??= new();
-            if (PreviousControlIsHovered())
+            if (PreviousInteractableIsHovered())
             {
                 var oldZ = Gui.ActiveGUI.CurrentZIndex;
                 Gui.ActiveGUI.DrawList.PushClipRectFullScreen();
@@ -260,24 +224,20 @@ namespace Prowl.Runtime.GUI
 
         }
 
-        public LayoutNode ToggleNode(string id, ref bool value)
-        {
-            using (Node(id).Enter())
-            {
-                Interactable interact = GetInteractable();
-                if (interact.TakeFocus())
-                    value = !value;
-
-                return CurrentNode;
-            }
-        }
-
         public LayoutNode OpenCloseNode(string id, out bool opened, bool openByDefault = true)
         {
             opened = GetStorage<bool>("H_" + id, openByDefault);
-            var result = ToggleNode(id, ref opened);
-            SetStorage("H_" + id, opened);
-            return result;
+
+            using (Node(id).Enter())
+            {
+                if (IsNodePressed())
+                {
+                    opened = !opened;
+                    SetStorage(CurrentNode.Parent, "H_" + id, opened);
+                }
+                
+                return CurrentNode;
+            }
         }
 
         public void OpenPopup(string id, Vector2? topleft = null)
@@ -300,7 +260,7 @@ namespace Prowl.Runtime.GUI
                 using ((node = rootNode.AppendNode("PU_" + id)).Left(pos.x).Top(pos.y).IgnoreLayout().Enter())
                 {
                     SetZIndex(50000 + nextPopupIndex, false);
-                    CreateBlocker(CurrentNode.LayoutData.Rect);
+                    BlockInteractables(CurrentNode.LayoutData.Rect);
 
                     // Clamp node position so that its always in screen bounds
                     var rect = CurrentNode.LayoutData.Rect;
@@ -320,7 +280,7 @@ namespace Prowl.Runtime.GUI
                     if (IsPointerDown(Silk.NET.Input.MouseButton.Left) && 
                         !node.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Popup
                         !parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
-                        !IsBlocked(PointerPos, 50000 + nextPopupIndex)) // Not blocked by any interactables above this popup
+                        !IsBlockedByInteractable(PointerPos, 50000 + nextPopupIndex)) // Not blocked by any interactables above this popup
                     {
                         ClosePopup(id);
                         return false;
@@ -357,7 +317,7 @@ namespace Prowl.Runtime.GUI
             style.WidgetRoundness = 8f;
             style.BorderThickness = 1f;
             var changed = InputField(ID, ref searchText, 32, InputFieldFlags.None, x, y, width, height, style);
-            if(string.IsNullOrWhiteSpace(searchText) && !g.PreviousControlIsFocus())
+            if(string.IsNullOrWhiteSpace(searchText) && !g.PreviousInteractableIsFocus())
             {
                 var pos = g.PreviousNode.LayoutData.InnerRect.Position + new Vector2(8, 3);
                 // Center text vertically

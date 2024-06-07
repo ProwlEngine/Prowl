@@ -97,9 +97,6 @@ namespace Prowl.Runtime.GUI.Layout
         internal ulong _nextAnimationFrame = 0;
         internal int _nextAnimation = 0;
 
-        internal ulong _nextInteractableFrame = 0;
-        internal int _nextInteractable = 0;
-
         internal int ZIndex = 0;
 
         internal List<LayoutNode> Children = new List<LayoutNode>();
@@ -124,17 +121,6 @@ namespace Prowl.Runtime.GUI.Layout
                 _nextAnimation = 0;
             }
             return _nextAnimation++;
-        }
-
-        public int GetNextInteractable()
-        {
-            if (_nextInteractableFrame != Gui.frameCount)
-            {
-                // New frame for this node, reset interactable index
-                _nextInteractableFrame = Gui.frameCount;
-                _nextInteractable = 0;
-            }
-            return _nextInteractable++;
         }
 
         public void UpdateCache()
@@ -391,7 +377,6 @@ namespace Prowl.Runtime.GUI.Layout
             hash = hash * 23 + (ulong)VScroll.GetHashCode();
             hash = hash * 23 + (ulong)HScroll.GetHashCode();
             hash = hash * 23 + (ulong)_nextAnimation.GetHashCode();
-            hash = hash * 23 + (ulong)_nextInteractable.GetHashCode();
             return hash;
         }
     }

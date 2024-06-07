@@ -131,7 +131,7 @@ public class SceneViewWindow : EditorWindow
 
         Ray mouseRay = Cam.ScreenPointToRay(g.PointerPos - imagePos);
 
-        bool blockPicking = g.IsBlocked(g.PointerPos);
+        bool blockPicking = g.IsBlockedByInteractable(g.PointerPos);
         HandleGizmos(selectedGOs, mouseRay, view, projection, blockPicking);
 
         Camera.Current = null;
