@@ -12,6 +12,7 @@ namespace Prowl.Editor;
 public class SceneViewWindow : EditorWindow
 {
     public static Camera LastFocusedCamera;
+    private static bool LastFocusedCameraChanged;
 
     //public static ImGuizmoOperation GizmosOperation = ImGuizmoOperation.Translate;
     //public static ImGuizmoMode GizmosSpace = ImGuizmoMode.Local;
@@ -241,6 +242,13 @@ public class SceneViewWindow : EditorWindow
 
                 if (g.IsPointerMoving)
                 {
+                    if (LastFocusedCameraChanged)
+                    {
+                        camX = Cam.GameObject.Transform.eulerAngles.x;
+                        camY = Cam.GameObject.Transform.eulerAngles.y;
+                        LastFocusedCameraChanged = false;
+                    }
+
                     var mouseDelta = g.PointerDelta;
                     if (SceneViewPreferences.Instance.InvertLook)
                         mouseDelta.y = -mouseDelta.y;
@@ -509,5 +517,12 @@ public class SceneViewWindow : EditorWindow
             }
             g.SimpleTooltip("Open SceneView Preferences");
         }
+    }
+
+    internal static void SetCamera(Vector3 position, Quaternion rotation)
+    {
+        LastFocusedCamera.GameObject.Transform.position = position;
+        LastFocusedCamera.GameObject.Transform.rotation = rotation;
+        LastFocusedCameraChanged = true;
     }
 }

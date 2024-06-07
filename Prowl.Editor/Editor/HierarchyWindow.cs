@@ -6,6 +6,8 @@ using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
+using Hexa.NET.ImGui;
+using Prowl.Editor.EditorWindows;
 
 namespace Prowl.Editor
 {
@@ -96,12 +98,23 @@ namespace Prowl.Editor
                     height += entryHeight;
                 }
 
+                if (g.BeginPopup("RightClickGameObject", out var node))
+                {
+                    using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
+                    {
+                        var instanceID = g.GetGlobalStorage<int>("RightClickGameObject");
+                        var go = EngineObject.FindObjectByID<GameObject>(instanceID);
+                        DrawContextMenu(go);
+                    }
+                }
+
                 g.ScrollV();
             }
         }
 
         private void DrawContextMenu(GameObject? parent)
         {
+            bool closePopup = false;
             if (EditorGUI.QuickButton("New GameObject"))
             {
                 var go = new GameObject("New GameObject");
@@ -109,9 +122,56 @@ namespace Prowl.Editor
                     go.SetParent(parent);
                 go.Transform.localPosition = Vector3.zero;
                 SelectHandler.SetSelection(new WeakReference(go));
+
+                closePopup = true;
+            }
+
+            if(parent != null)
+            {
+                SelectHandler.SelectIfNot(new WeakReference(parent));
+                if (EditorGUI.QuickButton("Rename"))
+                    m_RenamingGO = parent;
+                if (EditorGUI.QuickButton("Duplicate"))
+                    DuplicateSelected();
+                if (EditorGUI.QuickButton("Delete"))
+                    parent.Destroy();
+
+                if (SelectHandler.Count > 1 && EditorGUI.QuickButton("Delete All"))
+                {
+                    SelectHandler.Foreach((go) => {
+                        (go.Target as GameObject).Destroy();
+                    });
+                    SelectHandler.Clear();
+                }
+
+                if (SelectHandler.Count > 0 && EditorGUI.QuickButton("Align With View"))
+                {
+                    SelectHandler.Foreach((go) => {
+                        Camera cam = SceneViewWindow.LastFocusedCamera;
+                        (go.Target as GameObject).Transform.position = cam.GameObject.Transform.position;
+                        (go.Target as GameObject).Transform.rotation = cam.GameObject.Transform.rotation;
+                    });
+                }
+
+                if (SelectHandler.Count == 1 && EditorGUI.QuickButton("Align View With"))
+                {
+                    Camera cam = SceneViewWindow.LastFocusedCamera;
+                    cam.GameObject.Transform.position = parent.Transform.position;
+                    cam.GameObject.Transform.rotation = parent.Transform.rotation;
+                    SceneViewWindow.SetCamera(parent.Transform.position, parent.Transform.rotation);
+                }
             }
 
             MenuItem.DrawMenuRoot("Template");
+
+            if (closePopup)
+            {
+                // Close the popup
+                if (parent == null)
+                    g.ClosePopup("CreateGameObject");
+                else
+                    g.ClosePopup("RightClickGameObject");
+            }
         }
 
         public void DrawGameObject(ref int index, GameObject entity, uint depth, bool isPartOfPrefab)
@@ -151,6 +211,11 @@ namespace Prowl.Editor
                 {
                     justStartedRename = true;
                     m_RenamingGO = entity;
+                }
+                else if (g.IsPointerClick(Silk.NET.Input.MouseButton.Right) && interact.IsHovered())
+                {
+                    g.OpenPopup("RightClickGameObject");
+                    g.SetGlobalStorage("RightClickGameObject", entity.InstanceID);
                 }
 
                 if (IsFocused)
