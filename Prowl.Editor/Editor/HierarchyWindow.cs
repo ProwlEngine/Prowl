@@ -120,6 +120,8 @@ namespace Prowl.Editor
 
         private void DrawContextMenu(GameObject? parent, LayoutNode popupHolder)
         {
+            EditorGUI.Text("Create");
+
             bool closePopup = false;
             if (closePopup |= EditorGUI.QuickButton("New GameObject"))
             {
@@ -130,8 +132,13 @@ namespace Prowl.Editor
                 SelectHandler.SetSelection(new WeakReference(go));
             }
 
-            if(parent != null)
+            MenuItem.DrawMenuRoot("Template");
+
+            if (parent != null)
             {
+                EditorGUI.Separator();
+                EditorGUI.Text("GameObject");
+
                 SelectHandler.SelectIfNot(new WeakReference(parent));
                 if (closePopup |= EditorGUI.QuickButton("Rename"))
                     m_RenamingGO = parent;
@@ -165,8 +172,6 @@ namespace Prowl.Editor
                     SceneViewWindow.SetCamera(parent.Transform.position, parent.Transform.rotation);
                 }
             }
-
-            MenuItem.DrawMenuRoot("Template");
 
             if (closePopup)
                 g.ClosePopup(popupHolder);
