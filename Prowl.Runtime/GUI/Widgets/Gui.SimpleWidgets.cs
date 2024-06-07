@@ -240,11 +240,11 @@ namespace Prowl.Runtime.GUI
             }
         }
 
-        public void OpenPopup(string id, Vector2? topleft = null)
+        public void OpenPopup(string id, Vector2? topleft = null, LayoutNode? popupHolder = null)
         {
-            SetStorage("Popup", true);
-            SetStorage("Popup_ID", id.GetHashCode());
-            SetStorage("PU_POS_" + id, topleft ?? PointerPos);
+            SetStorage(popupHolder ?? CurrentNode, "Popup", true);
+            SetStorage(popupHolder ?? CurrentNode, "Popup_ID", id.GetHashCode());
+            SetStorage(popupHolder ?? CurrentNode, "PU_POS_" + id, topleft ?? PointerPos);
         }
 
 

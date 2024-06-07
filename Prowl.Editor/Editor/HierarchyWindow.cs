@@ -103,13 +103,14 @@ namespace Prowl.Editor
                     height += entryHeight;
                 }
 
+                var popupHolder = g.CurrentNode;
                 if (g.BeginPopup("RightClickGameObject", out var node))
                 {
                     using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
                     {
                         var instanceID = g.GetGlobalStorage<int>("RightClickGameObject");
                         var go = EngineObject.FindObjectByID<GameObject>(instanceID);
-                        DrawContextMenu(go, node.Parent);
+                        DrawContextMenu(go, popupHolder);
                     }
                 }
 
@@ -120,28 +121,26 @@ namespace Prowl.Editor
         private void DrawContextMenu(GameObject? parent, LayoutNode popupHolder)
         {
             bool closePopup = false;
-            if (EditorGUI.QuickButton("New GameObject"))
+            if (closePopup |= EditorGUI.QuickButton("New GameObject"))
             {
                 var go = new GameObject("New GameObject");
                 if(parent != null)
                     go.SetParent(parent);
                 go.Transform.localPosition = Vector3.zero;
                 SelectHandler.SetSelection(new WeakReference(go));
-
-                closePopup = true;
             }
 
             if(parent != null)
             {
                 SelectHandler.SelectIfNot(new WeakReference(parent));
-                if (EditorGUI.QuickButton("Rename"))
+                if (closePopup |= EditorGUI.QuickButton("Rename"))
                     m_RenamingGO = parent;
-                if (EditorGUI.QuickButton("Duplicate"))
+                if (closePopup |= EditorGUI.QuickButton("Duplicate"))
                     DuplicateSelected();
-                if (EditorGUI.QuickButton("Delete"))
+                if (closePopup |= EditorGUI.QuickButton("Delete"))
                     parent.Destroy();
 
-                if (SelectHandler.Count > 1 && EditorGUI.QuickButton("Delete All"))
+                if (SelectHandler.Count > 1 && (closePopup |= EditorGUI.QuickButton("Delete All")))
                 {
                     SelectHandler.Foreach((go) => {
                         (go.Target as GameObject).Destroy();
@@ -149,7 +148,7 @@ namespace Prowl.Editor
                     SelectHandler.Clear();
                 }
 
-                if (SelectHandler.Count > 0 && EditorGUI.QuickButton("Align With View"))
+                if (SelectHandler.Count > 0 && (closePopup |= EditorGUI.QuickButton("Align With View")))
                 {
                     SelectHandler.Foreach((go) => {
                         Camera cam = SceneViewWindow.LastFocusedCamera;
@@ -158,7 +157,7 @@ namespace Prowl.Editor
                     });
                 }
 
-                if (SelectHandler.Count == 1 && EditorGUI.QuickButton("Align View With"))
+                if (SelectHandler.Count == 1 && (closePopup |= EditorGUI.QuickButton("Align View With")))
                 {
                     Camera cam = SceneViewWindow.LastFocusedCamera;
                     cam.GameObject.Transform.position = parent.Transform.position;
@@ -213,7 +212,8 @@ namespace Prowl.Editor
                 }
                 else if (g.IsPointerClick(Silk.NET.Input.MouseButton.Right) && interact.IsHovered())
                 {
-                    g.OpenPopup("RightClickGameObject");
+                    // POpup holder is our parent, since thats the Tree node
+                    g.OpenPopup("RightClickGameObject", null, g.CurrentNode.Parent);
                     g.SetGlobalStorage("RightClickGameObject", entity.InstanceID);
                 }
 
