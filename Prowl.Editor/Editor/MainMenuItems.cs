@@ -12,12 +12,12 @@ namespace Prowl.Editor
         public static DirectoryInfo? Directory { get; set; }
         public static bool fromAssetBrowser = false;
 
-        [MenuItem("Create/Fer")]
-        public static void CreateFer()
+        [MenuItem("Create/Folder")]
+        public static void CreateDir()
         {
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
 
-            DirectoryInfo dir = new(Path.Combine(Directory.FullName, "New Fer"));
+            DirectoryInfo dir = new(Path.Combine(Directory.FullName, "New Folder"));
             AssetDatabase.GenerateUniqueAssetPath(ref dir);
             dir.Create();
             if (fromAssetBrowser)
