@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace Prowl.Runtime.GUI
 {
@@ -76,7 +75,7 @@ namespace Prowl.Runtime.GUI
             return animId * 23 + CurrentNode.ID;
         }
 
-        public void UpdateAnimations(double dt)
+        private void UpdateAnimations(double dt)
         {
             foreach (var storageID in _boolAnimations.Keys)
             {
