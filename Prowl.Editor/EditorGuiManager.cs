@@ -141,32 +141,15 @@ public static class EditorGuiManager
                 var window = Windows[i];
                 if (!window.IsDocked || window.Leaf.LeafWindows[window.Leaf.WindowNum] == window)
                 {
-                    g.SetZIndex(i);
+                    g.SetZIndex(i * 100);
                     g.PushID((ulong)window._id);
                     window.ProcessFrame();
                     g.PopID();
 
                     // Focus Window
-                    // If your pointer is over the window and left/right click is down, and no window's rect is above this window's rect
-                    // Focus it
                     if (g.IsHovering(window.Rect) && (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) || g.IsPointerClick(Silk.NET.Input.MouseButton.Right)))
-                    {
-                        bool focus = true;
-                        for (int j = i + 1; j < Windows.Count; j++)
-                        {
-                            var nextWindow = Windows[j];
-                            if (!nextWindow.IsDocked || nextWindow.Leaf.LeafWindows[nextWindow.Leaf.WindowNum] == nextWindow)
-                                if (g.IsHovering(Windows[j].Rect))
-                                {
-                                    focus = false;
-                                    break;
-                                }
-                        }
-                        if (focus)
-                        {
+                        if (!g.IsBlocked(g.PointerPos))
                             FocusWindow(window);
-                        }
-                    }
 
                 }
 
