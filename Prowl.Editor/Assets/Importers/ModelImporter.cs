@@ -1,6 +1,4 @@
 ﻿using Assimp;
-using Hexa.NET.ImGui;
-using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Utils;

@@ -1,4 +1,5 @@
-using Prowl.Runtime;
+
+/*using Prowl.Runtime;
 using Hexa.NET.ImGui;
 using Prowl.Icons;
 using Prowl.Editor.Preferences;
@@ -123,3 +124,4 @@ public class OldConsoleWindow : OldEditorWindow {
     }
 
 }
+*/

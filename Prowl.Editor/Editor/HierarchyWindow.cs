@@ -1,14 +1,11 @@
 ﻿using Prowl.Editor.Preferences;
-using Prowl.Editor;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
+using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
-using Hexa.NET.ImGui;
-using Prowl.Editor.EditorWindows;
-using Prowl.Runtime.GUI.Layout;
 
 namespace Prowl.Editor
 {
@@ -258,8 +255,6 @@ namespace Prowl.Editor
                     {
                         // Draw a ping effect
                         // TODO: Scroll to Rect
-                        //if (pingTimer > PingDuration - 1f)
-                        //    ImGui.ScrollToItem(ImGuiScrollFlags.None);
                         var pingRect = rect;
                         pingRect.Expand(MathF.Sin(pingTimer) * 6f);
                         g.Draw2D.DrawRect(pingRect, GuiStyle.Yellow, 2f, 4f);

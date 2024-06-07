@@ -1,17 +1,4 @@
-﻿using Hexa.NET.ImGuizmo;
-using ImageMagick;
-using Prowl.Icons;
-using Prowl.Runtime;
-using Prowl.Runtime.GUI;
-using Prowl.Runtime.GUI.Graphics;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection.Emit;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Prowl.Editor
+﻿namespace Prowl.Editor
 {
 
     // 1. rename the configs to be easier to understand

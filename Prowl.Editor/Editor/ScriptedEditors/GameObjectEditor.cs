@@ -1,13 +1,8 @@
-﻿using ImageMagick;
-using Prowl.Editor.Assets;
-using Prowl.Editor.Utilities;
+﻿using Prowl.Editor.Assets;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.Utils;
-using System;
-using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using static Prowl.Editor.EditorGUI;
 using static Prowl.Runtime.GUI.Gui;

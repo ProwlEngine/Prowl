@@ -92,11 +92,11 @@ namespace Prowl.Editor.Assets
 #warning TODO: Handle Dependencies
             if (includeDependencies) throw new NotImplementedException("Dependency tracking is not implemented yet.");
 
-            ImOldFileDialogInfo imFileDialogInfo = new() {
+            FileDialogContext imFileDialogInfo = new() {
                 title = "Export Package",
                 directoryPath = new DirectoryInfo(Project.ProjectDirectory),
                 fileName = "New Package.prowlpackage",
-                type = ImGuiFileDialogType.SaveFile,
+                type = FileDialogType.SaveFile,
                 OnComplete = (path) => {
                     var file = new FileInfo(path);
                     if (File.Exists(file.FullName))

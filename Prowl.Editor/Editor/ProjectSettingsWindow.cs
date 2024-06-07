@@ -1,4 +1,3 @@
-using Prowl.Editor.Drawers;
 using Prowl.Editor.Preferences;
 using Prowl.Editor.ProjectSettings;
 using Prowl.Icons;
@@ -6,7 +5,6 @@ using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using System.Reflection;
 using static Prowl.Editor.EditorGUI;
-using System.Threading.Channels;
 
 namespace Prowl.Editor;
 

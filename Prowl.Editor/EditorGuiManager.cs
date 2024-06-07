@@ -1,10 +1,6 @@
-using Hexa.NET.ImGui;
 using Prowl.Editor.Docking;
-using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Silk.NET.Core;
-using System.Reflection;
 
 namespace Prowl.Editor;
 
@@ -166,28 +162,25 @@ public static class EditorGuiManager
         WindowsToRemove.Clear();
     }
 
-    #region ImGUI attributes
+    #region GUI attributes
 
-    public static bool HandleBeginImGUIAttributes(object target, IEnumerable<IImGUIAttri> attribs)
+    public static bool HandleBeginGUIAttributes(object target, IEnumerable<InspectorUIAttribute> attribs)
     {
-        foreach (IImGUIAttri imGuiAttribute in attribs)
-            switch (imGuiAttribute.AttribType())
+        foreach (InspectorUIAttribute guiAttribute in attribs)
+            switch (guiAttribute.AttribType())
             {
 
                 case GuiAttribType.Space:
-                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
                     break;
 
                 case GuiAttribType.Text:
-                    ImGui.TextWrapped((imGuiAttribute as TextAttribute).text);
                     break;
 
                 case GuiAttribType.Indent:
-                    ImGui.Indent((imGuiAttribute as IndentAttribute).indent);
                     break;
 
                 case GuiAttribType.ShowIf:
-                    var showIf = imGuiAttribute as ShowIfAttribute;
+                    var showIf = guiAttribute as ShowIfAttribute;
                     var field = target.GetType().GetField(showIf.propertyName);
                     if (field != null && field.FieldType == typeof(bool))
                     {
@@ -206,68 +199,40 @@ public static class EditorGuiManager
                     break;
 
                 case GuiAttribType.Separator:
-                    ImGui.Separator();
                     break;
 
                 case GuiAttribType.Sameline:
-                    ImGui.SameLine();
                     break;
 
                 case GuiAttribType.Disabled:
-                    ImGui.BeginDisabled();
                     break;
 
                 case GuiAttribType.Header:
-                    ImGui.Text((imGuiAttribute as HeaderAttribute).name);
-                    ImGui.Separator();
-                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 8);
                     break;
 
                 case GuiAttribType.StartGroup:
-                    var group = (imGuiAttribute as StartGroupAttribute);
-                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 10);
-                    GUIHelper.TextCenter(group.name, 1f, false);
-                    curGroupHeight = ImGui.GetCursorPosY();
-                    ImGui.Separator();
-                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 3);
-                    ImGui.BeginChild(group.name, new System.Numerics.Vector2(-1, group.height), ImGuiChildFlags.Border);
-                    ImGui.Indent();
                     break;
 
             }
         return true;
     }
 
-    static float curGroupHeight = 0;
-
-    public static void HandleEndImGUIAttributes(IEnumerable<IImGUIAttri> attribs)
+    public static void HandleEndAttributes(IEnumerable<InspectorUIAttribute> attribs)
     {
-        foreach (IImGUIAttri imGuiAttribute in attribs)
-            switch (imGuiAttribute.AttribType())
+        foreach (InspectorUIAttribute guiAttribute in attribs)
+            switch (guiAttribute.AttribType())
             {
 
                 case GuiAttribType.Disabled:
-                    ImGui.EndDisabled();
                     break;
 
                 case GuiAttribType.Unindent:
-                    ImGui.Unindent((imGuiAttribute as UnindentAttribute).unindent);
                     break;
 
                 case GuiAttribType.EndGroup:
-                    ImGui.Unindent();
-                    ImGui.EndChild();
-
-                    // Draw a background with the color of Seperators
-                    float curHeight = ImGui.GetCursorPosY();
-                    uint col = ImGui.GetColorU32(ImGuiCol.Separator);
-                    ImGui.GetWindowDrawList().AddRect(new System.Numerics.Vector2(ImGui.GetWindowPos().X + 18, curGroupHeight), new System.Numerics.Vector2(ImGui.GetWindowPos().X + ImGui.GetWindowWidth() - 3, ImGui.GetWindowPos().Y + curHeight), col, 0f, 2);
-
-                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
                     break;
 
                 case GuiAttribType.Tooltip:
-                    GUIHelper.Tooltip((imGuiAttribute as TooltipAttribute).tooltip);
                     break;
 
             }
@@ -275,23 +240,23 @@ public static class EditorGuiManager
 
     public static bool HandleAttributeButtons(object target)
     {
-        foreach (MethodInfo method in target.GetType().GetMethods())
-        {
-            var attribute = method.GetCustomAttribute<ImGUIButtonAttribute>();
-            if (attribute != null)
-                if (ImGui.Button(attribute.buttonText))
-                {
-                    try
-                    {
-                        method.Invoke(target, null);
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogError("Error During ImGui Button Execution: " + e.Message + "\n" + e.StackTrace);
-                    }
-                    return true;
-                }
-        }
+        //foreach (MethodInfo method in target.GetType().GetMethods())
+        //{
+        //    var attribute = method.GetCustomAttribute<GUIButtonAttribute>();
+        //    if (attribute != null)
+        //        if (ImGui.Button(attribute.buttonText))
+        //        {
+        //            try
+        //            {
+        //                method.Invoke(target, null);
+        //            }
+        //            catch (Exception e)
+        //            {
+        //                Debug.LogError("Error During ImGui Button Execution: " + e.Message + "\n" + e.StackTrace);
+        //            }
+        //            return true;
+        //        }
+        //}
         return false;
     }
 

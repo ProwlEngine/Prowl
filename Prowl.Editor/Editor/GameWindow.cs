@@ -3,7 +3,6 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
-using System.Reflection;
 using static Prowl.Editor.EditorGUI;
 
 namespace Prowl.Editor;
@@ -33,7 +32,7 @@ public class GameWindow : EditorWindow
     RenderTexture RenderTarget;
     bool previouslyPlaying = false;
 
-    public static bool IsFocused;
+    public static bool IsGameWindowFocused;
 
     public GameWindow() : base()
     {
@@ -66,6 +65,8 @@ public class GameWindow : EditorWindow
         // }
 
         // IsFocused |= ImGg.IsWindowFocused();
+
+        IsGameWindowFocused = IsFocused;
 
         g.CurrentNode.Layout(Runtime.GUI.LayoutType.Column).ScaleChildren();
 

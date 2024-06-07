@@ -1,3 +1,4 @@
+/*
 using Hexa.NET.ImGui;
 using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
@@ -519,3 +520,4 @@ public class OldAssetsWindow : OldEditorWindow
         return FontAwesome6.File;
     }
 }
+*/

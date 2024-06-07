@@ -12,7 +12,7 @@ namespace Prowl.Runtime.Components.Testings
 
         private Mesh mesh;
 
-        [ImGUIButton("Mesh")]
+        [GUIButton("Mesh")]
         public override void Awake()
         {
             // native arrays (Unity will auto dispose NativeArrays that are allocated in a job)
@@ -105,7 +105,7 @@ namespace Prowl.Runtime.Components.Testings
 
         }
 
-        [ImGUIButton("Assign Mesh")]
+        [GUIButton("Assign Mesh")]
         public void AssignMesh()
         {
             if (mesh == null)

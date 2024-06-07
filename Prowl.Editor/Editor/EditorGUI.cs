@@ -4,8 +4,10 @@ using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
+using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Xml.Linq;
 using static Prowl.Runtime.GUI.Gui;
 
 namespace Prowl.Editor
@@ -293,6 +295,93 @@ namespace Prowl.Editor
 
         #endregion
 
+
+        public static bool Property_EngineObject(string ID, ref EngineObject value)
+        {
+            using (Property(ID).Enter())
+            {
+                bool changed = false;
+
+                ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 2);
+
+                var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
+                pos += new Vector2(0, 8);
+                if (value == null)
+                {
+                    string text = "(Null)";
+                    var col = GuiStyle.Red * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f);
+                    ActiveGUI.Draw2D.DrawText(text, pos, col);
+                }
+                else
+                {
+                    ActiveGUI.Draw2D.DrawText(value.Name, pos, GuiStyle.Base11 * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f));
+                    if (ActiveGUI.IsNodeHovered() && ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                        GlobalSelectHandler.Select(value);
+                }
+
+                // Drag and drop support
+                if (DragnDrop.Drop(out var instance, value.GetType()))
+                {
+                    value = instance as EngineObject;
+                    changed = true;
+                }
+
+                // support looking for components on dropped GameObjects
+                if (value.GetType() == typeof(MonoBehaviour) && DragnDrop.Drop(out GameObject go))
+                {
+                    var component = go.GetComponent(value.GetType());
+                    if (component != null)
+                    {
+                        value = component;
+                        changed = true;
+                    }
+                }
+
+                return changed;
+            }
+        }
+
+        public static bool Property_Transform(string ID, ref Transform value)
+        {
+            using (Property(ID).Enter())
+            {
+                bool changed = false;
+
+                ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 2);
+
+                var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
+                pos += new Vector2(0, 8);
+                if (value == null)
+                {
+                    string text = "(Null)";
+                    var col = GuiStyle.Red * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f);
+                    ActiveGUI.Draw2D.DrawText(text, pos, col);
+                }
+                else
+                {
+                    ActiveGUI.Draw2D.DrawText(value.gameObject.Name + "(Transform)", pos, GuiStyle.Base11 * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f));
+                    if (ActiveGUI.IsNodeHovered() && ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                        GlobalSelectHandler.Select(value);
+                }
+
+                // Drag and drop support
+                if (DragnDrop.Drop(out Transform instance))
+                {
+                    value = instance;
+                    changed = true;
+                }
+
+                // support looking for components on dropped GameObjects
+                if (DragnDrop.Drop(out GameObject go))
+                {
+                    value =  go.Transform;
+                    changed = true;
+                }
+
+                return changed;
+            }
+        }
+
         // TODO, Widgets for:
         // Lists/Arrays
         // LayerMask
@@ -498,6 +587,16 @@ namespace Prowl.Editor
                             {
                                 fieldValue = values.GetValue(selectedIndex);
                             }
+                        }
+                        else if (fieldValue is EngineObject engineObj)
+                        {
+                            changed |= Property_EngineObject("Prop" + index, ref engineObj);
+                            fieldValue = engineObj;
+                        }
+                        else if (fieldValue is Transform trans)
+                        {
+                            changed |= Property_Transform("Prop" + index, ref trans);
+                            fieldValue = trans;
                         }
                         else
                         {

@@ -1,3 +1,4 @@
+/*
 using Hexa.NET.ImGui;
 using Prowl.Icons;
 using Prowl.Runtime;
@@ -360,3 +361,4 @@ public class OldHierarchyWindow : OldEditorWindow
         SelectHandler.SetSelection(newGO.ToArray());
     }
 }
+*/

@@ -92,7 +92,7 @@ public static class Program
                 try
                 {
                     // Only handle input if the game window is focused
-                    Input.Enabled = OldGameWindow.IsFocused;
+                    Input.Enabled = GameWindow.IsGameWindowFocused;
                     SceneManager.Update();
                     Input.Enabled = true;
                 }
@@ -102,7 +102,7 @@ public static class Program
                 }
             }
 
-            OldGameWindow.IsFocused = false;
+            GameWindow.IsGameWindowFocused = false;
         };
 
         Application.Render += (delta) =>

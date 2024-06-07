@@ -1,3 +1,4 @@
+/*
 using Hexa.NET.ImGui;
 using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
@@ -509,3 +510,4 @@ public class OldAssetBrowserWindow : OldEditorWindow
         return _cachedThumbnails[fileName].Res;
     }
 }
+*/

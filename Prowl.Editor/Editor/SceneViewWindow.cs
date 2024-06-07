@@ -1,5 +1,4 @@
-﻿using Hexa.NET.ImGuizmo;
-using Prowl.Editor.Preferences;
+﻿using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
@@ -13,10 +12,6 @@ public class SceneViewWindow : EditorWindow
 {
     public static Camera LastFocusedCamera;
     private static bool LastFocusedCameraChanged;
-
-    //public static ImGuizmoOperation GizmosOperation = ImGuizmoOperation.Translate;
-    //public static ImGuizmoMode GizmosSpace = ImGuizmoMode.Local;
-
 
     Camera Cam;
     Material gridMat;

@@ -1,16 +1,10 @@
 ﻿using Prowl.Editor.Assets;
-using Prowl.Editor;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
-using Prowl.Runtime.SceneManagement;
-using Hexa.NET.ImGui;
-using System.IO;
-using Prowl.Editor.EditorWindows;
-using System.Reflection;
 using Prowl.Runtime.GUI.Layout;
-using Prowl.Editor.Preferences;
+using Prowl.Runtime.SceneManagement;
 
 namespace Prowl.Editor
 {
@@ -218,6 +212,8 @@ namespace Prowl.Editor
                 EditorGUI.Text("Project");
                 if (closePopup |= EditorGUI.QuickButton("Open Project Settings"))
                     new ProjectSettingsWindow();
+                if (closePopup |= EditorGUI.QuickButton("Recompile Project"))
+                    Program.RegisterReloadOfExternalAssemblies();
                 if (closePopup |= EditorGUI.QuickButton("Build Project"))
                     Project.BuildProject();
             }
@@ -225,8 +221,8 @@ namespace Prowl.Editor
             {
                 if (EditorGUI.QuickButton("Rename"))
                     if (fromAssetBrowser)
-                    {
-                        OldAssetBrowserWindow.StartRename(file.FullName);
+                    { 
+                        AssetsBrowserWindow.StartRename(file.FullName);
                     }
                     else
                     {
@@ -252,6 +248,8 @@ namespace Prowl.Editor
                 EditorGUI.Text("Project");
                 if (closePopup |= EditorGUI.QuickButton("Open Project Settings"))
                     new ProjectSettingsWindow();
+                if (closePopup |= EditorGUI.QuickButton("Recompile Project"))
+                    Program.RegisterReloadOfExternalAssemblies();
                 if (closePopup |= EditorGUI.QuickButton("Build Project"))
                     Project.BuildProject();
             }
@@ -260,7 +258,7 @@ namespace Prowl.Editor
                 if (EditorGUI.QuickButton("Rename"))
                     if (fromAssetBrowser)
                     {
-                        OldAssetBrowserWindow.StartRename(dir.FullName);
+                        AssetsBrowserWindow.StartRename(dir.FullName);
                     }
                     else
                     {
@@ -286,6 +284,8 @@ namespace Prowl.Editor
                 EditorGUI.Text("Project");
                 if (closePopup |= EditorGUI.QuickButton("Open Project Settings"))
                     new ProjectSettingsWindow();
+                if (closePopup |= EditorGUI.QuickButton("Recompile Project"))
+                    Program.RegisterReloadOfExternalAssemblies();
                 if (closePopup |= EditorGUI.QuickButton("Build Project"))
                     Project.BuildProject();
             }
