@@ -4,14 +4,36 @@ using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
-using System.ComponentModel;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using static Prowl.Runtime.GUI.Gui;
 
 namespace Prowl.Editor
 {
     public static class EditorGUI
     {
+        public static void Separator(float thickness = 1f, [CallerLineNumber] int line = 0)
+        {
+            var g = ActiveGUI;
+            using (g.Node("Seperator", line).ExpandWidth().Height(GuiStyle.ItemHeight / 2).Enter())
+            {
+                // Draw Line in middle of rect
+                var start = g.CurrentNode.LayoutData.GlobalContentPosition;
+                start.y += g.CurrentNode.LayoutData.Rect.height / 2;
+                var end = start + new Vector2(g.CurrentNode.LayoutData.Rect.width, 0);
+                g.DrawLine(start, end, GuiStyle.Borders, thickness);
+            }
+        }
+
+        public static void Text(string text, [CallerLineNumber] int line = 0)
+        {
+            var g = ActiveGUI;
+            using (g.Node(text, line).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+            {
+                g.DrawText(text, g.CurrentNode.LayoutData.Rect, GuiStyle.Base11);
+            }
+        }
+
         public static bool QuickButton(string label)
         {
             var g = ActiveGUI;
@@ -20,15 +42,14 @@ namespace Prowl.Editor
                 g.DrawRect(g.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 10);
 
                 g.DrawText(label, g.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
-
-                var interact = g.GetInteractable();
-                if (interact.TakeFocus())
+                
+                if (p)
                 {
                     g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
                     return true;
                 }
 
-                if (interact.IsHovered())
+                if (h)
                     g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5 * 0.5f, 10);
 
 
