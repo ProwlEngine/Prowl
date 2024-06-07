@@ -109,7 +109,6 @@ namespace Prowl.Editor
 
                     Rect = g.CurrentNode.LayoutData.InnerRect;
 
-                    // TODO: Resize
                     if (!LockSize && !IsDocked)
                         HandleResize();
 
@@ -121,25 +120,48 @@ namespace Prowl.Editor
 
                             if (IsDocked && Leaf.LeafWindows.Count > 0)
                             {
-                                // Draw Tabs
-                                var tabWidth = (g.CurrentNode.LayoutData.InnerRect.width - 35) / Leaf.LeafWindows.Count;
-                                tabWidth = Math.Min(tabWidth, 115);
+                                double[] tabWidths = new double[Leaf.LeafWindows.Count];
+                                double total = 0;
+                                for (int i = 0; i < Leaf.LeafWindows.Count; i++)
+                                {
+                                    var window = Leaf.LeafWindows[i];
+                                    var textSize = UIDrawList.DefaultFont.CalcTextSize(window.Title, 0);
+                                    tabWidths[i] = textSize.x + 20;
+                                    total += tabWidths[i];
+                                }
+                                
+                                double updatedTotal = 0;
+                                if (total > g.CurrentNode.LayoutData.InnerRect.width - 35)
+                                {
+                                    for (int i = 0; i < tabWidths.Length; i++)
+                                    {
+                                        tabWidths[i] = (tabWidths[i] / total) * (g.CurrentNode.LayoutData.InnerRect.width - 35);
+                                        updatedTotal += tabWidths[i];
+                                    }
+                                }
+                                else
+                                {
+                                    updatedTotal = total;
+                                }
 
                                 // background rect for all tabs
                                 if (Leaf.LeafWindows.Count > 1)
                                 {
                                     var tabsRect = g.CurrentNode.LayoutData.InnerRect;
                                     tabsRect.x += 2;
-                                    tabsRect.width = (tabWidth * Leaf.LeafWindows.Count) + 1;
+                                    tabsRect.width = updatedTotal;
                                     tabsRect.Expand(6);
                                     g.Draw2D.DrawRectFilled(tabsRect, GuiStyle.WindowBackground * 0.8f, 10);
                                 }
 
+                                double left = 0;
                                 for (int i = 0; i < Leaf.LeafWindows.Count; i++)
                                 {
                                     var window = Leaf.LeafWindows[i];
-                                    using (g.Node("Tab _" + window.Title, window._id).Width(tabWidth).Height(20).Left(i * (tabWidth + 5)).Enter())
+                                    var tabWidth = tabWidths[i];
+                                    using (g.Node("Tab _" + window.Title, window._id).Width(tabWidth).Height(20).Left(left).Enter())
                                     {
+                                        left += tabWidth + 5;
                                         var tabRect = g.CurrentNode.LayoutData.Rect;
                                         tabRect.Expand(0, 2);
 
