@@ -110,6 +110,8 @@ namespace Prowl.Editor
                     Rect = g.CurrentNode.LayoutData.InnerRect;
 
                     // TODO: Resize
+                    if (!LockSize && !IsDocked)
+                        HandleResize();
 
                     if (TitleBar)
                     {
@@ -215,6 +217,38 @@ namespace Prowl.Editor
                 if (interact.IsHovered())
                     g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new(1f, 1f, 1f, 0.5f));
                 g.Draw2D.DrawText(UIDrawList.DefaultFont, FontAwesome6.Xmark, 20, g.CurrentNode.LayoutData.Rect, Color.white);
+            }
+        }
+
+        private bool _wasResizing = false;
+        private void HandleResize()
+        {
+            using (g.Node("ResizeTab").TopLeft(Offset.Percentage(1f, -15)).Scale(15).IgnoreLayout().Enter())
+            {
+                if(g.IsNodePressed() || g.IsNodeActive())
+                {
+                    if (!_wasResizing)
+                    {
+                        _wasResizing = true;
+                    }
+                    else
+                    {
+                        _width += g.PointerDelta.x;
+                        _height += g.PointerDelta.y;
+
+                        // If width or height is less than 10, move the window instead
+                        if (_width < 150)
+                            _width = 150;
+                        if (_height < 150)
+                            _height = 150;
+                    }
+                }
+                else
+                {
+                    _wasResizing = false;
+                }
+
+                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? new(1f, 1f, 1f, 0.5f) : new(1f, 1f, 1f, 0.2f), 10, 5);
             }
         }
 
