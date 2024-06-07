@@ -105,7 +105,6 @@ namespace Prowl.Runtime.GUI
 
                 // ZIndex.count - supports up to 1k interactables per Z Index
                 zIndex = CurrentZIndex + (count / 1000.0);
-                Console.WriteLine($"ZIndex: {zIndex}");
             }
 
                 // Check if there is any interactable with a higher ZIndex that intersects the current position

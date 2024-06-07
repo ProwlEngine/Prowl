@@ -281,7 +281,7 @@ namespace Prowl.Runtime.GUI
                         SetStorage(parentNode, "PU_POS_" + id, pos);
                     }
 
-                    if (IsPointerDown(Silk.NET.Input.MouseButton.Left) && 
+                    if ((IsPointerDown(Silk.NET.Input.MouseButton.Left) || IsPointerDown(Silk.NET.Input.MouseButton.Right)) &&
                         !node.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Popup
                         !parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
                         !IsBlockedByInteractable(PointerPos, 50000 + nextPopupIndex)) // Not blocked by any interactables above this popup
