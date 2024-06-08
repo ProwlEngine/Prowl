@@ -165,6 +165,8 @@ namespace Prowl.Runtime.GUI
                 _subGizmos.Add(new TranslationSubGizmo(this, new() { Mode = TransformGizmoMode.TranslateView, Direction = GizmoDirection.View, TransformKind = TransformKind.Plane }));
 
             AddScaleAxis();
+            if (mode.HasFlag(TransformGizmoMode.ScaleUniform))
+                _subGizmos.Add(new ScaleSubGizmo(this, new() { Mode = TransformGizmoMode.ScaleUniform, Direction = GizmoDirection.View, TransformKind = TransformKind.Plane }));
 
             AddRotateAxis();
             if (mode.HasFlag(TransformGizmoMode.RotateView))

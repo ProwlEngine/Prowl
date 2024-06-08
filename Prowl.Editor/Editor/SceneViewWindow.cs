@@ -44,7 +44,7 @@ public class SceneViewWindow : EditorWindow
 
         TransformGizmoMode mode = TransformGizmoMode.TranslateX | TransformGizmoMode.TranslateY | TransformGizmoMode.TranslateZ | TransformGizmoMode.TranslateXY | TransformGizmoMode.TranslateXZ | TransformGizmoMode.TranslateYZ | TransformGizmoMode.TranslateView;
         mode |= TransformGizmoMode.RotateX | TransformGizmoMode.RotateY | TransformGizmoMode.RotateZ | TransformGizmoMode.RotateView;
-        mode |= TransformGizmoMode.ScaleX | TransformGizmoMode.ScaleY | TransformGizmoMode.ScaleZ;
+        mode |= TransformGizmoMode.ScaleX | TransformGizmoMode.ScaleY | TransformGizmoMode.ScaleZ | TransformGizmoMode.ScaleUniform;
 
         gizmo = new TransformGizmo(EditorGuiManager.Gui, mode);
         viewManipulator = new ViewManipulatorGizmo(EditorGuiManager.Gui);
