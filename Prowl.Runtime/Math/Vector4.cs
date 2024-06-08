@@ -38,6 +38,15 @@ namespace Prowl.Runtime
             this.w = w;
         }
 
+        /// <summary> Constructs a Vector4 from 2 given Vector2's. </summary>
+        public Vector4(Vector2 xy, Vector2 zw)
+        {
+            x = xy.x;
+            y = xy.y;
+            z = zw.x;
+            w = zw.y;
+        }
+
         /// <summary> Constructs a Vector4 from the given Vector3 and a W component. </summary>
         public Vector4(Vector3 value, Double w = 0.0)
         {

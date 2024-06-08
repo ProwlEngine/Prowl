@@ -28,6 +28,8 @@ SOFTWARE.
 */
 #endregion License
 
+using System;
+
 namespace Prowl.Runtime
 {
     public struct Rect
@@ -37,7 +39,7 @@ namespace Prowl.Runtime
 
         public static Rect Empty {
             get {
-                return new Rect(
+                return Rect.CreateFromMinMax(
                     new Vector2(double.MaxValue, double.MaxValue),
                     new Vector2(double.MinValue, double.MinValue));
             }
@@ -49,35 +51,54 @@ namespace Prowl.Runtime
                     new Vector2(0, 0));
             }
         }
+
+        public double x {
+            readonly get => Min.x;
+            set {
+                double width = Max.x - Min.x;
+                Min.x = value;
+                Max.x = value + width;
+            }
+        }
+
+        public double y {
+            readonly get => Min.y;
+            set {
+                double height = Max.y - Min.y;
+                Min.y = value;
+                Max.y = value + height;
+            }
+        }
+        public readonly Vector2 Position => Min;
+        public readonly Vector2 Center => new((Min.x + Max.x) / 2, (Min.y + Max.y) / 2);
+
+        public double width {
+            readonly get => Max.x - Min.x;
+            set => Max.x = Min.x + value;
+        }
+
+        public double height {
+            readonly get => Max.y - Min.y;
+            set => Max.y = Min.y + value;
+        }
+        public readonly Vector2 Size => new(width, height);
+
         public double Left => Min.x;
         public double Right => Max.x;
         public double Top => Min.y;
         public double Bottom => Max.y;
-        public double X => Min.x;
-        public double Y => Min.y;
-        public double Width => Max.x - Min.x;
-        public double Height => Max.y - Min.y;
-        public Vector2 Size => new Vector2(Width, Height);
-        public double CenterX => Min.x + Width / 2.0f;
-        public double CenterY => Min.y + Height / 2.0f;
+        public readonly Vector2 TopLeft => new(Left, Top);
+        public readonly Vector2 TopRight => new(Right, Top);
+        public readonly Vector2 BottomLeft => new(Left, Bottom);
+        public readonly Vector2 BottomRight => new(Right, Bottom);
 
-        public Rect(Vector2 min, Vector2 max)
+        public Rect(Vector2 position, Vector2 scale)
         {
-            Min = min;
-            Max = max;
+            Min = position;
+            Max = position + scale;
         }
 
-        public Rect(Vector4 v) : this(new Vector2(v.x, v.y), new Vector2(v.z, v.w)) { }
-        public Rect(double x, double y, double width, double height) : this(new Vector2(x, y), new Vector2(x+width, y+height)) { }
-
-        public Vector2 GetCenter() { return new Vector2((Min.x + Max.x) * 0.5f, (Min.y + Max.y) * 0.5f); }
-
-        public double GetWidth() { return Max.x - Min.x; }
-        public double GetHeight() { return Max.y - Min.y; }
-        public Vector2 GetTL() { return Min; }                   // Top-left
-        public Vector2 GetTR() { return new Vector2(Max.x, Min.y); }  // Top-right
-        public Vector2 GetBL() { return new Vector2(Min.x, Max.y); }  // Bottom-left
-        public Vector2 GetBR() { return Max; }                   // Bottom-right
+        public Rect(double x, double y, double width, double height) : this(new Vector2(x, y), new Vector2(width, height)) { }
 
         public bool Contains(Vector2 p) { return p.x >= Min.x && p.y >= Min.y && p.x < Max.x && p.y < Max.y; }
         public bool Contains(Rect r) { return r.Min.x >= Min.x && r.Min.y >= Min.y && r.Max.x < Max.x && r.Max.y < Max.y; }
@@ -85,6 +106,7 @@ namespace Prowl.Runtime
         public void Add(Vector2 rhs) { if (Min.x > rhs.x) Min.x = rhs.x; if (Min.y > rhs.y) Min.y = rhs.y; if (Max.x < rhs.x) Max.x = rhs.x; if (Max.y < rhs.y) Max.y = rhs.y; }
         public void Add(Rect rhs) { if (Min.x > rhs.Min.x) Min.x = rhs.Min.x; if (Min.y > rhs.Min.y) Min.y = rhs.Min.y; if (Max.x < rhs.Max.x) Max.x = rhs.Max.x; if (Max.y < rhs.Max.y) Max.y = rhs.Max.y; }
         public void Expand(float amount) { Min.x -= amount; Min.y -= amount; Max.x += amount; Max.y += amount; }
+        public void Expand(float horizontal, float vertical) { Min.x -= horizontal; Min.y -= vertical; Max.x += horizontal; Max.y += vertical; }
         public void Expand(Vector2 amount) { Min.x -= amount.x; Min.y -= amount.y; Max.x += amount.x; Max.y += amount.y; }
         public void Reduce(Vector2 amount) { Min.x += amount.x; Min.y += amount.y; Max.x -= amount.x; Max.y -= amount.y; }
         public void Clip(Rect clip) { if (Min.x < clip.Min.x) Min.x = clip.Min.x; if (Min.y < clip.Min.y) Min.y = clip.Min.y; if (Max.x > clip.Max.x) Max.x = clip.Max.x; if (Max.y > clip.Max.y) Max.y = clip.Max.y; }
@@ -103,15 +125,14 @@ namespace Prowl.Runtime
             return true;
         }
 
-        public static Rect CombineRect(Rect Parent, Rect Child)
+        public static Rect CombineRect(Rect a, Rect b)
         {
-            var Result = Rect.Zero;
-            if (!IntersectRect(Parent, Child, ref Result))
-            {
-                return Parent;
-            }
-
-            return Result;
+            Rect result = new Rect();
+            result.Min.x = Mathf.Min(a.Min.x, b.Min.x);
+            result.Min.y = Mathf.Min(a.Min.y, b.Min.y);
+            result.Max.x = Mathf.Max(a.Max.x, b.Max.x);
+            result.Max.y = Mathf.Max(a.Max.y, b.Max.y);
+            return result;
         }
 
         public Vector2 GetClosestPoint(Vector2 p, bool on_edge)
@@ -125,30 +146,12 @@ namespace Prowl.Runtime
             return p;
         }
 
-        public double x {
-            get { return Min.x; }
-            set { Min.x = value; }
-        }
-
-        public double y {
-            get { return Min.y; }
-            set { Min.y = value; }
-        }
-
-        public double width {
-            get { return Max.x - Min.x; }
-            set { Max.x = Min.x + value; }
-        }
-
-        public double height {
-            get { return Max.y - Min.y; }
-            set { Max.y = Min.y + value; }
-        }
-
         public override string ToString()
         {
             return $"{{ Min: {Min}, Max: {Max} }}";
         }
+
+        public static Rect CreateFromMinMax(Vector2 min, Vector2 max) => new(min, max - min);
 
         public static Rect CreateWithCenter(Vector2 CenterPos, Vector2 Size)
         {
@@ -164,5 +167,21 @@ namespace Prowl.Runtime
         {
             return new Rect(Left, Top, Right - Left, Bottom - Top);
         }
+
+        internal bool IsFinite()
+        {
+            return Min.IsFinate() && Max.IsFinate();
+        }
+
+        public static explicit operator Vector4(Rect v)
+        {
+            return new Vector4((float)v.Min.x, (float)v.Min.y, (float)v.Max.x, (float)v.Max.y);
+        }
+
+        public static bool operator ==(Rect a, Rect b) => a.Min == b.Min && a.Max == b.Max;
+        public static bool operator !=(Rect a, Rect b) => a.Min != b.Min || a.Max != b.Max;
+
+        public override bool Equals(object obj) => obj is Rect r && r == this;
+        public override int GetHashCode() => Min.GetHashCode() ^ Max.GetHashCode();
     }
 }

@@ -89,15 +89,22 @@ namespace Prowl.Runtime.Utils
 
             if (File.Exists(filePath))
             {
-                return Serializer.Deserialize<T>(StringTagConverter.ReadFromFile(new FileInfo(filePath)))!;
+                try
+                {
+                    var deserialized = Serializer.Deserialize<T>(StringTagConverter.ReadFromFile(new FileInfo(filePath)))!;
+                    if (deserialized != null)
+                        return deserialized;
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine($"Failed to load {typeof(T).Name}, Replacing Corrupted file. At {filePath}: {e.Message}");
+                }
             }
-            else
-            {
-                var newInstance = new T();
-                newInstance.OnValidate();
-                newInstance.Save();
-                return newInstance;
-            }
+
+            var newInstance = new T();
+            newInstance.OnValidate();
+            newInstance.Save();
+            return newInstance;
         }
 
         static void CopyTo(string? dataPath)

@@ -1,70 +1,91 @@
-﻿using Hexa.NET.ImGui;
-using Prowl.Editor.Assets;
+﻿using Prowl.Editor.Assets;
 using Prowl.Icons;
+using Prowl.Runtime;
+using Prowl.Runtime.GUI;
+using Prowl.Runtime.GUI.Graphics;
 
-namespace Prowl.Editor.EditorWindows;
-
-public class AssetSelectorWindow : EditorWindow
+namespace Prowl.Editor
 {
-    private string _searchText = "";
-    private Type type;
-    private Action<Guid, ushort> _onAssetSelected;
-
-    protected override ImGuiWindowFlags Flags { get; } = ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.Tooltip | ImGuiWindowFlags.NoDecoration;
-    protected override bool Center { get; } = true;
-    protected override int Width { get; } = 512;
-    protected override int Height { get; } = 512;
-    protected override bool BackgroundFade { get; } = true;
-
-    public AssetSelectorWindow(Type type, Action<Guid, ushort> onAssetSelected) : base()
+    public class AssetSelectorWindow : EditorWindow
     {
-        Title = FontAwesome6.Book + " Assets Selection";
-        this.type = type;
-        _onAssetSelected = onAssetSelected;
-    }
+        private string _searchText = "";
+        private Type type;
+        private Action<Guid, ushort> _onAssetSelected;
 
-    protected override void Draw()
-    {
-        ImGui.BeginChild("assetChild");
+        protected override bool Center { get; } = true;
+        protected override double Width { get; } = 512;
+        protected override double Height { get; } = 512;
+        protected override bool BackgroundFade { get; } = true;
+        protected override bool IsDockable => false;
+        protected override bool LockSize => true;
 
-        GUIHelper.Search("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X);
-
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, ImGui.GetStyle().Colors[(int)ImGuiCol.FrameBg]);
-        ImGui.BeginChild("assetList", new System.Numerics.Vector2(ImGui.GetWindowWidth(), ImGui.GetWindowHeight() - 29));
-
-        if (ImGui.Selectable("  None", false, ImGuiSelectableFlags.None, new System.Numerics.Vector2(ImGui.GetWindowWidth(), 21)))
+        public AssetSelectorWindow(Type type, Action<Guid, ushort> onAssetSelected) : base()
         {
-            _onAssetSelected(Guid.Empty, 0);
-            isOpened = false;
+            Title = FontAwesome6.Book + " Asset Selector";
+            this.type = type;
+            _onAssetSelected = onAssetSelected;
         }
 
-        ImGui.Separator();
-
-        var assets = AssetDatabase.GetAllAssetsOfType(type);
-        foreach (var asset in assets)
+        protected override void Draw()
         {
-            if (AssetDatabase.TryGetFile(asset.Item2, out var file))
+            gui.CurrentNode.Layout(LayoutType.Column);
+            gui.CurrentNode.ScaleChildren();
+            gui.CurrentNode.Padding(0, 10, 10, 10);
+
+            using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(GuiStyle.ItemHeight).Clip().Enter())
             {
-                if (string.IsNullOrEmpty(_searchText) || file.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+                gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f), GuiStyle.ItemHeight);
+            }
+
+            using (gui.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column).Enter())
+            {
+                double xPos = gui.CurrentNode.LayoutData.InnerRect.x + 3;
+                using (gui.Node("None", -1).Width(Size.Percentage(1f)).Height(GuiStyle.ItemHeight).Enter())
                 {
-                    // Selectable
-                    if (ImGui.Selectable("  " + AssetDatabase.GetRelativePath(file.FullName) + "." + asset.Item1, false, ImGuiSelectableFlags.None, new System.Numerics.Vector2(ImGui.GetWindowWidth(), 21)))
+                    var interact = gui.GetInteractable();
+                    if (interact.TakeFocus())
                     {
-                        _onAssetSelected(asset.Item2, asset.Item3);
+                        _onAssetSelected(Guid.Empty, 0);
                         isOpened = false;
                     }
-                    ImGui.Separator();
+
+                    if (interact.IsHovered())
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5);
+
+                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, "None", 20, new Vector2(xPos, gui.CurrentNode.LayoutData.Rect.y + 7), GuiStyle.Base10);
+                }
+
+                var assets = AssetDatabase.GetAllAssetsOfType(type);
+                int i = 0; // Used to help the ID's of the nodes, Ensures every node has a unique ID
+                foreach (var asset in assets)
+                {
+                    if (AssetDatabase.TryGetFile(asset.Item2, out var file))
+                    {
+                        if (string.IsNullOrEmpty(_searchText) || file.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+                        {
+                            // just using the index as an id, unique we don't need both string and int id
+                            using (gui.Node("", i++).Width(Size.Percentage(1f)).Height(GuiStyle.ItemHeight).Enter())
+                            {
+                                var interact = gui.GetInteractable();
+                                if (interact.TakeFocus())
+                                {
+                                    _onAssetSelected(asset.Item2, asset.Item3);
+                                    isOpened = false;
+                                }
+
+                                if (interact.IsHovered())
+                                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5);
+
+                                gui.Draw2D.DrawText(UIDrawList.DefaultFont, AssetDatabase.GetRelativePath(file.FullName) + "." + asset.Item1, 20, new Vector2(xPos, gui.CurrentNode.LayoutData.Rect.y + 7), GuiStyle.Base10);
+                            }
+                        }
+                    }
                 }
             }
+
+            // Clicked outside Window
+            if (gui.IsPointerClick(Silk.NET.Input.MouseButton.Left) && !gui.IsPointerHovering())
+                isOpened = false;
         }
-
-        ImGui.EndChild();
-
-        ImGui.PopStyleColor();
-        ImGui.EndChild();
-
-        // Click outside window should close it
-        if (ImGui.IsMouseClicked(0) && !ImGui.IsMouseHoveringRect(ImGui.GetWindowPos(), ImGui.GetWindowPos() + ImGui.GetWindowSize(), false))
-            isOpened = false;
     }
 }

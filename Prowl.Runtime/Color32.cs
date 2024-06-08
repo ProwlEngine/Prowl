@@ -20,6 +20,16 @@ namespace Prowl.Runtime
             this.alpha = a;
         }
 
+        internal uint GetUInt()
+        {
+            uint @out;
+            @out = (uint)red;
+            @out |= (uint)green << 8;
+            @out |= (uint)blue << 16;
+            @out |= (uint)alpha << 24;
+            return @out;
+        }
+
         public static implicit operator Color32(Color c)
         {
             return new Color32((byte)(MathF.Min(MathF.Max(c.r, 0f), 1f) * 255f), (byte)(MathF.Min(MathF.Max(c.g, 0f), 1f) * 255f), (byte)(MathF.Min(MathF.Max(c.b, 0f), 1f) * 255f), (byte)(MathF.Min(MathF.Max(c.a, 0f), 1f) * 255f));

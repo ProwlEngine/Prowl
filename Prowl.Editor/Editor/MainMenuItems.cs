@@ -4,7 +4,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
 using System.Reflection;
 
-namespace Prowl.Editor.EditorWindows
+namespace Prowl.Editor
 {
     public static class MainMenuItems
     {
@@ -13,7 +13,7 @@ namespace Prowl.Editor.EditorWindows
         public static bool fromAssetBrowser = false;
 
         [MenuItem("Create/Folder")]
-        public static void CreateFolder()
+        public static void CreateDir()
         {
             Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
 
@@ -21,9 +21,9 @@ namespace Prowl.Editor.EditorWindows
             AssetDatabase.GenerateUniqueAssetPath(ref dir);
             dir.Create();
             if (fromAssetBrowser)
-                AssetBrowserWindow.StartRename(dir.FullName);
+                AssetsBrowserWindow.StartRename(dir.FullName);
             else
-                AssetsWindow.StartRename(dir.FullName);
+                AssetsTreeWindow.StartRename(dir.FullName);
         }
 
         [MenuItem("Create/Material")]
@@ -37,9 +37,28 @@ namespace Prowl.Editor.EditorWindows
             Material mat = new Material(Shader.Find("Defaults/Standard.shader"));
             StringTagConverter.WriteToFile(Serializer.Serialize(mat), file);
             if (fromAssetBrowser)
-                AssetBrowserWindow.StartRename(file.FullName);
+                AssetsBrowserWindow.StartRename(file.FullName);
             else
-                AssetsWindow.StartRename(file.FullName);
+                AssetsTreeWindow.StartRename(file.FullName);
+
+            AssetDatabase.Update();
+            AssetDatabase.Ping(file);
+        }
+
+        [MenuItem("Create/GuiStyle")]
+        public static void CreateGuiStyle()
+        {
+            Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+
+            FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New GuiStyle.guistyle"));
+            AssetDatabase.GenerateUniqueAssetPath(ref file);
+
+            GuiStyle style = new GuiStyle();
+            StringTagConverter.WriteToFile(Serializer.Serialize(style), file);
+            if (fromAssetBrowser)
+                AssetsBrowserWindow.StartRename(file.FullName);
+            else
+                AssetsTreeWindow.StartRename(file.FullName);
 
             AssetDatabase.Update();
             AssetDatabase.Ping(file);
@@ -59,9 +78,9 @@ namespace Prowl.Editor.EditorWindows
             script = script.Replace("%SCRIPTNAME%", EditorUtils.FilterAlpha(Path.GetFileNameWithoutExtension(file.Name)));
             File.WriteAllText(file.FullName, script);
             if (fromAssetBrowser)
-                AssetBrowserWindow.StartRename(file.FullName);
+                AssetsBrowserWindow.StartRename(file.FullName);
             else
-                AssetsWindow.StartRename(file.FullName);
+                AssetsTreeWindow.StartRename(file.FullName);
 
             AssetDatabase.Update();
             AssetDatabase.Ping(file);
@@ -103,12 +122,12 @@ namespace Prowl.Editor.EditorWindows
         [MenuItem("Scene/Save As")]
         public static void SaveSceneAs()
         {
-            ImFileDialogInfo imFileDialogInfo = new ImFileDialogInfo()
+            FileDialogContext imFileDialogInfo = new FileDialogContext()
             {
                 title = "Save Scene As",
                 fileName = "New Scene.scene",
                 directoryPath = new DirectoryInfo(Project.ProjectAssetDirectory),
-                type = ImGuiFileDialogType.SaveFile,
+                type = FileDialogType.SaveFile,
                 OnComplete = (path) =>
                 {
                     // Make sure path is relative to ProjectAssetDirectory
@@ -131,7 +150,7 @@ namespace Prowl.Editor.EditorWindows
                     AssetDatabase.Ping(file);
                 }
             };
-            ImGuiFileDialog.FileDialog(imFileDialogInfo);
+            FileDialog.Open(imFileDialogInfo);
         }
 
         #endregion
@@ -141,7 +160,7 @@ namespace Prowl.Editor.EditorWindows
         static Vector3 GetPosition()
         {
             // Last Focused Editor camera
-            var cam = ViewportWindow.LastFocusedCamera;
+            var cam = SceneViewWindow.LastFocusedCamera;
             // get position 10 units infront
             var t = cam.GameObject;
             return t.Transform.position + t.Transform.forward * 10;

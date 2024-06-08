@@ -2,7 +2,7 @@
 using Prowl.Runtime.Utils;
 using Silk.NET.Input;
 
-namespace Prowl.Editor.Editor.Preferences
+namespace Prowl.Editor.Preferences
 {
     [FilePath("Hotkeys.pref", FilePathAttribute.Location.EditorPreference)]
     public class Hotkeys : ScriptableSingleton<Hotkeys>

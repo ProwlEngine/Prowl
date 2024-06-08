@@ -1,6 +1,7 @@
-﻿using Hexa.NET.ImGui;
+﻿using Prowl.Icons;
+using Prowl.Runtime;
+using Prowl.Runtime.GUI;
 using Prowl.Runtime.Utils;
-using System;
 using System.Reflection;
 
 namespace Prowl.Editor
@@ -106,28 +107,9 @@ namespace Prowl.Editor
             if (!Menus.ContainsKey(root)) return;
             var node = Menus[root];
             if (node.Children.Count == 0) return;
-            //if (ImGui.BeginPopup("##Menu_"+ root))
-            if (ImGui.BeginMenu(node.Path))
-            {
-                foreach (var child in node.Children)
-                    DrawMenu(child);
-                ImGui.EndMenu();
-            }
-        }
 
-        public static void DrawMenuPopupRoot(string root)
-        {
-            if (Menus == null) return;
-            if (root == null) return;
-            if (!Menus.ContainsKey(root)) return;
-            var node = Menus[root];
-            if (node.Children.Count == 0) return;
-            if (ImGui.BeginPopup("##Menu_"+ root))
-            {
-                foreach (var child in node.Children)
-                    DrawMenu(child);
-                ImGui.EndMenu();
-            }
+            foreach (var child in node.Children)
+                DrawMenu(child);
         }
 
         static void DrawMenu(MenuPath menu)
@@ -135,16 +117,32 @@ namespace Prowl.Editor
             if (menu == null) return;
             if (menu.Children.Count == 0)
             {
-                if (ImGui.MenuItem(menu.Path))
+                if (EditorGUI.StyledButton(menu.Path))
                     menu.Method?.Invoke();
             }
             else
             {
-                if (ImGui.BeginMenu(menu.Path))
+
+                if (EditorGUI.StyledButton(menu.Path))
+                    Gui.ActiveGUI.OpenPopup(menu.Path + "Popup", Gui.ActiveGUI.PreviousNode.LayoutData.Rect.TopRight);
+
+                // Enter the Button's Node
+                using (Gui.ActiveGUI.PreviousNode.Enter())
                 {
-                    foreach (var child in menu.Children)
-                        DrawMenu(child);
-                    ImGui.EndMenu();
+                    // Draw a > to indicate a popup
+                    Rect rect = Gui.ActiveGUI.CurrentNode.LayoutData.Rect;
+                    rect.x = rect.x + rect.width - 25;
+                    rect.width = 20;
+                    Gui.ActiveGUI.Draw2D.DrawText(FontAwesome6.ChevronRight, rect, Color.white);
+                }
+
+                if (Gui.ActiveGUI.BeginPopup(menu.Path + "Popup", out var node))
+                {
+                    using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
+                    {
+                        foreach (var child in menu.Children)
+                            DrawMenu(child);
+                    }
                 }
             }
         }

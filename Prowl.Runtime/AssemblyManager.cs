@@ -80,10 +80,10 @@ public static class AssemblyManager {
         foreach(Assembly assembly in ExternalAssemblies) {
             Debug.Log($"Unloading external assembly from: '{assembly.Location}'...");
         }
-        
+
         // crashes after recovery and attempted unloading for the second time
-        _externalAssemblyLoadContext.Unload();
-        
+        if (_externalAssemblyLoadContext != null)
+            _externalAssemblyLoadContext.Unload();
         externalAssemblyLoadContextRef = new WeakReference(_externalAssemblyLoadContext);
         _externalAssemblyLoadContext = null;
     }

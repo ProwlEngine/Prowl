@@ -7,13 +7,19 @@ namespace Prowl.Runtime;
 public static class Input
 {
     public static bool Enabled { get; set; } = true;
-
-
+    
     public static IInputContext Context { get; internal set; }
 
     public static IReadOnlyList<IKeyboard> Keyboards => Context.Keyboards;
     public static IReadOnlyList<IMouse> Mice => Context.Mice;
     public static IReadOnlyList<IJoystick> Joysticks => Context.Joysticks;
+
+    public static string Clipboard {
+        get => Context.Keyboards[0].ClipboardText;
+        set {
+           Context.Keyboards[0].ClipboardText = value;
+        }
+    }
 
 
     private static Vector2Int _currentMousePos;
@@ -39,8 +45,10 @@ public static class Input
     private static Dictionary<MouseButton, bool> wasMousePressed = new Dictionary<MouseButton, bool>();
     private static Dictionary<MouseButton, bool> isMousePressed = new Dictionary<MouseButton, bool>();
 
-    public static Key LastPressedKeyCode;
-    public static char LastPressedChar;
+    public static char? LastPressedChar;
+
+    public static event Action<Key, bool> OnKeyEvent;
+    public static Action<MouseButton, double, double, bool, bool> OnMouseEvent;
 
     public static bool IsAnyKeyDown => Enabled && isKeyPressed.ContainsValue(true);
 
@@ -72,7 +80,7 @@ public static class Input
         foreach (var keyboard in Keyboards)
             keyboard.KeyChar += (keyboard, c) => LastPressedChar = c;
 
-            UpdateKeyStates();
+        UpdateKeyStates();
     }
 
     internal static void Dispose()
@@ -84,6 +92,17 @@ public static class Input
     {
         _prevMousePos = _currentMousePos;
         _currentMousePos = (Vector2Int)Mice[0].Position.ToDouble();
+        if (_prevMousePos != _currentMousePos)
+        {
+            if (isMousePressed[MouseButton.Left])
+                OnMouseEvent?.Invoke(MouseButton.Left, MousePosition.x, MousePosition.y, false, true);
+            else if (isMousePressed[MouseButton.Right])
+                OnMouseEvent?.Invoke(MouseButton.Right, MousePosition.x, MousePosition.y, false, true);
+            else if (isMousePressed[MouseButton.Middle])
+                OnMouseEvent?.Invoke(MouseButton.Middle, MousePosition.x, MousePosition.y, false, true);
+            else
+                OnMouseEvent?.Invoke(MouseButton.Unknown, MousePosition.x, MousePosition.y, false, true);
+        }
         UpdateKeyStates();
     }
 
@@ -99,11 +118,12 @@ public static class Input
                 foreach (var keyboard in Keyboards)
                     if (keyboard.IsKeyPressed(key))
                     {
-                        if(wasKeyPressed[key] == false)
-                            LastPressedKeyCode = key;
                         isKeyPressed[key] = true;
                         break;
                     }
+
+                if (wasKeyPressed[key] != isKeyPressed[key])
+                    OnKeyEvent?.Invoke(key, isKeyPressed[key]);
             }
         }
 
@@ -119,6 +139,8 @@ public static class Input
                         isMousePressed[button] = true;
                         break;
                     }
+                if (wasMousePressed[button] != isMousePressed[button])
+                    OnMouseEvent?.Invoke(button, MousePosition.x, MousePosition.y, isMousePressed[button], false);
             }
         }
     }
@@ -134,4 +156,6 @@ public static class Input
     public static bool GetMouseButtonDown(int button) => Enabled && isMousePressed[(MouseButton)button] && !wasMousePressed[(MouseButton)button];
 
     public static bool GetMouseButtonUp(int button) => Enabled && isMousePressed[(MouseButton)button] && wasMousePressed[(MouseButton)button];
+    
+    public static void SetCursorVisible(bool visible, int miceIndex = 0) => Mice[miceIndex].Cursor.CursorMode = visible ? CursorMode.Normal : CursorMode.Hidden;
 }

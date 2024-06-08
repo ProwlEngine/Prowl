@@ -1,362 +1,361 @@
-using Hexa.NET.ImGui;
+﻿using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
-using Prowl.Editor.ImGUI.Widgets;
+using Prowl.Runtime.GUI;
+using Prowl.Runtime.GUI.Graphics;
+using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.SceneManagement;
 using Silk.NET.Input;
-using Prowl.Editor.Editor.Preferences;
 
-namespace Prowl.Editor.EditorWindows;
-
-public class HierarchyWindow : EditorWindow
+namespace Prowl.Editor
 {
-    protected override ImGuiWindowFlags Flags => ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse;
 
-    public HierarchyWindow() : base()
+    public class HierarchyWindow : EditorWindow
     {
-        Title = FontAwesome6.FolderTree + " Hierarchy";
-        SelectHandler.OnSelectObject += (obj) => {
-            // Reset ping timer on selection changed
-            pingTimer = 0;
-            pingedGO = null;
-        };
-    }
+        const double entryHeight = 30;
+        const double entryPadding = 4;
 
-    private string _searchText = "";
-    private GameObject? m_RenamingGO = null;
-    public static SelectHandler<WeakReference> SelectHandler { get; private set; } = new((item) => !item.IsAlive || (item.Target is EngineObject eObj && eObj.IsDestroyed), (a, b) => ReferenceEquals(a.Target, b.Target));
+        private string _searchText = "";
+        private GameObject? m_RenamingGO = null;
+        public static SelectHandler<WeakReference> SelectHandler { get; private set; } = new((item) => !item.IsAlive || (item.Target is EngineObject eObj && eObj.IsDestroyed), (a, b) => ReferenceEquals(a.Target, b.Target));
 
-    private const float PingDuration = 3f;
-    private static float pingTimer = 0;
-    private static WeakReference pingedGO;
+        private const float PingDuration = 3f;
+        private static float pingTimer = 0;
+        private static WeakReference pingedGO;
 
-    public static void Ping(GameObject go)
-    {
-        pingTimer = PingDuration;
-        pingedGO = new WeakReference(go);
-    }
-
-    protected override void Draw()
-    {
-        pingTimer -= Time.deltaTimeF;
-        if (pingTimer < 0) pingTimer = 0;
-
-        SelectHandler.StartFrame();
-
-        ImGuiTableFlags tableFlags = ImGuiTableFlags.RowBg | ImGuiTableFlags.ContextMenuInBody | ImGuiTableFlags.BordersInner | ImGuiTableFlags.ScrollY;
-
-        float lineHeight = ImGui.GetTextLineHeight();
-        float contentWidth = ImGui.GetContentRegionAvail().X;
-        const float addButtonSize = 48f;
-        System.Numerics.Vector2 padding = ImGui.GetStyle().FramePadding;
-
-        float filterCursorPosX = ImGui.GetCursorPosX();
-        GUIHelper.Search("##searchBox", ref _searchText, contentWidth - addButtonSize - 7);
-
-        ImGui.SameLine();
-
-        ImGui.SetCursorPosX(contentWidth - addButtonSize);
-        if (ImGui.Button("  " + FontAwesome6.Plus + " Add  "))
-            ImGui.OpenPopup("SceneHierarchyContextWindow");
-
-        if (string.IsNullOrEmpty(_searchText)) {
-            ImGui.SameLine();
-            ImGui.SetCursorPosX(filterCursorPosX + ImGui.GetFontSize() * 0.5f);
-            ImGui.TextUnformatted(FontAwesome6.MagnifyingGlass + " Search...");
+        public HierarchyWindow() : base()
+        {
+            Title = FontAwesome6.FolderTree + " Hierarchy";
+            SelectHandler.OnSelectObject += (obj) => {
+                // Reset ping timer on selection changed
+                pingTimer = 0;
+                pingedGO = null;
+            };
         }
 
-        if (ImGui.BeginTable("HierarchyTable", 4, tableFlags)) {
-            if (ImGui.BeginPopupContextWindow("SceneHierarchyContextWindow", ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.NoOpenOverItems)) {
-                DrawContextMenu();
-                ImGui.EndPopup();
-            }
+        public static void Ping(GameObject go)
+        {
+            pingTimer = PingDuration;
+            pingedGO = new WeakReference(go);
+        }
 
-            ImGui.TableSetupColumn("  Label", ImGuiTableColumnFlags.NoHide | ImGuiTableColumnFlags.NoClip | ImGuiTableColumnFlags.WidthStretch, contentWidth);
-            ImGui.TableSetupColumn(" " + FontAwesome6.Tag, ImGuiTableColumnFlags.WidthFixed, lineHeight * 1.0f);
-            ImGui.TableSetupColumn(" " + FontAwesome6.LayerGroup, ImGuiTableColumnFlags.WidthFixed, lineHeight * 1.0f);
-            ImGui.TableSetupColumn(" " + FontAwesome6.Eye, ImGuiTableColumnFlags.WidthFixed, lineHeight * 1.0f);
+        protected override void Draw()
+        {
+            pingTimer -= Time.deltaTimeF;
+            if (pingTimer < 0) pingTimer = 0;
 
-            ImGui.TableSetupScrollFreeze(0, 1);
+            SelectHandler.StartFrame();
 
-            ImGui.TableNextRow(ImGuiTableRowFlags.Headers, ImGui.GetFrameHeight());
-            for (int column = 0; column < 4; ++column) {
-                ImGui.TableSetColumnIndex(column);
-                string columnName = ImGui.TableGetColumnNameS(column);
-                ImGui.PushID(column);
-                ImGui.SetCursorPosY(ImGui.GetCursorPosY() + padding.Y);
-                ImGui.TableHeader(columnName);
-                ImGui.PopID();
-            }
+            gui.CurrentNode.Layout(LayoutType.Column);
+            gui.CurrentNode.ScaleChildren();
+            gui.CurrentNode.Padding(0, 10, 10, 10);
 
-            ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 0.0f);
-            ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new System.Numerics.Vector2(0f, 0f));
-            int id = 0;
-            for (int i = 0; i < SceneManager.AllGameObjects.Count; i++) {
-                var go = SceneManager.AllGameObjects[i];
-                if (go.parent == null)
-                    DrawEntityNode(ref id, go, 0, false);
-            }
-            ImGui.PopStyleVar(2);
 
-            if (m_RenamingGO != null && ImGui.BeginPopup("RenameGameObjects"))
+            using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(entryHeight).Clip().Enter())
             {
-                string name = m_RenamingGO.Name;
-                if (ImGui.InputText("##Tag", ref name, 0x100)) {
-                    m_RenamingGO.Name = name;
+                gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f, -entryHeight), entryHeight);
+
+                using (gui.Node("CreateGOBtn").Left(Offset.Percentage(1f, -entryHeight + 3)).Scale(entryHeight).Enter())
+                {
+                    gui.Draw2D.DrawText(FontAwesome6.CirclePlus, 30, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base4);
+
+                    if (gui.IsNodePressed())
+                        gui.OpenPopup("CreateGameObject");
+
+                    var test = gui.CurrentNode;
+                    if (gui.BeginPopup("CreateGameObject", out var node))
+                    {
+                        using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
+                        {
+                            DrawContextMenu(null, test);
+                        }
+                    }
                 }
-                ImGui.SetKeyboardFocusHere(-1);
-                ImGui.EndPopup();
-            } else {
-                m_RenamingGO = null;
+
             }
 
-            ImGui.EndTable();
 
-            if (!SelectHandler.SelectedThisFrame && ImGui.IsItemClicked(0))
-                SelectHandler.Clear();
-
-            if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
-                DuplicateSelected();
-
-            HandleDragnDrop(null); // Into window
-        }
-    }
-
-    void DrawEntityNode(ref int index, GameObject entity, uint depth, bool isPartOfPrefab)
-    {
-        if (entity == null) return;
-        if (entity.hideFlags.HasFlag(HideFlags.Hide) || entity.hideFlags.HasFlag(HideFlags.HideAndDontSave)) return;
-
-        if (!string.IsNullOrEmpty(_searchText) && !entity.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase)) {
-            for (int i = 0; i < entity.children.Count; i++)
-                DrawEntityNode(ref index, entity.children[i], depth, isPartOfPrefab);
-            return;
-        }
-
-        ImGui.TableNextRow();
-        ImGui.TableNextColumn();
-
-        bool isPrefab = entity.IsPrefab;
-        bool isSelected = SelectHandler.IsSelected(new WeakReference(entity));
-
-        ImGuiTreeNodeFlags flags = CalculateFlags(entity, isSelected);
-
-        int colPushCount = 0;
-        if (isSelected) {
-            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(ImGuiCol.HeaderActive));
-            ImGui.PushStyleColor(ImGuiCol.Header, ImGui.GetColorU32(ImGuiCol.HeaderActive));
-            ImGui.PushStyleColor(ImGuiCol.HeaderHovered, ImGui.GetColorU32(ImGuiCol.HeaderActive));
-            colPushCount += 2;
-        } else if (isPrefab)
-            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new System.Numerics.Vector4(0.3215f, 0.6352f, 0.9294f, 1.0f)));
-        else if (isPartOfPrefab)
-            ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new System.Numerics.Vector4(0.3215f, 0.6352f, 0.9294f, 0.5f)));
-
-        if (entity.enabledInHierarchy == false) {
-            ImGui.PushStyleColor(ImGuiCol.Text, ImGui.GetColorU32(ImGuiCol.TextDisabled));
-            colPushCount += 1;
-        }
-
-        // if were pinging we need to open the tree to the pinged object
-        bool isPingedEntity = false;
-        if (pingTimer > 0 && pingedGO != null && pingedGO.Target is GameObject go)
-        {
-            if (entity.IsParentOf(go))
-                ImGui.SetNextItemOpen(true); // Open down to the pinged object
-            else if (entity.InstanceID == go.InstanceID)
-                isPingedEntity = true; // This is the pinged entity
-        }
-
-        var opened = ImGui.TreeNodeEx(entity.Name + "##" + entity.InstanceID, flags);
-        ImGui.PopStyleColor(colPushCount);
-
-        if (isPingedEntity)
-        {
-            if (pingTimer > PingDuration - 1f)
-                ImGui.ScrollToItem(ImGuiScrollFlags.None);
-            GUIHelper.ItemRect(1f, 0.8f, 0.0f, 0.8f, MathF.Sin(pingTimer) * 1f, 3f, 2.5f);
-            GUIHelper.ItemRect(1f, 0.8f, 0.0f, 0.8f, MathF.Sin(pingTimer) * 6f, 3f, 2.5f);
-        }
-
-        // Select
-        if (!ImGui.IsItemToggledOpen())
-        {
-            SelectHandler.HandleSelectable(index++, new WeakReference(entity), true);
-            if (SelectHandler.Count == 1 && ImGui.IsMouseDoubleClicked(0) && ImGui.IsItemHovered())
+            using (gui.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Clip().Enter())
             {
-                m_RenamingGO = entity;
-                ImGui.OpenPopup("RenameGameObjects");
+                //g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.5f, 10, 12);
+
+                var dropInteract = gui.GetInteractable();
+                HandleDrop(null);
+
+                if (!SelectHandler.SelectedThisFrame && dropInteract.TakeFocus())
+                    SelectHandler.Clear();
+
+                if(IsFocused)
+                    if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
+                        DuplicateSelected();
+
+
+                double height = 0;
+                int id = 0;
+                for (int i = 0; i < SceneManager.AllGameObjects.Count; i++)
+                {
+                    var go = SceneManager.AllGameObjects[i];
+                    if (go.parent == null)
+                        DrawGameObject(ref id, go, 0, false);
+                    height += entryHeight;
+                }
+
+                var popupHolder = gui.CurrentNode;
+                if (gui.BeginPopup("RightClickGameObject", out var node))
+                {
+                    using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
+                    {
+                        var instanceID = gui.GetGlobalStorage<int>("RightClickGameObject");
+                        var go = EngineObject.FindObjectByID<GameObject>(instanceID);
+                        DrawContextMenu(go, popupHolder);
+                    }
+                }
+
+                gui.ScrollV();
             }
         }
 
-        DrawGameObjectContextMenu(entity);
-
-        // Drag Drop
-        HandleDragnDrop(entity);
-
-        ImGui.TableNextColumn();
-        DrawTagIcon(entity);
-        ImGui.TableNextColumn();
-        DrawLayerIcon(entity);
-        ImGui.TableNextColumn();
-        DrawVisibilityToggle(entity);
-
-        // Open
-        if (opened)
+        private void DrawContextMenu(GameObject? parent, LayoutNode popupHolder)
         {
-            for (int i = 0; i < entity.children.Count; i++)
-                DrawEntityNode(ref index, entity.children[i], depth + 1, isPartOfPrefab || isPrefab);
+            EditorGUI.Text("Create");
 
-            if (opened && entity.children.Count > 0)
-                ImGui.TreePop();
+            bool closePopup = false;
+            if (EditorGUI.StyledButton("New GameObject"))
+            {
+                var go = new GameObject("New GameObject");
+                if(parent != null)
+                    go.SetParent(parent);
+                go.Transform.localPosition = Vector3.zero;
+                SelectHandler.SetSelection(new WeakReference(go));
+                closePopup = true;
+            }
+
+            MenuItem.DrawMenuRoot("Template");
+
+            if (parent != null)
+            {
+                EditorGUI.Separator();
+                EditorGUI.Text("GameObject");
+
+                SelectHandler.SelectIfNot(new WeakReference(parent));
+                if (EditorGUI.StyledButton("Rename"))
+                {
+                    m_RenamingGO = parent;
+                    closePopup = true;
+                }
+                if (EditorGUI.StyledButton("Duplicate"))
+                {
+                    DuplicateSelected();
+                    closePopup = true;
+                }
+                if (EditorGUI.StyledButton("Delete"))
+                {
+                    parent.Destroy();
+                    closePopup = true;
+                }
+
+                if (SelectHandler.Count > 1 && EditorGUI.StyledButton("Delete All"))
+                {
+                    SelectHandler.Foreach((go) => {
+                        (go.Target as GameObject).Destroy();
+                    });
+                    SelectHandler.Clear();
+                    closePopup = true;
+                }
+
+                if (SelectHandler.Count > 0 && EditorGUI.StyledButton("Align With View"))
+                {
+                    SelectHandler.Foreach((go) => {
+                        Camera cam = SceneViewWindow.LastFocusedCamera;
+                        (go.Target as GameObject).Transform.position = cam.GameObject.Transform.position;
+                        (go.Target as GameObject).Transform.rotation = cam.GameObject.Transform.rotation;
+                    });
+                    closePopup = true;
+                }
+
+                if (SelectHandler.Count == 1 && EditorGUI.StyledButton("Align View With"))
+                {
+                    Camera cam = SceneViewWindow.LastFocusedCamera;
+                    cam.GameObject.Transform.position = parent.Transform.position;
+                    cam.GameObject.Transform.rotation = parent.Transform.rotation;
+                    SceneViewWindow.SetCamera(parent.Transform.position, parent.Transform.rotation);
+                    closePopup = true;
+                }
+            }
+
+            if (closePopup)
+                gui.ClosePopup(popupHolder);
         }
-    }
 
-    private static ImGuiTreeNodeFlags CalculateFlags(GameObject entity, bool isSelected)
-    {
-        return (isSelected ? ImGuiTreeNodeFlags.Selected : ImGuiTreeNodeFlags.None)
-            | ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.SpanFullWidth | ImGuiTreeNodeFlags.FramePadding
-            | (entity.children.Count == 0 ? ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.NoTreePushOnOpen : 0);
-    }
-
-    private void HandleDragnDrop(GameObject? entity)
-    {
-        if (DragnDrop.Drop<GameObject>(out var original))
+        public void DrawGameObject(ref int index, GameObject entity, uint depth, bool isPartOfPrefab)
         {
-            GameObject go = original;
-            if (!SceneManager.Has(original)) // If its not already in the scene, Instantiate it
-                go = (GameObject)EngineObject.Instantiate(original, true);
-            go.SetParent(entity); // null is root
-            SelectHandler.SetSelection(new WeakReference(go));
+            if (entity == null) return;
+            if (entity.hideFlags.HasFlag(HideFlags.Hide) || entity.hideFlags.HasFlag(HideFlags.HideAndDontSave)) return;
+
+            if (!string.IsNullOrEmpty(_searchText) && !entity.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+            {
+                for (int i = 0; i < entity.children.Count; i++)
+                    DrawGameObject(ref index, entity.children[i], depth, isPartOfPrefab);
+                return;
+            }
+
+            bool drawChildren = false;
+            bool isPrefab = entity.IsPrefab;
+            double left = depth * entryHeight;
+            ulong goNodeID = 0;
+            using (gui.Node(entity.GetHashCode().ToString()).Left(left).Top(index * (entryHeight + entryPadding)).ExpandWidth(-(left + gui.VScrollBarWidth())).Height(entryHeight).Margin(2, 0).Enter())
+            {
+                goNodeID = gui.CurrentNode.ID;
+                float colMult = entity.enabledInHierarchy ? 1 : 0.5f;
+                bool isSelected = SelectHandler.IsSelected(new WeakReference(entity));
+
+                double maxwidth = gui.CurrentNode.LayoutData.InnerRect.width;
+                var rect = gui.CurrentNode.LayoutData.InnerRect;
+                rect.width = maxwidth;
+                rect.height = entryHeight;
+
+                // Interaction
+                SelectHandler.AddSelectableAtIndex(index, new WeakReference(entity));
+                var interact = gui.GetInteractable(rect);
+                if (interact.TakeFocus())
+                    SelectHandler.Select(index, new WeakReference(entity));
+
+                bool justStartedRename = false;
+                if (SelectHandler.Count == 1 && gui.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left) && interact.IsHovered())
+                {
+                    justStartedRename = true;
+                    m_RenamingGO = entity;
+                }
+                else if (gui.IsPointerClick(Silk.NET.Input.MouseButton.Right) && interact.IsHovered())
+                {
+                    // POpup holder is our parent, since thats the Tree node
+                    gui.OpenPopup("RightClickGameObject", null, gui.CurrentNode.Parent);
+                    gui.SetGlobalStorage("RightClickGameObject", entity.InstanceID);
+                }
+
+                if (IsFocused)
+                    if (isSelected && Input.GetKeyDown(Key.Delete))
+                        entity.Destroy();
+
+                // Drag n Drop
+                // Dropping uses the current nodes rect by default
+                HandleDrop(entity);
+                DragnDrop.Drag(entity);
+
+                var col = (interact.IsHovered() ? GuiStyle.Base5 : GuiStyle.Base4 * 0.8f) * colMult;
+                gui.Draw2D.DrawRectFilled(rect, (isSelected ? GuiStyle.Indigo : col), 8);
+                gui.Draw2D.DrawRectFilled(rect.Min, new Vector2(entryHeight, entryHeight), GuiStyle.Borders, 8, 9);
+                if (isPrefab || isPartOfPrefab || !entity.enabledInHierarchy)
+                {
+                    var lineColor = (isPrefab ? GuiStyle.Orange : GuiStyle.Yellow);
+                    if(!entity.enabledInHierarchy)
+                        lineColor = GuiStyle.Red;
+                    gui.Draw2D.DrawLine(new Vector2(rect.x + entryHeight + 1, rect.y - 1), new Vector2(rect.x + entryHeight + 1, rect.y + entryHeight - 1), lineColor, 3);
+                }
+
+                using (gui.Node("VisibilityBtn").TopLeft(6).Scale(20).Enter())
+                {
+                    if (gui.IsNodePressed())
+                        entity.enabled = !entity.enabled;
+                    gui.Draw2D.DrawText(entity.enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash, 20, gui.CurrentNode.LayoutData.Rect, entity.enabledInHierarchy ? GuiStyle.Base11 : GuiStyle.Base4);
+                }
+
+                // if were pinging we need to open the tree to the pinged object
+                if (pingTimer > 0 && pingedGO != null && pingedGO.Target is GameObject go)
+                {
+                    if (entity.IsParentOf(go)) // Set the tree open
+                        gui.SetStorage(entity.InstanceID.ToString(), true);
+                    else if (entity.InstanceID == go.InstanceID)
+                    {
+                        // Draw a ping effect
+                        // TODO: Scroll to Rect
+                        var pingRect = rect;
+                        pingRect.Expand(MathF.Sin(pingTimer) * 6f);
+                        gui.Draw2D.DrawRect(pingRect, GuiStyle.Yellow, 2f, 4f);
+                    }
+                }
+
+                if (entity.children.Count > 0)
+                {
+                    bool expanded = gui.GetNodeStorage<bool>(entity.InstanceID.ToString());
+                    using (gui.Node("VisibilityBtn").TopLeft(maxwidth - entryHeight, 5).Scale(20).Enter())
+                    {
+                        if (gui.IsNodePressed())
+                        {
+                            expanded = !expanded;
+                            gui.SetNodeStorage(gui.CurrentNode.Parent, entity.InstanceID.ToString(), expanded);
+                        }
+                        gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.Rect, entity.enabledInHierarchy ? GuiStyle.Base11 : GuiStyle.Base4);
+                    }
+                    drawChildren = expanded;
+                }
+
+                // Name
+                var name = entity.Name;
+                if (m_RenamingGO == entity)
+                {
+                    var inputRect = new Rect(rect.x + 33, rect.y + 4, maxwidth - (entryHeight * 2.25), 21);
+                    gui.Draw2D.DrawRectFilled(inputRect, GuiStyle.WindowBackground, 8);
+                    gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.None, 30, 3, maxwidth - (entryHeight * 2.25), null, null, true);
+                    if (justStartedRename)
+                        gui.FocusPreviousInteractable();
+                    if (!gui.PreviousInteractableIsFocus())
+                        m_RenamingGO = null;
+                    entity.Name = name;
+                }
+                else
+                {
+                    var textRect = rect;
+                    textRect.width -= entryHeight;
+                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, name, 20, new Vector2(rect.x + 40, rect.y + 7), GuiStyle.Base11, 0, textRect);
+                }
+
+                index++;
+            }
+
+            // Open
+            if (drawChildren)
+            {
+                gui.PushID(goNodeID);
+                for (int i = 0; i < entity.children.Count; i++)
+                    DrawGameObject(ref index, entity.children[i], depth + 1, isPartOfPrefab || isPrefab);
+                gui.PopID();
+            }
         }
-        else if (DragnDrop.Drop<Prefab>(out var prefab))
+
+        private void HandleDrop(GameObject? entity)
         {
-            SelectHandler.SetSelection(new WeakReference(prefab.Instantiate()));
+            if (DragnDrop.Drop<GameObject>(out var original))
+            {
+                GameObject go = original;
+                if (!SceneManager.Has(original)) // If its not already in the scene, Instantiate it
+                    go = (GameObject)EngineObject.Instantiate(original, true);
+                go.SetParent(entity); // null is root
+                SelectHandler.SetSelection(new WeakReference(go));
+            }
+            else if (DragnDrop.Drop<Prefab>(out var prefab))
+            {
+                SelectHandler.SetSelection(new WeakReference(prefab.Instantiate()));
+            }
+            else if (DragnDrop.Drop<Scene>(out var scene))
+            {
+                SceneManager.LoadScene(scene);
+            }
         }
-        else if (DragnDrop.Drop<Scene>(out var scene))
+
+        public void DuplicateSelected()
         {
-            SceneManager.LoadScene(scene);
+            var newGO = new List<WeakReference>();
+            SelectHandler.Foreach((go) => {
+                // Duplicating, Easiest way to duplicate is to Serialize then Deserialize
+                var serialized = Serializer.Serialize(go.Target);
+                var deserialized = Serializer.Deserialize<GameObject>(serialized);
+                deserialized.SetParent((go.Target as GameObject).parent);
+                newGO.Add(new WeakReference(deserialized));
+            });
+            SelectHandler.Clear();
+            SelectHandler.SetSelection(newGO.ToArray());
         }
 
-        // Offer GameObject up from Hierarchy for Drag And Drop
-        if (entity != null) DragnDrop.Drag(entity);
-    }
-
-    private static void DrawTagIcon(GameObject entity)
-    {
-        ImGui.Text(" " + FontAwesome6.Tag);
-        if (ImGui.IsItemHovered()) {
-            GUIHelper.ItemRectFilled(1f, 1f, 1f, 0.25f);
-            if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
-                ImGui.OpenPopup("GameObjecTags##" + entity.InstanceID);
-        }
-        GUIHelper.Tooltip("Tag: " + TagLayerManager.Tags[entity.tagIndex]);
-
-        if (ImGui.BeginPopup("GameObjecTags##" + entity.InstanceID)) {
-            ImGui.Combo("##Tag", ref entity.tagIndex, TagLayerManager.Tags.ToArray(), TagLayerManager.Tags.Count);
-            ImGui.EndPopup();
-        }
-    }
-
-    private static void DrawLayerIcon(GameObject entity)
-    {
-        ImGui.Text(" " + FontAwesome6.LayerGroup);
-        if (ImGui.IsItemHovered()) {
-            GUIHelper.ItemRectFilled(1f, 1f, 1f, 0.25f);
-            if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
-                ImGui.OpenPopup("GameObjectLayers##" + entity.InstanceID);
-        }
-        GUIHelper.Tooltip("Layer: " + TagLayerManager.Layers[entity.layerIndex]);
-
-        if (ImGui.BeginPopup("GameObjectLayers##" + entity.InstanceID)) {
-            ImGui.Combo("##Layers", ref entity.layerIndex, TagLayerManager.Layers.ToArray(), TagLayerManager.Layers.Count);
-            ImGui.EndPopup();
-        }
-    }
-
-    private static void DrawVisibilityToggle(GameObject entity)
-    {
-        ImGui.Text(" " + (entity.enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash));
-        if (ImGui.IsItemHovered()) {
-            GUIHelper.ItemRectFilled(1f, 1f, 1f, 0.25f);
-            if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
-                entity.enabled = !entity.enabled;
-        }
-        GUIHelper.Tooltip("Visibility: " + (entity.enabled ? "Visible" : "Hidden"));
-    }
-
-    void DrawContextMenu(GameObject context = null)
-    {
-        if (ImGui.MenuItem("New Gameobject")) {
-            GameObject go = new GameObject("New Gameobject");
-            if (context != null)
-                go.SetParent(context);
-            SelectHandler.SetSelection(new WeakReference(go));
-            ImGui.CloseCurrentPopup();
-        }
-
-        MenuItem.DrawMenuRoot("Template");
-    }
-
-    void DrawGameObjectContextMenu(GameObject entity)
-    {
-        if (ImGui.BeginPopupContextItem()) {
-            SelectHandler.SelectIfNot(new WeakReference(entity));
-
-            DrawContextMenu(entity);
-
-            ImGui.Separator();
-
-            if (ImGui.MenuItem("Rename")) {
-                m_RenamingGO = entity;
-#warning This rename looks like it fails because of https://github.com/ocornut/imgui/issues/6462
-                ImGui.OpenPopup("RenameGameObjects");
-            }
-
-            if (ImGui.MenuItem("Duplicate"))
-                DuplicateSelected();
-
-            if (ImGui.MenuItem("Delete", "Del"))
-                entity.Destroy();
-
-            if (SelectHandler.Count > 1 && ImGui.MenuItem("Delete All")) {
-                SelectHandler.Foreach((go) => {
-                    (go.Target as GameObject).Destroy();
-                });
-                SelectHandler.Clear();
-            }
-
-            ImGui.Separator();
-
-            if (SelectHandler.Count > 0 && ImGui.MenuItem("Align With View")) {
-                SelectHandler.Foreach((go) => {
-                    Camera cam = ViewportWindow.LastFocusedCamera;
-                    (go.Target as GameObject).Transform.position = cam.GameObject.Transform.position;
-                    (go.Target as GameObject).Transform.rotation = cam.GameObject.Transform.rotation;
-                });
-            }
-
-            if (SelectHandler.Count == 1 && ImGui.MenuItem("Align View With")) {
-                Camera cam = ViewportWindow.LastFocusedCamera;
-                cam.GameObject.Transform.position = entity.Transform.position;
-                cam.GameObject.Transform.rotation = entity.Transform.rotation;
-            }
-
-            ImGui.EndPopup();
-        }
-    }
-
-    public void DuplicateSelected()
-    {
-        var newGO = new List<WeakReference>();
-        SelectHandler.Foreach((go) => {
-            // Duplicating, Easiest way to duplicate is to Serialize then Deserialize
-            var serialized = Serializer.Serialize(go.Target);
-            var deserialized = Serializer.Deserialize<GameObject>(serialized);
-            deserialized.SetParent((go.Target as GameObject).parent);
-            newGO.Add(new WeakReference(deserialized));
-        });
-        SelectHandler.Clear();
-        SelectHandler.SetSelection(newGO.ToArray());
     }
 }

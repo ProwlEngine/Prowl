@@ -1,5 +1,4 @@
 ﻿using Prowl.Editor.Assets;
-using Prowl.Editor.EditorWindows;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 using System.Reflection;

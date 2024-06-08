@@ -15,29 +15,14 @@ public static class PlayMode {
         Current = Mode.Playing;
         SceneManager.Clear();
         SceneManager.RestoreScene(); // Resets GameObjects and Components to re-trigger things like Awake() and Start()
-
-        ImGuiNotify.InsertNotification(new ImGuiToast()
-        {
-            Title = "Entering Playmode!"
-        });
     }
     
     public static void Pause() {
         Current = Mode.Paused;
-
-        ImGuiNotify.InsertNotification(new ImGuiToast()
-        {
-            Title = "Playmode Paused!"
-        });
     }
     
     public static void Resume() {
         Current = Mode.Playing;
-
-        ImGuiNotify.InsertNotification(new ImGuiToast()
-        {
-            Title = "Playmode Resumed!"
-        });
     }
     
     public static void Stop() {
@@ -46,10 +31,5 @@ public static class PlayMode {
 
         SceneManager.RestoreScene();
         SceneManager.ClearStoredScene();
-
-        ImGuiNotify.InsertNotification(new ImGuiToast()
-        {
-            Title = "Playmode Stopped, Scene Reloaded!"
-        });
     }
 }
