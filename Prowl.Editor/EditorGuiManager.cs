@@ -42,6 +42,14 @@ public static class EditorGuiManager
         WindowsToRemove.Add(editorWindow);
     }
 
+    public static DockNode DockWindowTo(EditorWindow window, DockNode? node, DockZone zone, double split = 0.5f)
+    {
+        if(node != null)
+            return Container.AttachWindow(window, node, zone, split);
+        else
+            return Container.AttachWindow(window, Container.Root, DockZone.Center, split);
+    }
+
     public static void Update()
     {
         if (FocusedWindow != null && FocusedWindow.Target != null)

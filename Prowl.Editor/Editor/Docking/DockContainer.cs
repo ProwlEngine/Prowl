@@ -229,7 +229,7 @@ namespace Prowl.Editor.Docking
             return inside;
         }
 
-        public DockNode AttachWindow(EditorWindow window, DockNode leaf, DockZone zone)
+        public DockNode AttachWindow(EditorWindow window, DockNode leaf, DockZone zone, double splitDistance = 0.5f)
         {
             if (window == null)
                 return null;
@@ -266,7 +266,7 @@ namespace Prowl.Editor.Docking
             node.Child[0].Type = DockNode.NodeType.Leaf;
             node.Child[1].Type = DockNode.NodeType.Leaf;
 
-            node.SplitDistance = 0.5f; // Default split distance is 50%
+            node.SplitDistance = splitDistance; // Default split distance is 50%
 
             node.Type = (DockNode.NodeType)(((int)zone >> 1) & 1);
 
