@@ -308,8 +308,6 @@ namespace Prowl.Editor
                     textRect.width -= entryHeight;
                     g.Draw2D.DrawText(UIDrawList.DefaultFont, name, 20, new Vector2(rect.x + 40, rect.y + 7), GuiStyle.Base11, 0, textRect);
                 }
-
-                index++;
             }
 
             // Open
