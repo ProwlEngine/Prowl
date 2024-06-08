@@ -129,45 +129,43 @@ namespace Prowl.Editor.ScriptedEditors
 
                                             g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 2);
 
-                                            bool p = false;
-                                            bool h = false;
-                                            using (g.ButtonNode("Selector", out p, out h).MaxWidth(GuiStyle.ItemHeight).ExpandHeight().Enter())
+                                            using (g.Node("Selector").MaxWidth(GuiStyle.ItemHeight).ExpandHeight().Enter())
                                             {
                                                 var pos = g.CurrentNode.LayoutData.GlobalContentPosition;
                                                 pos += new Vector2(8, 8);
-                                                g.Draw2D.DrawText(FontAwesome6.MagnifyingGlass, pos, GuiStyle.Base11 * (h ? 1f : 0.8f));
-                                                if (p)
+                                                g.Draw2D.DrawText(FontAwesome6.MagnifyingGlass, pos, GuiStyle.Base11 * (gui.IsNodeHovered() ? 1f : 0.8f));
+                                                if (gui.IsNodePressed())
                                                 {
                                                     Selected = assetDrawerID;
                                                     new AssetSelectorWindow(tex.InstanceType, (guid, fileid) => { assignedGUID = guid; guidAssignedToID = assetDrawerID; assignedFileID = fileid; });
                                                 }
                                             }
 
-                                            using (g.ButtonNode("Asset", out p, out h).ExpandHeight().Clip().Enter())
+                                            using (g.Node("Asset").ExpandHeight().Clip().Enter())
                                             {
                                                 var pos = g.CurrentNode.LayoutData.GlobalContentPosition;
                                                 pos += new Vector2(0, 8);
                                                 if (tex.IsExplicitNull || tex.IsRuntimeResource)
                                                 {
                                                     string text = tex.IsExplicitNull ? "(Null)" : "(Runtime)" + tex.Name;
-                                                    var col = GuiStyle.Base11 * (h ? 1f : 0.8f);
+                                                    var col = GuiStyle.Base11 * (gui.IsNodeHovered() ? 1f : 0.8f);
                                                     if (tex.IsExplicitNull)
-                                                        col = GuiStyle.Red * (h ? 1f : 0.8f);
+                                                        col = GuiStyle.Red * (gui.IsNodeHovered() ? 1f : 0.8f);
                                                     g.Draw2D.DrawText(text, pos, col);
-                                                    if (p)
+                                                    if (gui.IsNodePressed())
                                                         Selected = assetDrawerID;
                                                 }
                                                 else if (AssetDatabase.TryGetFile(tex.AssetID, out var assetPath))
                                                 {
-                                                    g.Draw2D.DrawText(AssetDatabase.ToRelativePath(assetPath), pos, GuiStyle.Base11 * (h ? 1f : 0.8f));
-                                                    if (p)
+                                                    g.Draw2D.DrawText(AssetDatabase.ToRelativePath(assetPath), pos, GuiStyle.Base11 * (gui.IsNodeHovered() ? 1f : 0.8f));
+                                                    if (gui.IsNodePressed())
                                                     {
                                                         Selected = assetDrawerID;
                                                         AssetDatabase.Ping(tex.AssetID);
                                                     }
                                                 }
 
-                                                if (h && g.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                                                if (gui.IsNodeHovered() && g.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
                                                     GlobalSelectHandler.Select(tex);
 
 

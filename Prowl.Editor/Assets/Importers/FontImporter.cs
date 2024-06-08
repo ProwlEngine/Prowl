@@ -65,14 +65,13 @@ namespace Prowl.Editor.Assets
 
         public bool QuickButton(string label, LayoutNode popupHolder)
         {
-            using (gui.ButtonNode(label, out var p, out var h).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+            using (gui.Node(label).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
             {
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
 
                 gui.Draw2D.DrawText(label, gui.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
 
-                var interact = gui.GetInteractable();
-                if (interact.TakeFocus())
+                if (gui.IsNodePressed())
                 {
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
                     if(popupHolder != null)
@@ -80,7 +79,7 @@ namespace Prowl.Editor.Assets
                     return true;
                 }
 
-                if (interact.IsHovered())
+                if (gui.IsNodeHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
 
@@ -105,16 +104,16 @@ namespace Prowl.Editor.Assets
                 int rangeIndex = 0;
                 foreach (var range in importer.characterRanges)
                 {
-                    using (gui.ButtonNode("DelRange" + rangeIndex++, out var pressed, out var hovered).Scale(GuiStyle.ItemHeight).Enter())
+                    using (gui.Node("DelRange" + rangeIndex++).Scale(GuiStyle.ItemHeight).Enter())
                     {
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
 
                         gui.Draw2D.DrawText("X", gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, 8), GuiStyle.Base8);
 
-                        if (hovered)
+                        if (gui.IsNodeHovered())
                             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
-                        if (pressed)
+                        if (gui.IsNodePressed())
                         {
                             importer.characterRanges.Remove(range);
                         }
@@ -125,16 +124,16 @@ namespace Prowl.Editor.Assets
             }
 
 
-            using (gui.ButtonNode("AddRange", out var p, out var h).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+            using (gui.Node("AddRange").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
             {
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
 
                 gui.Draw2D.DrawText("Add Range", gui.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
 
-                if (h)
+                if (gui.IsNodeHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
-                if(p)
+                if(gui.IsNodePressed())
                     gui.OpenPopup("AddRangePopup");
 
                 if (gui.BeginPopup("AddRangePopup", out var popupNode))

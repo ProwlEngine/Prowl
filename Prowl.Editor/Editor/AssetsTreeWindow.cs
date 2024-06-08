@@ -202,7 +202,7 @@ namespace Prowl.Editor
             }
             else if (fileInfo is FileInfo file)
             {
-                if (EditorGUI.QuickButton("Rename"))
+                if (EditorGUI.StyledButton("Rename"))
                     if (fromAssetBrowser)
                     {
                         AssetsBrowserWindow.StartRename(file.FullName);
@@ -213,23 +213,23 @@ namespace Prowl.Editor
                         StartRename(file.FullName);
                         closePopup = true;
                     }
-                if (EditorGUI.QuickButton("Reimport"))
+                if (EditorGUI.StyledButton("Reimport"))
                 {
                     AssetDatabase.Reimport(file);
                     closePopup = true;
                 }
                 EditorGUI.Separator();
-                if (EditorGUI.QuickButton("Show In Explorer"))
+                if (EditorGUI.StyledButton("Show In Explorer"))
                 {
                     AssetDatabase.OpenPath(file.Directory);
                     closePopup = true;
                 }
-                if (EditorGUI.QuickButton("Open"))
+                if (EditorGUI.StyledButton("Open"))
                 {
                     AssetDatabase.OpenPath(file);
                     closePopup = true;
                 }
-                if (EditorGUI.QuickButton("Delete"))
+                if (EditorGUI.StyledButton("Delete"))
                 {
                     file.Delete();
                     closePopup = true;
@@ -241,7 +241,7 @@ namespace Prowl.Editor
             }
             else if (fileInfo is DirectoryInfo dir)
             {
-                if (EditorGUI.QuickButton("Rename"))
+                if (EditorGUI.StyledButton("Rename"))
                     if (fromAssetBrowser)
                     {
                         AssetsBrowserWindow.StartRename(dir.FullName);
@@ -252,18 +252,18 @@ namespace Prowl.Editor
                         StartRename(dir.FullName);
                         closePopup = true;
                     }
-                if (EditorGUI.QuickButton("Reimport"))
+                if (EditorGUI.StyledButton("Reimport"))
                 {
                     AssetDatabase.ReimportFolder(dir);
                     closePopup = true;
                 }
                 EditorGUI.Separator();
-                if (EditorGUI.QuickButton("Show In Explorer"))
+                if (EditorGUI.StyledButton("Show In Explorer"))
                 {
                     AssetDatabase.OpenPath(dir.Parent!);
                     closePopup = true;
                 }
-                if (EditorGUI.QuickButton("Delete"))
+                if (EditorGUI.StyledButton("Delete"))
                 {
                     dir.Delete(true);
                     closePopup = true;
@@ -292,28 +292,28 @@ namespace Prowl.Editor
         {
             EditorGUI.Text("Project");
 
-            if (EditorGUI.QuickButton("Reimport All"))
+            if (EditorGUI.StyledButton("Reimport All"))
             {
                 AssetDatabase.ReimportAll();
                 closePopup = true;
             }
 
-            if (EditorGUI.QuickButton("Open Project Settings"))
+            if (EditorGUI.StyledButton("Open Project Settings"))
             {
                 new ProjectSettingsWindow();
                 closePopup = true;
             }
-            if (EditorGUI.QuickButton("Recompile Project"))
+            if (EditorGUI.StyledButton("Recompile Project"))
             {
                 Program.RegisterReloadOfExternalAssemblies();
                 closePopup = true;
             }
-            if (EditorGUI.QuickButton("Build Project"))
+            if (EditorGUI.StyledButton("Build Project"))
             {
                 Project.BuildProject();
                 closePopup = true;
             }
-            if (EditorGUI.QuickButton("Show Project In Explorer"))
+            if (EditorGUI.StyledButton("Show Project In Explorer"))
             {
                 AssetDatabase.OpenPath(new DirectoryInfo(Project.ProjectAssetDirectory));
                 closePopup = true;

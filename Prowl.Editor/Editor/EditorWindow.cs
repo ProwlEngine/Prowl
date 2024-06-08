@@ -263,13 +263,13 @@ namespace Prowl.Editor
                     using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
                     {
                         bool closePopup = false;
-                        if (EditorGUI.QuickButton("Duplicate"))
+                        if (EditorGUI.StyledButton("Duplicate"))
                         {
                             _ = (EditorWindow)Activator.CreateInstance(GetType());
                             closePopup = true;
                         }
 
-                        if (EditorGUI.QuickButton("Close All"))
+                        if (EditorGUI.StyledButton("Close All"))
                         {
                             if(!IsDocked)
                                 EditorGuiManager.Remove(this);
@@ -285,15 +285,15 @@ namespace Prowl.Editor
 
                         EditorGUI.Separator();
 
-                        if (EditorGUI.QuickButton("Scene View"))            { new SceneViewWindow(); closePopup = true; }
-                        if (EditorGUI.QuickButton("Game"))                  { new GameWindow(); closePopup = true; }
-                        if (EditorGUI.QuickButton("Hierarchy"))             { new HierarchyWindow(); closePopup = true; }
-                        if (EditorGUI.QuickButton("Inspector"))             { new InspectorWindow(); closePopup = true; }
-                        if (EditorGUI.QuickButton("Asset Browser"))         { new AssetsBrowserWindow(); closePopup = true; }
-                        if (EditorGUI.QuickButton("Asset Tree"))            { new AssetsTreeWindow(); closePopup = true; }
-                        if (EditorGUI.QuickButton("Console"))               { new ConsoleWindow(); closePopup = true; }
-                        if (EditorGUI.QuickButton("Project Settings"))      { new ProjectSettingsWindow(); closePopup = true; }
-                        if (EditorGUI.QuickButton("Editor Preferences"))    { new PreferencesWindow(); closePopup = true; }
+                        if (EditorGUI.StyledButton("Scene View"))            { new SceneViewWindow(); closePopup = true; }
+                        if (EditorGUI.StyledButton("Game"))                  { new GameWindow(); closePopup = true; }
+                        if (EditorGUI.StyledButton("Hierarchy"))             { new HierarchyWindow(); closePopup = true; }
+                        if (EditorGUI.StyledButton("Inspector"))             { new InspectorWindow(); closePopup = true; }
+                        if (EditorGUI.StyledButton("Asset Browser"))         { new AssetsBrowserWindow(); closePopup = true; }
+                        if (EditorGUI.StyledButton("Asset Tree"))            { new AssetsTreeWindow(); closePopup = true; }
+                        if (EditorGUI.StyledButton("Console"))               { new ConsoleWindow(); closePopup = true; }
+                        if (EditorGUI.StyledButton("Project Settings"))      { new ProjectSettingsWindow(); closePopup = true; }
+                        if (EditorGUI.StyledButton("Editor Preferences"))    { new PreferencesWindow(); closePopup = true; }
 
                         if (closePopup)
                             gui.ClosePopup(popupHolder);

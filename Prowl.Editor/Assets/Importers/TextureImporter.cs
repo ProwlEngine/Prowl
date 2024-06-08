@@ -54,7 +54,7 @@ namespace Prowl.Editor.Assets
             EditorGUI.DrawProperty(2, "Mag Filter", ref importer.textureMagFilter);
             EditorGUI.DrawProperty(3, "Wrap Mode", ref importer.textureWrap);
 
-            if (EditorGUI.QuickButton("Save"))
+            if (EditorGUI.StyledButton("Save"))
             {
                 (target as MetaFile).Save();
                 AssetDatabase.Reimport((target as MetaFile).AssetPath);

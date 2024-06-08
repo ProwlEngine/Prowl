@@ -36,22 +36,22 @@ namespace Prowl.Editor
             }
         }
 
-        public static bool QuickButton(string label)
+        public static bool StyledButton(string label)
         {
             var g = ActiveGUI;
-            using (g.ButtonNode(label, out var p, out var h).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+            using (g.Node(label).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
             {
                 g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 10);
 
                 g.Draw2D.DrawText(label, g.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
                 
-                if (p)
+                if (g.IsNodePressed())
                 {
                     g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
                     return true;
                 }
 
-                if (h)
+                if (g.IsNodeHovered())
                     g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5 * 0.5f, 10);
 
 
@@ -59,17 +59,17 @@ namespace Prowl.Editor
             }
         }
 
-        public static bool QuickButton(string label, double width, double height, bool border = true, Color? textcolor = null)
+        public static bool StyledButton(string label, double width, double height, bool border = true, Color? textcolor = null)
         {
             var g = ActiveGUI;
-            using (g.ButtonNode(label, out var p, out var h).Width(width).Height(height).Enter())
+            using (g.Node(label).Width(width).Height(height).Enter())
             {
                 if(border)
                     g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 10);
 
                 g.Draw2D.DrawText(label, g.CurrentNode.LayoutData.Rect, textcolor ?? GuiStyle.Base11);
                 
-                if (p)
+                if (g.IsNodePressed())
                 {
                     g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
                     return true;
@@ -77,7 +77,7 @@ namespace Prowl.Editor
 
                 var hovCol = GuiStyle.Base11;
                 hovCol.a = 0.25f;
-                if (h)
+                if (g.IsNodeHovered())
                     g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
 
 
@@ -233,19 +233,19 @@ namespace Prowl.Editor
 
                 bool p = false;
                 bool h = false;
-                using (ActiveGUI.ButtonNode(ID + "Selector", out p, out h).MaxWidth(GuiStyle.ItemHeight).ExpandHeight().Enter())
+                using (ActiveGUI.Node(ID + "Selector").MaxWidth(GuiStyle.ItemHeight).ExpandHeight().Enter())
                 {
                     var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
                     pos += new Vector2(8, 8);
                     ActiveGUI.Draw2D.DrawText(FontAwesome6.MagnifyingGlass, pos, GuiStyle.Base11 * (h ? 1f : 0.8f));
-                    if (p)
+                    if (ActiveGUI.IsNodePressed())
                     {
                         Selected = assetDrawerID;
                         new AssetSelectorWindow(value.InstanceType, (guid, fileid) => { assignedGUID = guid; guidAssignedToID = assetDrawerID; assignedFileID = fileid; });
                     }
                 }
 
-                using (ActiveGUI.ButtonNode(ID + "Asset", out p, out h).ExpandHeight().Clip().Enter())
+                using (ActiveGUI.Node(ID + "Asset").ExpandHeight().Clip().Enter())
                 {
                     var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
                     pos += new Vector2(0, 8);
@@ -256,13 +256,13 @@ namespace Prowl.Editor
                         if(value.IsExplicitNull)
                             col = GuiStyle.Red * (h ? 1f : 0.8f);
                         ActiveGUI.Draw2D.DrawText(text, pos, col);
-                        if (p)
+                        if (ActiveGUI.IsNodePressed())
                             Selected = assetDrawerID;
                     }
                     else if (AssetDatabase.TryGetFile(value.AssetID, out var assetPath))
                     {
                         ActiveGUI.Draw2D.DrawText(AssetDatabase.ToRelativePath(assetPath), pos, GuiStyle.Base11 * (h ? 1f : 0.8f));
-                        if (p)
+                        if (ActiveGUI.IsNodePressed())
                         {
                             Selected = assetDrawerID;
                             AssetDatabase.Ping(value.AssetID);

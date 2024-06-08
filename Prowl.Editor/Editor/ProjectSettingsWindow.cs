@@ -73,19 +73,19 @@ public abstract class SingletonEditorWindow : EditorWindow
     protected void RenderSideViewElement<T>(T elementInstance)
     {
         Type settingType = elementInstance.GetType();
-        using (gui.ButtonNode("Element" + elementCounter++, out var pressed, out var hovered).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+        using (gui.Node("Element" + elementCounter++).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
         {
 
             if (currentType == settingType)
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
-            else if (hovered)
+            else if (gui.IsNodeHovered())
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 10);
 
             // remove 'Preferences'
             string name = settingType.Name.Replace("Preferences", "");
             gui.Draw2D.DrawText(name, gui.CurrentNode.LayoutData.Rect, false);
 
-            if (pressed || currentType == settingType)
+            if (gui.IsNodePressed() || currentType == settingType)
             {
                 currentType = settingType;
                 currentSingleton = elementInstance;

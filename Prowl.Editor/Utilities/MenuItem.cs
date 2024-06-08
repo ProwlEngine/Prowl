@@ -117,13 +117,13 @@ namespace Prowl.Editor
             if (menu == null) return;
             if (menu.Children.Count == 0)
             {
-                if (EditorGUI.QuickButton(menu.Path))
+                if (EditorGUI.StyledButton(menu.Path))
                     menu.Method?.Invoke();
             }
             else
             {
 
-                if (EditorGUI.QuickButton(menu.Path))
+                if (EditorGUI.StyledButton(menu.Path))
                     Gui.ActiveGUI.OpenPopup(menu.Path + "Popup", Gui.ActiveGUI.PreviousNode.LayoutData.Rect.TopRight);
 
                 // Enter the Button's Node

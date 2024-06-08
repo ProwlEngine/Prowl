@@ -663,13 +663,13 @@ namespace Prowl.Editor.Assets
 
             using (gui.Node("Tabs").Width(Size.Percentage(1f)).MaxHeight(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
             {
-                if(EditorGUI.QuickButton("Meshes"))
+                if(EditorGUI.StyledButton("Meshes"))
                     selectedTab = 0;
-                if(EditorGUI.QuickButton("Materials"))
+                if(EditorGUI.StyledButton("Materials"))
                     selectedTab = 1;
-                if(EditorGUI.QuickButton("Scene"))
+                if(EditorGUI.StyledButton("Scene"))
                     selectedTab = 2;
-                if(EditorGUI.QuickButton("Animations"))
+                if(EditorGUI.StyledButton("Animations"))
                     selectedTab = 3;
             }
 
@@ -692,7 +692,7 @@ namespace Prowl.Editor.Assets
                         break;
                 }
 
-                if (EditorGUI.QuickButton("Save"))
+                if (EditorGUI.StyledButton("Save"))
                 {
                     (target as MetaFile).Save();
                     AssetDatabase.Reimport((target as MetaFile).AssetPath);
@@ -781,7 +781,7 @@ namespace Prowl.Editor.Assets
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
                 for (int i = 0; i < animations.Count(); i++)
                 {
-                    if (EditorGUI.QuickButton(i + ": " +  animations.ElementAt(i).Name))
+                    if (EditorGUI.StyledButton(i + ": " +  animations.ElementAt(i).Name))
                     {
                         selectedAnim = i + 1;
                     }
@@ -805,7 +805,7 @@ namespace Prowl.Editor.Assets
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
                     for (int i = 0; i < anim.Bones.Count; i++)
                     {
-                        if (EditorGUI.QuickButton(i + ": " + anim.Bones[i].BoneName))
+                        if (EditorGUI.StyledButton(i + ": " + anim.Bones[i].BoneName))
                         {
                             selectedAnimBone = i;
                         }

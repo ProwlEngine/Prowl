@@ -57,37 +57,36 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 // Show buttons to Ping Prefab Asset, Revert Prefab, and Apply Prefab
                 using (gui.Node("#_PrefabBtns").ExpandWidth().Height(GuiStyle.ItemHeight).Top((GuiStyle.ItemHeight + 5)).Layout(LayoutType.Row).ScaleChildren().Enter())
                 {
-                    bool pressed, hovered;
-                    using (gui.ButtonNode("#_SelectBtn", out pressed, out hovered).ExpandHeight().Margin(0, 4).Enter())
+                    using (gui.Node("#_SelectBtn").ExpandHeight().Margin(0, 4).Enter())
                     {
-                        if (pressed)
+                        if (gui.IsNodePressed())
                         {
                             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10, 9);
                             AssetDatabase.Ping(go.AssetID);
                         }
-                        else if (hovered)
+                        else if (gui.IsNodeHovered())
                             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f, 10, 9);
                         else
                             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Blue, 10, 9);
                         gui.Draw2D.DrawText("Select", gui.CurrentNode.LayoutData.InnerRect, GuiStyle.Base11, false);
                     }
 
-                    using (gui.ButtonNode("#_RevertBtn", out pressed, out hovered).ExpandHeight().Margin(0, 4).Enter())
+                    using (gui.Node("#_RevertBtn").ExpandHeight().Margin(0, 4).Enter())
                     {
-                        if (pressed)
+                        if (gui.IsNodePressed())
                             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
-                        else if (hovered)
+                        else if (gui.IsNodeHovered())
                             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
                         else
                             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Red);
                         gui.Draw2D.DrawText("Revert", gui.CurrentNode.LayoutData.InnerRect, GuiStyle.Base11, false);
                     }
 
-                    using (gui.ButtonNode("#_ApplyBtn", out pressed, out hovered).ExpandHeight().Margin(0, 4).Enter())
+                    using (gui.Node("#_ApplyBtn").ExpandHeight().Margin(0, 4).Enter())
                     {
-                        if (pressed)
+                        if (gui.IsNodePressed())
                             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10, 6);
-                        else if (hovered)
+                        else if (gui.IsNodeHovered())
                             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f, 10, 6);
                         else
                             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Green, 10, 6);

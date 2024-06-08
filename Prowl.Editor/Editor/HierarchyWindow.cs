@@ -120,7 +120,7 @@ namespace Prowl.Editor
             EditorGUI.Text("Create");
 
             bool closePopup = false;
-            if (EditorGUI.QuickButton("New GameObject"))
+            if (EditorGUI.StyledButton("New GameObject"))
             {
                 var go = new GameObject("New GameObject");
                 if(parent != null)
@@ -138,23 +138,23 @@ namespace Prowl.Editor
                 EditorGUI.Text("GameObject");
 
                 SelectHandler.SelectIfNot(new WeakReference(parent));
-                if (EditorGUI.QuickButton("Rename"))
+                if (EditorGUI.StyledButton("Rename"))
                 {
                     m_RenamingGO = parent;
                     closePopup = true;
                 }
-                if (EditorGUI.QuickButton("Duplicate"))
+                if (EditorGUI.StyledButton("Duplicate"))
                 {
                     DuplicateSelected();
                     closePopup = true;
                 }
-                if (EditorGUI.QuickButton("Delete"))
+                if (EditorGUI.StyledButton("Delete"))
                 {
                     parent.Destroy();
                     closePopup = true;
                 }
 
-                if (SelectHandler.Count > 1 && EditorGUI.QuickButton("Delete All"))
+                if (SelectHandler.Count > 1 && EditorGUI.StyledButton("Delete All"))
                 {
                     SelectHandler.Foreach((go) => {
                         (go.Target as GameObject).Destroy();
@@ -163,7 +163,7 @@ namespace Prowl.Editor
                     closePopup = true;
                 }
 
-                if (SelectHandler.Count > 0 && EditorGUI.QuickButton("Align With View"))
+                if (SelectHandler.Count > 0 && EditorGUI.StyledButton("Align With View"))
                 {
                     SelectHandler.Foreach((go) => {
                         Camera cam = SceneViewWindow.LastFocusedCamera;
@@ -173,7 +173,7 @@ namespace Prowl.Editor
                     closePopup = true;
                 }
 
-                if (SelectHandler.Count == 1 && EditorGUI.QuickButton("Align View With"))
+                if (SelectHandler.Count == 1 && EditorGUI.StyledButton("Align View With"))
                 {
                     Camera cam = SceneViewWindow.LastFocusedCamera;
                     cam.GameObject.Transform.position = parent.Transform.position;

@@ -189,19 +189,19 @@ public class GameWindow : EditorWindow
             switch (PlayMode.Current)
             {
                 case PlayMode.Mode.Editing:
-                    if (EditorGUI.QuickButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                    if (EditorGUI.StyledButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
                         PlayMode.Start();
                     break;
                 case PlayMode.Mode.Playing:
-                    if (EditorGUI.QuickButton(FontAwesome6.Pause, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                    if (EditorGUI.StyledButton(FontAwesome6.Pause, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
                         PlayMode.Pause();
-                    if (EditorGUI.QuickButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
+                    if (EditorGUI.StyledButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
                         PlayMode.Stop();
                     break;
                 case PlayMode.Mode.Paused:
-                    if (EditorGUI.QuickButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                    if (EditorGUI.StyledButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
                         PlayMode.Resume();
-                    if (EditorGUI.QuickButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
+                    if (EditorGUI.StyledButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
                         PlayMode.Stop();
                     break;
 

@@ -2,7 +2,6 @@
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
 using System;
-using System.Runtime.CompilerServices;
 
 namespace Prowl.Runtime.GUI
 {
@@ -66,29 +65,6 @@ namespace Prowl.Runtime.GUI
             }
 
             SetStorage("VScroll", CurrentNode.VScroll);
-        }
-
-        /// <summary>
-        /// A Shortcut to an Interactable Node
-        /// This creates a node with an Interactable and outputs the pressed and hovered states
-        /// </summary>
-        public LayoutNode ButtonNode(string ID, out bool pressed, out bool hovered) => ButtonNode(ID, out pressed, out _, out hovered);
-        /// <summary>
-        /// A Shortcut to an Interactable Node
-        /// This creates a node with an Interactable and outputs the pressed, active and hovered states
-        /// </summary>
-        public LayoutNode ButtonNode(string ID, out bool pressed, out bool active, out bool hovered)
-        {
-            LayoutNode node = Node(ID);
-            using (node.Enter())
-            {
-                Interactable interact = GetInteractable();
-
-                pressed = interact.TakeFocus();
-                active = interact.IsActive();
-                hovered = interact.IsHovered();
-            }
-            return node;
         }
 
         public LayoutNode TextNode(string id, string text, Font? font = null)

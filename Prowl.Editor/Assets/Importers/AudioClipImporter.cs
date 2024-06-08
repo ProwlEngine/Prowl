@@ -158,36 +158,34 @@ namespace Prowl.Editor.Assets.Importers
                 // Play
                 if(preview != null && preview.IsPlaying)
                 {
-                    using (gui.ButtonNode("StopBtn", out var p, out var h).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                    using (gui.Node("StopBtn").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
                     {
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
 
                         gui.Draw2D.DrawText("Stop", gui.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
 
-                        var interact = gui.GetInteractable();
-                        if (interact.TakeFocus())
+                        if (gui.IsNodePressed())
                         {
                             preview.Stop();
                             preview = null;
                         }
 
-                        if (interact.IsHovered())
+                        if (gui.IsNodeHovered())
                             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
                     }
                 }
                 else
                 {
-                    using (gui.ButtonNode("PlayBtn", out var p, out var h).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                    using (gui.Node("PlayBtn").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
                     {
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
 
                         gui.Draw2D.DrawText("Play", gui.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
 
-                        var interact = gui.GetInteractable();
-                        if (interact.TakeFocus())
+                        if (gui.IsNodePressed())
                             preview = AudioSystem.PlaySound(audioClip);
 
-                        if (interact.IsHovered())
+                        if (gui.IsNodeHovered())
                             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
                     }
                 }

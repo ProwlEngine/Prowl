@@ -429,19 +429,19 @@ public class SceneViewWindow : EditorWindow
             switch (PlayMode.Current)
             {
                 case PlayMode.Mode.Editing:
-                    if (EditorGUI.QuickButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                    if (EditorGUI.StyledButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
                         PlayMode.Start();
                     break;
                 case PlayMode.Mode.Playing:
-                    if (EditorGUI.QuickButton(FontAwesome6.Pause, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                    if (EditorGUI.StyledButton(FontAwesome6.Pause, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
                         PlayMode.Pause();
-                    if (EditorGUI.QuickButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
+                    if (EditorGUI.StyledButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
                         PlayMode.Stop();
                     break;
                 case PlayMode.Mode.Paused:
-                    if (EditorGUI.QuickButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                    if (EditorGUI.StyledButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
                         PlayMode.Resume();
-                    if (EditorGUI.QuickButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
+                    if (EditorGUI.StyledButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
                         PlayMode.Stop();
                     break;
 
@@ -465,15 +465,15 @@ public class SceneViewWindow : EditorWindow
         {
             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
 
-            using (gui.ButtonNode("EditorCam", out var pressed, out var hovered).Scale(buttonSize).Enter())
+            using (gui.Node("EditorCam").Scale(buttonSize).Enter())
             {
-                if (pressed)
+                if (gui.IsNodePressed())
                     GlobalSelectHandler.Select(new WeakReference(Cam.GameObject));
 
                 gui.TextNode("Label", FontAwesome6.Camera).Expand();
                 var hovCol = GuiStyle.Base11;
                 hovCol.a = 0.25f;
-                if (hovered)
+                if (gui.IsNodeHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, hovCol, 10);
             }
             gui.Tooltip("Select Editor Camera");
@@ -486,28 +486,28 @@ public class SceneViewWindow : EditorWindow
             if (gui.Combo("GridType", "_GridTypePopup", ref gridTypeIndex, Enum.GetNames(typeof(GridType)), 0, 0, buttonSize, buttonSize, style, FontAwesome6.TableCells))
                 SceneViewPreferences.Instance.GridType = (GridType)gridTypeIndex;
 
-            using (gui.ButtonNode("GizmoMode", out var pressed, out var hovered).Scale(buttonSize).Enter())
+            using (gui.Node("GizmoMode").Scale(buttonSize).Enter())
             {
-                if (pressed)
+                if (gui.IsNodePressed())
                     gizmo.Orientation = (TransformGizmo.GizmoOrientation)((int)gizmo.Orientation == 1 ? 0 : 1);
 
                 gui.TextNode("Label", gizmo.Orientation == 0 ? FontAwesome6.Globe : FontAwesome6.Cube).Expand();
                 var hovCol = GuiStyle.Base11;
                 hovCol.a = 0.25f;
-                if (hovered)
+                if (gui.IsNodeHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, hovCol, 10);
             }
             gui.Tooltip("Gizmo Mode: " + (gizmo.Orientation == 0 ? "World" : "Local"));
 
-            using (gui.ButtonNode("OpenPreferences", out var pressed, out var hovered).Scale(buttonSize).Enter())
+            using (gui.Node("OpenPreferences").Scale(buttonSize).Enter())
             {
-                if (pressed)
+                if (gui.IsNodePressed())
                     new PreferencesWindow(typeof(SceneViewPreferences));
 
                 gui.TextNode("Label", FontAwesome6.Gear).Expand();
                 var hovCol = GuiStyle.Base11;
                 hovCol.a = 0.25f;
-                if (hovered)
+                if (gui.IsNodeHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, hovCol, 10);
             }
             gui.Tooltip("Open Editor Preferences");

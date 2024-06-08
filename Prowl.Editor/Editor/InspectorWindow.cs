@@ -58,17 +58,17 @@ namespace Prowl.Editor
             {
                 ForwardBackButtons();
 
-                using (gui.ButtonNode("LockBtn", out var lockPressed, out var lockHovered).Scale(GuiStyle.ItemHeight).IgnoreLayout().Left(Offset.Percentage(1f, -GuiStyle.ItemHeight)).Enter())
+                using (gui.Node("LockBtn").Scale(GuiStyle.ItemHeight).IgnoreLayout().Left(Offset.Percentage(1f, -GuiStyle.ItemHeight)).Enter())
                 {
                     gui.Draw2D.DrawText(lockSelection ? FontAwesome6.Lock : FontAwesome6.LockOpen, gui.CurrentNode.LayoutData.InnerRect, GuiStyle.Base4, false);
 
-                    if (lockPressed)
+                    if (gui.IsNodePressed())
                     {
                         lockSelection = !lockSelection;
 
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
                     }
-                    else if (lockHovered)
+                    else if (gui.IsNodeHovered())
                     {
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
                     }
@@ -195,29 +195,23 @@ namespace Prowl.Editor
                     break;
             }
 
-            LayoutNode backNode;
-            bool backNodePressed = false;
-            bool backNodeHovered = false;
-            if (_BackStack.Count == 0)
-                backNode = gui.Node("BackBtn");
-            else 
-                backNode = gui.ButtonNode("BackBtn", out backNodePressed, out backNodeHovered);
-
-            using (backNode.Scale(GuiStyle.ItemHeight).Enter())
+            using (gui.Node("BackBtn").Scale(GuiStyle.ItemHeight).Enter())
             {
                 Color backCol = _BackStack.Count == 0 ? Color.white * 0.7f : Color.white;
                 gui.Draw2D.DrawText(FontAwesome6.ArrowLeft, gui.CurrentNode.LayoutData.InnerRect, backCol, false);
-
-                if (backNodePressed)
+                if (_BackStack.Count != 0)
                 {
-                    _ForwardStack.Push(Selected);
-                    Selected = _BackStack.Pop();
+                    if (gui.IsNodePressed())
+                    {
+                        _ForwardStack.Push(Selected);
+                        Selected = _BackStack.Pop();
 
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
-                }
-                else if (backNodeHovered)
-                {
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
+                    }
+                    else if (gui.IsNodeHovered())
+                    {
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
+                    }
                 }
             }
 
@@ -232,29 +226,24 @@ namespace Prowl.Editor
                     break;
             }
 
-            LayoutNode forwardNode;
-            bool forwardNodePressed = false;
-            bool forwardNodeHovered = false;
-            if (_ForwardStack.Count == 0)
-                forwardNode = gui.Node("ForwardBtn");
-            else
-                forwardNode = gui.ButtonNode("ForwardBtn", out forwardNodePressed, out forwardNodeHovered);
-
-            using (forwardNode.Scale(GuiStyle.ItemHeight).Enter())
+            using (gui.Node("ForwardBtn").Scale(GuiStyle.ItemHeight).Enter())
             {
                 Color forwardCol = _ForwardStack.Count == 0 ? Color.white * 0.7f : Color.white;
                 gui.Draw2D.DrawText(FontAwesome6.ArrowRight, gui.CurrentNode.LayoutData.InnerRect, forwardCol, false);
 
-                if (forwardNodePressed)
+                if (gui.IsNodePressed())
                 {
-                    _BackStack.Push(Selected);
-                    Selected = _ForwardStack.Pop();
+                    if (gui.IsNodePressed())
+                    {
+                        _BackStack.Push(Selected);
+                        Selected = _ForwardStack.Pop();
 
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
-                }
-                else if (forwardNodeHovered)
-                {
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
+                    }
+                    else if (gui.IsNodeHovered())
+                    {
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
+                    }
                 }
             }
         }
