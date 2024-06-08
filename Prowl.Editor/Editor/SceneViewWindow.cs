@@ -510,7 +510,7 @@ public class SceneViewWindow : EditorWindow
                 if (hovered)
                     g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
             }
-            g.Tooltip("Open SceneView Preferences");
+            g.Tooltip("Open Editor Preferences");
         }
     }
 
