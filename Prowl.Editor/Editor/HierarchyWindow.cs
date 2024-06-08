@@ -277,13 +277,13 @@ namespace Prowl.Editor
 
                 if (entity.children.Count > 0)
                 {
-                    bool expanded = gui.GetStorage<bool>(entity.InstanceID.ToString());
+                    bool expanded = gui.GetNodeStorage<bool>(entity.InstanceID.ToString());
                     using (gui.Node("VisibilityBtn").TopLeft(maxwidth - entryHeight, 5).Scale(20).Enter())
                     {
                         if (gui.IsNodePressed())
                         {
                             expanded = !expanded;
-                            gui.SetStorage(gui.CurrentNode.Parent, entity.InstanceID.ToString(), expanded);
+                            gui.SetNodeStorage(gui.CurrentNode.Parent, entity.InstanceID.ToString(), expanded);
                         }
                         gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.Rect, entity.enabledInHierarchy ? GuiStyle.Base11 : GuiStyle.Base4);
                     }

@@ -337,13 +337,13 @@ namespace Prowl.Editor
                 else if (interact.IsHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
-                expanded = gui.GetStorage<bool>(root.FullName, defaultOpen);
+                expanded = gui.GetNodeStorage<bool>(root.FullName, defaultOpen);
                 using (gui.Node("ExpandBtn").TopLeft(5, 0).Scale(GuiStyle.ItemHeight).Enter())
                 {
                     if (gui.IsNodePressed())
                     {
                         expanded = !expanded;
-                        gui.SetStorage(gui.CurrentNode.Parent, root.FullName, expanded);
+                        gui.SetNodeStorage(gui.CurrentNode.Parent, root.FullName, expanded);
                     }
                     gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
                 }
@@ -391,7 +391,7 @@ namespace Prowl.Editor
                         if (gui.IsNodePressed())
                         {
                             expanded = !expanded;
-                            gui.SetStorage(gui.CurrentNode.Parent.Parent, subDirectory.FullName, expanded);
+                            gui.SetNodeStorage(gui.CurrentNode.Parent.Parent, subDirectory.FullName, expanded);
                         }
                         gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
                     }
@@ -447,7 +447,7 @@ namespace Prowl.Editor
                             if (gui.IsNodePressed())
                             {
                                 expanded = !expanded;
-                                gui.SetStorage(gui.CurrentNode.Parent.Parent, file.FullName, expanded);
+                                gui.SetNodeStorage(gui.CurrentNode.Parent.Parent, file.FullName, expanded);
                             }
                             gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
                         }

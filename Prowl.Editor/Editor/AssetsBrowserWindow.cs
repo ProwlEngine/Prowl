@@ -288,7 +288,7 @@ namespace Prowl.Editor
                             if (gui.IsNodePressed())
                             {
                                 expanded = !expanded;
-                                gui.SetStorage(gui.CurrentNode.Parent.Parent, file.FullName, expanded);
+                                gui.SetNodeStorage(gui.CurrentNode.Parent.Parent, file.FullName, expanded);
                             }
                             gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronRight : FontAwesome6.ChevronLeft, 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base5);
                         }

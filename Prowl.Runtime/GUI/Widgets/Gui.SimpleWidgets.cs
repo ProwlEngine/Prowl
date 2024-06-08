@@ -16,7 +16,7 @@ namespace Prowl.Runtime.GUI
         {
             style ??= new();
             var n = CurrentNode;
-            CurrentNode.VScroll = GetStorage<double>("VScroll");
+            CurrentNode.VScroll = GetNodeStorage<double>("VScroll");
             //CurrentNode.PaddingRight(ScrollVWidth + ScrollVPadding);
 
             using (Node("_VScroll").Width(ScrollVWidth).Height(Size.Percentage(1f, -(ScrollVPadding * 2))).Left(Offset.Percentage(1f, -(ScrollVWidth + ScrollVPadding))).Top(ScrollVPadding).IgnoreLayout().Enter())
@@ -200,41 +200,24 @@ namespace Prowl.Runtime.GUI
 
         }
 
-        public LayoutNode OpenCloseNode(string id, out bool opened, bool openByDefault = true)
-        {
-            opened = GetStorage<bool>("H_" + id, openByDefault);
-
-            using (Node(id).Enter())
-            {
-                if (IsNodePressed())
-                {
-                    opened = !opened;
-                    SetStorage(CurrentNode.Parent, "H_" + id, opened);
-                }
-                
-                return CurrentNode;
-            }
-        }
-
         public void OpenPopup(string id, Vector2? topleft = null, LayoutNode? popupHolder = null)
         {
-            SetStorage(popupHolder ?? CurrentNode, "Popup", true);
-            SetStorage(popupHolder ?? CurrentNode, "Popup_ID", id.GetHashCode());
-            SetStorage(popupHolder ?? CurrentNode, "PU_POS_" + id, topleft ?? PointerPos);
+            SetNodeStorage(popupHolder ?? CurrentNode, "Popup", true);
+            SetNodeStorage(popupHolder ?? CurrentNode, "Popup_ID", id.GetHashCode());
+            SetNodeStorage(popupHolder ?? CurrentNode, "PU_POS_" + id, topleft ?? PointerPos);
         }
-
 
         private static int nextPopupIndex;
 
         public bool BeginPopup(string id, out LayoutNode? node, bool invisible = false)
         {
             node = null;
-            var show = GetStorage<bool>("Popup");
-            show &= GetStorage<int>("Popup_ID") == id.GetHashCode();
+            var show = GetNodeStorage<bool>("Popup");
+            show &= GetNodeStorage<int>("Popup_ID") == id.GetHashCode();
             // If this node is showing a Popup and the Popup ID is the same as this ID
             if (show)
             {
-                var pos = GetStorage<Vector2>("PU_POS_" + id);
+                var pos = GetNodeStorage<Vector2>("PU_POS_" + id);
                 var parentNode = CurrentNode;
                 // Append to Root
                 using ((node = rootNode.AppendNode("PU_" + id)).Left(pos.x).Top(pos.y).IgnoreLayout().Enter())
@@ -248,13 +231,13 @@ namespace Prowl.Runtime.GUI
                     {
                         CurrentNode.Left(ScreenRect.width - rect.width);
                         pos.x = ScreenRect.width - rect.width;
-                        SetStorage(parentNode, "PU_POS_" + id, pos);
+                        SetNodeStorage(parentNode, "PU_POS_" + id, pos);
                     }
                     if (pos.y + rect.height > ScreenRect.height)
                     {
                         CurrentNode.Top(ScreenRect.height - rect.height);
                         pos.y = ScreenRect.height - rect.height;
-                        SetStorage(parentNode, "PU_POS_" + id, pos);
+                        SetNodeStorage(parentNode, "PU_POS_" + id, pos);
                     }
 
                     if ((IsPointerDown(Silk.NET.Input.MouseButton.Left) || IsPointerDown(Silk.NET.Input.MouseButton.Right)) &&
@@ -282,8 +265,8 @@ namespace Prowl.Runtime.GUI
 
         public void ClosePopup(LayoutNode? popupHolder = null)
         {
-            SetStorage(popupHolder ?? CurrentNode, "Popup", false);
-            SetStorage(popupHolder ?? CurrentNode, "Popup_ID", -1);
+            SetNodeStorage(popupHolder ?? CurrentNode, "Popup", false);
+            SetNodeStorage(popupHolder ?? CurrentNode, "Popup_ID", -1);
         }
 
         public bool Search(string ID, ref string searchText, Offset x, Offset y, Size width, Size? height = null, GuiStyle? style = null)

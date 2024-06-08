@@ -1,4 +1,5 @@
-﻿using Prowl.Editor.Assets;
+﻿using ImageMagick;
+using Prowl.Editor.Assets;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
@@ -101,9 +102,15 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                 // Transform
                 // Header
-                bool opened;
-                using (gui.OpenCloseNode("#_TransformH", out opened, true).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                bool opened = gui.GetNodeStorage("#_Opened_TransformH", true);
+                using (gui.Node("#_TransformH").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
                 {
+                    if (gui.IsNodePressed())
+                    {
+                        opened = !opened;
+                        gui.SetNodeStorage(gui.CurrentNode.Parent, "#_Opened_TransformH", opened);
+                    }
+
                     gui.Draw2D.DrawText((opened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, 8));
                     gui.Draw2D.DrawText("Transform", 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, 7));
 
@@ -188,9 +195,15 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                     // Component
                     // Header
-                    bool compOpened;
-                    using (gui.OpenCloseNode("#_CompH_" + comp.InstanceID, out compOpened, true).ExpandWidth().Height(GuiStyle.ItemHeight).MarginTop(10).Enter())
+                    bool compOpened = gui.GetNodeStorage("#_Opened_CompH", true);
+                    using (gui.Node("#_CompH_" + comp.InstanceID).ExpandWidth().Height(GuiStyle.ItemHeight).MarginTop(10).Enter())
                     {
+                        if (gui.IsNodePressed())
+                        {
+                            compOpened = !compOpened;
+                            gui.SetNodeStorage(gui.CurrentNode.Parent, "#_Opened_CompH", compOpened);
+                        }
+
                         //g.SeperatorHNode(1f, GuiStyle.Base4 * 0.8f);
                         gui.Draw2D.DrawText((compOpened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, 8));
                         gui.Draw2D.DrawText(GetComponentDisplayName(cType), 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, 7));

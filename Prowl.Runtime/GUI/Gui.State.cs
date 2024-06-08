@@ -26,10 +26,10 @@ namespace Prowl.Runtime.GUI
         /// <summary> Get a value from the global GUI storage this persists across Nodes </summary>
         public T GetGlobalStorage<T>(string key) where T : unmanaged => GetStorage<T>(rootNode, key, default);
         /// <summary> Set a value in the global GUI storage this persists across Nodes </summary>
-        public void SetGlobalStorage<T>(string key, T value) where T : unmanaged => SetStorage(rootNode, key, value);
+        public void SetGlobalStorage<T>(string key, T value) where T : unmanaged => SetNodeStorage(rootNode, key, value);
 
         /// <summary> Get a value from the current node's storage </summary>
-        public T GetStorage<T>(string key, T defaultValue = default) where T : unmanaged => GetStorage<T>(CurrentNode, key, defaultValue);
+        public T GetNodeStorage<T>(string key, T defaultValue = default) where T : unmanaged => GetStorage<T>(CurrentNode, key, defaultValue);
 
         /// <summary> Get a value from the current node's storage </summary>
         public T GetStorage<T>(LayoutNode node, string key, T defaultValue = default) where T : unmanaged
@@ -44,9 +44,9 @@ namespace Prowl.Runtime.GUI
         }
 
         /// <summary> Set a value in the current node's storage </summary>
-        public void SetStorage<T>(string key, T value) where T : unmanaged => SetStorage(CurrentNode, key, value);
+        public void SetStorage<T>(string key, T value) where T : unmanaged => SetNodeStorage(CurrentNode, key, value);
         /// <summary> Set a value in the current node's storage </summary>
-        public void SetStorage<T>(LayoutNode node, string key, T value) where T : unmanaged
+        public void SetNodeStorage<T>(LayoutNode node, string key, T value) where T : unmanaged
         {
             if (!_storage.TryGetValue(node.ID, out var storage))
                 _storage[node.ID] = storage = [];
