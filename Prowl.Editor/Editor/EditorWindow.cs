@@ -1,4 +1,5 @@
-﻿using Prowl.Editor.Docking;
+﻿using Prowl.Editor.Assets;
+using Prowl.Editor.Docking;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
@@ -91,7 +92,7 @@ namespace Prowl.Editor
 
                 var width = _width;
                 var height = _height;
-                if(IsDocked)
+                if (IsDocked)
                 {
                     _x = DockPosition.x;
                     _y = DockPosition.y;
@@ -129,7 +130,7 @@ namespace Prowl.Editor
                                     tabWidths[i] = textSize.x + 20;
                                     total += tabWidths[i];
                                 }
-                                
+
                                 double updatedTotal = 0;
                                 if (total > g.CurrentNode.LayoutData.InnerRect.width - 35)
                                 {
@@ -205,9 +206,9 @@ namespace Prowl.Editor
                                                     else
                                                         EditorGuiManager.Remove(window);
                                                 }
-                                                g.Draw2D.DrawText(UIDrawList.DefaultFont, FontAwesome6.Xmark, 20, g.CurrentNode.LayoutData.Rect, g.IsPointerHovering() ? GuiStyle.Base11 : GuiStyle.Base4);
+                                                g.Draw2D.DrawText(UIDrawList.DefaultFont, FontAwesome6.Xmark, 20, g.CurrentNode.LayoutData.Rect, g.IsPointerHovering() ? GuiStyle.Base11 : GuiStyle.Base9);
                                             }
-                                        
+
                                         }
                                     }
                                 }
@@ -217,7 +218,7 @@ namespace Prowl.Editor
                                 g.Draw2D.DrawText(UIDrawList.DefaultFont, Title, 20, g.CurrentNode.LayoutData.Rect, Color.white);
                             }
 
-                            DrawAndHandleCloseButton();
+                            DrawWindowManagementButton();
                         }
 
 
@@ -248,16 +249,68 @@ namespace Prowl.Editor
             }
         }
 
-        private void DrawAndHandleCloseButton()
+        private void DrawWindowManagementButton()
         {
-            using (g.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -20)).Enter())
+            using (g.Node("_WindowManageBtn").Width(20).Height(20).Left(Offset.Percentage(1f, -20)).Enter())
             {
-                var interact = g.GetInteractable();
-                if (interact.TakeFocus())
-                    isOpened = false;
-                if (interact.IsHovered())
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new(1f, 1f, 1f, 0.5f));
-                g.Draw2D.DrawText(UIDrawList.DefaultFont, FontAwesome6.Xmark, 20, g.CurrentNode.LayoutData.Rect, Color.white);
+                if (g.IsNodePressed())
+                    g.OpenPopup("WindowManagement");
+                g.Draw2D.DrawText(FontAwesome6.EllipsisVertical, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base6);
+
+                if (g.BeginPopup("WindowManagement", out var node))
+                {
+                    var popupHolder = g.CurrentNode;
+                    using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
+                    {
+                        bool closePopup = false;
+                        if (EditorGUI.QuickButton("Duplicate"))
+                        {
+                            _ = (EditorWindow)Activator.CreateInstance(GetType());
+                            closePopup = true;
+                        }
+
+                        if (EditorGUI.QuickButton("Close All"))
+                        {
+                            if(!IsDocked)
+                                EditorGuiManager.Remove(this);
+                            else
+                            {
+                                foreach (var window in Leaf.LeafWindows)
+                                {
+                                    EditorGuiManager.Remove(window);
+                                }
+                            }
+                            closePopup = true;
+                        }
+
+                        EditorGUI.Separator();
+
+                        if (EditorGUI.QuickButton("Scene View"))            { new SceneViewWindow(); closePopup = true; }
+                        if (EditorGUI.QuickButton("Game"))                  { new GameWindow(); closePopup = true; }
+                        if (EditorGUI.QuickButton("Hierarchy"))             { new HierarchyWindow(); closePopup = true; }
+                        if (EditorGUI.QuickButton("Inspector"))             { new InspectorWindow(); closePopup = true; }
+                        if (EditorGUI.QuickButton("Asset Browser"))         { new AssetsBrowserWindow(); closePopup = true; }
+                        if (EditorGUI.QuickButton("Asset Tree"))            { new AssetsTreeWindow(); closePopup = true; }
+                        if (EditorGUI.QuickButton("Console"))               { new ConsoleWindow(); closePopup = true; }
+                        if (EditorGUI.QuickButton("Project Settings"))      { new ProjectSettingsWindow(); closePopup = true; }
+                        if (EditorGUI.QuickButton("Editor Preferences"))    { new PreferencesWindow(); closePopup = true; }
+
+                        if (closePopup)
+                            g.ClosePopup(popupHolder);
+                    }
+                }
+            }
+
+            if (!IsDocked)
+            {
+                // If the window isnt docked then theres no tab with a Close button
+                // So we need to draw the close button on the title bar instead
+                using (g.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -45)).Enter())
+                {
+                    if (g.IsNodePressed())
+                        isOpened = false;
+                    g.Draw2D.DrawText(FontAwesome6.Xmark, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base6);
+                }
             }
         }
 
@@ -266,7 +319,7 @@ namespace Prowl.Editor
         {
             using (g.Node("ResizeTab").TopLeft(Offset.Percentage(1f, -15)).Scale(15).IgnoreLayout().Enter())
             {
-                if(g.IsNodePressed() || g.IsNodeActive())
+                if (g.IsNodePressed() || g.IsNodeActive())
                 {
                     if (!_wasResizing)
                     {
