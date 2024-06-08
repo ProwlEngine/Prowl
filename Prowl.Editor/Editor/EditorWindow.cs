@@ -167,13 +167,12 @@ namespace Prowl.Editor
 
                                         if (window != this)
                                         {
-                                            var interact = g.GetInteractable();
-                                            if (interact.TakeFocus())
+                                            if (g.IsNodePressed())
                                             {
                                                 Leaf.WindowNum = i;
                                                 EditorGuiManager.FocusWindow(window);
                                             }
-                                            if (interact.IsHovered())
+                                            if (g.IsNodeHovered())
                                                 g.Draw2D.DrawRectFilled(tabRect, GuiStyle.Borders, 10);
                                         }
                                         if (window == this)
@@ -190,6 +189,26 @@ namespace Prowl.Editor
                                         else
                                             g.Draw2D.DrawText(UIDrawList.DefaultFont, "...", 20, new Vector2(tabRect.x + (tabRect.width * 0.5) - 5, pos.y), Color.white);
 
+                                        // Close Button
+                                        if (g.IsPointerHovering())
+                                        {
+                                            using (g.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -23)).Enter())
+                                            {
+                                                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new Color(1, 1, 1, 150), 10);
+                                                if (g.IsNodePressed())
+                                                {
+                                                    //Leaf.LeafWindows.Remove(window);
+                                                    //EditorGuiManager.Remove(window);
+                                                    //EditorGuiManager.FocusWindow(Leaf.LeafWindows[Leaf.WindowNum]);
+                                                    if (window == this)
+                                                        isOpened = false;
+                                                    else
+                                                        EditorGuiManager.Remove(window);
+                                                }
+                                                g.Draw2D.DrawText(UIDrawList.DefaultFont, FontAwesome6.Xmark, 20, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base4);
+                                            }
+                                        
+                                        }
                                     }
                                 }
                             }
