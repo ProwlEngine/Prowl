@@ -190,12 +190,12 @@ namespace Prowl.Editor
                                             g.Draw2D.DrawText(UIDrawList.DefaultFont, "...", 20, new Vector2(tabRect.x + (tabRect.width * 0.5) - 5, pos.y), Color.white);
 
                                         // Close Button
-                                        if (g.IsPointerHovering())
+                                        if (g.IsNodePressed())
                                         {
                                             using (g.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -23)).Enter())
                                             {
                                                 g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new Color(1, 1, 1, 150), 10);
-                                                if (g.IsNodePressed())
+                                                if (g.IsPointerHovering() && g.IsPointerClick())
                                                 {
                                                     //Leaf.LeafWindows.Remove(window);
                                                     //EditorGuiManager.Remove(window);
