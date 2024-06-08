@@ -91,23 +91,26 @@ public static class EditorGuiManager
                 Vector2 cursorPos = g.PointerPos;
                 if (!g.IsPointerMoving && (g.ActiveID == 0 || g.ActiveID == null) && DragSplitter == null)
                 {
-                    DockNode node = Container.Root.TraceSeparator(cursorPos.x, cursorPos.y);
-                    if (node != null)
+                    if (!Gui.IsBlockedByInteractable(cursorPos))
                     {
-                        node.GetSplitterBounds(out var bmins, out var bmaxs, 4);
-
-                        g.SetZIndex(11000);
-                        g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
-                        g.SetZIndex(0);
-
-                        if (g.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+                        DockNode node = Container.Root.TraceSeparator(cursorPos.x, cursorPos.y);
+                        if (node != null)
                         {
-                            m_DragPos = cursorPos;
-                            DragSplitter = node;
-                            if (DragSplitter.Type == DockNode.NodeType.SplitVertical)
-                                m_StartSplitPos = Mathf.Lerp(DragSplitter.Mins.x, DragSplitter.Maxs.x, DragSplitter.SplitDistance);
-                            else
-                                m_StartSplitPos = Mathf.Lerp(DragSplitter.Mins.y, DragSplitter.Maxs.y, DragSplitter.SplitDistance);
+                            node.GetSplitterBounds(out var bmins, out var bmaxs, 4);
+
+                            g.SetZIndex(11000);
+                            g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
+                            g.SetZIndex(0);
+
+                            if (g.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+                            {
+                                m_DragPos = cursorPos;
+                                DragSplitter = node;
+                                if (DragSplitter.Type == DockNode.NodeType.SplitVertical)
+                                    m_StartSplitPos = Mathf.Lerp(DragSplitter.Mins.x, DragSplitter.Maxs.x, DragSplitter.SplitDistance);
+                                else
+                                    m_StartSplitPos = Mathf.Lerp(DragSplitter.Mins.y, DragSplitter.Maxs.y, DragSplitter.SplitDistance);
+                            }
                         }
                     }
                 }
