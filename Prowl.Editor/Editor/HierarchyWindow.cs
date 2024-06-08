@@ -120,13 +120,14 @@ namespace Prowl.Editor
             EditorGUI.Text("Create");
 
             bool closePopup = false;
-            if (closePopup |= EditorGUI.QuickButton("New GameObject"))
+            if (EditorGUI.QuickButton("New GameObject"))
             {
                 var go = new GameObject("New GameObject");
                 if(parent != null)
                     go.SetParent(parent);
                 go.Transform.localPosition = Vector3.zero;
                 SelectHandler.SetSelection(new WeakReference(go));
+                closePopup = true;
             }
 
             MenuItem.DrawMenuRoot("Template");
@@ -137,36 +138,48 @@ namespace Prowl.Editor
                 EditorGUI.Text("GameObject");
 
                 SelectHandler.SelectIfNot(new WeakReference(parent));
-                if (closePopup |= EditorGUI.QuickButton("Rename"))
+                if (EditorGUI.QuickButton("Rename"))
+                {
                     m_RenamingGO = parent;
-                if (closePopup |= EditorGUI.QuickButton("Duplicate"))
+                    closePopup = true;
+                }
+                if (EditorGUI.QuickButton("Duplicate"))
+                {
                     DuplicateSelected();
-                if (closePopup |= EditorGUI.QuickButton("Delete"))
+                    closePopup = true;
+                }
+                if (EditorGUI.QuickButton("Delete"))
+                {
                     parent.Destroy();
+                    closePopup = true;
+                }
 
-                if (SelectHandler.Count > 1 && (closePopup |= EditorGUI.QuickButton("Delete All")))
+                if (SelectHandler.Count > 1 && EditorGUI.QuickButton("Delete All"))
                 {
                     SelectHandler.Foreach((go) => {
                         (go.Target as GameObject).Destroy();
                     });
                     SelectHandler.Clear();
+                    closePopup = true;
                 }
 
-                if (SelectHandler.Count > 0 && (closePopup |= EditorGUI.QuickButton("Align With View")))
+                if (SelectHandler.Count > 0 && EditorGUI.QuickButton("Align With View"))
                 {
                     SelectHandler.Foreach((go) => {
                         Camera cam = SceneViewWindow.LastFocusedCamera;
                         (go.Target as GameObject).Transform.position = cam.GameObject.Transform.position;
                         (go.Target as GameObject).Transform.rotation = cam.GameObject.Transform.rotation;
                     });
+                    closePopup = true;
                 }
 
-                if (SelectHandler.Count == 1 && (closePopup |= EditorGUI.QuickButton("Align View With")))
+                if (SelectHandler.Count == 1 && EditorGUI.QuickButton("Align View With"))
                 {
                     Camera cam = SceneViewWindow.LastFocusedCamera;
                     cam.GameObject.Transform.position = parent.Transform.position;
                     cam.GameObject.Transform.rotation = parent.Transform.rotation;
                     SceneViewWindow.SetCamera(parent.Transform.position, parent.Transform.rotation);
+                    closePopup = true;
                 }
             }
 

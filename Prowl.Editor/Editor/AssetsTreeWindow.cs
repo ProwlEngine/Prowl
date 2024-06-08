@@ -131,7 +131,7 @@ namespace Prowl.Editor
                     var popupHolder = g.CurrentNode;
                     if (g.BeginPopup("CreateOrImportAsset", out var node))
                     {
-                        using (node.Width(150).Padding(5).Layout(LayoutType.Column).FitContentHeight().Enter())
+                        using (node.Width(180).Padding(5).Layout(LayoutType.Column).FitContentHeight().Enter())
                         {
                             DrawContextMenu(null, null, false, popupHolder);
                         }
@@ -193,65 +193,48 @@ namespace Prowl.Editor
 
             if (fileInfo == null)
             {
-                EditorGUI.Text("Root Folder");
-                MainMenuItems.Directory = directory;
-                MainMenuItems.fromAssetBrowser = fromAssetBrowser;
-                if (closePopup |= EditorGUI.QuickButton("Show In Explorer"))
-                    AssetDatabase.OpenPath(new DirectoryInfo(Project.ProjectAssetDirectory));
-                if (closePopup |= EditorGUI.QuickButton("Reimport All"))
-                    AssetDatabase.ReimportAll();
-
+                DrawCreateContextMenu(directory, fromAssetBrowser);
                 EditorGUI.Separator();
-                EditorGUI.Text("Create");
-
-                MainMenuItems.Directory = new DirectoryInfo(Project.ProjectAssetDirectory);
-                MainMenuItems.fromAssetBrowser = fromAssetBrowser;
-                MenuItem.DrawMenuRoot("Create");
-
-                EditorGUI.Separator();
-                EditorGUI.Text("Project");
-                if (closePopup |= EditorGUI.QuickButton("Open Project Settings"))
-                    new ProjectSettingsWindow();
-                if (closePopup |= EditorGUI.QuickButton("Recompile Project"))
-                    Program.RegisterReloadOfExternalAssemblies();
-                if (closePopup |= EditorGUI.QuickButton("Build Project"))
-                    Project.BuildProject();
+                DrawProjectContextMenu(ref closePopup);
             }
             else if (fileInfo is FileInfo file)
             {
                 if (EditorGUI.QuickButton("Rename"))
                     if (fromAssetBrowser)
-                    { 
+                    {
                         AssetsBrowserWindow.StartRename(file.FullName);
+                        closePopup = true;
                     }
                     else
                     {
                         StartRename(file.FullName);
+                        closePopup = true;
                     }
-                if (closePopup |= EditorGUI.QuickButton("Reimport"))
+                if (EditorGUI.QuickButton("Reimport"))
+                {
                     AssetDatabase.Reimport(file);
+                    closePopup = true;
+                }
                 EditorGUI.Separator();
-                MainMenuItems.Directory = file.Directory;
-                MainMenuItems.fromAssetBrowser = fromAssetBrowser;
-                MenuItem.DrawMenuRoot("Create");
-                if (closePopup |= EditorGUI.QuickButton("Show In Explorer"))
+                if (EditorGUI.QuickButton("Show In Explorer"))
+                {
                     AssetDatabase.OpenPath(file.Directory);
-                if (closePopup |= EditorGUI.QuickButton("Open"))
+                    closePopup = true;
+                }
+                if (EditorGUI.QuickButton("Open"))
+                {
                     AssetDatabase.OpenPath(file);
-                if (closePopup |= EditorGUI.QuickButton("Delete"))
+                    closePopup = true;
+                }
+                if (EditorGUI.QuickButton("Delete"))
+                {
                     file.Delete();
-                EditorGUI.Separator();
-                if (closePopup |= EditorGUI.QuickButton("Reimport All"))
-                    AssetDatabase.ReimportAll();
+                    closePopup = true;
+                }
 
+                DrawCreateContextMenu(file.Directory, fromAssetBrowser);
                 EditorGUI.Separator();
-                EditorGUI.Text("Project");
-                if (closePopup |= EditorGUI.QuickButton("Open Project Settings"))
-                    new ProjectSettingsWindow();
-                if (closePopup |= EditorGUI.QuickButton("Recompile Project"))
-                    Program.RegisterReloadOfExternalAssemblies();
-                if (closePopup |= EditorGUI.QuickButton("Build Project"))
-                    Project.BuildProject();
+                DrawProjectContextMenu(ref closePopup);
             }
             else if (fileInfo is DirectoryInfo dir)
             {
@@ -259,39 +242,79 @@ namespace Prowl.Editor
                     if (fromAssetBrowser)
                     {
                         AssetsBrowserWindow.StartRename(dir.FullName);
+                        closePopup = true;
                     }
                     else
                     {
                         StartRename(dir.FullName);
+                        closePopup = true;
                     }
-                if (closePopup |= EditorGUI.QuickButton("Reimport"))
+                if (EditorGUI.QuickButton("Reimport"))
+                {
                     AssetDatabase.ReimportFolder(dir);
+                    closePopup = true;
+                }
                 EditorGUI.Separator();
-                MainMenuItems.Directory = dir;
-                MainMenuItems.fromAssetBrowser = fromAssetBrowser;
-                MenuItem.DrawMenuRoot("Create");
-                if (closePopup |= EditorGUI.QuickButton("Show In Explorer"))
+                if (EditorGUI.QuickButton("Show In Explorer"))
+                {
                     AssetDatabase.OpenPath(dir.Parent!);
-                if (closePopup |= EditorGUI.QuickButton("Open"))
-                    AssetDatabase.OpenPath(dir);
-                if (closePopup |= EditorGUI.QuickButton("Delete"))
+                    closePopup = true;
+                }
+                if (EditorGUI.QuickButton("Delete"))
+                {
                     dir.Delete(true);
+                    closePopup = true;
+                }
                 EditorGUI.Separator();
-                if (closePopup |= EditorGUI.QuickButton("Reimport All"))
-                    AssetDatabase.ReimportAll();
 
+                DrawCreateContextMenu(dir, fromAssetBrowser);
                 EditorGUI.Separator();
-                EditorGUI.Text("Project");
-                if (closePopup |= EditorGUI.QuickButton("Open Project Settings"))
-                    new ProjectSettingsWindow();
-                if (closePopup |= EditorGUI.QuickButton("Recompile Project"))
-                    Program.RegisterReloadOfExternalAssemblies();
-                if (closePopup |= EditorGUI.QuickButton("Build Project"))
-                    Project.BuildProject();
+                DrawProjectContextMenu(ref closePopup);
             }
 
             if (closePopup)
                 Gui.ActiveGUI.ClosePopup(popupHolder);
+        }
+
+        private static void DrawCreateContextMenu(DirectoryInfo? directory, bool fromAssetBrowser)
+        {
+            EditorGUI.Text("Create");
+
+            MainMenuItems.Directory = directory;
+            MainMenuItems.fromAssetBrowser = fromAssetBrowser;
+            MenuItem.DrawMenuRoot("Create");
+        }
+
+        private static void DrawProjectContextMenu(ref bool closePopup)
+        {
+            EditorGUI.Text("Project");
+
+            if (EditorGUI.QuickButton("Reimport All"))
+            {
+                AssetDatabase.ReimportAll();
+                closePopup = true;
+            }
+
+            if (EditorGUI.QuickButton("Open Project Settings"))
+            {
+                new ProjectSettingsWindow();
+                closePopup = true;
+            }
+            if (EditorGUI.QuickButton("Recompile Project"))
+            {
+                Program.RegisterReloadOfExternalAssemblies();
+                closePopup = true;
+            }
+            if (EditorGUI.QuickButton("Build Project"))
+            {
+                Project.BuildProject();
+                closePopup = true;
+            }
+            if (EditorGUI.QuickButton("Show Project In Explorer"))
+            {
+                AssetDatabase.OpenPath(new DirectoryInfo(Project.ProjectAssetDirectory));
+                closePopup = true;
+            }
         }
 
         private void RenderRootFolder(bool defaultOpen, DirectoryInfo root, Color col)
