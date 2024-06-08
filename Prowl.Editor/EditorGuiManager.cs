@@ -32,6 +32,9 @@ public static class EditorGuiManager
 
     public static void FocusWindow(EditorWindow editorWindow)
     {
+        if (FocusedWindow != null && FocusedWindow.Target != editorWindow)
+            Gui.ClearFocus();
+
         Windows.Remove(editorWindow);
         Windows.Add(editorWindow);
         FocusedWindow = new WeakReference(editorWindow);
@@ -143,21 +146,26 @@ public static class EditorGuiManager
                 }
             }
 
-            for (int i = 0; i < Windows.Count; i++)
+            // Focus Windows first
+            var windowList = new List<EditorWindow>(Windows);
+            for (int i = 0; i < windowList.Count; i++)
             {
-                var window = Windows[i];
+                var window = windowList[i];
+                if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) || g.IsPointerClick(Silk.NET.Input.MouseButton.Right)))
+                    if (!g.IsBlockedByInteractable(g.PointerPos, window.MaxZ))
+                        FocusWindow(window);
+            }
+
+            // Draw/Update Windows
+            for (int i = 0; i < windowList.Count; i++)
+            {
+                var window = windowList[i];
                 if (!window.IsDocked || window.Leaf.LeafWindows[window.Leaf.WindowNum] == window)
                 {
                     g.SetZIndex(i * 100);
                     g.PushID((ulong)window._id);
                     window.ProcessFrame();
                     g.PopID();
-
-                    // Focus Window
-                    if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) || g.IsPointerClick(Silk.NET.Input.MouseButton.Right)))
-                        if (!g.IsBlockedByInteractable(g.PointerPos))
-                            FocusWindow(window);
-
                 }
 
             }

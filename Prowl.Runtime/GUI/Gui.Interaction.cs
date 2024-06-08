@@ -58,6 +58,18 @@ namespace Prowl.Runtime.GUI
             return zIndex + (count / 1000.0);
         }
 
+        public double GetCurrentInteractableZLayer()
+        {
+            if (!_zInteractableCounter.TryGetValue(CurrentZIndex, out int count))
+                count = 0;
+            return CurrentZIndex + (count / 1000.0);
+        }
+
+        public void ClearFocus()
+        {
+            FocusID = 0;
+        }
+
         /// <summary>
         /// Block all interactables in the given rect below this ZIndex/Node
         /// Usefull for Popups/Windows when you want to prevent interaction with things below/behind it

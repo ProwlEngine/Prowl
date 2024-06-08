@@ -148,9 +148,6 @@ namespace Prowl.Editor
                 var dropInteract = gui.GetInteractable();
                 //HandleDrop();
 
-                if (!SelectHandler.SelectedThisFrame && dropInteract.TakeFocus())
-                    SelectHandler.Clear();
-
                 //if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
                 //    DuplicateSelected();
 
@@ -185,6 +182,10 @@ namespace Prowl.Editor
                     RenderRootFolder(false, AssetDatabase.GetRootFolders()[0], GuiStyle.Red); // Defaults Folder
                     RenderRootFolder(false, AssetDatabase.GetRootFolders()[1], GuiStyle.Red); // Packages Folder
                 }
+
+                if (!SelectHandler.SelectedThisFrame && dropInteract.TakeFocus())
+                    SelectHandler.Clear();
+
 
                 gui.ScrollV();
             }
