@@ -526,7 +526,7 @@ namespace Prowl.Editor
 
             if(index != -1)
                 SelectHandler.AddSelectableAtIndex(index, entry);
-            if (interact.TakeFocus())
+            if (interact.TakeFocus(true))
                 SelectHandler.Select(index, entry);
 
             if (isAsset && interact.IsHovered() && Gui.ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
