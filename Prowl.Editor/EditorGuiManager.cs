@@ -163,7 +163,9 @@ public static class EditorGuiManager
 
         foreach (var window in WindowsToRemove)
         {
-            if(FocusedWindow != null && FocusedWindow.Target == window)
+            if(window.IsDocked)
+                Container.DetachWindow(window);
+            if (FocusedWindow != null && FocusedWindow.Target == window)
                 FocusedWindow = null;
             Windows.Remove(window);
         }
