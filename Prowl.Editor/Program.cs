@@ -52,13 +52,20 @@ public static class Program
                 {
                     CreatedDefaultWindows = true;
                     //new EditorMainMenubar();
-                    new HierarchyWindow();
-                    new SceneViewWindow();
-                    new GameWindow();
-                    new InspectorWindow();
-                    new ConsoleWindow();
-                    new AssetsBrowserWindow();
-                    new AssetsTreeWindow();
+                    var console = EditorGuiManager.DockWindowTo(new ConsoleWindow(), null, Docking.DockZone.Center);
+                    var assetbrowser = EditorGuiManager.DockWindowTo(new AssetsBrowserWindow(), console, Docking.DockZone.Center);
+                    // Add Asset Tree, When we do this AssetBrowser node will subdivide into two children
+                    var assettree = EditorGuiManager.DockWindowTo(new AssetsTreeWindow(), assetbrowser, Docking.DockZone.Left, 0.2f);
+                    // So for the Inspector we need to use the Child to dock now
+                    var inspector = EditorGuiManager.DockWindowTo(new InspectorWindow(), assetbrowser.Child[1], Docking.DockZone.Right, 0.75f);
+                    // Now Asset Browser is Subdivided twice, 
+                    assetbrowser = assetbrowser.Child[1].Child[0];
+                    var game = EditorGuiManager.DockWindowTo(new GameWindow(), assetbrowser, Docking.DockZone.Top, 0.65f);
+                    var scene = EditorGuiManager.DockWindowTo(new SceneViewWindow(), game, Docking.DockZone.Center);
+
+                    // and finally hierarchy on top of asset tree
+                    var hierarchy = EditorGuiManager.DockWindowTo(new HierarchyWindow(), assettree, Docking.DockZone.Top, 0.65f);
+
                     //new ProjectSettingsWindow();
                     //new PreferencesWindow();
                     //new AssetSelectorWindow(typeof(Texture2D), (guid, fileid) => {  });
