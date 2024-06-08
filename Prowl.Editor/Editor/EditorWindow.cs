@@ -190,7 +190,7 @@ namespace Prowl.Editor
                                             g.Draw2D.DrawText(UIDrawList.DefaultFont, "...", 20, new Vector2(tabRect.x + (tabRect.width * 0.5) - 5, pos.y), Color.white);
 
                                         // Close Button
-                                        if (g.IsNodePressed())
+                                        if (g.IsNodeHovered())
                                         {
                                             using (g.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -23)).Enter())
                                             {
@@ -205,7 +205,7 @@ namespace Prowl.Editor
                                                     else
                                                         EditorGuiManager.Remove(window);
                                                 }
-                                                g.Draw2D.DrawText(UIDrawList.DefaultFont, FontAwesome6.Xmark, 20, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base4);
+                                                g.Draw2D.DrawText(UIDrawList.DefaultFont, FontAwesome6.Xmark, 20, g.CurrentNode.LayoutData.Rect, g.IsPointerHovering() ? GuiStyle.Base11 : GuiStyle.Base4);
                                             }
                                         
                                         }
