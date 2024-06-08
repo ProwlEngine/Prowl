@@ -11,7 +11,7 @@ namespace Prowl.Runtime
         public const double ItemPadding = 4;
 
         // Base Colors 
-        public static Color Black => new(0, 0, 0);
+        public static Color Black => new(0, 0, 0, 255);
         public static Color Background => new(15, 15, 18);
         public static Color WindowBackground => new(31, 33, 40);
         public static Color Borders => new(49, 52, 66); // Border
