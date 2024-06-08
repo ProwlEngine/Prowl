@@ -16,18 +16,37 @@ namespace Prowl.Runtime.GUI
 
     public class GuiDraw3D(Gui gui)
     {
-        private Matrix4x4 _mvp;
-        private Rect _viewport;
+        public class GUI3DViewScope : IDisposable
+        {
+            public GUI3DViewScope(Rect viewport) => Gui.ActiveGUI.Draw3D._viewports.Push(viewport);
+            public void Dispose() => Gui.ActiveGUI.Draw3D._viewports.Pop();
+        }
+
+        public class GUI3DMVPScope : IDisposable
+        {
+            public GUI3DMVPScope(Matrix4x4 mvp) => Gui.ActiveGUI.Draw3D._mvps.Push(mvp);
+            public void Dispose() => Gui.ActiveGUI.Draw3D._mvps.Pop();
+        }
+
         private readonly Gui _gui = gui;
 
-        public void Setup3DObject(Matrix4x4 mvp, Rect viewport)
-        {
-            _mvp = mvp;
-            _viewport = viewport;
-        }
+        private Stack<Rect> _viewports = new Stack<Rect>();
+        private Rect _viewport => _viewports.Peek();
+
+        private Stack<Matrix4x4> _mvps = new Stack<Matrix4x4>();
+        private Matrix4x4 _mvp => _mvps.Peek();
+
+        private bool hasViewport => _viewports.Count > 0;
+        private bool hasMVP => _mvps.Count > 0;
+
+        public GUI3DViewScope Viewport(Rect viewport) => new GUI3DViewScope(viewport);
+        public GUI3DMVPScope Matrix(Matrix4x4 mvp) => new GUI3DMVPScope(mvp);
 
         public void Arc(double radius, double startAngle, double endAngle, Stroke3D stroke)
         {
+            if (!hasViewport) throw new InvalidOperationException("No viewport set.");
+            if (!hasMVP) throw new InvalidOperationException("No MVP set.");
+
             var startRad = startAngle * Mathf.Deg2Rad;
             var endRad = endAngle * Mathf.Deg2Rad;
             var points = ArcPoints(radius, startRad, endRad);
@@ -42,6 +61,9 @@ namespace Prowl.Runtime.GUI
 
         public void FilledCircle(double radius, Stroke3D stroke)
         {
+            if (!hasViewport) throw new InvalidOperationException("No viewport set.");
+            if (!hasMVP) throw new InvalidOperationException("No MVP set.");
+
             var points = ArcPoints(radius, 0.0, Math.PI * 2);
             if (points.Count <= 0) return;
             _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count - 1, stroke.Color.GetUInt(), stroke.AntiAliased);
@@ -49,6 +71,9 @@ namespace Prowl.Runtime.GUI
 
         public void LineSegment(Vector3 from, Vector3 to, Stroke3D stroke)
         {
+            if (!hasViewport) throw new InvalidOperationException("No viewport set.");
+            if (!hasMVP) throw new InvalidOperationException("No MVP set.");
+
             var points = new Vector2[2];
 
             for (int i = 0; i < 2; i++)
@@ -65,6 +90,9 @@ namespace Prowl.Runtime.GUI
 
         public void Arrow(Vector3 from, Vector3 to, Stroke3D stroke)
         {
+            if (!hasViewport) throw new InvalidOperationException("No viewport set.");
+            if (!hasMVP) throw new InvalidOperationException("No MVP set.");
+
             if (WorldToScreen(_viewport, _mvp, from, out Vector2 arrowStart) &&
                 WorldToScreen(_viewport, _mvp, to, out Vector2 arrowEnd))
             {
@@ -83,6 +111,9 @@ namespace Prowl.Runtime.GUI
 
         public void Polygon(IEnumerable<Vector3> points, Stroke3D stroke)
         {
+            if (!hasViewport) throw new InvalidOperationException("No viewport set.");
+            if (!hasMVP) throw new InvalidOperationException("No MVP set.");
+
             var screenPoints = new UIBuffer<Vector2>();
             foreach (Vector3 pos in points)
                 if (WorldToScreen(_viewport, _mvp, pos, out Vector2 screenPos))
@@ -94,6 +125,9 @@ namespace Prowl.Runtime.GUI
 
         public void Polyline(IEnumerable<Vector3> points, Stroke3D stroke)
         {
+            if (!hasViewport) throw new InvalidOperationException("No viewport set.");
+            if (!hasMVP) throw new InvalidOperationException("No MVP set.");
+
             var screenPoints = new UIBuffer<Vector2>();
             foreach (Vector3 pos in points)
                 if (WorldToScreen(_viewport, _mvp, pos, out Vector2 screenPos))
@@ -105,6 +139,9 @@ namespace Prowl.Runtime.GUI
 
         public void Sector(double radius, double startAngle, double endAngle, Stroke3D stroke)
         {
+            if (!hasViewport) throw new InvalidOperationException("No viewport set.");
+            if (!hasMVP) throw new InvalidOperationException("No MVP set.");
+
             var startRad = startAngle * Mathf.Deg2Rad;
             var endRad = endAngle * Mathf.Deg2Rad;
 

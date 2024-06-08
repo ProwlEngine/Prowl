@@ -109,71 +109,72 @@ namespace Prowl.Runtime.GUI
         {
             var transform = RotationMatrix();
 
-            _gizmo._gui.Draw3D.Setup3DObject(transform * _gizmo.ViewProjection, _gizmo.Viewport);
-
-            var color = GizmoUtils.GizmoColor(_gizmo, focused, _params.Direction);
-            var stroke = new Stroke3D() { Thickness = _gizmo.StrokeWidth, Color = color, AntiAliased = true };
-
-            var radius = ArcRadius();
-
-            if (!focused)
+            using (_gizmo._gui.Draw3D.Matrix(transform * _gizmo.ViewProjection))
             {
-                var angle = ArcAngle();
-                _gizmo._gui.Draw3D.Arc(radius, (Math.PI / 2 - angle) * Mathf.Rad2Deg, (Math.PI / 2 + angle) * Mathf.Rad2Deg, stroke);
-            }
-            else
-            {
-                var startAngle = _state.StartAxisAngle + Math.PI / 2;
-                var endAngle = startAngle + _state.CurrentDelta;
+                var color = GizmoUtils.GizmoColor(_gizmo, focused, _params.Direction);
+                var stroke = new Stroke3D() { Thickness = _gizmo.StrokeWidth, Color = color, AntiAliased = true };
 
-                if (startAngle > endAngle)
+                var radius = ArcRadius();
+
+                if (!focused)
                 {
-                    (startAngle, endAngle) = (endAngle, startAngle);
+                    var angle = ArcAngle();
+                    _gizmo._gui.Draw3D.Arc(radius, (Math.PI / 2 - angle) * Mathf.Rad2Deg, (Math.PI / 2 + angle) * Mathf.Rad2Deg, stroke);
                 }
-
-                endAngle += 1e-5;
-
-                var totalAngle = endAngle - startAngle;
-                var fullCircles = (int)Math.Abs(totalAngle / Math.Tau);
-
-                endAngle -= Math.Tau * fullCircles;
-
-                var startAngle2 = endAngle;
-                var endAngle2 = startAngle + Math.Tau;
-
-                if (Vector3.Dot(_gizmo.ViewForward, GizmoUtils.GizmoNormal(_gizmo, _params.Direction)) < 0)
+                else
                 {
-                    (startAngle, endAngle) = (endAngle, startAngle);
-                    (startAngle2, endAngle2) = (endAngle2, startAngle2);
-                }
+                    var startAngle = _state.StartAxisAngle + Math.PI / 2;
+                    var endAngle = startAngle + _state.CurrentDelta;
 
-                _gizmo._gui.Draw3D.Polyline(new[]
-                {
+                    if (startAngle > endAngle)
+                    {
+                        (startAngle, endAngle) = (endAngle, startAngle);
+                    }
+
+                    endAngle += 1e-5;
+
+                    var totalAngle = endAngle - startAngle;
+                    var fullCircles = (int)Math.Abs(totalAngle / Math.Tau);
+
+                    endAngle -= Math.Tau * fullCircles;
+
+                    var startAngle2 = endAngle;
+                    var endAngle2 = startAngle + Math.Tau;
+
+                    if (Vector3.Dot(_gizmo.ViewForward, GizmoUtils.GizmoNormal(_gizmo, _params.Direction)) < 0)
+                    {
+                        (startAngle, endAngle) = (endAngle, startAngle);
+                        (startAngle2, endAngle2) = (endAngle2, startAngle2);
+                    }
+
+                    _gizmo._gui.Draw3D.Polyline(new[]
+                    {
                     new Vector3(Math.Cos(startAngle) * radius, 0, Math.Sin(startAngle) * radius),
                     Vector3.zero,
                     new Vector3(Math.Cos(endAngle) * radius, 0, Math.Sin(endAngle) * radius)
                 }, stroke);
 
-                var w = stroke;
-                if (fullCircles > 0)
-                {
-                    w.Color.alpha = (byte)(stroke.Color.alpha * Math.Min(0.25f * fullCircles, 1f));
-                    _gizmo._gui.Draw3D.Sector(radius, startAngle2 * Mathf.Rad2Deg, endAngle2 * Mathf.Rad2Deg, w);
-                }
-
-                w.Color.alpha = (byte)(stroke.Color.alpha * Math.Min(0.25f * (fullCircles + 1), 1f));
-                _gizmo._gui.Draw3D.Sector(radius, startAngle * Mathf.Rad2Deg, endAngle * Mathf.Rad2Deg, w);
-
-                _gizmo._gui.Draw3D.Circle(radius, stroke);
-
-                if (_gizmo.Snapping)
-                {
-                    var strokeWidth = stroke.Thickness / 2;
-                    for (int i = 0; i <= Math.Tau / (_gizmo.SnapAngle * Mathf.Deg2Rad); i++)
+                    var w = stroke;
+                    if (fullCircles > 0)
                     {
-                        var angle = i * (_gizmo.SnapAngle * Mathf.Deg2Rad) + endAngle;
-                        var pos = new Vector3(Math.Cos(angle), 0, Math.Sin(angle));
-                        _gizmo._gui.Draw3D.LineSegment(pos * radius * 1.1, pos * radius * 1.2, new Stroke3D() { Thickness = strokeWidth, Color = stroke.Color, AntiAliased = true });
+                        w.Color.alpha = (byte)(stroke.Color.alpha * Math.Min(0.25f * fullCircles, 1f));
+                        _gizmo._gui.Draw3D.Sector(radius, startAngle2 * Mathf.Rad2Deg, endAngle2 * Mathf.Rad2Deg, w);
+                    }
+
+                    w.Color.alpha = (byte)(stroke.Color.alpha * Math.Min(0.25f * (fullCircles + 1), 1f));
+                    _gizmo._gui.Draw3D.Sector(radius, startAngle * Mathf.Rad2Deg, endAngle * Mathf.Rad2Deg, w);
+
+                    _gizmo._gui.Draw3D.Circle(radius, stroke);
+
+                    if (_gizmo.Snapping)
+                    {
+                        var strokeWidth = stroke.Thickness / 2;
+                        for (int i = 0; i <= Math.Tau / (_gizmo.SnapAngle * Mathf.Deg2Rad); i++)
+                        {
+                            var angle = i * (_gizmo.SnapAngle * Mathf.Deg2Rad) + endAngle;
+                            var pos = new Vector3(Math.Cos(angle), 0, Math.Sin(angle));
+                            _gizmo._gui.Draw3D.LineSegment(pos * radius * 1.1, pos * radius * 1.2, new Stroke3D() { Thickness = strokeWidth, Color = stroke.Color, AntiAliased = true });
+                        }
                     }
                 }
             }

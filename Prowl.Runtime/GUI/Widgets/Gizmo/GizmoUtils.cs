@@ -250,24 +250,25 @@ namespace Prowl.Runtime.GUI
             if (_gizmo.Orientation == TransformGizmo.GizmoOrientation.Local)
                 transform = Matrix4x4.CreateFromQuaternion(_gizmo.Rotation) * transform;
 
-            _gizmo._gui.Draw3D.Setup3DObject(transform * _gizmo.ViewProjection, _gizmo.Viewport);
+            using (_gizmo._gui.Draw3D.Matrix(transform * _gizmo.ViewProjection))
+            {
+                var color3 = GizmoUtils.GizmoColor(_gizmo, focused, direction);
 
-            var color3 = GizmoUtils.GizmoColor(_gizmo, focused, direction);
+                var scale = GizmoUtils.PlaneSize(_gizmo) * 0.5f;
+                var bitangent = GizmoUtils.PlaneBitangent(direction) * scale;
+                var tangent = GizmoUtils.PlaneTangent(direction) * scale;
+                var origin3 = GizmoUtils.PlaneLocalOrigin(_gizmo, direction);
 
-            var scale = GizmoUtils.PlaneSize(_gizmo) * 0.5f;
-            var bitangent = GizmoUtils.PlaneBitangent(direction) * scale;
-            var tangent = GizmoUtils.PlaneTangent(direction) * scale;
-            var origin3 = GizmoUtils.PlaneLocalOrigin(_gizmo, direction);
+                var v1 = origin3 - bitangent - tangent;
+                var v2 = origin3 + bitangent - tangent;
+                var v3 = origin3 + bitangent + tangent;
+                var v4 = origin3 - bitangent + tangent;
 
-            var v1 = origin3 - bitangent - tangent;
-            var v2 = origin3 + bitangent - tangent;
-            var v3 = origin3 + bitangent + tangent;
-            var v4 = origin3 - bitangent + tangent;
+                List<Vector3> vertices = [v1, v2, v3, v4];
 
-            List<Vector3> vertices = [v1, v2, v3, v4];
-
-            _gizmo._gui.Draw3D.Polygon(vertices, new Stroke3D { Color = color3, Thickness = _gizmo.StrokeWidth, AntiAliased = true });
-            return transform;
+                _gizmo._gui.Draw3D.Polygon(vertices, new Stroke3D { Color = color3, Thickness = _gizmo.StrokeWidth, AntiAliased = true });
+                return transform;
+            }
         }
 
         public static Matrix4x4 DrawCircle(TransformGizmo _gizmo, bool focused, Matrix4x4 transform)
@@ -287,11 +288,12 @@ namespace Prowl.Runtime.GUI
 
             transform = rotation * transform;
 
-            _gizmo._gui.Draw3D.Setup3DObject(transform * _gizmo.ViewProjection, _gizmo.Viewport);
-
-            var color2 = GizmoUtils.GizmoColor(_gizmo, focused, GizmoDirection.View);
-            _gizmo._gui.Draw3D.Circle(GizmoUtils.InnerCircleRadius(_gizmo), new Stroke3D { Color = color2, Thickness = _gizmo.StrokeWidth, AntiAliased = true });
-            return transform;
+            using (_gizmo._gui.Draw3D.Matrix(transform * _gizmo.ViewProjection))
+            {
+                var color2 = GizmoUtils.GizmoColor(_gizmo, focused, GizmoDirection.View);
+                _gizmo._gui.Draw3D.Circle(GizmoUtils.InnerCircleRadius(_gizmo), new Stroke3D { Color = color2, Thickness = _gizmo.StrokeWidth, AntiAliased = true });
+                return transform;
+            }
         }
 
         public static void DrawArrow(TransformGizmo _gizmo, bool focused, Matrix4x4 transform, GizmoDirection direction, TransformGizmoMode mode, double scale = 1f)
@@ -299,25 +301,26 @@ namespace Prowl.Runtime.GUI
             if (_gizmo.Orientation == TransformGizmo.GizmoOrientation.Local)
                 transform = Matrix4x4.CreateFromQuaternion(_gizmo.Rotation) * transform;
 
-            _gizmo._gui.Draw3D.Setup3DObject(transform * _gizmo.ViewProjection, _gizmo.Viewport);
+            using (_gizmo._gui.Draw3D.Matrix(transform * _gizmo.ViewProjection))
+            {
+                var color = GizmoUtils.GizmoColor(_gizmo, focused, direction);
+                var normal = GizmoUtils.GizmoLocalNormal(_gizmo, direction);
 
-            var color = GizmoUtils.GizmoColor(_gizmo, focused, direction);
-            var normal = GizmoUtils.GizmoLocalNormal(_gizmo, direction);
+                (Vector3 start, Vector3 end, double length) = ArrowParams(_gizmo, normal, mode);
 
-            (Vector3 start, Vector3 end, double length) = ArrowParams(_gizmo, normal, mode);
+                end *= scale;
 
-            end *= scale;
+                var tip_stroke_width = 2.4 * _gizmo.StrokeWidth;
+                var tip_length = (tip_stroke_width * _gizmo.ScaleFactor);
+                var tip_start = end - normal * tip_length;
 
-            var tip_stroke_width = 2.4 * _gizmo.StrokeWidth;
-            var tip_length = (tip_stroke_width * _gizmo.ScaleFactor);
-            var tip_start = end - normal * tip_length;
-
-            _gizmo._gui.Draw3D.LineSegment(start, tip_start, new Stroke3D { Color = color, Thickness = _gizmo.StrokeWidth, AntiAliased = true });
-            bool isTranslate = mode == TransformGizmoMode.TranslateX || mode == TransformGizmoMode.TranslateY || mode == TransformGizmoMode.TranslateZ;
-            if (isTranslate)
-                _gizmo._gui.Draw3D.Arrow(tip_start, end, new Stroke3D { Color = color, Thickness = tip_stroke_width, AntiAliased = true });
-            else
-                _gizmo._gui.Draw3D.LineSegment(tip_start, end, new Stroke3D { Color = color, Thickness = tip_stroke_width, AntiAliased = true });
+                _gizmo._gui.Draw3D.LineSegment(start, tip_start, new Stroke3D { Color = color, Thickness = _gizmo.StrokeWidth, AntiAliased = true });
+                bool isTranslate = mode == TransformGizmoMode.TranslateX || mode == TransformGizmoMode.TranslateY || mode == TransformGizmoMode.TranslateZ;
+                if (isTranslate)
+                    _gizmo._gui.Draw3D.Arrow(tip_start, end, new Stroke3D { Color = color, Thickness = tip_stroke_width, AntiAliased = true });
+                else
+                    _gizmo._gui.Draw3D.LineSegment(tip_start, end, new Stroke3D { Color = color, Thickness = tip_stroke_width, AntiAliased = true });
+            }
         }
 
         public static bool ArrowModesOverlapping(TransformGizmoMode mode, TransformGizmoMode gizmoModes){

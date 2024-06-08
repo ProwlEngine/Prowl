@@ -271,7 +271,10 @@ namespace Prowl.Runtime.GUI
 
         public void Draw()
         {
-            _subGizmos.ForEach(g => g.Draw());
+            using (_gui.Draw3D.Viewport(Viewport))
+            {
+                _subGizmos.ForEach(g => g.Draw());
+            }
         }
     }
 }
