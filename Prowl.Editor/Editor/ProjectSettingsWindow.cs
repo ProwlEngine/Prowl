@@ -51,17 +51,17 @@ public abstract class SingletonEditorWindow : EditorWindow
     {
         if (!Project.HasProject) return;
 
-        g.CurrentNode.Layout(LayoutType.Row);
+        gui.CurrentNode.Layout(LayoutType.Row);
 
         elementCounter = 0;
 
-        using (g.Node("SidePanel").Padding(5, 10, 10, 10).Width(150).ExpandHeight().Layout(LayoutType.Column).Clip().Enter())
+        using (gui.Node("SidePanel").Padding(5, 10, 10, 10).Width(150).ExpandHeight().Layout(LayoutType.Column).Clip().Enter())
         {
-            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
+            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
             RenderSideView();
         }
 
-        using (g.Node("ContentPanel").PaddingRight(28).Left(150).Width(Size.Percentage(0.8f)).ExpandHeight().Enter())
+        using (gui.Node("ContentPanel").PaddingRight(28).Left(150).Width(Size.Percentage(0.8f)).ExpandHeight().Enter())
         {
             RenderBody();
         }
@@ -73,17 +73,17 @@ public abstract class SingletonEditorWindow : EditorWindow
     protected void RenderSideViewElement<T>(T elementInstance)
     {
         Type settingType = elementInstance.GetType();
-        using (g.ButtonNode("Element" + elementCounter++, out var pressed, out var hovered).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+        using (gui.ButtonNode("Element" + elementCounter++, out var pressed, out var hovered).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
         {
 
             if (currentType == settingType)
-                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
             else if (hovered)
-                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 10);
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 10);
 
             // remove 'Preferences'
             string name = settingType.Name.Replace("Preferences", "");
-            g.Draw2D.DrawText(name, g.CurrentNode.LayoutData.Rect, false);
+            gui.Draw2D.DrawText(name, gui.CurrentNode.LayoutData.Rect, false);
 
             if (pressed || currentType == settingType)
             {

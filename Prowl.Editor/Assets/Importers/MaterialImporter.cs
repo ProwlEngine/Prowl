@@ -50,8 +50,8 @@ namespace Prowl.Editor.Assets
             }
             catch (Exception e)
             {
-                g.Node("DummyForText").ExpandWidth().Height(GuiStyle.ItemHeight * 10);
-                g.Draw2D.DrawText("Failed to Deserialize Material: " + e.Message + "\n" + e.StackTrace, g.CurrentNode.LayoutData.Rect);
+                gui.Node("DummyForText").ExpandWidth().Height(GuiStyle.ItemHeight * 10);
+                gui.Draw2D.DrawText("Failed to Deserialize Material: " + e.Message + "\n" + e.StackTrace, gui.CurrentNode.LayoutData.Rect);
             }
         }
     }

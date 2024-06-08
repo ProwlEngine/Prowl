@@ -37,14 +37,14 @@ namespace Prowl.Editor
 
         protected override void Draw()
         {
-            g.CurrentNode.Layout(LayoutType.Column);
-            g.CurrentNode.ScaleChildren();
+            gui.CurrentNode.Layout(LayoutType.Column);
+            gui.CurrentNode.ScaleChildren();
 
             //using(g.Node().Width(Size.Percentage(1f)).MaxHeight(20).Enter())
             //{
             //    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.SelectedColor);
             //}
-            using (g.Node("List").Width(Size.Percentage(1f)).Padding(0, 3, 3, 3).Clip().Enter())
+            using (gui.Node("List").Width(Size.Percentage(1f)).Padding(0, 3, 3, 3).Clip().Enter())
             {
                 double height = 0;
                 for (int i = _logMessages.Count; i-- > 0;)
@@ -55,21 +55,21 @@ namespace Prowl.Editor
                     else if (logSeverity == LogSeverity.Error && !GeneralPreferences.Instance.ShowDebugErrors) continue;
                     else if (logSeverity == LogSeverity.Success && !GeneralPreferences.Instance.ShowDebugSuccess) continue;
 
-                    int width = (int)g.CurrentNode.LayoutData.InnerRect.width;
-                    var pos = g.CurrentNode.LayoutData.InnerRect.Position;
-                    pos.y -= g.CurrentNode.LayoutData.VScroll;
+                    int width = (int)gui.CurrentNode.LayoutData.InnerRect.width;
+                    var pos = gui.CurrentNode.LayoutData.InnerRect.Position;
+                    pos.y -= gui.CurrentNode.LayoutData.VScroll;
                     var size = UIDrawList.DefaultFont.CalcTextSize(_logMessages[i].Message, 0, width - 24);
 
-                    g.Draw2D.DrawLine(new(pos.x + 12, pos.y + height), new(pos.x + width - 12, pos.y + height), GuiStyle.Borders, 1);
+                    gui.Draw2D.DrawLine(new(pos.x + 12, pos.y + height), new(pos.x + width - 12, pos.y + height), GuiStyle.Borders, 1);
 
                     _logMessages[i].Draw(pos + new Vector2(12, height + 8), width - 24);
                     height += size.y + 8;
                 }
 
                 // Dummy node to set the height of the scroll area
-                g.Node("Dummy").Width(5).Height(height);
+                gui.Node("Dummy").Width(5).Height(height);
 
-                g.ScrollV();
+                gui.ScrollV();
             }
         }
 

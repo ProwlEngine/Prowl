@@ -7,55 +7,26 @@ namespace Prowl.Runtime.GUI
 
     // Based on ShapeBuilder from: https://github.com/urholaukkarinen/transform-gizmo - Dual licensed under MIT and Apache 2.0.
 
-    public struct Stroke
+    public struct Stroke3D
     {
         public double Thickness;
         public Color32 Color;
         public bool AntiAliased;
     }
 
-    public partial class Gui
+    public class GuiDraw3D(Gui gui)
     {
-        private GuiShapeBuilder _draw3D;
-        public GuiShapeBuilder Draw3D => _draw3D ??= new GuiShapeBuilder(this);
-
-        //TODO: Target API
-        //public void test()
-        //{
-        //    using (Draw3D.Viewport(Rect.Zero))
-        //    {
-        //        using (Draw3D.Matrix(Matrix4x4.Identity))
-        //        {
-        //
-        //        }
-        //
-        //        using (Draw3D.Matrix(Matrix4x4.Identity))
-        //        {
-        //
-        //        }
-        //
-        //        using (Draw3D.Matrix(Matrix4x4.Identity))
-        //        {
-        //
-        //        }
-        //    }
-        //}
-
-    }
-
-    public class GuiShapeBuilder(Gui g)
-    {
-        private Matrix4x4 mvp;
-        private Rect viewport;
-        private readonly Gui gui = g;
+        private Matrix4x4 _mvp;
+        private Rect _viewport;
+        private readonly Gui _gui = gui;
 
         public void Setup3DObject(Matrix4x4 mvp, Rect viewport)
         {
-            this.mvp = mvp;
-            this.viewport = viewport;
+            _mvp = mvp;
+            _viewport = viewport;
         }
 
-        public void Arc(double radius, double startAngle, double endAngle, Stroke stroke)
+        public void Arc(double radius, double startAngle, double endAngle, Stroke3D stroke)
         {
             var startRad = startAngle * Mathf.Deg2Rad;
             var endRad = endAngle * Mathf.Deg2Rad;
@@ -64,41 +35,38 @@ namespace Prowl.Runtime.GUI
 
             bool closed = points.Count > 0 && Vector2.Distance(points[0], points[points.Count - 1]) < 1e-2;
 
-            gui.Draw2D.DrawList.AddPolyline(points, closed ? points.Count - 1 : points.Count, stroke.Color.GetUInt(), closed, (float)stroke.Thickness, stroke.AntiAliased);
+            _gui.Draw2D.DrawList.AddPolyline(points, closed ? points.Count - 1 : points.Count, stroke.Color.GetUInt(), closed, (float)stroke.Thickness, stroke.AntiAliased);
         }
 
-        public void Circle(double radius, Stroke stroke)
-        {
-            Arc(radius, 0.0, 360, stroke);
-        }
+        public void Circle(double radius, Stroke3D stroke) => Arc(radius, 0.0, 360, stroke);
 
-        public void FilledCircle(double radius, Stroke stroke)
+        public void FilledCircle(double radius, Stroke3D stroke)
         {
             var points = ArcPoints(radius, 0.0, Math.PI * 2);
             if (points.Count <= 0) return;
-            gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count - 1, stroke.Color.GetUInt(), stroke.AntiAliased);
+            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count - 1, stroke.Color.GetUInt(), stroke.AntiAliased);
         }
 
-        public void LineSegment(Vector3 from, Vector3 to, Stroke stroke)
+        public void LineSegment(Vector3 from, Vector3 to, Stroke3D stroke)
         {
             var points = new Vector2[2];
 
             for (int i = 0; i < 2; i++)
             {
                 Vector3 point = i == 0 ? from : to;
-                if (WorldToScreen(viewport, mvp, point, out Vector2 screenPos))
+                if (WorldToScreen(_viewport, _mvp, point, out Vector2 screenPos))
                     points[i] = screenPos;
                 else
                     return;
             }
 
-            gui.Draw2D.DrawList.AddLine(points[0], points[1], stroke.Color.GetUInt(), (float)stroke.Thickness);
+            _gui.Draw2D.DrawList.AddLine(points[0], points[1], stroke.Color.GetUInt(), (float)stroke.Thickness);
         }
 
-        public void Arrow(Vector3 from, Vector3 to, Stroke stroke)
+        public void Arrow(Vector3 from, Vector3 to, Stroke3D stroke)
         {
-            if (WorldToScreen(viewport, mvp, from, out Vector2 arrowStart) &&
-                WorldToScreen(viewport, mvp, to, out Vector2 arrowEnd))
+            if (WorldToScreen(_viewport, _mvp, from, out Vector2 arrowStart) &&
+                WorldToScreen(_viewport, _mvp, to, out Vector2 arrowEnd))
             {
                 Vector2 direction = (arrowEnd - arrowStart).normalized;
                 Vector2 cross = new Vector2(-direction.y, direction.x) * stroke.Thickness / 2.0f;
@@ -109,33 +77,33 @@ namespace Prowl.Runtime.GUI
                 points.Add(arrowStart + cross);
                 points.Add(arrowEnd);
 
-                gui.Draw2D.DrawList.AddConvexPolyFilled(points, 3, stroke.Color.GetUInt(), stroke.AntiAliased);
+                _gui.Draw2D.DrawList.AddConvexPolyFilled(points, 3, stroke.Color.GetUInt(), stroke.AntiAliased);
             }
         }
 
-        public void Polygon(IEnumerable<Vector3> points, Stroke stroke)
+        public void Polygon(IEnumerable<Vector3> points, Stroke3D stroke)
         {
             var screenPoints = new UIBuffer<Vector2>();
             foreach (Vector3 pos in points)
-                if (WorldToScreen(viewport, mvp, pos, out Vector2 screenPos))
+                if (WorldToScreen(_viewport, _mvp, pos, out Vector2 screenPos))
                     screenPoints.Add(screenPos);
 
             if (screenPoints.Count > 2)
-                gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, stroke.Color.GetUInt(), stroke.AntiAliased);
+                _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, stroke.Color.GetUInt(), stroke.AntiAliased);
         }
 
-        public void Polyline(IEnumerable<Vector3> points, Stroke stroke)
+        public void Polyline(IEnumerable<Vector3> points, Stroke3D stroke)
         {
             var screenPoints = new UIBuffer<Vector2>();
             foreach (Vector3 pos in points)
-                if (WorldToScreen(viewport, mvp, pos, out Vector2 screenPos))
+                if (WorldToScreen(_viewport, _mvp, pos, out Vector2 screenPos))
                     screenPoints.Add(screenPos);
 
             if (screenPoints.Count > 1)
-                gui.Draw2D.DrawList.AddPolyline(screenPoints, screenPoints.Count, stroke.Color.GetUInt(), false, (float)stroke.Thickness, stroke.AntiAliased);
+                _gui.Draw2D.DrawList.AddPolyline(screenPoints, screenPoints.Count, stroke.Color.GetUInt(), false, (float)stroke.Thickness, stroke.AntiAliased);
         }
 
-        public void Sector(double radius, double startAngle, double endAngle, Stroke stroke)
+        public void Sector(double radius, double startAngle, double endAngle, Stroke3D stroke)
         {
             var startRad = startAngle * Mathf.Deg2Rad;
             var endRad = endAngle * Mathf.Deg2Rad;
@@ -157,7 +125,7 @@ namespace Prowl.Runtime.GUI
                 return;
             }
 
-            Vec3ToPos2(Vector3.zero, out var center);
+            WorldToScreen(Vector3.zero, out var center);
             points.Add(center);
 
             (double sinStep, double cosStep) = SinCos(stepSize);
@@ -168,7 +136,7 @@ namespace Prowl.Runtime.GUI
                 double x = cosAngle * radius;
                 double y = sinAngle * radius;
 
-                if (Vec3ToPos2(new Vector3((float)x, 0.0f, (float)y), out Vector2 pos))
+                if (WorldToScreen(new Vector3((float)x, 0.0f, (float)y), out Vector2 pos))
                 {
                     points.Add(pos);
                 }
@@ -182,7 +150,7 @@ namespace Prowl.Runtime.GUI
 
             if (points.Count <= 0) return;
 
-            gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count, stroke.Color.GetUInt(), stroke.AntiAliased);
+            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count, stroke.Color.GetUInt(), stroke.AntiAliased);
         }
 
         private UIBuffer<Vector2> ArcPoints(double radius, double startRad, double endRad)
@@ -201,7 +169,7 @@ namespace Prowl.Runtime.GUI
                 double x = Math.Cos(startRad + step) * radius;
                 double z = Math.Sin(startRad + step) * radius;
 
-                if (Vec3ToPos2(new Vector3((float)x, 0.0f, (float)z), out Vector2 pos))
+                if (WorldToScreen(new Vector3((float)x, 0.0f, (float)z), out Vector2 pos))
                 {
                     points.Add(pos);
                 }
@@ -210,21 +178,11 @@ namespace Prowl.Runtime.GUI
             return points;
         }
 
-        private bool Vec3ToPos2(Vector3 vec, out Vector2 pos)
-        {
-            return WorldToScreen(viewport, mvp, vec, out pos);
-        }
 
-        private static int Steps(double angle)
-        {
-            return Math.Max(1, (int)Math.Ceiling(20.0 * Math.Abs(angle)));
-        }
+        private static int Steps(double angle) => Math.Max(1, (int)Math.Ceiling(20.0 * Math.Abs(angle)));
+        private static (double sin, double cos) SinCos(double angle) => (Math.Sin(angle), Math.Cos(angle));
 
-        private static (double sin, double cos) SinCos(double angle)
-        {
-            return (Math.Sin(angle), Math.Cos(angle));
-        }
-
+        private bool WorldToScreen(Vector3 vec, out Vector2 pos) => WorldToScreen(_viewport, _mvp, vec, out pos);
         private static bool WorldToScreen(Rect viewport, Matrix4x4 mvp, Vector3 pos, out Vector2 screenPos)
         {
             var res = GizmoUtils.WorldToScreen(viewport, mvp, pos);

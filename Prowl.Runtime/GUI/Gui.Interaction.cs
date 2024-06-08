@@ -245,9 +245,9 @@ namespace Prowl.Runtime.GUI
         internal Rect _rect;
         internal double zIndex;
 
-        internal Interactable(Gui g, ulong id, Rect rect, double z)
+        internal Interactable(Gui gui, ulong id, Rect rect, double z)
         {
-            _gui = g;
+            _gui = gui;
             _id = id;
             _rect = rect;
             zIndex = z;

@@ -68,11 +68,11 @@ public class GameWindow : EditorWindow
 
         IsGameWindowFocused = IsFocused;
 
-        g.CurrentNode.Layout(Runtime.GUI.LayoutType.Column).ScaleChildren();
+        gui.CurrentNode.Layout(Runtime.GUI.LayoutType.Column).ScaleChildren();
 
-        using (g.Node("MenuBar").ExpandWidth().MaxHeight(GuiStyle.ItemHeight).Layout(LayoutType.Row).Enter())
+        using (gui.Node("MenuBar").ExpandWidth().MaxHeight(GuiStyle.ItemHeight).Layout(LayoutType.Row).Enter())
         {
-            g.TextNode("displayIcon", FontAwesome6.Display).Scale(GuiStyle.ItemHeight);
+            gui.TextNode("displayIcon", FontAwesome6.Display).Scale(GuiStyle.ItemHeight);
 
             bool changed = false;
 
@@ -84,7 +84,7 @@ public class GameWindow : EditorWindow
                 changed = true;
                 RefreshRenderTexture();
             }
-            g.PreviousNode.Width(50);
+            gui.PreviousNode.Width(50);
             if (EditorGUI.DrawProperty(1, "Height", ref GeneralPreferences.Instance.CurrentHeight, config))
             {
                 GeneralPreferences.Instance.CurrentHeight = Math.Clamp(GeneralPreferences.Instance.CurrentHeight, 1, 4320);
@@ -92,7 +92,7 @@ public class GameWindow : EditorWindow
                 changed = true;
                 RefreshRenderTexture();
             }
-            g.PreviousNode.Width(50);
+            gui.PreviousNode.Width(50);
 
             if (EditorGUI.DrawProperty(2, "Resolution", ref GeneralPreferences.Instance.Resolution, config))
             {
@@ -100,7 +100,7 @@ public class GameWindow : EditorWindow
                 changed = true;
                 RefreshRenderTexture();
             }
-            g.PreviousNode.Width(100);
+            gui.PreviousNode.Width(100);
 
             //changed |= EditorGUI.DrawProperty(3, "Auto Focus", ref GeneralPreferences.Instance.AutoFocusGameView, config);
             //g.PreviousNode.Width(100);
@@ -118,11 +118,11 @@ public class GameWindow : EditorWindow
             DrawPlayMode();
         }
 
-        using (g.Node("Main").Width(Size.Percentage(1f)).Padding(5).Enter())
+        using (gui.Node("Main").Width(Size.Percentage(1f)).Padding(5).Enter())
         {
-            var innerRect = g.CurrentNode.LayoutData.InnerRect;
+            var innerRect = gui.CurrentNode.LayoutData.InnerRect;
 
-            g.Draw2D.DrawRectFilled(innerRect, Color.black);
+            gui.Draw2D.DrawRectFilled(innerRect, Color.black);
 
             var renderSize = innerRect.Size;
             renderSize.x = Mathf.Max(renderSize.x, 1);
@@ -137,8 +137,8 @@ public class GameWindow : EditorWindow
 
             if (mainCam == null)
             {
-                g.Draw2D.DrawRect(innerRect, Color.red, 2);
-                g.Draw2D.DrawText(UIDrawList.DefaultFont, "No Camera found", 40f, innerRect, Color.red);
+                gui.Draw2D.DrawRect(innerRect, Color.red, 2);
+                gui.Draw2D.DrawText(UIDrawList.DefaultFont, "No Camera found", 40f, innerRect, Color.red);
                 return;
             }
 
@@ -172,19 +172,19 @@ public class GameWindow : EditorWindow
             }
 
             // Letter box the image into the render size
-            g.Draw2D.DrawImage(RenderTarget.InternalTextures[0], innerRect.Position, innerRect.Size, Color.white, true);
+            gui.Draw2D.DrawImage(RenderTarget.InternalTextures[0], innerRect.Position, innerRect.Size, Color.white, true);
         }
 
     }
 
     private void DrawPlayMode()
     {
-        using (g.Node("PSP").FitContentWidth().Height(GuiStyle.ItemHeight).Top(5).Layout(LayoutType.Row).Enter())
+        using (gui.Node("PSP").FitContentWidth().Height(GuiStyle.ItemHeight).Top(5).Layout(LayoutType.Row).Enter())
         {
             // Center
-            g.CurrentNode.Left(Offset.Percentage(0.5f, -(g.CurrentNode.LayoutData.Rect.width / 2)));
+            gui.CurrentNode.Left(Offset.Percentage(0.5f, -(gui.CurrentNode.LayoutData.Rect.width / 2)));
 
-            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
+            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
 
             switch (PlayMode.Current)
             {

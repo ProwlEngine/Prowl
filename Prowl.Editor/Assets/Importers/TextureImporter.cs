@@ -32,7 +32,7 @@ namespace Prowl.Editor.Assets
 
     public class ScriptedEditor
     {
-        public Gui g => Gui.ActiveGUI;
+        public Gui gui => Gui.ActiveGUI;
 
         public object target { get; internal set; }
         public virtual void OnEnable() { }
@@ -47,7 +47,7 @@ namespace Prowl.Editor.Assets
         {
             var importer = (TextureImporter)(target as MetaFile).importer;
 
-            g.CurrentNode.Layout(LayoutType.Column);
+            gui.CurrentNode.Layout(LayoutType.Column);
 
             EditorGUI.DrawProperty(0, "Generate Mipmaps", ref importer.generateMipmaps);
             EditorGUI.DrawProperty(1, "Min Filter", ref importer.textureMinFilter);

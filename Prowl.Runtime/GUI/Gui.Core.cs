@@ -1,13 +1,7 @@
-﻿using Prowl.Runtime.GUI.Graphics;
-using Prowl.Runtime.GUI.Layout;
-using Prowl.Runtime.Rendering.OpenGL;
-using Silk.NET.Maths;
+﻿using Prowl.Runtime.GUI.Layout;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using static System.Formats.Asn1.AsnWriter;
 
 namespace Prowl.Runtime.GUI
 {
@@ -20,7 +14,8 @@ namespace Prowl.Runtime.GUI
         public LayoutNode CurrentNode => layoutNodeScopes.First!.Value._node;
         public LayoutNode PreviousNode { get; private set; }
 
-        public Draw2D Draw2D;
+        public readonly GuiDraw2D Draw2D;
+        public readonly GuiDraw3D Draw3D;
 
         internal LinkedList<LayoutNodeScope> layoutNodeScopes = new();
         internal Stack<ulong> IDStack = new();
@@ -40,6 +35,7 @@ namespace Prowl.Runtime.GUI
             _createdNodes = [];
 
             Draw2D = new(this);
+            Draw3D = new(this);
         }
 
         public void ProcessFrame(Rect screenRect, float uiScale, Vector2 frameBufferScale, Action<Gui> gui)

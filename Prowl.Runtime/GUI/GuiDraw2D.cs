@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace Prowl.Runtime.GUI
 {
-    public class Draw2D
+    public class GuiDraw2D
     {
         public UIDrawList DrawList => _drawList[currentZIndex];
 
@@ -16,7 +16,7 @@ namespace Prowl.Runtime.GUI
         private Gui _gui;
         List<UIDrawList> drawListsOrdered = new();
 
-        public Draw2D(Gui gui)
+        public GuiDraw2D(Gui gui)
         {
             _gui = gui;
             _drawList[0] = new UIDrawList(); // Root Draw List

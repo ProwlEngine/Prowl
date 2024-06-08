@@ -136,35 +136,35 @@ namespace Prowl.Editor.Assets.Importers
 
             try
             {
-                g.CurrentNode.Layout(LayoutType.Column);
+                gui.CurrentNode.Layout(LayoutType.Column);
 
                 var audioClip = (AudioClip)serialized.Main;
-                g.TextNode("name", "Name: " + audioClip.Name).ExpandWidth().Height(GuiStyle.ItemHeight);
-                g.TextNode("ch", "Channels: " + audioClip.Channels).ExpandWidth().Height(GuiStyle.ItemHeight);
-                g.TextNode("bps", "Bits Per Sample: " + audioClip.BitsPerSample).ExpandWidth().Height(GuiStyle.ItemHeight);
-                g.TextNode("sr", "Sample Rate: " + audioClip.SampleRate).ExpandWidth().Height(GuiStyle.ItemHeight);
-                g.TextNode("dur", "Duration: " + audioClip.Duration + "s").ExpandWidth().Height(GuiStyle.ItemHeight);
-                g.TextNode("size", "Size in Bytes: " + audioClip.SizeInBytes).ExpandWidth().Height(GuiStyle.ItemHeight);
-                g.TextNode("form", "Format: " + audioClip.Format.ToString()).ExpandWidth().Height(GuiStyle.ItemHeight);
+                gui.TextNode("name", "Name: " + audioClip.Name).ExpandWidth().Height(GuiStyle.ItemHeight);
+                gui.TextNode("ch", "Channels: " + audioClip.Channels).ExpandWidth().Height(GuiStyle.ItemHeight);
+                gui.TextNode("bps", "Bits Per Sample: " + audioClip.BitsPerSample).ExpandWidth().Height(GuiStyle.ItemHeight);
+                gui.TextNode("sr", "Sample Rate: " + audioClip.SampleRate).ExpandWidth().Height(GuiStyle.ItemHeight);
+                gui.TextNode("dur", "Duration: " + audioClip.Duration + "s").ExpandWidth().Height(GuiStyle.ItemHeight);
+                gui.TextNode("size", "Size in Bytes: " + audioClip.SizeInBytes).ExpandWidth().Height(GuiStyle.ItemHeight);
+                gui.TextNode("form", "Format: " + audioClip.Format.ToString()).ExpandWidth().Height(GuiStyle.ItemHeight);
 
                 //g.SeperatorHNode();
 
                 if (audioClip.Data == null)
                 {
-                    g.TextNode("err", "Audio Data is Null!").ExpandWidth().Height(GuiStyle.ItemHeight);
+                    gui.TextNode("err", "Audio Data is Null!").ExpandWidth().Height(GuiStyle.ItemHeight);
                     return;
                 }
 
                 // Play
                 if(preview != null && preview.IsPlaying)
                 {
-                    using (g.ButtonNode("StopBtn", out var p, out var h).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                    using (gui.ButtonNode("StopBtn", out var p, out var h).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
                     {
-                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
 
-                        g.Draw2D.DrawText("Stop", g.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
+                        gui.Draw2D.DrawText("Stop", gui.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
 
-                        var interact = g.GetInteractable();
+                        var interact = gui.GetInteractable();
                         if (interact.TakeFocus())
                         {
                             preview.Stop();
@@ -172,30 +172,30 @@ namespace Prowl.Editor.Assets.Importers
                         }
 
                         if (interact.IsHovered())
-                            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
                     }
                 }
                 else
                 {
-                    using (g.ButtonNode("PlayBtn", out var p, out var h).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                    using (gui.ButtonNode("PlayBtn", out var p, out var h).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
                     {
-                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
 
-                        g.Draw2D.DrawText("Play", g.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
+                        gui.Draw2D.DrawText("Play", gui.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
 
-                        var interact = g.GetInteractable();
+                        var interact = gui.GetInteractable();
                         if (interact.TakeFocus())
                             preview = AudioSystem.PlaySound(audioClip);
 
                         if (interact.IsHovered())
-                            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
                     }
                 }
 
             }
             catch
             {
-                g.TextNode("error", "Failed to display AudioClip Data").ExpandWidth().Height(GuiStyle.ItemHeight);
+                gui.TextNode("error", "Failed to display AudioClip Data").ExpandWidth().Height(GuiStyle.ItemHeight);
             }
         }
     }

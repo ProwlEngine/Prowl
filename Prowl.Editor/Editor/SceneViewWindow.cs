@@ -69,15 +69,15 @@ public class SceneViewWindow : EditorWindow
         }
 
         if (!Project.HasProject) return;
-        g.CurrentNode.Padding(5);
+        gui.CurrentNode.Padding(5);
 
-        var renderSize = g.CurrentNode.LayoutData.Rect.Size;
+        var renderSize = gui.CurrentNode.LayoutData.Rect.Size;
         if (renderSize.x == 0 || renderSize.y == 0) return;
 
         if (RenderTarget == null || (int)renderSize.x != RenderTarget.Width || (int)renderSize.y != RenderTarget.Height)
             RefreshRenderTexture((int)renderSize.x, (int)renderSize.y);
 
-        WindowCenter = g.CurrentNode.LayoutData.Rect.Center;
+        WindowCenter = gui.CurrentNode.LayoutData.Rect.Center;
 
         // Manually Render to the RenderTexture
         Cam.NearClip = SceneViewPreferences.Instance.NearClip;
@@ -86,9 +86,9 @@ public class SceneViewWindow : EditorWindow
         SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
         Cam.RenderResolution = SceneViewPreferences.Instance.RenderResolution;
 
-        var imagePos = g.CurrentNode.LayoutData.Rect.Position;
-        var imageSize = g.CurrentNode.LayoutData.Rect.Size;
-        g.Draw2D.DrawImage(RenderTarget.InternalTextures[0], imagePos, imageSize, Color.white);
+        var imagePos = gui.CurrentNode.LayoutData.Rect.Position;
+        var imageSize = gui.CurrentNode.LayoutData.Rect.Size;
+        gui.Draw2D.DrawImage(RenderTarget.InternalTextures[0], imagePos, imageSize, Color.white);
 
 #warning TODO: Camera rendering clears Gizmos untill the rendering overhaul, so gizmos will Flicker here
         Camera.Current = Cam;
@@ -124,18 +124,18 @@ public class SceneViewWindow : EditorWindow
         var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Transform.position, Cam.GameObject.Transform.forward, Cam.GameObject.Transform.up);
         var projection = Cam.GetProjectionMatrix((float)renderSize.x, (float)renderSize.y);
 
-        Ray mouseRay = Cam.ScreenPointToRay(g.PointerPos - imagePos);
+        Ray mouseRay = Cam.ScreenPointToRay(gui.PointerPos - imagePos);
 
-        bool blockPicking = g.IsBlockedByInteractable(g.PointerPos);
+        bool blockPicking = gui.IsBlockedByInteractable(gui.PointerPos);
         HandleGizmos(selectedGOs, mouseRay, view, projection, blockPicking);
 
         Camera.Current = null;
 
-        Rect rect = g.CurrentNode.LayoutData.Rect;
+        Rect rect = gui.CurrentNode.LayoutData.Rect;
         rect.width = 100;
         rect.height = 100;
-        rect.x = g.CurrentNode.LayoutData.Rect.x + g.CurrentNode.LayoutData.Rect.width - rect.width - 10;
-        rect.y = g.CurrentNode.LayoutData.Rect.y + 10;
+        rect.x = gui.CurrentNode.LayoutData.Rect.x + gui.CurrentNode.LayoutData.Rect.width - rect.width - 10;
+        rect.y = gui.CurrentNode.LayoutData.Rect.y + 10;
         viewManipulator.SetRect(rect);
         viewManipulator.SetCamera(Cam.Transform.forward, Cam.Transform.up, Cam.projectionType == Camera.ProjectionType.Orthographic);
 
@@ -158,17 +158,17 @@ public class SceneViewWindow : EditorWindow
         }
 
 
-        mouseUV = (g.PointerPos - imagePos) / imageSize;
+        mouseUV = (gui.PointerPos - imagePos) / imageSize;
         // Flip Y
         mouseUV.y = 1.0 - mouseUV.y;
 
-        var viewportInteractable = g.GetInteractable();
+        var viewportInteractable = gui.GetInteractable();
 
         HandleDragnDrop();
-        g.SetCursorVisibility(true);
+        gui.SetCursorVisibility(true);
         if (IsFocused && viewportInteractable.IsHovered())
         {
-            if (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) && !gizmo.IsOver && !viewManipulator.IsOver)
+            if (gui.IsPointerClick(Silk.NET.Input.MouseButton.Left) && !gizmo.IsOver && !viewManipulator.IsOver)
             {
                 // If the Scene Camera has no Render Graph, the gBuffer may not be initialized
                 if (Cam.gBuffer != null)
@@ -180,7 +180,7 @@ public class SceneViewWindow : EditorWindow
                         var go = EngineObject.FindObjectByID<GameObject>(instanceID);
                         if (go != null)
                         {
-                            if (!go.IsPartOfPrefab || g.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                            if (!go.IsPartOfPrefab || gui.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
                             {
                                 HierarchyWindow.SelectHandler.Select(new WeakReference(go));
                                 HierarchyWindow.Ping(go);
@@ -207,21 +207,21 @@ public class SceneViewWindow : EditorWindow
                     }
                 }
             }
-            else if (g.IsPointerDown(Silk.NET.Input.MouseButton.Right))
+            else if (gui.IsPointerDown(Silk.NET.Input.MouseButton.Right))
             {
-                g.SetCursorVisibility(false);
+                gui.SetCursorVisibility(false);
                 Vector3 moveDir = Vector3.zero;
-                if (g.IsKeyDown(Key.W)) moveDir += Cam.GameObject.Transform.forward;
-                if (g.IsKeyDown(Key.S)) moveDir -= Cam.GameObject.Transform.forward;
-                if (g.IsKeyDown(Key.A)) moveDir -= Cam.GameObject.Transform.right;
-                if (g.IsKeyDown(Key.D)) moveDir += Cam.GameObject.Transform.right;
-                if (g.IsKeyDown(Key.E)) moveDir += Cam.GameObject.Transform.up;
-                if (g.IsKeyDown(Key.Q)) moveDir -= Cam.GameObject.Transform.up;
+                if (gui.IsKeyDown(Key.W)) moveDir += Cam.GameObject.Transform.forward;
+                if (gui.IsKeyDown(Key.S)) moveDir -= Cam.GameObject.Transform.forward;
+                if (gui.IsKeyDown(Key.A)) moveDir -= Cam.GameObject.Transform.right;
+                if (gui.IsKeyDown(Key.D)) moveDir += Cam.GameObject.Transform.right;
+                if (gui.IsKeyDown(Key.E)) moveDir += Cam.GameObject.Transform.up;
+                if (gui.IsKeyDown(Key.Q)) moveDir -= Cam.GameObject.Transform.up;
 
                 if (moveDir != Vector3.zero)
                 {
                     moveDir = Vector3.Normalize(moveDir);
-                    if (g.IsKeyDown(Key.ShiftLeft))
+                    if (gui.IsKeyDown(Key.ShiftLeft))
                         moveDir *= 2.0f;
                     Cam.GameObject.Transform.position += moveDir * (Time.deltaTimeF * 10f) * moveSpeed;
 
@@ -235,7 +235,7 @@ public class SceneViewWindow : EditorWindow
                     moveSpeed = 1;
                 }
 
-                if (g.IsPointerMoving)
+                if (gui.IsPointerMoving)
                 {
                     if (LastFocusedCameraChanged)
                     {
@@ -244,7 +244,7 @@ public class SceneViewWindow : EditorWindow
                         LastFocusedCameraChanged = false;
                     }
 
-                    var mouseDelta = g.PointerDelta;
+                    var mouseDelta = gui.PointerDelta;
                     if (SceneViewPreferences.Instance.InvertLook)
                         mouseDelta.y = -mouseDelta.y;
                     camY += mouseDelta.x * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
@@ -252,26 +252,26 @@ public class SceneViewWindow : EditorWindow
                     camX = Mathf.Clamp(camX, -89.9f, 89.9f);
                     Cam.GameObject.Transform.eulerAngles = new Vector3(camX, camY, 0);
 
-                    g.PointerPos = WindowCenter;
+                    gui.PointerPos = WindowCenter;
                     // Input.MousePosition = WindowCenter;
                 }
             }
             else
             {
                 moveSpeed = 1;
-                if (g.IsPointerDown(MouseButton.Middle))
+                if (gui.IsPointerDown(MouseButton.Middle))
                 {
-                    g.SetCursorVisibility(false);
-                    var mouseDelta = g.PointerDelta;
+                    gui.SetCursorVisibility(false);
+                    var mouseDelta = gui.PointerDelta;
                     var pos = Cam.GameObject.Transform.position;
                     pos -= Cam.GameObject.Transform.right * mouseDelta.x * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
                     pos += Cam.GameObject.Transform.up * mouseDelta.y * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
                     Cam.GameObject.Transform.position = pos;
-                    g.PointerPos = WindowCenter;
+                    gui.PointerPos = WindowCenter;
 
                 }
 
-                if (g.IsKeyDown(Key.F) && HierarchyWindow.SelectHandler.Selected.Any())
+                if (gui.IsKeyDown(Key.F) && HierarchyWindow.SelectHandler.Selected.Any())
                 {
                     float defaultZoomFactor = 2f;
                     if (HierarchyWindow.SelectHandler.Selected.Count == 1)
@@ -306,11 +306,11 @@ public class SceneViewWindow : EditorWindow
                 }
             }
             
-            if (g.PointerWheel != 0)
+            if (gui.PointerWheel != 0)
             {
                 // Larger distance more zoom, but clamped
                 double amount = 1f * SceneViewPreferences.Instance.ZoomSensitivity;
-                Cam.GameObject.Transform.position += mouseRay.direction * amount * g.PointerWheel;
+                Cam.GameObject.Transform.position += mouseRay.direction * amount * gui.PointerWheel;
 
             }
         }
@@ -321,13 +321,13 @@ public class SceneViewWindow : EditorWindow
         if (SceneViewPreferences.Instance.ShowFPS)
         {
             //g.DrawRectFilled(imagePos + new Vector2(5, imageSize.y - 25), new Vector2(75, 20), new Color(0, 0, 0, 0.25f));
-            g.Draw2D.DrawText($"FPS: {fps:0.0}", imagePos + new Vector2(10, imageSize.y - 22));
+            gui.Draw2D.DrawText($"FPS: {fps:0.0}", imagePos + new Vector2(10, imageSize.y - 22));
         }
     }
 
     private void HandleGizmos(List<GameObject> selectedGOs, Ray mouseRay, Matrix4x4 view, Matrix4x4 projection, bool blockPicking)
     {
-        gizmo.UpdateCamera(g.CurrentNode.LayoutData.Rect, view, projection, Cam.GameObject.Transform.up, Cam.GameObject.Transform.forward, Cam.GameObject.Transform.right);
+        gizmo.UpdateCamera(gui.CurrentNode.LayoutData.Rect, view, projection, Cam.GameObject.Transform.up, Cam.GameObject.Transform.forward, Cam.GameObject.Transform.right);
 
         gizmo.Snapping = Input.GetKey(Key.ControlLeft);
         gizmo.SnapDistance = SceneViewPreferences.Instance.SnapDistance;
@@ -352,7 +352,7 @@ public class SceneViewWindow : EditorWindow
         }
         
         gizmo.SetTransform(centerOfAll, rotation, scale);
-        var result = gizmo.Update(mouseRay, g.PointerPos, blockPicking);
+        var result = gizmo.Update(mouseRay, gui.PointerPos, blockPicking);
         if (result.HasValue)
         {
             foreach (var selectedGo in selectedGOs)
@@ -419,12 +419,12 @@ public class SceneViewWindow : EditorWindow
 
     private void DrawPlayMode()
     {
-        using (g.Node("PSP").FitContentWidth().Height(GuiStyle.ItemHeight).Top(5).Layout(LayoutType.Row).Enter())
+        using (gui.Node("PSP").FitContentWidth().Height(GuiStyle.ItemHeight).Top(5).Layout(LayoutType.Row).Enter())
         {
             // Center
-            g.CurrentNode.Left(Offset.Percentage(0.5f, -(g.CurrentNode.LayoutData.Rect.width / 2)));
+            gui.CurrentNode.Left(Offset.Percentage(0.5f, -(gui.CurrentNode.LayoutData.Rect.width / 2)));
 
-            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
+            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
 
             switch (PlayMode.Current)
             {
@@ -461,56 +461,56 @@ public class SceneViewWindow : EditorWindow
         double width = (vertical ? buttonSize : buttonSize * buttonCount) + GuiStyle.ItemPadding * 2;
         double height = (vertical ? buttonSize * buttonCount : buttonSize) + GuiStyle.ItemPadding * 2;
 
-        using (g.Node("VpSettings").TopLeft(5).Scale(width, height).Padding(GuiStyle.ItemPadding).Layout(vertical ? LayoutType.Column : LayoutType.Row).Enter())
+        using (gui.Node("VpSettings").TopLeft(5).Scale(width, height).Padding(GuiStyle.ItemPadding).Layout(vertical ? LayoutType.Column : LayoutType.Row).Enter())
         {
-            g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
+            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
 
-            using (g.ButtonNode("EditorCam", out var pressed, out var hovered).Scale(buttonSize).Enter())
+            using (gui.ButtonNode("EditorCam", out var pressed, out var hovered).Scale(buttonSize).Enter())
             {
                 if (pressed)
                     GlobalSelectHandler.Select(new WeakReference(Cam.GameObject));
 
-                g.TextNode("Label", FontAwesome6.Camera).Expand();
+                gui.TextNode("Label", FontAwesome6.Camera).Expand();
                 var hovCol = GuiStyle.Base11;
                 hovCol.a = 0.25f;
                 if (hovered)
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, hovCol, 10);
             }
-            g.Tooltip("Select Editor Camera");
+            gui.Tooltip("Select Editor Camera");
 
             var gridType = SceneViewPreferences.Instance.GridType;
             int gridTypeIndex = (int)gridType;
             GuiStyle style = new();
             style.WidgetColor = Color.clear;
             style.BorderThickness = 0;
-            if (g.Combo("GridType", "_GridTypePopup", ref gridTypeIndex, Enum.GetNames(typeof(GridType)), 0, 0, buttonSize, buttonSize, style, FontAwesome6.TableCells))
+            if (gui.Combo("GridType", "_GridTypePopup", ref gridTypeIndex, Enum.GetNames(typeof(GridType)), 0, 0, buttonSize, buttonSize, style, FontAwesome6.TableCells))
                 SceneViewPreferences.Instance.GridType = (GridType)gridTypeIndex;
 
-            using (g.ButtonNode("GizmoMode", out var pressed, out var hovered).Scale(buttonSize).Enter())
+            using (gui.ButtonNode("GizmoMode", out var pressed, out var hovered).Scale(buttonSize).Enter())
             {
                 if (pressed)
                     gizmo.Orientation = (TransformGizmo.GizmoOrientation)((int)gizmo.Orientation == 1 ? 0 : 1);
 
-                g.TextNode("Label", gizmo.Orientation == 0 ? FontAwesome6.Globe : FontAwesome6.Cube).Expand();
+                gui.TextNode("Label", gizmo.Orientation == 0 ? FontAwesome6.Globe : FontAwesome6.Cube).Expand();
                 var hovCol = GuiStyle.Base11;
                 hovCol.a = 0.25f;
                 if (hovered)
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, hovCol, 10);
             }
-            g.Tooltip("Gizmo Mode: " + (gizmo.Orientation == 0 ? "World" : "Local"));
+            gui.Tooltip("Gizmo Mode: " + (gizmo.Orientation == 0 ? "World" : "Local"));
 
-            using (g.ButtonNode("OpenPreferences", out var pressed, out var hovered).Scale(buttonSize).Enter())
+            using (gui.ButtonNode("OpenPreferences", out var pressed, out var hovered).Scale(buttonSize).Enter())
             {
                 if (pressed)
                     new PreferencesWindow(typeof(SceneViewPreferences));
 
-                g.TextNode("Label", FontAwesome6.Gear).Expand();
+                gui.TextNode("Label", FontAwesome6.Gear).Expand();
                 var hovCol = GuiStyle.Base11;
                 hovCol.a = 0.25f;
                 if (hovered)
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, hovCol, 10);
             }
-            g.Tooltip("Open Editor Preferences");
+            gui.Tooltip("Open Editor Preferences");
         }
     }
 

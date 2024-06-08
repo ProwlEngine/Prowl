@@ -32,8 +32,8 @@ namespace Prowl.Editor.ScriptedEditors
             }
             catch
             {
-                g.Node("DummyForText").ExpandWidth().Height(GuiStyle.ItemHeight * 10);
-                g.Draw2D.DrawText("Failed to Deserialize ScriptableObject, The ScriptableObject file is invalid.", g.CurrentNode.LayoutData.Rect);
+                gui.Node("DummyForText").ExpandWidth().Height(GuiStyle.ItemHeight * 10);
+                gui.Draw2D.DrawText("Failed to Deserialize ScriptableObject, The ScriptableObject file is invalid.", gui.CurrentNode.LayoutData.Rect);
             }
         }
 

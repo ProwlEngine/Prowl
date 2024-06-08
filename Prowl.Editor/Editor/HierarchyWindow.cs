@@ -46,24 +46,24 @@ namespace Prowl.Editor
 
             SelectHandler.StartFrame();
 
-            g.CurrentNode.Layout(LayoutType.Column);
-            g.CurrentNode.ScaleChildren();
-            g.CurrentNode.Padding(0, 10, 10, 10);
+            gui.CurrentNode.Layout(LayoutType.Column);
+            gui.CurrentNode.ScaleChildren();
+            gui.CurrentNode.Padding(0, 10, 10, 10);
 
 
-            using (g.Node("Search").Width(Size.Percentage(1f)).MaxHeight(entryHeight).Clip().Enter())
+            using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(entryHeight).Clip().Enter())
             {
-                g.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f, -entryHeight), entryHeight);
+                gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f, -entryHeight), entryHeight);
 
-                using (g.Node("CreateGOBtn").Left(Offset.Percentage(1f, -entryHeight + 3)).Scale(entryHeight).Enter())
+                using (gui.Node("CreateGOBtn").Left(Offset.Percentage(1f, -entryHeight + 3)).Scale(entryHeight).Enter())
                 {
-                    g.Draw2D.DrawText(FontAwesome6.CirclePlus, 30, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base4);
+                    gui.Draw2D.DrawText(FontAwesome6.CirclePlus, 30, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base4);
 
-                    if (g.IsNodePressed())
-                        g.OpenPopup("CreateGameObject");
+                    if (gui.IsNodePressed())
+                        gui.OpenPopup("CreateGameObject");
 
-                    var test = g.CurrentNode;
-                    if (g.BeginPopup("CreateGameObject", out var node))
+                    var test = gui.CurrentNode;
+                    if (gui.BeginPopup("CreateGameObject", out var node))
                     {
                         using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
                         {
@@ -75,11 +75,11 @@ namespace Prowl.Editor
             }
 
 
-            using (g.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Clip().Enter())
+            using (gui.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Clip().Enter())
             {
                 //g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.5f, 10, 12);
 
-                var dropInteract = g.GetInteractable();
+                var dropInteract = gui.GetInteractable();
                 HandleDrop(null);
 
                 if (!SelectHandler.SelectedThisFrame && dropInteract.TakeFocus())
@@ -100,18 +100,18 @@ namespace Prowl.Editor
                     height += entryHeight;
                 }
 
-                var popupHolder = g.CurrentNode;
-                if (g.BeginPopup("RightClickGameObject", out var node))
+                var popupHolder = gui.CurrentNode;
+                if (gui.BeginPopup("RightClickGameObject", out var node))
                 {
                     using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
                     {
-                        var instanceID = g.GetGlobalStorage<int>("RightClickGameObject");
+                        var instanceID = gui.GetGlobalStorage<int>("RightClickGameObject");
                         var go = EngineObject.FindObjectByID<GameObject>(instanceID);
                         DrawContextMenu(go, popupHolder);
                     }
                 }
 
-                g.ScrollV();
+                gui.ScrollV();
             }
         }
 
@@ -184,7 +184,7 @@ namespace Prowl.Editor
             }
 
             if (closePopup)
-                g.ClosePopup(popupHolder);
+                gui.ClosePopup(popupHolder);
         }
 
         public void DrawGameObject(ref int index, GameObject entity, uint depth, bool isPartOfPrefab)
@@ -203,34 +203,34 @@ namespace Prowl.Editor
             bool isPrefab = entity.IsPrefab;
             double left = depth * entryHeight;
             ulong goNodeID = 0;
-            using (g.Node(entity.GetHashCode().ToString()).Left(left).Top(index * (entryHeight + entryPadding)).ExpandWidth(-(left + g.VScrollBarWidth())).Height(entryHeight).Margin(2, 0).Enter())
+            using (gui.Node(entity.GetHashCode().ToString()).Left(left).Top(index * (entryHeight + entryPadding)).ExpandWidth(-(left + gui.VScrollBarWidth())).Height(entryHeight).Margin(2, 0).Enter())
             {
-                goNodeID = g.CurrentNode.ID;
+                goNodeID = gui.CurrentNode.ID;
                 float colMult = entity.enabledInHierarchy ? 1 : 0.5f;
                 bool isSelected = SelectHandler.IsSelected(new WeakReference(entity));
 
-                double maxwidth = g.CurrentNode.LayoutData.InnerRect.width;
-                var rect = g.CurrentNode.LayoutData.InnerRect;
+                double maxwidth = gui.CurrentNode.LayoutData.InnerRect.width;
+                var rect = gui.CurrentNode.LayoutData.InnerRect;
                 rect.width = maxwidth;
                 rect.height = entryHeight;
 
                 // Interaction
                 SelectHandler.AddSelectableAtIndex(index, new WeakReference(entity));
-                var interact = g.GetInteractable(rect);
+                var interact = gui.GetInteractable(rect);
                 if (interact.TakeFocus())
                     SelectHandler.Select(index, new WeakReference(entity));
 
                 bool justStartedRename = false;
-                if (SelectHandler.Count == 1 && g.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left) && interact.IsHovered())
+                if (SelectHandler.Count == 1 && gui.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left) && interact.IsHovered())
                 {
                     justStartedRename = true;
                     m_RenamingGO = entity;
                 }
-                else if (g.IsPointerClick(Silk.NET.Input.MouseButton.Right) && interact.IsHovered())
+                else if (gui.IsPointerClick(Silk.NET.Input.MouseButton.Right) && interact.IsHovered())
                 {
                     // POpup holder is our parent, since thats the Tree node
-                    g.OpenPopup("RightClickGameObject", null, g.CurrentNode.Parent);
-                    g.SetGlobalStorage("RightClickGameObject", entity.InstanceID);
+                    gui.OpenPopup("RightClickGameObject", null, gui.CurrentNode.Parent);
+                    gui.SetGlobalStorage("RightClickGameObject", entity.InstanceID);
                 }
 
                 if (IsFocused)
@@ -243,49 +243,49 @@ namespace Prowl.Editor
                 DragnDrop.Drag(entity);
 
                 var col = (interact.IsHovered() ? GuiStyle.Base5 : GuiStyle.Base4 * 0.8f) * colMult;
-                g.Draw2D.DrawRectFilled(rect, (isSelected ? GuiStyle.Indigo : col), 8);
-                g.Draw2D.DrawRectFilled(rect.Min, new Vector2(entryHeight, entryHeight), GuiStyle.Borders, 8, 9);
+                gui.Draw2D.DrawRectFilled(rect, (isSelected ? GuiStyle.Indigo : col), 8);
+                gui.Draw2D.DrawRectFilled(rect.Min, new Vector2(entryHeight, entryHeight), GuiStyle.Borders, 8, 9);
                 if (isPrefab || isPartOfPrefab || !entity.enabledInHierarchy)
                 {
                     var lineColor = (isPrefab ? GuiStyle.Orange : GuiStyle.Yellow);
                     if(!entity.enabledInHierarchy)
                         lineColor = GuiStyle.Red;
-                    g.Draw2D.DrawLine(new Vector2(rect.x + entryHeight + 1, rect.y - 1), new Vector2(rect.x + entryHeight + 1, rect.y + entryHeight - 1), lineColor, 3);
+                    gui.Draw2D.DrawLine(new Vector2(rect.x + entryHeight + 1, rect.y - 1), new Vector2(rect.x + entryHeight + 1, rect.y + entryHeight - 1), lineColor, 3);
                 }
 
-                using (g.Node("VisibilityBtn").TopLeft(6).Scale(20).Enter())
+                using (gui.Node("VisibilityBtn").TopLeft(6).Scale(20).Enter())
                 {
-                    if (g.IsNodePressed())
+                    if (gui.IsNodePressed())
                         entity.enabled = !entity.enabled;
-                    g.Draw2D.DrawText(entity.enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash, 20, g.CurrentNode.LayoutData.Rect, entity.enabledInHierarchy ? GuiStyle.Base11 : GuiStyle.Base4);
+                    gui.Draw2D.DrawText(entity.enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash, 20, gui.CurrentNode.LayoutData.Rect, entity.enabledInHierarchy ? GuiStyle.Base11 : GuiStyle.Base4);
                 }
 
                 // if were pinging we need to open the tree to the pinged object
                 if (pingTimer > 0 && pingedGO != null && pingedGO.Target is GameObject go)
                 {
                     if (entity.IsParentOf(go)) // Set the tree open
-                        g.SetStorage(entity.InstanceID.ToString(), true);
+                        gui.SetStorage(entity.InstanceID.ToString(), true);
                     else if (entity.InstanceID == go.InstanceID)
                     {
                         // Draw a ping effect
                         // TODO: Scroll to Rect
                         var pingRect = rect;
                         pingRect.Expand(MathF.Sin(pingTimer) * 6f);
-                        g.Draw2D.DrawRect(pingRect, GuiStyle.Yellow, 2f, 4f);
+                        gui.Draw2D.DrawRect(pingRect, GuiStyle.Yellow, 2f, 4f);
                     }
                 }
 
                 if (entity.children.Count > 0)
                 {
-                    bool expanded = g.GetStorage<bool>(entity.InstanceID.ToString());
-                    using (g.Node("VisibilityBtn").TopLeft(maxwidth - entryHeight, 5).Scale(20).Enter())
+                    bool expanded = gui.GetStorage<bool>(entity.InstanceID.ToString());
+                    using (gui.Node("VisibilityBtn").TopLeft(maxwidth - entryHeight, 5).Scale(20).Enter())
                     {
-                        if (g.IsNodePressed())
+                        if (gui.IsNodePressed())
                         {
                             expanded = !expanded;
-                            g.SetStorage(g.CurrentNode.Parent, entity.InstanceID.ToString(), expanded);
+                            gui.SetStorage(gui.CurrentNode.Parent, entity.InstanceID.ToString(), expanded);
                         }
-                        g.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, g.CurrentNode.LayoutData.Rect, entity.enabledInHierarchy ? GuiStyle.Base11 : GuiStyle.Base4);
+                        gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.Rect, entity.enabledInHierarchy ? GuiStyle.Base11 : GuiStyle.Base4);
                     }
                     drawChildren = expanded;
                 }
@@ -295,11 +295,11 @@ namespace Prowl.Editor
                 if (m_RenamingGO == entity)
                 {
                     var inputRect = new Rect(rect.x + 33, rect.y + 4, maxwidth - (entryHeight * 2.25), 21);
-                    g.Draw2D.DrawRectFilled(inputRect, GuiStyle.WindowBackground, 8);
-                    g.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.None, 30, 3, maxwidth - (entryHeight * 2.25), null, null, true);
+                    gui.Draw2D.DrawRectFilled(inputRect, GuiStyle.WindowBackground, 8);
+                    gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.None, 30, 3, maxwidth - (entryHeight * 2.25), null, null, true);
                     if (justStartedRename)
-                        g.FocusPreviousInteractable();
-                    if (!g.PreviousInteractableIsFocus())
+                        gui.FocusPreviousInteractable();
+                    if (!gui.PreviousInteractableIsFocus())
                         m_RenamingGO = null;
                     entity.Name = name;
                 }
@@ -307,7 +307,7 @@ namespace Prowl.Editor
                 {
                     var textRect = rect;
                     textRect.width -= entryHeight;
-                    g.Draw2D.DrawText(UIDrawList.DefaultFont, name, 20, new Vector2(rect.x + 40, rect.y + 7), GuiStyle.Base11, 0, textRect);
+                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, name, 20, new Vector2(rect.x + 40, rect.y + 7), GuiStyle.Base11, 0, textRect);
                 }
 
                 index++;
@@ -316,10 +316,10 @@ namespace Prowl.Editor
             // Open
             if (drawChildren)
             {
-                g.PushID(goNodeID);
+                gui.PushID(goNodeID);
                 for (int i = 0; i < entity.children.Count; i++)
                     DrawGameObject(ref index, entity.children[i], depth + 1, isPartOfPrefab || isPrefab);
-                g.PopID();
+                gui.PopID();
             }
         }
 

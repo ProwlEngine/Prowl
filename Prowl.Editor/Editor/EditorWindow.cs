@@ -23,7 +23,7 @@ namespace Prowl.Editor
         protected virtual double Padding { get; } = 8;
 
         protected bool isOpened = true;
-        protected Runtime.GUI.Gui g => Runtime.GUI.Gui.ActiveGUI;
+        protected Runtime.GUI.Gui gui => Runtime.GUI.Gui.ActiveGUI;
 
         private double _width, _height;
         public double _x, _y;
@@ -76,8 +76,8 @@ namespace Prowl.Editor
 
                 if (BackgroundFade)
                 {
-                    g.BlockInteractables(g.ScreenRect);
-                    g.Draw2D.DrawRectFilled(g.ScreenRect, new System.Numerics.Vector4(0, 0, 0, 0.5f));
+                    gui.BlockInteractables(gui.ScreenRect);
+                    gui.Draw2D.DrawRectFilled(gui.ScreenRect, new System.Numerics.Vector4(0, 0, 0, 0.5f));
                     // Ensure were at the start of the EditorWindows List
                     EditorGuiManager.FocusWindow(this);
 
@@ -85,7 +85,7 @@ namespace Prowl.Editor
 
                 if (Center)
                 {
-                    var vp_size = g.ScreenRect.Size / 2;
+                    var vp_size = gui.ScreenRect.Size / 2;
                     _x = vp_size.x - (_width / 2);
                     _y = vp_size.y - (_height / 2);
                 }
@@ -97,25 +97,25 @@ namespace Prowl.Editor
                     _x = DockPosition.x;
                     _y = DockPosition.y;
                     // Dock is Relative to Node, Convert to Screen Space
-                    _x -= g.CurrentNode.LayoutData.Rect.x;
-                    _y -= g.CurrentNode.LayoutData.Rect.y;
+                    _x -= gui.CurrentNode.LayoutData.Rect.x;
+                    _y -= gui.CurrentNode.LayoutData.Rect.y;
                     width = DockSize.x;
                     height = DockSize.y;
                 }
 
-                using (g.Node("_" + Title, _id).Width(width).Height(height).Padding(Padding).Left(_x).Top(_y).Layout(LayoutType.Column).ScaleChildren().Enter())
+                using (gui.Node("_" + Title, _id).Width(width).Height(height).Padding(Padding).Left(_x).Top(_y).Layout(LayoutType.Column).ScaleChildren().Enter())
                 {
-                    g.BlockInteractables(g.CurrentNode.LayoutData.InnerRect);
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
+                    gui.BlockInteractables(gui.CurrentNode.LayoutData.InnerRect);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
 
-                    Rect = g.CurrentNode.LayoutData.InnerRect;
+                    Rect = gui.CurrentNode.LayoutData.InnerRect;
 
                     if (!LockSize && !IsDocked)
                         HandleResize();
 
                     if (TitleBar)
                     {
-                        using (g.Node("_Titlebar").Width(Size.Percentage(1f)).MaxHeight(40).Padding(10, 10).Enter())
+                        using (gui.Node("_Titlebar").Width(Size.Percentage(1f)).MaxHeight(40).Padding(10, 10).Enter())
                         {
                             HandleTitleBarInteraction();
 
@@ -132,11 +132,11 @@ namespace Prowl.Editor
                                 }
 
                                 double updatedTotal = 0;
-                                if (total > g.CurrentNode.LayoutData.InnerRect.width - 35)
+                                if (total > gui.CurrentNode.LayoutData.InnerRect.width - 35)
                                 {
                                     for (int i = 0; i < tabWidths.Length; i++)
                                     {
-                                        tabWidths[i] = (tabWidths[i] / total) * (g.CurrentNode.LayoutData.InnerRect.width - 35);
+                                        tabWidths[i] = (tabWidths[i] / total) * (gui.CurrentNode.LayoutData.InnerRect.width - 35);
                                         updatedTotal += tabWidths[i];
                                     }
                                 }
@@ -148,11 +148,11 @@ namespace Prowl.Editor
                                 // background rect for all tabs
                                 if (Leaf.LeafWindows.Count > 1)
                                 {
-                                    var tabsRect = g.CurrentNode.LayoutData.InnerRect;
+                                    var tabsRect = gui.CurrentNode.LayoutData.InnerRect;
                                     tabsRect.x += 2;
                                     tabsRect.width = updatedTotal;
                                     tabsRect.Expand(6);
-                                    g.Draw2D.DrawRectFilled(tabsRect, GuiStyle.WindowBackground * 0.8f, 10);
+                                    gui.Draw2D.DrawRectFilled(tabsRect, GuiStyle.WindowBackground * 0.8f, 10);
                                 }
 
                                 double left = 0;
@@ -160,43 +160,43 @@ namespace Prowl.Editor
                                 {
                                     var window = Leaf.LeafWindows[i];
                                     var tabWidth = tabWidths[i];
-                                    using (g.Node("Tab _" + window.Title, window._id).Width(tabWidth).Height(20).Left(left).Enter())
+                                    using (gui.Node("Tab _" + window.Title, window._id).Width(tabWidth).Height(20).Left(left).Enter())
                                     {
                                         left += tabWidth + 5;
-                                        var tabRect = g.CurrentNode.LayoutData.Rect;
+                                        var tabRect = gui.CurrentNode.LayoutData.Rect;
                                         tabRect.Expand(0, 2);
 
                                         if (window != this)
                                         {
-                                            if (g.IsNodePressed())
+                                            if (gui.IsNodePressed())
                                             {
                                                 Leaf.WindowNum = i;
                                                 EditorGuiManager.FocusWindow(window);
                                             }
-                                            if (g.IsNodeHovered())
-                                                g.Draw2D.DrawRectFilled(tabRect, GuiStyle.Borders, 10);
+                                            if (gui.IsNodeHovered())
+                                                gui.Draw2D.DrawRectFilled(tabRect, GuiStyle.Borders, 10);
                                         }
                                         if (window == this)
                                         {
-                                            g.Draw2D.DrawRectFilled(tabRect, GuiStyle.Indigo, 10);
+                                            gui.Draw2D.DrawRectFilled(tabRect, GuiStyle.Indigo, 10);
                                         }
 
                                         var textSize = UIDrawList.DefaultFont.CalcTextSize(window.Title, 0);
-                                        var pos = g.CurrentNode.LayoutData.Rect.Position;
+                                        var pos = gui.CurrentNode.LayoutData.Rect.Position;
                                         pos.x += (tabRect.width - textSize.x) * 0.5f;
                                         pos.y += (tabRect.height - (textSize.y)) * 0.5f;
                                         if (textSize.x < tabWidth - 10)
-                                            g.Draw2D.DrawText(UIDrawList.DefaultFont, window.Title, 20, pos, Color.white);
+                                            gui.Draw2D.DrawText(UIDrawList.DefaultFont, window.Title, 20, pos, Color.white);
                                         else
-                                            g.Draw2D.DrawText(UIDrawList.DefaultFont, "...", 20, new Vector2(tabRect.x + (tabRect.width * 0.5) - 5, pos.y), Color.white);
+                                            gui.Draw2D.DrawText(UIDrawList.DefaultFont, "...", 20, new Vector2(tabRect.x + (tabRect.width * 0.5) - 5, pos.y), Color.white);
 
                                         // Close Button
-                                        if (g.IsNodeHovered())
+                                        if (gui.IsNodeHovered())
                                         {
-                                            using (g.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -23)).Enter())
+                                            using (gui.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -23)).Enter())
                                             {
-                                                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new Color(1, 1, 1, 150), 10);
-                                                if (g.IsPointerHovering() && g.IsPointerClick())
+                                                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new Color(1, 1, 1, 150), 10);
+                                                if (gui.IsPointerHovering() && gui.IsPointerClick())
                                                 {
                                                     //Leaf.LeafWindows.Remove(window);
                                                     //EditorGuiManager.Remove(window);
@@ -206,7 +206,7 @@ namespace Prowl.Editor
                                                     else
                                                         EditorGuiManager.Remove(window);
                                                 }
-                                                g.Draw2D.DrawText(UIDrawList.DefaultFont, FontAwesome6.Xmark, 20, g.CurrentNode.LayoutData.Rect, g.IsPointerHovering() ? GuiStyle.Base11 : GuiStyle.Base9);
+                                                gui.Draw2D.DrawText(UIDrawList.DefaultFont, FontAwesome6.Xmark, 20, gui.CurrentNode.LayoutData.Rect, gui.IsPointerHovering() ? GuiStyle.Base11 : GuiStyle.Base9);
                                             }
 
                                         }
@@ -215,14 +215,14 @@ namespace Prowl.Editor
                             }
                             else
                             {
-                                g.Draw2D.DrawText(UIDrawList.DefaultFont, Title, 20, g.CurrentNode.LayoutData.Rect, Color.white);
+                                gui.Draw2D.DrawText(UIDrawList.DefaultFont, Title, 20, gui.CurrentNode.LayoutData.Rect, Color.white);
                             }
 
                             DrawWindowManagementButton();
                         }
 
 
-                        using (g.Node("_Main").Width(Size.Percentage(1f)).Clip().Enter())
+                        using (gui.Node("_Main").Width(Size.Percentage(1f)).Clip().Enter())
                         {
                             Draw();
                         }
@@ -231,7 +231,7 @@ namespace Prowl.Editor
                     {
                         Draw();
                     }
-                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, GuiStyle.Borders, 2, 10);
+                    gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.InnerRect, GuiStyle.Borders, 2, 10);
                 }
 
 
@@ -251,15 +251,15 @@ namespace Prowl.Editor
 
         private void DrawWindowManagementButton()
         {
-            using (g.Node("_WindowManageBtn").Width(20).Height(20).Left(Offset.Percentage(1f, -20)).Enter())
+            using (gui.Node("_WindowManageBtn").Width(20).Height(20).Left(Offset.Percentage(1f, -20)).Enter())
             {
-                if (g.IsNodePressed())
-                    g.OpenPopup("WindowManagement");
-                g.Draw2D.DrawText(FontAwesome6.EllipsisVertical, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base6);
+                if (gui.IsNodePressed())
+                    gui.OpenPopup("WindowManagement");
+                gui.Draw2D.DrawText(FontAwesome6.EllipsisVertical, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base6);
 
-                if (g.BeginPopup("WindowManagement", out var node))
+                if (gui.BeginPopup("WindowManagement", out var node))
                 {
-                    var popupHolder = g.CurrentNode;
+                    var popupHolder = gui.CurrentNode;
                     using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
                     {
                         bool closePopup = false;
@@ -296,7 +296,7 @@ namespace Prowl.Editor
                         if (EditorGUI.QuickButton("Editor Preferences"))    { new PreferencesWindow(); closePopup = true; }
 
                         if (closePopup)
-                            g.ClosePopup(popupHolder);
+                            gui.ClosePopup(popupHolder);
                     }
                 }
             }
@@ -305,11 +305,11 @@ namespace Prowl.Editor
             {
                 // If the window isnt docked then theres no tab with a Close button
                 // So we need to draw the close button on the title bar instead
-                using (g.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -45)).Enter())
+                using (gui.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -45)).Enter())
                 {
-                    if (g.IsNodePressed())
+                    if (gui.IsNodePressed())
                         isOpened = false;
-                    g.Draw2D.DrawText(FontAwesome6.Xmark, g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base6);
+                    gui.Draw2D.DrawText(FontAwesome6.Xmark, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base6);
                 }
             }
         }
@@ -317,9 +317,9 @@ namespace Prowl.Editor
         private bool _wasResizing = false;
         private void HandleResize()
         {
-            using (g.Node("ResizeTab").TopLeft(Offset.Percentage(1f, -15)).Scale(15).IgnoreLayout().Enter())
+            using (gui.Node("ResizeTab").TopLeft(Offset.Percentage(1f, -15)).Scale(15).IgnoreLayout().Enter())
             {
-                if (g.IsNodePressed() || g.IsNodeActive())
+                if (gui.IsNodePressed() || gui.IsNodeActive())
                 {
                     if (!_wasResizing)
                     {
@@ -327,8 +327,8 @@ namespace Prowl.Editor
                     }
                     else
                     {
-                        _width += g.PointerDelta.x;
-                        _height += g.PointerDelta.y;
+                        _width += gui.PointerDelta.x;
+                        _height += gui.PointerDelta.y;
 
                         // If width or height is less than 10, move the window instead
                         if (_width < 150)
@@ -342,50 +342,50 @@ namespace Prowl.Editor
                     _wasResizing = false;
                 }
 
-                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, g.IsNodeHovered() ? new(1f, 1f, 1f, 0.5f) : new(1f, 1f, 1f, 0.2f), 10, 5);
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? new(1f, 1f, 1f, 0.5f) : new(1f, 1f, 1f, 0.2f), 10, 5);
             }
         }
 
         private void HandleTitleBarInteraction()
         {
-            var titleInteract = g.GetInteractable();
+            var titleInteract = gui.GetInteractable();
             if (EditorGuiManager.DragSplitter == null)
             {
                 if (titleInteract.TakeFocus() || titleInteract.IsActive())
                 {
                     EditorGuiManager.FocusWindow(this);
-                    if (_wasDragged || g.IsPointerMoving)
+                    if (_wasDragged || gui.IsPointerMoving)
                     {
                         _wasDragged = true;
 
-                        _x += g.PointerDelta.x;
-                        _y += g.PointerDelta.y;
+                        _x += gui.PointerDelta.x;
+                        _y += gui.PointerDelta.y;
                         EditorGuiManager.DraggingWindow = this;
 
-                        if (g.IsPointerMoving && IsDocked)
+                        if (gui.IsPointerMoving && IsDocked)
                         {
                             EditorGuiManager.Container.DetachWindow(this);
                             // Position the window so the mouse is over the title bar
-                            _x = g.PointerPos.x - (_width / 2);
-                            _y = g.PointerPos.y - 10;
+                            _x = gui.PointerPos.x - (_width / 2);
+                            _y = gui.PointerPos.y - 10;
                         }
 
                         if (IsDockable && !IsDocked)
                         {
                             // Draw Docking Placement
-                            var oldZ = g.CurrentZIndex;
-                            g.SetZIndex(10000);
-                            _ = EditorGuiManager.Container.GetPlacement(g.PointerPos.x, g.PointerPos.y, out var placements, out var hovered);
+                            var oldZ = gui.CurrentZIndex;
+                            gui.SetZIndex(10000);
+                            _ = EditorGuiManager.Container.GetPlacement(gui.PointerPos.x, gui.PointerPos.y, out var placements, out var hovered);
                             if (placements != null)
                             {
                                 foreach (var possible in placements)
                                 {
-                                    g.Draw2D.DrawRectFilled(possible, GuiStyle.Blue * 0.6f, 10);
-                                    g.Draw2D.DrawRect(possible, GuiStyle.Blue * 0.6f, 4, 10);
+                                    gui.Draw2D.DrawRectFilled(possible, GuiStyle.Blue * 0.6f, 10);
+                                    gui.Draw2D.DrawRect(possible, GuiStyle.Blue * 0.6f, 4, 10);
                                 }
-                                g.Draw2D.DrawRect(hovered, Color.yellow, 4, 10);
+                                gui.Draw2D.DrawRect(hovered, Color.yellow, 4, 10);
                             }
-                            g.SetZIndex(oldZ);
+                            gui.SetZIndex(oldZ);
                         }
                     }
                 }
@@ -396,7 +396,7 @@ namespace Prowl.Editor
                         _wasDragged = false;
                         if (IsDockable && !IsDocked)
                         {
-                            Vector2 cursorPos = g.PointerPos;
+                            Vector2 cursorPos = gui.PointerPos;
                             EditorGuiManager.Container.AttachWindowAt(this, cursorPos.x, cursorPos.y);
                         }
                     }

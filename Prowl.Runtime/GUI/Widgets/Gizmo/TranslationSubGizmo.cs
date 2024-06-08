@@ -112,7 +112,7 @@ namespace Prowl.Runtime.GUI
             _gizmo._gui.Draw3D.Setup3DObject(transform * _gizmo.ViewProjection, _gizmo.Viewport);
 
             var color = GizmoUtils.GizmoColor(_gizmo, focused, _params.Direction);
-            var stroke = new Stroke() { Thickness = _gizmo.StrokeWidth, Color = color, AntiAliased = true };
+            var stroke = new Stroke3D() { Thickness = _gizmo.StrokeWidth, Color = color, AntiAliased = true };
 
             var radius = ArcRadius();
 
@@ -173,7 +173,7 @@ namespace Prowl.Runtime.GUI
                     {
                         var angle = i * (_gizmo.SnapAngle * Mathf.Deg2Rad) + endAngle;
                         var pos = new Vector3(Math.Cos(angle), 0, Math.Sin(angle));
-                        _gizmo._gui.Draw3D.LineSegment(pos * radius * 1.1, pos * radius * 1.2, new Stroke() { Thickness = strokeWidth, Color = stroke.Color, AntiAliased = true });
+                        _gizmo._gui.Draw3D.LineSegment(pos * radius * 1.1, pos * radius * 1.2, new Stroke3D() { Thickness = strokeWidth, Color = stroke.Color, AntiAliased = true });
                     }
                 }
             }
