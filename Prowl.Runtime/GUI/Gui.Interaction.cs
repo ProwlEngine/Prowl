@@ -153,7 +153,8 @@ namespace Prowl.Runtime.GUI
         }
 
         /// <summary> A Shortcut to <see cref="GetInteractable(Rect?)"/>.TakeFocus() </summary>
-        public bool IsNodePressed(Rect? interactArea = null) => GetInteractable(interactArea).TakeFocus();
+        public bool IsNodePressed(bool onrelease) => GetInteractable().TakeFocus(onrelease);
+        public bool IsNodePressed(Rect? interactArea = null, bool onrelease = false) => GetInteractable(interactArea).TakeFocus(onrelease);
         /// <summary> A Shortcut to <see cref="GetInteractable(Rect?)"/>.IsHovered() </summary>
         public bool IsNodeHovered(Rect? interactArea = null) => GetInteractable(interactArea).IsHovered();
         /// <summary> A Shortcut to <see cref="GetInteractable(Rect?)"/>.IsFocused() </summary>
@@ -288,7 +289,7 @@ namespace Prowl.Runtime.GUI
         /// Check if the Interactable is hovered and clicked on if it is, it will take focus
         /// </summary>
         /// <returns>True on the frame the Interactable took focus, Great for Buttons: if(Interactable.TakeFocus())</returns>
-        public bool TakeFocus()
+        public bool TakeFocus(bool onrelease = false)
         {
             // Clicking on another Interactable will remove focus
             //if (_gui.FocusID == _id && _gui.HoveredID != _id && _gui.IsPointerDown(Silk.NET.Input.MouseButton.Left))
@@ -296,7 +297,7 @@ namespace Prowl.Runtime.GUI
 
             // If we are hovered and active, we are focused
             //if (_gui.HoveredID == _id && _gui.ActiveID == _id && !_gui.IsPointerDown(Silk.NET.Input.MouseButton.Left))
-            if (_gui.HoveredID == _id && _gui.ActiveID == _id && _gui.IsPointerClick(Silk.NET.Input.MouseButton.Left))
+            if (_gui.HoveredID == _id && _gui.ActiveID == _id && _gui.IsPointerClick(Silk.NET.Input.MouseButton.Left, onrelease))
             {
                 _gui.FocusID = _id;
                 return true;
