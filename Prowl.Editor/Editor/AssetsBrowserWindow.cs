@@ -275,7 +275,7 @@ namespace Prowl.Editor
                 using (g.Node(file.Name).Scale(EntrySize).Margin(itemPadding).Enter())
                 {
                     var interact = g.GetInteractable();
-                    AssetsTreeWindow.HandleFileClick(interact, file, 0);
+                    AssetsTreeWindow.HandleFileClick(-1, interact, file, 0);
 
                     DrawFileEntry(0, entry, interact);
 
@@ -304,7 +304,7 @@ namespace Prowl.Editor
                         using (g.Node(subAssets[i].name, i).Scale(EntrySize * 0.75).Margin(itemPadding).Enter())
                         {
                             var interact = g.GetInteractable();
-                            AssetsTreeWindow.HandleFileClick(interact, file, i);
+                            AssetsTreeWindow.HandleFileClick(-1, interact, file, i);
 
                             DrawFileEntry(0, entry, interact, true, subAssets[i]);
                         }

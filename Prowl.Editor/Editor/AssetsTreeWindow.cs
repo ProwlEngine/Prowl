@@ -161,9 +161,10 @@ namespace Prowl.Editor
                     {
                         using (g.Node(file.FullName).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-g.VScrollBarWidth()).Height(GuiStyle.ItemHeight).Enter())
                         {
+                            SelectHandler.AddSelectableAtIndex(_treeCounter, file);
                             var interact = g.GetInteractable();
                             if (interact.TakeFocus())
-                                SelectHandler.HandleSelectable(_treeCounter, file, true);
+                                SelectHandler.Select(_treeCounter, file);
 
                             if (SelectHandler.IsSelected(file))
                                 g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
@@ -173,6 +174,8 @@ namespace Prowl.Editor
                             var textRect = g.CurrentNode.LayoutData.Rect;
                             textRect.width -= GuiStyle.ItemHeight;
                             g.Draw2D.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), GuiStyle.Base4, 0, textRect);
+
+                            _treeCounter++;
                         }
                     }
                 }
@@ -324,9 +327,10 @@ namespace Prowl.Editor
             {
                 g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, 4);
 
+                SelectHandler.AddSelectableAtIndex(_treeCounter, root);
                 var interact = g.GetInteractable();
                 if (interact.TakeFocus())
-                    SelectHandler.HandleSelectable(_treeCounter++, root);
+                    SelectHandler.Select(_treeCounter, root);
 
                 if (SelectHandler.IsSelected(root))
                     g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
@@ -345,6 +349,8 @@ namespace Prowl.Editor
                 }
 
                 g.Draw2D.DrawText(UIDrawList.DefaultFont, root.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white);
+
+                _treeCounter++;
             }
 
             float scaleAnim = g.AnimateBool((ulong)root.FullName.GetHashCode(), expanded, 0.15f, EaseType.Linear);
@@ -364,14 +370,15 @@ namespace Prowl.Editor
                 using (g.Node(subDirectory.Name, depth).Left(left).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-(left + g.VScrollBarWidth())).Height(GuiStyle.ItemHeight * scaleHeight).Margin(2, 0).Enter())
                 {
                     subDirID = g.CurrentNode.ID;
-                    if (_treeCounter++ % 2 == 0)
+                    if (_treeCounter % 2 == 0)
                         g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.6f, 4);
                     else
                         g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
 
+                    SelectHandler.AddSelectableAtIndex(_treeCounter, subDirectory);
                     var interact = g.GetInteractable();
                     if (interact.TakeFocus())
-                        SelectHandler.HandleSelectable(_treeCounter, subDirectory);
+                        SelectHandler.Select(_treeCounter, subDirectory);
 
                     if (SelectHandler.IsSelected(subDirectory))
                         g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
@@ -390,6 +397,8 @@ namespace Prowl.Editor
                     }
 
                     g.Draw2D.DrawText(UIDrawList.DefaultFont, subDirectory.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white);
+
+                    _treeCounter++;
                 }
 
                 g.PushID(subDirID);
@@ -423,7 +432,7 @@ namespace Prowl.Editor
                     //    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GetFileColor(ext, 0.6f, 1f), 4);
 
                     var interact = g.GetInteractable();
-                    HandleFileClick(interact, file, 0);
+                    HandleFileClick(_treeCounter, interact, file, 0);
 
                     if (SelectHandler.IsSelected(file))
                         g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
@@ -451,6 +460,8 @@ namespace Prowl.Editor
                     g.Draw2D.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white, 0, textRect);
                 }
 
+                _treeCounter++;
+
                 // SubAssets
                 if (expanded)
                 {
@@ -467,7 +478,7 @@ namespace Prowl.Editor
                             g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GetTypeColor(subassets[i].type!) * 0.5f, 4);
 
                             var interact = g.GetInteractable();
-                            HandleFileClick(interact, file, i);
+                            HandleFileClick(_treeCounter, interact, file, i);
 
                             if (SelectHandler.IsSelected(file))
                                 g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
@@ -477,6 +488,8 @@ namespace Prowl.Editor
                             g.Draw2D.DrawText(UIDrawList.DefaultFont, GetIconForType(subassets[i].type!), 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + (GuiStyle.ItemHeight / 2), g.CurrentNode.LayoutData.Rect.y + 7), GetTypeColor(subassets[i].type!));
                             g.Draw2D.DrawText(UIDrawList.DefaultFont, subassets[i].name, 20, new Vector2(g.CurrentNode.LayoutData.Rect.x + 40, g.CurrentNode.LayoutData.Rect.y + 7), Color.white);
                         }
+
+                        _treeCounter++;
                     }
 
                     g.PopID();
@@ -485,7 +498,7 @@ namespace Prowl.Editor
             }
         }
 
-        public static void HandleFileClick(Interactable interact, FileInfo entry, ushort fileID = 0)
+        public static void HandleFileClick(int index, Interactable interact, FileInfo entry, ushort fileID = 0)
         {
             Guid guid;
             bool isAsset = AssetDatabase.TryGetGuid(entry, out guid);
@@ -511,8 +524,10 @@ namespace Prowl.Editor
 
             if (fileID != 0) return;
 
+            if(index != -1)
+                SelectHandler.AddSelectableAtIndex(index, entry);
             if (interact.TakeFocus())
-                SelectHandler.Select(entry);
+                SelectHandler.Select(index, entry);
 
             if (isAsset && interact.IsHovered() && Gui.ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
             {

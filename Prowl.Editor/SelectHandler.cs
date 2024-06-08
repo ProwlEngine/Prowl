@@ -20,8 +20,8 @@ public class SelectHandler<T> where T : class
 {
     bool selectedThisFrame = false;
     List<T> selected = new();
-    SortedList<int, T> previousFrameSorted;
-    SortedList<int, T> sorted = new();
+    SortedList<int, T> previousFrameSelectables;
+    SortedList<int, T> selectables = new();
     int lastSelectedIndex = -1;
 
     public bool SelectedThisFrame => selectedThisFrame;
@@ -51,8 +51,8 @@ public class SelectHandler<T> where T : class
         }
 
         selectedThisFrame = false;
-        previousFrameSorted = sorted;
-        sorted = new();
+        previousFrameSelectables = selectables;
+        selectables = new();
 
         if (lastSelectedIndex == -1 && selected.Count > 0) {
             SetSelectedIndex((T)selected[0]);
@@ -100,23 +100,22 @@ public class SelectHandler<T> where T : class
         });
     }
 
-    public void HandleSelectable(int index, T obj, bool mouseReleased = false)
-    {
-        // This is a list of all the objects that are selectable sorted in order that their drawn in
-        sorted.Add(index, obj);
+    public void AddSelectableAtIndex(int index, T obj) => selectables.Add(index, obj);
 
+    public void Select(int index, T obj)
+    {
         int prevLastIndex = lastSelectedIndex;
         Select(obj);
-        if (prevLastIndex != index)
+        if (prevLastIndex != index && index != -1 && lastSelectedIndex != -1)
         {
             if (prevLastIndex != -1 && Input.GetKey(Silk.NET.Input.Key.ShiftLeft))
             {
                 // Bulk Select
                 for (int i = Math.Min(prevLastIndex, index); i <= Math.Max(prevLastIndex, index); i++)
                 {
-                    if (previousFrameSorted.TryGetValue(i, out var o))
+                    if (previousFrameSelectables.TryGetValue(i, out var o))
                     {
-                        if (CheckIsDestroyed.Invoke(o))
+                        if (!CheckIsDestroyed.Invoke(o))
                         {
                             // Always additive so we cant call Select(o) here as that checks if ctrl is down
                             selected.Add(o);
@@ -163,11 +162,11 @@ public class SelectHandler<T> where T : class
 
     private void SetSelectedIndex(T entity)
     {
-        if (previousFrameSorted == null) return;
+        if (previousFrameSelectables == null) return;
         // if sorted has this value using reference equals, set lastSelectedIndex to the index of it
-        for (int i = 0; i < previousFrameSorted.Count; i++) {
-            if (Equals.Invoke(previousFrameSorted.Values[i], entity)) {
-                lastSelectedIndex = previousFrameSorted.Keys[i];
+        for (int i = 0; i < previousFrameSelectables.Count; i++) {
+            if (Equals.Invoke(previousFrameSelectables.Values[i], entity)) {
+                lastSelectedIndex = previousFrameSelectables.Keys[i];
                 break;
             }
         }

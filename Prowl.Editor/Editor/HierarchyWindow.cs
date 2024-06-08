@@ -215,9 +215,10 @@ namespace Prowl.Editor
                 rect.height = entryHeight;
 
                 // Interaction
+                SelectHandler.AddSelectableAtIndex(index, new WeakReference(entity));
                 var interact = g.GetInteractable(rect);
                 if (interact.TakeFocus())
-                    SelectHandler.HandleSelectable(index++, new WeakReference(entity), true);
+                    SelectHandler.Select(index, new WeakReference(entity));
 
                 bool justStartedRename = false;
                 if (SelectHandler.Count == 1 && g.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left) && interact.IsHovered())
@@ -308,6 +309,8 @@ namespace Prowl.Editor
                     textRect.width -= entryHeight;
                     g.Draw2D.DrawText(UIDrawList.DefaultFont, name, 20, new Vector2(rect.x + 40, rect.y + 7), GuiStyle.Base11, 0, textRect);
                 }
+
+                index++;
             }
 
             // Open
