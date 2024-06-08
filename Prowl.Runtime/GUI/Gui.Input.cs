@@ -137,7 +137,7 @@ namespace Prowl.Runtime.GUI
         public bool IsKeyPressed(Key Key) => IsKeyClick(Key) || (IsKeyDown(Key) && KeyPressedTime[(int)Key] >= 0.5f);
         public bool IsPointerDown(MouseButton Btn) => PointerCurState[(int)Btn];
         public bool IsPointerUp(MouseButton Btn) => !PointerCurState[(int)Btn];
-        public bool IsPointerClick(MouseButton Btn) => !PointerPreState[(int)Btn] && PointerCurState[(int)Btn];
+        public bool IsPointerClick(MouseButton Btn = MouseButton.Left) => !PointerPreState[(int)Btn] && PointerCurState[(int)Btn];
         public bool IsPointerDoubleClick(MouseButton Btn) => IsPointerClick(Btn) && Time.time < PointerLastClickTime[(int)Btn] && (PointerPos - PointerLastClickPos[(int)Btn]).sqrMagnitude < 5;
         public bool IsPointerPressed(MouseButton Btn) => IsPointerClick(Btn) || (IsPointerDown(Btn) && PointerPressedTime[(int)Btn] >= 0.5f);
         public Vector2 GetPointerClickPos(MouseButton Btn) => PointerClickPos[(int)Btn];
