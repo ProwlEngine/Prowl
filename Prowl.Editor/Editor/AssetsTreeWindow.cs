@@ -338,6 +338,15 @@ namespace Prowl.Editor
                 else if (interact.IsHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
+                if (DragnDrop.Drop<FileSystemInfo>(out var systeminfo))
+                {
+                    string target = RuntimeUtils.GetUniquePath(Path.Combine(root.FullName, systeminfo.Name));
+                    if (systeminfo is FileInfo fileinfo)
+                        fileinfo?.MoveTo(target);
+                    else if (systeminfo is DirectoryInfo dirinfo)
+                        dirinfo?.MoveTo(target);
+                }
+
                 expanded = gui.GetNodeStorage<bool>(root.FullName, defaultOpen);
                 using (gui.Node("ExpandBtn").TopLeft(5, 0).Scale(GuiStyle.ItemHeight).Enter())
                 {
@@ -385,6 +394,20 @@ namespace Prowl.Editor
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
                     else if (interact.IsHovered())
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+
+                    DragnDrop.Drag(subDirectory);
+
+                    if (subDirectory.Exists)
+                    {
+                        if (DragnDrop.Drop<FileSystemInfo>(out var systeminfo))
+                        {
+                            string target = RuntimeUtils.GetUniquePath(Path.Combine(subDirectory.FullName, systeminfo.Name));
+                            if(systeminfo is FileInfo fileinfo)
+                                fileinfo?.MoveTo(target);
+                            else if(systeminfo is DirectoryInfo dirinfo)
+                                dirinfo?.MoveTo(target);
+                        }
+                    }
 
                     expanded = gui.GetStorage<bool>(gui.CurrentNode.Parent, subDirectory.FullName, false);
                     using (gui.Node("ExpandBtn").TopLeft(5, 0).Scale(GuiStyle.ItemHeight).Enter())
