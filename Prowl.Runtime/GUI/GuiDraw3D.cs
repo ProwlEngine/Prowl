@@ -58,6 +58,15 @@ namespace Prowl.Runtime.GUI
         }
 
         public void Circle(double radius, Stroke3D stroke) => Arc(radius, 0.0, 360, stroke);
+        public void Quad(double radius, Stroke3D stroke)
+        {
+            if (!hasViewport) throw new InvalidOperationException("No viewport set.");
+            if (!hasMVP) throw new InvalidOperationException("No MVP set.");
+
+            var points = QuadPoints(radius * 2.0);
+            if (points.Count <= 0) return;
+            _gui.Draw2D.DrawList.AddPolyline(points, points.Count, stroke.Color.GetUInt(), true, (float)stroke.Thickness, stroke.AntiAliased);
+        }
 
         public void FilledCircle(double radius, Stroke3D stroke)
         {
@@ -207,6 +216,34 @@ namespace Prowl.Runtime.GUI
                 double z = Math.Sin(startRad + step) * radius;
 
                 if (WorldToScreen(new Vector3((float)x, 0.0f, (float)z), out Vector2 pos))
+                {
+                    points.Add(pos);
+                }
+            }
+
+            return points;
+        }
+
+        private UIBuffer<Vector2> QuadPoints(double size)
+        {
+            var points = new UIBuffer<Vector2>();
+            points.reserve(4);
+
+            double halfSize = size / 2.0;
+
+            // Define the four corners of the quad
+            Vector3[] quadCorners = new Vector3[]
+            {
+                new Vector3((float)-halfSize, 0.0f, (float)-halfSize), // Bottom-left
+                new Vector3((float)halfSize, 0.0f, (float)-halfSize),  // Bottom-right
+                new Vector3((float)halfSize, 0.0f, (float)halfSize),   // Top-right
+                new Vector3((float)-halfSize, 0.0f, (float)halfSize)   // Top-left
+            };
+
+            // Convert to screen coordinates and add to the points buffer
+            foreach (var corner in quadCorners)
+            {
+                if (WorldToScreen(corner, out Vector2 pos))
                 {
                     points.Add(pos);
                 }

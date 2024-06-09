@@ -296,6 +296,31 @@ namespace Prowl.Runtime.GUI
             }
         }
 
+        public static Matrix4x4 DrawQuad(TransformGizmo _gizmo, bool focused, Matrix4x4 transform)
+        {
+            // Negate forward and right as per your requirement
+            var viewUp = _gizmo.ViewUp;
+            var viewForward = -_gizmo.ViewForward;
+            var viewRight = -_gizmo.ViewRight;
+
+            // Construct the rotation matrix
+            var rotation = new Matrix4x4(
+                new Vector4(viewUp, 0),
+                new Vector4(-viewForward, 0),
+                new Vector4(-viewRight, 0),
+                new Vector4(0, 0, 0, 1)
+            );
+
+            transform = rotation * transform;
+
+            using (_gizmo._gui.Draw3D.Matrix(transform * _gizmo.ViewProjection))
+            {
+                var color2 = GizmoUtils.GizmoColor(_gizmo, focused, GizmoDirection.View);
+                _gizmo._gui.Draw3D.Quad(GizmoUtils.InnerCircleRadius(_gizmo), new Stroke3D { Color = color2, Thickness = _gizmo.StrokeWidth, AntiAliased = true });
+                return transform;
+            }
+        }
+
         public static void DrawArrow(TransformGizmo _gizmo, bool focused, Matrix4x4 transform, GizmoDirection direction, TransformGizmoMode mode, double scale = 1f)
         {
             if (_gizmo.Orientation == TransformGizmo.GizmoOrientation.Local)

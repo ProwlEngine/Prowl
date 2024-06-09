@@ -501,7 +501,7 @@ namespace Prowl.Runtime.GUI
             for (int i = 0; i < count; i++)
             {
                 if ((NumbersOnly && !char.IsNumber(c[i])) || c[i] == '\r')
-                    if (c[i] != '.')
+                    if (c[i] != '.' && c[i] != '-')
                         continue;
 
                 StbTextEdit.InputChar(stb, c[i]);
