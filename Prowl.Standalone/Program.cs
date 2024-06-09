@@ -1,5 +1,4 @@
 ﻿using Prowl.Runtime;
-using Prowl.Runtime.Rendering.OpenGL;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
 
@@ -33,12 +32,12 @@ internal class Program {
             }
         };
 
-        Application.Update += (delta) => {
+        Application.Update += () => {
             Physics.Update();
             SceneManager.Update();
         };
 
-        Application.Render += (delta) => {
+        Application.Render += () => {
             Graphics.StartFrame();
 
             SceneManager.Draw();
