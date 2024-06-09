@@ -24,6 +24,7 @@ namespace Prowl.Runtime.GUI
         public Vector3? TotalTranslation;
 
         public Vector3? Scale;
+        public Vector3? ScaleDelta;
         public Vector3? StartScale;
 
         public Vector3? RotationAxis;

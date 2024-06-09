@@ -373,8 +373,8 @@ public class SceneViewWindow : EditorWindow
                     selectedGo.Transform.rotation = rotationDelta * selectedGo.Transform.rotation;
                 }
 
-                if (result.Value.Scale.HasValue)
-                    selectedGo.Transform.localScale = result.Value.Scale.Value;
+                if (result.Value.ScaleDelta.HasValue)
+                    selectedGo.Transform.localScale *= result.Value.ScaleDelta.Value;
             }
         }
         gizmo.Draw();

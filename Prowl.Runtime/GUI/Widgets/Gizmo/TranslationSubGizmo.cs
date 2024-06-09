@@ -1,4 +1,5 @@
 ﻿using System;
+using static Prowl.Runtime.GUI.ScaleSubGizmo;
 using static Prowl.Runtime.GUI.TransformGizmo;
 
 namespace Prowl.Runtime.GUI
@@ -315,6 +316,7 @@ namespace Prowl.Runtime.GUI
             public double StartDelta;
             public Vector3 StartScale;
             public Vector3 Scale;
+            public Vector3 ScaleDelta;
         }
     
         private ScaleParams _params;
@@ -368,6 +370,7 @@ namespace Prowl.Runtime.GUI
             _state.StartDelta = startDelta.HasValue ? startDelta.Value : 0;
             _state.StartScale = _gizmo.Scale;
             _state.Scale = Vector3.one;
+            _state.ScaleDelta = Vector3.one;
 
             t = pickResult.T;
             return pickResult.Picked;
@@ -407,10 +410,11 @@ namespace Prowl.Runtime.GUI
             }
     
             var scale = Vector3.one + (direction * delta.Value);
+            _state.ScaleDelta = Vector3.one + (scale - _state.Scale);
             _state.Scale = scale;
 
     
-            return new GizmoResult { Scale = scale, StartScale = _state.StartScale };
+            return new GizmoResult { Scale = scale, StartScale = _state.StartScale, ScaleDelta = _state.ScaleDelta };
         }
 
         public void Draw()
