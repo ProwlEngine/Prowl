@@ -529,7 +529,7 @@ namespace Prowl.Editor
             if (interact.TakeFocus())
                 SelectHandler.Select(index, entry);
 
-            if (isAsset && interact.IsHovered() && Gui.ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+            if (isAsset && interact.IsHovered() && Gui.ActiveGUI.IsPointerDoubleClick(Veldrid.MouseButton.Left))
             {
                 if (entry.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase))
                     SceneManager.LoadScene(new AssetRef<Runtime.Scene>(guid));

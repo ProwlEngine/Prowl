@@ -5,7 +5,6 @@ using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.SceneManagement;
-using Silk.NET.Input;
 
 namespace Prowl.Editor
 {
@@ -86,7 +85,7 @@ namespace Prowl.Editor
                     SelectHandler.Clear();
 
                 if(IsFocused)
-                    if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
+                    if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Veldrid.Key.D, Ctrl = true }))
                         DuplicateSelected();
 
 
@@ -221,12 +220,12 @@ namespace Prowl.Editor
                     SelectHandler.Select(index, new WeakReference(entity));
 
                 bool justStartedRename = false;
-                if (SelectHandler.Count == 1 && gui.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left) && interact.IsHovered())
+                if (SelectHandler.Count == 1 && gui.IsPointerDoubleClick(Veldrid.MouseButton.Left) && interact.IsHovered())
                 {
                     justStartedRename = true;
                     m_RenamingGO = entity;
                 }
-                else if (gui.IsPointerClick(Silk.NET.Input.MouseButton.Right) && interact.IsHovered())
+                else if (gui.IsPointerClick(Veldrid.MouseButton.Right) && interact.IsHovered())
                 {
                     // POpup holder is our parent, since thats the Tree node
                     gui.OpenPopup("RightClickGameObject", null, gui.CurrentNode.Parent);
@@ -234,7 +233,7 @@ namespace Prowl.Editor
                 }
 
                 if (IsFocused)
-                    if (isSelected && Input.GetKeyDown(Key.Delete))
+                    if (isSelected && Input.GetKeyDown(Veldrid.Key.Delete))
                         entity.Destroy();
 
                 // Drag n Drop

@@ -254,7 +254,7 @@ namespace Prowl.Editor
                         CurDirectory = old;
                     }
 
-                    if (interact.IsHovered() && gui.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                    if (interact.IsHovered() && gui.IsPointerDoubleClick(Veldrid.MouseButton.Left))
                     {
                         CurDirectory = new DirectoryInfo(entry.FullName);
                     }

@@ -244,7 +244,7 @@ namespace Prowl.Runtime.GUI
                 {
                     hoveredGizmo = pickResults[0].Item1;
                     hoveredGizmo.SetFocused(true);
-                    if (_gui.IsPointerClick(Silk.NET.Input.MouseButton.Left))
+                    if (_gui.IsPointerClick(Veldrid.MouseButton.Left))
                         focusedGizmo = hoveredGizmo;
                 }
             }
@@ -254,7 +254,7 @@ namespace Prowl.Runtime.GUI
             {
                 hoveredGizmo = focusedGizmo;
                 focusedGizmo.SetFocused(true);
-                if (_gui.IsPointerUp(Silk.NET.Input.MouseButton.Left))
+                if (_gui.IsPointerUp(Veldrid.MouseButton.Left))
                 {
                     focusedGizmo = null;
                 }

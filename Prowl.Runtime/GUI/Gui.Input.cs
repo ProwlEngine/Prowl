@@ -1,5 +1,5 @@
 ﻿using System;
-using Silk.NET.Input;
+using Veldrid;
 
 namespace Prowl.Runtime.GUI
 {
@@ -12,11 +12,11 @@ namespace Prowl.Runtime.GUI
         internal double[] KeyPressedTime = new double[(int)Key.Menu];
         internal Key KeyCode = Key.Unknown;
 
-        internal bool[] PointerCurState = new bool[(int)MouseButton.Button12];
-        internal bool[] PointerPreState = new bool[(int)MouseButton.Button12];
-        internal double[] PointerPressedTime = new double[(int)MouseButton.Button12];
-        internal Vector2[] PointerClickPos = new Vector2[(int)MouseButton.Button12];
-        internal MouseButton PointerButton = MouseButton.Unknown;
+        internal bool[] PointerCurState = new bool[(int)MouseButton.LastButton];
+        internal bool[] PointerPreState = new bool[(int)MouseButton.LastButton];
+        internal double[] PointerPressedTime = new double[(int)MouseButton.LastButton];
+        internal Vector2[] PointerClickPos = new Vector2[(int)MouseButton.LastButton];
+        internal MouseButton PointerButton = (MouseButton)(-1);
         public Vector2 PreviousPointerPos = Vector2.zero;
 
         private Vector2 _pointerPos;
@@ -34,8 +34,8 @@ namespace Prowl.Runtime.GUI
         public Vector2 PointerDelta => PointerPos - PreviousPointerPos;
         public bool IsPointerMoving => PointerDelta.sqrMagnitude > 0;
 
-        public double[] PointerLastClickTime = new double[(int)MouseButton.Button12];
-        public Vector2[] PointerLastClickPos = new Vector2[(int)MouseButton.Button12];
+        public double[] PointerLastClickTime = new double[(int)MouseButton.LastButton];
+        public Vector2[] PointerLastClickPos = new Vector2[(int)MouseButton.LastButton];
         public const double MaxDoubleClickTime = 0.25;
 
         private Vector2 frameBufferScale;
@@ -98,7 +98,7 @@ namespace Prowl.Runtime.GUI
                 PointerClickPos[Index] = Vector2.zero;
             }
 
-            PointerButton = MouseButton.Unknown;
+            PointerButton = (MouseButton)(-1);
             PreviousPointerPos = PointerPos;
             PointerPos = Vector2.zero;
             PointerWheel = 0;

@@ -95,7 +95,7 @@
             //}
             //
             //// Clicked outside Window
-            //if (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) && !g.IsHovering())
+            //if (g.IsPointerClick(Veldrid.MouseButton.Left) && !g.IsHovering())
             //{
             //    isOpened = false;
             //    Dialog.OnCancel?.Invoke();

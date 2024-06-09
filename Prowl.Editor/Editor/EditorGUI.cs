@@ -269,7 +269,7 @@ namespace Prowl.Editor
                         }
                     }
 
-                    if(h && ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                    if(h && ActiveGUI.IsPointerDoubleClick(Veldrid.MouseButton.Left))
                         GlobalSelectHandler.Select(value);
 
 
@@ -281,7 +281,7 @@ namespace Prowl.Editor
                         changed = true;
                     }
 
-                    if(Selected == assetDrawerID && ActiveGUI.IsKeyDown(Silk.NET.Input.Key.Delete))
+                    if(Selected == assetDrawerID && ActiveGUI.IsKeyDown(Veldrid.Key.Delete))
                     {
                         value.AssetID = Guid.Empty;
                         value.FileID = 0;
@@ -315,7 +315,7 @@ namespace Prowl.Editor
                 else
                 {
                     ActiveGUI.Draw2D.DrawText(value.Name, pos, GuiStyle.Base11 * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f));
-                    if (ActiveGUI.IsNodeHovered() && ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                    if (ActiveGUI.IsNodeHovered() && ActiveGUI.IsPointerDoubleClick(Veldrid.MouseButton.Left))
                         GlobalSelectHandler.Select(value);
                 }
 
@@ -360,7 +360,7 @@ namespace Prowl.Editor
                 else
                 {
                     ActiveGUI.Draw2D.DrawText(value.gameObject.Name + "(Transform)", pos, GuiStyle.Base11 * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f));
-                    if (ActiveGUI.IsNodeHovered() && ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                    if (ActiveGUI.IsNodeHovered() && ActiveGUI.IsPointerDoubleClick(Veldrid.MouseButton.Left))
                         GlobalSelectHandler.Select(value);
                 }
 

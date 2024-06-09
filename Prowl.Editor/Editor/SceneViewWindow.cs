@@ -4,7 +4,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Widgets.Gizmo;
 using Prowl.Runtime.SceneManagement;
-using Silk.NET.Input;
+using Veldrid;
 
 namespace Prowl.Editor;
 
@@ -113,7 +113,7 @@ public class SceneViewWindow : EditorWindow
 
         if (SceneViewPreferences.Instance.GridType != GridType.None)
         {
-            gridMat ??= new Material(Shader.Find("Defaults/Grid.shader"));
+            gridMat ??= new Material(Prowl.Runtime.Shader.Find("Defaults/Grid.shader"));
             gridMat.SetTexture("gPositionRoughness", Cam.gBuffer.PositionRoughness);
             gridMat.SetKeyword("GRID_XZ", SceneViewPreferences.Instance.GridType == GridType.XZ);
             gridMat.SetKeyword("GRID_XY", SceneViewPreferences.Instance.GridType == GridType.XY);
@@ -168,7 +168,7 @@ public class SceneViewWindow : EditorWindow
         gui.SetCursorVisibility(true);
         if (IsFocused && viewportInteractable.IsHovered())
         {
-            if (gui.IsPointerClick(Silk.NET.Input.MouseButton.Left) && !gizmo.IsOver && !viewManipulator.IsOver)
+            if (gui.IsPointerClick(Veldrid.MouseButton.Left) && !gizmo.IsOver && !viewManipulator.IsOver)
             {
                 // If the Scene Camera has no Render Graph, the gBuffer may not be initialized
                 if (Cam.gBuffer != null)
@@ -180,7 +180,7 @@ public class SceneViewWindow : EditorWindow
                         var go = EngineObject.FindObjectByID<GameObject>(instanceID);
                         if (go != null)
                         {
-                            if (!go.IsPartOfPrefab || gui.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                            if (!go.IsPartOfPrefab || gui.IsPointerDoubleClick(Veldrid.MouseButton.Left))
                             {
                                 HierarchyWindow.SelectHandler.Select(new WeakReference(go));
                                 HierarchyWindow.Ping(go);
@@ -207,7 +207,7 @@ public class SceneViewWindow : EditorWindow
                     }
                 }
             }
-            else if (gui.IsPointerDown(Silk.NET.Input.MouseButton.Right))
+            else if (gui.IsPointerDown(Veldrid.MouseButton.Right))
             {
                 gui.SetCursorVisibility(false);
                 Vector3 moveDir = Vector3.zero;

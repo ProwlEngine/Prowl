@@ -1,6 +1,6 @@
 ﻿using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.TextEdit;
-using Silk.NET.Input;
+using Veldrid;
 using System;
 using System.Collections.Generic;
 
@@ -277,7 +277,7 @@ namespace Prowl.Runtime.GUI
             if ((Flags & InputFieldFlags.EnterReturnsTrue) == InputFieldFlags.EnterReturnsTrue)
             {
                 Text = stb.Text;
-                if (g.IsKeyPressed(Silk.NET.Input.Key.Enter))
+                if (g.IsKeyPressed(Key.Enter))
                 {
                     g.FocusID = 0;
                     return true;
@@ -286,7 +286,7 @@ namespace Prowl.Runtime.GUI
             }
             else
             {
-                if (g.IsKeyPressed(Silk.NET.Input.Key.Enter))
+                if (g.IsKeyPressed(Key.Enter))
                     g.FocusID = 0;
 
                 var oldText = Text;
@@ -410,7 +410,7 @@ namespace Prowl.Runtime.GUI
                     stb_key = StbTextEdit.ControlKeys.Down;
                     if (Shift && !NoSelection) stb_key |= StbTextEdit.ControlKeys.Shift;
                     break;
-                case Key.Backspace when IsEditable:
+                case Key.BackSpace when IsEditable:
                     stb_key = StbTextEdit.ControlKeys.BackSpace;
                     if (Shift && !NoSelection) stb_key |= StbTextEdit.ControlKeys.Shift;
                     break;
@@ -518,12 +518,12 @@ namespace Prowl.Runtime.GUI
             Pos.x -= 5; // Account for padding in text rendering
             Pos.x += stb.ScrollX;
             Pos.y += g.CurrentNode.VScroll;
-            if (g.IsPointerClick(Silk.NET.Input.MouseButton.Left))
+            if (g.IsPointerClick(MouseButton.Left))
             {
                 StbTextEdit.Click(stb, (float)Pos.x, (float)Pos.y);
                 stb.cursorAnim = 0f;
             }
-            if (g.IsPointerDown(Silk.NET.Input.MouseButton.Left) && g.IsPointerMoving)
+            if (g.IsPointerDown(MouseButton.Left) && g.IsPointerMoving)
             {
                 StbTextEdit.Drag(stb, (float)Pos.x, (float)Pos.y);
                 stb.cursorAnim = 0f;
