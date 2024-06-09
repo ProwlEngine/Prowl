@@ -1,9 +1,4 @@
 ﻿using Prowl.Runtime.GUI.Graphics;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Prowl.Runtime.GUI.Widgets.Gizmo
 {
@@ -67,7 +62,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                 {
                     if (blockPicking) return false;
                     isHovering = true;
-                    if (_gui.IsPointerClick(Silk.NET.Input.MouseButton.Left))
+                    if (_gui.IsPointerClick(Veldrid.MouseButton.Left))
                     {
                         // Rotate Camera
                         // FIXME: Why is forward vector inverted?
@@ -95,7 +90,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                         hovCol.a = 0.25f;
                         _gui.Draw2D.DrawCircleFilled(rect.Center, (float)rect.width / 2, hovCol, 48);
                         
-                        if (_gui.IsPointerClick(Silk.NET.Input.MouseButton.Left))
+                        if (_gui.IsPointerClick(Veldrid.MouseButton.Left))
                         {
                             // Toggle Perspective / Orthographic
                             isOrthographic = !isOrthographic;
