@@ -60,7 +60,7 @@ public static class EditorGuiManager
 
         Rect screenRect = new Rect(0, 0, Runtime.Graphics.Resolution.x, Runtime.Graphics.Resolution.y);
 
-        Vector2 framebufferAndInputScale = new((float)Window.InternalWindow.FramebufferSize.X / (float)Window.InternalWindow.Size.X, (float)Window.InternalWindow.FramebufferSize.Y / (float)Window.InternalWindow.Size.Y);
+        Vector2 framebufferAndInputScale = new((float)Graphics.Framebuffer.Width / (float)Screen.Size.x, (float)Graphics.Framebuffer.Height / (float)Screen.Size.y);
 
         Gui.PointerWheel = Input.MouseWheelDelta;
         EditorGuiManager.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, (g) => {
@@ -82,7 +82,7 @@ public static class EditorGuiManager
                 g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
                 g.SetZIndex(0);
 
-                if (!g.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+                if (!g.IsPointerDown(Veldrid.MouseButton.Left))
                     DragSplitter = null;
             }
 
@@ -100,7 +100,7 @@ public static class EditorGuiManager
                         g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
                         g.SetZIndex(0);
 
-                        if (g.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+                        if (g.IsPointerDown(Veldrid.MouseButton.Left))
                         {
                             m_DragPos = cursorPos;
                             DragSplitter = node;
@@ -151,7 +151,7 @@ public static class EditorGuiManager
                     g.PopID();
 
                     // Focus Window
-                    if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) || g.IsPointerClick(Silk.NET.Input.MouseButton.Right)))
+                    if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(Veldrid.MouseButton.Left) || g.IsPointerClick(Veldrid.MouseButton.Right)))
                         if (!g.IsBlockedByInteractable(g.PointerPos))
                             FocusWindow(window);
 
