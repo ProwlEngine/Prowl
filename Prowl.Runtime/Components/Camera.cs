@@ -1,5 +1,4 @@
 ﻿using Prowl.Icons;
-using Prowl.Runtime.Rendering.Primitives;
 using Prowl.Runtime.Resources.RenderPipeline;
 using Prowl.Runtime.SceneManagement;
 using System;
@@ -51,7 +50,7 @@ public class Camera : MonoBehaviour
     private Vector2 GetRenderTargetSize()
     {
         if (Target.IsAvailable) return new Vector2(Target.Res!.Width, Target.Res!.Height);
-        return new Vector2(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
+        return new Vector2((int)Graphics.Framebuffer.Width, (int)Graphics.Framebuffer.Height);
     }
 
     private void CheckGBuffer()
@@ -116,15 +115,14 @@ public class Camera : MonoBehaviour
         }
         else if (width == -1 || height == -1)
         {
-            width = Window.InternalWindow.FramebufferSize.X;
-            height = Window.InternalWindow.FramebufferSize.Y;
+            width = (int)Graphics.Framebuffer.Width;
+            height = (int)Graphics.Framebuffer.Height;
         }
 
         width = (int)(width * RenderResolution);
         height = (int)(height * RenderResolution);
 
         CheckGBuffer();
-
 
         Current = this;
 
