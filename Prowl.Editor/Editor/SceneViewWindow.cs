@@ -44,7 +44,7 @@ public class SceneViewWindow : EditorWindow
 
         TransformGizmoMode mode = TransformGizmoMode.TranslateX | TransformGizmoMode.TranslateY | TransformGizmoMode.TranslateZ | TransformGizmoMode.TranslateXY | TransformGizmoMode.TranslateXZ | TransformGizmoMode.TranslateYZ | TransformGizmoMode.TranslateView;
         mode |= TransformGizmoMode.RotateX | TransformGizmoMode.RotateY | TransformGizmoMode.RotateZ | TransformGizmoMode.RotateView;
-        mode |= TransformGizmoMode.ScaleX | TransformGizmoMode.ScaleY | TransformGizmoMode.ScaleZ;
+        mode |= TransformGizmoMode.ScaleX | TransformGizmoMode.ScaleY | TransformGizmoMode.ScaleZ | TransformGizmoMode.ScaleUniform;
 
         gizmo = new TransformGizmo(EditorGuiManager.Gui, mode);
         viewManipulator = new ViewManipulatorGizmo(EditorGuiManager.Gui);
@@ -271,6 +271,9 @@ public class SceneViewWindow : EditorWindow
 
                 }
 
+                if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
+                    HierarchyWindow.DuplicateSelected();
+
                 if (gui.IsKeyDown(Key.F) && HierarchyWindow.SelectHandler.Selected.Any())
                 {
                     float defaultZoomFactor = 2f;
@@ -373,8 +376,8 @@ public class SceneViewWindow : EditorWindow
                     selectedGo.Transform.rotation = rotationDelta * selectedGo.Transform.rotation;
                 }
 
-                if (result.Value.Scale.HasValue)
-                    selectedGo.Transform.localScale = result.Value.Scale.Value;
+                if (result.Value.ScaleDelta.HasValue)
+                    selectedGo.Transform.localScale *= result.Value.ScaleDelta.Value;
             }
         }
         gizmo.Draw();

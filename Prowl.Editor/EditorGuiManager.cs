@@ -32,6 +32,9 @@ public static class EditorGuiManager
 
     public static void FocusWindow(EditorWindow editorWindow)
     {
+        if (FocusedWindow != null && FocusedWindow.Target != editorWindow)
+            Gui.ClearFocus();
+
         Windows.Remove(editorWindow);
         Windows.Add(editorWindow);
         FocusedWindow = new WeakReference(editorWindow);
@@ -91,23 +94,26 @@ public static class EditorGuiManager
                 Vector2 cursorPos = g.PointerPos;
                 if (!g.IsPointerMoving && (g.ActiveID == 0 || g.ActiveID == null) && DragSplitter == null)
                 {
-                    DockNode node = Container.Root.TraceSeparator(cursorPos.x, cursorPos.y);
-                    if (node != null)
+                    if (!Gui.IsBlockedByInteractable(cursorPos))
                     {
-                        node.GetSplitterBounds(out var bmins, out var bmaxs, 4);
-
-                        g.SetZIndex(11000);
-                        g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
-                        g.SetZIndex(0);
-
-                        if (g.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+                        DockNode node = Container.Root.TraceSeparator(cursorPos.x, cursorPos.y);
+                        if (node != null)
                         {
-                            m_DragPos = cursorPos;
-                            DragSplitter = node;
-                            if (DragSplitter.Type == DockNode.NodeType.SplitVertical)
-                                m_StartSplitPos = Mathf.Lerp(DragSplitter.Mins.x, DragSplitter.Maxs.x, DragSplitter.SplitDistance);
-                            else
-                                m_StartSplitPos = Mathf.Lerp(DragSplitter.Mins.y, DragSplitter.Maxs.y, DragSplitter.SplitDistance);
+                            node.GetSplitterBounds(out var bmins, out var bmaxs, 4);
+
+                            g.SetZIndex(11000);
+                            g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
+                            g.SetZIndex(0);
+
+                            if (g.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+                            {
+                                m_DragPos = cursorPos;
+                                DragSplitter = node;
+                                if (DragSplitter.Type == DockNode.NodeType.SplitVertical)
+                                    m_StartSplitPos = Mathf.Lerp(DragSplitter.Mins.x, DragSplitter.Maxs.x, DragSplitter.SplitDistance);
+                                else
+                                    m_StartSplitPos = Mathf.Lerp(DragSplitter.Mins.y, DragSplitter.Maxs.y, DragSplitter.SplitDistance);
+                            }
                         }
                     }
                 }
@@ -140,21 +146,26 @@ public static class EditorGuiManager
                 }
             }
 
-            for (int i = 0; i < Windows.Count; i++)
+            // Focus Windows first
+            var windowList = new List<EditorWindow>(Windows);
+            for (int i = 0; i < windowList.Count; i++)
             {
-                var window = Windows[i];
+                var window = windowList[i];
+                if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) || g.IsPointerClick(Silk.NET.Input.MouseButton.Right)))
+                    if (!g.IsBlockedByInteractable(g.PointerPos, window.MaxZ))
+                        FocusWindow(window);
+            }
+
+            // Draw/Update Windows
+            for (int i = 0; i < windowList.Count; i++)
+            {
+                var window = windowList[i];
                 if (!window.IsDocked || window.Leaf.LeafWindows[window.Leaf.WindowNum] == window)
                 {
                     g.SetZIndex(i * 100);
                     g.PushID((ulong)window._id);
                     window.ProcessFrame();
                     g.PopID();
-
-                    // Focus Window
-                    if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) || g.IsPointerClick(Silk.NET.Input.MouseButton.Right)))
-                        if (!g.IsBlockedByInteractable(g.PointerPos))
-                            FocusWindow(window);
-
                 }
 
             }
