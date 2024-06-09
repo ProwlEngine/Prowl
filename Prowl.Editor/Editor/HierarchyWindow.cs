@@ -343,7 +343,7 @@ namespace Prowl.Editor
             }
         }
 
-        public void DuplicateSelected()
+        public static void DuplicateSelected()
         {
             var newGO = new List<WeakReference>();
             SelectHandler.Foreach((go) => {

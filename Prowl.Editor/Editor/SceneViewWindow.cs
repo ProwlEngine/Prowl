@@ -271,6 +271,9 @@ public class SceneViewWindow : EditorWindow
 
                 }
 
+                if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
+                    HierarchyWindow.DuplicateSelected();
+
                 if (gui.IsKeyDown(Key.F) && HierarchyWindow.SelectHandler.Selected.Any())
                 {
                     float defaultZoomFactor = 2f;
