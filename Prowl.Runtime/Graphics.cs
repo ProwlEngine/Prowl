@@ -1,7 +1,5 @@
 ﻿using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.OpenGL;
 using Prowl.Runtime.Rendering.Primitives;
-using Silk.NET.Maths;
 using System;
 
 namespace Prowl.Runtime
@@ -26,7 +24,7 @@ namespace Prowl.Runtime
         public static bool UseJitter;
 
         private static Material defaultMat;
-        internal static Vector2D<int> FrameBufferSize;
+        internal static Vector2Int FrameBufferSize;
 
 #warning TODO: Move these to a separate class "GraphicsCapabilities" and add more
         public static int MaxTextureSize { get; internal set; }
@@ -36,7 +34,8 @@ namespace Prowl.Runtime
 
         public static void Initialize()
         {
-            Device = new GLDevice();
+            //Device = new GLDevice();
+            Device = null;
             Device.Initialize(true);
         }
 
@@ -60,7 +59,7 @@ namespace Prowl.Runtime
             RenderTexture.UpdatePool();
 
             Clear();
-            Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
+            Viewport((int)Screen.InternalDevice.SwapchainFramebuffer.Width, (int)Screen.InternalDevice.SwapchainFramebuffer.Height);
             // Set default states
             Device.SetState(new(), true);
         }

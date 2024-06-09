@@ -1,6 +1,5 @@
 ﻿using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.Primitives;
-using Silk.NET.Maths;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -73,14 +72,14 @@ namespace Prowl.Runtime
         {
             Graphics.Device.BindFramebuffer(frameBuffer);
             Graphics.Viewport(Width, Height);
-            Graphics.FrameBufferSize = new Vector2D<int>(Width, Height);
+            Graphics.FrameBufferSize = new Vector2Int(Width, Height);
         }
 
         public void End()
         {
             Graphics.Device.UnbindFramebuffer();
-            Graphics.Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
-            Graphics.FrameBufferSize = new Vector2D<int>(Width, Height);
+            Graphics.Viewport((int)Screen.InternalDevice.SwapchainFramebuffer.Width, (int)Screen.InternalDevice.SwapchainFramebuffer.Height);
+            Graphics.FrameBufferSize = new Vector2Int(Width, Height);
         }
 
         public override void OnDispose()
