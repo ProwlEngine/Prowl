@@ -2,7 +2,6 @@
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.Rendering.OpenGL;
 
 namespace Prowl.Editor.ScriptedEditors
 {
@@ -165,7 +164,7 @@ namespace Prowl.Editor.ScriptedEditors
                                                     }
                                                 }
 
-                                                if (gui.IsNodeHovered() && g.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                                                if (gui.IsNodeHovered() && g.IsPointerDoubleClick(Veldrid.MouseButton.Left))
                                                     GlobalSelectHandler.Select(tex);
 
 
@@ -177,7 +176,7 @@ namespace Prowl.Editor.ScriptedEditors
                                                     changed = true;
                                                 }
 
-                                                if (Selected == assetDrawerID && g.IsKeyDown(Silk.NET.Input.Key.Delete))
+                                                if (Selected == assetDrawerID && g.IsKeyDown(Veldrid.Key.Delete))
                                                 {
                                                     tex.AssetID = Guid.Empty;
                                                     tex.FileID = 0;

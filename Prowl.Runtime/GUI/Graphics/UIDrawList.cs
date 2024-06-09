@@ -1,7 +1,5 @@
 ﻿using Prowl.Icons;
 using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.OpenGL;
-using Silk.NET.OpenGL;
 using System;
 using System.IO;
 using System.Reflection;
@@ -1144,7 +1142,7 @@ namespace Prowl.Runtime.GUI.Graphics
         private const int IM_COL32_B_SHIFT = 16;
         private const int IM_COL32_A_SHIFT = 24;
 
-
+        /*
         public unsafe static void Draw(GL _gl, Vector2 DisplaySize, UIDrawList[] lists)
         {
             int framebufferWidth = (int)DisplaySize.x;
@@ -1319,6 +1317,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
         private static unsafe void SetupRenderState(GL _gl, Vector2 DisplaySize, int framebufferWidth, int framebufferHeight)
         {
+            /*
             // Setup render state: alpha-blending enabled, no face culling, no depth testing, scissor enabled, polygon fill
             //_gl.Enable(EnableCap.FramebufferSrgb);
             _gl.Enable(GLEnum.Blend);
@@ -1425,9 +1424,11 @@ namespace Prowl.Runtime.GUI.Graphics
 
             _gl.BindVertexArray((uint)lastVertexArray);
         }
+        */
 
         public static Font DefaultFont { get; private set; }
 
+        /*
         /// <summary>
         /// Creates the texture used to render text.
         /// </summary>
@@ -1463,6 +1464,7 @@ namespace Prowl.Runtime.GUI.Graphics
                 DefaultFont = builder.End(40, 20);
             }
         }
+        */
 
         private static int _attribLocationVtxPos;
         private static int _attribLocationVtxUV;

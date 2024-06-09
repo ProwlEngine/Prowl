@@ -1,5 +1,4 @@
 ﻿using Prowl.Runtime.GUI.Graphics;
-using Prowl.Runtime.Rendering.OpenGL;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -38,7 +37,7 @@ namespace Prowl.Runtime.GUI
 
         public void EndFrame(Rect screenRect)
         {
-            UIDrawList.Draw(GLDevice.GL, new(screenRect.width, screenRect.height), drawListsOrdered.ToArray());
+            //UIDrawList.Draw(GLDevice.GL, new(screenRect.width, screenRect.height), drawListsOrdered.ToArray());
         }
 
         /// <summary>
