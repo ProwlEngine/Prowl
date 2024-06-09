@@ -1,6 +1,7 @@
-﻿using Silk.NET.Input;
+﻿using Veldrid.Sdl2;
 using System;
 using System.Collections.Generic;
+using Veldrid;
 
 namespace Prowl.Runtime;
 
@@ -8,16 +9,15 @@ public static class Input
 {
     public static bool Enabled { get; set; } = true;
     
-    public static IInputContext Context { get; internal set; }
+    public static InputSnapshot InputSnapshot { get; set; }
 
-    public static IReadOnlyList<IKeyboard> Keyboards => Context.Keyboards;
-    public static IReadOnlyList<IMouse> Mice => Context.Mice;
-    public static IReadOnlyList<IJoystick> Joysticks => Context.Joysticks;
+    public static IReadOnlyList<KeyEvent> KeyEvents => InputSnapshot.KeyEvents;
+    public static IReadOnlyList<MouseEvent> MouseEvents => InputSnapshot.MouseEvents;
 
     public static string Clipboard {
-        get => Context.Keyboards[0].ClipboardText;
+        get => Sdl2Native.SDL_GetClipboardText();
         set {
-           Context.Keyboards[0].ClipboardText = value;
+           Sdl2Native.SDL_SetClipboardText(value);
         }
     }
 
@@ -33,12 +33,15 @@ public static class Input
             {
                 _prevMousePos = value;
                 _currentMousePos = value;
-                Mice[0].Position = (Vector2)value;
+                Screen.InternalWindow.SetMousePosition(new Vector2(value.x, value.y));
             }
         }
     }
+
     public static Vector2 MouseDelta => Enabled ? (_currentMousePos - _prevMousePos) : Vector2.zero;
-    public static float MouseWheelDelta => Enabled ? Mice[0].ScrollWheels[0].Y : 0f;
+
+    private static float _mouseWheelDelta;
+    public static float MouseWheelDelta => Enabled ? _mouseWheelDelta : 0f;
 
     private static Dictionary<Key, bool> wasKeyPressed = new Dictionary<Key, bool>();
     private static Dictionary<Key, bool> isKeyPressed = new Dictionary<Key, bool>();
@@ -54,9 +57,12 @@ public static class Input
 
     internal static void Initialize()
     {
-        Context = Window.InternalWindow.CreateInput();
-        _prevMousePos = (Vector2Int)Mice[0].Position.ToDouble();
-        _currentMousePos = (Vector2Int)Mice[0].Position.ToDouble();
+        InputSnapshot = Screen.LatestInputSnapshot;
+
+        Screen.InternalWindow.MouseWheel += (mouseWheelEvent) => { _mouseWheelDelta = mouseWheelEvent.WheelDelta; };
+
+        _prevMousePos = new Vector2Int((int)InputSnapshot.MousePosition.X, (int)InputSnapshot.MousePosition.Y);
+        _currentMousePos = _prevMousePos;
 
         // initialize key states
         foreach (Key key in Enum.GetValues(typeof(Key)))
@@ -70,28 +76,20 @@ public static class Input
 
         foreach (MouseButton button in Enum.GetValues(typeof(MouseButton)))
         {
-            if (button != MouseButton.Unknown)
-            {
-                wasMousePressed[button] = false;
-                isMousePressed[button] = false;
-            }
+            wasMousePressed[button] = false;
+            isMousePressed[button] = false;
         }
-
-        foreach (var keyboard in Keyboards)
-            keyboard.KeyChar += (keyboard, c) => LastPressedChar = c;
 
         UpdateKeyStates();
     }
 
-    internal static void Dispose()
-    {
-        Context.Dispose();
-    }
-
     internal static void LateUpdate()
     {
+        InputSnapshot = Screen.LatestInputSnapshot;
+
         _prevMousePos = _currentMousePos;
-        _currentMousePos = (Vector2Int)Mice[0].Position.ToDouble();
+        _currentMousePos = new Vector2Int((int)InputSnapshot.MousePosition.X, (int)InputSnapshot.MousePosition.Y);
+
         if (_prevMousePos != _currentMousePos)
         {
             if (isMousePressed[MouseButton.Left])
@@ -100,8 +98,8 @@ public static class Input
                 OnMouseEvent?.Invoke(MouseButton.Right, MousePosition.x, MousePosition.y, false, true);
             else if (isMousePressed[MouseButton.Middle])
                 OnMouseEvent?.Invoke(MouseButton.Middle, MousePosition.x, MousePosition.y, false, true);
-            else
-                OnMouseEvent?.Invoke(MouseButton.Unknown, MousePosition.x, MousePosition.y, false, true);
+            //else
+            //    OnMouseEvent?.Invoke(MouseButton.Unknown, MousePosition.x, MousePosition.y, false, true);
         }
         UpdateKeyStates();
     }
@@ -115,8 +113,9 @@ public static class Input
             {
                 wasKeyPressed[key] = isKeyPressed[key];
                 isKeyPressed[key] = false;
-                foreach (var keyboard in Keyboards)
-                    if (keyboard.IsKeyPressed(key))
+
+                foreach (var keyEvent in KeyEvents)
+                    if (keyEvent.Down && keyEvent.Key == key)
                     {
                         isKeyPressed[key] = true;
                         break;
@@ -129,19 +128,21 @@ public static class Input
 
         foreach (MouseButton button in Enum.GetValues(typeof(MouseButton)))
         {
-            if (button != MouseButton.Unknown)
-            {
+            //if (button != MouseButton.Unknown)
+            //{
                 wasMousePressed[button] = isMousePressed[button];
                 isMousePressed[button] = false;
-                foreach (var mouse in Mice)
-                    if (mouse.IsButtonPressed((MouseButton)button))
+
+                foreach (var mouseEvent in MouseEvents)
+                    if (mouseEvent.Down && mouseEvent.MouseButton == button)
                     {
                         isMousePressed[button] = true;
                         break;
                     }
+
                 if (wasMousePressed[button] != isMousePressed[button])
                     OnMouseEvent?.Invoke(button, MousePosition.x, MousePosition.y, isMousePressed[button], false);
-            }
+            //}
         }
     }
 
@@ -157,5 +158,5 @@ public static class Input
 
     public static bool GetMouseButtonUp(int button) => Enabled && isMousePressed[(MouseButton)button] && wasMousePressed[(MouseButton)button];
     
-    public static void SetCursorVisible(bool visible, int miceIndex = 0) => Mice[miceIndex].Cursor.CursorMode = visible ? CursorMode.Normal : CursorMode.Hidden;
+    public static void SetCursorVisible(bool visible) => Screen.InternalWindow.CursorVisible = visible;
 }
