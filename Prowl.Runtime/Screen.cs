@@ -1,5 +1,4 @@
-﻿using Silk.NET.Maths;
-using System;
+﻿using System;
 using Veldrid;
 using Veldrid.Sdl2;
 using Veldrid.StartupUtilities;
@@ -9,8 +8,9 @@ namespace Prowl.Runtime
     public static class Screen
     {
         public static Sdl2Window InternalWindow { get; internal set; }
-        public static GraphicsDevice InternalDevice { get; internal set; }
-        public static InputSnapshot LatestInputSnapshot { get; internal set; }
+
+        // Hacky way to give Input.cs access to the polled input snapshot object.
+        internal static InputSnapshot LatestInputSnapshot { get; private set; } 
 
 
         public static event Action? Load;
@@ -27,14 +27,9 @@ namespace Prowl.Runtime
             set { InternalWindow.Width = value.x; InternalWindow.Height = value.y; }
         }
 
-        public static bool VSync {
-            get { return InternalDevice.SyncToVerticalBlank; }
-            set { InternalDevice.SyncToVerticalBlank = value; }
-        }
-
         public static float FramesPerSecond {
             get { return InternalWindow.PollIntervalInMs / 1000.0f; }
-            set { InternalWindow.LimitPollRate = value != double.MaxValue; InternalWindow.PollIntervalInMs = value * 1000.0f; }
+            set { InternalWindow.LimitPollRate = value != 0 && value != double.MaxValue; InternalWindow.PollIntervalInMs = value * 1000.0f; }
         }
 
         public static bool IsVisible {
@@ -51,7 +46,7 @@ namespace Prowl.Runtime
             get { return isFocused; }
         }
 
-        public static void Start(string name, Vector2Int size, Vector2Int position, WindowState initialState = WindowState.Normal, bool VSync = true, GraphicsBackend preferredBackend = GraphicsBackend.OpenGL)
+        public static void Start(string name, Vector2Int size, Vector2Int position, WindowState initialState = WindowState.Normal)
         {
             WindowCreateInfo windowInfo = new()
             {
@@ -63,17 +58,7 @@ namespace Prowl.Runtime
                 Y = position.y
             };
 
-            GraphicsDeviceOptions deviceOptions = new()
-            {
-                SyncToVerticalBlank = VSync,
-                PreferStandardClipSpaceYDirection = true,
-                PreferDepthRangeZeroToOne = true,
-                ResourceBindingModel = ResourceBindingModel.Default,
-            };
-
             InternalWindow = VeldridStartup.CreateWindow(ref windowInfo);
-            
-            InternalDevice = VeldridStartup.CreateGraphicsDevice(InternalWindow, deviceOptions, preferredBackend);
 
             OnLoad();
 
@@ -89,6 +74,8 @@ namespace Prowl.Runtime
             while (InternalWindow.Exists)
             {
                 LatestInputSnapshot = InternalWindow.PumpEvents();  
+
+                OnUpdate();
             }
         }
 
