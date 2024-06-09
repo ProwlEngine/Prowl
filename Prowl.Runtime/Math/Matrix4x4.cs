@@ -2,9 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using Silk.NET.Input;
-using Silk.NET.Maths;
-using Silk.NET.SDL;
 using System;
 using System.Globalization;
 using System.Runtime.CompilerServices;
