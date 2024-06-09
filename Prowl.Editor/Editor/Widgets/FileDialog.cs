@@ -80,7 +80,6 @@ namespace Prowl.Editor
                     
                     if (gui.IsNodePressed() && _BackStack.Count > 0)
                     {
-                        Debug.Log("popping top item");
                         Dialog.directoryPath = _BackStack.Pop();
                     }
                 }
@@ -134,7 +133,7 @@ namespace Prowl.Editor
                         Color bg = hovered ? GuiStyle.Base11 : GuiStyle.Base4;
                         using (gui.Node("FileName").Expand().Enter())
                         {
-                            gui.Draw2D.DrawText(FontAwesome6.Folder + directory.Name, 20, gui.CurrentNode.LayoutData.InnerRect.Min,bg);
+                            gui.Draw2D.DrawText(FontAwesome6.Folder + " " + directory.Name, 20, gui.CurrentNode.LayoutData.InnerRect.Min,bg);
                         }
                         
                         using (gui.Node("FileDate").Expand().Enter())
@@ -142,11 +141,6 @@ namespace Prowl.Editor
                             gui.Draw2D.DrawText(directory.LastWriteTime.ToString(), 20, gui.CurrentNode.LayoutData.InnerRect.Min,bg);
                         }
                         
-                        using (gui.Node("SaveBtn").Expand().Enter())
-                        {
-                            gui.Draw2D.DrawText("Save", 20, gui.CurrentNode.LayoutData.InnerRect,bg);
-                        }
-
                         index++;
                     }
                 }
