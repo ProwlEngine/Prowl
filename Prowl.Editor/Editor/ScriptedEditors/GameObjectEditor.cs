@@ -47,7 +47,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             style.BorderThickness = 1f;
             string name = go.Name;
             if (gui.InputField("NameInput", ref name, 32, InputFieldFlags.None, GuiStyle.ItemHeight, 0, Size.Percentage(1f, -(GuiStyle.ItemHeight * 3)), GuiStyle.ItemHeight, style))
-                go.Name = go.Name.Trim();
+                go.Name = name.Trim();
 
             var invisStyle = new GuiStyle { WidgetColor = new Color(0, 0, 0, 0), Border = new Color(0, 0, 0, 0) };
             gui.Combo("#_TagID", "#_TagPopupID", ref go.tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(GuiStyle.ItemHeight * 2)), 0, GuiStyle.ItemHeight, GuiStyle.ItemHeight, invisStyle, FontAwesome6.Tag);
