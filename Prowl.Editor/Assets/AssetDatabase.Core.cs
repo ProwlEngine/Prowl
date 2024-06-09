@@ -42,13 +42,13 @@ namespace Prowl.Editor.Assets
 
         internal static void InternalUpdate()
         {
-            if (Window.IsFocused)
+            if (Screen.IsFocused)
             {
                 RefreshTimer += Time.deltaTime;
                 if (!lastFocused || RefreshTimer > 5f)
                     Update();
             }
-            lastFocused = Window.IsFocused;
+            lastFocused = Screen.IsFocused;
         }
 
         /// <summary>
