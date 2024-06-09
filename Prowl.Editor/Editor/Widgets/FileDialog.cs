@@ -46,7 +46,7 @@ namespace Prowl.Editor
         protected override bool BackgroundFade { get; } = true;
         protected override bool IsDockable => false;
         protected override bool LockSize => true;
-        protected override bool TitleBar => base.TitleBar;
+        protected override bool TitleBar => false;
 
         public FileDialog(FileDialogContext dialogInfo) : base()
         {
@@ -65,9 +65,8 @@ namespace Prowl.Editor
 
             gui.CurrentNode.Layout(LayoutType.Column);
             gui.CurrentNode.ScaleChildren();
-            gui.CurrentNode.Padding(10, 10, 10, 10);
-
-            using (gui.Node("Header").ExpandWidth().MaxHeight(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
+            
+            using (gui.Node("Header").ExpandWidth().MaxHeight(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Padding(10).Enter())
             {
                 using (gui.Node("Title").Expand().Enter())
                 {
@@ -116,7 +115,7 @@ namespace Prowl.Editor
                 }
             }
             
-            using (gui.Node("Content").ExpandWidth().Layout(LayoutType.Column).Enter())
+            using (gui.Node("Content").ExpandWidth().Layout(LayoutType.Column).Padding(10).Clip().Enter())
             {
                 DirectoryInfo[] directories = Dialog.directoryPath.GetDirectories();
                 int index = 0;
@@ -127,7 +126,7 @@ namespace Prowl.Editor
                     {
                         if (gui.IsNodePressed())
                         {
-                            _BackStack.Push(directory);
+                            _BackStack.Push(Dialog.directoryPath);
                             Dialog.directoryPath = directory;
                         }
                         
@@ -183,6 +182,8 @@ namespace Prowl.Editor
                         index++;
                     }
                 }
+                
+                gui.ScrollV();
             }
             
             // Clicked outside Window
