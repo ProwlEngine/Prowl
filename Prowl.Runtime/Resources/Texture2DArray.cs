@@ -17,6 +17,8 @@ namespace Prowl.Runtime
         /// <summary>The quantity or length of this <see cref="Texture2DArray"/>.</summary>
         public uint Layers => InternalTexture.ArrayLayers;
 
+        internal Texture2DArray() : base() { }
+
         /// <summary>
         /// Creates a <see cref="Texture2DArray"/> with the desired parameters but no image data.
         /// </summary>
@@ -25,18 +27,23 @@ namespace Prowl.Runtime
         /// <param name="layers">The height of the <see cref="Texture2DArray"/>.</param>
         /// <param name="mipLevels">How many mip levels this texcture has <see cref="Texture3D"/>.</param>
         /// <param name="format">The pixel format for this <see cref="Texture3D"/>.</param>
-        public Texture2DArray(uint width, uint height, uint layers, uint mipLevels = 0, PixelFormat format = PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage usage = TextureUsage.Sampled) : base(new() 
-            {
-                Width = width,
-                Height = height,
-                Depth = 1,
-                MipLevels = mipLevels,
-                ArrayLayers = layers,
-                Format = format,
-                Usage = usage,
-                Type = TextureType.Texture2D,
-            }) { }
-
+        public Texture2DArray(
+            uint width,  uint height, 
+            uint layers, uint mipLevels = 0, 
+            PixelFormat format = PixelFormat.R8_G8_B8_A8_UNorm, 
+            TextureUsage usage = TextureUsage.Sampled, 
+            TextureSampleCount samples = TextureSampleCount.Count1
+        ) : base(new() {
+            Width = width,
+            Height = height,
+            Depth = 1,
+            MipLevels = mipLevels,
+            ArrayLayers = layers,
+            Format = format,
+            Usage = usage,
+            SampleCount = samples,
+            Type = TextureType.Texture2D,
+        }) { }
         
         /// <summary>
         /// Sets the data of an area of the <see cref="Texture2DArray"/>.
@@ -106,6 +113,7 @@ namespace Prowl.Runtime
                 ArrayLayers = layers,
                 Format = this.Format,
                 Usage = this.Usage,
+                SampleCount = this.InternalTexture.SampleCount,
                 Type = this.Type,
             });
         }

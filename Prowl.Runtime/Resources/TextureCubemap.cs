@@ -1,3 +1,4 @@
+/*
 using System;
 using Prowl.Runtime.Rendering;
 using Prowl.Runtime.Rendering.Primitives;
@@ -22,7 +23,6 @@ namespace Prowl.Runtime
         /// <summary>
         /// Creates a <see cref="TextureCubemap"/> with the desired parameters but no image data.
         /// </summary>
-        /// <param name="graphicsDevice">The <see cref="GraphicsDevice"/> this resource will use.</param>
         /// <param name="size">The size (width and height) of the cubemap's faces.</param>
         /// <param name="imageFormat">The image format for this <see cref="TextureCubemap"/>.</param>
         public TextureCubemap(uint size, TextureImageFormat imageFormat = TextureImageFormat.Color4b)
@@ -125,19 +125,6 @@ namespace Prowl.Runtime
                 Graphics.Device.GetTexImage(Handle, 0, ptr);
         }
 
-        /// <summary>
-        /// Sets the texture coordinate wrapping modes for when a texture is sampled outside the [0, 1] range.
-        /// </summary>
-        /// <param name="sWrapMode">The wrap mode for the S (or texture-X) coordinate.</param>
-        /// <param name="tWrapMode">The wrap mode for the T (or texture-Y) coordinate.</param>
-        /// <param name="rWrapMode">The wrap mode for the R (or texture-Z) coordinate.</param>
-        public void SetWrapModes(TextureWrap sWrapMode, TextureWrap tWrapMode, TextureWrap rWrapMode)
-        {
-            Graphics.Device.SetWrapS(Handle, sWrapMode);
-            Graphics.Device.SetWrapT(Handle, tWrapMode);
-            Graphics.Device.SetWrapR(Handle, rWrapMode);
-        }
-
         private void ValidateRectOperation(int rectX, int rectY, uint rectWidth, uint rectHeight)
         {
             if (rectX < 0 || rectY >= Size)
@@ -163,3 +150,4 @@ namespace Prowl.Runtime
         }
     }
 }
+*/

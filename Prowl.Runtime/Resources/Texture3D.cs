@@ -17,6 +17,8 @@ namespace Prowl.Runtime
         /// <summary>The depth of this <see cref="Texture3D"/>.</summary>
         public uint Depth => InternalTexture.Depth;
 
+        internal Texture3D() : base() { }
+
         /// <summary>
         /// Creates a <see cref="Texture3D"/> with the desired parameters but no image data.
         /// </summary>
@@ -25,17 +27,23 @@ namespace Prowl.Runtime
         /// <param name="depth">The depth of the <see cref="Texture3D"/>.</param>
         /// <param name="mipLevels">How many mip levels this texcture has <see cref="Texture3D"/>.</param>
         /// <param name="format">The pixel format for this <see cref="Texture3D"/>.</param>
-        public Texture3D(uint width, uint height, uint depth, int mipLevels = 0, PixelFormat format = PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage usage = TextureUsage.Sampled) : base(new() 
-            {
-                Width = width,
-                Height = height,
-                Depth = depth,
-                MipLevels = (uint)mipLevels,
-                ArrayLayers = 0,
-                Format = format,
-                Usage = usage,
-                Type = TextureType.Texture3D,
-            }) { }
+        public Texture3D(
+            uint width, uint height, uint depth, 
+            int mipLevels = 0, 
+            PixelFormat format = PixelFormat.R8_G8_B8_A8_UNorm, 
+            TextureUsage usage = TextureUsage.Sampled,
+            TextureSampleCount samples = TextureSampleCount.Count1
+        ) : base(new() {
+            Width = width,
+            Height = height,
+            Depth = depth,
+            MipLevels = (uint)mipLevels,
+            ArrayLayers = 0,
+            Format = format,
+            Usage = usage,
+            SampleCount = samples,
+            Type = TextureType.Texture3D,
+        }) { }
 
         
         /// <summary>
@@ -101,6 +109,7 @@ namespace Prowl.Runtime
                 ArrayLayers = 0,
                 Format = this.Format,
                 Usage = this.Usage,
+                SampleCount = this.InternalTexture.SampleCount,
                 Type = TextureType.Texture3D,
             });
         }

@@ -27,6 +27,8 @@ namespace Prowl.Runtime
         /// <summary>Gets whether this <see cref="Texture"/> can be mipmapped (depends on texture type).</summary>
         public bool IsMipmappable => InternalTexture.Usage.HasFlag(TextureUsage.GenerateMipmaps);
 
+        internal Texture() : base("New Texture") { }
+
         internal Texture(TextureDescription description) : base("New Texture") 
         { 
             RecreateInternalTexture(description);
@@ -37,11 +39,13 @@ namespace Prowl.Runtime
             if (InternalTexture != null)
                 InternalTexture.Dispose();
 
-            ValidateDescription(description);
+            if (!IsSupportedDescription(description, out Exception exception))
+                throw exception;
+
             InternalTexture = Graphics.Device.ResourceFactory.CreateTexture(ref description);
         }
 
-        public void Dispose()
+        public override void OnDispose()
         {
             InternalTexture.Dispose();
         }
@@ -335,24 +339,54 @@ namespace Prowl.Runtime
                 throw new ArgumentOutOfRangeException("Specified mip level is outside of mip size");
         }
 
-        private void ValidateDescription(TextureDescription description)
+        public bool IsSupportedDescription(TextureDescription description, out Exception exception)
         {
             uint width = description.Width;
             uint height = description.Height;
             uint depth = description.Depth;
             uint layers = description.ArrayLayers;
+            uint mipLevels = description.MipLevels;
 
-            if (width <= 0 || width > Graphics.MaxTextureSize)
-                throw new ArgumentOutOfRangeException(nameof(width), width, nameof(width) + " must be in the range (0, " + nameof(Graphics.MaxTextureSize) + ")");
+            PixelFormatProperties properties;
 
-            if (height <= 0 || height > Graphics.MaxTextureSize)
-                throw new ArgumentOutOfRangeException(nameof(height), height, nameof(height) + " must be in the range (0, " + nameof(Graphics.MaxTextureSize) + ")");
+            if (!Graphics.Device.GetPixelFormatSupport(description.Format, description.Type, description.Usage, out properties))
+            {
+                exception = new Exception($"Platform does not support ({description.Format}) format with a ({description.Usage} {description.Type})");
+                return false;
+            }
 
-            if (depth <= 0 || depth > Graphics.MaxTextureSize)
-                throw new ArgumentOutOfRangeException(nameof(depth), depth, nameof(depth) + " must be in the range (0, " + nameof(Graphics.MaxTextureSize) + ")");
+            if (width <= 0 || width > properties.MaxWidth)
+            {
+                exception = new ArgumentOutOfRangeException(nameof(width), width, nameof(width) + " must be in the range (0, " + nameof(properties.MaxWidth) + ")");
+                return false;
+            }
 
-            if (layers <= 0 || layers > Graphics.MaxArrayTextureLayers)
-                throw new ArgumentOutOfRangeException(nameof(layers), layers, nameof(layers) + " must be in the range (0, " + nameof(Graphics.MaxArrayTextureLayers) + ")");
+            if (height <= 0 || height > properties.MaxHeight)
+            {
+                exception = new ArgumentOutOfRangeException(nameof(height), height, nameof(height) + " must be in the range (0, " + nameof(properties.MaxHeight) + ")");
+                return false;
+            }
+
+            if (depth <= 0 || depth > properties.MaxDepth)
+            {
+                exception = new ArgumentOutOfRangeException(nameof(depth), depth, nameof(depth) + " must be in the range (0, " + nameof(properties.MaxDepth) + ")");
+                return false;
+            }
+
+            if (layers <= 0 || layers > properties.MaxArrayLayers)
+            {
+                exception = new ArgumentOutOfRangeException(nameof(layers), layers, nameof(layers) + " must be in the range (0, " + nameof(properties.MaxArrayLayers) + ")");
+                return false;
+            }
+                
+            if (mipLevels <= 0 || mipLevels > properties.MaxMipLevels)
+            {
+                exception = new ArgumentOutOfRangeException(nameof(mipLevels), mipLevels, nameof(mipLevels) + " must be in the range (0, " + nameof(properties.MaxMipLevels) + ")");
+                return false;
+            }
+
+            exception = null;
+            return true;
         }
     }
 }
