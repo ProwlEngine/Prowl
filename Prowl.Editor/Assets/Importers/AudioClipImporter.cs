@@ -1,7 +1,6 @@
-﻿using Hexa.NET.ImGui;
-using Hexa.NET.ImPlot;
-using Prowl.Runtime;
+﻿using Prowl.Runtime;
 using Prowl.Runtime.Audio;
+using Prowl.Runtime.GUI;
 using Prowl.Runtime.Utils;
 using System.Buffers.Binary;
 
@@ -113,92 +112,13 @@ namespace Prowl.Editor.Assets.Importers
     [CustomEditor(typeof(AudioClipImporter))]
     public class AudioClipEditor : ScriptedEditor
     {
-        enum Res { _1, _2, _4, _8, _16, _32, _64, _128, _256 }
-        Res visRes = Res._64;
-
         ActiveAudio? preview;
-
-        byte[] data8L;
-        byte[] data8R;
-
-        short[] data16;
-        short[] data16R;
-        float[] dataF;
-        float[] dataFR;
 
         SerializedAsset serialized;
 
         public override void OnEnable()
         {
             serialized = AssetDatabase.LoadAsset((target as MetaFile).AssetPath);
-            var audioClip = (AudioClip)serialized.Main;
-
-            if (audioClip.Format == BufferAudioFormat.Mono8)
-            {
-                // nothing to do data is already in byte format
-            }
-            else if (audioClip.Format == BufferAudioFormat.Mono16)
-            {
-                short[] data = new short[audioClip.Data.Length / 2];
-                Buffer.BlockCopy(audioClip.Data, 0, data, 0, audioClip.Data.Length);
-                data16 = data;
-            }
-            else if (audioClip.Format == BufferAudioFormat.MonoF)
-            {
-                float[] data = new float[audioClip.Data.Length / 4];
-                Buffer.BlockCopy(audioClip.Data, 0, data, 0, audioClip.Data.Length);
-                dataF = data;
-            }
-            // Stereo
-            else if (audioClip.Format == BufferAudioFormat.Stereo8)
-            {
-                // Handle Stereo
-                data8L = new byte[audioClip.Data.Length / 2];
-                data8R = new byte[audioClip.Data.Length / 2];
-
-                // Separate interleaved stereo data into left and right channels
-                for (int i = 0; i < audioClip.Data.Length; i++)
-                {
-                    if (i % 2 == 0)
-                        data8L[i / 2] = audioClip.Data[i]; // Left channel
-                    else
-                        data8R[i / 2] = audioClip.Data[i]; // Right channel
-                }
-
-            }
-            else if (audioClip.Format == BufferAudioFormat.Stereo16)
-            {
-                short[] data = new short[audioClip.Data.Length / 2];
-                Buffer.BlockCopy(audioClip.Data, 0, data, 0, audioClip.Data.Length);
-                data16 = new short[data.Length / 2];
-                data16R = new short[data.Length / 2];
-
-                // Separate interleaved stereo data into left and right channels
-                for (int i = 0; i < data.Length; i++)
-                {
-                    if (i % 2 == 0)
-                        data16[i / 2] = data[i]; // Left channel
-                    else
-                        data16R[i / 2] = data[i]; // Right channel
-                }
-            }
-            else if (audioClip.Format == BufferAudioFormat.StereoF)
-            {
-                float[] data = new float[audioClip.Data.Length / 4];
-                Buffer.BlockCopy(audioClip.Data, 0, data, 0, audioClip.Data.Length);
-                dataF = new float[data.Length / 2];
-                dataFR = new float[data.Length / 2];
-
-                // Separate interleaved stereo data into left and right channels
-                for (int i = 0; i < data.Length; i++)
-                {
-                    if (i % 2 == 0)
-                        dataF[i / 2] = data[i]; // Left channel
-                    else
-                        dataFR[i / 2] = data[i]; // Right channel
-                }
-            }
-
         }
 
         public override void OnDisable()
@@ -216,125 +136,64 @@ namespace Prowl.Editor.Assets.Importers
 
             try
             {
-                // Show Audio information
-                var audioClip = (AudioClip)serialized.Main;
-                ImGui.Text("Name: " + audioClip.Name);
-                ImGui.Text("Channels: " + audioClip.Channels);
-                ImGui.Text("Bits Per Sample: " + audioClip.BitsPerSample);
-                ImGui.Text("Sample Rate: " + audioClip.SampleRate);
-                ImGui.Text("Duration: " + audioClip.Duration + "s");
-                ImGui.Separator();
-                ImGui.Text("Sample Rate: " + audioClip.SampleRate);
-                ImGui.Text("Size in Bytes: " + audioClip.SizeInBytes);
-                ImGui.Text("Format: " + audioClip.Format.ToString());
+                gui.CurrentNode.Layout(LayoutType.Column);
 
-                ImGui.Separator();
-                // Show Audio Data with ImPlots
+                var audioClip = (AudioClip)serialized.Main;
+                gui.TextNode("name", "Name: " + audioClip.Name).ExpandWidth().Height(GuiStyle.ItemHeight);
+                gui.TextNode("ch", "Channels: " + audioClip.Channels).ExpandWidth().Height(GuiStyle.ItemHeight);
+                gui.TextNode("bps", "Bits Per Sample: " + audioClip.BitsPerSample).ExpandWidth().Height(GuiStyle.ItemHeight);
+                gui.TextNode("sr", "Sample Rate: " + audioClip.SampleRate).ExpandWidth().Height(GuiStyle.ItemHeight);
+                gui.TextNode("dur", "Duration: " + audioClip.Duration + "s").ExpandWidth().Height(GuiStyle.ItemHeight);
+                gui.TextNode("size", "Size in Bytes: " + audioClip.SizeInBytes).ExpandWidth().Height(GuiStyle.ItemHeight);
+                gui.TextNode("form", "Format: " + audioClip.Format.ToString()).ExpandWidth().Height(GuiStyle.ItemHeight);
+
+                //g.SeperatorHNode();
+
                 if (audioClip.Data == null)
                 {
-                    ImGui.Text("Audioclip Data is Null!");
+                    gui.TextNode("err", "Audio Data is Null!").ExpandWidth().Height(GuiStyle.ItemHeight);
                     return;
-                }
-
-                ImGui.Text("Audio Data");
-
-                // Show res
-                GUIHelper.EnumComboBox("Resolution", ref visRes);
-
-                var reg = ImGui.GetContentRegionAvail();
-                ImPlotFlags flags = ImPlotFlags.None;
-                float height = 250;
-                // Mono has NoLegends flag
-                if (audioClip.Format == BufferAudioFormat.Mono8 || audioClip.Format == BufferAudioFormat.Mono16 || audioClip.Format == BufferAudioFormat.MonoF)
-                {
-                    flags |= ImPlotFlags.NoLegend;
-                    height = 150;
-                }
-                if (ImPlot.BeginPlot("Audio Waveform", new System.Numerics.Vector2(reg.X, height), flags))
-                {
-                    ImPlot.SetupAxes("Time (s)", "Amplitude", ImPlotAxisFlags.None, ImPlotAxisFlags.AutoFit);
-                    ImPlot.SetupAxesLimits(0, audioClip.Duration, -1, 1);
-                    ImPlot.SetupMouseText(ImPlotLocation.SouthEast, 0);
-                    
-                    int res = 1 << (int)visRes;
-                    if (audioClip.Format == BufferAudioFormat.Mono8)
-                    {
-                        float xScale = ((1.0f / audioClip.Data.Length) * audioClip.Duration) * res;
-                        ImPlot.PlotLine("Audio", ref audioClip.Data[0], audioClip.Data.Length / res, xScale, 0, 0, 0, res);
-                    }
-                    else if (audioClip.Format == BufferAudioFormat.Mono16)
-                    {
-                        float xScale = ((1.0f / data16.Length) * audioClip.Duration) * res;
-                        ImPlot.PlotLine("Audio", ref data16[0], data16.Length / res, xScale, 0, 0, 0, 2 * res);
-                    }
-                    else if (audioClip.Format == BufferAudioFormat.MonoF)
-                    {
-                        float xScale = ((1.0f / dataF.Length) * audioClip.Duration) * res;
-                        ImPlot.PlotLine("Audio", ref dataF[0], dataF.Length / res, xScale, 0, 0, 0, 4 * res);
-                    }
-                    else if (audioClip.Format == BufferAudioFormat.Stereo8)
-                    {
-                        float xScale = ((1.0f / data8L.Length) * audioClip.Duration) * res;
-                        ImPlot.PlotLine("Left Channel", ref data8L[0], data8L.Length / res, xScale, 0, 0, 0, res);
-                        ImPlot.PlotLine("Right Channel", ref data8R[0], data8R.Length / res, xScale, 0, 0, 0, res);
-                    }
-                    else if (audioClip.Format == BufferAudioFormat.Stereo16)
-                    {
-                        float xScale = ((1.0f / data16.Length) * audioClip.Duration) * res;
-                        ImPlot.PlotLine("Left Channel", ref data16[0], data16.Length / res, xScale, 0, 0, 0, 2 * res);
-                        ImPlot.PlotLine("Right Channel", ref data16R[0], data16R.Length / res, xScale, 0, 0, 0, 2 * res);
-                    }
-                    else if (audioClip.Format == BufferAudioFormat.StereoF)
-                    {
-                        float xScale = ((1.0f / dataF.Length) * audioClip.Duration) * res;
-                        ImPlot.PlotLine("Left Channel", ref dataF[0], dataF.Length / res, xScale, 0, 0, 0, 4 * res);
-                        ImPlot.PlotLine("Right Channel", ref dataFR[0], dataFR.Length / res, xScale, 0, 0, 0, 4 * res);
-                    }
-
-
-                    // playback position
-                    if (preview != null && preview.IsPlaying)
-                    {
-                        // from 0-1
-                        float playbackPos = preview.PlaybackPosition;
-
-                        // Draw a vertical line
-                        double pos = playbackPos * audioClip.Duration;
-
-                        if(ImPlot.DragLineX(0, ref pos, new System.Numerics.Vector4(1f, 1f, 1f, 1f)))
-                            preview.PlaybackPosition = (float)Mathf.Clamp01(pos / audioClip.Duration);
-
-                        // If click on plot set playback position
-                        if (ImPlot.IsPlotHovered() && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
-                        {
-                            double x = ImPlot.GetPlotMousePos().X;
-                            preview.PlaybackPosition = (float)Mathf.Clamp01(x / audioClip.Duration);
-                        }
-                    }
-                    ImPlot.EndPlot();
                 }
 
                 // Play
                 if(preview != null && preview.IsPlaying)
                 {
-                    if (ImGui.Button("Stop"))
+                    using (gui.Node("StopBtn").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
                     {
-                        preview.Stop();
-                        preview = null;
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
+
+                        gui.Draw2D.DrawText("Stop", gui.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
+
+                        if (gui.IsNodePressed())
+                        {
+                            preview.Stop();
+                            preview = null;
+                        }
+
+                        if (gui.IsNodeHovered())
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
                     }
                 }
                 else
                 {
-                    if (ImGui.Button("Play"))
+                    using (gui.Node("PlayBtn").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
                     {
-                        preview = AudioSystem.PlaySound(audioClip);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
+
+                        gui.Draw2D.DrawText("Play", gui.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
+
+                        if (gui.IsNodePressed())
+                            preview = AudioSystem.PlaySound(audioClip);
+
+                        if (gui.IsNodeHovered())
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
                     }
                 }
 
             }
             catch
             {
-                ImGui.Text("Failed to display AudioClip Data");
+                gui.TextNode("error", "Failed to display AudioClip Data").ExpandWidth().Height(GuiStyle.ItemHeight);
             }
         }
     }

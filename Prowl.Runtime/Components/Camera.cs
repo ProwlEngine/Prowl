@@ -17,6 +17,7 @@ public class Camera : MonoBehaviour
     public bool DoClear = true;
     public Color ClearColor = new Color(0f, 0f, 0f, 1f);
     public float FieldOfView = 60f;
+    public float OrthographicSize = 0.5f;
     public int DrawOrder = 0;
     public float NearClip = 0.01f;
     public float FarClip = 1000f;
@@ -40,7 +41,8 @@ public class Camera : MonoBehaviour
     public Matrix4x4 GetProjectionMatrix(float width, float height)
     {
         if (projectionType == ProjectionType.Orthographic)
-            return System.Numerics.Matrix4x4.CreateOrthographicLeftHanded(width, height, NearClip, FarClip).ToDouble();
+            //return System.Numerics.Matrix4x4.CreateOrthographicLeftHanded(width, height, NearClip, FarClip).ToDouble();
+            return System.Numerics.Matrix4x4.CreateOrthographicOffCenterLeftHanded(-OrthographicSize, OrthographicSize, -OrthographicSize, OrthographicSize, NearClip, FarClip).ToDouble();
         else
             return System.Numerics.Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(FieldOfView.ToRad(), width / height, NearClip, FarClip).ToDouble();
     }
@@ -132,7 +134,7 @@ public class Camera : MonoBehaviour
         Graphics.OldMatProjection = oldProjection ?? Graphics.MatProjection;
 
         // Set default jitter to false, this is set to true in a TAA pass
-        rp.Res!.Prepare(width, height);
+        rp.Res!.Prepare("Deferred", width, height);
 
         Matrix4x4.Invert(Graphics.MatProjection, out Graphics.MatProjectionInverse);
 
@@ -227,6 +229,45 @@ public class Camera : MonoBehaviour
             renderTexture.Destroy();
         cachedRenderTextures.Clear();
     }
+
+    public Ray ScreenPointToRay(Vector2 screenPoint)
+    {
+        // Get the render target size
+        Vector2 renderTargetSize = GetRenderTargetSize();
+
+        // Normalize screen coordinates to [-1, 1]
+        Vector2 ndc = new Vector2(
+            (screenPoint.x / renderTargetSize.x) * 2.0f - 1.0f,
+            1.0f - (screenPoint.y / renderTargetSize.y) * 2.0f
+        );
+
+        // Create the near and far points in NDC
+        Vector4 nearPointNDC = new Vector4(ndc.x, ndc.y, 0.0f, 1.0f);
+        Vector4 farPointNDC = new Vector4(ndc.x, ndc.y, 1.0f, 1.0f);
+
+        // Get the view and projection matrices
+        Matrix4x4 viewMatrix = Matrix4x4.CreateLookToLeftHanded(GameObject.Transform.position, GameObject.Transform.forward, GameObject.Transform.up);
+        Matrix4x4 projectionMatrix = GetProjectionMatrix((int)renderTargetSize.x, (int)renderTargetSize.y);
+
+        // Calculate the inverse view-projection matrix
+        Matrix4x4 viewProjectionMatrix = viewMatrix * projectionMatrix;
+        Matrix4x4.Invert(viewProjectionMatrix, out Matrix4x4 inverseViewProjectionMatrix);
+
+        // Unproject the near and far points to world space
+        Vector4 nearPointWorld = Vector4.Transform(nearPointNDC, inverseViewProjectionMatrix);
+        Vector4 farPointWorld = Vector4.Transform(farPointNDC, inverseViewProjectionMatrix);
+
+        // Perform perspective divide
+        nearPointWorld /= nearPointWorld.w;
+        farPointWorld /= farPointWorld.w;
+
+        // Create the ray
+        Vector3 rayOrigin = new Vector3(nearPointWorld.x, nearPointWorld.y, nearPointWorld.z);
+        Vector3 rayDirection = Vector3.Normalize(new Vector3(farPointWorld.x, farPointWorld.y, farPointWorld.z) - rayOrigin);
+
+        return new Ray(rayOrigin, rayDirection);
+    }
+
 
     #region RT Cache
 

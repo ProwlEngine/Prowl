@@ -115,7 +115,7 @@ namespace Prowl.Runtime.Utils
                 obj.DestroyImmediate();
         }
 
-        public object GetAsset(ushort fileID)
+        public EngineObject GetAsset(ushort fileID)
         {
             if (fileID == 0) return Main;
             return SubAssets[fileID - 1];

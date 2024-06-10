@@ -120,7 +120,7 @@ namespace Prowl.Runtime
         public static void Clear()
         {
             gizmos.Clear();
-            LineBatch.Reset();
+            LineBatch?.Reset();
         }
     }
 

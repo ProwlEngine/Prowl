@@ -1,12 +1,10 @@
-﻿using Hexa.NET.ImGui;
-using Prowl.Editor.EditorWindows.CustomEditors;
-using Prowl.Editor.ImGUI.Widgets;
-using Prowl.Editor.PropertyDrawers;
+﻿using Prowl.Editor.ScriptedEditors;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Assets
 {
+
     [Importer("FileIcon.png", typeof(Material), ".mat")]
     public class MaterialImporter : ScriptedImporter
     {
@@ -48,10 +46,12 @@ namespace Prowl.Editor.Assets
                     StringTagConverter.WriteToFile(Serializer.Serialize(mat), (target as MetaFile).AssetPath);
                     AssetDatabase.Reimport((target as MetaFile).AssetPath);
                 });
+                editor.OnInspectorGUI();
             }
-            catch
+            catch (Exception e)
             {
-                ImGui.LabelText("Failed to Deserialize Material", "The material file is invalid.");
+                gui.Node("DummyForText").ExpandWidth().Height(GuiStyle.ItemHeight * 10);
+                gui.Draw2D.DrawText("Failed to Deserialize Material: " + e.Message + "\n" + e.StackTrace, gui.CurrentNode.LayoutData.Rect);
             }
         }
     }

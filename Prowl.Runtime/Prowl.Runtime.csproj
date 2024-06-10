@@ -8,6 +8,13 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <Content Remove="C:\Users\acer1\.nuget\packages\pictime.sharpfont.dependencies\2.6.0\build\..\bin\msvc12\x64\freetype6.dll" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="EmbeddedResources\fa-regular-400.ttf" />
+      <None Remove="EmbeddedResources\fa-solid-900.ttf" />
+      <None Remove="EmbeddedResources\font.ttf" />
       <None Remove="Resources/AudioIcon.png" />
       <None Remove="Resources/Checkerboard.png" />
       <None Remove="Resources/CSharpIcon.png" />
@@ -31,12 +38,19 @@
       <None Remove="Resources/ShaderIcon.png" />
       <None Remove="Resources/standard.glsl" />
     </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Include="EmbeddedResources\fa-regular-400.ttf" />
+      <EmbeddedResource Include="EmbeddedResources\fa-solid-900.ttf" />
+      <EmbeddedResource Include="EmbeddedResources\font.ttf" />
+    </ItemGroup>
     
     <ItemGroup>
       <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
       <PackageReference Include="BepuPhysics" Version="2.5.0-beta.23" />
       <PackageReference Include="Silk.NET" Version="2.20.0" />
       <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.21.1.2" />
+      <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
     </ItemGroup>
 
 </Project>

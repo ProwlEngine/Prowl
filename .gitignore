@@ -399,3 +399,6 @@ FodyWeavers.xsd
 
 # Mac OSX Folder info
 .DS_Store
+
+# Rider IDE
+.idea/

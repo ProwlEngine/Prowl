@@ -1,11 +1,11 @@
-﻿using Hexa.NET.ImGui;
-using Prowl.Editor.Editor.Preferences;
+using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
-using Prowl.Runtime.Rendering.OpenGL;
-using System.Reflection;
+using Prowl.Runtime.GUI;
+using Prowl.Runtime.GUI.Graphics;
+using static Prowl.Editor.EditorGUI;
 
-namespace Prowl.Editor.EditorWindows;
+namespace Prowl.Editor;
 
 public class GameWindow : EditorWindow
 {
@@ -32,13 +32,13 @@ public class GameWindow : EditorWindow
     RenderTexture RenderTarget;
     bool previouslyPlaying = false;
 
-    public static bool IsFocused;
+    public static bool IsGameWindowFocused;
 
     public GameWindow() : base()
     {
         Title = FontAwesome6.Gamepad + " Game";
-        GeneralPreferences.Instance.CurrentWidth = Width;
-        GeneralPreferences.Instance.CurrentHeight = Height - HeaderHeight;
+        GeneralPreferences.Instance.CurrentWidth = (int)Width;
+        GeneralPreferences.Instance.CurrentHeight = (int)Height - HeaderHeight;
         RefreshRenderTexture();
     }
 
@@ -48,138 +48,171 @@ public class GameWindow : EditorWindow
         RenderTarget = new RenderTexture(GeneralPreferences.Instance.CurrentWidth, GeneralPreferences.Instance.CurrentHeight);
     }
 
-    protected override void PreWindowDraw() =>
-        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new System.Numerics.Vector2(0, 0));
-
-    protected override void PostWindowDraw() =>
-        ImGui.PopStyleVar(1);
-
     protected override void Draw()
     {
         if (!Project.HasProject) return;
 
-        if (!previouslyPlaying && Application.isPlaying) {
-            previouslyPlaying = true;
-            if(GeneralPreferences.Instance.AutoFocusGameView)
-                ImGui.SetWindowFocus();
-        } else if (previouslyPlaying && !Application.isPlaying) {
-            previouslyPlaying = false;
-        }
+        // TODO: Add Window Focus
+        // if (!previouslyPlaying && Application.isPlaying)
+        // {
+        //     previouslyPlaying = true;
+        //     if (GeneralPreferences.Instance.AutoFocusGameView)
+        //         ImGg.SetWindowFocus();
+        // }
+        // else if (previouslyPlaying && !Application.isPlaying)
+        // {
+        //     previouslyPlaying = false;
+        // }
 
-        IsFocused |= ImGui.IsWindowFocused();
+        // IsFocused |= ImGg.IsWindowFocused();
 
-        // Header Bar with resolution settings, then Image under it
-        ImGui.BeginChild("Header", new System.Numerics.Vector2(0, HeaderHeight), ImGuiChildFlags.Border, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse);
+        IsGameWindowFocused = IsFocused;
+
+        gui.CurrentNode.Layout(Runtime.GUI.LayoutType.Column).ScaleChildren();
+
+        using (gui.Node("MenuBar").ExpandWidth().MaxHeight(GuiStyle.ItemHeight).Layout(LayoutType.Row).Enter())
         {
+            gui.TextNode("displayIcon", FontAwesome6.Display).Scale(GuiStyle.ItemHeight);
+
             bool changed = false;
-            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 3);
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 5);
-            ImGui.Text(FontAwesome6.Display);
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth(50);
-            if (ImGui.InputInt("##Width", ref GeneralPreferences.Instance.CurrentWidth, 0, 0, ImGuiInputTextFlags.EnterReturnsTrue)) {
+
+            PropertyGridConfig config = PropertyGridConfig.NoLabel;
+            if (EditorGUI.DrawProperty(0, "Width", ref GeneralPreferences.Instance.CurrentWidth, config))
+            {
                 GeneralPreferences.Instance.CurrentWidth = Math.Clamp(GeneralPreferences.Instance.CurrentWidth, 1, 7680);
                 GeneralPreferences.Instance.Resolution = Resolutions.custom;
                 changed = true;
                 RefreshRenderTexture();
             }
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth(50);
-            if (ImGui.InputInt("##Height", ref GeneralPreferences.Instance.CurrentHeight, 0, 0, ImGuiInputTextFlags.EnterReturnsTrue)) {
+            gui.PreviousNode.Width(50);
+            if (EditorGUI.DrawProperty(1, "Height", ref GeneralPreferences.Instance.CurrentHeight, config))
+            {
                 GeneralPreferences.Instance.CurrentHeight = Math.Clamp(GeneralPreferences.Instance.CurrentHeight, 1, 4320);
                 GeneralPreferences.Instance.Resolution = Resolutions.custom;
                 changed = true;
                 RefreshRenderTexture();
             }
+            gui.PreviousNode.Width(50);
 
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth(100);
-            string[] resolutionNames = Enum.GetValues(typeof(Resolutions)).Cast<Resolutions>().Select(r => GetDescription(r)).ToArray();
-            int currentIndex = (int)GeneralPreferences.Instance.Resolution;
-            if (ImGui.Combo("##ResolutionCombo", ref currentIndex, resolutionNames, resolutionNames.Length)) {
-                GeneralPreferences.Instance.Resolution = (Resolutions)Enum.GetValues(typeof(Resolutions)).GetValue(currentIndex);
+            if (EditorGUI.DrawProperty(2, "Resolution", ref GeneralPreferences.Instance.Resolution, config))
+            {
                 UpdateResolution(GeneralPreferences.Instance.Resolution);
                 changed = true;
                 RefreshRenderTexture();
             }
+            gui.PreviousNode.Width(100);
 
-            ImGui.SameLine();
-            // Auto Focus
-            ImGui.SetCursorPosX(ImGui.GetWindowWidth() - 200);
-            changed |= ImGui.Checkbox("Auto Focus", ref GeneralPreferences.Instance.AutoFocusGameView);
-            ImGui.SameLine();
-            // Auto Refresh
-            changed |= ImGui.Checkbox("Auto Refresh", ref GeneralPreferences.Instance.AutoRefreshGameView);
+            //changed |= EditorGUI.DrawProperty(3, "Auto Focus", ref GeneralPreferences.Instance.AutoFocusGameView, config);
+            //g.PreviousNode.Width(100);
+            //g.SimpleTooltip("Auto Focus will automatically focus the Game View when the game starts playing.");
+            //changed |= EditorGUI.DrawProperty(4, "Auto Refresh", ref GeneralPreferences.Instance.AutoRefreshGameView, config);
+            //g.PreviousNode.Width(100);
+            //g.SimpleTooltip("Auto Refresh will automatically refresh the Game View.");
 
             if (changed)
             {
                 GeneralPreferences.Instance.OnValidate();
                 GeneralPreferences.Instance.Save();
             }
-        }
-        ImGui.EndChild();
 
-        var renderSize = ImGui.GetContentRegionAvail();
-
-        var min = ImGui.GetCursorScreenPos();
-        var max = new System.Numerics.Vector2(min.X + renderSize.X, min.Y + renderSize.Y);
-        ImGui.GetWindowDrawList().AddRectFilled(min, max, ImGui.GetColorU32(new System.Numerics.Vector4(0, 0, 0, 1)));
-
-        // Find Camera to render
-        var allCameras = EngineObject.FindObjectsOfType<Camera>();
-        // Remove disabled ones
-        allCameras = allCameras.Where(c => c.EnabledInHierarchy && !c.GameObject.Name.Equals("Editor-Camera", StringComparison.OrdinalIgnoreCase)).ToArray();
-        // Find MainCamera
-        var mainCam = allCameras.FirstOrDefault(c => c.GameObject.CompareTag("Main Camera") && c.Target.IsExplicitNull, allCameras.Length > 0 ? allCameras[0] : null);
-
-        if (mainCam == null) {
-            GUIHelper.TextCenter("No Camera found", 2f, true);
-            return;
-        }
-        if (GeneralPreferences.Instance.Resolution == Resolutions.fit) {
-            if (renderSize.X != RenderTarget.Width || renderSize.Y != RenderTarget.Height) {
-                GeneralPreferences.Instance.CurrentWidth = (int)renderSize.X;
-                GeneralPreferences.Instance.CurrentHeight = (int)renderSize.Y;
-                RefreshRenderTexture();
-            }
+            DrawPlayMode();
         }
 
-        // We got a camera to visualize
-        if (GeneralPreferences.Instance.AutoRefreshGameView)
+        using (gui.Node("Main").Width(Size.Percentage(1f)).Padding(5).Enter())
         {
-            if (Application.isPlaying || Time.frameCount % 8 == 0)
+            var innerRect = gui.CurrentNode.LayoutData.InnerRect;
+
+            gui.Draw2D.DrawRectFilled(innerRect, Color.black);
+
+            var renderSize = innerRect.Size;
+            renderSize.x = Mathf.Max(renderSize.x, 1);
+            renderSize.y = Mathf.Max(renderSize.y, 1);
+
+            // Find Camera to render
+            var allCameras = EngineObject.FindObjectsOfType<Camera>();
+            // Remove disabled ones
+            allCameras = allCameras.Where(c => c.EnabledInHierarchy && !c.GameObject.Name.Equals("Editor-Camera", StringComparison.OrdinalIgnoreCase)).ToArray();
+            // Find MainCamera
+            var mainCam = allCameras.FirstOrDefault(c => c.GameObject.CompareTag("Main Camera") && c.Target.IsExplicitNull, allCameras.Length > 0 ? allCameras[0] : null);
+
+            if (mainCam == null)
             {
-                var tmp = mainCam.Target;
-                mainCam.Target = RenderTarget;
-                mainCam.Render((int)renderSize.X, (int)renderSize.Y);
-                mainCam.Target = tmp;
+                gui.Draw2D.DrawRect(innerRect, Color.red, 2);
+                gui.Draw2D.DrawText(UIDrawList.DefaultFont, "No Camera found", 40f, innerRect, Color.red);
+                return;
             }
+
+            if (GeneralPreferences.Instance.Resolution == Resolutions.fit)
+            {
+                if (renderSize.x != RenderTarget.Width || renderSize.y != RenderTarget.Height)
+                {
+                    GeneralPreferences.Instance.CurrentWidth = (int)renderSize.x;
+                    GeneralPreferences.Instance.CurrentHeight = (int)renderSize.y;
+                    RefreshRenderTexture();
+                }
+            }
+
+            // We got a camera to visualize
+            if (GeneralPreferences.Instance.AutoRefreshGameView)
+            {
+                if (Application.isPlaying || Time.frameCount % 8 == 0)
+                {
+                    var tmp = mainCam.Target;
+                    try
+                    {
+                        mainCam.Target = RenderTarget;
+                        mainCam.Render((int)renderSize.x, (int)renderSize.y);
+                    }
+                    finally
+                    {
+                        mainCam.Target = tmp;
+                    }
+                    
+                }
+            }
+
+            // Letter box the image into the render size
+            gui.Draw2D.DrawImage(RenderTarget.InternalTextures[0], innerRect.Position, innerRect.Size, Color.white, true);
         }
 
-        // Letter box the image into the render size
-        float aspect = (float)RenderTarget.Width / (float)RenderTarget.Height;
-        float renderAspect = renderSize.X / renderSize.Y;
-        if (aspect > renderAspect) {
-            float width = renderSize.X;
-            float height = width / aspect;
-            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + ((renderSize.Y - height) / 2f));
-            ImGui.Image((IntPtr)(RenderTarget.InternalTextures[0].Handle as GLTexture)!.Handle, new System.Numerics.Vector2(width, height), new System.Numerics.Vector2(0, 1), new System.Numerics.Vector2(1, 0));
-        } else {
-            float height = renderSize.Y;
-            float width = height * aspect;
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + ((renderSize.X - width) / 2f));
-            ImGui.Image((IntPtr)(RenderTarget.InternalTextures[0].Handle as GLTexture)!.Handle, new System.Numerics.Vector2(width, height), new System.Numerics.Vector2(0, 1), new System.Numerics.Vector2(1, 0));
-        }
     }
 
-    protected override void Update()
+    private void DrawPlayMode()
     {
+        using (gui.Node("PSP").FitContentWidth().Height(GuiStyle.ItemHeight).Top(5).Layout(LayoutType.Row).Enter())
+        {
+            // Center
+            gui.CurrentNode.Left(Offset.Percentage(0.5f, -(gui.CurrentNode.LayoutData.Rect.width / 2)));
 
+            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
+
+            switch (PlayMode.Current)
+            {
+                case PlayMode.Mode.Editing:
+                    if (EditorGUI.StyledButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                        PlayMode.Start();
+                    break;
+                case PlayMode.Mode.Playing:
+                    if (EditorGUI.StyledButton(FontAwesome6.Pause, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                        PlayMode.Pause();
+                    if (EditorGUI.StyledButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
+                        PlayMode.Stop();
+                    break;
+                case PlayMode.Mode.Paused:
+                    if (EditorGUI.StyledButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                        PlayMode.Resume();
+                    if (EditorGUI.StyledButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
+                        PlayMode.Stop();
+                    break;
+
+            }
+        }
     }
 
     void UpdateResolution(Resolutions resolution)
     {
-        switch (resolution) {
+        switch (resolution)
+        {
             case Resolutions._480p:
                 GeneralPreferences.Instance.CurrentWidth = 854;
                 GeneralPreferences.Instance.CurrentHeight = 480;
@@ -229,13 +262,6 @@ public class GameWindow : EditorWindow
                 GeneralPreferences.Instance.CurrentHeight = 4320;
                 break;
         }
-    }
-
-    string GetDescription(Enum value)
-    {
-        FieldInfo field = value.GetType().GetField(value.ToString());
-        TextAttribute attribute = Attribute.GetCustomAttribute(field, typeof(TextAttribute)) as TextAttribute;
-        return attribute == null ? value.ToString() : attribute.text;
     }
 
 }

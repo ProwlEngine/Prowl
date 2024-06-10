@@ -41,28 +41,29 @@ Pass 0
 		
 		uniform sampler2D gPositionRoughness; // Pos
 		
-		float Grid(vec3 ro, vec3 rd, out float d) {
-			#ifdef GRID_XZ
-			    d = -ro.y / rd.y;
-			    if (d <= 0.0) return 0.0;
-			    vec2 p = (ro.xz + rd.xz * d) * 2.0;
-			#elif defined(GRID_ZY)
+		float Grid(vec3 ro, float scale, vec3 rd, out float d) {
+			ro /= scale;
+			#ifdef GRID_YZ
 			    d = -ro.x / rd.x;
 			    if (d <= 0.0) return 0.0;
-			    vec2 p = (ro.zy + rd.zy * d) * 2.0;
+			    vec2 p = (ro.zy + rd.zy * d);
 			#elif defined(GRID_XY)
 			    d = -ro.z / rd.z;
 			    if (d <= 0.0) return 0.0;
-			    vec2 p = (ro.xy + rd.xy * d) * 2.0;
+			    vec2 p = (ro.xy + rd.xy * d);
+			#else
+			    d = -ro.y / rd.y;
+			    if (d <= 0.0) return 0.0;
+			    vec2 p = (ro.xz + rd.xz * d);
 			#endif
 			vec2 e = fwidth(p);
-			vec2 grid = abs(fract(p) - 0.5);
+			vec2 grid = abs(fract(p - 0.5) - 0.5);
 			vec2 lines = smoothstep(0.5 * e, e, grid);
 			
 			float line = min(lines.x, lines.y);
 			
 			// Distance fade
-			float fadeDist = 128.0; // Adjust this value to control the fade distance
+			float fadeDist = 128.0 / scale; // Adjust this value to control the fade distance
 			float fadeAmount = 1.0 - clamp(d / fadeDist, 0.0, 1.0);
 			
 			return mix(0.9, 0.0, line) * fadeAmount;
@@ -73,13 +74,15 @@ Pass 0
             vec3 gPos = textureLod(gPositionRoughness, TexCoords, 0).rgb;
 			
 			float d = 0.0;
-			float g = Grid(Camera_WorldPosition * 0.5, normalize(vPosition), d);
+			float sg = Grid(Camera_WorldPosition, 1.0, normalize(vPosition), d);
+			float bg = Grid(Camera_WorldPosition, 4.0, normalize(vPosition), d);
 			
-			float depth = length(gPos.xyz) * 0.5;
+			float depth = length(gPos.xyz) * 0.25;
 			
 			if(depth > d || depth == 0.0)
 			{
-				OutputColor = vec4(1.0, 1.0, 1.0, g);
+				OutputColor = vec4(1.0, 1.0, 1.0, sg * 0.6);
+				OutputColor += vec4(1.0, 1.0, 1.0, bg * 0.4);
             }
 		}
 

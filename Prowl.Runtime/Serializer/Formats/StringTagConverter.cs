@@ -87,15 +87,15 @@ namespace Prowl.Runtime
                     writer.Write('C');
                     break;
                 case PropertyType.Float:
-                    writer.Write(prop.FloatValue);
+                    writer.Write(prop.FloatValue.ToString(CultureInfo.InvariantCulture));
                     writer.Write('F');
                     break;
                 case PropertyType.Double:
-                    writer.Write(prop.DoubleValue);
+                    writer.Write(prop.DoubleValue.ToString(CultureInfo.InvariantCulture));
                     writer.Write('D');
                     break;
                 case PropertyType.Decimal:
-                    writer.Write(prop.DecimalValue);
+                    writer.Write(prop.DecimalValue.ToString(CultureInfo.InvariantCulture));
                     writer.Write('M');
                     break;
                 case PropertyType.String:

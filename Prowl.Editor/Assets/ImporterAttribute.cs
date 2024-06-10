@@ -41,7 +41,7 @@ namespace Prowl.Editor.Assets
                             if (ext.Count(x => x == '.') > 1) throw new Exception($"Extension {ext} is formatted incorrectly on importer: {type.Name}");
 
                             if(extToImporter.TryGetValue(ext, out var oldType))
-                                ImGuiNotify.InsertNotification("Asset Importer Overwritten.", new(0.8f, 0.1f, 0.1f, 1), $"{ext} extension already in use by: {oldType.Name}, being overwritten by: {type.Name}");
+                                Debug.LogError($"Asset Importer Overwritten. {ext} extension already in use by: {oldType.Name}, being overwritten by: {type.Name}");
                             extToImporter[ext] = type;
                             extToIcon[ext] = attribute.FileIcon;
                             extToGeneralType[ext] = attribute.GeneralType;
@@ -106,7 +106,7 @@ namespace Prowl.Editor.Assets
                         if (attribute == null) continue;
 
                         if (typeToEditor.TryGetValue(attribute.Type, out var oldType))
-                            ImGuiNotify.InsertNotification("Custom Editor Overwritten.", new(0.8f, 0.1f, 0.1f, 1), $"{attribute.Type.Name} already has a custom Editor: {oldType.Name}, being overwritten by: {type.Name}");
+                            Debug.LogError($"Custom Editor Overwritten. {attribute.Type.Name} already has a custom Editor: {oldType.Name}, being overwritten by: {type.Name}");
                         typeToEditor[attribute.Type] = type;
                     }
         }
