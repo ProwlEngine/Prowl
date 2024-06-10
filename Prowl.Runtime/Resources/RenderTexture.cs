@@ -1,72 +1,51 @@
-﻿using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.Primitives;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using Veldrid;
 
 namespace Prowl.Runtime
 {
+    public struct RenderTextureDescription
+    {
+        public uint width;
+        public uint height;
+
+        public PixelFormat[] colorBufferFormats;
+        public PixelFormat? depthStencilFormat; // Color is optional, depth isn't.
+    }
+
     public sealed class RenderTexture : EngineObject, ISerializable
     {
-        public GraphicsFrameBuffer frameBuffer { get; private set; }
-        public Texture2D MainTexture => InternalTextures[0];
-        public Texture2D[] InternalTextures { get; private set; }
-        public Texture2D InternalDepth { get; private set; }
+        private int colorAttachmentLimit = 4;
+        private const PixelFormat defaultFormat = PixelFormat.R8_G8_B8_A8_UNorm; 
 
-        public int Width { get; private set; }
-        public int Height { get; private set; }
-        private int numTextures;
-        private bool hasDepthAttachment;
-        private TextureImageFormat[] textureFormats;
+        public RenderTextureDescription description;
 
-        public RenderTexture() : base("RenderTexture")
+        public Framebuffer framebuffer { get; private set; }
+
+        public Texture2D[] ColorBuffers { get; private set; }
+        public Texture2D DepthBuffer { get; private set; }
+
+        public int width { get; private set; }
+        public int height { get; private set; }
+
+
+        public RenderTexture(RenderTextureDescription description) : base("RenderTexture")
         {
-            Width = 0;
-            Height = 0;
-            numTextures = 0;
-            hasDepthAttachment = false;
-            textureFormats = new TextureImageFormat[0];
+            if (description.colorBufferFormats.Length > colorAttachmentLimit)
+                throw new Exception("Invalid number of color buffers! [0-" + colorAttachmentLimit + "]");
+
+            this.description = description;
         }
 
-        public RenderTexture(int Width, int Height, int numTextures = 1, bool hasDepthAttachment = true, TextureImageFormat[]? formats = null) : base("RenderTexture")
+
+        public void Create()
         {
-            if (numTextures < 0 || numTextures > Graphics.MaxFramebufferColorAttachments)
-                throw new Exception("Invalid number of textures! [0-" + Graphics.MaxFramebufferColorAttachments + "]");
-
-            this.Width = Width;
-            this.Height = Height;
-            this.numTextures = numTextures;
-            this.hasDepthAttachment = hasDepthAttachment;
-
-            if (formats == null) {
-                this.textureFormats = new TextureImageFormat[numTextures];
-                for (int i = 0; i < numTextures; i++)
-                    this.textureFormats[i] = TextureImageFormat.Color4b;
-            } else {
-                if (formats.Length != numTextures)
-                    throw new ArgumentException("Invalid number of texture formats!");
-                this.textureFormats = formats;
-            }
-
-            GraphicsFrameBuffer.Attachment[] attachments = new GraphicsFrameBuffer.Attachment[numTextures + (hasDepthAttachment ? 1 : 0)];
-            InternalTextures = new Texture2D[numTextures];
-            for (int i = 0; i < numTextures; i++)
-            {
-                InternalTextures[i] = new Texture2D((uint)Width, (uint)Height, false, this.textureFormats[i]);
-                InternalTextures[i].SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
-                InternalTextures[i].SetWrapModes(TextureWrap.ClampToEdge, TextureWrap.ClampToEdge);
-                attachments[i] = new GraphicsFrameBuffer.Attachment { texture = InternalTextures[i].Handle, isDepth = false };
-            }
-
-            if (hasDepthAttachment)
-            {
-                InternalDepth = new Texture2D((uint)Width, (uint)Height, false, TextureImageFormat.Depth24);
-                attachments[numTextures] = new GraphicsFrameBuffer.Attachment { texture = InternalDepth.Handle, isDepth = true };
-            }
-
-            frameBuffer = Graphics.Device.CreateFramebuffer(attachments);
+            
         }
+
+
 
         public void Begin()
         {
@@ -78,13 +57,14 @@ namespace Prowl.Runtime
         public void End()
         {
             Graphics.Device.UnbindFramebuffer();
-            Graphics.Viewport((int)Screen.InternalDevice.SwapchainFramebuffer.Width, (int)Screen.InternalDevice.SwapchainFramebuffer.Height);
+            Graphics.Viewport((int)Graphics.Framebuffer.Width, (int)Graphics.Framebuffer.Height);
             Graphics.FrameBufferSize = new Vector2Int(Width, Height);
         }
 
         public override void OnDispose()
         {
             if (frameBuffer == null) return;
+            
             foreach (var texture in InternalTextures)
                 texture.Dispose();
 

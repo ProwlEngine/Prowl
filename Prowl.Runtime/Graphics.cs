@@ -1,6 +1,7 @@
-﻿using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.Primitives;
-using System;
+﻿using System;
+using Veldrid;
+using Veldrid.StartupUtilities;
+
 
 namespace Prowl.Runtime
 {
@@ -8,6 +9,11 @@ namespace Prowl.Runtime
     public static class Graphics
     {
         public static GraphicsDevice Device { get; internal set; }
+        
+        public static Swapchain MainSwapchain => Device.MainSwapchain;
+        public static Framebuffer Framebuffer => Device.SwapchainFramebuffer;
+        public static ResourceFactory ResourceFactory => ResourceFactory;
+
 
         public static Vector2 Resolution;
         public static Matrix4x4 MatView;
@@ -26,32 +32,23 @@ namespace Prowl.Runtime
         private static Material defaultMat;
         internal static Vector2Int FrameBufferSize;
 
-#warning TODO: Move these to a separate class "GraphicsCapabilities" and add more
-        public static int MaxTextureSize { get; internal set; }
-        public static int MaxCubeMapTextureSize { get; internal set; }
-        public static int MaxArrayTextureLayers { get; internal set; }
-        public static int MaxFramebufferColorAttachments { get; internal set; }
-
-        public static void Initialize()
-        {
-            //Device = new GLDevice();
-            Device = null;
-            Device.Initialize(true);
+        public static bool VSync {
+            get { return Device.SyncToVerticalBlank; }
+            set { Device.SyncToVerticalBlank = value; }
         }
 
-        public static void Viewport(int width, int height)
+        public static void Initialize(bool VSync = true, GraphicsBackend preferredBackend = GraphicsBackend.OpenGL)
         {
-            Device.Viewport(0, 0, (uint)width, (uint)height);
-            Resolution = new Vector2(width, height);
-        }
+            GraphicsDeviceOptions deviceOptions = new()
+            {
+                SyncToVerticalBlank = VSync,
+                PreferStandardClipSpaceYDirection = true,
+                PreferDepthRangeZeroToOne = true,
+                ResourceBindingModel = ResourceBindingModel.Default,
+                HasMainSwapchain = true,
+            };
 
-        public static void Clear(float r = 0, float g = 0, float b = 0, float a = 1, bool color = true, bool depth = true, bool stencil = true)
-        {
-            ClearFlags flags = 0;
-            if (color) flags |= ClearFlags.Color;
-            if (depth) flags |= ClearFlags.Depth;
-            if (stencil) flags |= ClearFlags.Stencil;
-            Device.Clear(r, g, b, a, flags);
+            Device = VeldridStartup.CreateGraphicsDevice(Screen.InternalWindow, deviceOptions, preferredBackend);
         }
 
         public static void StartFrame()
@@ -59,7 +56,7 @@ namespace Prowl.Runtime
             RenderTexture.UpdatePool();
 
             Clear();
-            Viewport((int)Screen.InternalDevice.SwapchainFramebuffer.Width, (int)Screen.InternalDevice.SwapchainFramebuffer.Height);
+            Viewport((int)Framebuffer.Width, (int)Framebuffer.Height);
             // Set default states
             Device.SetState(new(), true);
         }
@@ -72,7 +69,8 @@ namespace Prowl.Runtime
         public static void DrawMeshNow(Mesh mesh, Matrix4x4 transform, Material material, Matrix4x4? oldTransform = null)
         {
             if (Camera.Current == null) throw new Exception("DrawMeshNow must be called during a rendering context like OnRenderObject()!");
-            if (Graphics.Device.CurrentProgram == null) throw new Exception("Non Program Assigned, Use Material.SetPass first before calling DrawMeshNow!");
+
+            if (Device.CurrentProgram == null) throw new Exception("Non Program Assigned, Use Material.SetPass first before calling DrawMeshNow!");
 
             oldTransform ??= transform;
 
@@ -201,6 +199,32 @@ namespace Prowl.Runtime
                                         ClearFlags.Depth, BlitFilter.Nearest
                                         );
             Device.UnbindFramebuffer();
+
+
+        }
+
+
+        public static void CopyTexture(Texture source, Texture destination)
+        {
+            CommandList commandList = ResourceFactory.CreateCommandList();
+
+            commandList.Begin();
+            commandList.CopyTexture(source.InternalTexture, destination.InternalTexture);
+            commandList.End();
+
+            Device.SubmitCommands(commandList);
+        }
+
+
+        public static void CopyTexture(Texture source, Texture destination, uint mipLevel, uint arrayLayer)
+        {
+            CommandList commandList = ResourceFactory.CreateCommandList();
+
+            commandList.Begin();
+            commandList.CopyTexture(source.InternalTexture, destination.InternalTexture, mipLevel, arrayLayer);
+            commandList.End();
+
+            Device.SubmitCommands(commandList);
         }
     }
 }
