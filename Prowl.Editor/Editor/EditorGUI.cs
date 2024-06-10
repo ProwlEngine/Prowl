@@ -183,6 +183,15 @@ namespace Prowl.Editor
             using (Property(ID).Enter())
                 return Gui.ActiveGUI.Checkbox(ID + "Val", ref value, -5, 0, out _);
         }
+
+        public static bool Property_String(string ID, ref string value)
+        {
+            using (Property(ID).Enter())
+            {
+                return ActiveGUI.InputField(ID, ref value, 255, InputFieldFlags.NumbersOnly, 0, 0, Size.Percentage(1f), null, null);
+            }
+        }
+
         public static bool Property_Color(string ID, ref Color value)
         {
             using (Property(ID).Layout(LayoutType.Row).ScaleChildren().Enter())
@@ -514,6 +523,11 @@ namespace Prowl.Editor
                     if (fieldValue == null)
                     {
                         ActiveGUI.Draw2D.DrawText(UIDrawList.DefaultFont, "null", 20, Gui.ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Base11, false);
+                        // If field stype is a unmanaged type show a button to create a new default instance
+                        if (fieldType.IsValueType && !fieldType.IsEnum)
+                        {
+                            // TODO: Add button to create new instance
+                        }
                     }
                     else
                     {
@@ -531,6 +545,11 @@ namespace Prowl.Editor
                         {
                             changed |= Property_Bool("Prop" + index, ref bVal);
                             fieldValue = bVal;
+                        }
+                        else if (fieldValue is string strVal)
+                        {
+                            changed |= Property_String("Prop" + index, ref strVal);
+                            fieldValue = strVal;
                         }
                         else if (fieldValue is float fVal)
                         {
@@ -562,10 +581,20 @@ namespace Prowl.Editor
                             changed |= PropertyIntegar("Prop" + index, ref longVal);
                             fieldValue = longVal;
                         }
+                        else if (fieldValue is Vector2 v2Val)
+                        {
+                            changed |= Property_Vector2("Prop" + index, ref v2Val);
+                            fieldValue = v2Val;
+                        }
                         else if (fieldValue is Vector3 v3Val)
                         {
                             changed |= Property_Vector3("Prop" + index, ref v3Val);
                             fieldValue = v3Val;
+                        }
+                        else if (fieldValue is Vector4 v4Val)
+                        {
+                            changed |= Property_Vector4("Prop" + index, ref v4Val);
+                            fieldValue = v4Val;
                         }
                         else if (fieldValue is Enum)
                         {
