@@ -77,7 +77,7 @@ namespace Prowl.Editor
 
             using (gui.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Clip().Enter())
             {
-                //g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.5f, 10, 12);
+                //gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 4);
 
                 var dropInteract = gui.GetInteractable();
                 HandleDrop(null);

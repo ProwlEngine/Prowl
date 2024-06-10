@@ -75,7 +75,7 @@ namespace Prowl.Editor
                 }
             }
 
-            using (gui.Node("Content").ExpandWidth().Padding(5, 10, 10, 10).Enter())
+            using (gui.Node("Content").ExpandWidth().Padding(5, 10, 10, 10).Clip().Enter())
             {
                 if (Selected == null)
                 {

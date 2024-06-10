@@ -39,7 +39,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 gui.Draw2D.DrawText("This GameObject is not editable", gui.CurrentNode.LayoutData.InnerRect);
 
             bool isEnabled = go.enabled;
-            if(gui.Checkbox("IsEnabledChk", ref isEnabled, 0, 0, out _))
+            if (gui.Checkbox("IsEnabledChk", ref isEnabled, 0, 0, out _))
                 go.enabled = isEnabled;
             gui.Tooltip("Is Enabled");
 
@@ -98,10 +98,10 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     }
                 }
             }
-            
-            var height = (GuiStyle.ItemHeight + 5) * (go.IsPrefab ? 2 : 1);
+
+            var height = (GuiStyle.ItemHeight + 5) * (go.IsPrefab ? 2 : 1) + 10;
             var addComponentHeight = 0.0;
-            using (gui.Node("#_InspContent").Top(height).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Enter())
+            using (gui.Node("#_InspContent").Top(height).ExpandWidth(-gui.VScrollBarWidth()).FitContentHeight().Layout(LayoutType.Column).Clip().Enter())
             {
                 addComponentHeight = gui.CurrentNode.LayoutData.Rect.height;
 
@@ -113,8 +113,11 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 // Transform
                 // Header
                 bool opened = gui.GetNodeStorage("#_Opened_TransformH", true);
-                using (gui.Node("#_TransformH").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                float animState = 0;
+                using (gui.Node("#_TransformH").ExpandWidth().Height(GuiStyle.ItemHeight).MarginTop(10).Enter())
                 {
+                    animState = DrawCompHeader(typeof(Transform), opened);
+
                     if (gui.IsNodePressed())
                     {
                         opened = !opened;
@@ -128,10 +131,12 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 }
 
                 // Content
-                if (opened)
+                if (opened || animState > 0)
                 {
-                    using (gui.Node("#_TansformC_").ExpandWidth().Layout(LayoutType.Column).FitContentHeight().Enter())
+                    using (gui.Node("#_TansformC_").ExpandWidth().Layout(LayoutType.Column).Padding(10).FitContentHeight(animState).Enter())
                     {
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.6f, 10, 12);
+
                         var t = go.Transform;
                         using (ActiveGUI.Node("PosParent", 0).ExpandWidth().Height(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
@@ -193,10 +198,11 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 // Draw Components
                 HashSet<int> editorsNeeded = [];
                 List<MonoBehaviour> toDelete = [];
-                foreach (var comp in go.GetComponents<MonoBehaviour>()) {
+                foreach (var comp in go.GetComponents<MonoBehaviour>())
+                {
                     if (comp == null) continue;
                     editorsNeeded.Add(comp.InstanceID);
-                
+
                     if (comp.hideFlags.HasFlag(HideFlags.Hide) || comp.hideFlags.HasFlag(HideFlags.HideAndDontSave) || comp.hideFlags.HasFlag(HideFlags.NotEditable))
                         continue;
 
@@ -206,8 +212,11 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     // Header
                     string openedID = "#_Opened_CompH" + comp.InstanceID;
                     bool compOpened = gui.GetNodeStorage(openedID, true);
+                    float animStateC = 0;
                     using (gui.Node("#_CompH_" + comp.InstanceID).ExpandWidth().Height(GuiStyle.ItemHeight).MarginTop(10).Enter())
                     {
+                        animStateC = DrawCompHeader(cType, compOpened);
+
                         if (gui.IsNodePressed())
                         {
                             compOpened = !compOpened;
@@ -220,7 +229,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         gui.Draw2D.DrawText((compOpened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, 8));
                         gui.Draw2D.DrawText(GetComponentDisplayName(cType), 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, 7));
                         isEnabled = comp.Enabled;
-                        if (gui.Checkbox("IsEnabledChk", ref isEnabled, Offset.Percentage(1f, -25), 0, out var chkNode))
+                        if (gui.Checkbox("IsEnabledChk", ref isEnabled, Offset.Percentage(1f, -30), 0, out var chkNode))
                             comp.Enabled = isEnabled;
                         gui.Tooltip("Is Component Enabled?");
 
@@ -246,10 +255,12 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     }
 
                     // Content
-                    if (compOpened)
+                    if (compOpened || animStateC > 0)
                     {
-                        using (gui.Node("#_CompC_" + comp.InstanceID).ExpandWidth().FitContentHeight().Enter())
+                        using (gui.Node("#_CompC_" + comp.InstanceID).ExpandWidth().FitContentHeight(animStateC).Padding(10).Enter())
                         {
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.6f, 10, 12);
+
                             // Handle Editors for this type if we have any
                             if (compEditors.TryGetValue(comp.InstanceID, out var editor))
                             {
@@ -285,17 +296,17 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         }
                     }
 
-                     //HandleComponentContextMenu(go, comp, ref toDelete);
+                    //HandleComponentContextMenu(go, comp, ref toDelete);
                 }
-                
+
                 // Handle Deletion
                 foreach (var comp in toDelete)
                     go.RemoveComponent(comp);
-                
+
                 // Remove any editors that are no longer needed
                 HandleUnusedEditors(editorsNeeded);
 
-                using (gui.Node("AddCompBtn").ExpandWidth().Height(GuiStyle.ItemHeight).Top(addComponentHeight + 50).IgnoreLayout().Enter())
+                using (gui.Node("AddCompBtn").ExpandWidth().Height(GuiStyle.ItemHeight).MarginTop(50).Enter())
                 {
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Violet : GuiStyle.Indigo, 10);
                     gui.Draw2D.DrawText("Add Component", gui.CurrentNode.LayoutData.InnerRect, GuiStyle.Base11, false);
@@ -320,9 +331,18 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                 //HandleAddComponentButton(go);
 
-
-                gui.ScrollV();
             }
+        }
+
+        private float DrawCompHeader(Type cType, bool compOpened)
+        {
+            float animState = gui.AnimateBool(compOpened, 0.1f, EaseType.Linear);
+            var compColor = GuiStyle.RandomPastelColor(cType.GetHashCode());
+            if (compOpened || animState > 0)
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, compColor, 10, 3);
+            else
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, compColor, 10);
+            return animState;
         }
 
         private static string GetComponentDisplayName(Type cType)
