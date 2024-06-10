@@ -267,7 +267,7 @@ namespace Prowl.Editor
                 if (gui.BeginPopup("WindowManagement", out var node))
                 {
                     var popupHolder = gui.CurrentNode;
-                    using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
+                    using (node.Width(150).Layout(LayoutType.Column).Padding(5).FitContentHeight().Enter())
                     {
                         bool closePopup = false;
                         if (EditorGUI.StyledButton("Duplicate"))

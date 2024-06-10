@@ -288,7 +288,7 @@ public static class Project
 
 
         BoundedLog($"Preparing projecte settings scene...");
-#warning TODO: Untested, Just slapped togather for now as I have othr things to do that are more important
+#warning TODO: Untested, Just slapped togather for now as I have other things to do that are more important
         // Find all ScriptableSingletons with the specified location
         foreach (var type in RuntimeUtils.GetTypesWithAttribute<FilePathAttribute>())
             if (Attribute.GetCustomAttribute(type, typeof(FilePathAttribute)) is FilePathAttribute attribute)

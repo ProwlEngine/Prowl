@@ -236,7 +236,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         var popupHolder = gui.CurrentNode;
                         if (gui.BeginPopup("RightClickComp", out var node))
                         {
-                            using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
+                            using (node.Width(150).Layout(LayoutType.Column).Padding(5).FitContentHeight().Enter())
                             {
                                 var instanceID = gui.GetGlobalStorage<int>("RightClickComp");
                                 //if(instanceID == comp.InstanceID)
@@ -306,7 +306,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     var popupHolder = gui.CurrentNode;
                     if (gui.BeginPopup("AddComponentPopup", out var node))
                     {
-                        using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
+                        using (node.Width(150).Layout(LayoutType.Column).Padding(5).FitContentHeight().Enter())
                         {
                             gui.Search("##searchBox", ref _searchText, 0, 0, Size.Percentage(1f));
 
@@ -391,7 +391,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                     if (Gui.ActiveGUI.BeginPopup(item.Name + "Popup", out var node))
                     {
-                        using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
+                        using (node.Width(150).Layout(LayoutType.Column).Padding(5).FitContentHeight().Enter())
                         {
                             DrawMenuItems(item, go);
                         }
