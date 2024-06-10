@@ -1,10 +1,13 @@
 ﻿using ImageMagick;
 using Prowl.Editor.Assets;
+using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Utils;
+using System.ComponentModel;
 using System.Reflection;
+using static Assimp.Metadata;
 using static Prowl.Editor.EditorGUI;
 using static Prowl.Runtime.GUI.Gui;
 
@@ -47,7 +50,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             style.BorderThickness = 1f;
             string name = go.Name;
             if (gui.InputField("NameInput", ref name, 32, InputFieldFlags.None, GuiStyle.ItemHeight, 0, Size.Percentage(1f, -(GuiStyle.ItemHeight * 3)), GuiStyle.ItemHeight, style))
-                go.Name = go.Name.Trim();
+                go.Name = name.Trim();
 
             var invisStyle = new GuiStyle { WidgetColor = new Color(0, 0, 0, 0), Border = new Color(0, 0, 0, 0) };
             gui.Combo("#_TagID", "#_TagPopupID", ref go.tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(GuiStyle.ItemHeight * 2)), 0, GuiStyle.ItemHeight, GuiStyle.ItemHeight, invisStyle, FontAwesome6.Tag);
@@ -97,8 +100,10 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             }
             
             var height = (GuiStyle.ItemHeight + 5) * (go.IsPrefab ? 2 : 1);
+            var addComponentHeight = 0.0;
             using (gui.Node("#_InspContent").Top(height).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Enter())
             {
+                addComponentHeight = gui.CurrentNode.LayoutData.Rect.height;
 
                 // Transform
                 // Header
@@ -215,6 +220,23 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         DragnDrop.Drag(comp, cType);
 
                         // TODO: Context Menu
+                        if (gui.IsPointerClick(Silk.NET.Input.MouseButton.Right) && gui.IsNodeHovered())
+                        {
+                            // Popup holder is our parent, since thats the Tree node
+                            gui.OpenPopup("RightClickComp", null, gui.CurrentNode.Parent);
+                            gui.SetGlobalStorage("RightClickComp", comp.InstanceID);
+                        }
+
+                        var popupHolder = gui.CurrentNode;
+                        if (gui.BeginPopup("RightClickComp", out var node))
+                        {
+                            using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
+                            {
+                                var instanceID = gui.GetGlobalStorage<int>("RightClickComp");
+                                //if(instanceID == comp.InstanceID)
+                                //    DrawContextMenu(go, popupHolder);
+                            }
+                        }
                     }
 
                     // Content
@@ -250,42 +272,14 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                             if (EditorGUI.PropertyGrid("CompPropertyGrid", ref compRef, TargetFields.Serializable, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground))
                                 comp.OnValidate();
 
-                            // Draw any Buttons
+                            // Draw any Buttons - these should be in PropertyGrid probably
                             //EditorGui.HandleAttributeButtons(comp);
 
                             EndComponent:;
                         }
                     }
 
-                    //    HandleComponentContextMenu(go, comp, ref toDelete);
-                    //
-                    //    ImGui.Indent();
-                    //    if (compEditors.TryGetValue(comp.InstanceID, out var editor)) {
-                    //        editor.OnInspectorGUI();
-                    //        goto EndComponent;
-                    //    } else {
-                    //        var editorType = CustomEditorAttribute.GetEditor(cType);
-                    //        if (editorType != null) {
-                    //            editor = Activator.CreateInstance(editorType) as ScriptedEditor;
-                    //            if (editor != null) {
-                    //                compEditors[comp.InstanceID] = editor;
-                    //                editor.target = comp;
-                    //                editor.OnEnable();
-                    //                editor.OnInspectorGUI();
-                    //                goto EndComponent;
-                    //            }
-                    //        }
-                    //    }
-                    //
-                    //    foreach (var field in RuntimeUtils.GetSerializableFields(comp))
-                    //        if (OldPropertyDrawer.Draw(comp, field))
-                    //            comp.OnValidate();
-                    //    ImGui.Unindent();
-                    //
-                    //    // Draw any Buttons
-                    //    EditorGui.HandleAttributeButtons(comp);
-                    //
-                    //EndComponent:;
+                     //HandleComponentContextMenu(go, comp, ref toDelete);
                 }
                 
                 // Handle Deletion
@@ -294,9 +288,34 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 
                 // Remove any editors that are no longer needed
                 HandleUnusedEditors(editorsNeeded);
-                
+
+                using (gui.Node("AddCompBtn").ExpandWidth().Height(GuiStyle.ItemHeight).Top(addComponentHeight + 50).IgnoreLayout().Enter())
+                {
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Violet : GuiStyle.Indigo, 10);
+                    gui.Draw2D.DrawText("Add Component", gui.CurrentNode.LayoutData.InnerRect, GuiStyle.Base11, false);
+
+                    if (gui.IsNodePressed())
+                        gui.OpenPopup("AddComponentPopup", null, gui.CurrentNode);
+
+                    var popupHolder = gui.CurrentNode;
+                    if (gui.BeginPopup("AddComponentPopup", out var node))
+                    {
+                        using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
+                        {
+                            gui.Search("##searchBox", ref _searchText, 0, 0, Size.Percentage(1f));
+
+                            EditorGUI.Separator();
+
+                            rootMenuItem ??= GetAddComponentMenuItems();
+                            DrawMenuItems(rootMenuItem, go);
+                        }
+                    }
+                }
+
                 //HandleAddComponentButton(go);
 
+
+                gui.ScrollV();
             }
         }
 
@@ -317,28 +336,6 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
         #region Add Component Popup
 
-        //private void HandleAddComponentButton(GameObject? go)
-        //{
-        //    if (ImGui.Button("Add Component", new System.Numerics.Vector2(ImGui.GetWindowWidth() - 15f, 25f)))
-        //        ImGui.OpenPopup("AddComponentContextMenu");
-        //
-        //    ImGui.PushStyleColor(ImGuiCol.PopupBg, new System.Numerics.Vector4(0.1f, 0.1f, 0.1f, 0.6f));
-        //    ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new System.Numerics.Vector2(6, 6));
-        //    if (ImGui.BeginPopup("AddComponentContextMenu")) {
-        //        GUIHelper.SearchOld("##searchBox", ref _searchText, ImGui.GetContentRegionAvail().X);
-        //
-        //        ImGui.Separator();
-        //
-        //        rootMenuItem ??= GetAddComponentMenuItems();
-        //
-        //        DrawMenuItems(rootMenuItem, go);
-        //
-        //        ImGui.EndPopup();
-        //    }
-        //    ImGui.PopStyleColor();
-        //    ImGui.PopStyleVar();
-        //}
-        //
         //private static void HandleComponentContextMenu(GameObject? go, MonoBehaviour comp, ref List<MonoBehaviour> toDelete)
         //{
         //    if (ImGui.BeginPopupContextItem()) {
@@ -352,118 +349,135 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
         //        ImGui.EndPopup();
         //    }
         //}
-        //
-        //private void DrawMenuItems(MenuItemInfo menuItem, GameObject go)
-        //{
-        //    bool foundName = false;
-        //    bool hasSearch = string.IsNullOrEmpty(_searchText) == false;
-        //    foreach (var item in menuItem.Children) {
-        //        if (hasSearch && (item.Name.Contains(_searchText, StringComparison.CurrentCultureIgnoreCase) == false || item.Type == null)) {
-        //            DrawMenuItems(item, go);
-        //            if (hasSearch && item.Name.Equals(_searchText, StringComparison.CurrentCultureIgnoreCase))
-        //                foundName = true;
-        //            continue;
-        //        }
-        //
-        //        if (item.Type != null) {
-        //            if (ImGui.MenuItem(item.Name))
-        //            {
-        //                go.AddComponent(item.Type).OnValidate();
-        //            }
-        //        } else {
-        //            if (ImGui.BeginMenu(item.Name, true)) {
-        //                DrawMenuItems(item, go);
-        //                ImGui.EndMenu();
-        //            }
-        //        }
-        //    }
-        //
-        //    if (PlayMode.Current != PlayMode.Mode.Editing) return; // Cannot create scripts during playmode
-        //     
-        //    // is first and found no component and were searching, lets create a new script
-        //    if (hasSearch && !foundName && menuItem == rootMenuItem)
-        //    {
-        //        if (ImGui.MenuItem("Create Script " + _searchText))
-        //        {
-        //            FileInfo file = new FileInfo(Project.ProjectAssetDirectory + $"/{_searchText}.cs");
-        //            if (File.Exists(file.FullName))
-        //                return;
-        //            using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
-        //            using StreamReader reader = new StreamReader(stream);
-        //            string script = reader.ReadToEnd();
-        //            script = script.Replace("%SCRIPTNAME%", EditorUtils.FilterAlpha(_searchText));
-        //            File.WriteAllText(file.FullName, script);
-        //            AssetDatabase.Ping(file);
-        //            // Trigger an update so the script get imported which will recompile all scripts
-        //            AssetDatabase.Update();
-        //
-        //            Type? type = Type.GetType($"{EditorUtils.FilterAlpha(_searchText)}, CSharp, Version=1.0.0.0, Culture=neutral");
-        //            if(type != null && type.IsAssignableTo(typeof(MonoBehaviour)))
-        //                go.AddComponent(type).OnValidate();
-        //            ImGui.EndMenu();
-        //        }
-        //    }
-        //}
-        //
-        //private MenuItemInfo GetAddComponentMenuItems()
-        //{
-        //    var componentTypes = AppDomain.CurrentDomain.GetAssemblies()
-        //        .SelectMany(assembly => assembly.GetTypes())
-        //        .Where(type => type.IsSubclassOf(typeof(MonoBehaviour)) && !type.IsAbstract)
-        //        .ToArray();
-        //
-        //    var items = componentTypes.Select(type => {
-        //        string Name = type.Name;
-        //        var addToMenuAttribute = type.GetCustomAttribute<AddComponentMenuAttribute>();
-        //        if (addToMenuAttribute != null)
-        //            Name = addToMenuAttribute.Path;
-        //        return (Name, type);
-        //    }).ToArray();
-        //
-        //
-        //    // Create a root MenuItemInfo object to serve as the starting point of the tree
-        //    MenuItemInfo root = new MenuItemInfo { Name = "Root" };
-        //
-        //    foreach (var (path, type) in items) {
-        //        string[] parts = path.Split('/');
-        //
-        //        // If first part is 'Hidden' then skip this component
-        //        if (parts[0] == "Hidden") continue;
-        //
-        //        MenuItemInfo currentNode = root;
-        //
-        //        for (int i = 0; i < parts.Length - 1; i++)  // Skip the last part
-        //        {
-        //            string part = parts[i];
-        //            MenuItemInfo childNode = currentNode.Children.Find(c => c.Name == part);
-        //
-        //            if (childNode == null) {
-        //                childNode = new MenuItemInfo { Name = part };
-        //                currentNode.Children.Add(childNode);
-        //            }
-        //
-        //            currentNode = childNode;
-        //        }
-        //
-        //        MenuItemInfo leafNode = new MenuItemInfo {
-        //            Name = parts[^1],  // Get the last part
-        //            Type = type
-        //        };
-        //
-        //        currentNode.Children.Add(leafNode);
-        //    }
-        //
-        //    SortChildren(root);
-        //    return root;
-        //}
-        //
-        //private void SortChildren(MenuItemInfo node)
-        //{
-        //    node.Children.Sort((x, y) => x.Type == null ? -1 : 1);
-        //
-        //    foreach (var child in node.Children)
-        //        SortChildren(child);
-        //}
+        
+        private void DrawMenuItems(MenuItemInfo menuItem, GameObject go)
+        {
+            bool foundName = false;
+            bool hasSearch = string.IsNullOrEmpty(_searchText) == false;
+            foreach (var item in menuItem.Children) {
+                if (hasSearch && (item.Name.Contains(_searchText, StringComparison.CurrentCultureIgnoreCase) == false || item.Type == null)) {
+                    DrawMenuItems(item, go);
+                    if (hasSearch && item.Name.Equals(_searchText, StringComparison.CurrentCultureIgnoreCase))
+                        foundName = true;
+                    continue;
+                }
+        
+                if (item.Type != null) 
+                {
+
+                    if (EditorGUI.StyledButton(item.Name))
+                        go.AddComponent(item.Type).OnValidate();
+
+                } else {
+
+                    if (EditorGUI.StyledButton(item.Name))
+                        Gui.ActiveGUI.OpenPopup(item.Name + "Popup", Gui.ActiveGUI.PreviousNode.LayoutData.Rect.TopRight);
+
+                    // Enter the Button's Node
+                    using (Gui.ActiveGUI.PreviousNode.Enter())
+                    {
+                        // Draw a > to indicate a popup
+                        Rect rect = Gui.ActiveGUI.CurrentNode.LayoutData.Rect;
+                        rect.x = rect.x + rect.width - 25;
+                        rect.width = 20;
+                        Gui.ActiveGUI.Draw2D.DrawText(FontAwesome6.ChevronRight, rect, Color.white);
+                    }
+
+                    if (Gui.ActiveGUI.BeginPopup(item.Name + "Popup", out var node))
+                    {
+                        using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
+                        {
+                            DrawMenuItems(item, go);
+                        }
+                    }
+                }
+            }
+        
+            if (PlayMode.Current != PlayMode.Mode.Editing) return; // Cannot create scripts during playmode
+             
+            // is first and found no component and were searching, lets create a new script
+            if (hasSearch && !foundName && menuItem == rootMenuItem)
+            {
+                if (EditorGUI.StyledButton("Create Script " + _searchText))
+                {
+                    FileInfo file = new FileInfo(Project.ProjectAssetDirectory + $"/{_searchText}.cs");
+                    if (File.Exists(file.FullName))
+                        return;
+                    using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
+                    using StreamReader reader = new StreamReader(stream);
+                    string script = reader.ReadToEnd();
+                    script = script.Replace("%SCRIPTNAME%", EditorUtils.FilterAlpha(_searchText));
+                    File.WriteAllText(file.FullName, script);
+                    AssetDatabase.Ping(file);
+                    // Trigger an update so the script get imported which will recompile all scripts
+                    AssetDatabase.Update();
+        
+                    Type? type = Type.GetType($"{EditorUtils.FilterAlpha(_searchText)}, CSharp, Version=1.0.0.0, Culture=neutral");
+                    if(type != null && type.IsAssignableTo(typeof(MonoBehaviour)))
+                        go.AddComponent(type).OnValidate();
+                }
+            }
+        }
+        
+        private MenuItemInfo GetAddComponentMenuItems()
+        {
+            var componentTypes = AppDomain.CurrentDomain.GetAssemblies()
+                .SelectMany(assembly => assembly.GetTypes())
+                .Where(type => type.IsSubclassOf(typeof(MonoBehaviour)) && !type.IsAbstract)
+                .ToArray();
+        
+            var items = componentTypes.Select(type => {
+                string Name = type.Name;
+                var addToMenuAttribute = type.GetCustomAttribute<AddComponentMenuAttribute>();
+                if (addToMenuAttribute != null)
+                    Name = addToMenuAttribute.Path;
+                return (Name, type);
+            }).ToArray();
+        
+        
+            // Create a root MenuItemInfo object to serve as the starting point of the tree
+            MenuItemInfo root = new MenuItemInfo { Name = "Root" };
+        
+            foreach (var (path, type) in items) {
+                string[] parts = path.Split('/');
+        
+                // If first part is 'Hidden' then skip this component
+                if (parts[0] == "Hidden") continue;
+        
+                MenuItemInfo currentNode = root;
+        
+                for (int i = 0; i < parts.Length - 1; i++)  // Skip the last part
+                {
+                    string part = parts[i];
+                    MenuItemInfo childNode = currentNode.Children.Find(c => c.Name == part);
+        
+                    if (childNode == null) {
+                        childNode = new MenuItemInfo { Name = part };
+                        currentNode.Children.Add(childNode);
+                    }
+        
+                    currentNode = childNode;
+                }
+        
+                MenuItemInfo leafNode = new MenuItemInfo {
+                    Name = parts[^1],  // Get the last part
+                    Type = type
+                };
+        
+                currentNode.Children.Add(leafNode);
+            }
+        
+            SortChildren(root);
+            return root;
+        }
+        
+        private void SortChildren(MenuItemInfo node)
+        {
+            node.Children.Sort((x, y) => x.Type == null ? -1 : 1);
+        
+            foreach (var child in node.Children)
+                SortChildren(child);
+        }
         
         private class MenuItemInfo
         {
