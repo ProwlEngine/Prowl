@@ -2,6 +2,7 @@
 
 public class LayerMask
 {
+    [SerializeField]
     private uint mask = 0;
 
     public bool Intersects(LayerMask other) => HasLayer(other.mask);
