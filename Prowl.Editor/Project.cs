@@ -353,6 +353,9 @@ public static class Project
         Assembly gameEditorAssembly = loadedAssemblies.FirstOrDefault(assembly => assembly.GetName().Name == "Prowl.Editor") 
             ?? throw new Exception("Failed to find Prowl.Editor Assembly!");
 
+        // Get all references by Prowl.Runtime
+        var references = gameEngineAssembly.GetReferencedAssemblies().Select(Assembly.Load).ToList();
+
         Runtime.Debug.Log($"Updating {Assembly_Proj}...");
 
         IEnumerable<string> nonEditorScripts = Directory.GetFiles(ProjectAssetDirectory, "*.cs", SearchOption.AllDirectories)
@@ -372,6 +375,12 @@ public static class Project
                 <OutputPath>$(ProjectRoot)/Builds/Latest/</OutputPath>
             </PropertyGroup>";
 
+        string referencesXML = string.Join("\n", references.Select(assembly => 
+                $"<Reference Include=\"{assembly.GetName().Name}\">" +
+                    $"<HintPath>{assembly.Location}</HintPath>" +
+                    "<Private>false</Private>" +
+                "</Reference>"));
+
         string gameproj = 
             @$"<Project Sdk=""Microsoft.NET.Sdk"">
                 {propertyGroupTemplate}
@@ -383,6 +392,7 @@ public static class Project
                         <HintPath>{gameEngineAssembly.Location}</HintPath>
                         <Private>false</Private>
                     </Reference>
+                    {referencesXML}
                 </ItemGroup>
             </Project>";
 
