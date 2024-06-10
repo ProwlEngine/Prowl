@@ -110,9 +110,9 @@ public static class EditorGuiManager
                                 m_DragPos = cursorPos;
                                 DragSplitter = node;
                                 if (DragSplitter.Type == DockNode.NodeType.SplitVertical)
-                                    m_StartSplitPos = Mathf.Lerp(DragSplitter.Mins.x, DragSplitter.Maxs.x, DragSplitter.SplitDistance);
+                                    m_StartSplitPos = MathD.Lerp(DragSplitter.Mins.x, DragSplitter.Maxs.x, DragSplitter.SplitDistance);
                                 else
-                                    m_StartSplitPos = Mathf.Lerp(DragSplitter.Mins.y, DragSplitter.Maxs.y, DragSplitter.SplitDistance);
+                                    m_StartSplitPos = MathD.Lerp(DragSplitter.Mins.y, DragSplitter.Maxs.y, DragSplitter.SplitDistance);
                             }
                         }
                     }

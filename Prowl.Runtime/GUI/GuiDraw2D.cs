@@ -167,7 +167,7 @@ namespace Prowl.Runtime.GUI
             var pos = new Vector2(rect.x, rect.y);
             var wrap = rect.width;
             var textSize = font.CalcTextSize(text, fontSize, 0, (float)(dowrap ? wrap : -1));
-            pos.x += Mathf.Max((rect.width - textSize.x) * 0.5f, 0.0);
+            pos.x += MathD.Max((rect.width - textSize.x) * 0.5f, 0.0);
             pos.y += (rect.height - (textSize.y * 0.75f)) * 0.5f;
             DrawText(font, text, fontSize, pos, color, dowrap ? wrap : 0, doclip ? rect : null);
         }

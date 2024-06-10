@@ -47,8 +47,8 @@ namespace Prowl.Runtime.GUI
             if (!hasViewport) throw new InvalidOperationException("No viewport set.");
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");
 
-            var startRad = startAngle * Mathf.Deg2Rad;
-            var endRad = endAngle * Mathf.Deg2Rad;
+            var startRad = startAngle * MathD.Deg2Rad;
+            var endRad = endAngle * MathD.Deg2Rad;
             var points = ArcPoints(radius, startRad, endRad);
             if (points.Count <= 0) return;
 
@@ -151,8 +151,8 @@ namespace Prowl.Runtime.GUI
             if (!hasViewport) throw new InvalidOperationException("No viewport set.");
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");
 
-            var startRad = startAngle * Mathf.Deg2Rad;
-            var endRad = endAngle * Mathf.Deg2Rad;
+            var startRad = startAngle * MathD.Deg2Rad;
+            var endRad = endAngle * MathD.Deg2Rad;
 
             double angleDelta = endRad - startRad;
             int stepCount = Steps(Math.Abs(angleDelta));

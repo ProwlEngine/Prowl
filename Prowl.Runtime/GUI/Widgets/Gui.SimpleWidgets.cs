@@ -54,7 +54,7 @@ namespace Prowl.Runtime.GUI
                             layoutDirty = true;
                         }
 
-                        n.VScroll = Mathf.Clamp(n.VScroll, 0, overflowHeight);
+                        n.VScroll = MathD.Clamp(n.VScroll, 0, overflowHeight);
                     }
                     else if (n.VScroll != 0)
                     {

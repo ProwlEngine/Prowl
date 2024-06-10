@@ -6,8 +6,7 @@ namespace Prowl.Runtime
 {
     // Some of these methods are taken from Freya Holmér's Mathfs class (https://github.com/FreyaHolmer/Mathfs)
 
-    // This class is called Mathf to be consistent with Unity's naming conventions but its actually MathD as it uses doubles instead of doubles
-    public static class Mathf
+    public static class MathD
     {
         private const MethodImplOptions IN = MethodImplOptions.AggressiveInlining;
 
@@ -193,7 +192,7 @@ namespace Prowl.Runtime
 
         [MethodImpl(IN)] public static int ComputeMipLevels(int width, int height) => (int)Math.Log2(Math.Max(width, height));
 
-        [MethodImpl(IN)] public static bool ApproximatelyEquals(double a, double b) => Mathf.Abs(a - b) < 0.00001f;
+        [MethodImpl(IN)] public static bool ApproximatelyEquals(double a, double b) => MathD.Abs(a - b) < 0.00001f;
         [MethodImpl(IN)] public static bool ApproximatelyEquals(Vector2 a, Vector2 b) => ApproximatelyEquals(a.x, b.x) && ApproximatelyEquals(a.y, b.y);
         [MethodImpl(IN)] public static bool ApproximatelyEquals(Vector3 a, Vector3 b) => ApproximatelyEquals(a.x, b.x) && ApproximatelyEquals(a.y, b.y) && ApproximatelyEquals(a.z, b.z);
         [MethodImpl(IN)] public static bool ApproximatelyEquals(Vector4 a, Vector4 b) => ApproximatelyEquals(a.x, b.x) && ApproximatelyEquals(a.y, b.y) && ApproximatelyEquals(a.z, b.z) && ApproximatelyEquals(a.w, b.w);

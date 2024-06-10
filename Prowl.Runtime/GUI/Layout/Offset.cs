@@ -39,7 +39,7 @@ namespace Prowl.Runtime.GUI
             {
                 Offset a = new(Value, PixelOffset, Type);
                 Offset b = new(_lerpValue, _lerpPixelOffset, _lerpType);
-                return Mathf.Lerp(a.ToPixels(parentValue), b.ToPixels(parentValue), _lerpTime);
+                return MathD.Lerp(a.ToPixels(parentValue), b.ToPixels(parentValue), _lerpTime);
             }
             else if (Type == LayoutValueType.Percent)
                 return (Value * parentValue) + PixelOffset;
