@@ -87,10 +87,10 @@ namespace Prowl.Runtime
         public double Right => Max.x;
         public double Top => Min.y;
         public double Bottom => Max.y;
-        public readonly Vector2 TopLeft => new(Left, Top);
-        public readonly Vector2 TopRight => new(Right, Top);
-        public readonly Vector2 BottomLeft => new(Left, Bottom);
-        public readonly Vector2 BottomRight => new(Right, Bottom);
+        public Vector2 TopLeft => new(Left, Top);
+        public Vector2 TopRight => new(Right, Top);
+        public Vector2 BottomLeft => new(Left, Bottom);
+        public Vector2 BottomRight => new(Right, Bottom);
 
         public Rect(Vector2 position, Vector2 scale)
         {
@@ -181,7 +181,7 @@ namespace Prowl.Runtime
         public static bool operator ==(Rect a, Rect b) => a.Min == b.Min && a.Max == b.Max;
         public static bool operator !=(Rect a, Rect b) => a.Min != b.Min || a.Max != b.Max;
 
-        public override bool Equals(object obj) => obj is Rect r && r == this;
+        public override bool Equals(object? obj) => obj is Rect r && r == this;
         public override int GetHashCode() => Min.GetHashCode() ^ Max.GetHashCode();
     }
 }
