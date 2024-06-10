@@ -148,9 +148,6 @@ namespace Prowl.Editor
                 var dropInteract = gui.GetInteractable();
                 //HandleDrop();
 
-                if (!SelectHandler.SelectedThisFrame && dropInteract.TakeFocus())
-                    SelectHandler.Clear();
-
                 //if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
                 //    DuplicateSelected();
 
@@ -185,6 +182,10 @@ namespace Prowl.Editor
                     RenderRootFolder(false, AssetDatabase.GetRootFolders()[0], GuiStyle.Red); // Defaults Folder
                     RenderRootFolder(false, AssetDatabase.GetRootFolders()[1], GuiStyle.Red); // Packages Folder
                 }
+
+                if (!SelectHandler.SelectedThisFrame && dropInteract.TakeFocus())
+                    SelectHandler.Clear();
+
 
                 gui.ScrollV();
             }
@@ -337,6 +338,15 @@ namespace Prowl.Editor
                 else if (interact.IsHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
+                if (DragnDrop.Drop<FileSystemInfo>(out var systeminfo))
+                {
+                    string target = RuntimeUtils.GetUniquePath(Path.Combine(root.FullName, systeminfo.Name));
+                    if (systeminfo is FileInfo fileinfo)
+                        fileinfo?.MoveTo(target);
+                    else if (systeminfo is DirectoryInfo dirinfo)
+                        dirinfo?.MoveTo(target);
+                }
+
                 expanded = gui.GetNodeStorage<bool>(root.FullName, defaultOpen);
                 using (gui.Node("ExpandBtn").TopLeft(5, 0).Scale(GuiStyle.ItemHeight).Enter())
                 {
@@ -384,6 +394,20 @@ namespace Prowl.Editor
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
                     else if (interact.IsHovered())
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+
+                    DragnDrop.Drag(subDirectory);
+
+                    if (subDirectory.Exists)
+                    {
+                        if (DragnDrop.Drop<FileSystemInfo>(out var systeminfo))
+                        {
+                            string target = RuntimeUtils.GetUniquePath(Path.Combine(subDirectory.FullName, systeminfo.Name));
+                            if(systeminfo is FileInfo fileinfo)
+                                fileinfo?.MoveTo(target);
+                            else if(systeminfo is DirectoryInfo dirinfo)
+                                dirinfo?.MoveTo(target);
+                        }
+                    }
 
                     expanded = gui.GetStorage<bool>(gui.CurrentNode.Parent, subDirectory.FullName, false);
                     using (gui.Node("ExpandBtn").TopLeft(5, 0).Scale(GuiStyle.ItemHeight).Enter())
@@ -526,7 +550,7 @@ namespace Prowl.Editor
 
             if(index != -1)
                 SelectHandler.AddSelectableAtIndex(index, entry);
-            if (interact.TakeFocus())
+            if (interact.TakeFocus(true))
                 SelectHandler.Select(index, entry);
 
             if (isAsset && interact.IsHovered() && Gui.ActiveGUI.IsPointerDoubleClick(Veldrid.MouseButton.Left))

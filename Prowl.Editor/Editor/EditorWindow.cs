@@ -35,6 +35,9 @@ namespace Prowl.Editor
         public Vector2 DockPosition;
         public Vector2 DockSize;
 
+        public double MinZ = double.MaxValue;
+        public double MaxZ = double.MinValue;
+
         public bool IsDocked => m_Leaf != null;
         private DockNode m_Leaf;
         private Vector2 m_DockPosition;
@@ -61,6 +64,8 @@ namespace Prowl.Editor
 
         public void ProcessFrame()
         {
+            MinZ = gui.GetCurrentInteractableZLayer();
+
             try
             {
                 Update();
@@ -247,6 +252,8 @@ namespace Prowl.Editor
             {
                 Runtime.Debug.LogError("Error in EditorWindow: " + e.Message + "\n" + e.StackTrace);
             }
+
+            MaxZ = gui.GetCurrentInteractableZLayer();
         }
 
         private void DrawWindowManagementButton()

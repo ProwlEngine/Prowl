@@ -106,7 +106,7 @@ namespace Prowl.Editor
                 {
                     if (!cantGoUp && gui.IsNodePressed())
                         CurDirectory = CurDirectory.Parent!;
-                    gui.Draw2D.DrawText(FontAwesome6.ArrowUp, 30, gui.CurrentNode.LayoutData.Rect, cantGoUp ? GuiStyle.Base4 : (gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base5));
+                    gui.Draw2D.DrawText(FontAwesome6.ArrowUp, 30, gui.CurrentNode.LayoutData.Rect, cantGoUp ? GuiStyle.Base4 : (gui.IsNodeHovered() ? GuiStyle.Base11 * 0.8f : GuiStyle.Base11));
                 }
 
                 if (gui.Search("SearchInput", ref _searchText, itemHeight + itemPadding, 0, 200, itemHeight))
@@ -257,6 +257,20 @@ namespace Prowl.Editor
                     if (interact.IsHovered() && gui.IsPointerDoubleClick(Veldrid.MouseButton.Left))
                     {
                         CurDirectory = new DirectoryInfo(entry.FullName);
+                    }
+
+                    DragnDrop.Drag(entry);
+
+                    if (dir.Exists)
+                    {
+                        if (DragnDrop.Drop<FileSystemInfo>(out var systeminfo))
+                        {
+                            string target = RuntimeUtils.GetUniquePath(Path.Combine(dir.FullName, systeminfo.Name));
+                            if (systeminfo is FileInfo fileinfo)
+                                fileinfo?.MoveTo(target);
+                            else if (systeminfo is DirectoryInfo dirinfo)
+                                dirinfo?.MoveTo(target);
+                        }
                     }
 
                     DrawFileEntry(index++, entry, interact);

@@ -1,4 +1,5 @@
 ﻿using System;
+using static Prowl.Runtime.GUI.ScaleSubGizmo;
 using static Prowl.Runtime.GUI.TransformGizmo;
 
 namespace Prowl.Runtime.GUI
@@ -315,6 +316,7 @@ namespace Prowl.Runtime.GUI
             public double StartDelta;
             public Vector3 StartScale;
             public Vector3 Scale;
+            public Vector3 ScaleDelta;
         }
     
         private ScaleParams _params;
@@ -336,11 +338,25 @@ namespace Prowl.Runtime.GUI
     
         public bool Pick(Ray ray, Vector2 screenPos, out double t)
         {
+            if (_params.Mode == TransformGizmoMode.ScaleUniform)
+            {
+                // If were scale Uniform and Translate view exists
+                if (_gizmo.mode.HasFlag(TransformGizmoMode.TranslateView))
+                {
+                    // then we only show if ctrl is pressed
+                    if (!_gizmo._gui.IsKeyDown(Silk.NET.Input.Key.ShiftLeft))
+                    {
+                        t = double.NaN;
+                        return false;
+                    }
+                }
+            }
+
             var pickResult = PickResult.None;
             switch (_params.TransformKind)
             {
                 case TransformKind.Plane when _params.Direction == GizmoDirection.View:
-                    pickResult = GizmoUtils.PickCircle(_gizmo, ray, GizmoUtils.OuterCircleRadius(_gizmo), false);
+                    pickResult = GizmoUtils.PickCircle(_gizmo, ray, GizmoUtils.InnerCircleRadius(_gizmo), true);
                     break;
                 case TransformKind.Plane:
                     pickResult = GizmoUtils.PickPlane(_gizmo, ray, _params.Direction);
@@ -354,6 +370,7 @@ namespace Prowl.Runtime.GUI
             _state.StartDelta = startDelta.HasValue ? startDelta.Value : 0;
             _state.StartScale = _gizmo.Scale;
             _state.Scale = Vector3.one;
+            _state.ScaleDelta = Vector3.one;
 
             t = pickResult.T;
             return pickResult.Picked;
@@ -393,14 +410,26 @@ namespace Prowl.Runtime.GUI
             }
     
             var scale = Vector3.one + (direction * delta.Value);
+            _state.ScaleDelta = Vector3.one + (scale - _state.Scale);
             _state.Scale = scale;
 
     
-            return new GizmoResult { Scale = scale, StartScale = _state.StartScale };
+            return new GizmoResult { Scale = scale, StartScale = _state.StartScale, ScaleDelta = _state.ScaleDelta };
         }
 
         public void Draw()
         {
+            if (_params.Mode == TransformGizmoMode.ScaleUniform)
+            {
+                // If were scale Uniform and Translate view exists
+                if (_gizmo.mode.HasFlag(TransformGizmoMode.TranslateView))
+                {
+                    // then we only show if ctrl is pressed
+                    if (!_gizmo._gui.IsKeyDown(Silk.NET.Input.Key.ShiftLeft))
+                        return;
+                }
+            }
+
             Matrix4x4 transform = Matrix4x4.CreateTranslation(_gizmo.Translation);
             switch (_params.TransformKind)
             {
@@ -408,7 +437,7 @@ namespace Prowl.Runtime.GUI
                     GizmoUtils.DrawArrow(_gizmo, focused, transform, _params.Direction, _params.Mode);//, Vector3.Dot(_state.Scale, GizmoUtils.GizmoNormal(_gizmo, _params.Direction)));
                     break;
                 case TransformKind.Plane when _params.Direction == GizmoDirection.View:
-                    GizmoUtils.DrawCircle(_gizmo, focused, transform);
+                    GizmoUtils.DrawQuad(_gizmo, focused, transform);
                     break;
                 case TransformKind.Plane:
                     GizmoUtils.DrawPlane(_gizmo, focused, transform, _params.Direction);
@@ -459,6 +488,20 @@ namespace Prowl.Runtime.GUI
 
         public bool Pick(Ray ray, Vector2 screenPos, out double t)
         {
+            if (_params.Mode == TransformGizmoMode.TranslateView)
+            {
+                // If were TranslateView and scale Uniform exists
+                if (_gizmo.mode.HasFlag(TransformGizmoMode.ScaleUniform))
+                {
+                    // then we only show if ctrl is notpressed
+                    if (_gizmo._gui.IsKeyDown(Silk.NET.Input.Key.ShiftLeft))
+                    {
+                        t = double.NaN;
+                        return false;
+                    }
+                }
+            }
+
             var pickResult = PickResult.None;
             switch (_params.TransformKind)
             {
@@ -483,6 +526,7 @@ namespace Prowl.Runtime.GUI
 
         public GizmoResult? Update(Ray ray, Vector2 screenPos)
         {
+
             Vector3 newPoint;
             if (_params.TransformKind == TransformKind.Axis)
             {
@@ -526,6 +570,17 @@ namespace Prowl.Runtime.GUI
 
         public void Draw()
         {
+            if (_params.Mode == TransformGizmoMode.TranslateView)
+            {
+                // If were TranslateView and scale Uniform exists
+                if (_gizmo.mode.HasFlag(TransformGizmoMode.ScaleUniform))
+                {
+                    // then we only show if ctrl is notpressed
+                    if (_gizmo._gui.IsKeyDown(Silk.NET.Input.Key.ShiftLeft))
+                        return;
+                }
+            }
+
             Matrix4x4 transform = Matrix4x4.CreateTranslation(_gizmo.Translation);
             switch (_params.TransformKind)
             {

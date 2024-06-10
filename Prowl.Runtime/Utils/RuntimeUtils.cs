@@ -110,5 +110,22 @@ namespace Prowl.Runtime
                     if (type.GetCustomAttributes(typeof(T), true).Length > 0)
                         yield return type;
         }
+
+        public static string GetUniquePath(string target)
+        {
+            if (!System.IO.File.Exists(target))
+                return target;
+
+            string path = System.IO.Path.GetDirectoryName(target);
+            string name = System.IO.Path.GetFileNameWithoutExtension(target);
+            string ext = System.IO.Path.GetExtension(target);
+
+            for (int i = 1; ; i++)
+            {
+                string temp = System.IO.Path.Combine(path, $"{name} ({i}){ext}");
+                if (!System.IO.File.Exists(temp))
+                    return temp;
+            }
+        }
     }
 }
