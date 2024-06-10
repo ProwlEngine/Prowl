@@ -150,7 +150,7 @@ public static class EditorGuiManager
             for (int i = 0; i < windowList.Count; i++)
             {
                 var window = windowList[i];
-                if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) || g.IsPointerClick(Silk.NET.Input.MouseButton.Right)))
+                if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(Veldrid.MouseButton.Left) || g.IsPointerClick(Veldrid.MouseButton.Right)))
                     if (!g.IsBlockedByInteractable(g.PointerPos, window.MaxZ))
                         FocusWindow(window);
             }
@@ -165,12 +165,6 @@ public static class EditorGuiManager
                     g.PushID((ulong)window._id);
                     window.ProcessFrame();
                     g.PopID();
-
-                    // Focus Window
-                    if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(Veldrid.MouseButton.Left) || g.IsPointerClick(Veldrid.MouseButton.Right)))
-                        if (!g.IsBlockedByInteractable(g.PointerPos))
-                            FocusWindow(window);
-
                 }
 
             }

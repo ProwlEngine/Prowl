@@ -1,13 +1,10 @@
 ﻿using Prowl.Runtime.GUI.Graphics;
-using Prowl.Runtime.Rendering.Primitives;
-using Silk.NET.OpenAL;
 using StbTrueTypeSharp;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using static Prowl.Runtime.GUI.Graphics.UIDrawList;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace Prowl.Runtime
 {
