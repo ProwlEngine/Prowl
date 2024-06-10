@@ -202,7 +202,6 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                     var cType = comp.GetType();
 
-
                     // Component
                     // Header
                     string openedID = "#_Opened_CompH" + comp.InstanceID;
@@ -215,6 +214,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                             gui.SetNodeStorage(gui.CurrentNode.Parent, openedID, compOpened);
                         }
 
+                        DragnDrop.Drag((MonoBehaviour)comp, comp!.GetType());
+
                         //g.SeperatorHNode(1f, GuiStyle.Base4 * 0.8f);
                         gui.Draw2D.DrawText((compOpened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, 8));
                         gui.Draw2D.DrawText(GetComponentDisplayName(cType), 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, 7));
@@ -223,7 +224,6 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                             comp.Enabled = isEnabled;
                         gui.Tooltip("Is Component Enabled?");
 
-                        DragnDrop.Drag(comp, cType);
 
                         // TODO: Context Menu
                         if (gui.IsPointerClick(Silk.NET.Input.MouseButton.Right) && gui.IsNodeHovered())
