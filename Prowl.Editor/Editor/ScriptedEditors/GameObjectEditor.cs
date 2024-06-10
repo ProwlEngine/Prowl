@@ -105,6 +105,11 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             {
                 addComponentHeight = gui.CurrentNode.LayoutData.Rect.height;
 
+                //if(DragnDrop.Drop<MonoScript>(out var mono))
+                //{
+                // // TODO: Need a way to know what type this MonoScript is to add it to the GameObject
+                //}
+
                 // Transform
                 // Header
                 bool opened = gui.GetNodeStorage("#_Opened_TransformH", true);
@@ -200,13 +205,14 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                     // Component
                     // Header
-                    bool compOpened = gui.GetNodeStorage("#_Opened_CompH", true);
+                    string openedID = "#_Opened_CompH" + comp.InstanceID;
+                    bool compOpened = gui.GetNodeStorage(openedID, true);
                     using (gui.Node("#_CompH_" + comp.InstanceID).ExpandWidth().Height(GuiStyle.ItemHeight).MarginTop(10).Enter())
                     {
                         if (gui.IsNodePressed())
                         {
                             compOpened = !compOpened;
-                            gui.SetNodeStorage(gui.CurrentNode.Parent, "#_Opened_CompH", compOpened);
+                            gui.SetNodeStorage(gui.CurrentNode.Parent, openedID, compOpened);
                         }
 
                         //g.SeperatorHNode(1f, GuiStyle.Base4 * 0.8f);
