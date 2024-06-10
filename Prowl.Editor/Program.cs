@@ -249,6 +249,7 @@ public static class Program
             if (Project.HasProject)
             {
                 SceneManager.StoreScene();
+                SceneManager.Clear();
 
                 try
                 {
