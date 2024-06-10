@@ -183,6 +183,13 @@ namespace Prowl.Editor
                 }
             }
 
+            if (parent == null)
+            {
+                EditorGUI.Separator();
+                EditorGUI.Text("Scene");
+                MenuItem.DrawMenuRoot("Scene");
+            }
+
             if (closePopup)
                 gui.ClosePopup(popupHolder);
         }
@@ -343,7 +350,7 @@ namespace Prowl.Editor
             }
         }
 
-        public void DuplicateSelected()
+        public static void DuplicateSelected()
         {
             var newGO = new List<WeakReference>();
             SelectHandler.Foreach((go) => {
