@@ -20,6 +20,7 @@ public class TestDrawers : MonoBehaviour
     public Camera aCamera;
     public Material aMaterial;
     public GameObject aGameObject;
+    public Transform aTransform;
 
     public float[] aFloats = new float[2];
 
