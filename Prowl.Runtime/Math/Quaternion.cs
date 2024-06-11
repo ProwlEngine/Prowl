@@ -110,7 +110,7 @@ namespace Prowl.Runtime
         public static Quaternion NormalizeSafe(Quaternion q)
         {
             double mag = q.Magnitude();
-            if (mag < Mathf.Epsilon)
+            if (mag < MathD.Epsilon)
                 return Quaternion.identity;
             else
                 return q / mag;
@@ -408,12 +408,12 @@ namespace Prowl.Runtime
         /// <summary>
         /// Returns the angle in degrees between two rotations.</para>
         /// </summary>
-        public static double Angle(Quaternion a, Quaternion b) => Mathf.Acos(Mathf.Min(Mathf.Abs(Dot(a, b)), 1.0)) * 2.0 * Mathf.Rad2Deg;
+        public static double Angle(Quaternion a, Quaternion b) => MathD.Acos(MathD.Min(MathD.Abs(Dot(a, b)), 1.0)) * 2.0 * MathD.Rad2Deg;
 
         public static Quaternion RotateTowards(Quaternion from, Quaternion to, double maxDegreesDelta)
         {
             double angle = Angle(from, to);
-            return angle == 0.0 ? to : Slerp(from, to, Mathf.Min(1.0, maxDegreesDelta / angle));
+            return angle == 0.0 ? to : Slerp(from, to, MathD.Min(1.0, maxDegreesDelta / angle));
         }
 
         /// <summary>

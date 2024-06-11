@@ -234,7 +234,7 @@ namespace Prowl.Runtime
 
         public void Rotate(Vector3 axis, double angle, bool relativeToSelf = true)
         {
-            RotateAroundInternal(relativeToSelf ? TransformDirection(axis) : axis, angle * Mathf.Deg2Rad);
+            RotateAroundInternal(relativeToSelf ? TransformDirection(axis) : axis, angle * MathD.Deg2Rad);
         }
 
         public void RotateAround(Vector3 point, Vector3 axis, double angle)
@@ -245,13 +245,13 @@ namespace Prowl.Runtime
             dif = q * dif;
             worldPos = point + dif;
             position = worldPos;
-            RotateAroundInternal(axis, angle * Mathf.Deg2Rad);
+            RotateAroundInternal(axis, angle * MathD.Deg2Rad);
         }
 
         internal void RotateAroundInternal(Vector3 worldAxis, double rad)
         {
             Vector3 localAxis = InverseTransformDirection(worldAxis);
-            if (localAxis.sqrMagnitude > Mathf.Epsilon)
+            if (localAxis.sqrMagnitude > MathD.Epsilon)
             {
                 localAxis.Normalize();
                 Quaternion q = Quaternion.AngleAxis(rad, localAxis);
@@ -331,7 +331,7 @@ namespace Prowl.Runtime
             return ret;
         }
 
-        static double InverseSafe(double f) => Mathf.Abs(f) > Mathf.Epsilon ? 1.0F / f : 0.0F;
+        static double InverseSafe(double f) => MathD.Abs(f) > MathD.Epsilon ? 1.0F / f : 0.0F;
         static Vector3 InverseSafe(Vector3 v) => new Vector3(InverseSafe(v.x), InverseSafe(v.y), InverseSafe(v.z));
     }
 }

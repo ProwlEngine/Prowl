@@ -60,7 +60,7 @@ namespace Prowl.Runtime
         #region Public Instance Properties
         public Vector4 normalized { get { return Normalize(this); } }
 
-        public double magnitude { get { return Mathf.Sqrt(x * x + y * y + z * z + w * w); } }
+        public double magnitude { get { return MathD.Sqrt(x * x + y * y + z * z + w * w); } }
 
         public double sqrMagnitude { get { return x * x + y * y + z * z + w * w; } }
 
@@ -100,7 +100,7 @@ namespace Prowl.Runtime
         public static Vector4 forward { get { return new Vector4(0.0, 0.0, 1.0, 0.0); } }
         public static Vector4 unitw { get { return new Vector4(0.0, 0.0, 0.0, 1.0); } }
 
-        public static Vector4 infinity = new Vector4(Mathf.Infinity, Mathf.Infinity, Mathf.Infinity, Mathf.Infinity);
+        public static Vector4 infinity = new Vector4(MathD.Infinity, MathD.Infinity, MathD.Infinity, MathD.Infinity);
         #endregion Public Static Properties
 
         #region Public Instance methods
@@ -204,7 +204,7 @@ namespace Prowl.Runtime
             sb.Append('>');
             return sb.ToString();
         }
-        public bool IsFinate() => Mathf.IsValid(x) && Mathf.IsValid(y) && Mathf.IsValid(z) && Mathf.IsValid(w);
+        public bool IsFinate() => MathD.IsValid(x) && MathD.IsValid(y) && MathD.IsValid(z) && MathD.IsValid(w);
         #endregion Public Instance Methods
 
         #region Public Static Methods

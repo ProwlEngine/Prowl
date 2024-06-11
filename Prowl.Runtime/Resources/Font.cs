@@ -78,7 +78,7 @@ namespace Prowl.Runtime
                 char c = text[s++];
                 if (c == '\n')
                 {
-                    text_size.x = Mathf.Max(text_size.x, line_width);
+                    text_size.x = MathD.Max(text_size.x, line_width);
                     text_size.y += line_height;
                     line_width = 0.0f;
                     if (stop_on_new_line)

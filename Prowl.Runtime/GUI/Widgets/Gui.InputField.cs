@@ -150,7 +150,7 @@ namespace Prowl.Runtime.GUI
                 int[] searches_result_line_number = { -1, -999 };
                 if (stb.SelectStart != stb.SelectEnd)
                 {
-                    searches_input_ptr[1] = text_begin + Mathf.Min(stb.SelectStart, stb.SelectEnd);
+                    searches_input_ptr[1] = text_begin + MathD.Min(stb.SelectStart, stb.SelectEnd);
                     searches_result_line_number[1] = -1;
                     searches_remaining++;
                 }
@@ -194,7 +194,7 @@ namespace Prowl.Runtime.GUI
                 {
                     double scroll_increment_x = size.x * 0.25f;
                     if (cursor_offset.x < stb.ScrollX)
-                        stb.ScrollX = (int)Mathf.Max(0.0f, cursor_offset.x - scroll_increment_x);
+                        stb.ScrollX = (int)MathD.Max(0.0f, cursor_offset.x - scroll_increment_x);
                     else if (cursor_offset.x - size.x >= stb.ScrollX)
                         stb.ScrollX = (int)(cursor_offset.x - size.x + scroll_increment_x);
                 }
@@ -208,7 +208,7 @@ namespace Prowl.Runtime.GUI
                 {
                     double scroll_y = g.CurrentNode.VScroll;
                     if (cursor_offset.y - fontsize < scroll_y)
-                        scroll_y = Mathf.Max(0.0f, cursor_offset.y - fontsize);
+                        scroll_y = MathD.Max(0.0f, cursor_offset.y - fontsize);
                     else if (cursor_offset.y - size.y >= scroll_y)
                         scroll_y = cursor_offset.y - size.y;
                     g.SetStorage("VScroll", scroll_y);
@@ -229,8 +229,8 @@ namespace Prowl.Runtime.GUI
             // Draw selection
             if (stb.SelectStart != stb.SelectEnd)
             {
-                int text_selected_begin = text_begin + Mathf.Min(stb.SelectStart, stb.SelectEnd);
-                int text_selected_end = text_begin + Mathf.Max(stb.SelectStart, stb.SelectEnd);
+                int text_selected_begin = text_begin + MathD.Min(stb.SelectStart, stb.SelectEnd);
+                int text_selected_end = text_begin + MathD.Max(stb.SelectStart, stb.SelectEnd);
 
                 float bg_offy_up = is_multiline ? 0.0f : -1.0f;    // FIXME: those offsets should be part of the style? they don't play so well with multi-line selection.
                 float bg_offy_dn = is_multiline ? 0.0f : 2.0f;

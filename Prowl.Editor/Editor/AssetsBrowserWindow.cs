@@ -183,6 +183,7 @@ namespace Prowl.Editor
         {
             using (gui.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Grid).Clip().Enter())
             {
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 4);
                 var dropInteract = gui.GetInteractable();
                 //HandleDrop();
 

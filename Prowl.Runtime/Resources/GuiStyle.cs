@@ -63,6 +63,15 @@ namespace Prowl.Runtime
         public Color ScrollBarHoveredColor = HoveredColor;
         public Color ScrollBarActiveColor = SelectedColor;
 
+        public static Color RandomPastelColor(int seed)
+        {
+            System.Random random = new System.Random(seed);
+            float r = (float)(random.NextDouble() * 0.5 + 0.5);
+            float g = (float)(random.NextDouble() * 0.5 + 0.5);
+            float b = (float)(random.NextDouble() * 0.5 + 0.5);
+            return new Color(r, g, b) * 0.8f;
+        }
+
     }
 
 }

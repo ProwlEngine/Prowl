@@ -157,7 +157,7 @@ namespace Prowl.Editor.Docking
 
             if (Type == NodeType.SplitVertical)
             {
-                double d = Mathf.Lerp(Mins.x, Maxs.x, SplitDistance);
+                double d = MathD.Lerp(Mins.x, Maxs.x, SplitDistance);
 
                 bmins.x = d - splitHalfWidth;
                 bmaxs.x = d + splitHalfWidth;
@@ -167,7 +167,7 @@ namespace Prowl.Editor.Docking
             }
             else if (Type == NodeType.SplitHorizontal)
             {
-                double d = Mathf.Lerp(Mins.y, Maxs.y, SplitDistance);
+                double d = MathD.Lerp(Mins.y, Maxs.y, SplitDistance);
 
                 bmins.y = d - splitHalfWidth;
                 bmaxs.y = d + splitHalfWidth;

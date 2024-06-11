@@ -83,7 +83,9 @@ namespace Prowl.Runtime.GUI.Layout
         private Offset _paddingBottom = Offset.Default;
         private bool _ignore = false;
         private bool _fitContentX = false;
+        private double _fitContentXPerc = 1f;
         private bool _fitContentY = false;
+        private double _fitContentYPerc = 1f;
         private bool _centerContent = false;
         private bool _canScaleChildren = false;
         private LayoutNode _positionRelativeTo;
@@ -343,9 +345,9 @@ namespace Prowl.Runtime.GUI.Layout
                 return;
 
             if (_fitContentX)
-                _width = _data.ContentRect.width + _data.Paddings.Horizontal;
+                _width = MathD.Lerp(0, _data.ContentRect.width + _data.Paddings.Horizontal, _fitContentXPerc);
             if (_fitContentY)           
-                _height = _data.ContentRect.height + _data.Paddings.Vertical;
+                _height = MathD.Lerp(0, _data.ContentRect.height + _data.Paddings.Vertical, _fitContentYPerc);
             UpdateScaleCache();
         }
 

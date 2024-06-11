@@ -31,7 +31,7 @@ namespace Prowl.Runtime
         #region Public Instance Properties
         public Vector2 normalized { get { return Normalize(this); } }
 
-        public double magnitude { get { return Mathf.Sqrt(x * x + y * y); } }
+        public double magnitude { get { return MathD.Sqrt(x * x + y * y); } }
 
         public double sqrMagnitude { get { return x * x + y * y; } }
 
@@ -147,7 +147,7 @@ namespace Prowl.Runtime
             return sb.ToString();
         }
         
-        public bool IsFinate() => Mathf.IsValid(x) && Mathf.IsValid(y);
+        public bool IsFinate() => MathD.IsValid(x) && MathD.IsValid(y);
         #endregion Public Instance Methods
 
         #region Public Static Properties
@@ -158,13 +158,13 @@ namespace Prowl.Runtime
         public static Vector2 up { get { return new Vector2(0.0, 1.0); } }
         public static Vector2 down { get { return new Vector2(0.0, 1.0); } }
 
-        public static Vector2 infinity = new Vector2(Mathf.Infinity, Mathf.Infinity);
+        public static Vector2 infinity = new Vector2(MathD.Infinity, MathD.Infinity);
         #endregion Public Static Properties
 
         #region Public Static Methods
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static double AngleBetween(Vector2 from, Vector2 to) { return Mathf.Acos(Mathf.Clamp(Dot(from.normalized, to.normalized), -1, 1)) * Mathf.Rad2Deg; }
+        public static double AngleBetween(Vector2 from, Vector2 to) { return MathD.Acos(MathD.Clamp(Dot(from.normalized, to.normalized), -1, 1)) * MathD.Rad2Deg; }
 
 
         /// <summary>

@@ -124,7 +124,7 @@ namespace Prowl.Editor
         {
             FileDialogContext imFileDialogInfo = new FileDialogContext()
             {
-                title = "Save Scene As",
+                title = "Save As",
                 fileName = "New Scene.scene",
                 directoryPath = new DirectoryInfo(Project.ProjectAssetDirectory),
                 type = FileDialogType.SaveFile,

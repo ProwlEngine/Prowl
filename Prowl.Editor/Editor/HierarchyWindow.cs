@@ -64,7 +64,7 @@ namespace Prowl.Editor
                     var test = gui.CurrentNode;
                     if (gui.BeginPopup("CreateGameObject", out var node))
                     {
-                        using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
+                        using (node.Width(150).Layout(LayoutType.Column).Padding(5).FitContentHeight().Enter())
                         {
                             DrawContextMenu(null, test);
                         }
@@ -76,7 +76,7 @@ namespace Prowl.Editor
 
             using (gui.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Clip().Enter())
             {
-                //g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.5f, 10, 12);
+                //gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 4);
 
                 var dropInteract = gui.GetInteractable();
                 HandleDrop(null);
@@ -102,7 +102,7 @@ namespace Prowl.Editor
                 var popupHolder = gui.CurrentNode;
                 if (gui.BeginPopup("RightClickGameObject", out var node))
                 {
-                    using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
+                    using (node.Width(150).Layout(LayoutType.Column).Padding(5).FitContentHeight().Enter())
                     {
                         var instanceID = gui.GetGlobalStorage<int>("RightClickGameObject");
                         var go = EngineObject.FindObjectByID<GameObject>(instanceID);
@@ -180,6 +180,13 @@ namespace Prowl.Editor
                     SceneViewWindow.SetCamera(parent.Transform.position, parent.Transform.rotation);
                     closePopup = true;
                 }
+            }
+
+            if (parent == null)
+            {
+                EditorGUI.Separator();
+                EditorGUI.Text("Scene");
+                MenuItem.DrawMenuRoot("Scene");
             }
 
             if (closePopup)

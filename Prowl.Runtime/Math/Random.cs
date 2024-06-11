@@ -53,10 +53,10 @@ namespace Prowl.Runtime
         public static Vector3 InUnitCube => new(Value, Value, Value);
 
         /// <summary> Returns a random angle in radians from 0 to TAU </summary>
-        public static double Angle => Value * Mathf.TAU;
+        public static double Angle => Value * MathD.TAU;
 
         /// <summary> Returns a random uniformly distributed rotation </summary>
-        public static Quaternion Rotation => new(OnUnitSphere, Value * Mathf.TAU); // Will this work? TODO: Test
+        public static Quaternion Rotation => new(OnUnitSphere, Value * MathD.TAU); // Will this work? TODO: Test
 
         /// <summary> Returns a random Boolean value </summary>
         public static bool Boolean => Value > 0.5f;

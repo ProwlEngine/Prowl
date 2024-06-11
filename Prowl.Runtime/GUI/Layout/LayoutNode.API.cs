@@ -12,15 +12,17 @@
 
         public LayoutNode FitContent() => FitContentWidth().FitContentHeight();
 
-        public LayoutNode FitContentWidth()
+        public LayoutNode FitContentWidth(double percentage = 1f)
         {
             _fitContentX = true;
+            _fitContentXPerc = percentage;
             return this;
         }
 
-        public LayoutNode FitContentHeight()
+        public LayoutNode FitContentHeight(double percentage = 1f)
         {
             _fitContentY = true;
+            _fitContentYPerc = percentage;
             return this;
         }
 

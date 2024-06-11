@@ -143,7 +143,7 @@ namespace Prowl.Editor
 
             using (gui.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column, false).Clip().Enter())
             {
-                //g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.5f, 10, 12);
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 4);
 
                 var dropInteract = gui.GetInteractable();
                 //HandleDrop();
@@ -178,9 +178,9 @@ namespace Prowl.Editor
                 }
                 else
                 {
-                    RenderRootFolder(true, AssetDatabase.GetRootFolders()[2], GuiStyle.Red); // Assets Folder
-                    RenderRootFolder(false, AssetDatabase.GetRootFolders()[0], GuiStyle.Red); // Defaults Folder
-                    RenderRootFolder(false, AssetDatabase.GetRootFolders()[1], GuiStyle.Red); // Packages Folder
+                    RenderRootFolder(true, AssetDatabase.GetRootFolders()[2], GuiStyle.RandomPastelColor(100)); // Assets Folder
+                    RenderRootFolder(false, AssetDatabase.GetRootFolders()[0], GuiStyle.RandomPastelColor(200)); // Defaults Folder
+                    RenderRootFolder(false, AssetDatabase.GetRootFolders()[1], GuiStyle.RandomPastelColor(500)); // Packages Folder
                 }
 
                 if (!SelectHandler.SelectedThisFrame && dropInteract.TakeFocus())
@@ -629,7 +629,9 @@ namespace Prowl.Editor
                 case Type t when t == typeof(MonoScript):
                     return GuiStyle.Blue;
                 default:
-                    return new Color(1.0f, 1.0f, 1.0f);
+                {
+                    return GuiStyle.RandomPastelColor(type.GetHashCode());
+                }
             }
         }
 

@@ -82,7 +82,7 @@ namespace Prowl.Runtime.GUI
 
             if (_gizmo.Snapping)
             {
-                rotationAngle = GizmoUtils.RoundToInterval(rotationAngle.Value - _state.StartRotationAngle, _gizmo.SnapAngle * Mathf.Deg2Rad)
+                rotationAngle = GizmoUtils.RoundToInterval(rotationAngle.Value - _state.StartRotationAngle, _gizmo.SnapAngle * MathD.Deg2Rad)
                                 + _state.StartRotationAngle;
             }
 
@@ -120,7 +120,7 @@ namespace Prowl.Runtime.GUI
                 if (!focused)
                 {
                     var angle = ArcAngle();
-                    _gizmo._gui.Draw3D.Arc(radius, (Math.PI / 2 - angle) * Mathf.Rad2Deg, (Math.PI / 2 + angle) * Mathf.Rad2Deg, stroke);
+                    _gizmo._gui.Draw3D.Arc(radius, (Math.PI / 2 - angle) * MathD.Rad2Deg, (Math.PI / 2 + angle) * MathD.Rad2Deg, stroke);
                 }
                 else
                 {
@@ -159,20 +159,20 @@ namespace Prowl.Runtime.GUI
                     if (fullCircles > 0)
                     {
                         w.Color.alpha = (byte)(stroke.Color.alpha * Math.Min(0.25f * fullCircles, 1f));
-                        _gizmo._gui.Draw3D.Sector(radius, startAngle2 * Mathf.Rad2Deg, endAngle2 * Mathf.Rad2Deg, w);
+                        _gizmo._gui.Draw3D.Sector(radius, startAngle2 * MathD.Rad2Deg, endAngle2 * MathD.Rad2Deg, w);
                     }
 
                     w.Color.alpha = (byte)(stroke.Color.alpha * Math.Min(0.25f * (fullCircles + 1), 1f));
-                    _gizmo._gui.Draw3D.Sector(radius, startAngle * Mathf.Rad2Deg, endAngle * Mathf.Rad2Deg, w);
+                    _gizmo._gui.Draw3D.Sector(radius, startAngle * MathD.Rad2Deg, endAngle * MathD.Rad2Deg, w);
 
                     _gizmo._gui.Draw3D.Circle(radius, stroke);
 
                     if (_gizmo.Snapping)
                     {
                         var strokeWidth = stroke.Thickness / 2;
-                        for (int i = 0; i <= Math.Tau / (_gizmo.SnapAngle * Mathf.Deg2Rad); i++)
+                        for (int i = 0; i <= Math.Tau / (_gizmo.SnapAngle * MathD.Deg2Rad); i++)
                         {
-                            var angle = i * (_gizmo.SnapAngle * Mathf.Deg2Rad) + endAngle;
+                            var angle = i * (_gizmo.SnapAngle * MathD.Deg2Rad) + endAngle;
                             var pos = new Vector3(Math.Cos(angle), 0, Math.Sin(angle));
                             _gizmo._gui.Draw3D.LineSegment(pos * radius * 1.1, pos * radius * 1.2, new Stroke3D() { Thickness = strokeWidth, Color = stroke.Color, AntiAliased = true });
                         }

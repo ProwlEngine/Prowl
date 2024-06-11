@@ -77,10 +77,10 @@ namespace Prowl.Runtime.GUI.Graphics
         public static uint ColorConvertFloat4ToU32(Vector4 @in)
         {
             uint @out;
-            @out = (uint)(Mathf.Clamp01(@in.x) * 255.0f + 0.5f);
-            @out |= (uint)(Mathf.Clamp01(@in.y) * 255.0f + 0.5f) << 8;
-            @out |= (uint)(Mathf.Clamp01(@in.z) * 255.0f + 0.5f) << 16;
-            @out |= (uint)(Mathf.Clamp01(@in.w) * 255.0f + 0.5f) << 24;
+            @out = (uint)(MathD.Clamp01(@in.x) * 255.0f + 0.5f);
+            @out |= (uint)(MathD.Clamp01(@in.y) * 255.0f + 0.5f) << 8;
+            @out |= (uint)(MathD.Clamp01(@in.z) * 255.0f + 0.5f) << 16;
+            @out |= (uint)(MathD.Clamp01(@in.w) * 255.0f + 0.5f) << 24;
             return @out;
         }
 
@@ -143,10 +143,10 @@ namespace Prowl.Runtime.GUI.Graphics
 
         private Vector4 IntersectRects(Vector4 rectA, Vector4 rectB)
         {
-            double left = Mathf.Max(rectA.x, rectB.x);
-            double top = Mathf.Max(rectA.y, rectB.y);
-            double right = Mathf.Min(rectA.z, rectB.z);
-            double bottom = Mathf.Min(rectA.w, rectB.w);
+            double left = MathD.Max(rectA.x, rectB.x);
+            double top = MathD.Max(rectA.y, rectB.y);
+            double right = MathD.Min(rectA.z, rectB.z);
+            double bottom = MathD.Min(rectA.w, rectB.w);
 
             if (right < left || bottom < top)
             {
@@ -322,10 +322,10 @@ namespace Prowl.Runtime.GUI.Graphics
             if (cpu_fine_clip_rect.HasValue)
             {
                 var cfcr = cpu_fine_clip_rect.Value;
-                clip_rect.x = Mathf.Max(clip_rect.x, cfcr.x);
-                clip_rect.y = Mathf.Max(clip_rect.y, cfcr.y);
-                clip_rect.z = Mathf.Min(clip_rect.z, cfcr.z);
-                clip_rect.w = Mathf.Min(clip_rect.w, cfcr.w);
+                clip_rect.x = MathD.Max(clip_rect.x, cfcr.x);
+                clip_rect.y = MathD.Max(clip_rect.y, cfcr.y);
+                clip_rect.z = MathD.Min(clip_rect.z, cfcr.z);
+                clip_rect.w = MathD.Min(clip_rect.w, cfcr.w);
             }
             var rect = font.RenderText(font_size, pos, col, clip_rect, text, text_begin, text_end, this, wrap_width, cpu_fine_clip_rect.HasValue);
 
@@ -682,7 +682,7 @@ namespace Prowl.Runtime.GUI.Graphics
             for (int i = 0; i <= num_segments; i++)
             {
                 float a = amin + i / (float)num_segments * (amax - amin);
-                _Path.Add(new Vector2(centre.x + Mathf.Cos(a) * radius, centre.y + Mathf.Sin(a) * radius));
+                _Path.Add(new Vector2(centre.x + MathD.Cos(a) * radius, centre.y + MathD.Sin(a) * radius));
             }
         }
 
@@ -697,8 +697,8 @@ namespace Prowl.Runtime.GUI.Graphics
                 for (int i = 0; i < circle_vtx_count; i++)
                 {
                     float a = i / (float)circle_vtx_count * 2 * MathF.PI;
-                    circle_vtx[i].x = Mathf.Cos(a);
-                    circle_vtx[i].y = Mathf.Sin(a);
+                    circle_vtx[i].x = MathD.Cos(a);
+                    circle_vtx[i].y = MathD.Sin(a);
                 }
                 circle_vtx_builds = true;
             }
@@ -773,8 +773,8 @@ namespace Prowl.Runtime.GUI.Graphics
         public void PathRect(Vector2 a, Vector2 b, float rounding = 0.0f, int rounding_corners = 0x0F)
         {
             float r = rounding;
-            r = (float)Mathf.Min(r, Mathf.Abs(b.x - a.x) * ((rounding_corners & (1 | 2)) == (1 | 2) || (rounding_corners & (4 | 8)) == (4 | 8) ? 0.5f : 1.0f) - 1.0f);
-            r = (float)Mathf.Min(r, Mathf.Abs(b.y - a.y) * ((rounding_corners & (1 | 8)) == (1 | 8) || (rounding_corners & (2 | 4)) == (2 | 4) ? 0.5f : 1.0f) - 1.0f);
+            r = (float)MathD.Min(r, MathD.Abs(b.x - a.x) * ((rounding_corners & (1 | 2)) == (1 | 2) || (rounding_corners & (4 | 8)) == (4 | 8) ? 0.5f : 1.0f) - 1.0f);
+            r = (float)MathD.Min(r, MathD.Abs(b.y - a.y) * ((rounding_corners & (1 | 8)) == (1 | 8) || (rounding_corners & (2 | 4)) == (2 | 4) ? 0.5f : 1.0f) - 1.0f);
 
             if (r <= 0.0f || rounding_corners == 0)
             {

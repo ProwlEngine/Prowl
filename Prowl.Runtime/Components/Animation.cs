@@ -62,7 +62,7 @@ namespace Prowl.Runtime
                 }
 
                 // Weight always update even if the state is disabled
-                state.Weight = Mathf.MoveTowards(state.Weight, state.TargetWeight, state.MoveWeightSpeed * Time.deltaTimeF);
+                state.Weight = MathD.MoveTowards(state.Weight, state.TargetWeight, state.MoveWeightSpeed * Time.deltaTimeF);
             }
 
             if (_states.Where(s => s.Enabled).Sum(s => s.Weight) <= 0)

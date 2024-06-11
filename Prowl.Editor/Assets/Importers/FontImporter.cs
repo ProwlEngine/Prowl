@@ -138,7 +138,7 @@ namespace Prowl.Editor.Assets
 
                 if (gui.BeginPopup("AddRangePopup", out var popupNode))
                 {
-                    using (popupNode.Width(250).FitContentHeight().Layout(LayoutType.Column).Padding(10).Enter())
+                    using (popupNode.Width(250).FitContentHeight().Layout(LayoutType.Column).Padding(5).Enter())
                     {
                         if (QuickButton("Add Basic Latin", popupNode.Parent))
                             importer.characterRanges.Add(Font.CharacterRange.BasicLatin);
