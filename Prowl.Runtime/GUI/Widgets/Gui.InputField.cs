@@ -123,13 +123,13 @@ namespace Prowl.Runtime.GUI
             if (justSelected && (Flags & InputFieldFlags.AutoSelectAll) == InputFieldFlags.AutoSelectAll)
             {
                 stb.SelectStart = 0;
-                stb.SelectEnd = Text.Length - 1;
+                stb.SelectEnd = Text.Length;
             }
 
             if (g.IsNodeHovered() && g.IsPointerDoubleClick(MouseButton.Left))
             {
                 stb.SelectStart = 0;
-                stb.SelectEnd = Text.Length - 1;
+                stb.SelectEnd = Text.Length;
             }
 
             //g.DrawText(font, Text, fontsize, render_pos, Color.black);
