@@ -13,7 +13,7 @@ namespace Prowl.Runtime
 
         /// <summary>The height of this <see cref="Texture2DArray"/>.</summary>
         public uint Height => InternalTexture.Height;
-        
+
         /// <summary>The quantity or length of this <see cref="Texture2DArray"/>.</summary>
         public uint Layers => InternalTexture.ArrayLayers;
 
@@ -28,12 +28,12 @@ namespace Prowl.Runtime
         /// <param name="mipLevels">How many mip levels this texcture has <see cref="Texture3D"/>.</param>
         /// <param name="format">The pixel format for this <see cref="Texture3D"/>.</param>
         public Texture2DArray(
-            uint width,  uint height, 
-            uint layers, uint mipLevels = 0, 
-            PixelFormat format = PixelFormat.R8_G8_B8_A8_UNorm, 
-            TextureUsage usage = TextureUsage.Sampled, 
-            TextureSampleCount samples = TextureSampleCount.Count1
-        ) : base(new() {
+            uint width, uint height,
+            uint layers, uint mipLevels = 0,
+            PixelFormat format = PixelFormat.R8_G8_B8_A8_UNorm,
+            TextureUsage usage = TextureUsage.Sampled
+        ) : base(new()
+        {
             Width = width,
             Height = height,
             Depth = 1,
@@ -41,10 +41,11 @@ namespace Prowl.Runtime
             ArrayLayers = layers,
             Format = format,
             Usage = usage,
-            SampleCount = samples,
+            SampleCount = TextureSampleCount.Count1,
             Type = TextureType.Texture2D,
-        }) { }
-        
+        })
+        { }
+
         /// <summary>
         /// Sets the data of an area of the <see cref="Texture2DArray"/>.
         /// </summary>
@@ -87,7 +88,7 @@ namespace Prowl.Runtime
         /// <param name="mipLevel">The mip level to copy.</param>
         /// <param name="layer">The array layer to copy.</param>
         public unsafe void CopyDataPtr(void* data, uint layer, uint mipLevel = 0) =>
-            InternalCopyDataPtr(data, out _, out _, (MipLevels * layer) + mipLevel);
+            InternalCopyDataPtr(data, out _, out _, layer, mipLevel);
 
         /// <summary>
         /// Copies the data of a portion of a <see cref="Texture2DArray"/> into a CPU-accessible region.
@@ -97,7 +98,7 @@ namespace Prowl.Runtime
         /// <param name="mipLevel">The mip level to copy.</param>
         /// <param name="layer">The array layer to copy.</param>
         public unsafe void CopyData<T>(Memory<T> data, uint layer, uint mipLevel = 0) where T : unmanaged =>
-            InternalCopyData(data, (MipLevels * layer) + mipLevel);
+            InternalCopyData(data, layer, mipLevel);
 
         /// <summary>
         /// Recreates and resizes the <see cref="Texture2DArray"/>.
@@ -120,7 +121,7 @@ namespace Prowl.Runtime
 
         public uint GetSingleTextureMemoryUsage()
         {
-            return Width * Height * PixelFormatBytes(Format);
+            return Width * Height * TextureUtility.PixelFormatBytes(Format);
         }
 
         public SerializedProperty Serialize(Serializer.SerializationContext ctx)
@@ -134,12 +135,16 @@ namespace Prowl.Runtime
             compoundTag.Add("ImageFormat", new((int)Format));
             compoundTag.Add("Usage", new((int)Usage));
 
+            SerializedProperty dataTag = SerializedProperty.NewList();
+
             for (uint i = 0; i < Layers; i++)
             {
                 Memory<byte> memory = new byte[GetSingleTextureMemoryUsage()];
                 CopyData(memory, i);
-                compoundTag.Add($"Data{i}", new(memory.ToArray()));
+                dataTag.ListAdd(new(memory.ToArray()));
             }
+
+            compoundTag.Add("Data", dataTag);
 
             return compoundTag;
         }
@@ -154,14 +159,16 @@ namespace Prowl.Runtime
             PixelFormat imageFormat = (PixelFormat)value["ImageFormat"].IntValue;
             TextureUsage usage = (TextureUsage)value["Usage"].IntValue;
 
-            var param = new[] { typeof(uint), typeof(uint), typeof(uint), typeof(uint), typeof(PixelFormat), typeof(TextureUsage)  };
+            var param = new[] { typeof(uint), typeof(uint), typeof(uint), typeof(uint), typeof(PixelFormat), typeof(TextureUsage) };
             var values = new object[] { width, height, layers, mips, imageFormat, usage };
 
             typeof(Texture2DArray).GetConstructor(param).Invoke(this, values);
-                
+
+            var dataTag = value.Get("Data");
+
             for (uint i = 0; i < layers; i++)
             {
-                Memory<byte> memory = value[$"Data{i}"].ByteArrayValue;
+                Memory<byte> memory = dataTag[(int)i].ByteArrayValue;
                 SetData(memory, i);
             }
 

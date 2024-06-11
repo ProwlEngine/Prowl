@@ -28,24 +28,24 @@ namespace Prowl.Runtime
         /// <param name="mipLevels">How many mip levels this texcture has <see cref="Texture3D"/>.</param>
         /// <param name="format">The pixel format for this <see cref="Texture3D"/>.</param>
         public Texture3D(
-            uint width, uint height, uint depth, 
-            int mipLevels = 0, 
-            PixelFormat format = PixelFormat.R8_G8_B8_A8_UNorm, 
-            TextureUsage usage = TextureUsage.Sampled,
-            TextureSampleCount samples = TextureSampleCount.Count1
-        ) : base(new() {
+            uint width, uint height, uint depth,
+            uint mipLevels = 0,
+            PixelFormat format = PixelFormat.R8_G8_B8_A8_UNorm,
+            TextureUsage usage = TextureUsage.Sampled
+        ) : base(new()
+        {
             Width = width,
             Height = height,
             Depth = depth,
-            MipLevels = (uint)mipLevels,
+            MipLevels = mipLevels,
             ArrayLayers = 0,
             Format = format,
             Usage = usage,
-            SampleCount = samples,
+            SampleCount = TextureSampleCount.Count1,
             Type = TextureType.Texture3D,
-        }) { }
+        })
+        { }
 
-        
         /// <summary>
         /// Sets the data of an area of the <see cref="Texture2D"/>.
         /// </summary>
@@ -84,7 +84,7 @@ namespace Prowl.Runtime
         /// <param name="data">The pointer to the copied data.</param>
         /// <param name="mipLevel">The mip level to copy.</param>
         public unsafe void CopyDataPtr(void* data, uint mipLevel = 0) =>
-            InternalCopyDataPtr(data, out _, out _, mipLevel);
+            InternalCopyDataPtr(data, out _, out _, 0, mipLevel);
 
         /// <summary>
         /// Copies the data of a portion of a <see cref="Texture3D"/>.
@@ -93,7 +93,7 @@ namespace Prowl.Runtime
         /// <param name="data">A <see cref="Span{T}"/> in which to write the pixel data.</param>
         /// <param name="mipLevel">The mipLevel to copy.</param>
         public unsafe void CopyData<T>(Memory<T> data, uint mipLevel = 0) where T : unmanaged =>
-            InternalCopyData(data, mipLevel);
+            InternalCopyData(data, 0, mipLevel);
 
         /// <summary>
         /// Recreates and resizes the <see cref="Texture2D"/>.
