@@ -20,13 +20,13 @@ namespace Prowl.Editor
 
             image.Flip();
 
-            PixelFormat format = PixelFormat.R16_G16_B16_A16_UInt; ;
+            PixelFormat format = PixelFormat.R16_G16_B16_A16_UNorm;
             image.ColorSpace = ColorSpace.sRGB;
             image.ColorType = ColorType.TrueColorAlpha;
 
             var pixels = image.GetPixelsUnsafe().GetAreaPointer(0, 0, image.Width, image.Height);
 
-            Texture2D texture = new Texture2D((uint)image.Width, (uint)image.Height, 0, format);
+            Texture2D texture = new Texture2D((uint)image.Width, (uint)image.Height, 1, format);
             try
             {
 
@@ -42,7 +42,7 @@ namespace Prowl.Editor
             }
             catch
             {
-                texture.Dispose();
+                texture.Destroy();
                 throw;
             }
         }
