@@ -12,65 +12,169 @@ namespace Prowl.Runtime
         public uint height;
 
         public PixelFormat[] colorBufferFormats;
-        public PixelFormat? depthStencilFormat; // Color is optional, depth isn't.
+        public PixelFormat? depthBufferFormat;
+
+        public bool enableRandomWrite;
+
+
+        public RenderTextureDescription(uint width, uint height, PixelFormat? depthFormat, PixelFormat[] colorFormats, bool randomWrite)
+        {
+            this.width = width;
+            this.height = height;
+            this.depthBufferFormat = depthFormat;
+            this.colorBufferFormats = colorFormats;
+            this.enableRandomWrite = randomWrite;
+        }
+
+
+        public RenderTextureDescription(RenderTexture texture)
+        {
+            this.width = texture.Width;
+            this.height = texture.Height;
+            this.depthBufferFormat = texture.DepthBufferFormat;
+            this.colorBufferFormats = texture.ColorBufferFormats;
+            this.enableRandomWrite = texture.RandomWriteEnabled;
+        }
+
+
+        public override bool Equals([NotNullWhen(true)] object? obj)
+        {
+            if (obj is not RenderTextureDescription key)
+                return false;
+
+            if (width != key.width || height != key.height)
+                return false;
+
+            if (depthBufferFormat != key.depthBufferFormat)
+                return false;
+
+            if ((colorBufferFormats == null) != (key.colorBufferFormats == null))
+                return false;
+
+            if (!colorBufferFormats.SequenceEqual(key.colorBufferFormats))
+                return false;
+
+            return true;
+        }
+
+
+        public override int GetHashCode()
+        {
+            HashCode hash = new();
+            hash.Add(width);
+            hash.Add(height);
+            hash.Add(depthBufferFormat);
+
+            foreach (var format in colorBufferFormats)
+                hash.Add(format.GetHashCode());
+
+            hash.Add(enableRandomWrite);
+
+            return hash.ToHashCode();
+        }
+
+
+        public static bool operator ==(RenderTextureDescription left, RenderTextureDescription right) => left.Equals(right);
+
+        public static bool operator !=(RenderTextureDescription left, RenderTextureDescription right) => !(left == right);
     }
 
     public sealed class RenderTexture : EngineObject, ISerializable
     {
-        private int colorAttachmentLimit = 4;
-        private const PixelFormat defaultFormat = PixelFormat.R8_G8_B8_A8_UNorm; 
+        // Since Veldrid does not provide any methods to check how many color attachments a framebuffer supports, we can cap it ourselves to a reasonable value.
+        private int colorAttachmentLimit = 3;
+        private const PixelFormat defaultDepth = PixelFormat.R16_UNorm;
+        private const PixelFormat defaultColor = PixelFormat.R8_G8_B8_A8_UNorm;
 
-        public RenderTextureDescription description;
+        public Framebuffer Framebuffer { get; private set; }
 
-        public Framebuffer framebuffer { get; private set; }
+        public PixelFormat[] ColorBufferFormats { get; private set; }
+        public Veldrid.Texture[] ColorBuffers { get; private set; }
 
-        public Texture2D[] ColorBuffers { get; private set; }
-        public Texture2D DepthBuffer { get; private set; }
+        public PixelFormat? DepthBufferFormat { get; private set; }
+        public Veldrid.Texture DepthBuffer { get; private set; }
 
-        public int width { get; private set; }
-        public int height { get; private set; }
+        public uint Width { get; private set; }
+        public uint Height { get; private set; }
 
+        public bool RandomWriteEnabled { get; private set; }
 
-        public RenderTexture(RenderTextureDescription description) : base("RenderTexture")
+        public RenderTexture(RenderTextureDescription description) : this(
+            description.width,
+            description.height,
+            description.colorBufferFormats,
+            description.depthBufferFormat,
+            description.enableRandomWrite
+        )
+        { }
+
+        /// <summary>
+        /// Creates a new RenderTexture object
+        /// </summary>
+        /// <param name="width">The width of the <see cref="RenderTexture"/> and its internal buffers.</param>
+        /// <param name="height">The height of the <see cref="RenderTexture"/> and its internal buffers.</param>
+        /// <param name="colorFormats">The format of the color buffer(s) in the <see cref="RenderTexture"/>. Passing null or empty will omit the creation of a color buffer.</param>
+        /// <param name="depthFormat">The format of the depth stencil buffer in the <see cref="RenderTexture"/>. Passing null or empty will omit the creation of the depth stencil buffer.</param>
+        /// <param name="enableRandomWrite">Enable random reads/writes to the <see cref="RenderTexture"/> internal buffers. This is useful within compute shaders which draw to the texture.</param>
+        public RenderTexture(uint width, uint height, PixelFormat[] colorFormats, PixelFormat? depthFormat = defaultDepth, bool enableRandomWrite = false) : base("RenderTexture")
         {
-            if (description.colorBufferFormats.Length > colorAttachmentLimit)
-                throw new Exception("Invalid number of color buffers! [0-" + colorAttachmentLimit + "]");
+            if (colorFormats != null && colorFormats.Length > colorAttachmentLimit)
+                throw new Exception($"Invalid number of color buffers! [0-{colorAttachmentLimit}]");
 
-            this.description = description;
-        }
+            this.Width = width;
+            this.Height = height;
+            this.DepthBufferFormat = depthFormat;
+            this.ColorBufferFormats = colorFormats; 
+            this.RandomWriteEnabled = enableRandomWrite;
 
+            TextureDescription textureDescription = new()
+            {
+                ArrayLayers = 0,
+                Depth = 1,
+                Width = Width,
+                Height = Height,
+                MipLevels = 0,
+                SampleCount = TextureSampleCount.Count1, // Single samples for now - multisampling should be added later.
+                Type = TextureType.Texture2D,
+                Usage = (enableRandomWrite ? TextureUsage.Sampled : TextureUsage.Storage) | TextureUsage.RenderTarget
+            };
 
-        public void Create()
-        {
-            
-        }
+            if (DepthBufferFormat != null)
+            {
+                TextureDescription depthDescription = textureDescription;
 
+                depthDescription.Usage |= TextureUsage.DepthStencil;
+                depthDescription.Format = DepthBufferFormat.Value;
 
+                DepthBuffer = Graphics.ResourceFactory.CreateTexture(depthDescription);
+            }
 
-        public void Begin()
-        {
-            Graphics.Device.BindFramebuffer(frameBuffer);
-            Graphics.Viewport(Width, Height);
-            Graphics.FrameBufferSize = new Vector2Int(Width, Height);
-        }
+            ColorBuffers = new Veldrid.Texture[ColorBufferFormats.Length];
+            if (ColorBufferFormats != null)
+            {
+                for (int i = 0; i < ColorBuffers.Length; i++)
+                {
+                    TextureDescription colorDescription = textureDescription;
+                    colorDescription.Format = ColorBufferFormats[i];
 
-        public void End()
-        {
-            Graphics.Device.UnbindFramebuffer();
-            Graphics.Viewport((int)Graphics.Framebuffer.Width, (int)Graphics.Framebuffer.Height);
-            Graphics.FrameBufferSize = new Vector2Int(Width, Height);
+                    ColorBuffers[i] = Graphics.ResourceFactory.CreateTexture(colorDescription);
+                }
+            }
+
+            FramebufferDescription description = new FramebufferDescription(DepthBuffer, ColorBuffers);
+
+            this.Framebuffer = Graphics.ResourceFactory.CreateFramebuffer(description);
         }
 
         public override void OnDispose()
         {
-            if (frameBuffer == null) return;
-            
-            foreach (var texture in InternalTextures)
-                texture.Dispose();
+            DepthBuffer?.Dispose();
 
-            //if(hasDepthAttachment) // Should auto dispose of Depth
-            //    Graphics.GL.DeleteRenderbuffer(InternalDepth.Handle);
-            frameBuffer.Dispose();
+            if (ColorBuffers != null)
+                foreach (var tex in ColorBuffers)
+                    tex?.Dispose();
+
+            Framebuffer?.Dispose();
         }
 
         public SerializedProperty Serialize(Serializer.SerializationContext ctx)
@@ -78,74 +182,64 @@ namespace Prowl.Runtime
             SerializedProperty compoundTag = SerializedProperty.NewCompound();
             compoundTag.Add("Width", new(Width));
             compoundTag.Add("Height", new(Height));
-            compoundTag.Add("NumTextures", new(numTextures));
-            compoundTag.Add("HasDepthAttachment", new((byte)(hasDepthAttachment ? 1 : 0)));
-            SerializedProperty textureFormatsTag = SerializedProperty.NewList();
-            foreach (var format in textureFormats)
-                textureFormatsTag.ListAdd(new((byte)format));
-            compoundTag.Add("TextureFormats", textureFormatsTag);
+            compoundTag.Add("EnableRandomWrite", new(RandomWriteEnabled));
+
+            compoundTag.Add("DepthBufferFormat", new(DepthBuffer != null ? (int)DepthBuffer.Format : -1));
+
+            SerializedProperty colorBuffersTag = SerializedProperty.NewList();
+
+            if (ColorBuffers != null)
+            {
+                foreach (var colorBuffer in ColorBuffers)
+                    colorBuffersTag.ListAdd(new((int)colorBuffer.Format));
+            }
+
+            compoundTag.Add("ColorBufferFormats", colorBuffersTag);
+
             return compoundTag;
         }
 
         public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
-            Width = value["Width"].IntValue;
-            Height = value["Height"].IntValue;
-            numTextures = value["NumTextures"].IntValue;
-            hasDepthAttachment = value["HasDepthAttachment"].ByteValue == 1;
-            textureFormats = new TextureImageFormat[numTextures];
-            var textureFormatsTag = value.Get("TextureFormats");
-            for (int i = 0; i < numTextures; i++)
-                textureFormats[i] = (TextureImageFormat)textureFormatsTag[i].ByteValue;
+            uint width = (uint)value["Width"].IntValue;
+            uint height = (uint)value["Height"].IntValue;
+            bool randomWrite = value["EnableRandomWrite"].BoolValue;
 
-            var param = new[] { typeof(int), typeof(int), typeof(int), typeof(bool), typeof(TextureImageFormat[]) };
-            var values = new object[] { Width, Height, numTextures, hasDepthAttachment, textureFormats };
+            int depthFormatInt = value["DepthBufferFormat"].IntValue;
+            PixelFormat? depthBufferFormat = depthFormatInt < 0 ? null : (PixelFormat)depthFormatInt;
+
+            var colorBuffersTag = value.Get("ColorBufferFormats");
+            PixelFormat[] colorBufferFormats = new PixelFormat[colorBuffersTag.Count];
+
+            for (int i = 0; i < colorBuffersTag.Count; i++)
+            {
+                int colorFormatInt = colorBuffersTag[i].IntValue;
+                colorBufferFormats[i] = (PixelFormat)colorFormatInt;
+            }
+
+            var param = new[] { typeof(uint), typeof(uint), typeof(PixelFormat?), typeof(PixelFormat[]), typeof(bool) };
+            var values = new object[] { width, height, depthBufferFormat, colorBufferFormats, randomWrite };
             typeof(RenderTexture).GetConstructor(param).Invoke(this, values);
         }
 
+
         #region Pool
 
-        private struct RenderTextureKey(int width, int height, TextureImageFormat[] format)
-        {
-            public int Width = width;
-            public int Height = height;
-            public TextureImageFormat[] Format = format;
+        private static Dictionary<RenderTextureDescription, List<(RenderTexture, long frameCreated)>> pool = [];
 
-            public override bool Equals([NotNullWhen(true)] object? obj)
-            {
-                if (obj is RenderTextureKey key)
-                {
-                    if (Width == key.Width && Height == key.Height && Format.Length == key.Format.Length)
-                    {
-                        for (int i = 0; i < Format.Length; i++)
-                            if (Format[i] != key.Format[i])
-                                return false;
-                        return true;
-                    }
-                }
-                return false;
-            }
-            public override int GetHashCode()
-            {
-                int hash = 17;
-                hash = hash * 23 + Width.GetHashCode();
-                hash = hash * 23 + Height.GetHashCode();
-                foreach (var format in Format)
-                    hash = hash * 23 + ((int)format).GetHashCode();
-                return hash;
-            }
-            public static bool operator ==(RenderTextureKey left, RenderTextureKey right) => left.Equals(right);
-            public static bool operator !=(RenderTextureKey left, RenderTextureKey right) => !(left == right);
-        }
-
-        private static Dictionary<RenderTextureKey, List<(RenderTexture, long frameCreated)>> pool = [];
         private const int MaxUnusedFrames = 10;
 
-        public static RenderTexture GetTemporaryRT(int width, int height, TextureImageFormat[] format)
-        {
-            var key = new RenderTextureKey(width, height, format);
 
-            if (pool.TryGetValue(key, out var list) && list.Count > 0)
+
+        public static RenderTexture GetTemporaryRT(uint width, uint height, PixelFormat? depthFormat, PixelFormat[] colorFormats, bool randomWrite)
+        {
+            return GetTemporaryRT(new RenderTextureDescription(width, height, depthFormat, colorFormats, randomWrite));
+        }
+
+
+        public static RenderTexture GetTemporaryRT(RenderTextureDescription description)
+        {
+            if (pool.TryGetValue(description, out var list) && list.Count > 0)
             {
                 int i = list.Count - 1;
                 RenderTexture renderTexture = list[i].Item1;
@@ -153,12 +247,13 @@ namespace Prowl.Runtime
                 return renderTexture;
             }
 
-            return new RenderTexture(width, height, 1, false, format);
+            return new RenderTexture(description);
         }
+
 
         public static void ReleaseTemporaryRT(RenderTexture renderTexture)
         {
-            var key = new RenderTextureKey(renderTexture.Width, renderTexture.Height, renderTexture.InternalTextures.Select(t => t.ImageFormat).ToArray());
+            var key = new RenderTextureDescription(renderTexture);
 
             if (!pool.TryGetValue(key, out var list))
             {
@@ -168,6 +263,7 @@ namespace Prowl.Runtime
 
             list.Add((renderTexture, Time.frameCount));
         }
+
 
         public static void UpdatePool()
         {
@@ -190,6 +286,5 @@ namespace Prowl.Runtime
         }
 
         #endregion
-
     }
 }
