@@ -1,5 +1,4 @@
 ﻿using Prowl.Runtime.Audio;
-using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.SceneManagement;
 using Veldrid;
 using System;
