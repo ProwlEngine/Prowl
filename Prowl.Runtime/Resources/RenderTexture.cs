@@ -83,16 +83,14 @@ namespace Prowl.Runtime
     {
         // Since Veldrid does not provide any methods to check how many color attachments a framebuffer supports, we can cap it ourselves to a reasonable value.
         private int colorAttachmentLimit = 3;
-        private const PixelFormat defaultDepth = PixelFormat.R16_UNorm;
-        private const PixelFormat defaultColor = PixelFormat.R8_G8_B8_A8_UNorm;
 
         public Framebuffer Framebuffer { get; private set; }
 
         public PixelFormat[] ColorBufferFormats { get; private set; }
-        public Veldrid.Texture[] ColorBuffers { get; private set; }
+        public Texture2D[] ColorBuffers { get; private set; }
 
         public PixelFormat? DepthBufferFormat { get; private set; }
-        public Veldrid.Texture DepthBuffer { get; private set; }
+        public Texture2D DepthBuffer { get; private set; }
 
         public uint Width { get; private set; }
         public uint Height { get; private set; }
@@ -116,7 +114,7 @@ namespace Prowl.Runtime
         /// <param name="colorFormats">The format of the color buffer(s) in the <see cref="RenderTexture"/>. Passing null or empty will omit the creation of a color buffer.</param>
         /// <param name="depthFormat">The format of the depth stencil buffer in the <see cref="RenderTexture"/>. Passing null or empty will omit the creation of the depth stencil buffer.</param>
         /// <param name="enableRandomWrite">Enable random reads/writes to the <see cref="RenderTexture"/> internal buffers. This is useful within compute shaders which draw to the texture.</param>
-        public RenderTexture(uint width, uint height, PixelFormat[] colorFormats, PixelFormat? depthFormat = defaultDepth, bool enableRandomWrite = false) : base("RenderTexture")
+        public RenderTexture(uint width, uint height, PixelFormat[] colorFormats = null, PixelFormat? depthFormat = null, bool enableRandomWrite = false) : base("RenderTexture")
         {
             if (colorFormats != null && colorFormats.Length > colorAttachmentLimit)
                 throw new Exception($"Invalid number of color buffers! [0-{colorAttachmentLimit}]");
@@ -127,41 +125,25 @@ namespace Prowl.Runtime
             this.ColorBufferFormats = colorFormats; 
             this.RandomWriteEnabled = enableRandomWrite;
 
-            TextureDescription textureDescription = new()
-            {
-                ArrayLayers = 0,
-                Depth = 1,
-                Width = Width,
-                Height = Height,
-                MipLevels = 0,
-                SampleCount = TextureSampleCount.Count1, // Single samples for now - multisampling should be added later.
-                Type = TextureType.Texture2D,
-                Usage = (enableRandomWrite ? TextureUsage.Sampled : TextureUsage.Storage) | TextureUsage.RenderTarget
-            };
+            TextureUsage usage = (enableRandomWrite ? TextureUsage.Sampled : TextureUsage.Storage) | TextureUsage.RenderTarget;
 
             if (DepthBufferFormat != null)
             {
-                TextureDescription depthDescription = textureDescription;
+                TextureUsage depthUsage = usage | TextureUsage.DepthStencil;
 
-                depthDescription.Usage |= TextureUsage.DepthStencil;
-                depthDescription.Format = DepthBufferFormat.Value;
-
-                DepthBuffer = Graphics.ResourceFactory.CreateTexture(depthDescription);
+                DepthBuffer = new Texture2D(Width, Height, 0, DepthBufferFormat.Value, depthUsage);
             }
 
-            ColorBuffers = new Veldrid.Texture[ColorBufferFormats.Length];
+            ColorBuffers = new Texture2D[ColorBufferFormats.Length];
             if (ColorBufferFormats != null)
             {
                 for (int i = 0; i < ColorBuffers.Length; i++)
                 {
-                    TextureDescription colorDescription = textureDescription;
-                    colorDescription.Format = ColorBufferFormats[i];
-
-                    ColorBuffers[i] = Graphics.ResourceFactory.CreateTexture(colorDescription);
+                    ColorBuffers[i] = new Texture2D(Width, Height, 0, ColorBufferFormats[i], usage);
                 }
             }
 
-            FramebufferDescription description = new FramebufferDescription(DepthBuffer, ColorBuffers);
+            FramebufferDescription description = new FramebufferDescription(DepthBuffer.InternalTexture, ColorBuffers.Select(x => x.InternalTexture).ToArray());
 
             this.Framebuffer = Graphics.ResourceFactory.CreateFramebuffer(description);
         }
