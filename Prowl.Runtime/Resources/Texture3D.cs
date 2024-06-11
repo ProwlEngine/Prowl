@@ -25,11 +25,11 @@ namespace Prowl.Runtime
         /// <param name="width">The width of the <see cref="Texture3D"/>.</param>
         /// <param name="height">The height of the <see cref="Texture3D"/>.</param>
         /// <param name="depth">The depth of the <see cref="Texture3D"/>.</param>
-        /// <param name="mipLevels">How many mip levels this texcture has <see cref="Texture3D"/>.</param>
+        /// <param name="mipLevels">How many mip levels this <see cref="Texture3D"/> has.</param>
         /// <param name="format">The pixel format for this <see cref="Texture3D"/>.</param>
         public Texture3D(
             uint width, uint height, uint depth,
-            uint mipLevels = 0,
+            uint mipLevels = 1,
             PixelFormat format = PixelFormat.R8_G8_B8_A8_UNorm,
             TextureUsage usage = TextureUsage.Sampled
         ) : base(new()
@@ -38,7 +38,7 @@ namespace Prowl.Runtime
             Height = height,
             Depth = depth,
             MipLevels = mipLevels,
-            ArrayLayers = 0,
+            ArrayLayers = 1,
             Format = format,
             Usage = usage,
             SampleCount = TextureSampleCount.Count1,
@@ -47,7 +47,7 @@ namespace Prowl.Runtime
         { }
 
         /// <summary>
-        /// Sets the data of an area of the <see cref="Texture2D"/>.
+        /// Sets the data of an area of the <see cref="Texture3D"/>.
         /// </summary>
         /// <param name="ptr">The pointer from which the pixel data will be read.</param>
         /// <param name="rectX">The X coordinate of the first pixel to write.</param>
@@ -58,9 +58,9 @@ namespace Prowl.Runtime
             InternalSetDataPtr(ptr, new Vector3Int((int)rectX, (int)rectY, (int)rectZ), new Vector3Int((int)rectWidth, (int)rectHeight, (int)rectDepth), 0, mipLevel);
 
         /// <summary>
-        /// Sets the data of an area of the <see cref="Texture2D"/>.
+        /// Sets the data of an area of the <see cref="Texture3D"/>.
         /// </summary>
-        /// <typeparam name="T">A struct with the same format as this <see cref="Texture2D"/>'s pixels.</typeparam>
+        /// <typeparam name="T">A struct with the same format as this <see cref="Texture3D"/>'s pixels.</typeparam>
         /// <param name="data">A <see cref="Memory{T}"/> containing the new pixel data.</param>
         /// <param name="rectX">The X coordinate of the first pixel to write.</param>
         /// <param name="rectY">The Y coordinate of the first pixel to write.</param>
@@ -71,9 +71,9 @@ namespace Prowl.Runtime
             InternalSetData(data, new Vector3Int((int)rectX, (int)rectY, (int)rectZ), new Vector3Int((int)rectWidth, (int)rectHeight, (int)rectDepth), 0, mipLevel);
 
         /// <summary>
-        /// Sets the data of the entire <see cref="Texture2D"/>.
+        /// Sets the data of the entire <see cref="Texture3D"/>.
         /// </summary>
-        /// <typeparam name="T">A struct with the same format as this <see cref="Texture2D"/>'s pixels.</typeparam>
+        /// <typeparam name="T">A struct with the same format as this <see cref="Texture3D"/>'s pixels.</typeparam>
         /// <param name="data">A <see cref="ReadOnlySpan{T}"/> containing the new pixel data.</param>
         public void SetData<T>(Memory<T> data, uint mipLevel = 0) where T : unmanaged =>
             SetData(data, 0, 0, 0, Width, Height, Depth, mipLevel);
@@ -89,14 +89,14 @@ namespace Prowl.Runtime
         /// <summary>
         /// Copies the data of a portion of a <see cref="Texture3D"/>.
         /// </summary>
-        /// <typeparam name="T">A struct with the same format as this <see cref="Texture2D"/>'s pixels.</typeparam>
+        /// <typeparam name="T">A struct with the same format as this <see cref="Texture3D"/>'s pixels.</typeparam>
         /// <param name="data">A <see cref="Span{T}"/> in which to write the pixel data.</param>
         /// <param name="mipLevel">The mipLevel to copy.</param>
         public unsafe void CopyData<T>(Memory<T> data, uint mipLevel = 0) where T : unmanaged =>
             InternalCopyData(data, 0, mipLevel);
 
         /// <summary>
-        /// Recreates and resizes the <see cref="Texture2D"/>.
+        /// Recreates and resizes the <see cref="Texture3D"/>.
         /// </summary>
         public void RecreateTexture(uint width, uint height, uint depth)
         {

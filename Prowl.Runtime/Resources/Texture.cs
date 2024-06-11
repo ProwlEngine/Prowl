@@ -225,7 +225,7 @@ namespace Prowl.Runtime
                 throw new ArgumentOutOfRangeException("Layer", layer, "Array layer must be in the range [0, " + InternalTexture.ArrayLayers + "]");
 
             if (mipLevel >= InternalTexture.MipLevels)
-                throw new ArgumentOutOfRangeException("Specified mip level is outside of mip size");
+                throw new ArgumentOutOfRangeException("Mip level", mipLevel, "Mip level must be in the range [0, " + InternalTexture.MipLevels + "]");
         }
     }
 }

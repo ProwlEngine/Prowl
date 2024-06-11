@@ -25,11 +25,11 @@ namespace Prowl.Runtime
         /// <param name="width">The width of the <see cref="Texture2DArray"/>.</param>
         /// <param name="height">The height of the <see cref="Texture2DArray"/>.</param>
         /// <param name="layers">The height of the <see cref="Texture2DArray"/>.</param>
-        /// <param name="mipLevels">How many mip levels this texcture has <see cref="Texture3D"/>.</param>
-        /// <param name="format">The pixel format for this <see cref="Texture3D"/>.</param>
+        /// <param name="mipLevels">How many mip levels this <see cref="Texture2DArray"/> has.</param>
+        /// <param name="format">The pixel format for this <see cref="Texture2DArray"/>.</param>
         public Texture2DArray(
             uint width, uint height,
-            uint layers, uint mipLevels = 0,
+            uint layers, uint mipLevels = 1,
             PixelFormat format = PixelFormat.R8_G8_B8_A8_UNorm,
             TextureUsage usage = TextureUsage.Sampled
         ) : base(new()

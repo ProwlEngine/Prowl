@@ -21,11 +21,11 @@ namespace Prowl.Runtime
         /// </summary>
         /// <param name="width">The width of the <see cref="Texture2D"/>.</param>
         /// <param name="height">The height of the <see cref="Texture2D"/>.</param>
-        /// <param name="mipLevels">How many mip levels this texcture has <see cref="Texture3D"/>.</param>
-        /// <param name="format">The pixel format for this <see cref="Texture3D"/>.</param>
+        /// <param name="mipLevels">How many mip levels this <see cref="Texture2D"/> has.</param>
+        /// <param name="format">The pixel format for this <see cref="Texture2D"/>.</param>
         public Texture2D(
             uint width, uint height,
-            uint mipLevels = 0,
+            uint mipLevels = 1,
             PixelFormat format = PixelFormat.R8_G8_B8_A8_UNorm,
             TextureUsage usage = TextureUsage.Sampled
         ) : base(new()
@@ -34,7 +34,7 @@ namespace Prowl.Runtime
             Height = height,
             Depth = 1,
             MipLevels = mipLevels,
-            ArrayLayers = 0,
+            ArrayLayers = 1,
             Format = format,
             Usage = usage,
             SampleCount = TextureSampleCount.Count1,
