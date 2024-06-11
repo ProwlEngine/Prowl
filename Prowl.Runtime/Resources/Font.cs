@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Veldrid;
 using static Prowl.Runtime.GUI.Graphics.UIDrawList;
 
 namespace Prowl.Runtime
@@ -30,10 +31,9 @@ namespace Prowl.Runtime
 
         public void CreateResource()
         {
-            Texture = new Texture2D((uint)Width, (uint)Height, false, Rendering.Primitives.TextureImageFormat.Color4b);
+            Texture = new Texture2D((uint)Width, (uint)Height, 0, PixelFormat.R8_G8_B8_A8_SNorm, TextureUsage.Sampled | TextureUsage.Staging);
             Memory<Color32> data = new Memory<Color32>(Bitmap);
             Texture.SetData(data);
-            Texture.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
         }
 
         public static FontBuilder BuildNewFont(int width, int height)
@@ -526,7 +526,8 @@ namespace Prowl.Runtime
             var glyphsTag = value.Get("Glyphs");
             foreach (var glyphTag in glyphsTag.List)
             {
-                var glyph = new GlyphInfo {
+                var glyph = new GlyphInfo
+                {
                     X = glyphTag["X"].IntValue,
                     Y = glyphTag["Y"].IntValue,
                     Width = glyphTag["Width"].IntValue,
@@ -632,7 +633,8 @@ namespace Prowl.Runtime
 
                     for (uint i = 0; i < cd.Length; ++i)
                     {
-                        var glyphInfo = new GlyphInfo {
+                        var glyphInfo = new GlyphInfo
+                        {
                             X = cd[i].x0,
                             Y = cd[i].y0,
                             Width = cd[i].x1 - cd[i].x0,
