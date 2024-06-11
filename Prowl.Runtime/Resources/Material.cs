@@ -1,5 +1,4 @@
-﻿using Prowl.Runtime.Rendering;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -68,6 +67,8 @@ namespace Prowl.Runtime
             colors.Clear();
         }
 
+        #warning Veldrid change
+        /*
         public static void Apply(MaterialPropertyBlock mpb, GraphicsProgram shader)
         {
             foreach (var item in mpb.floats)
@@ -113,6 +114,7 @@ namespace Prowl.Runtime
             foreach (var item in keysToUpdate)
                 mpb.textures[item.Item1] = item.Item2;
         }
+        */
     }
 
     public sealed class Material : EngineObject
@@ -182,12 +184,15 @@ namespace Prowl.Runtime
 
         void InternalSetPass(Shader.CompiledShader.Pass pass, bool apply = false)
         {
+            #warning Veldrid change
+            /*
             // Set the shader
             Graphics.Device.SetState(pass.State);
             Graphics.Device.BindProgram(pass.Program); // Ensure the program is in use
 
             if (apply)
                 MaterialPropertyBlock.Apply(PropertyBlock, Graphics.Device.CurrentProgram);
+            */
         }
 
         Shader.CompiledShader GetVariant(string[] allKeywords)

@@ -20,6 +20,8 @@ public class PointLight : MonoBehaviour
 
     public override void OnRenderObject()
     {
+        #warning Veldrid change
+        /*
         if (mesh == null)
             mesh = Mesh.CreateSphere(1f, 16, 16);
 
@@ -55,5 +57,6 @@ public class PointLight : MonoBehaviour
         Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
         Gizmos.Color = Color.yellow;
         Gizmos.DrawSphere(Vector3.zero, radius);
+        */
     }
 }

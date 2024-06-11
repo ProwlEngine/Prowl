@@ -1,8 +1,6 @@
-﻿using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.Primitives;
+﻿namespace Prowl.Runtime;
 
-namespace Prowl.Runtime;
-
+/*
 public class GBuffer
 {
     internal RenderTexture buffer;
@@ -79,3 +77,4 @@ public class GBuffer
         frameBuffer.Dispose();
     }
 }
+*/

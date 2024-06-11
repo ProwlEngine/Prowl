@@ -1,5 +1,4 @@
 ﻿using Prowl.Icons;
-using Prowl.Runtime.Rendering;
 using System;
 using System.IO;
 using System.Reflection;
@@ -308,8 +307,8 @@ namespace Prowl.Runtime.GUI.Graphics
             if (text_begin == text_end)
                 return;
 
-
-            System.Diagnostics.Debug.Assert(font.Texture.Handle == _TextureIdStack[_TextureIdStack.Count - 1]);  // Use high-level ImGui::PushFont() or low-level ImDrawList::PushTextureId() to change font.
+#warning Veldrid change
+            // System.Diagnostics.Debug.Assert(font.Texture.Handle == _TextureIdStack[_TextureIdStack.Count - 1]);  // Use high-level ImGui::PushFont() or low-level ImDrawList::PushTextureId() to change font.
 
             // reserve vertices for worse case (over-reserving is useful and easily amortized)
             int char_count = text_end - text_begin;
@@ -1142,6 +1141,7 @@ namespace Prowl.Runtime.GUI.Graphics
         private const int IM_COL32_B_SHIFT = 16;
         private const int IM_COL32_A_SHIFT = 24;
 
+        #warning Veldrid change
         /*
         public unsafe static void Draw(GL _gl, Vector2 DisplaySize, UIDrawList[] lists)
         {
@@ -1428,7 +1428,8 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public static Font DefaultFont { get; private set; }
 
-        /*
+        #warning Veldrid change
+        /*  
         /// <summary>
         /// Creates the texture used to render text.
         /// </summary>
@@ -1472,6 +1473,9 @@ namespace Prowl.Runtime.GUI.Graphics
         private static uint _vboHandle;
         private static uint _elementsHandle;
         private static uint _vertexArrayObject;
+
+        #warning Veldrid change
+        public class GraphicsProgram { }
 
         private static GraphicsProgram? _shader = null;
 

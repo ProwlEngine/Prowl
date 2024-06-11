@@ -1,5 +1,4 @@
 ﻿using Prowl.Icons;
-using Prowl.Runtime.Resources.RenderPipeline;
 using Prowl.Runtime.SceneManagement;
 using System;
 using System.Collections.Generic;
@@ -12,7 +11,9 @@ public class Camera : MonoBehaviour
 {
     public static Camera? Current;
 
-    public AssetRef<RenderPipeline> RenderPipeline;
+    #warning Veldrid change
+    // public AssetRef<RenderPipeline> RenderPipeline;
+
     public bool DoClear = true;
     public Color ClearColor = new Color(0f, 0f, 0f, 1f);
     public float FieldOfView = 60f;
@@ -32,7 +33,8 @@ public class Camera : MonoBehaviour
 
     public AssetRef<RenderTexture> Target;
 
-    public GBuffer gBuffer { get; private set; }
+    #warning Veldrid change
+    //public GBuffer gBuffer { get; private set; }
 
     public enum DebugDraw { Off, Albedo, Normals, Depth, Velocity, ObjectID }
     public DebugDraw debugDraw = DebugDraw.Off;
@@ -55,6 +57,8 @@ public class Camera : MonoBehaviour
 
     private void CheckGBuffer()
     {
+        #warning Veldrid change
+        /*
         RenderResolution = Math.Clamp(RenderResolution, 0.1f, 4.0f);
 
         Vector2 size = GetRenderTargetSize() * RenderResolution;
@@ -69,6 +73,7 @@ public class Camera : MonoBehaviour
             gBuffer = new GBuffer((int)size.x, (int)size.y);
             Resize?.Invoke(gBuffer.Width, gBuffer.Height);
         }
+        */
     }
 
     internal void RenderAllOfOrder(RenderingOrder order)
@@ -82,11 +87,14 @@ public class Camera : MonoBehaviour
 
     private void OpaquePass()
     {
+        #warning Veldrid change
+        /*
         SceneManager.ForeachComponent((x) => x.Do(x.OnPreRender));
         gBuffer.Begin();                            // Start
         RenderAllOfOrder(RenderingOrder.Opaque);    // Render
         gBuffer.End();                              // End
         SceneManager.ForeachComponent((x) => x.Do(x.OnPostRender));
+        */
     }
 
     Matrix4x4? oldView = null;
@@ -96,6 +104,8 @@ public class Camera : MonoBehaviour
 
     public void Render(int width, int height)
     {
+        #warning Veldrid change
+        /*
         if (RenderPipeline.IsAvailable == false)
         {
             Debug.LogError($"Camera on {GameObject.Name} has no RenderPipeline assigned, Falling back to default.");
@@ -199,10 +209,13 @@ public class Camera : MonoBehaviour
 
         Current = null;
         Graphics.UseJitter = false;
+        */
     }
 
     private void EarlyEndRender()
     {
+        #warning Veldrid change
+        /*
         Graphics.UseJitter = false;
         if (DoClear)
         {
@@ -211,6 +224,7 @@ public class Camera : MonoBehaviour
             Target.Res?.End();
         }
         Current = null;
+        */
     }
 
     public override void LateUpdate()
@@ -220,7 +234,8 @@ public class Camera : MonoBehaviour
 
     public override void OnDisable()
     {
-        gBuffer?.UnloadGBuffer();
+        #warning Veldrid change
+        //gBuffer?.UnloadGBuffer();
 
         // Clear the Cached RenderTextures
         foreach (var (name, (renderTexture, frameCreated)) in cachedRenderTextures)
@@ -272,6 +287,8 @@ public class Camera : MonoBehaviour
     private readonly Dictionary<string, (RenderTexture, long frameCreated)> cachedRenderTextures = [];
     private const int MaxUnusedFrames = 10;
 
+    #warning Veldrid change
+    /*
     public RenderTexture GetCachedRT(string name, int width, int height, TextureImageFormat[] format)
     {
         if (cachedRenderTextures.ContainsKey(name))
@@ -286,6 +303,7 @@ public class Camera : MonoBehaviour
         cachedRenderTextures[name] = (rt, Time.frameCount);
         return rt;
     }
+    */
 
     public void UpdateCachedRT()
     {

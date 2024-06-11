@@ -41,7 +41,8 @@ public class MeshRenderer : MonoBehaviour, ISerializable
             {
 
                 material.SetPass(i);
-                Graphics.DrawMeshNow(Mesh.Res!, mat, material, prevMat);
+                #warning Veldrid change
+                //Graphics.DrawMeshNow(Mesh.Res!, mat, material, prevMat);
             }
         }
 
@@ -57,11 +58,14 @@ public class MeshRenderer : MonoBehaviour, ISerializable
 
             var mvp = Matrix4x4.Identity;
             mvp = Matrix4x4.Multiply(mvp, mat);
+            #warning Veldrid change
+            /*
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthProjection);
             Material.Res!.SetMatrix("mvp", mvp);
             Material.Res!.SetShadowPass(true);
             Graphics.DrawMeshNowDirect(Mesh.Res!);
+            */
         }
     }
 

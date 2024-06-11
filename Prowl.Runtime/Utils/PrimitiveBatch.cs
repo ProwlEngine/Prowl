@@ -1,11 +1,13 @@
-﻿using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.Primitives;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace Prowl.Runtime
 {
     public class PrimitiveBatch
     {
+        #warning Veldrid change
+        public class GraphicsVertexArray { }
+        public class GraphicsBuffer { }
+
         private struct Vertex
         {
             public float x, y, z;
@@ -25,14 +27,15 @@ namespace Prowl.Runtime
         {
             this.primitiveType = primitiveType;
 
-            vbo = Graphics.Device.CreateBuffer(BufferType.VertexBuffer, new byte[0], true);
+            #warning Veldrid change
+            //vbo = Graphics.Device.CreateBuffer(BufferType.VertexBuffer, new byte[0], true);
 
             var format = new VertexFormat([
                 new VertexFormat.Element((uint)0, VertexFormat.VertexType.Float, 3),
                 new VertexFormat.Element((uint)1, VertexFormat.VertexType.Float, 4)
             ]);
 
-            vao = Graphics.Device.CreateVertexArray(format, vbo, null);
+            //vao = Graphics.Device.CreateVertexArray(format, vbo, null);
 
             IsUploaded = false;
         }
@@ -57,7 +60,8 @@ namespace Prowl.Runtime
         {
             if (vertices.Count == 0) return;
 
-            Graphics.Device.SetBuffer(vbo, vertices.ToArray(), true);
+            #warning Veldrid change
+            //Graphics.Device.SetBuffer(vbo, vertices.ToArray(), true);
 
             IsUploaded = true;
         }
@@ -66,8 +70,9 @@ namespace Prowl.Runtime
         {
             if (vertices.Count == 0 || vao == null) return;
 
-            Graphics.Device.BindVertexArray(vao);
-            Graphics.Device.Draw(primitiveType, 0, (uint)vertices.Count);
+            #warning Veldrid change
+            //Graphics.Device.BindVertexArray(vao);
+            //Graphics.Device.Draw(primitiveType, 0, (uint)vertices.Count);
         }
     }
 

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using Prowl.Runtime.Rendering.Primitives;
 
 namespace Prowl.Runtime
 {
@@ -91,9 +90,10 @@ namespace Prowl.Runtime
             catch
             {
                 return; // Happens when no project is loaded (Or no Gizmos shader was found)
-            }
+            }   
 
-            LineBatch ??= new PrimitiveBatch(Topology.Lines);
+            #warning Veldrid change
+            //LineBatch ??= new PrimitiveBatch(Topology.Lines);
 
             if (LineBatch.IsUploaded == false)
             {
@@ -110,8 +110,11 @@ namespace Prowl.Runtime
             }
 
             var mvp = Matrix4x4.Identity;
-            mvp = Matrix4x4.Multiply(mvp, Graphics.MatView);
-            mvp = Matrix4x4.Multiply(mvp, Graphics.MatProjection);
+
+            #warning Veldrid change
+            //mvp = Matrix4x4.Multiply(mvp, Graphics.MatView);
+            //mvp = Matrix4x4.Multiply(mvp, Graphics.MatProjection);
+            
             mat.SetMatrix("mvp", mvp);
             mat.SetPass(0, true);
             LineBatch.Draw();

@@ -30,7 +30,8 @@ namespace Prowl.Runtime.GUI
             foreach (var index in _drawList.Keys.OrderBy(x => x))
             {
                 _drawList[index].Clear();
-                _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
+                #warning Veldrid change
+                //_drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
                 drawListsOrdered.Add(_drawList[index]);
             }
         }
@@ -64,7 +65,8 @@ namespace Prowl.Runtime.GUI
             if (!_drawList.ContainsKey(index))
             {
                 _drawList[index] = new UIDrawList();
-                _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
+                #warning Veldrid change
+                //_drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
             }
 
             // Copy over the clip rect from the previous list
@@ -144,7 +146,9 @@ namespace Prowl.Runtime.GUI
                     size.y = adjustedHeight;
                 }
             }
-            _drawList[currentZIndex].AddImage(texture.Handle, position, position + size, uv0, uv1, color.GetUInt());
+
+            #warning Veldrid change
+            //_drawList[currentZIndex].AddImage(texture.Handle, position, position + size, uv0, uv1, color.GetUInt());
         }
 
         #endregion
@@ -185,7 +189,9 @@ namespace Prowl.Runtime.GUI
 
         public void DrawText(Font font, string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f, Rect? clip = null)
         {
-            _drawList[currentZIndex].PushTextureID(font.Texture.Handle);
+            #warning Veldrid change
+            //_drawList[currentZIndex].PushTextureID(font.Texture.Handle);
+            
             if (clip != null)
                 _drawList[currentZIndex].AddText(font, (float)fontSize, position, color.GetUInt(), text, wrap_width: (float)wrapwidth, cpu_fine_clip_rect: new Vector4(clip.Value.Position, clip.Value.Position + clip.Value.Size));
             else

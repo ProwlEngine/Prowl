@@ -1,11 +1,14 @@
-﻿using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.Primitives;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace Prowl.Runtime
 {
     public class SDFBatch
     {
+        #warning Veldrid change
+        public class GraphicsVertexArray { }
+        public class GraphicsBuffer { }
+        public class GraphicsProgram { }
+
         private struct Vertex
         {
             public float x, y;
@@ -26,6 +29,8 @@ namespace Prowl.Runtime
 
         public SDFBatch(int width, int height)
         {
+            #warning Veldrid change
+            /*
             target = new RenderTexture(width, height, 1, false, [ TextureImageFormat.Color4b ]);
             w = width;
             h = height;
@@ -42,14 +47,18 @@ namespace Prowl.Runtime
             shader = Graphics.Device.CompileProgram(FragmentShader, VertexShader, "");
 
             IsUploaded = false;
+            */
         }
 
         public void Resize(int width, int height)
         {
+            #warning Veldrid change
+            /*
             target?.Dispose();
             target = new RenderTexture(width, height, 1, false, [ TextureImageFormat.Color4b ]);
             w = width;
             h = height;
+            */
         }
 
         public void Reset()
@@ -81,7 +90,8 @@ namespace Prowl.Runtime
         {
             if (vertices.Count == 0) return;
 
-            Graphics.Device.SetBuffer(vbo, vertices.ToArray(), true);
+            #warning Veldrid change
+            //Graphics.Device.SetBuffer(vbo, vertices.ToArray(), true);
 
             IsUploaded = true;
         }
@@ -90,12 +100,15 @@ namespace Prowl.Runtime
         {
             if (vertices.Count == 0 || vao == null) return;
 
+            #warning Veldrid change
+            /*
             target.Begin();
             Graphics.Clear();
             Graphics.Device.BindProgram(shader);
             Graphics.Device.BindVertexArray(vao);
             Graphics.Device.Draw(Topology.Quads, 0, (uint)vertices.Count);
             target.End();
+            */
         }
 
 

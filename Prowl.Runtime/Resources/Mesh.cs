@@ -1,12 +1,17 @@
-﻿using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.Primitives;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using static VertexFormat;
 
 namespace Prowl.Runtime
 {
+    public enum Topology 
+    {
+        None,
+        Triangles,
+        TriangleStrip
+    };
+
     public enum IndexFormat : byte
     {
         UInt16 = 0,
@@ -119,9 +124,12 @@ namespace Prowl.Runtime
         public int VertexCount => vertices?.Length ?? 0;
         public int IndexCount => indices?.Length ?? 0;
 
+        #warning Veldrid change
+        /*
         public GraphicsVertexArray? VertexArrayObject => vertexArrayObject;
         public GraphicsBuffer VertexBuffer => vertexBuffer;
         public GraphicsBuffer IndexBuffer => indexBuffer;
+        */
 
         public bool HasNormals => (normals?.Length ?? 0) > 0;
         public bool HasTangents => (tangents?.Length ?? 0) > 0;
@@ -150,9 +158,12 @@ namespace Prowl.Runtime
         IndexFormat indexFormat = IndexFormat.UInt16;
         Topology meshTopology = Topology.TriangleStrip;
 
+        #warning Veldrid change
+        /*
         GraphicsVertexArray? vertexArrayObject;
         GraphicsBuffer vertexBuffer;
         GraphicsBuffer indexBuffer;
+        */
 
         public Mesh() { }
 
@@ -176,6 +187,8 @@ namespace Prowl.Runtime
 
         public void Upload()
         {
+            #warning Veldrid change
+            /*
             if (changed == false && vertexArrayObject != null)
                 return;
 
@@ -246,6 +259,7 @@ namespace Prowl.Runtime
             Debug.Log($"VAO: [ID {vertexArrayObject}] Mesh uploaded successfully to VRAM (GPU)");
 
             Graphics.Device.BindVertexArray(null);
+            */
         }
 
         public void RecalculateBounds()
@@ -423,12 +437,15 @@ namespace Prowl.Runtime
 
         private void DeleteGPUBuffers()
         {
+            #warning Veldrid change
+            /*
             vertexArrayObject?.Dispose();
             vertexArrayObject = null;
             vertexBuffer?.Dispose();
             vertexBuffer = null;
             indexBuffer?.Dispose();
             indexBuffer = null;
+            */
         }
 
         private T ReadVertexData<T>(T value)

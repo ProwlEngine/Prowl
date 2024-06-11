@@ -1,6 +1,4 @@
-﻿using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.Primitives;
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Prowl.Runtime
@@ -11,6 +9,10 @@ namespace Prowl.Runtime
     /// </summary>
     public sealed class Shader : EngineObject, ISerializable
     {
+        #warning Veldrid change
+        public class RasterizerState { }
+        public class GraphicsProgram { }
+
         public class Property
         {
             public string Name = "";
@@ -79,8 +81,10 @@ namespace Prowl.Runtime
                     try
                     {
                         PrepareFragVert(ref frag, ref vert, defines);
-                        var program = Graphics.Device.CompileProgram(frag, vert, "");
-                        compiledPasses[i] = new(Passes[i].State, program);
+
+                        #warning Veldrid change
+                        //var program = Graphics.Device.CompileProgram(frag, vert, "");
+                        //compiledPasses[i] = new(Passes[i].State, program);
                     }
                     catch (Exception e)
                     {
@@ -91,7 +95,9 @@ namespace Prowl.Runtime
                         frag = fallback.Res!.Passes[0].Fragment;
                         vert = fallback.Res!.Passes[0].Vertex;
                         PrepareFragVert(ref frag, ref vert, defines);
-                        compiledPasses[i] = new(new(), Graphics.Device.CompileProgram(frag, vert, ""));
+                        
+                        #warning Veldrid change
+                        //compiledPasses[i] = new(new(), Graphics.Device.CompileProgram(frag, vert, ""));
                     }
 
                 }
@@ -104,8 +110,9 @@ namespace Prowl.Runtime
                     string frag = ShadowPass.Fragment;
                     string vert = ShadowPass.Vertex;
                     PrepareFragVert(ref frag, ref vert, defines);
-                    var program = Graphics.Device.CompileProgram(frag, vert, "");
-                    compiledShader.shadowPass = new(ShadowPass.State, program);
+                    #warning Veldrid change
+                    //var program = Graphics.Device.CompileProgram(frag, vert, "");
+                    //compiledShader.shadowPass = new(ShadowPass.State, program);
                 }
                 else
                 {
@@ -114,7 +121,8 @@ namespace Prowl.Runtime
                     string frag = depth.Res!.Passes[0].Fragment;
                     string vert = depth.Res!.Passes[0].Vertex;
                     PrepareFragVert(ref frag, ref vert, defines);
-                    compiledShader.shadowPass = new(new(), Graphics.Device.CompileProgram(frag, vert, ""));
+                    #warning Veldrid change
+                    //compiledShader.shadowPass = new(new(), Graphics.Device.CompileProgram(frag, vert, ""));
                 }
 
                 return compiledShader;

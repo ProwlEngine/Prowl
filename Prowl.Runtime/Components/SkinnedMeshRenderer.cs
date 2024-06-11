@@ -39,6 +39,8 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
 
     public override void OnRenderObject()
     {
+        #warning Veldrid change
+        /*
         var mat = GameObject.GlobalCamRelative;
         int camID = Camera.Current.InstanceID;
         if (!prevMats.ContainsKey(camID)) prevMats[camID] = GameObject.GlobalCamRelative;
@@ -60,6 +62,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         }
 
         prevMats[camID] = mat;
+        */
     }
 
     public override void OnRenderObjectDepth()
@@ -71,6 +74,8 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
             Material.Res!.SetMatrices("bindPoses", Mesh.Res.bindPoses);
             Material.Res!.SetMatrices("boneTransforms", boneTransforms);
 
+            #warning Veldrid change
+            /*
             var mvp = Matrix4x4.Identity;
             mvp = Matrix4x4.Multiply(mvp, GameObject.GlobalCamRelative);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
@@ -80,6 +85,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
             Graphics.DrawMeshNowDirect(Mesh.Res!);
 
             Material.Res!.DisableKeyword("SKINNED");
+            */
         }
     }
 
