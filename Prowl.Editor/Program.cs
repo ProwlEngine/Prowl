@@ -99,7 +99,7 @@ public static class Program
                 try
                 {
                     // Only handle input if the game window is focused
-                    Input.Enabled = GameWindow.IsGameWindowFocused;
+                    Input.Enabled = GameWindow.IsGameWindowFocused || PlayMode.Current == PlayMode.Mode.Playing;
                     SceneManager.Update();
                     Input.Enabled = true;
                 }

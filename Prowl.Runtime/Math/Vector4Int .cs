@@ -146,7 +146,7 @@ namespace Prowl.Runtime
             return sb.ToString();
         }
         
-        public bool IsFinate() => Mathf.IsValid(x) && Mathf.IsValid(y) && Mathf.IsValid(z) && Mathf.IsValid(w);
+        public bool IsFinate() => MathD.IsValid(x) && MathD.IsValid(y) && MathD.IsValid(z) && MathD.IsValid(w);
         #endregion Public Instance Methods
 
         public static Vector4Int zero { get { return new Vector4Int(); } }

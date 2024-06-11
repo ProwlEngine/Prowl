@@ -118,20 +118,20 @@ namespace Prowl.Runtime
                 return false;
 
             Result = CreateWithBoundary(
-                Mathf.Max(Left.Left, Right.Left),
-                Mathf.Max(Left.Top, Right.Top),
-                Mathf.Min(Left.Right, Right.Right),
-                Mathf.Min(Left.Bottom, Right.Bottom));
+                MathD.Max(Left.Left, Right.Left),
+                MathD.Max(Left.Top, Right.Top),
+                MathD.Min(Left.Right, Right.Right),
+                MathD.Min(Left.Bottom, Right.Bottom));
             return true;
         }
 
         public static Rect CombineRect(Rect a, Rect b)
         {
             Rect result = new Rect();
-            result.Min.x = Mathf.Min(a.Min.x, b.Min.x);
-            result.Min.y = Mathf.Min(a.Min.y, b.Min.y);
-            result.Max.x = Mathf.Max(a.Max.x, b.Max.x);
-            result.Max.y = Mathf.Max(a.Max.y, b.Max.y);
+            result.Min.x = MathD.Min(a.Min.x, b.Min.x);
+            result.Min.y = MathD.Min(a.Min.y, b.Min.y);
+            result.Max.x = MathD.Max(a.Max.x, b.Max.x);
+            result.Max.y = MathD.Max(a.Max.y, b.Max.y);
             return result;
         }
 

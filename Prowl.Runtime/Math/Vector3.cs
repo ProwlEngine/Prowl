@@ -35,7 +35,7 @@ namespace Prowl.Runtime
         #region Public Instance Properties
         public Vector3 normalized { get { return Normalize(this); } }
 
-        public double magnitude { get { return Mathf.Sqrt(x * x + y * y + z * z); } }
+        public double magnitude { get { return MathD.Sqrt(x * x + y * y + z * z); } }
 
         public double sqrMagnitude { get { return x * x + y * y + z * z; } }
 
@@ -164,7 +164,7 @@ namespace Prowl.Runtime
             return sb.ToString();
         }
 
-        public bool IsFinate() => Mathf.IsValid(x) && Mathf.IsValid(y) && Mathf.IsValid(z);
+        public bool IsFinate() => MathD.IsValid(x) && MathD.IsValid(y) && MathD.IsValid(z);
 
         #endregion Public Instance Methods
 
@@ -178,14 +178,14 @@ namespace Prowl.Runtime
         public static Vector3 forward { get { return new Vector3(0.0, 0.0, 1.0); } }
         public static Vector3 backward { get { return new Vector3(0.0, 0.0, -1.0); } }
 
-        public static Vector3 infinity = new Vector3(Mathf.Infinity, Mathf.Infinity, Mathf.Infinity);
+        public static Vector3 infinity = new Vector3(MathD.Infinity, MathD.Infinity, MathD.Infinity);
 
         #endregion Public Static Properties
 
         #region Public Static Methods
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static double AngleBetween(Vector3 from, Vector3 to) => Mathf.Acos(Mathf.Clamp(Dot(from.normalized, to.normalized), -1f, 1f));
+        public static double AngleBetween(Vector3 from, Vector3 to) => MathD.Acos(MathD.Clamp(Dot(from.normalized, to.normalized), -1f, 1f));
 
         /// <summary> Returns the Euclidean distance between the two given points. </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -209,10 +209,10 @@ namespace Prowl.Runtime
             return current + toVector / dist * maxDistanceDelta;
         }
 
-        public static Vector3 SmoothDamp(Vector3 current, Vector3 target, ref Vector3 currentVelocity, double smoothTime, double maxSpeed = Mathf.Infinity, double deltaTime = 0.02)
+        public static Vector3 SmoothDamp(Vector3 current, Vector3 target, ref Vector3 currentVelocity, double smoothTime, double maxSpeed = MathD.Infinity, double deltaTime = 0.02)
         {
             // Based on Game Programming Gems 4 Chapter 1.10
-            smoothTime = Mathf.Max(0.0001F, smoothTime);
+            smoothTime = MathD.Max(0.0001F, smoothTime);
             double omega = 2 / smoothTime;
 
             double x = omega * deltaTime;

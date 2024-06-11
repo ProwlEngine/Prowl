@@ -249,7 +249,7 @@ public class SceneViewWindow : EditorWindow
                         mouseDelta.y = -mouseDelta.y;
                     camY += mouseDelta.x * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
                     camX += mouseDelta.y * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
-                    camX = Mathf.Clamp(camX, -89.9f, 89.9f);
+                    camX = MathD.Clamp(camX, -89.9f, 89.9f);
                     Cam.GameObject.Transform.eulerAngles = new Vector3(camX, camY, 0);
 
                     gui.PointerPos = WindowCenter;
@@ -299,7 +299,7 @@ public class SceneViewWindow : EditorWindow
                     }
 
                     // Calculate the zoom factor based on the size of the bounding box
-                    float boundingBoxSize = (float)Mathf.Max(combinedBounds.size.x, combinedBounds.size.y,
+                    float boundingBoxSize = (float)MathD.Max(combinedBounds.size.x, combinedBounds.size.y,
                         combinedBounds.size.z);
                     float zoomFactor = boundingBoxSize * defaultZoomFactor;
 

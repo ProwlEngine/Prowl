@@ -125,8 +125,8 @@ public class GameWindow : EditorWindow
             gui.Draw2D.DrawRectFilled(innerRect, Color.black);
 
             var renderSize = innerRect.Size;
-            renderSize.x = Mathf.Max(renderSize.x, 1);
-            renderSize.y = Mathf.Max(renderSize.y, 1);
+            renderSize.x = MathD.Max(renderSize.x, 1);
+            renderSize.y = MathD.Max(renderSize.y, 1);
 
             // Find Camera to render
             var allCameras = EngineObject.FindObjectsOfType<Camera>();

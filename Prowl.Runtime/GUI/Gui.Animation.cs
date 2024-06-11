@@ -94,7 +94,7 @@ namespace Prowl.Runtime.GUI
             {
                 BoolAnimation anim = _boolAnimations[storageID];
                 double speed = 1.0 / anim.Duration;
-                anim.ElapsedTime = Mathf.MoveTowards(anim.ElapsedTime, anim.CurrentValue ? 1 : 0, dt * speed);
+                anim.ElapsedTime = MathD.MoveTowards(anim.ElapsedTime, anim.CurrentValue ? 1 : 0, dt * speed);
                 _boolAnimations[storageID] = anim;
             }
         }
@@ -150,50 +150,50 @@ namespace Prowl.Runtime.GUI
         const double ConstantA = 1.70158;
         const double ConstantB = ConstantA * 1.525;
         const double ConstantC = ConstantA + 1.0;
-        const double ConstantD = 2.0 * Mathf.PI / 3.0;
-        const double ConstantE = 2.0 * Mathf.PI / 4.5;
+        const double ConstantD = 2.0 * MathD.PI / 3.0;
+        const double ConstantE = 2.0 * MathD.PI / 4.5;
         const double ConstantF = 7.5625;
         const double ConstantG = 2.75;
 
         static double Linear(double time) => time;
 
-        static double SineIn(double time) => 1.0 - Mathf.Cos((time * Mathf.PI) / 2.0);
-        static double SineOut(double time) => Mathf.Sin((time * Mathf.PI) / 2.0);
-        static double SineInOut(double time) => -(Mathf.Cos(Mathf.PI * time) - 1.0) / 2.0;
+        static double SineIn(double time) => 1.0 - MathD.Cos((time * MathD.PI) / 2.0);
+        static double SineOut(double time) => MathD.Sin((time * MathD.PI) / 2.0);
+        static double SineInOut(double time) => -(MathD.Cos(MathD.PI * time) - 1.0) / 2.0;
 
         static double QuadIn(double time) => time * time;
         static double QuadOut(double time) => 1 - (1 - time) * (1 - time);
-        static double QuadInOut(double time) => time < 0.5 ? 2 * time * time : 1 - Mathf.Pow(-2 * time + 2, 2) / 2;
+        static double QuadInOut(double time) => time < 0.5 ? 2 * time * time : 1 - MathD.Pow(-2 * time + 2, 2) / 2;
 
         static double CubicIn(double time) => time * time * time;
-        static double CubicOut(double time) => 1 - Mathf.Pow(1 - time, 3);
-        static double CubicInOut(double time) => time < 0.5 ? 4 * time * time * time : 1 - Mathf.Pow(-2 * time + 2, 3) / 2;
+        static double CubicOut(double time) => 1 - MathD.Pow(1 - time, 3);
+        static double CubicInOut(double time) => time < 0.5 ? 4 * time * time * time : 1 - MathD.Pow(-2 * time + 2, 3) / 2;
 
         static double QuartIn(double time) => time * time * time * time;
-        static double QuartOut(double time) => 1 - Mathf.Pow(1 - time, 4);
-        static double QuartInOut(double time) => time < 0.5 ? 8 * time * time * time * time : 1 - Mathf.Pow(-2 * time + 2, 4) / 2;
+        static double QuartOut(double time) => 1 - MathD.Pow(1 - time, 4);
+        static double QuartInOut(double time) => time < 0.5 ? 8 * time * time * time * time : 1 - MathD.Pow(-2 * time + 2, 4) / 2;
 
         static double QuintIn(double time) => time * time * time * time * time;
-        static double QuintOut(double time) => 1 - Mathf.Pow(1 - time, 5);
-        static double QuintInOut(double time) => time < 0.5 ? 16 * time * time * time * time * time : 1 - Mathf.Pow(-2 * time + 2, 5) / 2;
+        static double QuintOut(double time) => 1 - MathD.Pow(1 - time, 5);
+        static double QuintInOut(double time) => time < 0.5 ? 16 * time * time * time * time * time : 1 - MathD.Pow(-2 * time + 2, 5) / 2;
 
-        static double ExpoIn(double time) => time == 0 ? 0 : Mathf.Pow(2, 10 * time - 10);
-        static double ExpoOut(double time) => time == 1 ? 1 : 1 - Mathf.Pow(2, -10 * time);
-        static double ExpoInOut(double time) => time == 0 ? 0 : time == 1 ? 1 : time < 0.5 ? Mathf.Pow(2, 20 * time - 10) / 2 : (2 - Mathf.Pow(2, -20 * time + 10)) / 2;
+        static double ExpoIn(double time) => time == 0 ? 0 : MathD.Pow(2, 10 * time - 10);
+        static double ExpoOut(double time) => time == 1 ? 1 : 1 - MathD.Pow(2, -10 * time);
+        static double ExpoInOut(double time) => time == 0 ? 0 : time == 1 ? 1 : time < 0.5 ? MathD.Pow(2, 20 * time - 10) / 2 : (2 - MathD.Pow(2, -20 * time + 10)) / 2;
 
-        static double CircIn(double time) => 1 - Mathf.Sqrt(1 - Mathf.Pow(time, 2));
-        static double CircOut(double time) => Mathf.Sqrt(1 - Mathf.Pow(time - 1, 2));
-        static double CircInOut(double time) => time < 0.5 ? (1 - Mathf.Sqrt(1 - Mathf.Pow(2 * time, 2))) / 2 : (Mathf.Sqrt(1 - Mathf.Pow(-2 * time + 2, 2)) + 1) / 2;
+        static double CircIn(double time) => 1 - MathD.Sqrt(1 - MathD.Pow(time, 2));
+        static double CircOut(double time) => MathD.Sqrt(1 - MathD.Pow(time - 1, 2));
+        static double CircInOut(double time) => time < 0.5 ? (1 - MathD.Sqrt(1 - MathD.Pow(2 * time, 2))) / 2 : (MathD.Sqrt(1 - MathD.Pow(-2 * time + 2, 2)) + 1) / 2;
 
         static double BackIn(double time) => ConstantC * time * time * time - ConstantA * time * time;
-        static double BackOut(double time) => 1.0 + ConstantC * Mathf.Pow(time - 1, 3) + ConstantA * Mathf.Pow(time - 1, 2);
+        static double BackOut(double time) => 1.0 + ConstantC * MathD.Pow(time - 1, 3) + ConstantA * MathD.Pow(time - 1, 2);
         static double BackInOut(double time) => time < 0.5 ?
-              Mathf.Pow(2 * time, 2) * ((ConstantB + 1) * 2 * time - ConstantB) / 2 :
-              (Mathf.Pow(2 * time - 2, 2) * ((ConstantB + 1) * (time * 2 - 2) + ConstantB) + 2) / 2;
+              MathD.Pow(2 * time, 2) * ((ConstantB + 1) * 2 * time - ConstantB) / 2 :
+              (MathD.Pow(2 * time - 2, 2) * ((ConstantB + 1) * (time * 2 - 2) + ConstantB) + 2) / 2;
 
-        static double ElasticIn(double time) => time == 0 ? 0 : time == 1 ? 1 : -Mathf.Pow(2, 10 * time - 10) * Mathf.Sin((time * 10.0 - 10.75) * ConstantD);
-        static double ElasticOut(double time) => time == 0 ? 0 : time == 1 ? 1 : Mathf.Pow(2, -10 * time) * Mathf.Sin((time * 10 - 0.75) * ConstantD) + 1;
-        static double ElasticInOut(double time) => time == 0 ? 0 : time == 1 ? 1 : time < 0.5 ? -(Mathf.Pow(2, 20 * time - 10) * Mathf.Sin((20 * time - 11.125) * ConstantE)) / 2 : Mathf.Pow(2, -20 * time + 10) * Mathf.Sin((20 * time - 11.125) * ConstantE) / 2 + 1;
+        static double ElasticIn(double time) => time == 0 ? 0 : time == 1 ? 1 : -MathD.Pow(2, 10 * time - 10) * MathD.Sin((time * 10.0 - 10.75) * ConstantD);
+        static double ElasticOut(double time) => time == 0 ? 0 : time == 1 ? 1 : MathD.Pow(2, -10 * time) * MathD.Sin((time * 10 - 0.75) * ConstantD) + 1;
+        static double ElasticInOut(double time) => time == 0 ? 0 : time == 1 ? 1 : time < 0.5 ? -(MathD.Pow(2, 20 * time - 10) * MathD.Sin((20 * time - 11.125) * ConstantE)) / 2 : MathD.Pow(2, -20 * time + 10) * MathD.Sin((20 * time - 11.125) * ConstantE) / 2 + 1;
 
         static double BounceIn(double t) => 1 - BounceOut(1 - t);
         static double BounceOut(double t)

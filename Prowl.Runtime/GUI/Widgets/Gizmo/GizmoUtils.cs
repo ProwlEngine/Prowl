@@ -454,8 +454,8 @@ namespace Prowl.Runtime.GUI
                 }
             }
 
-            var ta = Mathf.Abs(sn) < 1e-8 ? 0.0 : sn / sd;
-            var tb = Mathf.Abs(tn) < 1e-8 ? 0.0 : tn / td;
+            var ta = MathD.Abs(sn) < 1e-8 ? 0.0 : sn / sd;
+            var tb = MathD.Abs(tn) < 1e-8 ? 0.0 : tn / td;
 
             return (ta, tb);
         }

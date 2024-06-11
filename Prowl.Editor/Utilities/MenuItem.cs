@@ -138,7 +138,7 @@ namespace Prowl.Editor
 
                 if (Gui.ActiveGUI.BeginPopup(menu.Path + "Popup", out var node))
                 {
-                    using (node.Width(150).Layout(LayoutType.Column).FitContentHeight().Enter())
+                    using (node.Width(150).Layout(LayoutType.Column).Padding(5).FitContentHeight().Enter())
                     {
                         foreach (var child in menu.Children)
                             DrawMenu(child);

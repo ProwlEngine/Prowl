@@ -112,7 +112,7 @@ namespace Prowl.Runtime
         public double GetDistanceToPoint(Vector3 inPt) => Math.Abs(Vector3.Dot(normal, inPt) + distance);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool IsOnPlane(Vector3 point, double tolerance = 0) => Mathf.Abs(Vector3.Dot(normal, point) - distance) <= tolerance;
+        public bool IsOnPlane(Vector3 point, double tolerance = 0) => MathD.Abs(Vector3.Dot(normal, point) - distance) <= tolerance;
 
         public void Normalize()
         {
@@ -181,12 +181,12 @@ namespace Prowl.Runtime
             Vector3 segment = lineStart - lineEnd;
             double den = Vector3.Dot(normal, segment);
 
-            if (Mathf.Abs(den) < Mathf.Small)
+            if (MathD.Abs(den) < MathD.Small)
                 return false;
 
             double dist = (Vector3.Dot(normal, lineStart) - distance) / den;
 
-            if (dist < (double)-Mathf.Small || dist > (1.0f + (double)Mathf.Small))
+            if (dist < (double)-MathD.Small || dist > (1.0f + (double)MathD.Small))
                 return false;
 
             dist = -dist;
