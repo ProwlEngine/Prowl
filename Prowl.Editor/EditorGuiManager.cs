@@ -47,7 +47,7 @@ public static class EditorGuiManager
 
     public static DockNode DockWindowTo(EditorWindow window, DockNode? node, DockZone zone, double split = 0.5f)
     {
-        if(node != null)
+        if (node != null)
             return Container.AttachWindow(window, node, zone, split);
         else
             return Container.AttachWindow(window, Container.Root, DockZone.Center, split);
@@ -66,7 +66,8 @@ public static class EditorGuiManager
         Vector2 framebufferAndInputScale = new((float)Graphics.Framebuffer.Width / (float)Screen.Size.x, (float)Graphics.Framebuffer.Height / (float)Screen.Size.y);
 
         Gui.PointerWheel = Input.MouseWheelDelta;
-        EditorGuiManager.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, (g) => {
+        EditorGuiManager.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, (g) =>
+        {
 
             // Draw Background
             g.Draw2D.DrawRectFilled(screenRect, GuiStyle.Background);
@@ -114,66 +115,68 @@ public static class EditorGuiManager
                                 else
                                     m_StartSplitPos = Mathf.Lerp(DragSplitter.Mins.y, DragSplitter.Maxs.y, DragSplitter.SplitDistance);
                             }
+                        }
                     }
-                }
-                else if (g.IsPointerMoving && DragSplitter != null)
-                {
-                    Vector2 dragDelta = cursorPos - m_DragPos;
-
-                    if (DragSplitter.Type == DockNode.NodeType.SplitVertical)
+                    else if (g.IsPointerMoving && DragSplitter != null)
                     {
-                        double w = DragSplitter.Maxs.x - DragSplitter.Mins.x;
-                        double split = m_StartSplitPos + dragDelta.x;
-                        split -= DragSplitter.Mins.x;
-                        split = (double)Math.Floor(split);
-                        split = Math.Clamp(split, 1.0f, w - 1.0f);
-                        split /= w;
+                        Vector2 dragDelta = cursorPos - m_DragPos;
 
-                        DragSplitter.SplitDistance = split;
-                    }
-                    else if (DragSplitter.Type == DockNode.NodeType.SplitHorizontal)
-                    {
-                        double h = DragSplitter.Maxs.y - DragSplitter.Mins.y;
-                        double split = m_StartSplitPos + dragDelta.y;
-                        split -= DragSplitter.Mins.y;
-                        split = (double)Math.Floor(split);
-                        split = Math.Clamp(split, 1.0f, h - 1.0f);
-                        split /= h;
+                        if (DragSplitter.Type == DockNode.NodeType.SplitVertical)
+                        {
+                            double w = DragSplitter.Maxs.x - DragSplitter.Mins.x;
+                            double split = m_StartSplitPos + dragDelta.x;
+                            split -= DragSplitter.Mins.x;
+                            split = (double)Math.Floor(split);
+                            split = Math.Clamp(split, 1.0f, w - 1.0f);
+                            split /= w;
 
-                        DragSplitter.SplitDistance = split;
+                            DragSplitter.SplitDistance = split;
+                        }
+                        else if (DragSplitter.Type == DockNode.NodeType.SplitHorizontal)
+                        {
+                            double h = DragSplitter.Maxs.y - DragSplitter.Mins.y;
+                            double split = m_StartSplitPos + dragDelta.y;
+                            split -= DragSplitter.Mins.y;
+                            split = (double)Math.Floor(split);
+                            split = Math.Clamp(split, 1.0f, h - 1.0f);
+                            split /= h;
+
+                            DragSplitter.SplitDistance = split;
+                        }
                     }
                 }
-            }
 
-            // Focus Windows first
-            var windowList = new List<EditorWindow>(Windows);
-            for (int i = 0; i < windowList.Count; i++)
-            {
-                var window = windowList[i];
-                if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(Veldrid.MouseButton.Left) || g.IsPointerClick(Veldrid.MouseButton.Right)))
-                    if (!g.IsBlockedByInteractable(g.PointerPos, window.MaxZ))
-                        FocusWindow(window);
-            }
-
-            // Draw/Update Windows
-            for (int i = 0; i < windowList.Count; i++)
-            {
-                var window = windowList[i];
-                if (!window.IsDocked || window.Leaf.LeafWindows[window.Leaf.WindowNum] == window)
+                // Focus Windows first
+                var windowList = new List<EditorWindow>(Windows);
+                for (int i = 0; i < windowList.Count; i++)
                 {
-                    g.SetZIndex(i * 100);
-                    g.PushID((ulong)window._id);
-                    window.ProcessFrame();
-                    g.PopID();
+                    var window = windowList[i];
+                    if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(Veldrid.MouseButton.Left) || g.IsPointerClick(Veldrid.MouseButton.Right)))
+                        if (!g.IsBlockedByInteractable(g.PointerPos, window.MaxZ))
+                            FocusWindow(window);
                 }
 
+                // Draw/Update Windows
+                for (int i = 0; i < windowList.Count; i++)
+                {
+                    var window = windowList[i];
+                    if (!window.IsDocked || window.Leaf.LeafWindows[window.Leaf.WindowNum] == window)
+                    {
+                        g.SetZIndex(i * 100);
+                        g.PushID((ulong)window._id);
+                        window.ProcessFrame();
+                        g.PopID();
+                    }
+
+                }
+
+                g.SetZIndex(0);
             }
-            g.SetZIndex(0);
         });
 
         foreach (var window in WindowsToRemove)
         {
-            if(window.IsDocked)
+            if (window.IsDocked)
                 Container.DetachWindow(window);
             if (FocusedWindow != null && FocusedWindow.Target == window)
                 FocusedWindow = null;
