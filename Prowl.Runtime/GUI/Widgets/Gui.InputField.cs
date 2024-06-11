@@ -125,6 +125,13 @@ namespace Prowl.Runtime.GUI
                 stb.SelectStart = 0;
                 stb.SelectEnd = Text.Length - 1;
             }
+
+            if (g.IsNodeHovered() && g.IsPointerDoubleClick(MouseButton.Left))
+            {
+                stb.SelectStart = 0;
+                stb.SelectEnd = Text.Length - 1;
+            }
+
             //g.DrawText(font, Text, fontsize, render_pos, Color.black);
 
             // Render
