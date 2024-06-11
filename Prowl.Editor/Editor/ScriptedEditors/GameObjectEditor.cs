@@ -235,7 +235,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
 
                         // TODO: Context Menu
-                        if (gui.IsPointerClick(Silk.NET.Input.MouseButton.Right) && gui.IsNodeHovered())
+                        if (gui.IsPointerClick(Veldrid.MouseButton.Right) && gui.IsNodeHovered())
                         {
                             // Popup holder is our parent, since thats the Tree node
                             gui.OpenPopup("RightClickComp", null, gui.CurrentNode.Parent);
