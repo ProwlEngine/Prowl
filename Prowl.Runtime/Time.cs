@@ -33,7 +33,7 @@ public static class Time {
 
     public static void Update()
     {
-        double dt = stopwatch.ElapsedMilliseconds * 1000.0;
+        double dt = stopwatch.Elapsed.TotalMilliseconds / 1000.0;
 
         frameCount++;
 
