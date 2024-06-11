@@ -3,6 +3,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Utils;
 using System.Reflection;
+using static BepuPhysics.Collidables.CompoundBuilder;
 
 namespace Prowl.Editor
 {
@@ -109,8 +110,9 @@ namespace Prowl.Editor
             if (node.Children.Count == 0) return false;
 
             bool changed = false;
-            foreach (var child in node.Children)
-                changed |= DrawMenu(child);
+            changed |= DrawMenu(node);
+            //foreach (var child in node.Children)
+            //    changed |= DrawMenu(child);
             return changed;
         }
 
