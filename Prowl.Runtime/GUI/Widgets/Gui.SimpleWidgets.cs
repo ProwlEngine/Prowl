@@ -241,11 +241,11 @@ namespace Prowl.Runtime.GUI
                         SetNodeStorage(parentNode, "PU_POS_" + id, pos);
                     }
 
-                    // Dont close Popup on the same frame it was opened
+                    // Dont close Popup on the same frame it was opened - 5 frame window
                     long frame = GetNodeStorage<long>(parentNode, "Popup_Frame");
-                    if (frame != Time.frameCount)
+                    if (frame < Time.frameCount)
                     {
-                        if ((IsPointerDown(Silk.NET.Input.MouseButton.Left) || IsPointerDown(Silk.NET.Input.MouseButton.Right)) &&
+                        if ((IsPointerClick(Silk.NET.Input.MouseButton.Left) || IsPointerClick(Silk.NET.Input.MouseButton.Right)) &&
                             !IsPointerMoving &&
                             !node.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Popup
                             //!parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
