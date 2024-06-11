@@ -2,7 +2,6 @@
 using Prowl.Editor.EditorWindows;
 using Prowl.Editor.Preferences;
 using Prowl.Runtime;
-using Prowl.Runtime.Rendering;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
 using Veldrid;
@@ -75,13 +74,13 @@ public static class Program
 
                 if (GeneralPreferences.Instance.LockFPS)
                 {
-                    Screen.VSync = false;
+                    Graphics.VSync = false;
                     Screen.FramesPerSecond = GeneralPreferences.Instance.TargetFPS;
                 }
                 else
                 {
                     Screen.FramesPerSecond = 0;
-                    Screen.VSync = GeneralPreferences.Instance.VSync;
+                    Graphics.VSync = GeneralPreferences.Instance.VSync;
                 }
 
                 if (Hotkeys.IsHotkeyDown("SaveSceneAs", new() { Key = Key.S, Ctrl = true, Shift = true }))
@@ -236,7 +235,6 @@ public static class Program
 
 
     public static Font font;
-    private static GraphicsTexture testImage;
 
     public static void CheckReloadingAssemblies()
     {
