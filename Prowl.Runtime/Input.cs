@@ -98,9 +98,11 @@ public static class Input
                 OnMouseEvent?.Invoke(MouseButton.Right, MousePosition.x, MousePosition.y, false, true);
             else if (isMousePressed[MouseButton.Middle])
                 OnMouseEvent?.Invoke(MouseButton.Middle, MousePosition.x, MousePosition.y, false, true);
+            #warning Veldrid change
             //else
             //    OnMouseEvent?.Invoke(MouseButton.Unknown, MousePosition.x, MousePosition.y, false, true);
         }
+
         UpdateKeyStates();
     }
 
