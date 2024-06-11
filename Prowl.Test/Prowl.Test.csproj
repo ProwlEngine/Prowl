@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <NoWarn>8600;8601;8618;8602;8603;8604;8605;8625</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Include="Cat.png" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="AssimpNet" Version="5.0.0-beta1" />
+      <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="13.6.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj"></ProjectReference>
+    </ItemGroup>
+    
+</Project>
