@@ -60,6 +60,8 @@ namespace Prowl.Runtime
 
             InternalWindow = VeldridStartup.CreateWindow(ref windowInfo);
 
+            LatestInputSnapshot = InternalWindow.PumpEvents(); 
+
             OnLoad();
 
             InternalWindow.DragDrop += (dragDropEvent) => { FileDrop?.Invoke([dragDropEvent.File]); };
@@ -70,6 +72,7 @@ namespace Prowl.Runtime
             InternalWindow.FocusLost += () => { OnFocusChanged(isFocused = false); };
 
             InternalWindow.Closing += OnClose;
+            InternalWindow.Closed += () => Environment.Exit(0); 
 
             while (InternalWindow.Exists)
             {
