@@ -130,7 +130,7 @@ namespace Prowl.Editor
                 closePopup = true;
             }
 
-            MenuItem.DrawMenuRoot("Template");
+            closePopup |= MenuItem.DrawMenuRoot("Template");
 
             if (parent != null)
             {
@@ -187,7 +187,7 @@ namespace Prowl.Editor
             {
                 EditorGUI.Separator();
                 EditorGUI.Text("Scene");
-                MenuItem.DrawMenuRoot("Scene");
+                closePopup |= MenuItem.DrawMenuRoot("Scene");
             }
 
             if (closePopup)

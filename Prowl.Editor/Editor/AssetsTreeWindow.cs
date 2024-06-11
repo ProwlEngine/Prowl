@@ -197,7 +197,7 @@ namespace Prowl.Editor
 
             if (fileInfo == null)
             {
-                DrawCreateContextMenu(directory, fromAssetBrowser);
+                closePopup |= DrawCreateContextMenu(directory, fromAssetBrowser);
                 EditorGUI.Separator();
                 DrawProjectContextMenu(ref closePopup);
             }
@@ -236,7 +236,7 @@ namespace Prowl.Editor
                     closePopup = true;
                 }
 
-                DrawCreateContextMenu(file.Directory, fromAssetBrowser);
+                closePopup |= DrawCreateContextMenu(file.Directory, fromAssetBrowser);
                 EditorGUI.Separator();
                 DrawProjectContextMenu(ref closePopup);
             }
@@ -271,7 +271,7 @@ namespace Prowl.Editor
                 }
                 EditorGUI.Separator();
 
-                DrawCreateContextMenu(dir, fromAssetBrowser);
+                closePopup |= DrawCreateContextMenu(dir, fromAssetBrowser);
                 EditorGUI.Separator();
                 DrawProjectContextMenu(ref closePopup);
             }
@@ -280,13 +280,13 @@ namespace Prowl.Editor
                 Gui.ActiveGUI.ClosePopup(popupHolder);
         }
 
-        private static void DrawCreateContextMenu(DirectoryInfo? directory, bool fromAssetBrowser)
+        private static bool DrawCreateContextMenu(DirectoryInfo? directory, bool fromAssetBrowser)
         {
             EditorGUI.Text("Create");
 
             MainMenuItems.Directory = directory;
             MainMenuItems.fromAssetBrowser = fromAssetBrowser;
-            MenuItem.DrawMenuRoot("Create");
+            return MenuItem.DrawMenuRoot("Create");
         }
 
         private static void DrawProjectContextMenu(ref bool closePopup)
