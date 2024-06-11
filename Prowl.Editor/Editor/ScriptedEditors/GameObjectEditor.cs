@@ -4,6 +4,7 @@ using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
+using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.Utils;
 using System.ComponentModel;
 using System.Reflection;
@@ -234,11 +235,10 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         gui.Tooltip("Is Component Enabled?");
 
 
-                        // TODO: Context Menu
                         if (gui.IsPointerClick(Silk.NET.Input.MouseButton.Right) && gui.IsNodeHovered())
                         {
                             // Popup holder is our parent, since thats the Tree node
-                            gui.OpenPopup("RightClickComp", null, gui.CurrentNode.Parent);
+                            gui.OpenPopup("RightClickComp", null);
                             gui.SetGlobalStorage("RightClickComp", comp.InstanceID);
                         }
 
@@ -248,8 +248,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                             using (node.Width(150).Layout(LayoutType.Column).Padding(5).FitContentHeight().Enter())
                             {
                                 var instanceID = gui.GetGlobalStorage<int>("RightClickComp");
-                                //if(instanceID == comp.InstanceID)
-                                //    DrawContextMenu(go, popupHolder);
+                                if(instanceID == comp.InstanceID)
+                                    HandleComponentContextMenu(go, comp, popupHolder, ref toDelete);
                             }
                         }
                     }
@@ -362,19 +362,27 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
         #region Add Component Popup
 
-        //private static void HandleComponentContextMenu(GameObject? go, MonoBehaviour comp, ref List<MonoBehaviour> toDelete)
-        //{
-        //    if (ImGui.BeginPopupContextItem()) {
-        //        if (ImGui.MenuItem("Duplicate")) {
-        //            var serialized = Serializer.Serialize(comp);
-        //            var copy = Serializer.Deserialize<MonoBehaviour>(serialized);
-        //            go.AddComponent(copy);
-        //            copy.OnValidate();
-        //        }
-        //        if (ImGui.MenuItem("Delete")) toDelete.Add(comp);
-        //        ImGui.EndPopup();
-        //    }
-        //}
+        private static void HandleComponentContextMenu(GameObject? go, MonoBehaviour comp, LayoutNode popupHolder, ref List<MonoBehaviour> toDelete)
+        {
+            bool closePopup = false;
+            if (EditorGUI.StyledButton("Duplicate"))
+            {
+                var serialized = Serializer.Serialize(comp);
+                var copy = Serializer.Deserialize<MonoBehaviour>(serialized);
+                go.AddComponent(copy);
+                copy.OnValidate();
+                closePopup = true;
+            }
+
+            if (EditorGUI.StyledButton("Delete"))
+            {
+                toDelete.Add(comp);
+                closePopup = true;
+            }
+
+            if (closePopup)
+                Gui.ActiveGUI.ClosePopup(popupHolder);
+        }
         
         private void DrawMenuItems(MenuItemInfo menuItem, GameObject go)
         {
