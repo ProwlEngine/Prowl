@@ -128,35 +128,35 @@ namespace Prowl.Runtime
                 return false;
             }
 
-            if (!ValidateRange(width, properties.MaxWidth, nameof(width), out exception))
+            if (!ValidateRange(width, 1, properties.MaxWidth, nameof(width), out exception))
                 return false;
 
-            if (!ValidateRange(height, properties.MaxHeight, nameof(height), out exception))
+            if (!ValidateRange(height, 1, properties.MaxHeight, nameof(height), out exception))
                 return false;
 
-            if (!ValidateRange(depth, properties.MaxDepth, nameof(depth), out exception))
+            if (!ValidateRange(depth, 1, properties.MaxDepth, nameof(depth), out exception))
                 return false;
 
-            if (!ValidateRange(layers, properties.MaxArrayLayers, nameof(layers), out exception))
+            if (!ValidateRange(layers, 1, properties.MaxArrayLayers, nameof(layers), out exception))
                 return false;
 
-            if (!ValidateRange(mipLevels, properties.MaxMipLevels, nameof(mipLevels), out exception))
+            if (!ValidateRange(mipLevels, 1, properties.MaxMipLevels, nameof(mipLevels), out exception))
                 return false;
 
             exception = null;
             return true;
         }
 
-        private static bool ValidateRange(uint value, uint max, string argsName, out Exception outOfRangeException)
+        private static bool ValidateRange(uint value, uint min, uint max, string argsName, out Exception outOfRangeException)
         {
-            if (value <= 0 || value > max)
+            if (value < min || value > max)
             {
-                outOfRangeException = new ArgumentOutOfRangeException(argsName, value, $"{argsName} must be in the range (0, {max})");
-                return true;
+                outOfRangeException = new ArgumentOutOfRangeException(argsName, value, $"{argsName} must be in the range ({min}, {max})");
+                return false;
             }
 
             outOfRangeException = null;
-            return false;
+            return true;
         }
     }
 }
