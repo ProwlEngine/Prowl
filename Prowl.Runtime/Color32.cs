@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Runtime.InteropServices;
 
 namespace Prowl.Runtime
 {
+    [StructLayout(LayoutKind.Sequential)]
     public struct Color32
     {
         public byte red;
