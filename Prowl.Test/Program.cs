@@ -9,6 +9,8 @@ internal static class Program {
     public static DirectoryInfo Data => new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
     static Texture2D catTex;
 
+    private static Mesh quadMesh = Mesh.GetFullscreenQuad();
+
     public static int Main(string[] args) {
 
         Application.isPlaying = true;
@@ -25,12 +27,13 @@ internal static class Program {
         Application.Render += () => {
             Graphics.StartFrame(catTex);
 
-            Graphics.DrawNDCQuad();
+            Graphics.DrawNDCQuad(quadMesh);
 
             Graphics.EndFrame();
         };
 
         Application.Quitting += () => {
+            
         };
 
         Application.Run("Prowl Editor", 1920, 1080, null, false);

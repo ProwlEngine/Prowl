@@ -26,37 +26,30 @@ namespace Prowl.Runtime
         private static bool createdResources = false;
 
         private static CommandList _commandList;
-        private static DeviceBuffer _vertexBuffer;
-        private static DeviceBuffer _indexBuffer;
         private static Veldrid.Shader[] _shaders;
         private static Pipeline _pipeline;
-
-        private static TextureView _textureView;
-        private static Sampler _textureSampler;
+        
         private static ResourceSet _textureSet;
 
         private const string VertexCode = @"
         #version 450
 
 layout(location = 0) in vec2 Position;
-layout(location = 1) in vec4 Color;
-layout(location = 2) in vec2 Uv;
+layout(location = 1) in vec2 Uv;
 
-layout(location = 0) out vec4 fsin_Color;
-layout(location = 1) out vec2 fsin_Uv;
+layout(location = 0) out vec2 fsin_Uv;
 
 void main()
 {
     gl_Position = vec4(Position, 0, 1);
-    fsin_Color = Color;
     fsin_Uv = Uv;
 }";
 
         private const string FragmentCode = @"
         #version 450
 
-layout(location = 0) in vec4 fsin_Color;
-layout(location = 1) in vec2 fsin_Uv;
+layout(location = 0) in vec2 fsin_Uv;
+
 layout(location = 0) out vec4 fsout_Color;
 
 layout(set = 0, binding = 0) uniform texture2D SurfaceTexture;
@@ -66,32 +59,6 @@ void main()
 {
     fsout_Color = texture(sampler2D(SurfaceTexture, SurfaceSampler), fsin_Uv);
 }";
-        unsafe struct VertexPositionColor
-        {
-            public System.Numerics.Vector2 Position; // This is the position, in normalized device coordinates.
-            public RgbaFloat Color; // This is the color of the vertex.
-            public System.Numerics.Vector2 UV;
-
-            public VertexPositionColor(Vector2 position, RgbaFloat color, Vector2 uv)
-            {
-                Position = position;
-                Color = color;
-                UV = uv;
-            }
-
-            public static readonly uint SizeInBytes = (uint)sizeof(VertexPositionColor);
-        }
-
-        static VertexPositionColor[] quadVertices =
-        {
-            new VertexPositionColor(new Vector2(-0.75f, 0.75f), RgbaFloat.Red, new Vector2(0, 1)),
-            new VertexPositionColor(new Vector2(0.75f, 0.75f), RgbaFloat.Green, new Vector2(1, 1)),
-            new VertexPositionColor(new Vector2(-0.75f, -0.75f), RgbaFloat.Blue, new Vector2(0, 0)),
-            new VertexPositionColor(new Vector2(0.75f, -0.75f), RgbaFloat.Yellow, new Vector2(1, 0))
-        };
-
-        private static ushort[] quadIndices = { 0, 1, 2, 3 };
-        // End veldrid quad stuff
 
         public static void Initialize(bool VSync = true, GraphicsBackend preferredBackend = GraphicsBackend.OpenGL)
         {
@@ -117,16 +84,10 @@ void main()
 
             ResourceFactory factory = Device.ResourceFactory;
 
-            _vertexBuffer = factory.CreateBuffer(new BufferDescription(4 * VertexPositionColor.SizeInBytes, BufferUsage.VertexBuffer));
-            _indexBuffer = factory.CreateBuffer(new BufferDescription(4 * sizeof(ushort), BufferUsage.IndexBuffer));
-            _textureView = factory.CreateTextureView(tex.InternalTexture);
+            VertexLayoutDescription positionLayout = new VertexLayoutDescription(
+                new VertexElementDescription("Position", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float3));
 
-            Device.UpdateBuffer(_vertexBuffer, 0, quadVertices);
-            Device.UpdateBuffer(_indexBuffer, 0, quadIndices);
-
-            VertexLayoutDescription vertexLayout = new VertexLayoutDescription(
-                new VertexElementDescription("Position", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2),
-                new VertexElementDescription("Color", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float4),
+            VertexLayoutDescription uvLayout = new VertexLayoutDescription(
                 new VertexElementDescription("Uv", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2));
 
             ResourceLayout worldTextureLayout = factory.CreateResourceLayout(
@@ -145,47 +106,43 @@ void main()
 
             _shaders = factory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
 
-            GraphicsPipelineDescription pipelineDescription = new GraphicsPipelineDescription();
-            pipelineDescription.BlendState = BlendStateDescription.SingleOverrideBlend;
+            GraphicsPipelineDescription pipelineDescription = new GraphicsPipelineDescription
+            {
+                BlendState = BlendStateDescription.SingleOverrideBlend,
 
-            pipelineDescription.DepthStencilState = new DepthStencilStateDescription(
-                depthTestEnabled: true,
-                depthWriteEnabled: true,
-                comparisonKind: ComparisonKind.LessEqual);
+                DepthStencilState = new DepthStencilStateDescription(
+                    depthTestEnabled: true,
+                    depthWriteEnabled: true,
+                    comparisonKind: ComparisonKind.LessEqual
+                ),
 
-            pipelineDescription.RasterizerState = new RasterizerStateDescription(
-                cullMode: FaceCullMode.Back,
-                fillMode: PolygonFillMode.Solid,
-                frontFace: FrontFace.Clockwise,
-                depthClipEnabled: true,
-                scissorTestEnabled: false);
+                RasterizerState = new RasterizerStateDescription(
+                    cullMode: FaceCullMode.Back,
+                    fillMode: PolygonFillMode.Solid,
+                    frontFace: FrontFace.Clockwise,
+                    depthClipEnabled: true,
+                    scissorTestEnabled: false
+                ),
 
-            pipelineDescription.PrimitiveTopology = PrimitiveTopology.TriangleStrip;
-            pipelineDescription.ResourceLayouts = System.Array.Empty<ResourceLayout>();
+                PrimitiveTopology = PrimitiveTopology.TriangleList,
 
-            pipelineDescription.ShaderSet = new ShaderSetDescription(
-                vertexLayouts: new VertexLayoutDescription[] { vertexLayout },
-                shaders: _shaders);
+                ShaderSet = new ShaderSetDescription(
+                    vertexLayouts: [ positionLayout, uvLayout ],
+                    shaders: _shaders
+                ),
 
-            pipelineDescription.Outputs = Device.SwapchainFramebuffer.OutputDescription;
-
-            pipelineDescription.ResourceLayouts = [ worldTextureLayout ];
+                Outputs = Device.SwapchainFramebuffer.OutputDescription,
+                ResourceLayouts = [ worldTextureLayout ],
+            };
 
             _pipeline = factory.CreateGraphicsPipeline(pipelineDescription);
 
             _commandList = factory.CreateCommandList();
 
-            SamplerDescription desc = new();
-            desc.Filter = SamplerFilter.MinLinear_MagLinear_MipPoint;
-            desc.AddressModeU = SamplerAddressMode.Wrap;
-            desc.AddressModeV = SamplerAddressMode.Wrap;
-
-            _textureSampler = factory.CreateSampler(desc);
-
             _textureSet = factory.CreateResourceSet(new ResourceSetDescription(
                 worldTextureLayout,
-                _textureView,
-                _textureSampler));
+                tex.TextureView,
+                TextureSampler.Aniso4x.InternalSampler));
 
             Console.WriteLine("Initialized resources");
         }
@@ -215,18 +172,23 @@ void main()
             Device.SwapBuffers();
         }
 
-        public static void DrawNDCQuad()
+        public static void DrawNDCQuad(Mesh mesh)
         {
             if (_commandList == null)
                 return;
 
             _commandList.SetPipeline(_pipeline);
 
-            _commandList.SetVertexBuffer(0, _vertexBuffer);
-            _commandList.SetIndexBuffer(_indexBuffer, Veldrid.IndexFormat.UInt16);
+            mesh.Upload();
+
+            _commandList.SetVertexBuffer(0, mesh.VertexBuffer, 0);
+            _commandList.SetVertexBuffer(1, mesh.VertexBuffer, (uint)mesh.UVStart);
+
+            _commandList.SetIndexBuffer(mesh.IndexBuffer, mesh.IndexFormat);
+
             _commandList.SetGraphicsResourceSet(0, _textureSet);
             _commandList.DrawIndexed(
-                indexCount: 4,
+                indexCount: (uint)mesh.IndexCount,
                 instanceCount: 1,
                 indexStart: 0,
                 vertexOffset: 0,
@@ -239,12 +201,8 @@ void main()
             _shaders[0].Dispose();
             _shaders[1].Dispose();
             _commandList.Dispose();
-            _vertexBuffer.Dispose();
-            _indexBuffer.Dispose();
 
-            _textureView.Dispose();
             _textureSet.Dispose();
-            _textureSampler.Dispose();
 
             Device.Dispose();
         }
