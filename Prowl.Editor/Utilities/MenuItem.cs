@@ -3,6 +3,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Utils;
 using System.Reflection;
+using static BepuPhysics.Collidables.CompoundBuilder;
 
 namespace Prowl.Editor
 {
@@ -100,25 +101,31 @@ namespace Prowl.Editor
             Menus = trees;
         }
 
-        public static void DrawMenuRoot(string root)
+        public static bool DrawMenuRoot(string root)
         {
-            if (Menus == null) return;
-            if (root == null) return;
-            if (!Menus.ContainsKey(root)) return;
+            if (Menus == null) return false;
+            if (root == null) return false;
+            if (!Menus.ContainsKey(root)) return false;
             var node = Menus[root];
-            if (node.Children.Count == 0) return;
+            if (node.Children.Count == 0) return false;
 
-            foreach (var child in node.Children)
-                DrawMenu(child);
+            bool changed = false;
+            changed |= DrawMenu(node);
+            //foreach (var child in node.Children)
+            //    changed |= DrawMenu(child);
+            return changed;
         }
 
-        static void DrawMenu(MenuPath menu)
+        static bool DrawMenu(MenuPath menu)
         {
-            if (menu == null) return;
+            if (menu == null) return false;
             if (menu.Children.Count == 0)
             {
                 if (EditorGUI.StyledButton(menu.Path))
+                {
                     menu.Method?.Invoke();
+                    return true;
+                }
             }
             else
             {
@@ -140,11 +147,15 @@ namespace Prowl.Editor
                 {
                     using (node.Width(150).Layout(LayoutType.Column).Padding(5).FitContentHeight().Enter())
                     {
+                        bool changed = false;
                         foreach (var child in menu.Children)
-                            DrawMenu(child);
+                            changed |= DrawMenu(child);
+                        return changed;
                     }
                 }
             }
+
+            return false;
         }
 
     }

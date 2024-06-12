@@ -106,23 +106,31 @@ namespace Prowl.Runtime.GUI
             render_pos.y += 3;
             render_pos.x += 5;
 
+            bool justSelected = false;
             if (stb == null || stb.ID != interact.ID)
             {
+                justSelected = true;
                 stb = new();
                 stb.ID = interact.ID;
-                if ((Flags & InputFieldFlags.AutoSelectAll) == InputFieldFlags.AutoSelectAll)
-                {
-                    stb.SelectStart = 0;
-                    stb.SelectEnd = Text.Length - 1;
-                }
                 stb.SingleLine = !((Flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline);
                 stb.font = font;
                 stb.Text = Text;
             }
 
-
             HandleKeyEvent(stb, MaxLength, Flags);
             HandleMouseEvent(stb);
+
+            if (justSelected && (Flags & InputFieldFlags.AutoSelectAll) == InputFieldFlags.AutoSelectAll)
+            {
+                stb.SelectStart = 0;
+                stb.SelectEnd = Text.Length;
+            }
+
+            if (g.IsNodeHovered() && g.IsPointerDoubleClick(MouseButton.Left))
+            {
+                stb.SelectStart = 0;
+                stb.SelectEnd = Text.Length;
+            }
 
             //g.DrawText(font, Text, fontsize, render_pos, Color.black);
 

@@ -69,10 +69,10 @@ public static class EditorGuiManager
         EditorGuiManager.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, (g) => {
 
             // Draw Background
-            g.Draw2D.DrawRectFilled(screenRect, GuiStyle.Background);
+            g.Draw2D.DrawRectFilled(g.ScreenRect, GuiStyle.Background);
 
             Container ??= new();
-            var rect = screenRect;
+            var rect = g.ScreenRect;
             rect.Expand(-8);
             Container.Update(rect);
 

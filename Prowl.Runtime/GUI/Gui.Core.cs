@@ -26,6 +26,7 @@ namespace Prowl.Runtime.GUI
         private LayoutNode rootNode;
         private Dictionary<ulong, ulong> _computedNodes;
         private HashSet<ulong> _createdNodes;
+        private float uiScale = 1f;
 
         public Gui()
         {
@@ -43,6 +44,7 @@ namespace Prowl.Runtime.GUI
             UpdateAnimations(Time.deltaTime);
 
             uiScale = 1f / uiScale;
+            this.uiScale = uiScale;
             screenRect.width *= uiScale;
             screenRect.height *= uiScale;
             ScreenRect = screenRect;
@@ -100,7 +102,7 @@ namespace Prowl.Runtime.GUI
             try
             {
                 ActiveGUI = this;
-                StartInputFrame(frameBufferScale);
+                StartInputFrame(frameBufferScale * uiScale);
                 StartInteractionFrame();
                 gui?.Invoke(this);
                 frameCount++;
