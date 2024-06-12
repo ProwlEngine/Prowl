@@ -51,9 +51,9 @@ namespace Prowl.Runtime
         public void SetMatrix(string name, Matrix4x4 value) => matrices[name] = value;
         public void SetMatrices(string name, System.Numerics.Matrix4x4[] value) => matrixArr[name] = value.Cast<System.Numerics.Matrix4x4>().ToArray();
         public Matrix4x4 GetMatrix(string name) => matrices.ContainsKey(name) ? matrices[name] : Matrix4x4.Identity;
-        public void SetTexture(string name, Texture2D value) => textures[name] = value;
-        public void SetTexture(string name, AssetRef<Texture2D> value) => textures[name] = value;
-        public AssetRef<Texture2D>? GetTexture(string name) => textures.ContainsKey(name) ? textures[name] : null;
+        public void SetTexture(string name, Texture value) => textures[name] = value;
+        public void SetTexture(string name, AssetRef<Texture> value) => textures[name] = value;
+        public AssetRef<Texture>? GetTexture(string name) => textures.ContainsKey(name) ? textures[name] : null;
 
         public void Clear()
         {
@@ -230,8 +230,8 @@ namespace Prowl.Runtime
         public void SetInt(string name, int value) => PropertyBlock.SetInt(name, value);
         public void SetMatrix(string name, Matrix4x4 value) => PropertyBlock.SetMatrix(name, value);
         public void SetMatrices(string name, System.Numerics.Matrix4x4[] value) => PropertyBlock.SetMatrices(name, value);
-        public void SetTexture(string name, Texture2D value) => PropertyBlock.SetTexture(name, value);
-        public void SetTexture(string name, AssetRef<Texture2D> value) => PropertyBlock.SetTexture(name, value);
+        public void SetTexture(string name, Texture value) => PropertyBlock.SetTexture(name, value);
+        public void SetTexture(string name, AssetRef<Texture> value) => PropertyBlock.SetTexture(name, value);
 
         //public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
         //{
