@@ -6,7 +6,7 @@ namespace Prowl.Runtime
     /// <summary>
     /// A <see cref="Texture"/> comprised of an array of images with two dimensions and support for multisampling.
     /// </summary>
-    public sealed class Texture2DArray : Texture, ISerializable
+    public sealed class Texture2DArray : Texture
     {
         /// <summary>The width of this <see cref="Texture2DArray"/>.</summary>
         public uint Width => InternalTexture.Width;
@@ -36,13 +36,11 @@ namespace Prowl.Runtime
         {
             Width = width,
             Height = height,
-            Depth = 1,
             MipLevels = mipLevels,
             ArrayLayers = layers,
             Format = format,
             Usage = usage,
-            SampleCount = TextureSampleCount.Count1,
-            Type = TextureType.Texture2D,
+            Type = TextureType.Texture2D
         })
         { }
 
@@ -109,12 +107,10 @@ namespace Prowl.Runtime
             {
                 Width = width,
                 Height = height,
-                Depth = 1,
                 MipLevels = this.MipLevels,
                 ArrayLayers = layers,
                 Format = this.Format,
                 Usage = this.Usage,
-                SampleCount = this.InternalTexture.SampleCount,
                 Type = this.Type,
             });
         }
@@ -124,7 +120,7 @@ namespace Prowl.Runtime
             return Width * Height * TextureUtility.PixelFormatBytes(Format);
         }
 
-        public SerializedProperty Serialize(Serializer.SerializationContext ctx)
+        public override SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
             SerializedProperty compoundTag = SerializedProperty.NewCompound();
             compoundTag.Add("Width", new((int)Width));
@@ -149,7 +145,7 @@ namespace Prowl.Runtime
             return compoundTag;
         }
 
-        public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
+        public override void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
             uint width = (uint)value["Width"].IntValue;
             uint height = (uint)value["Height"].IntValue;

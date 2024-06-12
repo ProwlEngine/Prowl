@@ -116,6 +116,12 @@ namespace Prowl.Runtime
                 return false;
             }
 
+            if (description.Usage.HasFlag(TextureUsage.Staging) && description.Usage != TextureUsage.Staging)
+            {
+                exception = new Exception("Staging textures are incompatible with other texture usages.");
+                return false;
+            }
+
             if (description.SampleCount != TextureSampleCount.Count1)
             {
                 exception = new Exception("Use of multisampled textures is not currently supported.");

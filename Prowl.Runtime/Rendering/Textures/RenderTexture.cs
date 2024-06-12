@@ -150,13 +150,17 @@ namespace Prowl.Runtime
 
         public override void OnDispose()
         {
-            DepthBuffer?.Dispose();
+            DepthBuffer?.DestroyImmediate();
 
             if (ColorBuffers != null)
                 foreach (var tex in ColorBuffers)
-                    tex?.Dispose();
+                    tex?.DestroyImmediate();
 
             Framebuffer?.Dispose();
+
+            DepthBuffer = null;
+            ColorBuffers = null;
+            Framebuffer = null;
         }
 
         public SerializedProperty Serialize(Serializer.SerializationContext ctx)

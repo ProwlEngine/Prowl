@@ -10,11 +10,8 @@ namespace Prowl.Runtime
     /// <remarks>
     /// Much of this class is comprised of validations and utilities to make working with a <see cref="Veldrid.Texture"/> safer.
     /// </remarks>
-    public abstract class Texture : EngineObject
+    public abstract class Texture : EngineObject, ISerializable
     {
-        /// <summary>The handle for the GL Texture Object.</summary>
-        public Veldrid.Texture InternalTexture { get; protected set; }
-
         /// <summary>The type of this <see cref="Texture"/>, such as 1D, 2D, 3D.</summary>
         public TextureType Type => InternalTexture.Type;
 
@@ -31,41 +28,38 @@ namespace Prowl.Runtime
         /// <remarks>This field is disabled if a texture is recreated. Manually setting a mip level will not set this field.</remarks>
         public bool IsMipmapped { get; protected set; }
 
-        /// <summary>Gets whether this <see cref="Texture"/> can be automatically mipmapped (depends on texture type).</summary>
-        public bool IsMipmappable => InternalTexture.Usage.HasFlag(TextureUsage.GenerateMipmaps);
+        /// <summary>Gets whether this <see cref="Texture"/> can be automatically mipmapped.</summary>
+        public bool IsMipmappable => Usage.HasFlag(TextureUsage.GenerateMipmaps);
+
+
+        /// <summary>The internal <see cref="Veldrid.Texture"/> representation.</summary>
+        internal Veldrid.Texture InternalTexture { get; private set; }
+
+        /// <inheritdoc cref="Veldrid.TextureView"/>
+        internal Veldrid.TextureView TextureView { get; private set; }
+
 
         private Veldrid.Texture stagingTexture = null;
 
-
+        
 
         internal Texture() : base("New Texture") { }
 
-
-        internal Texture(TextureDescription description) : base("New Texture")
-        {
+        internal Texture(TextureDescription description) : base("New Texture") 
+        { 
             RecreateInternalTexture(description);
         }
 
-
-        protected void RecreateInternalTexture(TextureDescription description)
-        {
-            InternalTexture?.Dispose();
-
-            if (!IsSupportedDescription(description, out _, out Exception exception))
-                throw exception;
-
-            InternalTexture = Graphics.Device.ResourceFactory.CreateTexture(ref description);
-            IsMipmapped = false;
-        }
-
-
         public override void OnDispose()
         {
-            InternalTexture.Dispose();
-
+            InternalTexture?.Dispose();
+            TextureView?.Dispose();
             stagingTexture?.Dispose();
-        }
 
+            InternalTexture = null;
+            TextureView = null;
+            stagingTexture = null;
+        }
 
         public void GenerateMipmaps()
         {
@@ -81,7 +75,6 @@ namespace Prowl.Runtime
             IsMipmapped = true;
         }
 
-
         /// <summary>
         /// Gets the estimated memory usage in bytes of the <see cref="Texture"/>.
         /// </summary>
@@ -90,8 +83,105 @@ namespace Prowl.Runtime
             return InternalTexture.Width * InternalTexture.Height * InternalTexture.Depth * InternalTexture.ArrayLayers * PixelFormatBytes(Format);
         }
 
+        protected void RecreateInternalTexture(TextureDescription description)
+        {
+            OnDispose();
+
+            // None of these values should ever be zero, so make sure they're all clamped to a minimum of 1.
+            description.Width = Math.Max(1, description.Width);
+            description.Height = Math.Max(1, description.Height);
+            description.Depth = Math.Max(1, description.Depth);
+            description.ArrayLayers = Math.Max(1, description.ArrayLayers);
+            description.MipLevels = Math.Max(1, description.MipLevels);
+            description.SampleCount = TextureSampleCount.Count1;
+
+            if (!IsSupportedDescription(description, out _, out Exception exception))
+                throw exception;
+
+            InternalTexture = Graphics.ResourceFactory.CreateTexture(ref description);
+
+            TextureViewDescription viewDescription = new()
+            {
+                ArrayLayers = description.ArrayLayers,
+                BaseArrayLayer = 0,
+                MipLevels = description.MipLevels,
+                BaseMipLevel = 0,
+                Format = description.Format,
+                Target = InternalTexture
+            };
+
+            TextureView = Graphics.ResourceFactory.CreateTextureView(ref viewDescription);
+
+            IsMipmapped = false;
+        }
+
+        unsafe protected void InternalSetDataPtr(void* data, Vector3Int rectPos, Vector3Int rectSize, uint layer, uint mipLevel)
+        {
+            ValidateRectOperation(rectPos, rectSize, layer, mipLevel);
+
+            uint mipWidth = GetMipDimension(InternalTexture.Width, mipLevel);
+            uint mipHeight = GetMipDimension(InternalTexture.Height, mipLevel);
+            uint mipDepth = GetMipDimension(InternalTexture.Depth, mipLevel);
+
+            uint mipLevelSize = mipWidth * mipHeight * mipDepth * PixelFormatBytes(Format);
+
+            EnsureStagingTexture();
+            Graphics.Device.UpdateTexture(stagingTexture, (IntPtr)data, mipLevelSize, (uint)rectPos.x, (uint)rectPos.y, (uint)rectPos.z, (uint)rectSize.x, (uint)rectSize.y, (uint)rectSize.z, mipLevel, layer);
+
+            if (stagingTexture != InternalTexture)
+                Graphics.InternalCopyTexture(stagingTexture, InternalTexture, mipLevel, layer, true);
+        }
+
+        unsafe protected void InternalSetData<T>(Memory<T> data, Vector3Int rectPos, Vector3Int rectSize, uint layer, uint mipLevel) where T : unmanaged
+        {
+            if (data.Length * sizeof(T) < rectSize.x * rectSize.y * rectSize.z)
+                throw new ArgumentException("Not enough pixel data", nameof(data));
+
+            fixed (void* ptr = data.Span)
+                InternalSetDataPtr(ptr, rectPos, rectSize, layer, mipLevel);
+        }
+
+        unsafe protected void InternalCopyDataPtr(void* dataPtr, out uint rowPitch, out uint depthPitch, uint arrayLayer, uint mipLevel)
+        {
+            EnsureStagingTexture();
+
+            if (stagingTexture != InternalTexture)
+                Graphics.InternalCopyTexture(InternalTexture, stagingTexture, mipLevel, arrayLayer, true);
+
+            uint subresource = (MipLevels * arrayLayer) + mipLevel;
+
+            MappedResource resource = Graphics.Device.Map(stagingTexture, MapMode.Read, subresource);
+
+            rowPitch = resource.RowPitch;
+            depthPitch = resource.DepthPitch;
+
+            Buffer.MemoryCopy((void*)resource.Data, dataPtr, resource.SizeInBytes, resource.SizeInBytes);
+
+            Graphics.Device.Unmap(stagingTexture, subresource);
+        }
+
+        unsafe protected void InternalCopyData<T>(Memory<T> data, uint arrayLayer, uint mipLevel) where T : unmanaged
+        {
+            EnsureStagingTexture();
+
+            if (stagingTexture != InternalTexture)
+                Graphics.InternalCopyTexture(InternalTexture, stagingTexture, mipLevel, arrayLayer, true);
+
+            uint subresource = (MipLevels * arrayLayer) + mipLevel;
+
+            MappedResource resource = Graphics.Device.Map(stagingTexture, MapMode.Read, subresource);
+
+            if (data.Length * sizeof(T) < resource.SizeInBytes)
+                throw new ArgumentException("Insufficient space to store the requested pixel data", nameof(data));
+
+            fixed (void* ptr = data.Span)
+                Buffer.MemoryCopy((void*)resource.Data, ptr, data.Length * sizeof(T), resource.SizeInBytes);
+
+            Graphics.Device.Unmap(stagingTexture, subresource);
+        }
 
         // Ensure that a CPU-accessible staging texture matching the internal one exists   
+        // If the internal texture is already a staging texture, uses itself.
         private void EnsureStagingTexture()
         {
             if (InternalTexture.Usage.HasFlag(TextureUsage.Staging))
@@ -128,76 +218,6 @@ namespace Prowl.Runtime
             return;
         }
 
-
-        unsafe protected void InternalSetDataPtr(void* data, Vector3Int rectPos, Vector3Int rectSize, uint layer, uint mipLevel)
-        {
-            ValidateRectOperation(rectPos, rectSize, layer, mipLevel);
-
-            uint mipWidth = GetMipDimension(InternalTexture.Width, mipLevel);
-            uint mipHeight = GetMipDimension(InternalTexture.Height, mipLevel);
-            uint mipDepth = GetMipDimension(InternalTexture.Depth, mipLevel);
-
-            uint mipLevelSize = mipWidth * mipHeight * mipDepth * PixelFormatBytes(Format);
-
-            EnsureStagingTexture();
-            Graphics.Device.UpdateTexture(stagingTexture, (IntPtr)data, mipLevelSize, (uint)rectPos.x, (uint)rectPos.y, (uint)rectPos.z, (uint)rectSize.x, (uint)rectSize.y, (uint)rectSize.z, mipLevel, layer);
-
-            if (stagingTexture != InternalTexture)
-                Graphics.InternalCopyTexture(stagingTexture, InternalTexture, mipLevel, layer, true);
-        }
-
-
-        unsafe protected void InternalSetData<T>(Memory<T> data, Vector3Int rectPos, Vector3Int rectSize, uint layer, uint mipLevel) where T : unmanaged
-        {
-            if (data.Length * sizeof(T) < rectSize.x * rectSize.y * rectSize.z)
-                throw new ArgumentException("Not enough pixel data", nameof(data));
-
-            fixed (void* ptr = data.Span)
-                InternalSetDataPtr(ptr, rectPos, rectSize, layer, mipLevel);
-        }
-
-
-        unsafe protected void InternalCopyDataPtr(void* dataPtr, out uint rowPitch, out uint depthPitch, uint arrayLayer, uint mipLevel)
-        {
-            EnsureStagingTexture();
-
-            if (stagingTexture != InternalTexture)
-                Graphics.InternalCopyTexture(InternalTexture, stagingTexture, mipLevel, arrayLayer, true);
-
-            uint subresource = (MipLevels * arrayLayer) + mipLevel;
-
-            MappedResource resource = Graphics.Device.Map(stagingTexture, MapMode.Read, subresource);
-
-            rowPitch = resource.RowPitch;
-            depthPitch = resource.DepthPitch;
-
-            Buffer.MemoryCopy((void*)resource.Data, dataPtr, resource.SizeInBytes, resource.SizeInBytes);
-
-            Graphics.Device.Unmap(stagingTexture, subresource);
-        }
-
-
-        unsafe protected void InternalCopyData<T>(Memory<T> data, uint arrayLayer, uint mipLevel) where T : unmanaged
-        {
-            EnsureStagingTexture();
-
-            if (stagingTexture != InternalTexture)
-                Graphics.InternalCopyTexture(InternalTexture, stagingTexture, mipLevel, arrayLayer, true);
-
-            uint subresource = (MipLevels * arrayLayer) + mipLevel;
-
-            MappedResource resource = Graphics.Device.Map(stagingTexture, MapMode.Read, subresource);
-
-            if (data.Length * sizeof(T) < resource.SizeInBytes)
-                throw new ArgumentException("Insufficient space to store the requested pixel data", nameof(data));
-
-            fixed (void* ptr = data.Span)
-                Buffer.MemoryCopy((void*)resource.Data, ptr, data.Length * sizeof(T), resource.SizeInBytes);
-
-            Graphics.Device.Unmap(stagingTexture, subresource);
-        }
-
-
         private void ValidateRectOperation(Vector3Int rect, Vector3Int size, uint layer, uint mipLevel)
         {
             if (rect.x < 0 || rect.x >= InternalTexture.Width)
@@ -227,5 +247,10 @@ namespace Prowl.Runtime
             if (mipLevel >= InternalTexture.MipLevels)
                 throw new ArgumentOutOfRangeException("Mip level", mipLevel, "Mip level must be in the range [0, " + InternalTexture.MipLevels + "]");
         }
+
+
+        public abstract SerializedProperty Serialize(Serializer.SerializationContext ctx);
+
+        public abstract void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx);
     }
 }
