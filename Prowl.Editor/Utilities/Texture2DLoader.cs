@@ -20,6 +20,8 @@ namespace Prowl.Editor
 
             image.Flip();
 
+            // TODO: Format should not be limited to 4-channel 16-bit. Potentially add conversion function to different formats
+
             PixelFormat format = PixelFormat.R16_G16_B16_A16_UNorm;
             image.ColorSpace = ColorSpace.sRGB;
             image.ColorType = ColorType.TrueColorAlpha;
@@ -42,7 +44,7 @@ namespace Prowl.Editor
             }
             catch
             {
-                texture.Destroy();
+                texture.DestroyImmediate();
                 throw;
             }
         }
