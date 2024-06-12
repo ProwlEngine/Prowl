@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using Veldrid;
 
 namespace Prowl.Runtime
 {
@@ -19,21 +20,21 @@ namespace Prowl.Runtime
         private List<Vertex> vertices = new List<Vertex>(50);
         private Mesh mesh;
 
-        private Topology primitiveType;
+        private PrimitiveTopology primitiveType;
 
         public bool IsUploaded { get; private set; }
 
-        public PrimitiveBatch(Topology primitiveType)
+        public PrimitiveBatch(PrimitiveTopology primitiveType)
         {
             this.primitiveType = primitiveType;
 
             #warning Veldrid change
             //vbo = Graphics.Device.CreateBuffer(BufferType.VertexBuffer, new byte[0], true);
 
-            var format = new VertexFormat([
-                new VertexFormat.Element((uint)0, VertexFormat.VertexType.Float, 3),
-                new VertexFormat.Element((uint)1, VertexFormat.VertexType.Float, 4)
-            ]);
+            //var format = new VertexFormat([
+            //    new VertexFormat.Element((uint)0, VertexFormat.VertexType.Float, 3),
+            //    new VertexFormat.Element((uint)1, VertexFormat.VertexType.Float, 4)
+            //]);
 
             //vao = Graphics.Device.CreateVertexArray(format, vbo, null);
 
