@@ -9,7 +9,7 @@ internal static class Program {
     public static DirectoryInfo Data => new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
     static Texture2D catTex;
 
-    private static Mesh quadMesh = Mesh.GetFullscreenQuad();
+    private static Mesh quadMesh = Mesh.CreateSphere(1f, 20, 20);
 
     public static int Main(string[] args) {
 
