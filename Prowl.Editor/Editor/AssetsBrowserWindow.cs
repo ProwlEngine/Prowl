@@ -187,6 +187,13 @@ namespace Prowl.Editor
                 var dropInteract = gui.GetInteractable();
                 //HandleDrop();
 
+                if (gui.IsNodeHovered() && gui.IsPointerClick(Silk.NET.Input.MouseButton.Right))
+                    gui.OpenPopup("RightClickBodyBrowser");
+                var popupHolder = gui.CurrentNode;
+                if (gui.BeginPopup("RightClickBodyBrowser", out var node))
+                    using (node.Width(180).Padding(5).Layout(LayoutType.Column).FitContentHeight().Enter())
+                        AssetsTreeWindow.DrawContextMenu(null, CurDirectory, false, popupHolder);
+
                 if (DragnDrop.Drop<GameObject>(out var go))
                 {
                     if (go.AssetID == Guid.Empty)
@@ -248,6 +255,13 @@ namespace Prowl.Editor
                 {
                     var interact = gui.GetInteractable();
 
+                    if (gui.IsNodeHovered() && gui.IsPointerClick(Silk.NET.Input.MouseButton.Right))
+                        gui.OpenPopup("RightClickFileBrowser");
+                    var popupHolder = gui.CurrentNode;
+                    if (gui.BeginPopup("RightClickFileBrowser", out var node))
+                        using (node.Width(180).Padding(5).Layout(LayoutType.Column).FitContentHeight().Enter())
+                            AssetsTreeWindow.DrawContextMenu(dir, null, false, popupHolder);
+
                     if (interact.TakeFocus())
                     {
                         var old = CurDirectory;
@@ -296,7 +310,7 @@ namespace Prowl.Editor
 
                     if (subAssets.Length > 1)
                     {
-                        expanded = gui.GetStorage<bool>(gui.CurrentNode.Parent, file.FullName, false);
+                        expanded = gui.GetNodeStorage<bool>(gui.CurrentNode.Parent, file.FullName, false);
 
                         using (gui.Node("ExpandBtn").TopLeft(Offset.Percentage(1f, -(itemHeight * 0.5)), 2).Scale(itemHeight * 0.5).Enter())
                         {

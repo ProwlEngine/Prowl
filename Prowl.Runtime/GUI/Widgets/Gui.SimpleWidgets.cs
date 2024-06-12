@@ -204,6 +204,7 @@ namespace Prowl.Runtime.GUI
         {
             SetNodeStorage(popupHolder ?? CurrentNode, "Popup", true);
             SetNodeStorage(popupHolder ?? CurrentNode, "Popup_ID", id.GetHashCode());
+            SetNodeStorage(popupHolder ?? CurrentNode, "Popup_Frame", Time.frameCount);
             SetNodeStorage(popupHolder ?? CurrentNode, "PU_POS_" + id, topleft ?? PointerPos);
         }
 
@@ -240,13 +241,19 @@ namespace Prowl.Runtime.GUI
                         SetNodeStorage(parentNode, "PU_POS_" + id, pos);
                     }
 
-                    if ((IsPointerDown(Veldrid.MouseButton.Left) || IsPointerDown(Veldrid.MouseButton.Right)) &&
-                        !node.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Popup
-                        !parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
-                        !IsBlockedByInteractable(PointerPos, 50000 + nextPopupIndex)) // Not blocked by any interactables above this popup
+                    // Dont close Popup on the same frame it was opened - 5 frame window
+                    long frame = GetNodeStorage<long>(parentNode, "Popup_Frame");
+                    if (frame < Time.frameCount)
                     {
-                        ClosePopup(parentNode);
-                        return false;
+                        if ((IsPointerClick(Veldrid.MouseButton.Left) || IsPointerClick(Veldrid.MouseButton.Right)) &&
+                            !IsPointerMoving &&
+                            !node.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Popup
+                            //!parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
+                            !IsBlockedByInteractable(PointerPos, 50000 + nextPopupIndex)) // Not blocked by any interactables above this popup
+                        {
+                            ClosePopup(parentNode);
+                            return false;
+                        }
                     }
 
                     if (!invisible)

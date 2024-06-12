@@ -384,10 +384,10 @@ namespace Prowl.Runtime.GUI
 
             delta /= _state.StartDelta;
     
-            if (_gizmo.Snapping)
-            {
-                delta = GizmoUtils.RoundToInterval(delta.Value, _gizmo.SnapDistance);
-            }
+            //if (_gizmo.Snapping)
+            //{
+            //    delta = GizmoUtils.RoundToInterval(delta.Value, _gizmo.SnapDistance);
+            //}
     
             delta = Math.Max(delta.Value, 1e-4) - 1.0;
     
@@ -398,7 +398,7 @@ namespace Prowl.Runtime.GUI
                     direction = GizmoUtils.GizmoLocalNormal(_gizmo, _params.Direction);
                     break;
                 case TransformKind.Plane when _params.Direction == GizmoDirection.View:
-                    direction = Vector3.one;
+                    direction = Vector3.one * 0.01f;
                     break;
                 case TransformKind.Plane:
                     direction = (GizmoUtils.PlaneBitangent(_params.Direction) +

@@ -191,13 +191,13 @@ namespace Prowl.Editor
             }
         }
 
-        private static void DrawContextMenu(FileSystemInfo? fileInfo, DirectoryInfo? directory = null, bool fromAssetBrowser = false, LayoutNode popupHolder = null)
+        public static void DrawContextMenu(FileSystemInfo? fileInfo, DirectoryInfo? directory = null, bool fromAssetBrowser = false, LayoutNode popupHolder = null)
         {
             bool closePopup = false;
 
             if (fileInfo == null)
             {
-                DrawCreateContextMenu(directory, fromAssetBrowser);
+                closePopup |= DrawCreateContextMenu(directory, fromAssetBrowser);
                 EditorGUI.Separator();
                 DrawProjectContextMenu(ref closePopup);
             }
@@ -236,7 +236,7 @@ namespace Prowl.Editor
                     closePopup = true;
                 }
 
-                DrawCreateContextMenu(file.Directory, fromAssetBrowser);
+                closePopup |= DrawCreateContextMenu(file.Directory, fromAssetBrowser);
                 EditorGUI.Separator();
                 DrawProjectContextMenu(ref closePopup);
             }
@@ -271,7 +271,7 @@ namespace Prowl.Editor
                 }
                 EditorGUI.Separator();
 
-                DrawCreateContextMenu(dir, fromAssetBrowser);
+                closePopup |= DrawCreateContextMenu(dir, fromAssetBrowser);
                 EditorGUI.Separator();
                 DrawProjectContextMenu(ref closePopup);
             }
@@ -280,13 +280,13 @@ namespace Prowl.Editor
                 Gui.ActiveGUI.ClosePopup(popupHolder);
         }
 
-        private static void DrawCreateContextMenu(DirectoryInfo? directory, bool fromAssetBrowser)
+        private static bool DrawCreateContextMenu(DirectoryInfo? directory, bool fromAssetBrowser)
         {
             EditorGUI.Text("Create");
 
             MainMenuItems.Directory = directory;
             MainMenuItems.fromAssetBrowser = fromAssetBrowser;
-            MenuItem.DrawMenuRoot("Create");
+            return MenuItem.DrawMenuRoot("Create");
         }
 
         private static void DrawProjectContextMenu(ref bool closePopup)
@@ -397,6 +397,13 @@ namespace Prowl.Editor
 
                     DragnDrop.Drag(subDirectory);
 
+                    if (gui.IsNodeHovered() && gui.IsPointerClick(Silk.NET.Input.MouseButton.Right))
+                        gui.OpenPopup("TreeRightClickAsset");
+                    var popupHolder = gui.CurrentNode;
+                    if (gui.BeginPopup("TreeRightClickAsset", out var node))
+                        using (node.Width(180).Padding(5).Layout(LayoutType.Column).FitContentHeight().Enter())
+                            DrawContextMenu(subDirectory, null, false, popupHolder);
+
                     if (subDirectory.Exists)
                     {
                         if (DragnDrop.Drop<FileSystemInfo>(out var systeminfo))
@@ -409,7 +416,7 @@ namespace Prowl.Editor
                         }
                     }
 
-                    expanded = gui.GetStorage<bool>(gui.CurrentNode.Parent, subDirectory.FullName, false);
+                    expanded = gui.GetNodeStorage<bool>(gui.CurrentNode.Parent, subDirectory.FullName, false);
                     using (gui.Node("ExpandBtn").TopLeft(5, 0).Scale(GuiStyle.ItemHeight).Enter())
                     {
                         if (gui.IsNodePressed())
@@ -465,7 +472,7 @@ namespace Prowl.Editor
 
                     if (subassets.Length > 1)
                     {
-                        expanded = gui.GetStorage<bool>(gui.CurrentNode.Parent, file.FullName, false);
+                        expanded = gui.GetNodeStorage<bool>(gui.CurrentNode.Parent, file.FullName, false);
                         using (gui.Node("ExpandBtn").TopLeft(Offset.Percentage(1f, -GuiStyle.ItemHeight), 0).Scale(GuiStyle.ItemHeight).Enter())
                         {
                             if (gui.IsNodePressed())
@@ -552,6 +559,13 @@ namespace Prowl.Editor
                 SelectHandler.AddSelectableAtIndex(index, entry);
             if (interact.TakeFocus(true))
                 SelectHandler.Select(index, entry);
+
+            if (interact.IsHovered() && Gui.ActiveGUI.IsPointerClick(Silk.NET.Input.MouseButton.Right))
+                Gui.ActiveGUI.OpenPopup("RightClickFile");
+            var popupHolder = Gui.ActiveGUI.CurrentNode;
+            if (Gui.ActiveGUI.BeginPopup("RightClickFile", out var node2))
+                using (node2.Width(180).Padding(5).Layout(LayoutType.Column).FitContentHeight().Enter())
+                    DrawContextMenu(entry, null, false, popupHolder);
 
             if (isAsset && interact.IsHovered() && Gui.ActiveGUI.IsPointerDoubleClick(Veldrid.MouseButton.Left))
             {

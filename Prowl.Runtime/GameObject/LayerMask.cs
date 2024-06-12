@@ -5,7 +5,7 @@ public class LayerMask
     [SerializeField]
     private uint mask = 0;
 
-    public bool Intersects(LayerMask other) => HasLayer(other.mask);
+    public bool Intersects(LayerMask other) => HasLayer(other.mask); // (mask & other.mask) != 0;
     public bool HasLayer(uint index) => (mask & (1 << (int)index)) == (1 << (int)index);
     public void SetLayer(uint index) => mask |= 1u << (int)index;
     public void RemoveLayer(uint index) => mask &= ~(1u << (int)index);

@@ -1,5 +1,4 @@
-﻿using Prowl.Runtime.GUI.Graphics;
-using Prowl.Runtime.GUI.Layout;
+﻿using Prowl.Runtime.GUI.Layout;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -24,15 +23,15 @@ namespace Prowl.Runtime.GUI
         }
 
         /// <summary> Get a value from the global GUI storage this persists across Nodes </summary>
-        public T GetGlobalStorage<T>(string key) where T : unmanaged => GetStorage<T>(rootNode, key, default);
+        public T GetGlobalStorage<T>(string key) where T : unmanaged => GetNodeStorage<T>(rootNode, key, default);
         /// <summary> Set a value in the global GUI storage this persists across Nodes </summary>
         public void SetGlobalStorage<T>(string key, T value) where T : unmanaged => SetNodeStorage(rootNode, key, value);
 
         /// <summary> Get a value from the current node's storage </summary>
-        public T GetNodeStorage<T>(string key, T defaultValue = default) where T : unmanaged => GetStorage<T>(CurrentNode, key, defaultValue);
+        public T GetNodeStorage<T>(string key, T defaultValue = default) where T : unmanaged => GetNodeStorage<T>(CurrentNode, key, defaultValue);
 
         /// <summary> Get a value from the current node's storage </summary>
-        public T GetStorage<T>(LayoutNode node, string key, T defaultValue = default) where T : unmanaged
+        public T GetNodeStorage<T>(LayoutNode node, string key, T defaultValue = default) where T : unmanaged
         {
             if (!_storage.TryGetValue(node.ID, out var storage))
                 return defaultValue;
