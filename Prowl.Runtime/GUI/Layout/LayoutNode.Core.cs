@@ -132,6 +132,15 @@ namespace Prowl.Runtime.GUI.Layout
             // Cache scale first
             UpdateScaleCache();
 
+            // Then finally position (Relies on Scale and Padding)
+            UpdatePositionCache();
+
+            foreach (var child in Children)
+                child.UpdateCache();
+        }
+
+        public void UpdateScaleCache()
+        {
             // Then Margin/Paddings (They rely on Scale)
             _data.Margins = new(
                     _marginLeft.ToPixels(_positionRelativeTo?._data.Scale.x ?? 0),
@@ -146,20 +155,11 @@ namespace Prowl.Runtime.GUI.Layout
                     _paddingBottom.ToPixels(_positionRelativeTo?._data.Scale.y ?? 0)
                 );
 
-            // Then finally position (Relies on Scale and Padding)
-            UpdatePositionCache();
-
-            foreach (var child in Children)
-                child.UpdateCache();
-        }
-
-        public void UpdateScaleCache()
-        {
             _data.Scale = new(
-                Math.Min(_width.ToPixels(_sizeRelativeTo?._data.GlobalContentWidth ?? 0),
+                Math.Min(_width.ToPixels(_sizeRelativeTo?._data.GlobalContentWidth ?? 0) - _data.Margins.Horizontal,
                          _maxWidth.ToPixels(_sizeRelativeTo?._data.GlobalContentWidth ?? 0)
                 ),
-                Math.Min(_height.ToPixels(_sizeRelativeTo?._data.GlobalContentHeight ?? 0),
+                Math.Min(_height.ToPixels(_sizeRelativeTo?._data.GlobalContentHeight ?? 0) - _data.Margins.Vertical,
                          _maxHeight.ToPixels(_sizeRelativeTo?._data.GlobalContentHeight ?? 0)
                 )
             );
