@@ -26,6 +26,10 @@ namespace Prowl.Runtime
         private BodyReference body;
         private TypedIndex? compoundShape;
 
+        public BodyHandle? BodyHandle {
+            get => bodyHandle;
+        }
+
         public Vector3 Position {
             get => body.Pose.Position;
             set => body.Pose.Position = value;
@@ -67,7 +71,7 @@ namespace Prowl.Runtime
 
         public void Build()
         {
-            if(bodyHandle != null)
+            if (bodyHandle != null)
                 Physics.Sim.Bodies.Remove(bodyHandle.Value);
             bodyHandle = null;
 
@@ -75,13 +79,13 @@ namespace Prowl.Runtime
 
             var shape = ComputeShape(out BodyInertia compoundInertia, out System.Numerics.Vector3 compoundCenter);
             var collidableDescription = new CollidableDescription(shape, 0.1f);
-            bodyHandle = Physics.Sim.Bodies.Add(BodyDescription.CreateDynamic(new RigidPose(this.Transform.position, this.Transform.rotation), compoundInertia, collidableDescription, 0.01f));
+            bodyHandle = Physics.Sim.Bodies.Add(BodyDescription.CreateDynamic(
+                new RigidPose(this.Transform.position, this.Transform.rotation), compoundInertia, collidableDescription,
+                0.01f));
             body = Physics.Sim.Bodies[bodyHandle.Value];
             if (kinematic)
                 body.BecomeKinematic();
         }
-
-
 
         internal TypedIndex ComputeShape(out BodyInertia compoundInertia, out System.Numerics.Vector3 compoundCenter)
         {
