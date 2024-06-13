@@ -425,7 +425,7 @@ namespace Prowl.Editor
             if (target == null) return changed;
 
             LayoutNode node;
-            using ((node = ActiveGUI.Node(name)).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Enter())
+            using ((node = ActiveGUI.Node(name)).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Spacing(5).Enter())
             {
                 // Draw the Background & Borders
                 if (!config.HasFlag(PropertyGridConfig.NoBackground))

@@ -191,7 +191,7 @@ namespace Prowl.Editor
                     gui.OpenPopup("RightClickBodyBrowser");
                 var popupHolder = gui.CurrentNode;
                 if (gui.BeginPopup("RightClickBodyBrowser", out var node))
-                    using (node.Width(180).Padding(5).Layout(LayoutType.Column).FitContentHeight().Enter())
+                    using (node.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
                         AssetsTreeWindow.DrawContextMenu(null, CurDirectory, false, popupHolder);
 
                 if (DragnDrop.Drop<GameObject>(out var go))

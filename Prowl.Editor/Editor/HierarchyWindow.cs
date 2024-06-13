@@ -65,7 +65,7 @@ namespace Prowl.Editor
                     var test = gui.CurrentNode;
                     if (gui.BeginPopup("CreateGameObject", out var node))
                     {
-                        using (node.Width(150).Layout(LayoutType.Column).Padding(5).FitContentHeight().Enter())
+                        using (node.Width(150).Layout(LayoutType.Column).Spacing(5).Padding(5).FitContentHeight().Enter())
                         {
                             DrawContextMenu(null, test);
                         }
@@ -103,7 +103,7 @@ namespace Prowl.Editor
                 var popupHolder = gui.CurrentNode;
                 if (gui.BeginPopup("RightClickGameObject", out var node))
                 {
-                    using (node.Width(150).Layout(LayoutType.Column).Padding(5).FitContentHeight().Enter())
+                    using (node.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                     {
                         var instanceID = gui.GetGlobalStorage<int>("RightClickGameObject");
                         var go = EngineObject.FindObjectByID<GameObject>(instanceID);

@@ -94,6 +94,8 @@ namespace Prowl.Runtime.GUI.Layout
         private LayoutType _layout = LayoutType.None;
         private bool _layoutX = false;
         private bool _layoutY = false;
+        private Size _layoutXSpacing = Size.Default;
+        private Size _layoutYSpacing = Size.Default;
         internal ClipType _clipped = ClipType.None;
 
         internal ulong _nextAnimationFrame = 0;
@@ -300,6 +302,7 @@ namespace Prowl.Runtime.GUI.Layout
                         if (_layoutX) child._positionX = 0;
                         if (_layoutY) child._positionY = y;
                         y += child._data.Margins.Vertical + child._data.Scale.y;
+                        y += _layoutYSpacing.ToPixels(_data.GlobalContentHeight);
                         child.UpdatePositionCache();
                     }
                     break;
@@ -310,6 +313,7 @@ namespace Prowl.Runtime.GUI.Layout
                         if (_layoutX) child._positionX = x;
                         if (_layoutY) child._positionY = 0;
                         x += child._data.Margins.Horizontal + child._data.Scale.x;
+                        y += _layoutXSpacing.ToPixels(_data.GlobalContentWidth);
                         child.UpdatePositionCache();
                     }
                     break;
