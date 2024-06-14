@@ -142,55 +142,22 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         var t = go.Transform;
                         using (ActiveGUI.Node("PosParent", 0).ExpandWidth().Height(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
-                            // Label
-                            using (ActiveGUI.Node("#_Label").ExpandHeight().Clip().Enter())
-                            {
-                                var pos = ActiveGUI.CurrentNode.LayoutData.Rect.Min;
-                                pos.x += 28;
-                                pos.y += 5;
-                                ActiveGUI.Draw2D.DrawText("Position", pos, GuiStyle.Base8);
-                            }
-
-                            // Value
                             var tpos = t.localPosition;
-                            using (ActiveGUI.Node("#_Value").ExpandHeight().Enter())
-                                EditorGUI.DrawProperty(0, "Position", ref tpos);
+                            EditorGUI.DrawProperty(0, "Position", ref tpos);
                             t.localPosition = tpos;
                         }
 
                         using (ActiveGUI.Node("RotParent", 0).ExpandWidth().Height(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
-                            // Label
-                            using (ActiveGUI.Node("#_Label").ExpandHeight().Clip().Enter())
-                            {
-                                var pos = ActiveGUI.CurrentNode.LayoutData.Rect.Min;
-                                pos.x += 28;
-                                pos.y += 5;
-                                ActiveGUI.Draw2D.DrawText("Rotation", pos, GuiStyle.Base8);
-                            }
-
-                            // Value
                             var tpos = t.localEulerAngles;
-                            using (ActiveGUI.Node("#_Value").ExpandHeight().Enter())
-                                EditorGUI.DrawProperty(1, "Rotation", ref tpos);
+                            EditorGUI.DrawProperty(1, "Rotation", ref tpos);
                             t.localEulerAngles = tpos;
                         }
 
                         using (ActiveGUI.Node("ScaleParent", 0).ExpandWidth().Height(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
-                            // Label
-                            using (ActiveGUI.Node("#_Label").ExpandHeight().Clip().Enter())
-                            {
-                                var pos = ActiveGUI.CurrentNode.LayoutData.Rect.Min;
-                                pos.x += 28;
-                                pos.y += 5;
-                                ActiveGUI.Draw2D.DrawText("Scale", pos, GuiStyle.Base8);
-                            }
-
-                            // Value
                             var tpos = t.localScale;
-                            using (ActiveGUI.Node("#_Value").ExpandHeight().Enter())
-                                EditorGUI.DrawProperty(2, "Scale", ref tpos);
+                            EditorGUI.DrawProperty(2, "Scale", ref tpos);
                             t.localScale = tpos;
                         }
                     }
