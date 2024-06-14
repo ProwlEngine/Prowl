@@ -6,6 +6,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.Utils;
+using System;
 using System.ComponentModel;
 using System.Reflection;
 using static Assimp.Metadata;
@@ -153,7 +154,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                             // Value
                             var tpos = t.localPosition;
                             using (ActiveGUI.Node("#_Value").ExpandHeight().Enter())
-                                Property_Vector3("Position", ref tpos);
+                                EditorGUI.DrawProperty(0, "Position", ref tpos);
                             t.localPosition = tpos;
                         }
 
@@ -171,7 +172,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                             // Value
                             var tpos = t.localEulerAngles;
                             using (ActiveGUI.Node("#_Value").ExpandHeight().Enter())
-                                Property_Vector3("Rotation", ref tpos);
+                                EditorGUI.DrawProperty(1, "Rotation", ref tpos);
                             t.localEulerAngles = tpos;
                         }
 
@@ -189,7 +190,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                             // Value
                             var tpos = t.localScale;
                             using (ActiveGUI.Node("#_Value").ExpandHeight().Enter())
-                                Property_Vector3("Scale", ref tpos);
+                                EditorGUI.DrawProperty(2, "Scale", ref tpos);
                             t.localScale = tpos;
                         }
                     }
