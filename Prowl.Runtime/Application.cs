@@ -42,7 +42,7 @@ public static class Application
     static void AppInitialize()
     {
         Input.Initialize();
-        Graphics.Initialize(true, GraphicsBackend.OpenGL);
+        Graphics.Initialize(true, GraphicsBackend.Vulkan);
         SceneManager.Initialize();
         AudioSystem.Initialize();
         Time.Initialize();
