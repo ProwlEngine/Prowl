@@ -30,7 +30,7 @@ namespace Prowl.Runtime
 
         public static SerializedProperty Read(string input)
         {
-            TextNbtMemoryParser parser = new(input.ToCharArray());
+            TextMemoryParser parser = new(input.ToCharArray());
 
             if (!parser.MoveNext())
                 throw new InvalidDataException("Empty input");
@@ -232,7 +232,7 @@ namespace Prowl.Runtime
 
 
 
-        public enum TextNbtTokenType
+        public enum TextTokenType
         {
             None,
             BeginCompound,
@@ -245,19 +245,19 @@ namespace Prowl.Runtime
             Value
         }
 
-        private static SerializedProperty ReadTag(TextNbtMemoryParser parser)
+        private static SerializedProperty ReadTag(TextMemoryParser parser)
         {
             return parser.TokenType switch {
-                TextNbtTokenType.BeginCompound => ReadCompoundTag(parser),
-                TextNbtTokenType.BeginList => ReadListTag(parser),
-                TextNbtTokenType.BeginArray => ReadArrayTag(parser),
-                TextNbtTokenType.Value => ReadValueTag(parser),
+                TextTokenType.BeginCompound => ReadCompoundTag(parser),
+                TextTokenType.BeginList => ReadListTag(parser),
+                TextTokenType.BeginArray => ReadArrayTag(parser),
+                TextTokenType.Value => ReadValueTag(parser),
                 _ => throw new InvalidDataException(
                     $"Invalid token \"{parser.Token}\" found while reading a property at position {parser.TokenPosition}")
             };
         }
 
-        private static SerializedProperty ReadCompoundTag(TextNbtMemoryParser parser)
+        private static SerializedProperty ReadCompoundTag(TextMemoryParser parser)
         {
             var startPosition = parser.TokenPosition;
 
@@ -266,17 +266,17 @@ namespace Prowl.Runtime
             {
                 switch (parser.TokenType)
                 {
-                    case TextNbtTokenType.EndCompound:
+                    case TextTokenType.EndCompound:
                         return new SerializedProperty(PropertyType.Compound, dict);
-                    case TextNbtTokenType.Separator:
+                    case TextTokenType.Separator:
                         continue;
-                    case TextNbtTokenType.Value:
+                    case TextTokenType.Value:
                         var name = parser.Token[0] is '"' or '\'' ? ParseQuotedStringValue(parser) : new string(parser.Token);
 
                         if (!parser.MoveNext())
                             throw new InvalidDataException($"End of input reached while reading a compound property starting at position {startPosition}");
 
-                        if (parser.TokenType != TextNbtTokenType.NameValueSeparator)
+                        if (parser.TokenType != TextTokenType.NameValueSeparator)
                             throw new InvalidDataException($"Invalid token \"{parser.Token}\" found while reading a compound property at position {parser.TokenPosition}");
 
                         if (!parser.MoveNext())
@@ -295,7 +295,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"End of input reached while reading a compound property starting at position {startPosition}");
         }
 
-        private static SerializedProperty ReadListTag(TextNbtMemoryParser parser)
+        private static SerializedProperty ReadListTag(TextMemoryParser parser)
         {
             var startPosition = parser.TokenPosition;
 
@@ -305,9 +305,9 @@ namespace Prowl.Runtime
             {
                 switch (parser.TokenType)
                 {
-                    case TextNbtTokenType.EndList:
+                    case TextTokenType.EndList:
                         return new SerializedProperty(PropertyType.List, items);
-                    case TextNbtTokenType.Separator:
+                    case TextTokenType.Separator:
                         continue;
                 }
 
@@ -320,7 +320,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"End of input reached while reading a list property starting at position {startPosition}");
         }
 
-        private static SerializedProperty ReadArrayTag(TextNbtMemoryParser parser)
+        private static SerializedProperty ReadArrayTag(TextMemoryParser parser)
         {
             return parser.Token[1] switch {
                 'B' => ReadByteArrayTag(parser),
@@ -328,7 +328,7 @@ namespace Prowl.Runtime
             };
         }
 
-        private static SerializedProperty ReadByteArrayTag(TextNbtMemoryParser parser)
+        private static SerializedProperty ReadByteArrayTag(TextMemoryParser parser)
         {
             var startPosition = parser.TokenPosition;
 
@@ -337,11 +337,11 @@ namespace Prowl.Runtime
             {
                 switch (parser.TokenType)
                 {
-                    case TextNbtTokenType.EndList:
+                    case TextTokenType.EndList:
                         return new SerializedProperty(arr!);
-                    case TextNbtTokenType.Separator:
+                    case TextTokenType.Separator:
                         continue;
-                    case TextNbtTokenType.Value:
+                    case TextTokenType.Value:
                         arr = Convert.FromBase64String(parser.Token.ToString());
                         continue;
                     default:
@@ -352,7 +352,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"End of input reached while reading a byte array starting at position {startPosition}");
         }
 
-        private static SerializedProperty ReadValueTag(TextNbtMemoryParser parser)
+        private static SerializedProperty ReadValueTag(TextMemoryParser parser)
         {
             // null
             if (parser.Token.SequenceEqual("NULL")) return new SerializedProperty(PropertyType.Null, null);
@@ -375,7 +375,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"Invalid value \"{parser.Token}\" found while reading a tag at position {parser.TokenPosition}");
         }
 
-        private static SerializedProperty ReadNumberTag(TextNbtMemoryParser parser)
+        private static SerializedProperty ReadNumberTag(TextMemoryParser parser)
         {
             return parser.Token[^1] switch {
                 'B' => new SerializedProperty(ParseByteValue(parser)),
@@ -394,7 +394,7 @@ namespace Prowl.Runtime
             };
         }
 
-        private static byte ParseByteValue(TextNbtMemoryParser parser)
+        private static byte ParseByteValue(TextMemoryParser parser)
         {
             if (parser.Token[^1] == 'B' && byte.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
                 return v;
@@ -402,7 +402,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"Error parsing byte value \"{parser.Token}\" at position {parser.TokenPosition}");
         }
 
-        private static sbyte ParseSByteValue(TextNbtMemoryParser parser)
+        private static sbyte ParseSByteValue(TextMemoryParser parser)
         {
             if (parser.Token[^1] == 'N' && sbyte.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
                 return v;
@@ -410,7 +410,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"Error parsing sbyte value \"{parser.Token}\" at position {parser.TokenPosition}");
         }
 
-        private static short ParseShortValue(TextNbtMemoryParser parser)
+        private static short ParseShortValue(TextMemoryParser parser)
         {
             if (parser.Token[^1] == 'S' && short.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
                 return v;
@@ -418,7 +418,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"Error parsing short value \"{parser.Token}\" at position {parser.TokenPosition}");
         }
 
-        private static int ParseIntValue(TextNbtMemoryParser parser)
+        private static int ParseIntValue(TextMemoryParser parser)
         {
             if (int.TryParse(parser.Token, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
                 return v;
@@ -426,7 +426,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"Error parsing int value \"{parser.Token}\" at position {parser.TokenPosition}");
         }
 
-        private static long ParseLongValue(TextNbtMemoryParser parser)
+        private static long ParseLongValue(TextMemoryParser parser)
         {
             if (parser.Token[^1] == 'L' && long.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
                 return v;
@@ -434,7 +434,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"Error parsing long value \"{parser.Token}\" at position {parser.TokenPosition}");
         }
 
-        private static ushort ParseUShortValue(TextNbtMemoryParser parser)
+        private static ushort ParseUShortValue(TextMemoryParser parser)
         {
             if (parser.Token[^1] == 'V' && ushort.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
                 return v;
@@ -442,7 +442,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"Error parsing ushort value \"{parser.Token}\" at position {parser.TokenPosition}");
         }
 
-        private static uint ParseUIntValue(TextNbtMemoryParser parser)
+        private static uint ParseUIntValue(TextMemoryParser parser)
         {
             if (parser.Token[^1] == 'U' && uint.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
                 return v;
@@ -450,7 +450,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"Error parsing uint value \"{parser.Token}\" at position {parser.TokenPosition}");
         }
 
-        private static ulong ParseULongValue(TextNbtMemoryParser parser)
+        private static ulong ParseULongValue(TextMemoryParser parser)
         {
             if (parser.Token[^1] == 'C' && ulong.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
                 return v;
@@ -458,7 +458,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"Error parsing ulong value \"{parser.Token}\" at position {parser.TokenPosition}");
         }
 
-        private static float ParseFloatValue(TextNbtMemoryParser parser)
+        private static float ParseFloatValue(TextMemoryParser parser)
         {
             if (parser.Token[^1] == 'F' && float.TryParse(parser.Token[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
                 return v;
@@ -466,7 +466,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"Error parsing float value \"{parser.Token}\" at position {parser.TokenPosition}");
         }
 
-        private static double ParseDoubleValue(TextNbtMemoryParser parser)
+        private static double ParseDoubleValue(TextMemoryParser parser)
         {
             if (parser.Token[^1] == 'D' && double.TryParse(parser.Token[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
                 return v;
@@ -474,7 +474,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"Error parsing double value \"{parser.Token}\" at position {parser.TokenPosition}");
         }
 
-        private static decimal ParseDecimalValue(TextNbtMemoryParser parser)
+        private static decimal ParseDecimalValue(TextMemoryParser parser)
         {
             if (parser.Token[^1] == 'M' && decimal.TryParse(parser.Token[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
                 return v;
@@ -482,7 +482,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"Error parsing decimal value \"{parser.Token}\" at position {parser.TokenPosition}");
         }
 
-        private static string ParseQuotedStringValue(TextNbtMemoryParser parser)
+        private static string ParseQuotedStringValue(TextMemoryParser parser)
         {
             var token = parser.Token;
 
@@ -542,12 +542,12 @@ namespace Prowl.Runtime
 
 
 
-        public class TextNbtMemoryParser
+        public class TextMemoryParser
         {
-            public TextNbtMemoryParser(ReadOnlyMemory<char> input)
+            public TextMemoryParser(ReadOnlyMemory<char> input)
             {
                 Input = input;
-                TokenType = TextNbtTokenType.None;
+                TokenType = TextTokenType.None;
                 TokenPosition = 0;
                 InputPosition = 0;
                 TokenMemory = ReadOnlyMemory<char>.Empty;
@@ -555,7 +555,7 @@ namespace Prowl.Runtime
 
             public ReadOnlyMemory<char> TokenMemory { get; private set; }
             public ReadOnlyMemory<char> Input { get; }
-            public TextNbtTokenType TokenType { get; private set; }
+            public TextTokenType TokenType { get; private set; }
             public ReadOnlySpan<char> Token => TokenMemory.Span;
             public int TokenPosition { get; private set; }
             public int InputPosition { get; private set; }
@@ -570,7 +570,7 @@ namespace Prowl.Runtime
                 if (InputPosition >= Input.Length)
                 {
                     TokenPosition = Input.Length;
-                    TokenType = TextNbtTokenType.None;
+                    TokenType = TextTokenType.None;
                     TokenMemory = ReadOnlyMemory<char>.Empty;
                     return false;
                 }
@@ -582,12 +582,12 @@ namespace Prowl.Runtime
                 switch (firstChar)
                 {
                     case '{':
-                        TokenType = TextNbtTokenType.BeginCompound;
+                        TokenType = TextTokenType.BeginCompound;
                         TokenMemory = Input.Slice(TokenPosition, 1);
                         InputPosition++;
                         return true;
                     case '}':
-                        TokenType = TextNbtTokenType.EndCompound;
+                        TokenType = TextTokenType.EndCompound;
                         TokenMemory = Input.Slice(TokenPosition, 1);
                         InputPosition++;
                         return true;
@@ -595,33 +595,33 @@ namespace Prowl.Runtime
                         if (InputPosition + 2 < Input.Length && Input.Span[InputPosition + 2] == ';')
                         {
                             TokenMemory = Input.Slice(TokenPosition, 3);
-                            TokenType = TextNbtTokenType.BeginArray;
+                            TokenType = TextTokenType.BeginArray;
                             InputPosition += 3;
                             return true;
                         }
 
-                        TokenType = TextNbtTokenType.BeginList;
+                        TokenType = TextTokenType.BeginList;
                         TokenMemory = Input.Slice(TokenPosition, 1);
                         InputPosition++;
                         return true;
                     case ']':
-                        TokenType = TextNbtTokenType.EndList;
+                        TokenType = TextTokenType.EndList;
                         TokenMemory = Input.Slice(TokenPosition, 1);
                         InputPosition++;
                         return true;
                     case ',':
-                        TokenType = TextNbtTokenType.Separator;
+                        TokenType = TextTokenType.Separator;
                         TokenMemory = Input.Slice(TokenPosition, 1);
                         InputPosition++;
                         return true;
                     case ':':
-                        TokenType = TextNbtTokenType.NameValueSeparator;
+                        TokenType = TextTokenType.NameValueSeparator;
                         TokenMemory = Input.Slice(TokenPosition, 1);
                         InputPosition++;
                         return true;
                     case '"' or '\'':
                     {
-                        TokenType = TextNbtTokenType.Value;
+                        TokenType = TextTokenType.Value;
                         InputPosition++;
                         while (InputPosition < Input.Length)
                         {
@@ -648,7 +648,7 @@ namespace Prowl.Runtime
                     }
                     default:
                     {
-                        TokenType = TextNbtTokenType.Value;
+                        TokenType = TextTokenType.Value;
                         InputPosition++;
                         while (InputPosition < Input.Length
                                && !IsSymbol(Input.Span[InputPosition])

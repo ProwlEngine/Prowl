@@ -1,5 +1,4 @@
 ﻿using Prowl.Icons;
-using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
