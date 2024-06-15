@@ -2,7 +2,7 @@
 using Veldrid;
 using Veldrid.SPIRV;
 using Veldrid.StartupUtilities;
-using Vector2 = System.Numerics.Vector2;
+using System.Text;
 
 namespace Prowl.Runtime
 {
@@ -26,41 +26,46 @@ namespace Prowl.Runtime
         private static bool createdResources = false;
 
         private static CommandList _commandList;
-        private static Veldrid.Shader[] _shaders;
-        private static Pipeline _pipeline;
+        private static Shader shader;
 
-        private static DeviceBuffer _projectionBuffer;
-        private static DeviceBuffer _viewBuffer;
-        private static DeviceBuffer _worldBuffer;
+        private static DeviceBuffer _matrixBuffer;
+        private static DeviceBuffer _colorBuffer;
         
-        private static ResourceSet _projViewSet;
-        private static ResourceSet _worldTextureSet;
+        private static ResourceSet _matrixSet;
+        private static ResourceSet _multiSet;
 
         private const string VertexCode = @"
 #version 450
 
-layout(set = 0, binding = 0) uniform ProjectionBuffer
+layout(set = 0, binding = 0) uniform MatrixBuffer
 {
     mat4 Projection;
-};
-
-layout(set = 0, binding = 1) uniform ViewBuffer
-{
     mat4 View;
+    mat4 World;
 };
 
-layout(set = 1, binding = 0) uniform WorldBuffer
+layout(set = 1, binding = 0) uniform texture2D SurfaceTexture;
+layout(set = 1, binding = 1) uniform sampler SurfaceSampler;
+
+layout(set = 1, binding = 2) uniform ColorBuffer
 {
-    mat4 World;
+    vec4 ColorValue;
 };
 
 layout(location = 0) in vec3 Position;
 layout(location = 1) in vec2 TexCoords;
+
 layout(location = 0) out vec2 fsin_texCoords;
 
 void main()
 {
     vec4 worldPosition = World * vec4(Position, 1);
+
+    float lat = acos(worldPosition.y / length(worldPosition)); //theta
+    float lon = atan(worldPosition.x / worldPosition.z); // phi
+
+    worldPosition *= texture(sampler2D(SurfaceTexture, SurfaceSampler), vec2(lat, lon));
+
     vec4 viewPosition = View * worldPosition;
     vec4 clipPosition = Projection * viewPosition;
     
@@ -76,12 +81,17 @@ void main()
 layout(location = 0) in vec2 fsin_texCoords;
 layout(location = 0) out vec4 fsout_color;
 
-layout(set = 1, binding = 1) uniform texture2D SurfaceTexture;
-layout(set = 1, binding = 2) uniform sampler SurfaceSampler;
+layout(set = 1, binding = 0) uniform texture2D SurfaceTexture;
+layout(set = 1, binding = 1) uniform sampler SurfaceSampler;
+
+layout(set = 1, binding = 2) uniform ColorBuffer
+{
+    vec4 ColorValue;
+};
 
 void main()
 {
-    fsout_color =  texture(sampler2D(SurfaceTexture, SurfaceSampler), fsin_texCoords);
+    fsout_color = texture(sampler2D(SurfaceTexture, SurfaceSampler), fsin_texCoords) * ColorValue;
 }";
 
         public static void Initialize(bool VSync = true, GraphicsBackend preferredBackend = GraphicsBackend.OpenGL)
@@ -110,81 +120,49 @@ void main()
 
             ResourceFactory factory = Device.ResourceFactory;
 
-            _projectionBuffer = factory.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
-            _viewBuffer = factory.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
-            _worldBuffer = factory.CreateBuffer(new BufferDescription(64, BufferUsage.UniformBuffer));
+            _matrixBuffer = factory.CreateBuffer(new BufferDescription(64 * 3, BufferUsage.UniformBuffer));
+            _colorBuffer = factory.CreateBuffer(new BufferDescription(sizeof(float) * 4, BufferUsage.UniformBuffer));
 
-            VertexLayoutDescription positionLayout = new VertexLayoutDescription(
-                new VertexElementDescription("Position", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float3));
+            ShaderDescription vertexShaderDesc = new ShaderDescription(ShaderStages.Vertex, Encoding.UTF8.GetBytes(VertexCode), "main");
+            ShaderDescription fragmentShaderDesc = new ShaderDescription(ShaderStages.Fragment, Encoding.UTF8.GetBytes(FragmentCode), "main");
 
-            VertexLayoutDescription uvLayout = new VertexLayoutDescription(
-                new VertexElementDescription("TexCoords", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2));
+            // Pass creation info (Name, tags, compiled programs, etc...)
+            Pass pass = new Pass("DrawCube", []);
 
-            ResourceLayout projViewLayout = factory.CreateResourceLayout(
-                new ResourceLayoutDescription(
-                    new ResourceLayoutElementDescription("ProjectionBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex),
-                    new ResourceLayoutElementDescription("ViewBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex)));
+            pass.CreateProgram(factory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc));
 
-            ResourceLayout worldTextureLayout = factory.CreateResourceLayout(
-                new ResourceLayoutDescription(
-                    new ResourceLayoutElementDescription("WorldBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex),
-                    new ResourceLayoutElementDescription("SurfaceTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment),
-                    new ResourceLayoutElementDescription("SurfaceSampler", ResourceKind.Sampler, ShaderStages.Fragment)));
+            // The input channels the vertex shader expects
+            pass.AddVertexInput("Position", VertexElementSemantic.Position, VertexElementFormat.Float3);
+            pass.AddVertexInput("TexCoords", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2);
 
-            ShaderDescription vertexShaderDesc = new ShaderDescription(
-                ShaderStages.Vertex,
-                System.Text.Encoding.UTF8.GetBytes(VertexCode),
-                "main");
-            ShaderDescription fragmentShaderDesc = new ShaderDescription(
-                ShaderStages.Fragment,
-                System.Text.Encoding.UTF8.GetBytes(FragmentCode),
-                "main");
+            // MVP matrix resources
+            pass.AddResourceElement([ new ResourceLayoutElementDescription("MatrixBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex) ]);
+            
+            // Other shader resources
+            pass.AddResourceElement([
+                new ResourceLayoutElementDescription("SurfaceTexture", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment),
+                new ResourceLayoutElementDescription("SurfaceSampler", ResourceKind.Sampler, ShaderStages.Vertex | ShaderStages.Fragment),
+                new ResourceLayoutElementDescription("ColorValue", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment) ]);
 
-            _shaders = factory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
+            pass.cullMode = FaceCullMode.None;
 
-            GraphicsPipelineDescription pipelineDescription = new GraphicsPipelineDescription
-            {
-                BlendState = BlendStateDescription.SingleOverrideBlend,
+            shader = new Shader();
 
-                DepthStencilState = new DepthStencilStateDescription(
-                    depthTestEnabled: true,
-                    depthWriteEnabled: true,
-                    comparisonKind: ComparisonKind.LessEqual
-                ),
-
-                RasterizerState = new RasterizerStateDescription(
-                    cullMode: FaceCullMode.Back,
-                    fillMode: PolygonFillMode.Solid,
-                    frontFace: FrontFace.Clockwise,
-                    depthClipEnabled: true,
-                    scissorTestEnabled: false
-                ),
-
-                PrimitiveTopology = PrimitiveTopology.TriangleList,
-
-                ShaderSet = new ShaderSetDescription(
-                    vertexLayouts: [ positionLayout, uvLayout ],
-                    shaders: _shaders
-                ),
-
-                Outputs = Device.SwapchainFramebuffer.OutputDescription,
-                ResourceLayouts = [ projViewLayout, worldTextureLayout ],
-            };
-
-            _pipeline = factory.CreateGraphicsPipeline(pipelineDescription);
+            shader.AddPass(pass);
 
             _commandList = factory.CreateCommandList();
 
-            _projViewSet = factory.CreateResourceSet(new ResourceSetDescription(
-                projViewLayout,
-                _projectionBuffer,
-                _viewBuffer));
+            PipelineCache.PipelineInfo pipeline = PipelineCache.GetPipelineForPass(shader.GetPass(0), fillMode: PolygonFillMode.Wireframe);
 
-            _worldTextureSet = factory.CreateResourceSet(new ResourceSetDescription(
-                worldTextureLayout,
-                _worldBuffer,
+            _matrixSet = factory.CreateResourceSet(new ResourceSetDescription(
+                pipeline.description.ResourceLayouts[0],
+                _matrixBuffer));
+
+            _multiSet = factory.CreateResourceSet(new ResourceSetDescription(
+                pipeline.description.ResourceLayouts[1],
                 tex.TextureView,
-                TextureSampler.Aniso4x.InternalSampler));
+                tex.Sampler.InternalSampler,
+                _colorBuffer));
 
             Console.WriteLine("Initialized resources");
         }
@@ -220,30 +198,29 @@ void main()
             if (_commandList == null)
                 return;
 
-            _commandList.SetPipeline(_pipeline);
+            PipelineCache.PipelineInfo pipeline = PipelineCache.GetPipelineForPass(shader.GetPass(0), fillMode: PolygonFillMode.Wireframe);
+
+            _commandList.SetPipeline(pipeline.pipeline);
 
             mesh.Upload();
 
-            _commandList.UpdateBuffer(_projectionBuffer, 0, System.Numerics.Matrix4x4.CreatePerspectiveFieldOfView(
-                1.0f,
-                (float)Screen.Size.x / Screen.Size.y,
-                0.5f,
-                100f));
+            System.Numerics.Matrix4x4 proj = System.Numerics.Matrix4x4.CreatePerspectiveFieldOfView(1.0f, (float)Screen.Size.x / Screen.Size.y, 0.5f, 100f);
+            System.Numerics.Matrix4x4 view = System.Numerics.Matrix4x4.CreateLookAt(new Vector3(0, -1.5, -3), Vector3.zero, Vector3.up);
+            System.Numerics.Matrix4x4 world = System.Numerics.Matrix4x4.CreateWorld(Vector3.zero, Vector3.forward, Vector3.up);
 
-            _commandList.UpdateBuffer(_viewBuffer, 0, System.Numerics.Matrix4x4.CreateLookAt(Vector3.forward, Vector3.zero, Vector3.up));
+            world *= System.Numerics.Matrix4x4.CreateFromAxisAngle(Vector3.up, (float)Time.time * 0.25f);
+
+            _commandList.UpdateBuffer(_matrixBuffer, 0, [ proj, view, world ]);
             
-
-            System.Numerics.Matrix4x4 rotation = System.Numerics.Matrix4x4.CreateWorld(Vector3.zero, Vector3.forward, Vector3.up);
-
-            _commandList.UpdateBuffer(_worldBuffer, 0, ref rotation);
+            _commandList.UpdateBuffer(_colorBuffer, 0, new System.Numerics.Vector4((float)Math.Sin(Time.time), (float)Math.Cos(Time.time), 0.75f, 1.0f));
 
             _commandList.SetVertexBuffer(0, mesh.VertexBuffer, 0);
             _commandList.SetVertexBuffer(1, mesh.VertexBuffer, (uint)mesh.UVStart);
 
             _commandList.SetIndexBuffer(mesh.IndexBuffer, mesh.IndexFormat);
 
-            _commandList.SetGraphicsResourceSet(0, _projViewSet);
-            _commandList.SetGraphicsResourceSet(1, _worldTextureSet);
+            _commandList.SetGraphicsResourceSet(0, _matrixSet);
+            _commandList.SetGraphicsResourceSet(1, _multiSet);
 
             _commandList.DrawIndexed(
                 indexCount: (uint)mesh.IndexCount,
@@ -255,19 +232,16 @@ void main()
 
         internal static void Dispose()
         {
-            _pipeline.Dispose();
-            _shaders[0].Dispose();
-            _shaders[1].Dispose();
             _commandList.Dispose();
 
-            _projViewSet.Dispose();
-            _worldTextureSet.Dispose();
+            _matrixSet.Dispose();
+            _multiSet.Dispose();
 
-            _projectionBuffer.Dispose();
-            _viewBuffer.Dispose();
-            _worldBuffer.Dispose();
+            _matrixBuffer.Dispose();
+            _colorBuffer.Dispose();
 
             Device.Dispose();
+            PipelineCache.Dispose();
         }
 
         public static void CopyTexture(Texture source, Texture destination, bool waitForOperationCompletion = false)
