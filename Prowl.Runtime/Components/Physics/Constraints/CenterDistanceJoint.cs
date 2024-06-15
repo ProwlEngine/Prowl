@@ -4,10 +4,10 @@ using Prowl.Icons;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Joint} CenterDIstanceJoint")]
+[AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Joint} CenterDistanceJoint")]
 public class CenterDistanceJoint : Joint
 {
-    public float TargetDistance;
+    public float TargetDistance = 1;
     
     protected override ConstraintHandle Build(SpringSettings springSettings)
     {
@@ -16,10 +16,5 @@ public class CenterDistanceJoint : Joint
         distanceConstraint.SpringSettings = springSettings;
         
         return Physics.Sim!.Solver.Add<CenterDistanceConstraint>(Rigidbody!.BodyHandle.Value, ConnectedBody!.BodyHandle.Value, distanceConstraint);
-    }
-    
-    public override void DrawGizmosSelected()
-    {
-        Gizmos.DrawLine(Rigidbody.Transform.position, ConnectedBody.Transform.position);
     }
 }

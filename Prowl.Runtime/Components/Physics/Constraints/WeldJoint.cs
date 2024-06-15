@@ -11,7 +11,7 @@ public class WeldJoint : Joint
     protected override ConstraintHandle Build(SpringSettings springSettings)
     {
         var weld = new Weld();
-        weld.LocalOffset = this.Transform.InverseTransformPoint(ConnectedBody.Transform.position);
+        weld.LocalOffset = this.Transform.InverseTransformPoint(ConnectedBody!.Transform.position);
         weld.LocalOrientation = ConnectedBody.Transform.InverseTransformRotation(this.Transform.TransformRotation(ConnectedBody.Transform.localRotation));
         weld.SpringSettings = springSettings;
         

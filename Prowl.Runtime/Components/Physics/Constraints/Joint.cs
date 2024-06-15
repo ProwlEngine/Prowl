@@ -12,15 +12,14 @@ public abstract class Joint : MonoBehaviour
     public float DampingRatio = 5;
     
     protected ConstraintHandle? ConstraintHandle;
-    protected Rigidbody? Rigidbody;
     protected bool HasInitialized = false;
+    protected Rigidbody? Rigidbody => _rigidbody ??= GetComponent<Rigidbody>();
+    private Rigidbody _rigidbody;
 
     public override void Update()
     {
         if (!HasInitialized)
         {
-            Rigidbody ??= GetComponent<Rigidbody>();
-
             if (Rigidbody!.BodyHandle == null)
             {
                 Debug.LogError("Rigidbody BodyHandle is null");
@@ -47,5 +46,10 @@ public abstract class Joint : MonoBehaviour
     public override void OnDisable()
     {
         if (ConstraintHandle != null) Physics.Sim!.Solver.Remove(ConstraintHandle.Value);
+    }
+
+    public override void OnEnable()
+    {
+        if (ConnectedBody != null) Gizmos.DrawLine(Rigidbody!.Transform.position, ConnectedBody.Transform.position);
     }
 }
