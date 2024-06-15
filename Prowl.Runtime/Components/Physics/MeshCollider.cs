@@ -43,8 +43,19 @@ namespace Prowl.Runtime
                     mesh = meshRenderer.Mesh;
             }
             if (mesh.IsAvailable == false) return;
-
-            if (!convex)
+            
+            if (convex)
+            {
+                var copy = new List<System.Numerics.Vector3>(mesh.Res!.Vertices.Length);
+                var s = this.GameObject.Transform.lossyScale.ToFloat();
+                foreach (var v in mesh.Res!.Vertices)
+                    copy.Add(new System.Numerics.Vector3(v.X * s.X, v.Y * s.Y, v.Z * s.Z));
+                var convexShape = new ConvexHull(copy.ToArray(), Physics.Pool, out _);
+                shape = convexShape;
+                bodyInertia = convexShape.ComputeInertia(mass);
+                shapeIndex = Physics.Sim.Shapes.Add(convexShape);
+            }
+            else
             {
                 Physics.Pool.Take<Triangle>(mesh.Res!.IndexCount / 3, out var triangles);
                 for (int i = 0; i < mesh.Res!.IndexCount / 3; ++i)
@@ -62,17 +73,6 @@ namespace Prowl.Runtime
                 else
                     bodyInertia = meshCollider.ComputeOpenInertia(mass);
                 shapeIndex = Physics.Sim.Shapes.Add(meshCollider);
-            }
-            else
-            {
-                var copy = new List<System.Numerics.Vector3>(mesh.Res!.Vertices.Length);
-                var s = this.GameObject.Transform.lossyScale.ToFloat();
-                foreach (var v in mesh.Res!.Vertices)
-                    copy.Add(new System.Numerics.Vector3(v.X * s.X, v.Y * s.Y, v.Z * s.Z));
-                var convexShape = new ConvexHull(copy.ToArray(), Physics.Pool, out _);
-                shape = convexShape;
-                bodyInertia = convexShape.ComputeInertia(mass);
-                shapeIndex = Physics.Sim.Shapes.Add(convexShape);
             }
         }
 

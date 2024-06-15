@@ -14,7 +14,6 @@ using Prowl.Runtime.Controller;
 
 namespace Prowl.Runtime
 {
-
     struct NarrowPhaseCallbacks : INarrowPhaseCallbacks
     {
         /// <summary>
@@ -263,7 +262,6 @@ namespace Prowl.Runtime
             if (!isInitialized)
                 return;
 
-
             Characters.Dispose();
             Characters = null;
             Sim.Dispose();
@@ -318,6 +316,12 @@ namespace Prowl.Runtime
                     // Collider is a static object
                     collider.BuildStatic();
                 }
+            }
+            else
+            {
+                // Recursively traverse children
+                foreach (var child in go.children)
+                    TraverseHierarchy(child, parentRigidbody);
             }
         }
     }

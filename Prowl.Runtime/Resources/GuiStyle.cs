@@ -63,6 +63,27 @@ namespace Prowl.Runtime
         public Color ScrollBarHoveredColor = HoveredColor;
         public Color ScrollBarActiveColor = SelectedColor;
 
+        public GuiStyle()
+        {
+        }
+
+        public GuiStyle(GuiStyle style)
+        {
+            Font = style.Font;
+            FontSize = style.FontSize;
+            TextColor = style.TextColor;
+            TextHighlightColor = style.TextHighlightColor;
+            Border = style.Border;
+            BorderThickness = style.BorderThickness;
+            WidgetColor = style.WidgetColor;
+            WidgetRoundness = style.WidgetRoundness;
+            BtnHoveredColor = style.BtnHoveredColor;
+            BtnActiveColor = style.BtnActiveColor;
+            ScrollBarRoundness = style.ScrollBarRoundness;
+            ScrollBarHoveredColor = style.ScrollBarHoveredColor;
+            ScrollBarActiveColor = style.ScrollBarActiveColor;
+        }
+
         public static Color RandomPastelColor(int seed)
         {
             System.Random random = new System.Random(seed);

@@ -19,6 +19,7 @@ namespace Prowl.Editor.Assets
         {
             // Load the Texture into a TextureData Object and serialize to Asset Folder
             Texture2D texture = Texture2DLoader.FromFile(assetPath.FullName);
+            texture.Name = Path.GetFileNameWithoutExtension(assetPath.Name);
 
             texture.SetTextureFilters(textureMinFilter, textureMagFilter);
             texture.SetWrapModes(textureWrap, textureWrap);

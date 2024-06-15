@@ -33,7 +33,6 @@ internal class Program {
         };
 
         Application.Update += () => {
-            Physics.Update();
             SceneManager.Update();
         };
 

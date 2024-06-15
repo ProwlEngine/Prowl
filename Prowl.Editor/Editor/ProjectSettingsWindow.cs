@@ -55,7 +55,7 @@ public abstract class SingletonEditorWindow : EditorWindow
 
         elementCounter = 0;
 
-        using (gui.Node("SidePanel").Padding(5, 10, 10, 10).Width(150).ExpandHeight().Layout(LayoutType.Column).Clip().Enter())
+        using (gui.Node("SidePanel").Padding(5, 10, 10, 10).Width(150).ExpandHeight().Layout(LayoutType.Column).Spacing(5).Clip().Enter())
         {
             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
             RenderSideView();

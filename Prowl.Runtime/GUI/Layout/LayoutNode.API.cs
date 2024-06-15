@@ -10,6 +10,13 @@
             return this;
         }
 
+        public LayoutNode Spacing(Size spacing)
+        {
+            _layoutYSpacing = spacing;
+            _layoutXSpacing = spacing;
+            return this;
+        }
+
         public LayoutNode FitContent() => FitContentWidth().FitContentHeight();
 
         public LayoutNode FitContentWidth(double percentage = 1f)

@@ -131,7 +131,7 @@ namespace Prowl.Editor
                     var popupHolder = gui.CurrentNode;
                     if (gui.BeginPopup("CreateOrImportAsset", out var node))
                     {
-                        using (node.Width(180).Padding(5).Layout(LayoutType.Column).FitContentHeight().Enter())
+                        using (node.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
                         {
                             DrawContextMenu(null, null, false, popupHolder);
                         }
@@ -141,7 +141,7 @@ namespace Prowl.Editor
             }
 
 
-            using (gui.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column, false).Clip().Enter())
+            using (gui.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column, false).Spacing(5).Clip().Enter())
             {
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 4);
 
@@ -324,7 +324,7 @@ namespace Prowl.Editor
         private void RenderRootFolder(bool defaultOpen, DirectoryInfo root, Color col)
         {
             bool expanded = false;
-            using (gui.Node(root.Name).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-gui.VScrollBarWidth()).Height(GuiStyle.ItemHeight).Margin(2, 0).Enter())
+            using (gui.Node(root.Name).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-gui.VScrollBarWidth()).Height(GuiStyle.ItemHeight).Enter())
             {
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, col, 4);
 
@@ -377,7 +377,7 @@ namespace Prowl.Editor
                 var left = depth * GuiStyle.ItemHeight;
                 ulong subDirID = 0;
                 // Directory Entry
-                using (gui.Node(subDirectory.Name, depth).Left(left).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-(left + gui.VScrollBarWidth())).Height(GuiStyle.ItemHeight * scaleHeight).Margin(2, 0).Enter())
+                using (gui.Node(subDirectory.Name, depth).Left(left).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-(left + gui.VScrollBarWidth())).Height(GuiStyle.ItemHeight * scaleHeight).Enter())
                 {
                     subDirID = gui.CurrentNode.ID;
                     if (_treeCounter % 2 == 0)
@@ -401,7 +401,7 @@ namespace Prowl.Editor
                         gui.OpenPopup("TreeRightClickAsset");
                     var popupHolder = gui.CurrentNode;
                     if (gui.BeginPopup("TreeRightClickAsset", out var node))
-                        using (node.Width(180).Padding(5).Layout(LayoutType.Column).FitContentHeight().Enter())
+                        using (node.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
                             DrawContextMenu(subDirectory, null, false, popupHolder);
 
                     if (subDirectory.Exists)
@@ -454,7 +454,7 @@ namespace Prowl.Editor
                 var left = depth * GuiStyle.ItemHeight;
                 ulong fileNodeID = 0;
                 // File Entry
-                using (gui.Node(file.Name, depth).Left(left).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-(left + gui.VScrollBarWidth())).Height(GuiStyle.ItemHeight * scaleHeight).Margin(2, 0).Enter())
+                using (gui.Node(file.Name, depth).Left(left).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-(left + gui.VScrollBarWidth())).Height(GuiStyle.ItemHeight * scaleHeight).Enter())
                 {
                     fileNodeID = gui.CurrentNode.ID;
                     //if (_treeCounter++ % 2 == 0)
@@ -504,7 +504,7 @@ namespace Prowl.Editor
                         if (subassets[i].type == null) continue;
 
                         // SubAsset Entry
-                        using (gui.Node(subassets[i].name, depth + 1 + i).Left(left).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).Width(Size.Percentage(1f, -left)).Height(GuiStyle.ItemHeight * scaleHeight).Margin(2, 0).Enter())
+                        using (gui.Node(subassets[i].name, depth + 1 + i).Left(left).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).Width(Size.Percentage(1f, -(left + gui.VScrollBarWidth()))).Height(GuiStyle.ItemHeight * scaleHeight).Enter())
                         {
                             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GetTypeColor(subassets[i].type!) * 0.5f, 4);
 
@@ -564,7 +564,7 @@ namespace Prowl.Editor
                 Gui.ActiveGUI.OpenPopup("RightClickFile");
             var popupHolder = Gui.ActiveGUI.CurrentNode;
             if (Gui.ActiveGUI.BeginPopup("RightClickFile", out var node2))
-                using (node2.Width(180).Padding(5).Layout(LayoutType.Column).FitContentHeight().Enter())
+                using (node2.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
                     DrawContextMenu(entry, null, false, popupHolder);
 
             if (isAsset && interact.IsHovered() && Gui.ActiveGUI.IsPointerDoubleClick(Veldrid.MouseButton.Left))
