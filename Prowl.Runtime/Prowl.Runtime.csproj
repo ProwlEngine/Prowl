@@ -44,6 +44,7 @@
       <EmbeddedResource Include="EmbeddedResources\fa-regular-400.ttf" />
       <EmbeddedResource Include="EmbeddedResources\fa-solid-900.ttf" />
       <EmbeddedResource Include="EmbeddedResources\font.ttf" />
+      <EmbeddedResource Include="EmbeddedResources\TestShader.shader" />
     </ItemGroup>
     
     <ItemGroup>
