@@ -86,12 +86,18 @@ public static class SceneManager
     [OnAssemblyUnload]
     public static void Clear()
     { 
-#warning TODO: Fix DontDestroyOnLoad
+        List<GameObject> toRemove = new List<GameObject>();
         for (int i = 0; i < _gameObjects.Count; i++)
-            if (!_dontDestroyOnLoad.Contains(_gameObjects[i].InstanceID))
+            if (!_dontDestroyOnLoad.Contains(_gameObjects[i].InstanceID)) {
                 _gameObjects[i].Destroy();
+                toRemove.Add(_gameObjects[i]);
+            }
+
         EngineObject.HandleDestroyed();
-        _gameObjects.Clear();
+
+        for (int i = 0; i < toRemove.Count; i++)
+            _gameObjects.Remove(toRemove[i]);
+
         Physics.Dispose();
         Physics.Initialize();
         MainScene = new();

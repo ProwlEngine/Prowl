@@ -1,5 +1,4 @@
 ﻿using Prowl.Runtime;
-using Prowl.Runtime.Rendering.OpenGL;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
 
