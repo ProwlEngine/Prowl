@@ -3,9 +3,16 @@ using System.Collections.Generic;
 
 namespace Prowl.Runtime
 {
+    public class PrimitiveBatch { 
+        public void Line(Vector3 pos, Vector3 pos2, Color col, Color col2)
+        {
+
+        }
+    }
+
     public static class Gizmos
     {
-        private static PrimitiveBatch LineBatch;
+        //private static PrimitiveBatch LineBatch;
         private readonly static List<(Gizmo, Matrix4x4)> gizmos = new(100);
         private static Material mat;
 
@@ -93,7 +100,8 @@ namespace Prowl.Runtime
             }   
 
             #warning Veldrid change
-            //LineBatch ??= new PrimitiveBatch(Topology.Lines);
+            /*
+            LineBatch ??= new PrimitiveBatch(Topology.Lines);
 
             if (LineBatch.IsUploaded == false)
             {
@@ -118,12 +126,13 @@ namespace Prowl.Runtime
             mat.SetMatrix("mvp", mvp);
             mat.SetPass(0, true);
             LineBatch.Draw();
+            */
         }
 
         public static void Clear()
         {
             gizmos.Clear();
-            LineBatch?.Reset();
+            //LineBatch?.Reset();
         }
     }
 
@@ -393,5 +402,4 @@ namespace Prowl.Runtime
             new CircleGizmo(color).Render(batch, m);
         }
     }
-
 }
