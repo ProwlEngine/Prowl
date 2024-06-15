@@ -34,7 +34,6 @@ internal class Program {
         };
 
         Application.Update += (delta) => {
-            Physics.Update();
             SceneManager.Update();
         };
 

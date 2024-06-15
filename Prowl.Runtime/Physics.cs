@@ -317,6 +317,12 @@ namespace Prowl.Runtime
                     collider.BuildStatic();
                 }
             }
+            else
+            {
+                // Recursively traverse children
+                foreach (var child in go.children)
+                    TraverseHierarchy(child, parentRigidbody);
+            }
         }
     }
 }
