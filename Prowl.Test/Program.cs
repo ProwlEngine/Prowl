@@ -4,27 +4,32 @@ using Prowl.Runtime.Utils;
 
 namespace Prowl.Standalone;
 
-internal static class Program {
+internal static class Program
+{
 
     public static DirectoryInfo Data => new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
     static Texture2D catTex;
 
-    private static Mesh quadMesh = Mesh.CreateSphere(1f, 20, 20);
+    private static Mesh quadMesh = Mesh.CreateSphere(1f, 40, 40);
 
-    public static int Main(string[] args) {
+    public static int Main(string[] args)
+    {
 
         Application.isPlaying = true;
         Application.DataPath = Data.FullName;
 
-        Application.Initialize += () => {
+        Application.Initialize += () =>
+        {
             catTex = Texture2DLoader.FromFile(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cat.png"));
         };
 
-        Application.Update += () => {
+        Application.Update += () =>
+        {
 
         };
 
-        Application.Render += () => {
+        Application.Render += () =>
+        {
             Graphics.StartFrame(catTex);
 
             Graphics.DrawNDCQuad(quadMesh);
@@ -32,13 +37,14 @@ internal static class Program {
             Graphics.EndFrame();
         };
 
-        Application.Quitting += () => {
-            
+        Application.Quitting += () =>
+        {
+
         };
 
         Application.Run("Prowl Editor", 1920, 1080, null, false);
 
         return 0;
     }
-    
+
 }
