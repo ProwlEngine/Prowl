@@ -6,6 +6,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.Utils;
+using System;
 using System.ComponentModel;
 using System.Reflection;
 using static Assimp.Metadata;
@@ -115,7 +116,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 // Header
                 bool opened = gui.GetNodeStorage("#_Opened_TransformH", true);
                 float animState = 0;
-                using (gui.Node("#_TransformH").ExpandWidth().Height(GuiStyle.ItemHeight).MarginTop(10).Enter())
+                using (gui.Node("#_TransformH").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
                 {
                     animState = DrawCompHeader(typeof(Transform), opened);
 
@@ -134,62 +135,29 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 // Content
                 if (opened || animState > 0)
                 {
-                    using (gui.Node("#_TansformC_").ExpandWidth().Layout(LayoutType.Column).Padding(10).FitContentHeight(animState).Enter())
+                    using (gui.Node("#_TansformC_").ExpandWidth().Layout(LayoutType.Column).Spacing(5).Padding(10).FitContentHeight(animState).Enter())
                     {
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.6f, 10, 12);
 
                         var t = go.Transform;
                         using (ActiveGUI.Node("PosParent", 0).ExpandWidth().Height(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
-                            // Label
-                            using (ActiveGUI.Node("#_Label").ExpandHeight().Clip().Enter())
-                            {
-                                var pos = ActiveGUI.CurrentNode.LayoutData.Rect.Min;
-                                pos.x += 28;
-                                pos.y += 5;
-                                ActiveGUI.Draw2D.DrawText("Position", pos, GuiStyle.Base8);
-                            }
-
-                            // Value
                             var tpos = t.localPosition;
-                            using (ActiveGUI.Node("#_Value").ExpandHeight().Enter())
-                                Property_Vector3("Position", ref tpos);
+                            EditorGUI.DrawProperty(0, "Position", ref tpos);
                             t.localPosition = tpos;
                         }
 
                         using (ActiveGUI.Node("RotParent", 0).ExpandWidth().Height(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
-                            // Label
-                            using (ActiveGUI.Node("#_Label").ExpandHeight().Clip().Enter())
-                            {
-                                var pos = ActiveGUI.CurrentNode.LayoutData.Rect.Min;
-                                pos.x += 28;
-                                pos.y += 5;
-                                ActiveGUI.Draw2D.DrawText("Rotation", pos, GuiStyle.Base8);
-                            }
-
-                            // Value
                             var tpos = t.localEulerAngles;
-                            using (ActiveGUI.Node("#_Value").ExpandHeight().Enter())
-                                Property_Vector3("Rotation", ref tpos);
+                            EditorGUI.DrawProperty(1, "Rotation", ref tpos);
                             t.localEulerAngles = tpos;
                         }
 
                         using (ActiveGUI.Node("ScaleParent", 0).ExpandWidth().Height(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
-                            // Label
-                            using (ActiveGUI.Node("#_Label").ExpandHeight().Clip().Enter())
-                            {
-                                var pos = ActiveGUI.CurrentNode.LayoutData.Rect.Min;
-                                pos.x += 28;
-                                pos.y += 5;
-                                ActiveGUI.Draw2D.DrawText("Scale", pos, GuiStyle.Base8);
-                            }
-
-                            // Value
                             var tpos = t.localScale;
-                            using (ActiveGUI.Node("#_Value").ExpandHeight().Enter())
-                                Property_Vector3("Scale", ref tpos);
+                            EditorGUI.DrawProperty(2, "Scale", ref tpos);
                             t.localScale = tpos;
                         }
                     }
@@ -214,7 +182,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     string openedID = "#_Opened_CompH" + comp.InstanceID;
                     bool compOpened = gui.GetNodeStorage(openedID, true);
                     float animStateC = 0;
-                    using (gui.Node("#_CompH_" + comp.InstanceID).ExpandWidth().Height(GuiStyle.ItemHeight).MarginTop(10).Enter())
+                    using (gui.Node("#_CompH_" + comp.InstanceID).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
                     {
                         animStateC = DrawCompHeader(cType, compOpened);
 
@@ -245,7 +213,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         var popupHolder = gui.CurrentNode;
                         if (gui.BeginPopup("RightClickComp", out var node))
                         {
-                            using (node.Width(150).Layout(LayoutType.Column).Padding(5).FitContentHeight().Enter())
+                            using (node.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                             {
                                 var instanceID = gui.GetGlobalStorage<int>("RightClickComp");
                                 if(instanceID == comp.InstanceID)
@@ -306,7 +274,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 // Remove any editors that are no longer needed
                 HandleUnusedEditors(editorsNeeded);
 
-                using (gui.Node("AddCompBtn").ExpandWidth().Height(GuiStyle.ItemHeight).MarginTop(50).Enter())
+                using (gui.Node("AddCompBtn").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
                 {
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Violet : GuiStyle.Indigo, 10);
                     gui.Draw2D.DrawText("Add Component", gui.CurrentNode.LayoutData.InnerRect, GuiStyle.Base11, false);
@@ -317,7 +285,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     var popupHolder = gui.CurrentNode;
                     if (gui.BeginPopup("AddComponentPopup", out var node))
                     {
-                        using (node.Width(150).Layout(LayoutType.Column).Padding(5).FitContentHeight().Enter())
+                        using (node.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                         {
                             gui.Search("##searchBox", ref _searchText, 0, 0, Size.Percentage(1f));
 
@@ -419,7 +387,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                     if (Gui.ActiveGUI.BeginPopup(item.Name + "Popup", out var node))
                     {
-                        using (node.Width(150).Layout(LayoutType.Column).Padding(5).FitContentHeight().Enter())
+                        using (node.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                         {
                             DrawMenuItems(item, go);
                         }

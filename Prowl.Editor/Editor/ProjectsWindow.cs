@@ -35,7 +35,7 @@ namespace Prowl.Editor
             gui.CurrentNode.Layout(LayoutType.Row);
             gui.CurrentNode.ScaleChildren();
 
-            using (gui.Node("Side").Height(Size.Percentage(1f)).MaxWidth(150).Layout(LayoutType.Column).Enter())
+            using (gui.Node("Side").Height(Size.Percentage(1f)).MaxWidth(150).Layout(LayoutType.Column).Spacing(5).Enter())
             {
                 DrawSidePanel();
             }
@@ -65,7 +65,7 @@ namespace Prowl.Editor
 
             gui.InputField("SearchInput", ref _searchText, 0x100, Gui.InputFieldFlags.None, 25, 50, 150);
 
-            using (gui.Node("List").Width(565).Height(345).Left(25).Top(80).Layout(LayoutType.Column).Clip().Enter())
+            using (gui.Node("List").Width(565).Height(345).Left(25).Top(80).Layout(LayoutType.Column).Spacing(5).Clip().Enter())
             {
                 Directory.CreateDirectory(Project.Projects_Directory);
                 var folders = new DirectoryInfo(Project.Projects_Directory).EnumerateDirectories();

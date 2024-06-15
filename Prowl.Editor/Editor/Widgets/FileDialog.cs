@@ -41,8 +41,8 @@ namespace Prowl.Editor
         private Stack<DirectoryInfo> _ForwardStack = new();
 
         protected override bool Center { get; } = true;
-        protected override double Width { get; } = 1024 + (512 / 2);
-        protected override double Height { get; } = 1024;
+        protected override double Width { get; } = 512 + (512 / 2);
+        protected override double Height { get; } = 512;
         protected override bool BackgroundFade { get; } = true;
         protected override bool IsDockable => false;
         protected override bool LockSize => true;
@@ -69,8 +69,9 @@ namespace Prowl.Editor
             gui.CurrentNode.Layout(LayoutType.Row);
             gui.CurrentNode.ScaleChildren();
 
-            using (gui.Node("Sidebar").Layout(LayoutType.Column).ExpandHeight().ScaleChildren().MaxWidth(200).Enter())
+            using (gui.Node("Sidebar").Layout(LayoutType.Column).ExpandHeight().MaxWidth(200).Margin(10).Padding(10).Enter())
             {
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 10);
                 for (int i = 0; i < 10; i++)
                 {
                     using (gui.Node("Content" + i).ExpandWidth().Height(GuiStyle.ItemHeight).ScaleChildren()

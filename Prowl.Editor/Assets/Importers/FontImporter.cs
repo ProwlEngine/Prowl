@@ -2,6 +2,8 @@
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.Utils;
+using System;
+using System.Reflection;
 
 namespace Prowl.Editor.Assets
 {
@@ -40,7 +42,7 @@ namespace Prowl.Editor.Assets
 
                 // Value
                 using (gui.Node("#_Value").ExpandHeight().Enter())
-                    EditorGUI.Property_Float(name, ref val);
+                    EditorGUI.DrawProperty(0, name, ref val);
             }
         }
 
@@ -59,7 +61,7 @@ namespace Prowl.Editor.Assets
 
                 // Value
                 using (gui.Node("#_Value").ExpandHeight().Enter())
-                    EditorGUI.PropertyIntegar(name, ref val);
+                    EditorGUI.DrawProperty(0, name, ref val);
             }
         }
 

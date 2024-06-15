@@ -54,7 +54,7 @@ namespace Prowl.Runtime
         public Matrix4x4 GetMatrix(string name) => matrices.ContainsKey(name) ? matrices[name] : Matrix4x4.Identity;
         public void SetTexture(string name, Texture2D value) => textures[name] = value;
         public void SetTexture(string name, AssetRef<Texture2D> value) => textures[name] = value;
-        public AssetRef<Texture2D>? GetTexture(string name) => textures.ContainsKey(name) ? textures[name] : null;
+        public AssetRef<Texture2D> GetTexture(string name) => textures.ContainsKey(name) ? textures[name] : new AssetRef<Texture2D>(null);
 
         public void Clear()
         {

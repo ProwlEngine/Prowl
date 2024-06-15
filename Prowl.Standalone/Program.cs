@@ -1,5 +1,4 @@
 ﻿using Prowl.Runtime;
-using Prowl.Runtime.Rendering.OpenGL;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
 
@@ -34,7 +33,6 @@ internal class Program {
         };
 
         Application.Update += (delta) => {
-            Physics.Update();
             SceneManager.Update();
         };
 

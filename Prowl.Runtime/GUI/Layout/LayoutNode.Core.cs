@@ -94,6 +94,8 @@ namespace Prowl.Runtime.GUI.Layout
         private LayoutType _layout = LayoutType.None;
         private bool _layoutX = false;
         private bool _layoutY = false;
+        private Size _layoutXSpacing = Size.Default;
+        private Size _layoutYSpacing = Size.Default;
         internal ClipType _clipped = ClipType.None;
 
         internal ulong _nextAnimationFrame = 0;
@@ -132,6 +134,15 @@ namespace Prowl.Runtime.GUI.Layout
             // Cache scale first
             UpdateScaleCache();
 
+            // Then finally position (Relies on Scale and Padding)
+            UpdatePositionCache();
+
+            foreach (var child in Children)
+                child.UpdateCache();
+        }
+
+        public void UpdateScaleCache()
+        {
             // Then Margin/Paddings (They rely on Scale)
             _data.Margins = new(
                     _marginLeft.ToPixels(_positionRelativeTo?._data.Scale.x ?? 0),
@@ -146,20 +157,11 @@ namespace Prowl.Runtime.GUI.Layout
                     _paddingBottom.ToPixels(_positionRelativeTo?._data.Scale.y ?? 0)
                 );
 
-            // Then finally position (Relies on Scale and Padding)
-            UpdatePositionCache();
-
-            foreach (var child in Children)
-                child.UpdateCache();
-        }
-
-        public void UpdateScaleCache()
-        {
             _data.Scale = new(
-                Math.Min(_width.ToPixels(_sizeRelativeTo?._data.GlobalContentWidth ?? 0),
+                Math.Min(_width.ToPixels(_sizeRelativeTo?._data.GlobalContentWidth ?? 0) - _data.Margins.Horizontal,
                          _maxWidth.ToPixels(_sizeRelativeTo?._data.GlobalContentWidth ?? 0)
                 ),
-                Math.Min(_height.ToPixels(_sizeRelativeTo?._data.GlobalContentHeight ?? 0),
+                Math.Min(_height.ToPixels(_sizeRelativeTo?._data.GlobalContentHeight ?? 0) - _data.Margins.Vertical,
                          _maxHeight.ToPixels(_sizeRelativeTo?._data.GlobalContentHeight ?? 0)
                 )
             );
@@ -300,6 +302,7 @@ namespace Prowl.Runtime.GUI.Layout
                         if (_layoutX) child._positionX = 0;
                         if (_layoutY) child._positionY = y;
                         y += child._data.Margins.Vertical + child._data.Scale.y;
+                        y += _layoutYSpacing.ToPixels(_data.GlobalContentHeight);
                         child.UpdatePositionCache();
                     }
                     break;
@@ -310,6 +313,7 @@ namespace Prowl.Runtime.GUI.Layout
                         if (_layoutX) child._positionX = x;
                         if (_layoutY) child._positionY = 0;
                         x += child._data.Margins.Horizontal + child._data.Scale.x;
+                        y += _layoutXSpacing.ToPixels(_data.GlobalContentWidth);
                         child.UpdatePositionCache();
                     }
                     break;
