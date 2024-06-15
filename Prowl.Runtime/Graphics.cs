@@ -126,7 +126,7 @@ void main()
             ShaderDescription vertexShaderDesc = new ShaderDescription(ShaderStages.Vertex, Encoding.UTF8.GetBytes(VertexCode), "main");
             ShaderDescription fragmentShaderDesc = new ShaderDescription(ShaderStages.Fragment, Encoding.UTF8.GetBytes(FragmentCode), "main");
 
-            // Pass creation info (Name, tags, compiled programs, etc...)
+            // Pass creation info (Name, tags)
             Pass pass = new Pass("DrawCube", []);
 
             pass.CreateProgram(factory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc));
