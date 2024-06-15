@@ -37,13 +37,14 @@ public class MeshRenderer : MonoBehaviour, ISerializable
         {
             material.SetColor("_MainColor", mainColor);
             material.SetInt("ObjectID", GameObject.InstanceID);
-            for (int i = 0; i < material.PassCount; i++)
+            /*for (int i = 0; i < material.PassCount; i++)
             {
 
                 material.SetPass(i);
                 #warning Veldrid change
                 //Graphics.DrawMeshNow(Mesh.Res!, mat, material, prevMat);
             }
+            */
         }
 
         prevMats[camID] = mat;
