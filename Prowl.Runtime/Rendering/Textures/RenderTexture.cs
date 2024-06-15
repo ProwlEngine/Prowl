@@ -16,7 +16,6 @@ namespace Prowl.Runtime
 
         public bool enableRandomWrite;
 
-
         public RenderTextureDescription(uint width, uint height, PixelFormat? depthFormat, PixelFormat[] colorFormats, bool randomWrite)
         {
             this.width = width;
@@ -26,7 +25,6 @@ namespace Prowl.Runtime
             this.enableRandomWrite = randomWrite;
         }
 
-
         public RenderTextureDescription(RenderTexture texture)
         {
             this.width = texture.Width;
@@ -35,7 +33,6 @@ namespace Prowl.Runtime
             this.colorBufferFormats = texture.ColorBufferFormats;
             this.enableRandomWrite = texture.RandomWriteEnabled;
         }
-
 
         public override bool Equals([NotNullWhen(true)] object? obj)
         {
@@ -57,7 +54,6 @@ namespace Prowl.Runtime
             return true;
         }
 
-
         public override int GetHashCode()
         {
             HashCode hash = new();
@@ -73,7 +69,6 @@ namespace Prowl.Runtime
             return hash.ToHashCode();
         }
 
-
         public static bool operator ==(RenderTextureDescription left, RenderTextureDescription right) => left.Equals(right);
 
         public static bool operator !=(RenderTextureDescription left, RenderTextureDescription right) => !(left == right);
@@ -86,10 +81,10 @@ namespace Prowl.Runtime
 
         public Framebuffer Framebuffer { get; private set; }
 
-        public PixelFormat[] ColorBufferFormats { get; private set; }
+        public PixelFormat[] ColorBufferFormats => ColorBuffers.Select(x => x.Format).ToArray();
         public Texture2D[] ColorBuffers { get; private set; }
 
-        public PixelFormat? DepthBufferFormat { get; private set; }
+        public PixelFormat? DepthBufferFormat => DepthBuffer?.Format;
         public Texture2D DepthBuffer { get; private set; }
 
         public uint Width { get; private set; }
@@ -121,25 +116,23 @@ namespace Prowl.Runtime
 
             this.Width = width;
             this.Height = height;
-            this.DepthBufferFormat = depthFormat;
-            this.ColorBufferFormats = colorFormats; 
             this.RandomWriteEnabled = enableRandomWrite;
 
             TextureUsage usage = (enableRandomWrite ? TextureUsage.Sampled : TextureUsage.Storage) | TextureUsage.RenderTarget;
 
-            if (DepthBufferFormat != null)
+            if (depthFormat != null)
             {
                 TextureUsage depthUsage = usage | TextureUsage.DepthStencil;
 
-                DepthBuffer = new Texture2D(Width, Height, 1, DepthBufferFormat.Value, depthUsage);
+                DepthBuffer = new Texture2D(Width, Height, 1, depthFormat.Value, depthUsage);
             }
 
-            ColorBuffers = new Texture2D[ColorBufferFormats.Length];
-            if (ColorBufferFormats != null)
+            ColorBuffers = new Texture2D[colorFormats.Length];
+            if (colorFormats != null)
             {
                 for (int i = 0; i < ColorBuffers.Length; i++)
                 {
-                    ColorBuffers[i] = new Texture2D(Width, Height, 1, ColorBufferFormats[i], usage);
+                    ColorBuffers[i] = new Texture2D(Width, Height, 1, colorFormats[i], usage);
                 }
             }
 
@@ -215,13 +208,10 @@ namespace Prowl.Runtime
 
         private const int MaxUnusedFrames = 10;
 
-
-
         public static RenderTexture GetTemporaryRT(uint width, uint height, PixelFormat? depthFormat, PixelFormat[] colorFormats, bool randomWrite)
         {
             return GetTemporaryRT(new RenderTextureDescription(width, height, depthFormat, colorFormats, randomWrite));
         }
-
 
         public static RenderTexture GetTemporaryRT(RenderTextureDescription description)
         {
@@ -236,7 +226,6 @@ namespace Prowl.Runtime
             return new RenderTexture(description);
         }
 
-
         public static void ReleaseTemporaryRT(RenderTexture renderTexture)
         {
             var key = new RenderTextureDescription(renderTexture);
@@ -249,7 +238,6 @@ namespace Prowl.Runtime
 
             list.Add((renderTexture, Time.frameCount));
         }
-
 
         public static void UpdatePool()
         {

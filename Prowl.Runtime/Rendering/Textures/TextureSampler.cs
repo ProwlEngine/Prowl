@@ -31,17 +31,17 @@ namespace Prowl.Runtime
         }
 
 
-        public SamplerAddressMode wrapModeU = SamplerAddressMode.Clamp;
-        public SamplerAddressMode wrapModeV = SamplerAddressMode.Clamp;
-        public SamplerAddressMode wrapModeW = SamplerAddressMode.Clamp;
+        public SamplerAddressMode WrapModeU = SamplerAddressMode.Clamp;
+        public SamplerAddressMode WrapModeV = SamplerAddressMode.Clamp;
+        public SamplerAddressMode WrapModeW = SamplerAddressMode.Clamp;
 
-        public SamplerBorderColor borderColor = SamplerBorderColor.OpaqueBlack;
-        public SamplerFilter filter = SamplerFilter.MinLinear_MagLinear_MipLinear;
+        public SamplerBorderColor BorderColor = SamplerBorderColor.OpaqueBlack;
+        public SamplerFilter Filter = SamplerFilter.MinLinear_MagLinear_MipLinear;
 
-        public int lodBias;
-        public uint maximumAnisotropy;
-        public uint maximumLod;
-        public uint minimumLod;
+        public int LodBias;
+        public uint MaximumAnisotropy;
+        public uint MaximumLod;
+        public uint MinimumLod;
 
         public static readonly TextureSampler Aniso4x = new TextureSampler(SamplerDescription.Aniso4x);
         public static readonly TextureSampler Linear = new TextureSampler(SamplerDescription.Linear);
@@ -52,30 +52,30 @@ namespace Prowl.Runtime
 
         internal TextureSampler(SamplerDescription description) : this()
         {
-            wrapModeU = description.AddressModeU;
-            wrapModeV = description.AddressModeV;
-            wrapModeW = description.AddressModeW;
-            borderColor = description.BorderColor;
-            filter = description.Filter;
-            lodBias = description.LodBias;
-            maximumAnisotropy = description.MaximumAnisotropy;
-            maximumLod = description.MaximumLod;
-            minimumLod = description.MinimumLod;
+            WrapModeU = description.AddressModeU;
+            WrapModeV = description.AddressModeV;
+            WrapModeW = description.AddressModeW;
+            BorderColor = description.BorderColor;
+            Filter = description.Filter;
+            LodBias = description.LodBias;
+            MaximumAnisotropy = description.MaximumAnisotropy;
+            MaximumLod = description.MaximumLod;
+            MinimumLod = description.MinimumLod;
         }
 
         private void RecreateInternalSampler()
         {
             SamplerDescription description = new()
             {
-                AddressModeU = wrapModeU,
-                AddressModeV = wrapModeV,
-                AddressModeW = wrapModeW,
-                BorderColor = borderColor,
-                Filter = filter,
-                LodBias = lodBias,
-                MaximumAnisotropy = maximumAnisotropy,
-                MaximumLod = maximumLod,
-                MinimumLod = minimumLod
+                AddressModeU = WrapModeU,
+                AddressModeV = WrapModeV,
+                AddressModeW = WrapModeW,
+                BorderColor = BorderColor,
+                Filter = Filter,
+                LodBias = LodBias,
+                MaximumAnisotropy = MaximumAnisotropy,
+                MaximumLod = MaximumLod,
+                MinimumLod = MinimumLod
             };
 
             if (_internalSampler == null || !CompareDescriptions(in description, in _internalDescription))
@@ -89,24 +89,24 @@ namespace Prowl.Runtime
         public void SetWrapMode(SamplerAxis axis, SamplerAddressMode mode)
         {
             if (axis.HasFlag(SamplerAxis.U))
-                wrapModeU = mode;
+                WrapModeU = mode;
             if (axis.HasFlag(SamplerAxis.V))
-                wrapModeV = mode;
+                WrapModeV = mode;
             if (axis.HasFlag(SamplerAxis.W))
-                wrapModeW = mode;
+                WrapModeW = mode;
         }
 
         public void SetLodLimits(uint maxLod, uint minLod)
         {
-            maximumLod = maxLod;
-            minimumLod = minLod;
+            MaximumLod = maxLod;
+            MinimumLod = minLod;
         }
 
         public void SetFilter(FilterType minFilter = FilterType.Linear, FilterType magFilter = FilterType.Linear, FilterType mipFilter = FilterType.Linear, bool anisotropic = false)
         {
             if (anisotropic == true)
             {
-                filter = SamplerFilter.Anisotropic;
+                Filter = SamplerFilter.Anisotropic;
                 return;
             }
 
@@ -116,16 +116,16 @@ namespace Prowl.Runtime
                 if (magFilter == FilterType.Linear)
                 {
                     if (mipFilter == FilterType.Linear)
-                        filter = SamplerFilter.MinLinear_MagLinear_MipLinear;
+                        Filter = SamplerFilter.MinLinear_MagLinear_MipLinear;
                     else
-                        filter = SamplerFilter.MinLinear_MagLinear_MipPoint;
+                        Filter = SamplerFilter.MinLinear_MagLinear_MipPoint;
                 }
                 else
                 {
                     if (mipFilter == FilterType.Linear)
-                        filter = SamplerFilter.MinLinear_MagPoint_MipLinear;
+                        Filter = SamplerFilter.MinLinear_MagPoint_MipLinear;
                     else
-                        filter = SamplerFilter.MinLinear_MagPoint_MipPoint;
+                        Filter = SamplerFilter.MinLinear_MagPoint_MipPoint;
                 }
             }
             else
@@ -133,16 +133,16 @@ namespace Prowl.Runtime
                 if (magFilter == FilterType.Linear)
                 {
                     if (mipFilter == FilterType.Linear)
-                        filter = SamplerFilter.MinPoint_MagLinear_MipLinear;
+                        Filter = SamplerFilter.MinPoint_MagLinear_MipLinear;
                     else
-                        filter = SamplerFilter.MinPoint_MagLinear_MipPoint;
+                        Filter = SamplerFilter.MinPoint_MagLinear_MipPoint;
                 }
                 else
                 {
                     if (mipFilter == FilterType.Linear)
-                        filter = SamplerFilter.MinPoint_MagPoint_MipLinear;
+                        Filter = SamplerFilter.MinPoint_MagPoint_MipLinear;
                     else
-                        filter = SamplerFilter.MinPoint_MagPoint_MipPoint;
+                        Filter = SamplerFilter.MinPoint_MagPoint_MipPoint;
                 }
             }
         }
@@ -170,30 +170,30 @@ namespace Prowl.Runtime
         public SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
             SerializedProperty compoundTag = SerializedProperty.NewCompound();
-            compoundTag.Add("WrapModeU", new((int)wrapModeU));
-            compoundTag.Add("WrapModeV", new((int)wrapModeV));
-            compoundTag.Add("WrapModeW", new((int)wrapModeW));
-            compoundTag.Add("BorderColor", new((int)borderColor));
-            compoundTag.Add("Filter", new((int)filter));
-            compoundTag.Add("LodBias", new(lodBias));
-            compoundTag.Add("MaxAniso", new(maximumAnisotropy));
-            compoundTag.Add("MaxLod", new(maximumLod));
-            compoundTag.Add("MinLod", new(minimumLod));
+            compoundTag.Add("WrapModeU", new((int)WrapModeU));
+            compoundTag.Add("WrapModeV", new((int)WrapModeV));
+            compoundTag.Add("WrapModeW", new((int)WrapModeW));
+            compoundTag.Add("BorderColor", new((int)BorderColor));
+            compoundTag.Add("Filter", new((int)Filter));
+            compoundTag.Add("LodBias", new(LodBias));
+            compoundTag.Add("MaxAniso", new(MaximumAnisotropy));
+            compoundTag.Add("MaxLod", new(MaximumLod));
+            compoundTag.Add("MinLod", new(MinimumLod));
 
             return compoundTag;
         }
 
         public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
-            wrapModeU = (SamplerAddressMode)value["WrapModeU"].IntValue;
-            wrapModeV = (SamplerAddressMode)value["WrapModeV"].IntValue;
-            wrapModeW = (SamplerAddressMode)value["WrapModeW"].IntValue;
-            borderColor = (SamplerBorderColor)value["BorderColor"].IntValue;
-            filter = (SamplerFilter)value["Filter"].IntValue;
-            lodBias = value["LodBias"].IntValue;
-            maximumAnisotropy = (uint)value["MaxAniso"].IntValue;
-            maximumLod = (uint)value["MaxLod"].IntValue;
-            minimumLod = (uint)value["MinLod"].IntValue;
+            WrapModeU = (SamplerAddressMode)value["WrapModeU"].IntValue;
+            WrapModeV = (SamplerAddressMode)value["WrapModeV"].IntValue;
+            WrapModeW = (SamplerAddressMode)value["WrapModeW"].IntValue;
+            BorderColor = (SamplerBorderColor)value["BorderColor"].IntValue;
+            Filter = (SamplerFilter)value["Filter"].IntValue;
+            LodBias = value["LodBias"].IntValue;
+            MaximumAnisotropy = (uint)value["MaxAniso"].IntValue;
+            MaximumLod = (uint)value["MaxLod"].IntValue;
+            MinimumLod = (uint)value["MinLod"].IntValue;
         }
     }
 }

@@ -31,12 +31,15 @@ namespace Prowl.Runtime
         /// <summary>Gets whether this <see cref="Texture"/> can be automatically mipmapped.</summary>
         public bool IsMipmappable => Usage.HasFlag(TextureUsage.GenerateMipmaps);
 
+        /// <summary>The sampler for this <see cref="Veldrid.Texture"/></summary>
+        public TextureSampler Sampler { get; private set; } = TextureSampler.Linear;
+
 
         /// <summary>The internal <see cref="Veldrid.Texture"/> representation.</summary>
         internal Veldrid.Texture InternalTexture { get; private set; }
 
         /// <inheritdoc cref="Veldrid.TextureView"/>
-        internal Veldrid.TextureView TextureView { get; private set; }
+        internal Veldrid.TextureView TextureView { get; private set; } 
 
 
         private Veldrid.Texture stagingTexture = null;
@@ -59,18 +62,24 @@ namespace Prowl.Runtime
             InternalTexture = null;
             TextureView = null;
             stagingTexture = null;
+
+            DestroyImmediate(Sampler);
         }
 
-        public void GenerateMipmaps()
+        public void GenerateMipmaps(bool waitForCompletion = false)
         {
             if (!IsMipmappable)
                 throw new InvalidOperationException($"Cannot generate mipmaps on a non-mipmappable texture. Ensure texture is created with the {TextureUsage.GenerateMipmaps} flag.");
 
-            CommandList commandList = Graphics.Device.ResourceFactory.CreateCommandList();
+            Fence fence = Graphics.ResourceFactory.CreateFence(false);
+            CommandList commandList = Graphics.ResourceFactory.CreateCommandList();
 
             commandList.GenerateMipmaps(InternalTexture);
 
-            Graphics.Device.SubmitCommands(commandList);
+            Graphics.Device.SubmitCommands(commandList, fence);
+
+            if (waitForCompletion)
+                Graphics.Device.WaitForFence(fence);
 
             IsMipmapped = true;
         }
