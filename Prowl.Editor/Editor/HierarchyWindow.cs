@@ -318,6 +318,7 @@ namespace Prowl.Editor
                     if (!gui.PreviousInteractableIsFocus())
                         m_RenamingGO = null;
                     entity.Name = name;
+                    justStartedRename = false;
                 }
                 else
                 {

@@ -86,6 +86,7 @@ namespace Prowl.Editor
         internal static string? RenamingEntry = null;
 
         private int _treeCounter = 0;
+        private static bool justStartedRename = false;
 
         public AssetsTreeWindow() : base()
         {
@@ -95,7 +96,9 @@ namespace Prowl.Editor
         public static void StartRename(string? entry)
         {
             RenamingEntry = entry;
+            justStartedRename = true;
         }
+
         protected override void Draw()
         {
             if (!Project.HasProject)
@@ -427,8 +430,31 @@ namespace Prowl.Editor
                         gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
                     }
 
-                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, subDirectory.Name, 20, new Vector2(gui.CurrentNode.LayoutData.Rect.x + 40, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white);
+                    var name = subDirectory.Name;
+                    if (RenamingEntry == subDirectory.FullName)
+                    {
+                        var rect = gui.CurrentNode.LayoutData.Rect;
+                        var inputRect = new Rect(rect.x + 33, rect.y + 4, rect.width - 40, 30 - 8);
+                        gui.Draw2D.DrawRectFilled(inputRect, GuiStyle.WindowBackground, 8);
+                        bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 30, 0, Size.Percentage(1f), null, null, true);
+                        if (justStartedRename)
+                            gui.FocusPreviousInteractable();
+                        if (!gui.PreviousInteractableIsFocus())
+                            RenamingEntry = null;
+                        //subDirectory.Name = name;
+                        string newPath = Path.Combine(subDirectory.Parent!.FullName, name);
+                        if (changed && !string.IsNullOrEmpty(name) && !subDirectory.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && !Directory.Exists(newPath))
+                        {
+                            subDirectory.MoveTo(newPath);
+                            RenamingEntry = null;
+                        }
 
+                        justStartedRename = false;
+                    }
+                    else
+                    {
+                        gui.Draw2D.DrawText(subDirectory.Name, new Vector2(gui.CurrentNode.LayoutData.Rect.x + 40, gui.CurrentNode.LayoutData.Rect.y + 7));
+                    }
                     _treeCounter++;
                 }
 
@@ -488,7 +514,35 @@ namespace Prowl.Editor
                     if (subassets.Length > 1)
                         textRect.width -= GuiStyle.ItemHeight;
                     gui.Draw2D.DrawText(UIDrawList.DefaultFont, GetIcon(ext), 20, new Vector2(gui.CurrentNode.LayoutData.Rect.x + (GuiStyle.ItemHeight / 2), gui.CurrentNode.LayoutData.Rect.y + 7), GetFileColor(ext), 0, textRect);
-                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(gui.CurrentNode.LayoutData.Rect.x + 40, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white, 0, textRect);
+
+                    // Display Name
+                    var name = file.Name;
+                    if (RenamingEntry == file.FullName)
+                    {
+                        var rect = gui.CurrentNode.LayoutData.Rect;
+                        var inputRect = new Rect(rect.x + 33, rect.y + 4, rect.width - 40, 30 - 8);
+                        gui.Draw2D.DrawRectFilled(inputRect, GuiStyle.WindowBackground, 8);
+                        bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 30, 0, Size.Percentage(1f), null, null, true);
+                        if (justStartedRename)
+                            gui.FocusPreviousInteractable();
+                        if (!gui.PreviousInteractableIsFocus())
+                            RenamingEntry = null;
+
+                        string newPath = Path.Combine(file.DirectoryName!, name);
+                        if (changed && !string.IsNullOrEmpty(name) && !file.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && !File.Exists(newPath))
+                        {
+                            file.MoveTo(newPath);
+                            RenamingEntry = null;
+                            AssetDatabase.Update();
+                        }
+                        
+
+                        justStartedRename = false;
+                    }
+                    else
+                    {
+                        gui.Draw2D.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(gui.CurrentNode.LayoutData.Rect.x + 40, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white, 0, textRect);
+                    }
                 }
 
                 _treeCounter++;
@@ -529,7 +583,7 @@ namespace Prowl.Editor
             }
         }
 
-        public static void HandleFileClick(int index, Interactable interact, FileInfo entry, ushort fileID = 0)
+        public static void HandleFileClick(int index, Interactable interact, FileInfo entry, ushort fileID = 0, bool fromAssetBrowser = false)
         {
             Guid guid;
             bool isAsset = AssetDatabase.TryGetGuid(entry, out guid);
@@ -565,7 +619,7 @@ namespace Prowl.Editor
             var popupHolder = Gui.ActiveGUI.CurrentNode;
             if (Gui.ActiveGUI.BeginPopup("RightClickFile", out var node2))
                 using (node2.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
-                    DrawContextMenu(entry, null, false, popupHolder);
+                    DrawContextMenu(entry, null, fromAssetBrowser, popupHolder);
 
             if (isAsset && interact.IsHovered() && Gui.ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
             {
