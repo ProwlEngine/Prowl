@@ -3,6 +3,7 @@ using Veldrid;
 using Veldrid.SPIRV;
 using Veldrid.StartupUtilities;
 using System.Text;
+using System.Collections.Generic;
 
 namespace Prowl.Runtime
 {
@@ -22,77 +23,9 @@ namespace Prowl.Runtime
         }
 
         // Veldrid quad stuff
-        
         private static bool createdResources = false;
 
         private static CommandList _commandList;
-        private static Shader shader;
-
-        private static DeviceBuffer _matrixBuffer;
-        private static DeviceBuffer _colorBuffer;
-        
-        private static ResourceSet _matrixSet;
-        private static ResourceSet _multiSet;
-
-        private const string VertexCode = @"
-#version 450
-
-layout(set = 0, binding = 0) uniform MatrixBuffer
-{
-    mat4 Projection;
-    mat4 View;
-    mat4 World;
-};
-
-layout(set = 1, binding = 0) uniform texture2D SurfaceTexture;
-layout(set = 1, binding = 1) uniform sampler SurfaceSampler;
-
-layout(set = 1, binding = 2) uniform ColorBuffer
-{
-    vec4 ColorValue;
-};
-
-layout(location = 0) in vec3 Position;
-layout(location = 1) in vec2 TexCoords;
-
-layout(location = 0) out vec2 fsin_texCoords;
-
-void main()
-{
-    vec4 worldPosition = World * vec4(Position, 1);
-
-    float lat = acos(worldPosition.y / length(worldPosition)); //theta
-    float lon = atan(worldPosition.x / worldPosition.z); // phi
-
-    worldPosition *= texture(sampler2D(SurfaceTexture, SurfaceSampler), vec2(lat, lon));
-
-    vec4 viewPosition = View * worldPosition;
-    vec4 clipPosition = Projection * viewPosition;
-    
-    clipPosition.y *= -1.0;
-
-    gl_Position = clipPosition;
-    fsin_texCoords = TexCoords;
-}";
-
-        private const string FragmentCode = @"
-#version 450
-
-layout(location = 0) in vec2 fsin_texCoords;
-layout(location = 0) out vec4 fsout_color;
-
-layout(set = 1, binding = 0) uniform texture2D SurfaceTexture;
-layout(set = 1, binding = 1) uniform sampler SurfaceSampler;
-
-layout(set = 1, binding = 2) uniform ColorBuffer
-{
-    vec4 ColorValue;
-};
-
-void main()
-{
-    fsout_color = texture(sampler2D(SurfaceTexture, SurfaceSampler), fsin_texCoords) * ColorValue;
-}";
 
         public static void Initialize(bool VSync = true, GraphicsBackend preferredBackend = GraphicsBackend.OpenGL)
         {
@@ -108,77 +41,35 @@ void main()
             };
 
             Device = VeldridStartup.CreateGraphicsDevice(Screen.InternalWindow, deviceOptions, preferredBackend);
+
+            Screen.Resize += (newSize) => Device.ResizeMainWindow((uint)newSize.x, (uint)newSize.y);
         }
 
 
-        private static void EnsureResources(Texture2D tex)
+        private static void EnsureResources()
         {
             if (createdResources)
                 return;
 
             createdResources = true;
 
-            ResourceFactory factory = Device.ResourceFactory;
-
-            _matrixBuffer = factory.CreateBuffer(new BufferDescription(64 * 3, BufferUsage.UniformBuffer));
-            _colorBuffer = factory.CreateBuffer(new BufferDescription(sizeof(float) * 4, BufferUsage.UniformBuffer));
-
-            ShaderDescription vertexShaderDesc = new ShaderDescription(ShaderStages.Vertex, Encoding.UTF8.GetBytes(VertexCode), "main");
-            ShaderDescription fragmentShaderDesc = new ShaderDescription(ShaderStages.Fragment, Encoding.UTF8.GetBytes(FragmentCode), "main");
-
-            // Pass creation info (Name, tags)
-            Pass pass = new Pass("DrawCube", []);
-
-            pass.CreateProgram(factory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc));
-
-            // The input channels the vertex shader expects
-            pass.AddVertexInput("Position", VertexElementSemantic.Position, VertexElementFormat.Float3);
-            pass.AddVertexInput("TexCoords", VertexElementSemantic.TextureCoordinate, VertexElementFormat.Float2);
-
-            // MVP matrix resources
-            pass.AddResourceElement([ new ResourceLayoutElementDescription("MatrixBuffer", ResourceKind.UniformBuffer, ShaderStages.Vertex) ]);
-            
-            // Other shader resources
-            pass.AddResourceElement([
-                new ResourceLayoutElementDescription("SurfaceTexture", ResourceKind.TextureReadOnly, ShaderStages.Vertex | ShaderStages.Fragment),
-                new ResourceLayoutElementDescription("SurfaceSampler", ResourceKind.Sampler, ShaderStages.Vertex | ShaderStages.Fragment),
-                new ResourceLayoutElementDescription("ColorValue", ResourceKind.UniformBuffer, ShaderStages.Vertex | ShaderStages.Fragment) ]);
-
-            pass.cullMode = FaceCullMode.None;
-
-            shader = new Shader();
-
-            shader.AddPass(pass);
-
-            _commandList = factory.CreateCommandList();
-
-            PipelineCache.PipelineInfo pipeline = PipelineCache.GetPipelineForPass(shader.GetPass(0), fillMode: PolygonFillMode.Wireframe);
-
-            _matrixSet = factory.CreateResourceSet(new ResourceSetDescription(
-                pipeline.description.ResourceLayouts[0],
-                _matrixBuffer));
-
-            _multiSet = factory.CreateResourceSet(new ResourceSetDescription(
-                pipeline.description.ResourceLayouts[1],
-                tex.TextureView,
-                tex.Sampler.InternalSampler,
-                _colorBuffer));
+            _commandList = ResourceFactory.CreateCommandList();
 
             Console.WriteLine("Initialized resources");
         }
 
 
-        public static void StartFrame(Texture2D quadTex)
+        public static void StartFrame()
         {
             RenderTexture.UpdatePool();
 
-            EnsureResources(quadTex);
+            EnsureResources();
 
             if (_commandList == null)
                 return;
 
             _commandList.Begin();
-            _commandList.SetFramebuffer(Device.SwapchainFramebuffer);
+            _commandList.SetFramebuffer(Framebuffer);
             _commandList.ClearColorTarget(0, RgbaFloat.Black);
             _commandList.ClearDepthStencil(1f);
         }
@@ -193,34 +84,26 @@ void main()
             Device.SwapBuffers();
         }
 
-        public static void DrawNDCQuad(Mesh mesh)
+        public static Veldrid.Shader[] CreateFromSpirv(string vert, string frag)
         {
-            if (_commandList == null)
-                return;
+            ShaderDescription vertexShaderDesc = new ShaderDescription(ShaderStages.Vertex, Encoding.UTF8.GetBytes(vert), "main");
+            ShaderDescription fragmentShaderDesc = new ShaderDescription(ShaderStages.Fragment, Encoding.UTF8.GetBytes(frag), "main");
 
-            PipelineCache.PipelineInfo pipeline = PipelineCache.GetPipelineForPass(shader.GetPass(0), fillMode: PolygonFillMode.Wireframe);
+            return ResourceFactory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
+        }
 
-            _commandList.SetPipeline(pipeline.pipeline);
-
+        public static void DrawMesh(Mesh mesh, Material material, Matrix4x4 matrix, int pass = 0, PolygonFillMode fill = PolygonFillMode.Solid)
+        {
             mesh.Upload();
+            Matrix4x4 proj = Matrix4x4.CreatePerspectiveFieldOfView(1.0f, (float)Screen.Size.x / Screen.Size.y, 0.5f, 100f);
+            Matrix4x4 view = Matrix4x4.CreateLookAt(new Vector3(0, -1.5, -3), Vector3.zero, Vector3.up);
 
-            System.Numerics.Matrix4x4 proj = System.Numerics.Matrix4x4.CreatePerspectiveFieldOfView(1.0f, (float)Screen.Size.x / Screen.Size.y, 0.5f, 100f);
-            System.Numerics.Matrix4x4 view = System.Numerics.Matrix4x4.CreateLookAt(new Vector3(0, -1.5, -3), Vector3.zero, Vector3.up);
-            System.Numerics.Matrix4x4 world = System.Numerics.Matrix4x4.CreateWorld(Vector3.zero, Vector3.forward, Vector3.up);
+            material.SetMatrix("ProjectionMatrix", proj);
+            material.SetMatrix("ViewMatrix", view);
+            material.SetMatrix("WorldMatrix", matrix);
 
-            world *= System.Numerics.Matrix4x4.CreateFromAxisAngle(Vector3.up, (float)Time.time * 0.25f);
-
-            _commandList.UpdateBuffer(_matrixBuffer, 0, [ proj, view, world ]);
-            
-            _commandList.UpdateBuffer(_colorBuffer, 0, new System.Numerics.Vector4((float)Math.Sin(Time.time), (float)Math.Cos(Time.time), 0.75f, 1.0f));
-
-            _commandList.SetVertexBuffer(0, mesh.VertexBuffer, 0);
-            _commandList.SetVertexBuffer(1, mesh.VertexBuffer, (uint)mesh.UVStart);
-
-            _commandList.SetIndexBuffer(mesh.IndexBuffer, mesh.IndexFormat);
-
-            _commandList.SetGraphicsResourceSet(0, _matrixSet);
-            _commandList.SetGraphicsResourceSet(1, _multiSet);
+            material.SetPass(_commandList, true, pass, fill);
+            BindMeshBuffers(_commandList, mesh, material.Shader.Res.GetPass(pass).GetVariant(material.Keywords).vertexInputs);
 
             _commandList.DrawIndexed(
                 indexCount: (uint)mesh.IndexCount,
@@ -230,18 +113,34 @@ void main()
                 instanceStart: 0);
         }
 
+        private static void BindMeshBuffers(CommandList commandList, Mesh mesh, List<MeshResource> vertexInputs)
+        {
+            commandList.SetIndexBuffer(mesh.IndexBuffer, mesh.IndexFormat);
+
+            for (uint i = 0; i < vertexInputs.Count; i++)
+            {
+                MeshResource resource = vertexInputs[(int)i];
+
+                switch (resource)
+                {
+                    case MeshResource.Position:     commandList.SetVertexBuffer(i, mesh.VertexBuffer, 0);                           break;
+                    case MeshResource.UV0:          commandList.SetVertexBuffer(i, mesh.VertexBuffer, (uint)mesh.UVStart);          break;
+                    case MeshResource.UV1:          commandList.SetVertexBuffer(i, mesh.VertexBuffer, (uint)mesh.UV2Start);         break;
+                    case MeshResource.Normals:      commandList.SetVertexBuffer(i, mesh.VertexBuffer, (uint)mesh.NormalsStart);     break;
+                    case MeshResource.Tangents:     commandList.SetVertexBuffer(i, mesh.VertexBuffer, (uint)mesh.TangentsStart);    break;
+                    case MeshResource.Colors:       commandList.SetVertexBuffer(i, mesh.VertexBuffer, (uint)mesh.ColorsStart);      break;
+                    case MeshResource.BoneIndices:  commandList.SetVertexBuffer(i, mesh.VertexBuffer, (uint)mesh.BoneIndexStart);   break;
+                    case MeshResource.BoneWeights:  commandList.SetVertexBuffer(i, mesh.VertexBuffer, (uint)mesh.BoneWeightStart);  break;
+                };
+            }
+        }
+
         internal static void Dispose()
         {
             _commandList.Dispose();
 
-            _matrixSet.Dispose();
-            _multiSet.Dispose();
-
-            _matrixBuffer.Dispose();
-            _colorBuffer.Dispose();
-
             Device.Dispose();
-            PipelineCache.Dispose();
+            ResourceCache.Dispose();
         }
 
         public static void CopyTexture(Texture source, Texture destination, bool waitForOperationCompletion = false)
@@ -267,6 +166,7 @@ void main()
 
             if (waitForOperationCompletion)
                 Device.WaitForFence(fence);
+            fence.Dispose();
         }
 
         internal static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, uint mipLevel, uint arrayLayer, bool waitForOperationCompletion = false)
@@ -282,6 +182,7 @@ void main()
 
             if (waitForOperationCompletion)
                 Device.WaitForFence(fence);
+            fence.Dispose();
         }
     }
 }
