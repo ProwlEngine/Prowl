@@ -7,6 +7,19 @@ using System.Runtime.InteropServices;
 
 namespace Prowl.Runtime
 {  
+    public enum MeshResource
+    {
+        Position,
+        UV0,
+        UV1,
+        Normals,
+        Tangents,
+        Colors,
+        BoneIndices,
+        BoneWeights,
+        Custom
+    }
+
     public class Mesh : EngineObject, ISerializable
     {
         /// <summary> Whether this mesh is readable by the CPU </summary>
@@ -490,7 +503,23 @@ namespace Prowl.Runtime
 
             return offsets;
         }
-        
+
+        public static VertexLayoutDescription GetLayoutForResource(MeshResource resource)
+        {
+            return resource switch 
+            {
+                MeshResource.Position => new VertexLayoutDescription(new VertexElementDescription("POSITION", VertexElementFormat.Float3, VertexElementSemantic.Position)),
+                MeshResource.UV0 => new VertexLayoutDescription(new VertexElementDescription("TEXCOORD0", VertexElementFormat.Float2, VertexElementSemantic.TextureCoordinate)),
+                MeshResource.UV1 => new VertexLayoutDescription(new VertexElementDescription("TEXCOORD1", VertexElementFormat.Float2, VertexElementSemantic.TextureCoordinate)),
+                MeshResource.Normals => new VertexLayoutDescription(new VertexElementDescription("NORMAL", VertexElementFormat.Float3, VertexElementSemantic.Normal)),
+                MeshResource.Tangents => new VertexLayoutDescription(new VertexElementDescription("TANGENT", VertexElementFormat.Float3, VertexElementSemantic.Normal)),
+                MeshResource.Colors => new VertexLayoutDescription(new VertexElementDescription("COLOR", VertexElementFormat.Float4, VertexElementSemantic.Color)),
+                MeshResource.BoneIndices => new VertexLayoutDescription(new VertexElementDescription("BONEINDEX", VertexElementFormat.Float4, VertexElementSemantic.Position)),
+                MeshResource.BoneWeights => new VertexLayoutDescription(new VertexElementDescription("BONEWEIGHT", VertexElementFormat.Float4, VertexElementSemantic.Color)),
+            };
+        }
+
+
         public SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
             var compoundTag = SerializedProperty.NewCompound();
