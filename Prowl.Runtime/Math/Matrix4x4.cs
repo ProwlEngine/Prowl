@@ -176,6 +176,31 @@ namespace Prowl.Runtime
             return result;
         }
 
+        public static Matrix4x4 FromFloat(System.Numerics.Matrix4x4 floatMatrix)
+        {
+            Matrix4x4 result;
+            result.M11 = floatMatrix.M11;
+            result.M12 = floatMatrix.M12;
+            result.M13 = floatMatrix.M13;
+            result.M14 = floatMatrix.M14;
+
+            result.M21 = floatMatrix.M21;
+            result.M22 = floatMatrix.M22;
+            result.M23 = floatMatrix.M23;
+            result.M24 = floatMatrix.M24;
+
+            result.M31 = floatMatrix.M31;
+            result.M32 = floatMatrix.M32;
+            result.M33 = floatMatrix.M33;
+            result.M34 = floatMatrix.M34;
+
+            result.M41 = floatMatrix.M41;
+            result.M42 = floatMatrix.M42;
+            result.M43 = floatMatrix.M43;
+            result.M44 = floatMatrix.M44;
+            return result;
+        }
+
         public static Matrix4x4 TRS(Vector3 m_LocalPosition, Quaternion m_LocalRotation, Vector3 m_LocalScale)
             => Matrix4x4.CreateScale(m_LocalScale) * Matrix4x4.CreateFromQuaternion(m_LocalRotation) * Matrix4x4.CreateTranslation(m_LocalPosition);
 
