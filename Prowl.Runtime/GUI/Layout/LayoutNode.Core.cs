@@ -269,7 +269,7 @@ namespace Prowl.Runtime.GUI.Layout
                     child._width = Math.Max(width - child._data.Margins.Horizontal, 0);
                     remainingWidth -= width;
                     remainingChildren--;
-                    child.UpdateScaleCache();
+                    child.UpdateCache();
                 }
             }
 
@@ -285,7 +285,7 @@ namespace Prowl.Runtime.GUI.Layout
                     child._height = Math.Max(height - child._data.Margins.Vertical, 0);
                     remainingHeight -= height;
                     remainingChildren--;
-                    child.UpdateScaleCache();
+                    child.UpdateCache();
                 }
             }
         }
@@ -352,7 +352,7 @@ namespace Prowl.Runtime.GUI.Layout
                 _width = MathD.Lerp(0, _data.ContentRect.width + _data.Paddings.Horizontal, _fitContentXPerc);
             if (_fitContentY)           
                 _height = MathD.Lerp(0, _data.ContentRect.height + _data.Paddings.Vertical, _fitContentYPerc);
-            UpdateScaleCache();
+            UpdateCache();
         }
 
         public ulong GetHashCode64()

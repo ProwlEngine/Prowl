@@ -22,6 +22,7 @@ namespace Prowl.Editor
         private readonly Dictionary<string, AssetRef<Texture2D>> _cachedThumbnails = new();
         private static (long, bool) _lastGenerated = (-1, false);
         internal static string? RenamingEntry = null;
+        private static bool justStartedRename = false;
 
         private const float PingDuration = 3f;
         private float _pingTimer = 0;
@@ -71,6 +72,7 @@ namespace Prowl.Editor
         public static void StartRename(string? entry)
         {
             RenamingEntry = entry;
+            justStartedRename = true;
         }
 
         protected override void Draw()
@@ -192,7 +194,7 @@ namespace Prowl.Editor
                 var popupHolder = gui.CurrentNode;
                 if (gui.BeginPopup("RightClickBodyBrowser", out var node))
                     using (node.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
-                        AssetsTreeWindow.DrawContextMenu(null, CurDirectory, false, popupHolder);
+                        AssetsTreeWindow.DrawContextMenu(null, CurDirectory, true, popupHolder);
 
                 if (DragnDrop.Drop<GameObject>(out var go))
                 {
@@ -260,7 +262,7 @@ namespace Prowl.Editor
                     var popupHolder = gui.CurrentNode;
                     if (gui.BeginPopup("RightClickFileBrowser", out var node))
                         using (node.Width(180).Padding(5).Layout(LayoutType.Column).FitContentHeight().Enter())
-                            AssetsTreeWindow.DrawContextMenu(dir, null, false, popupHolder);
+                            AssetsTreeWindow.DrawContextMenu(dir, null, true, popupHolder);
 
                     if (interact.TakeFocus())
                     {
@@ -304,7 +306,7 @@ namespace Prowl.Editor
                 using (gui.Node(file.Name).Scale(EntrySize).Margin(itemPadding).Enter())
                 {
                     var interact = gui.GetInteractable();
-                    AssetsTreeWindow.HandleFileClick(-1, interact, file, 0);
+                    AssetsTreeWindow.HandleFileClick(-1, interact, file, 0, true);
 
                     DrawFileEntry(0, entry, interact);
 
@@ -333,7 +335,7 @@ namespace Prowl.Editor
                         using (gui.Node(subAssets[i].name, i).Scale(EntrySize * 0.75).Margin(itemPadding).Enter())
                         {
                             var interact = gui.GetInteractable();
-                            AssetsTreeWindow.HandleFileClick(-1, interact, file, i);
+                            AssetsTreeWindow.HandleFileClick(-1, interact, file, i, true);
 
                             DrawFileEntry(0, entry, interact, true, subAssets[i]);
                         }
@@ -393,8 +395,49 @@ namespace Prowl.Editor
             // Draw Name
             var namePos = rect.Position + new Vector2(0, size + 5);
             var nameRect = new Rect(namePos.x, namePos.y, entrySize, itemHeight);
-            var text = AssetPipelinePreferences.Instance.HideExtensions ? Path.GetFileNameWithoutExtension(entry.FullName) : Path.GetFileName(entry.FullName);
-            gui.Draw2D.DrawText(UIDrawList.DefaultFont, text, 20, nameRect, GuiStyle.Base11, false);
+            //gui.Draw2D.DrawText(UIDrawList.DefaultFont, text, 20, nameRect, GuiStyle.Base11, false);
+
+
+            if (RenamingEntry == entry.FullName)
+            {
+                var inputRect = new Rect(nameRect.x, nameRect.y + 4, nameRect.width, 30 - 8);
+                gui.Draw2D.DrawRectFilled(inputRect, GuiStyle.WindowBackground, 8);
+                string name = Path.GetFileNameWithoutExtension(entry.FullName);
+                bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 0, size + 4, Size.Percentage(1f), null, null, true);
+                if (justStartedRename)
+                    gui.FocusPreviousInteractable();
+                if (!gui.PreviousInteractableIsFocus())
+                    RenamingEntry = null;
+
+                if(entry is FileInfo file)
+                {
+                    string newPath = Path.Combine(file.DirectoryName, name + file.Extension);
+                    if (changed && !string.IsNullOrEmpty(name) && !newPath.Equals(file.FullName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        file.MoveTo(newPath);
+                        RenamingEntry = null;
+                        AssetDatabase.Update();
+                    }
+                }
+                else if (entry is DirectoryInfo dir)
+                {
+                    string newPath = Path.Combine(dir.Parent.FullName, name);
+                    if (changed && !string.IsNullOrEmpty(name) && !newPath.Equals(dir.FullName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        dir.MoveTo(newPath);
+                        RenamingEntry = null;
+                        AssetDatabase.Update();
+                    }
+                }
+
+
+                justStartedRename = false;
+            }
+            else
+            {
+                var text = AssetPipelinePreferences.Instance.HideExtensions ? Path.GetFileNameWithoutExtension(entry.FullName) : Path.GetFileName(entry.FullName);
+                gui.Draw2D.DrawText(text, nameRect, GuiStyle.Base11);
+            }
         }
 
         private void DrawPingEffect(FileSystemInfo entry)

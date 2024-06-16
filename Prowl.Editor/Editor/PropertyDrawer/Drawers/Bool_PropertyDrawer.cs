@@ -14,5 +14,4 @@ namespace Prowl.Editor.PropertyDrawers
         }
     }
 
-
 }
