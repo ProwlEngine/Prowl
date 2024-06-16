@@ -30,26 +30,23 @@ namespace Prowl.Runtime
             comparisonKind: ComparisonKind.LessEqual
         );
 
-
         public FaceCullMode cullMode = FaceCullMode.Back;
         public bool depthClipEnabled = true;
 
 
-        // Encapsulates a compiled program for this pass which can be identified by a keyword state
-        public class Program
+        public class Variant
         {
-            public List<VertexLayoutDescription> vertexInputs = new();
-            public List<ResourceLayoutDescription> resourceDescriptions = new();
-            public Veldrid.Shader[] passPrograms;
+            public KeywordState keywords;
+            public List<MeshResource> vertexInputs = new();
+            public List<ShaderResource[]> resourceSets = new();
+            public Veldrid.Shader[] compiledPrograms;
         }
 
 
-        private Dictionary<KeywordState, Program> variantPrograms = new();
+        private Dictionary<KeywordState, Variant> variants = new();
 
 
-        public Pass(
-            string name,
-            (string, string)[] tags)
+        public Pass(string name, (string, string)[] tags)
         {
             this.name = name;
 
@@ -57,44 +54,47 @@ namespace Prowl.Runtime
                 this.tags.Add(tags[i].Item1, tags[i].Item2);
         }
 
-        public void CreateProgram(Veldrid.Shader[] compiledShaders, KeywordState? keywordID = null)
+        public void CreateProgram(Veldrid.Shader[] compiledPrograms, KeywordState? keywordID = null)
         {
-            Program program = new() 
+            keywordID ??= KeywordState.Empty;
+
+            Variant program = new() 
             {
-                passPrograms = compiledShaders
+                keywords = keywordID.Value,
+                compiledPrograms = compiledPrograms
             };
 
-            variantPrograms.Add(keywordID ?? KeywordState.Empty, program);
+            variants.Add(keywordID.Value, program);
         }
 
-        public Program GetProgram(KeywordState? keywordID = null)
+        public Variant GetVariant(KeywordState? keywordID = null)
         {
-            if (variantPrograms.TryGetValue(keywordID ?? KeywordState.Empty, out Program program))
+            if (variants.TryGetValue(keywordID ?? KeywordState.Empty, out Variant program))
                 return program;
             else
-                throw new Exception("Could not find program for keyword ID");
+                throw new Exception("Could not find variant for keyword ID");
         }
 
-        public void AddVertexInput(string name, VertexElementSemantic semantic, VertexElementFormat format, KeywordState? keywordID = null)
+        public void AddVertexInput(MeshResource resource, KeywordState? keywordID = null)
         {
-            if (variantPrograms.TryGetValue(keywordID ?? KeywordState.Empty, out Program program))
-                program.vertexInputs.Add(new VertexLayoutDescription(new VertexElementDescription(name, semantic, format)));
+            if (variants.TryGetValue(keywordID ?? KeywordState.Empty, out Variant program))
+                program.vertexInputs.Add(resource);
             else
-                throw new Exception("Could not find program for keyword ID");
+                throw new Exception("Could not find variant for keyword ID");
         }
 
-        public void AddResourceElement(ResourceLayoutElementDescription[] elements, KeywordState? keywordID = null)
+        public void AddResourceElement(ShaderResource[] resourceTypes, KeywordState? keywordID = null)
         {
-            if (variantPrograms.TryGetValue(keywordID ?? KeywordState.Empty, out Program program))
-                program.resourceDescriptions.Add(new ResourceLayoutDescription(elements));
+            if (variants.TryGetValue(keywordID ?? KeywordState.Empty, out Variant program))
+                program.resourceSets.Add(resourceTypes);
             else
-                throw new Exception("Could not find program for keyword ID");
+                throw new Exception("Could not variant for keyword ID");
         }
 
         public void Dispose()
         {
-            foreach (Program program in variantPrograms.Values)
-                foreach (Veldrid.Shader shader in program.passPrograms)
+            foreach (Variant program in variants.Values)
+                foreach (Veldrid.Shader shader in program.compiledPrograms)
                     shader.Dispose();
         }
     }
