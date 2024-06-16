@@ -80,6 +80,7 @@ namespace Prowl.Runtime
 
             if (waitForCompletion)
                 Graphics.Device.WaitForFence(fence);
+            fence.Dispose();
 
             IsMipmapped = true;
         }
