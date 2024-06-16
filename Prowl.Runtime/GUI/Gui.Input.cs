@@ -138,9 +138,9 @@ namespace Prowl.Runtime.GUI
         public bool IsPointerDown(MouseButton Btn) => PointerCurState[(int)Btn];
         public bool IsPointerUp(MouseButton Btn) => !PointerCurState[(int)Btn];
         public bool IsPointerClick(MouseButton Btn = MouseButton.Left, bool onrelease = false) => !onrelease ? (!PointerPreState[(int)Btn] && PointerCurState[(int)Btn]) : (PointerPreState[(int)Btn] && !PointerCurState[(int)Btn]);
-        public bool IsPointerDoubleClick(MouseButton Btn) => IsPointerClick(Btn) && Time.time < PointerLastClickTime[(int)Btn] && (PointerPos - PointerLastClickPos[(int)Btn]).sqrMagnitude < 5;
-        public bool IsPointerPressed(MouseButton Btn) => IsPointerClick(Btn) || (IsPointerDown(Btn) && PointerPressedTime[(int)Btn] >= 0.5f);
-        public Vector2 GetPointerClickPos(MouseButton Btn) => PointerClickPos[(int)Btn];
+        public bool IsPointerDoubleClick(MouseButton Btn = MouseButton.Left) => IsPointerClick(Btn) && Time.time < PointerLastClickTime[(int)Btn] && (PointerPos - PointerLastClickPos[(int)Btn]).sqrMagnitude < 5;
+        public bool IsPointerPressed(MouseButton Btn = MouseButton.Left) => IsPointerClick(Btn) || (IsPointerDown(Btn) && PointerPressedTime[(int)Btn] >= 0.5f);
+        public Vector2 GetPointerClickPos(MouseButton Btn = MouseButton.Left) => PointerClickPos[(int)Btn];
         public void SetCursorVisibility(bool Visible) => OnCursorVisibilitySet?.Invoke(Visible);
     }
 }
