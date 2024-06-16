@@ -5,17 +5,43 @@ using Veldrid;
 
 namespace Prowl.Runtime
 {
-    public readonly struct KeywordState
+    public struct KeywordState
     {
         public static KeywordState Empty => new KeywordState();
 
-        public readonly string[] Keywords;
-        public readonly int Hash;
+        private readonly HashSet<string> keywords;
+        public IEnumerable<string> Keywords => keywords;
+
+        public int Hash { get; private set; }
 
         public KeywordState(params string[] keywords)
         {
-            this.Keywords = keywords;
+            this.keywords = new(keywords);
             this.Hash = ComputeHash();
+        }
+
+        public void SetKeyword(string keyword, bool state)
+        {
+            if (state) EnableKeyword(keyword);
+            else DisableKeyword(keyword);
+        }
+
+        public void EnableKeyword(string keyword)
+        {
+            if (!keywords.Contains(keyword))
+            {
+                keywords.Add(keyword);
+                Hash = ComputeHash();
+            }
+        }
+
+        public void DisableKeyword(string keyword)
+        {
+            if (keywords.Contains(keyword))
+            {
+                keywords.Remove(keyword);
+                Hash = ComputeHash();
+            }
         }
 
         public override int GetHashCode() => Hash;
@@ -29,7 +55,7 @@ namespace Prowl.Runtime
             // Stores number of occurences so far of each value.
             var valueCounts = new Dictionary<string, int>();
     
-            foreach (string keyword in Keywords)
+            foreach (string keyword in keywords)
             {
                 curHash = keyword.GetHashCode();
     
