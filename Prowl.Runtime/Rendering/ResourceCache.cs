@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace Prowl.Runtime
 {
-    public static class PipelineCache    
+    public static class ResourceCache    
     {
         const bool scissorTest = false;
         const bool depthClip = true;
@@ -26,11 +26,13 @@ namespace Prowl.Runtime
             }
         }
 
+        /// <summary>
+        /// Bundles a pipeline instance with its description.
+        /// </summary>
         public readonly struct PipelineInfo
         {
             public readonly Pipeline pipeline;
             public readonly GraphicsPipelineDescription description; 
-
 
             internal PipelineInfo(GraphicsPipelineDescription description, Pipeline pipeline)
             {
@@ -40,10 +42,24 @@ namespace Prowl.Runtime
         }
 
         private static Dictionary<PassPipelineDescription, PipelineInfo> pipelineCache = new();
+        private static Dictionary<string, WeakReference<Shader>> shaderCache = new();
+
 
         private static GraphicsPipelineDescription CreateDescriptionForPass(in PassPipelineDescription passDesc)
         {
-            Pass.Program keywordProgram = passDesc.pass.GetProgram(passDesc.keywordState);
+            Pass.Variant keywordProgram = passDesc.pass.GetVariant(passDesc.keywordState);
+
+            ResourceLayout[] resourceLayouts = new ResourceLayout[keywordProgram.resourceSets.Count];
+
+            for (int i = 0; i < resourceLayouts.Length; i++)
+            {
+                ShaderResource[] resources = keywordProgram.resourceSets[i];
+
+                var description = new ResourceLayoutDescription(resources.Select(x => x.ToDescription()).ToArray());
+
+                resourceLayouts[i] = Graphics.ResourceFactory.CreateResourceLayout(description);
+            }
+
 
             GraphicsPipelineDescription pipelineDesc = new()
             {
@@ -62,17 +78,18 @@ namespace Prowl.Runtime
                 Outputs = passDesc.output ?? Graphics.Framebuffer.OutputDescription,
 
                 ShaderSet = new ShaderSetDescription(
-                    vertexLayouts: keywordProgram.vertexInputs.ToArray(),
-                    shaders: keywordProgram.passPrograms
+                    vertexLayouts: keywordProgram.vertexInputs.Select(x => Mesh.GetLayoutForResource(x)).ToArray(),
+                    shaders: keywordProgram.compiledPrograms
                 ),
 
-                ResourceLayouts = keywordProgram.resourceDescriptions.Select(x => Graphics.ResourceFactory.CreateResourceLayout(x)).ToArray()
+                ResourceLayouts = resourceLayouts,
             };
 
             return pipelineDesc;
         }
 
-        public static PipelineInfo GetPipelineForPass(Pass pass, 
+        public static PipelineInfo GetPipelineForPass(
+            Pass pass, 
             KeywordState? keywords = null,
             PolygonFillMode fillMode = PolygonFillMode.Solid,
             FrontFace frontFace = FrontFace.Clockwise,
@@ -111,6 +128,19 @@ namespace Prowl.Runtime
                 foreach (var layout in info.description.ResourceLayouts)
                     layout.Dispose();
             }
+
+            pipelineCache.Clear();
+
+            foreach (var shader in shaderCache.Values)
+                if (shader.TryGetTarget(out Shader sh))
+                    sh.Destroy();
+                
+            shaderCache.Clear();
+        }
+
+        internal static void RegisterShader(Shader shader)
+        {
+            shaderCache.Add(shader.Name, new WeakReference<Shader>(shader));
         }
     }
 }
