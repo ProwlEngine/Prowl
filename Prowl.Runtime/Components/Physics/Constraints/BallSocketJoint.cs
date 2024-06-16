@@ -8,15 +8,26 @@ namespace Prowl.Runtime;
 public class BallSocketJoint : Joint
 {
     public Vector3 JointPosition;
-    
-    protected override ConstraintHandle Build(SpringSettings springSettings)
+    public float Frequency = 35;
+    public float DampingRatio = 5;
+    private SpringSettings springSettings = new SpringSettings();
+    private BallSocket joint = new BallSocket();
+
+    public override void Update()
     {
-        var joint = new BallSocket();
+        base.Update();
+        
+        springSettings.Frequency = Frequency;
+        springSettings.DampingRatio = DampingRatio;
+    }
+
+    protected override ConstraintHandle Build()
+    {
         joint.LocalOffsetA = JointPosition;
         joint.LocalOffsetB = ConnectedBody.Transform.InverseTransformPoint(this.Transform.TransformPoint(JointPosition));
         joint.SpringSettings = springSettings;
         
-        return Physics.Sim!.Solver.Add<BallSocket>(Rigidbody.BodyHandle.Value, ConnectedBody!.BodyHandle!.Value, joint);
+        return Physics.Sim!.Solver.Add<BallSocket>(Rigidbody.BodyHandle.Value, ConnectedBody!.BodyHandle!.Value, in joint);
     }
 
     public override void DrawGizmosSelected()

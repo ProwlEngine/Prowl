@@ -9,12 +9,24 @@ public class CenterDistanceJoint : Joint
 {
     public float TargetDistance = 1;
     
-    protected override ConstraintHandle Build(SpringSettings springSettings)
+    public float Frequency = 35;
+    public float DampingRatio = 5;
+    private SpringSettings springSettings = new SpringSettings();
+    private CenterDistanceConstraint distanceConstraint = new CenterDistanceConstraint();
+    
+    public override void Update()
     {
-        var distanceConstraint = new CenterDistanceConstraint();
+        base.Update();
+        
+        springSettings.Frequency = Frequency;
+        springSettings.DampingRatio = DampingRatio;
+    }
+    
+    protected override ConstraintHandle Build()
+    {
         distanceConstraint.TargetDistance = TargetDistance;
         distanceConstraint.SpringSettings = springSettings;
         
-        return Physics.Sim!.Solver.Add<CenterDistanceConstraint>(Rigidbody!.BodyHandle.Value, ConnectedBody!.BodyHandle.Value, distanceConstraint);
+        return Physics.Sim!.Solver.Add<CenterDistanceConstraint>(Rigidbody!.BodyHandle.Value, ConnectedBody!.BodyHandle.Value, in distanceConstraint);
     }
 }

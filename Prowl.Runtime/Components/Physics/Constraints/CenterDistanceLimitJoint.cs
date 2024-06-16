@@ -10,13 +10,25 @@ public class CenterDistanceLimitJoint : Joint
     public float MinimumDistance = 0;
     public float MaximumDistance = 5;
     
-    protected override ConstraintHandle Build(SpringSettings springSettings)
+    public float Frequency = 35;
+    public float DampingRatio = 5;
+    private SpringSettings springSettings = new SpringSettings();
+    private CenterDistanceLimit distanceConstraint = new CenterDistanceLimit();
+    
+    public override void Update()
     {
-        var distanceConstraint = new CenterDistanceLimit();
+        base.Update();
+        
+        springSettings.Frequency = Frequency;
+        springSettings.DampingRatio = DampingRatio;
+    }
+    
+    protected override ConstraintHandle Build()
+    {
         distanceConstraint.MinimumDistance = MinimumDistance;
         distanceConstraint.MaximumDistance = MaximumDistance;
         distanceConstraint.SpringSettings = springSettings;
         
-        return Physics.Sim!.Solver.Add<CenterDistanceLimit>(Rigidbody!.BodyHandle.Value, ConnectedBody!.BodyHandle.Value, distanceConstraint);
+        return Physics.Sim!.Solver.Add<CenterDistanceLimit>(Rigidbody!.BodyHandle.Value, ConnectedBody!.BodyHandle.Value, in distanceConstraint);
     }
 }

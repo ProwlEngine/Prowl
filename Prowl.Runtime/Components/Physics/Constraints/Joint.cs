@@ -1,3 +1,4 @@
+using System;
 using System.Net;
 using BepuPhysics;
 using BepuPhysics.Constraints;
@@ -8,9 +9,7 @@ namespace Prowl.Runtime;
 public abstract class Joint : MonoBehaviour
 {
     public Rigidbody? ConnectedBody;
-    public float Frequency = 35;
-    public float DampingRatio = 5;
-    
+
     protected ConstraintHandle? ConstraintHandle;
     protected bool HasInitialized = false;
     protected Rigidbody? Rigidbody => _rigidbody ??= GetComponent<Rigidbody>();
@@ -32,24 +31,21 @@ public abstract class Joint : MonoBehaviour
                 return;
             }
             
-            var springSettings = new SpringSettings();
-            springSettings.Frequency = Frequency;
-            springSettings.DampingRatio = DampingRatio;
-
-            ConstraintHandle = Build(springSettings);
+            ConstraintHandle = Build();
             HasInitialized = true;
         }
     }
 
-    protected abstract ConstraintHandle Build(SpringSettings springSettings);
+    protected abstract ConstraintHandle Build();
     
     public override void OnDisable()
     {
         if (ConstraintHandle != null) Physics.Sim!.Solver.Remove(ConstraintHandle.Value);
     }
 
-    public override void OnEnable()
+    public override void DrawGizmosSelected()
     {
-        if (ConnectedBody != null) Gizmos.DrawLine(Rigidbody!.Transform.position, ConnectedBody.Transform.position);
+        base.DrawGizmosSelected();
+        if (Rigidbody != null && ConnectedBody != null) Gizmos.DrawLine(Rigidbody!.Transform.position, ConnectedBody.Transform.position);
     }
 }
