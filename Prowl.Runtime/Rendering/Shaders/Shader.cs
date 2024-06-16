@@ -4,36 +4,76 @@ using Veldrid;
 
 namespace Prowl.Runtime
 {
-    public enum TargetUsage
+    public enum ResourceType
     {
-        PerShader,
-        PerMaterial,
-        PerDraw,
-        Unknown
+        Float,
+        Vector2,
+        Vector3,
+        Vector4,
+        Matrix4x4,
+        Texture,
+        RWTexture,
+        Sampler,
+        StructuredBuffer,
+        RWStructuredBuffer,
+    }
+
+
+    public readonly struct ShaderResource(string name, ResourceType type, ShaderStages stages)
+    {
+        public readonly string name = name;
+        public readonly ResourceType type = type;
+        public readonly ShaderStages stages = stages;
+        public readonly int size = ResourceSize(type);
+
+
+        public readonly ResourceLayoutElementDescription ToDescription()
+        {
+            return new ResourceLayoutElementDescription(name, TypeToKind(type), stages);
+        }
+
+        public static ResourceKind TypeToKind(ResourceType type)
+        {
+            return type switch 
+            {
+                ResourceType.Texture            =>  ResourceKind.TextureReadOnly,
+                ResourceType.RWTexture          =>  ResourceKind.TextureReadWrite,
+                ResourceType.Sampler            =>  ResourceKind.Sampler,
+                ResourceType.StructuredBuffer   =>  ResourceKind.StructuredBufferReadOnly,
+                ResourceType.RWStructuredBuffer =>  ResourceKind.StructuredBufferReadWrite,
+                _                               =>  ResourceKind.UniformBuffer
+            };
+        }
+
+        public static int ResourceSize(ResourceType type)
+        {
+            return type switch
+            {
+                ResourceType.Float     => sizeof(float),
+                ResourceType.Vector2   => sizeof(float) * 2,
+                ResourceType.Vector3   => sizeof(float) * 3,
+                ResourceType.Vector4   => sizeof(float) * 4,
+                ResourceType.Matrix4x4 => sizeof(float) * 4 * 4,
+                _ => -1
+            };
+        }
     }
 
 
     public sealed class Shader : EngineObject, ISerializable
     {
-        public class Property
-        {
-            public string Name = "";
-            public string DisplayName = "";
-            public enum PropertyType { FLOAT, VEC2, VEC3, VEC4, COLOR, INTEGER, IVEC2, IVEC3, IVEC4, TEXTURE2D }
-            public PropertyType Type;
-        }
-
-
-
-        public List<Property> ShaderProperties = new();
-
         private List<Pass> passes = new();
-
-
         private Dictionary<string, int> nameIndexLookup = new();
-        
         private Dictionary<string, List<int>> tagIndexLookup = new(); 
 
+
+        public Shader(params Pass[] passes) : base("New Shader")
+        {
+            foreach (Pass pass in passes)
+                AddPass(pass);
+
+            ResourceCache.RegisterShader(this);
+        }
 
         public void AddPass(Pass pass)
         {
@@ -107,8 +147,6 @@ namespace Prowl.Runtime
             foreach (Pass pass in passes)
                 pass.Dispose();
         }
-
-
 
         public static AssetRef<Shader> Find(string path)
         {
