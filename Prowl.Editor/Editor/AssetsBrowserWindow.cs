@@ -86,6 +86,7 @@ namespace Prowl.Editor
             while (!Path.Exists(CurDirectory.FullName))
                 CurDirectory = CurDirectory.Parent ?? new DirectoryInfo(Project.ProjectAssetDirectory);
 
+
             gui.CurrentNode.Layout(LayoutType.Column);
             gui.CurrentNode.ScaleChildren();
             gui.CurrentNode.Padding(0, 10, 10, 10);
@@ -282,11 +283,11 @@ namespace Prowl.Editor
                     {
                         if (DragnDrop.Drop<FileSystemInfo>(out var systeminfo))
                         {
-                            string target = RuntimeUtils.GetUniquePath(Path.Combine(dir.FullName, systeminfo.Name));
-                            if (systeminfo is FileInfo fileinfo)
-                                fileinfo?.MoveTo(target);
-                            else if (systeminfo is DirectoryInfo dirinfo)
-                                dirinfo?.MoveTo(target);
+                            string target = Path.Combine(dir.FullName, systeminfo.Name);
+                            if (systeminfo is FileInfo file)
+                                AssetDatabase.Move(file, target);
+                            else if (systeminfo is DirectoryInfo d)
+                                AssetDatabase.Move(d, target);
                         }
                     }
 
@@ -306,7 +307,7 @@ namespace Prowl.Editor
                 using (gui.Node(file.Name).Scale(EntrySize).Margin(itemPadding).Enter())
                 {
                     var interact = gui.GetInteractable();
-                    AssetsTreeWindow.HandleFileClick(-1, interact, file, 0, true);
+                    //AssetsTreeWindow.HandleFileClick(-1, interact, file, 0, true);
 
                     DrawFileEntry(0, entry, interact);
 
@@ -335,7 +336,7 @@ namespace Prowl.Editor
                         using (gui.Node(subAssets[i].name, i).Scale(EntrySize * 0.75).Margin(itemPadding).Enter())
                         {
                             var interact = gui.GetInteractable();
-                            AssetsTreeWindow.HandleFileClick(-1, interact, file, i, true);
+                            //AssetsTreeWindow.HandleFileClick(-1, interact, file, i, true);
 
                             DrawFileEntry(0, entry, interact, true, subAssets[i]);
                         }
@@ -409,27 +410,14 @@ namespace Prowl.Editor
                 if (!gui.PreviousInteractableIsFocus())
                     RenamingEntry = null;
 
-                if(entry is FileInfo file)
+                if (changed && !string.IsNullOrEmpty(name))
                 {
-                    string newPath = Path.Combine(file.DirectoryName, name + file.Extension);
-                    if (changed && !string.IsNullOrEmpty(name) && !newPath.Equals(file.FullName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        file.MoveTo(newPath);
-                        RenamingEntry = null;
-                        AssetDatabase.Update();
-                    }
+                    if (entry is FileInfo file)
+                        AssetDatabase.Rename(file, name);
+                    else if (entry is DirectoryInfo dir)
+                        AssetDatabase.Rename(dir, name);
+                    RenamingEntry = null;
                 }
-                else if (entry is DirectoryInfo dir)
-                {
-                    string newPath = Path.Combine(dir.Parent.FullName, name);
-                    if (changed && !string.IsNullOrEmpty(name) && !newPath.Equals(dir.FullName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        dir.MoveTo(newPath);
-                        RenamingEntry = null;
-                        AssetDatabase.Update();
-                    }
-                }
-
 
                 justStartedRename = false;
             }
