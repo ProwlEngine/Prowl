@@ -33,4 +33,12 @@ namespace Prowl.Editor.Preferences
         public int CurrentHeight = 720;
 
     }
+
+    [FilePath("Editor.pref", FilePathAttribute.Location.EditorPreference)]
+    public class EditorPreferences : ScriptableSingleton<EditorPreferences>
+    {
+        [Text("UI:")]
+        public bool AntiAliasing = false;
+
+    }
 }

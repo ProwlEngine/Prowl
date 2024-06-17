@@ -1,4 +1,5 @@
 using Prowl.Editor.Docking;
+using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 
@@ -23,7 +24,7 @@ public static class EditorGuiManager
 
     public static void Initialize()
     {
-        Gui = new();
+        Gui = new(EditorPreferences.Instance.AntiAliasing);
         Input.OnKeyEvent += Gui.SetKeyState;
         Input.OnMouseEvent += Gui.SetPointerState;
         Gui.OnPointerPosSet += (pos) => { Input.MousePosition = pos; };
@@ -66,7 +67,7 @@ public static class EditorGuiManager
         Vector2 framebufferAndInputScale = new((float)Window.InternalWindow.FramebufferSize.X / (float)Window.InternalWindow.Size.X, (float)Window.InternalWindow.FramebufferSize.Y / (float)Window.InternalWindow.Size.Y);
 
         Gui.PointerWheel = Input.MouseWheelDelta;
-        EditorGuiManager.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, (g) => {
+        EditorGuiManager.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, EditorPreferences.Instance.AntiAliasing, (g) => {
 
             // Draw Background
             g.Draw2D.DrawRectFilled(g.ScreenRect, GuiStyle.Background);

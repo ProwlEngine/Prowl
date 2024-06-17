@@ -11,7 +11,6 @@ namespace Prowl.Runtime.GUI
     {
         public double Thickness;
         public Color32 Color;
-        public bool AntiAliased;
     }
 
     public class GuiDraw3D(Gui gui)
@@ -54,7 +53,7 @@ namespace Prowl.Runtime.GUI
 
             bool closed = points.Count > 0 && Vector2.Distance(points[0], points[points.Count - 1]) < 1e-2;
 
-            _gui.Draw2D.DrawList.AddPolyline(points, closed ? points.Count - 1 : points.Count, stroke.Color.GetUInt(), closed, (float)stroke.Thickness, stroke.AntiAliased);
+            _gui.Draw2D.DrawList.AddPolyline(points, closed ? points.Count - 1 : points.Count, stroke.Color.GetUInt(), closed, (float)stroke.Thickness);
         }
 
         public void Circle(double radius, Stroke3D stroke) => Arc(radius, 0.0, 360, stroke);
@@ -65,7 +64,7 @@ namespace Prowl.Runtime.GUI
 
             var points = QuadPoints(radius * 2.0);
             if (points.Count <= 0) return;
-            _gui.Draw2D.DrawList.AddPolyline(points, points.Count, stroke.Color.GetUInt(), true, (float)stroke.Thickness, stroke.AntiAliased);
+            _gui.Draw2D.DrawList.AddPolyline(points, points.Count, stroke.Color.GetUInt(), true, (float)stroke.Thickness);
         }
 
         public void FilledCircle(double radius, Stroke3D stroke)
@@ -75,7 +74,7 @@ namespace Prowl.Runtime.GUI
 
             var points = ArcPoints(radius, 0.0, Math.PI * 2);
             if (points.Count <= 0) return;
-            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count - 1, stroke.Color.GetUInt(), stroke.AntiAliased);
+            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count - 1, stroke.Color.GetUInt());
         }
 
         public void LineSegment(Vector3 from, Vector3 to, Stroke3D stroke)
@@ -114,7 +113,7 @@ namespace Prowl.Runtime.GUI
                 points.Add(arrowStart + cross);
                 points.Add(arrowEnd);
 
-                _gui.Draw2D.DrawList.AddConvexPolyFilled(points, 3, stroke.Color.GetUInt(), stroke.AntiAliased);
+                _gui.Draw2D.DrawList.AddConvexPolyFilled(points, 3, stroke.Color.GetUInt());
             }
         }
 
@@ -129,7 +128,7 @@ namespace Prowl.Runtime.GUI
                     screenPoints.Add(screenPos);
 
             if (screenPoints.Count > 2)
-                _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, stroke.Color.GetUInt(), stroke.AntiAliased);
+                _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, stroke.Color.GetUInt());
         }
 
         public void Polyline(IEnumerable<Vector3> points, Stroke3D stroke)
@@ -143,7 +142,7 @@ namespace Prowl.Runtime.GUI
                     screenPoints.Add(screenPos);
 
             if (screenPoints.Count > 1)
-                _gui.Draw2D.DrawList.AddPolyline(screenPoints, screenPoints.Count, stroke.Color.GetUInt(), false, (float)stroke.Thickness, stroke.AntiAliased);
+                _gui.Draw2D.DrawList.AddPolyline(screenPoints, screenPoints.Count, stroke.Color.GetUInt(), false, (float)stroke.Thickness);
         }
 
         public void Sector(double radius, double startAngle, double endAngle, Stroke3D stroke)
@@ -196,7 +195,7 @@ namespace Prowl.Runtime.GUI
 
             if (points.Count <= 0) return;
 
-            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count, stroke.Color.GetUInt(), stroke.AntiAliased);
+            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count, stroke.Color.GetUInt());
         }
 
         private UIBuffer<Vector2> ArcPoints(double radius, double startRad, double endRad)
