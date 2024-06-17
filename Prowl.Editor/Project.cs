@@ -62,11 +62,11 @@ public static class Project
 
         CreateDefaults("Defaults");
         AssetDatabase.AddRootFolder("Defaults");
-        AssetDatabase.Update(false); // Ensure defaults are all loaded in
+        AssetDatabase.Update(false, true); // Ensure defaults are all loaded in
         AssetDatabase.AddRootFolder("Packages");
-        AssetDatabase.Update(false); // Ensure packages are all loaded in
+        AssetDatabase.Update(false, true); // Ensure packages are all loaded in
         AssetDatabase.AddRootFolder("Assets");
-        AssetDatabase.Update(); // Not that all folders are in we can unload anything thats not in the project anymore since last session
+        AssetDatabase.Update(true, true); // Not that all folders are in we can unload anything thats not in the project anymore since last session
 
 #warning TODO: Record last opened scene and try to open it
         SceneManager.InstantiateNewScene();
