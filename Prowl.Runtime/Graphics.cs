@@ -92,18 +92,34 @@ namespace Prowl.Runtime
             return ResourceFactory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
         }
 
-        public static void DrawMesh(Mesh mesh, Material material, Matrix4x4 matrix, int pass = 0, PolygonFillMode fill = PolygonFillMode.Solid)
+        public static void SetPass(Material mat, int pass, PolygonFillMode fill = PolygonFillMode.Solid, PrimitiveTopology topology = PrimitiveTopology.TriangleList)
+        {
+            mat.SetPass(_commandList, pass, fill, topology);
+        }
+
+
+        private static Transform trs = new Transform() { position = new Vector3(0, 1, -10), localScale = Vector3.one };
+        private static float fov = 1.0f;
+
+        public static void SetCamera(Transform trs, float fov)
+        {
+            Graphics.trs = trs;
+            Graphics.fov = fov;
+        }
+
+        public static void DrawMesh(Mesh mesh, Material material, Matrix4x4 matrix)
         {
             mesh.Upload();
-            Matrix4x4 proj = Matrix4x4.CreatePerspectiveFieldOfView(1.0f, (float)Screen.Size.x / Screen.Size.y, 0.5f, 100f);
-            Matrix4x4 view = Matrix4x4.CreateLookAt(new Vector3(0, -1.5, -3), Vector3.zero, Vector3.up);
+            Matrix4x4 proj = Matrix4x4.CreatePerspectiveFieldOfView(fov, (float)Screen.Size.x / Screen.Size.y, 0.5f, 1000f);
+            Matrix4x4 view = trs.worldToLocalMatrix;
 
-            material.SetMatrix("ProjectionMatrix", proj);
-            material.SetMatrix("ViewMatrix", view);
-            material.SetMatrix("WorldMatrix", matrix);
+            Matrix4x4 MVP = matrix * view * proj;
 
-            material.SetPass(_commandList, true, pass, fill);
-            BindMeshBuffers(_commandList, mesh, material.Shader.Res.GetPass(pass).GetVariant(material.Keywords).vertexInputs);
+            material.SetMatrix("MVPMatrix", MVP);
+
+            material.Upload(_commandList);
+
+            BindMeshBuffers(_commandList, mesh, material.GetPass().GetVariant(material.Keywords).vertexInputs);
 
             _commandList.DrawIndexed(
                 indexCount: (uint)mesh.IndexCount,
