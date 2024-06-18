@@ -27,6 +27,11 @@ namespace Prowl.Runtime
             set { InternalWindow.Width = value.x; InternalWindow.Height = value.y; }
         }
 
+        public static Vector2Int Position {
+            get { return new Vector2Int(InternalWindow.X, InternalWindow.Y); }
+            set { InternalWindow.X = value.x; InternalWindow.Y = value.y; }
+        }
+
         public static float FramesPerSecond {
             get { return InternalWindow.PollIntervalInMs / 1000.0f; }
             set { InternalWindow.LimitPollRate = value != 0 && value != double.MaxValue; InternalWindow.PollIntervalInMs = value * 1000.0f; }
@@ -76,8 +81,9 @@ namespace Prowl.Runtime
 
             while (InternalWindow.Exists)
             {
-                LatestInputSnapshot = InternalWindow.PumpEvents();  
-
+                Sdl2Events.ProcessEvents();
+                LatestInputSnapshot = InternalWindow.PumpEvents(); 
+                
                 OnUpdate();
             }
         }

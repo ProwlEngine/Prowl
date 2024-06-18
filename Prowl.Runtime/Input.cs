@@ -33,27 +33,35 @@ public static class Input
             {
                 _prevMousePos = value;
                 _currentMousePos = value;
-                Screen.InternalWindow.SetMousePosition(new Vector2(value.x, value.y));
+
+                if (!isLocked)
+                    Screen.InternalWindow.SetMousePosition(new Vector2(value.x, value.y));
             }
         }
     }
 
-    public static Vector2 MouseDelta => Enabled ? (_currentMousePos - _prevMousePos) : Vector2.zero;
+    public static Vector2 MouseDelta => Enabled ? Screen.InternalWindow.MouseDelta : Vector2.zero;
 
     private static float _mouseWheelDelta;
     public static float MouseWheelDelta => Enabled ? _mouseWheelDelta : 0f;
 
-    private static Dictionary<Key, bool> wasKeyPressed = new Dictionary<Key, bool>();
-    private static Dictionary<Key, bool> isKeyPressed = new Dictionary<Key, bool>();
-    private static Dictionary<MouseButton, bool> wasMousePressed = new Dictionary<MouseButton, bool>();
-    private static Dictionary<MouseButton, bool> isMousePressed = new Dictionary<MouseButton, bool>();
+    private static Dictionary<Key, bool> previousKeyState = new();
+    private static Dictionary<Key, bool> newKeyState = new();
 
-    public static char? LastPressedChar;
+    private static Dictionary<MouseButton, bool> previousButtonState = new();
+    private static Dictionary<MouseButton, bool> newButtonState = new();
+
+    private static bool wantsHidden;
+    private static bool wantsLock;
+
+    private static bool isLocked;
+
+    public static char? LastPressedChar = null;
 
     public static event Action<Key, bool> OnKeyEvent;
     public static Action<MouseButton, double, double, bool, bool> OnMouseEvent;
 
-    public static bool IsAnyKeyDown => Enabled && isKeyPressed.ContainsValue(true);
+    public static bool IsAnyKeyDown => Enabled && newKeyState.Count > 0;
 
     internal static void Initialize()
     {
@@ -64,98 +72,131 @@ public static class Input
         _prevMousePos = new Vector2Int((int)InputSnapshot.MousePosition.X, (int)InputSnapshot.MousePosition.Y);
         _currentMousePos = _prevMousePos;
 
-        // initialize key states
-        foreach (Key key in Enum.GetValues(typeof(Key)))
+        foreach (Key key in Enum.GetValues<Key>())
         {
-            if (key != Key.Unknown)
-            {
-                wasKeyPressed[key] = false;
-                isKeyPressed[key] = false;
-            }
+            previousKeyState[key] = false;
+            newKeyState[key] = false;
         }
 
-        foreach (MouseButton button in Enum.GetValues(typeof(MouseButton)))
+        foreach (MouseButton button in Enum.GetValues<MouseButton>())
         {
-            wasMousePressed[button] = false;
-            isMousePressed[button] = false;
+            previousButtonState[button] = false;
+            newButtonState[button] = false;
         }
 
         UpdateKeyStates();
     }
 
-    internal static void LateUpdate()
+    internal static void EarlyUpdate()
     {
         InputSnapshot = Screen.LatestInputSnapshot;
 
-        _prevMousePos = _currentMousePos;
-        _currentMousePos = new Vector2Int((int)InputSnapshot.MousePosition.X, (int)InputSnapshot.MousePosition.Y);
+        Vector2Int mousePosition = new Vector2Int((int)InputSnapshot.MousePosition.X, (int)InputSnapshot.MousePosition.Y);
 
-        if (_prevMousePos != _currentMousePos)
+        if ((GetKey(Key.Escape) || !Screen.InternalWindow.Focused || !new Rect(Screen.Position, Screen.Size).Contains(mousePosition)) && // Hit esc or unfocused the window or the mouse is outside window
+            (isLocked || !Screen.InternalWindow.CursorVisible))
         {
-            if (isMousePressed[MouseButton.Left])
-                OnMouseEvent?.Invoke(MouseButton.Left, MousePosition.x, MousePosition.y, false, true);
-            else if (isMousePressed[MouseButton.Right])
-                OnMouseEvent?.Invoke(MouseButton.Right, MousePosition.x, MousePosition.y, false, true);
-            else if (isMousePressed[MouseButton.Middle])
-                OnMouseEvent?.Invoke(MouseButton.Middle, MousePosition.x, MousePosition.y, false, true);
+            Screen.InternalWindow.CursorVisible = true;
+            
+            isLocked = false;
+            Screen.InternalWindow.SetMousePosition(new Vector2(_currentMousePos.x, _currentMousePos.y));
+        } 
+        else if (GetMouseButton(0))
+        {
+            Screen.InternalWindow.CursorVisible = !wantsHidden;
+            isLocked = wantsLock;
+        }
+
+        if (!isLocked)
+        {
+            _prevMousePos = _currentMousePos;
+            _currentMousePos = mousePosition;
+        }
+        else
+        {
+            Vector2Int size = Screen.Size;
+            Vector2Int pos = Screen.Position;
+
+            Vector2Int center = pos + (size / new Vector2Int(2, 2));
+            Vector2Int centerDelta = mousePosition - center;
+
+            Screen.InternalWindow.SetMousePosition(new Vector2(center.x, center.y));
+
+            _prevMousePos = _currentMousePos;
+            _currentMousePos += centerDelta;
         }
 
         UpdateKeyStates();
+
+        if (_prevMousePos != _currentMousePos)
+        {
+            if (GetMouseButton((int)MouseButton.Left))
+                OnMouseEvent?.Invoke(MouseButton.Left, MousePosition.x, MousePosition.y, false, true);
+            else if (GetMouseButton((int)MouseButton.Right))
+                OnMouseEvent?.Invoke(MouseButton.Right, MousePosition.x, MousePosition.y, false, true);
+            else if (GetMouseButton((int)MouseButton.Middle))
+                OnMouseEvent?.Invoke(MouseButton.Middle, MousePosition.x, MousePosition.y, false, true);
+        }
     }
 
     // Update the state of each key
     private static void UpdateKeyStates()
     {
-        foreach (Key key in Enum.GetValues(typeof(Key)))
+        foreach (var key in InputSnapshot.KeyEvents)
         {
-            if (key != Key.Unknown)
+            bool stateDiffers = key.Down != previousKeyState[key.Key];
+
+            if (newKeyState[key.Key])
+                newKeyState[key.Key] = false;
+
+            if (stateDiffers)
             {
-                wasKeyPressed[key] = isKeyPressed[key];
-                isKeyPressed[key] = false;
-
-                foreach (var keyEvent in KeyEvents)
-                    if (keyEvent.Down && keyEvent.Key == key)
-                    {
-                        isKeyPressed[key] = true;
-                        break;
-                    }
-
-                if (wasKeyPressed[key] != isKeyPressed[key])
-                    OnKeyEvent?.Invoke(key, isKeyPressed[key]);
+                previousKeyState[key.Key] = newKeyState[key.Key];
+                newKeyState[key.Key] = key.Down;
             }
         }
 
-        foreach (MouseButton button in Enum.GetValues(typeof(MouseButton)))
+        foreach (var mouse in InputSnapshot.MouseEvents)
         {
-            //if (button != MouseButton.Unknown)
-            //{
-                wasMousePressed[button] = isMousePressed[button];
-                isMousePressed[button] = false;
+            bool stateDiffers = mouse.Down != previousButtonState[mouse.MouseButton];
 
-                foreach (var mouseEvent in MouseEvents)
-                    if (mouseEvent.Down && mouseEvent.MouseButton == button)
-                    {
-                        isMousePressed[button] = true;
-                        break;
-                    }
+            if (newButtonState[mouse.MouseButton])
+                newButtonState[mouse.MouseButton] = false;
 
-                if (wasMousePressed[button] != isMousePressed[button])
-                    OnMouseEvent?.Invoke(button, MousePosition.x, MousePosition.y, isMousePressed[button], false);
-            //}
+            if (stateDiffers)
+            {
+                previousButtonState[mouse.MouseButton] = newButtonState[mouse.MouseButton];
+                newButtonState[mouse.MouseButton] = mouse.Down;
+            }
         }
     }
 
-    public static bool GetKey(Key key) => Enabled && isKeyPressed[key];
 
-    public static bool GetKeyDown(Key key) => Enabled && isKeyPressed[key] && !wasKeyPressed[key];
+    public static bool GetKey(Key key) => Enabled && 
+        (previousKeyState[key] || 
+        newKeyState[key]);
 
-    public static bool GetKeyUp(Key key) => Enabled && !isKeyPressed[key] && wasKeyPressed[key];
+    public static bool GetKeyDown(Key key) => Enabled && 
+        newKeyState[key] && 
+        !previousKeyState[key];
 
-    public static bool GetMouseButton(int button) => Enabled && isMousePressed[(MouseButton)button];
+    public static bool GetKeyUp(Key key) => Enabled && 
+        !newKeyState[key] && 
+        previousKeyState[key];
 
-    public static bool GetMouseButtonDown(int button) => Enabled && isMousePressed[(MouseButton)button] && !wasMousePressed[(MouseButton)button];
+    public static bool GetMouseButton(int button) => Enabled && 
+        (newButtonState[(MouseButton)button] || 
+        previousButtonState[(MouseButton)button]);
 
-    public static bool GetMouseButtonUp(int button) => Enabled && isMousePressed[(MouseButton)button] && wasMousePressed[(MouseButton)button];
-    
-    public static void SetCursorVisible(bool visible) => Screen.InternalWindow.CursorVisible = visible;
+    public static bool GetMouseButtonDown(int button) => Enabled && 
+        newButtonState[(MouseButton)button] && 
+        !previousButtonState[(MouseButton)button];
+
+    public static bool GetMouseButtonUp(int button) => Enabled && 
+        !newButtonState[(MouseButton)button] && 
+        previousButtonState[(MouseButton)button];
+
+
+    public static void SetCursorVisible(bool visible) => wantsHidden = !visible;
+    public static void LockCursor(bool isLocked) => wantsLock = isLocked;
 }

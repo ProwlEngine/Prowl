@@ -65,10 +65,9 @@ public static class Application
         {
             AudioSystem.UpdatePool();
             Time.Update();
+            Input.EarlyUpdate();
 
             Update?.Invoke();
-        
-            Input.LateUpdate();
 
             Render?.Invoke();
         } catch (Exception e) {
