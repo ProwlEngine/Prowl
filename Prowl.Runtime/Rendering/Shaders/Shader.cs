@@ -67,7 +67,7 @@ namespace Prowl.Runtime
         private Dictionary<string, List<int>> tagIndexLookup = new(); 
 
 
-        public Shader(params Pass[] passes) : base("New Shader")
+        public Shader(string name, params Pass[] passes) : base(name)
         {
             foreach (Pass pass in passes)
                 AddPass(pass);

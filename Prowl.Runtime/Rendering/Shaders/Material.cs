@@ -12,6 +12,8 @@ namespace Prowl.Runtime
         public MaterialPropertyBlock PropertyBlock;
 
 
+        private int activePass = -1;
+        private ResourceCache.PipelineInfo boundPipeline;
         private DeviceBuffer uniformBuffer;
         private ResourceSet[] resources;
 
@@ -26,29 +28,32 @@ namespace Prowl.Runtime
             Keywords = keywords ?? KeywordState.Empty;
         }
 
-
-        public void SetPass(CommandList commandList, bool upload = true, int passIndex = 0, PolygonFillMode fill = PolygonFillMode.Solid)
+        public void SetPass(CommandList commandList, int passIndex = 0, PolygonFillMode fill = PolygonFillMode.Solid, PrimitiveTopology topology = PrimitiveTopology.TriangleList)
         {
+            activePass = passIndex;
             Pass pass = Shader.Res.GetPass(passIndex);
 
-            ResourceCache.PipelineInfo pipeline = ResourceCache.GetPipelineForPass(pass, fillMode: fill);
+            boundPipeline = ResourceCache.GetPipelineForPass(pass, fillMode: fill, topology: topology);
 
-            commandList.SetPipeline(pipeline.pipeline);
-
-            if (upload)
-                BindResources(commandList, pass, pipeline);
+            commandList.SetPipeline(boundPipeline.pipeline);
         }
 
+        public Pass GetPass() => Shader.Res.GetPass(activePass);
 
         // Suboptimal solution that recreates every resource set to ensure that textures are properly sent to shader.
         // When shaders are being compiled by us, we can optimize this so textures go into their own resource set and then we only have to update the uniform buffer.
-        private void BindResources(CommandList commandList, Pass pass, ResourceCache.PipelineInfo info)
+        public void Upload(CommandList commandList)
         {
+            if (activePass < 0)
+                throw new Exception("Invalid pass state. Please make sure to call SetPass() onn this material before calling Upload()");
+
             if (resources != null)
             {
                 for (int i = 0; i < resources.Length; i++)
                     resources[i].Dispose();
             }
+
+            Pass pass = Shader.Res.GetPass(activePass);
             
             Pass.Variant variant = pass.GetVariant(Keywords);
 
@@ -74,7 +79,7 @@ namespace Prowl.Runtime
                 ShaderResource[] resourceSet = variant.resourceSets[set];
 
                 ResourceSetDescription description = new ResourceSetDescription();
-                description.Layout = info.description.ResourceLayouts[set];
+                description.Layout = boundPipeline.description.ResourceLayouts[set];
                 description.BoundResources = new BindableResource[resourceSet.Length];
 
                 for (int res = 0; res < resourceSet.Length; res++)
