@@ -24,10 +24,7 @@ Global
     
     // ...or custom values
     Blend
-    {
-        // Render target to blend
-        Target 0/1/2/3
-    
+    {    
         Src <Color/Alpha> <One/Zero/SrcColor/SrcAlpha/OneMinusSrcAlpha/OneMinusSrcColor/DstColor/DstAlpha/OneMinusDstAlpha/OneMinusDstColor>
         Dest <Color/Alpha> <One/Zero/SrcColor/SrcAlpha/OneMinusSrcAlpha/OneMinusSrcColor/DstColor/DstAlpha/OneMinusDstAlpha/OneMinusDstColor>
 
@@ -54,7 +51,7 @@ Global
     DepthWrite On/Off
     
     // Comparison kind
-    DepthTest <Always/Equal/Greater/GreaterEqual/Less/LessEqual/Never/NotEqual> (Off for no test) 
+    DepthTest <Always/Equal/Greater/GreaterEqual/Less/LessEqual/Never/NotEqual/Off 
 
     // Rasterizer culling mode
     Cull Back/Front/Off
