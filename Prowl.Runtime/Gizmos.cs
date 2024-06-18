@@ -1,405 +1,320 @@
 ﻿using System;
 using System.Collections.Generic;
+using Veldrid;
 
 namespace Prowl.Runtime
 {
-    public class PrimitiveBatch { 
-        public void Line(Vector3 pos, Vector3 pos2, Color col, Color col2)
-        {
-
-        }
-    }
-
     public static class Gizmos
     {
-        //private static PrimitiveBatch LineBatch;
-        private readonly static List<(Gizmo, Matrix4x4)> gizmos = new(100);
-        private static Material mat;
+        private readonly static List<(Gizmo, Matrix4x4)> gizmoDrawQueue = new(100);
+        private static Material gizmoMaterial;
 
         public static Matrix4x4 Matrix = Matrix4x4.Identity;
-        public static Color Color;
+        public static Color Color = Color.white;
 
         public static void DrawLine(Vector3 from, Vector3 to)
         {
-            from -= Camera.Current.GameObject.Transform.position;
-            to -= Camera.Current.GameObject.Transform.position;
             Add(new LineGizmo(from, to, Color));
         }
 
         public static void DrawCube(Vector3 center, Vector3 size)
         {
-            center -= Camera.Current.GameObject.Transform.position;
             Matrix = Matrix4x4.CreateScale(size) * Matrix * Matrix4x4.CreateTranslation(center);
             Add(new CubeGizmo(Color));
         }
 
-        public static void DrawPolygon(Vector3[] points, bool closed = false)
-        {
-            for (int i = 0; i < points.Length; i++)
-                points[i] -= Camera.Current.GameObject.Transform.position;
-            Add(new PolygonGizmo(points, Color, closed));
-        }
-
         public static void DrawCylinder(Vector3 center, float radius, float height)
         {
-            center -= Camera.Current.GameObject.Transform.position;
-            Matrix = Matrix4x4.CreateScale(new Vector3(radius * 2f, height, radius * 2f)) * Matrix * Matrix4x4.CreateTranslation(center);
+            Matrix = Matrix4x4.CreateScale(new Vector3(radius, height, radius)) * Matrix * Matrix4x4.CreateTranslation(center);
             Add(new CylinderGizmo(Color));
         }
 
-        public static void DrawCapsule(Vector3 center, float radius, float height)
+        public static void DrawArc(Vector3 center, float radius, float startAngle, float degrees)
         {
-            center -= Camera.Current.GameObject.Transform.position;
-            Matrix = Matrix4x4.CreateScale(new Vector3(radius * 2f, height, radius * 2f)) * Matrix * Matrix4x4.CreateTranslation(center);
-            Add(new CapsuleGizmo(Color));
-        }
-
-        public static void DrawCircle(Vector3 center, float radius)
-        {
-            center -= Camera.Current.GameObject.Transform.position;
-            Matrix = Matrix4x4.CreateScale(new Vector3(radius, radius, radius)) * Matrix * Matrix4x4.CreateTranslation(center);
-            Add(new CircleGizmo(Color));
+            Matrix = Matrix4x4.CreateScale(new Vector3(radius)) * Matrix * Matrix4x4.CreateTranslation(center);
+            Add(new ArcGizmo(startAngle, degrees, Color));
         }
 
         public static void DrawSphere(Vector3 center, float radius)
         {
-            center -= Camera.Current.GameObject.Transform.position;
-            Matrix = Matrix4x4.CreateScale(new Vector3(radius, radius, radius)) * Matrix * Matrix4x4.CreateTranslation(center);
+            Matrix = Matrix4x4.CreateScale(new Vector3(radius)) * Matrix * Matrix4x4.CreateTranslation(center);
             Add(new SphereGizmo(Color));
         }
 
-        public static void DrawDirectionalLight(Vector3 center)
+        public static void DrawCapsule(Vector3 center, float radius, float height)
         {
-            center -= Camera.Current.GameObject.Transform.position;
-            Matrix = Matrix * Matrix4x4.CreateTranslation(center);
-            Add(new DirectionalLightGizmo(Color));
-        }
-
-        public static void DrawSpotlight(Vector3 position, float distance, float spotAngle)
-        {
-            position -= Camera.Current.GameObject.Transform.position;
-            Matrix = Matrix * Matrix4x4.CreateTranslation(position);
-            Add(new SpotlightGizmo(distance, spotAngle, Color));
+            Matrix *= Matrix4x4.CreateTranslation(center);
+            Add(new CapsuleGizmo(radius, height, Color));
         }
 
         public static void Add(Gizmo gizmo)
         {
-            gizmos.Add((gizmo, Matrix));
+            gizmoDrawQueue.Add((gizmo, Matrix));
             Matrix = Matrix4x4.Identity;
+        }
+
+
+        private static void EnsureMaterial()
+        {
+            if (gizmoMaterial != null)
+                return;
+
+            const string vertex = @"
+#version 450
+
+layout (location = 0) in vec3 vertexPosition;
+
+layout(set = 0, binding = 0) uniform MVPBuffer
+{
+    mat4 MVPMatrix;
+};
+
+void main()
+{
+    vec4 clipPos = MVPMatrix * vec4(vertexPosition, 1.0);
+    gl_Position = clipPos;
+}
+            ";
+
+            const string fragment = @"
+#version 450
+
+layout (location = 0) out vec4 finalColor;
+
+layout(set = 1, binding = 0) uniform ColorBuffer
+{
+    vec4 Color;
+};
+
+void main()
+{
+	finalColor = Color;
+}
+            ";
+
+            // Pass creation info (Name, tags)
+            Pass pass = new Pass("DrawGizmos", []);
+
+            pass.CreateProgram(Graphics.CreateFromSpirv(vertex, fragment));
+
+            // The input channels the vertex shader expects
+            pass.AddVertexInput(MeshResource.Position);
+
+            // MVP matrix resources
+            pass.AddResourceElement([ 
+                new ShaderResource("MVPMatrix", ResourceType.Matrix4x4, ShaderStages.Vertex)
+            ]);
+            
+            // Other shader resources
+            pass.AddResourceElement([
+                new ShaderResource("Color", ResourceType.Vector4, ShaderStages.Fragment) 
+            ]);
+
+            pass.cullMode = FaceCullMode.None;
+
+            var shader = new Shader("Gizmos/GizmoShader", pass);
+
+            gizmoMaterial = new Material(shader);
         }
 
         public static void Render()
         {
-            try
-            {
-                mat ??= new Material(Shader.Find("Defaults/Gizmos.shader"));
-            }
-            catch
-            {
-                return; // Happens when no project is loaded (Or no Gizmos shader was found)
-            }   
+            EnsureMaterial();  
 
-            #warning Veldrid change
-            /*
-            LineBatch ??= new PrimitiveBatch(Topology.Lines);
+            Graphics.SetPass(gizmoMaterial, 0, PolygonFillMode.Solid, PrimitiveTopology.LineList);
 
-            if (LineBatch.IsUploaded == false)
-            {
-                foreach (var gizmo in gizmos)
-                    try
-                    {
-                        gizmo.Item1.Render(LineBatch, gizmo.Item2);
-                    }
-                    catch
-                    {
-                        // Nothing, errors are normal here
-                    }
-                LineBatch.Upload();
-            }
+            foreach (var gizmo in gizmoDrawQueue)
+                gizmo.Item1.Render(gizmoMaterial, gizmo.Item2);
 
-            var mvp = Matrix4x4.Identity;
-
-            #warning Veldrid change
-            //mvp = Matrix4x4.Multiply(mvp, Graphics.MatView);
-            //mvp = Matrix4x4.Multiply(mvp, Graphics.MatProjection);
-            
-            mat.SetMatrix("mvp", mvp);
-            mat.SetPass(0, true);
-            LineBatch.Draw();
-            */
+            Clear();
         }
 
         public static void Clear()
         {
-            gizmos.Clear();
-            //LineBatch?.Reset();
+            gizmoDrawQueue.Clear();
         }
     }
 
-    public abstract class Gizmo
+    public interface Gizmo
     {
-        public Matrix4x4 matrix;
-        public Vector3 Pos(Vector3 worldPos)
-        {
-            Vector3 transformedPos = Vector3.Transform(worldPos, matrix);
-            return transformedPos;
-        }
-
-        public abstract void Render(PrimitiveBatch batch, Matrix4x4 worldMatrix);
+        void Render(Material mat, Matrix4x4 worldMatrix);
     }
 
     public class LineGizmo(Vector3 start, Vector3 end, Color color) : Gizmo
     {
-        public override void Render(PrimitiveBatch batch, Matrix4x4 m)
+        private static Mesh lineMesh = new Mesh()
         {
-            base.matrix = m;
-            batch.Line(Pos(start), Pos(end), color, color);
+            MeshTopology = PrimitiveTopology.LineList,
+            Vertices = [ new Vector3(0, 0, 0), new Vector3(0, 0, 1) ],
+            Indices = [ 0, 1 ],
+        };
+
+        public void Render(Material mat, Matrix4x4 m)
+        {
+            lineMesh.Vertices = [ start, end ];
+
+            mat.SetColor("Color", color);
+
+            Graphics.DrawMesh(lineMesh, mat, m);
         }
     }
 
-    public class PolygonGizmo(Vector3[] points, Vector4 color, bool closed = false) : Gizmo
+    public class ArcGizmo(float startAngle, float degrees, Color color) : Gizmo
     {
-        public override void Render(PrimitiveBatch batch, Matrix4x4 m)
+        private static Mesh GenArcMesh(float degrees)
         {
-            base.matrix = m;
-            for (int i = 0; i < points.Length - 1; i++)
-                batch.Line(Pos(points[i]), Pos(points[i + 1]), color, color);
-            if (closed)
-                batch.Line(Pos(points[points.Length - 1]), Pos(points[0]), color, color);
-        }
-    }
+            Mesh mesh = new Mesh();
 
+            const int numSegments = 24;
 
-    public class CircleGizmo(Vector4 color) : Gizmo
-    {
-        public override void Render(PrimitiveBatch batch, Matrix4x4 m)
-        {
-            base.matrix = m;
-
-            int numSegments = 12;
+            var verts = new System.Numerics.Vector3[numSegments * 2];
+            var indices = new uint[numSegments * 2];
 
             for (int i = 0; i < numSegments; i++)
             {
-                float angle = (float)i / numSegments * 2f * MathF.PI;
-                float angle2 = (float)(i + 1) / numSegments * 2f * MathF.PI;
+                int index = i * 2;
 
-                Vector3 point1 = new Vector3(MathF.Cos(angle), MathF.Sin(angle), 0f);
-                Vector3 point2 = new Vector3(MathF.Cos(angle2), MathF.Sin(angle2), 0f);
+                float angle = (float)i / numSegments * degrees * (float)MathD.Deg2Rad;
+                float angle2 = (float)(i + 1) / numSegments * degrees * (float)MathD.Deg2Rad;
 
-                batch.Line(Pos(point1), Pos(point2), color, color);
+                Vector3 point1 = new Vector3(MathF.Cos(angle), 0f, MathF.Sin(angle));
+                Vector3 point2 = new Vector3(MathF.Cos(angle2), 0f, MathF.Sin(angle2));
+
+                verts[index] = point1;
+                verts[index + 1] = point2; 
+
+                indices[index] = (uint)index;
+                indices[index + 1] = (uint)index + 1;
             }
+
+            mesh.Vertices = verts;
+            mesh.Indices = indices;
+            mesh.MeshTopology = PrimitiveTopology.LineList;
+
+            return mesh;
+        }
+
+        private Mesh arcMesh = GenArcMesh(degrees);
+
+        public void Render(Material mat, Matrix4x4 m)
+        {
+            mat.SetColor("Color", color);
+
+            m = Matrix4x4.CreateRotationY(startAngle) * m;
+
+            Graphics.DrawMesh(arcMesh, mat, m);
         }
     }
 
-    public class DirectionalLightGizmo(Vector4 color) : Gizmo
+    public class SphereGizmo(Color color) : Gizmo
     {
-        public override void Render(PrimitiveBatch batch, Matrix4x4 m)
+        public void Render(Material mat, Matrix4x4 m)
         {
-            base.matrix = m;
+            ArcGizmo arc = new ArcGizmo(0.0f, 360.0f, color);
+            arc.Render(mat, m);
 
-            int numSegments = 6;  // Adjust for smoother or more segmented circle
-
-            for (int i = 0; i < numSegments; i++)
-            {
-                float angle = (float)i / numSegments * 2f * MathF.PI;
-                float angle2 = (float)(i + 1) / numSegments * 2f * MathF.PI;
-
-                Vector3 point1 = 0.5f * new Vector3(MathF.Cos(angle), MathF.Sin(angle), 0f);
-                Vector3 point2 = 0.5f * new Vector3(MathF.Cos(angle2), MathF.Sin(angle2), 0f);
-
-                batch.Line(Pos(point1), Pos(point1 + Vector3.forward), color, color);
-                batch.Line(Pos(point1), Pos(point2), color, color);
-            }
-        }
-    }
-
-    public class SphereGizmo(Vector4 color) : Gizmo
-    {
-        public override void Render(PrimitiveBatch batch, Matrix4x4 m)
-        {
-            base.matrix = m;
-
-            // Use 3 Circle3D gizmo's
-            new CircleGizmo(color).Render(batch, m);
             m = Matrix4x4.CreateRotationX(MathF.PI / 2f) * m;
-            new CircleGizmo(color).Render(batch, m);
-            m = Matrix4x4.CreateRotationY(MathF.PI / 2f) * m;
-            new CircleGizmo(color).Render(batch, m);
+            arc.Render(mat, m);
+
+            m = Matrix4x4.CreateRotationZ(MathF.PI / 2f) * m;
+            arc.Render(mat, m);
         }
     }
 
-    public class CubeGizmo(Vector4 color) : Gizmo
+    public class CubeGizmo(Color color) : Gizmo
     {
-        public override void Render(PrimitiveBatch batch, Matrix4x4 m)
+        private static Mesh cubeMesh = new Mesh()
         {
-            base.matrix = m;
+            Vertices = [ 
+                // Bottom verts
+                new Vector3(-0.5, -0.5, -0.5),
+                new Vector3(0.5, -0.5, -0.5), 
+                new Vector3(0.5, -0.5, 0.5),
+                new Vector3(-0.5, -0.5, 0.5), 
 
-            // Draw cube lines
-            Vector3[] points = new Vector3[8];
-            points[0] = new Vector3(-0.5f, -0.5f, -0.5f);
-            points[1] = new Vector3(0.5f, -0.5f, -0.5f);
-            points[2] = new Vector3(0.5f, 0.5f, -0.5f);
-            points[3] = new Vector3(-0.5f, 0.5f, -0.5f);
-            points[4] = new Vector3(-0.5f, -0.5f, 0.5f);
-            points[5] = new Vector3(0.5f, -0.5f, 0.5f);
-            points[6] = new Vector3(0.5f, 0.5f, 0.5f);
-            points[7] = new Vector3(-0.5f, 0.5f, 0.5f);
+                // Top verts
+                new Vector3(-0.5, 0.5, -0.5), 
+                new Vector3(0.5, 0.5, -0.5), 
+                new Vector3(0.5, 0.5, 0.5),
+                new Vector3(-0.5, 0.5, 0.5), 
+            ],
 
-            batch.Line(Pos(points[0]), Pos(points[1]), color, color);
-            batch.Line(Pos(points[1]), Pos(points[2]), color, color);
-            batch.Line(Pos(points[2]), Pos(points[3]), color, color);
-            batch.Line(Pos(points[3]), Pos(points[0]), color, color);
-            batch.Line(Pos(points[4]), Pos(points[5]), color, color);
-            batch.Line(Pos(points[5]), Pos(points[6]), color, color);
-            batch.Line(Pos(points[6]), Pos(points[7]), color, color);
-            batch.Line(Pos(points[7]), Pos(points[4]), color, color);
-            batch.Line(Pos(points[0]), Pos(points[4]), color, color);
-            batch.Line(Pos(points[1]), Pos(points[5]), color, color);
-            batch.Line(Pos(points[2]), Pos(points[6]), color, color);
-            batch.Line(Pos(points[3]), Pos(points[7]), color, color);
+            Indices = [
+                0, 1, 1, 2, 2, 3, 3, 0, // Bottom 
+                4, 5, 5, 6, 6, 7, 7, 4, // Top
+                0, 4, 1, 5, 2, 6, 3, 7 // Connecting segments
+            ],
+
+            MeshTopology = PrimitiveTopology.LineList
+        };
+
+        public void Render(Material mat, Matrix4x4 m)
+        {
+            mat.SetColor("Color", color);
+
+            Graphics.DrawMesh(cubeMesh, mat, m);
         }
     }
 
-    public class CylinderGizmo(Vector4 color) : Gizmo
+    public class CylinderGizmo(Color color) : Gizmo
     {
-        public override void Render(PrimitiveBatch batch, Matrix4x4 m)
+        private static Mesh cylinderMesh = new Mesh()
         {
-            base.matrix = m;
+            Vertices = [ 
+                new Vector3(0.0, -0.5, -1.0),
+                new Vector3(0.0, 0.5, -1.0), 
 
-            int numSegments = 12;  // Adjust for smoother or more segmented circle
+                new Vector3(0.0, -0.5, 1.0),
+                new Vector3(0.0, 0.5, 1.0), 
 
-            for (int i = 0; i < numSegments; i++)
-            {
-                float angle = (float)i / numSegments * 2f * MathF.PI;
-                float angle2 = (float)(i + 1) / numSegments * 2f * MathF.PI;
+                new Vector3(-1.0, -0.5, 0.0),
+                new Vector3(-1.0, 0.5, 0.0), 
 
-                Vector3 point1 = new Vector3(MathF.Cos(angle), -1f, MathF.Sin(angle)) * 0.5;
-                Vector3 point2 = new Vector3(MathF.Cos(angle2), -1f, MathF.Sin(angle2)) * 0.5;
-                Vector3 point3 = new Vector3(MathF.Cos(angle), 1f, MathF.Sin(angle)) * 0.5;
-                Vector3 point4 = new Vector3(MathF.Cos(angle2), 1f, MathF.Sin(angle2)) * 0.5;
+                new Vector3(1.0, -0.5, 0.0),
+                new Vector3(1.0, 0.5, 0.0),
+            ],
 
-                batch.Line(Pos(point1), Pos(point2), color, color);
-                batch.Line(Pos(point3), Pos(point4), color, color);
-                batch.Line(Pos(point1), Pos(point3), color, color);
-            }
+            Indices = [
+                0, 1, 2, 3, 4, 5, 6, 7 // Connecting segments
+            ],
+
+            MeshTopology = PrimitiveTopology.LineList
+        };
+
+        public void Render(Material mat, Matrix4x4 m)
+        {
+            ArcGizmo arc = new ArcGizmo(0.0f, 360.0f, color);
+
+            arc.Render(mat, Matrix4x4.CreateTranslation(new Vector3(0, 0.5, 0)) * m);
+            arc.Render(mat, Matrix4x4.CreateTranslation(new Vector3(0, -0.5, 0)) * m);
+
+            mat.SetColor("Color", color);
+            Graphics.DrawMesh(cylinderMesh, mat, m);
         }
     }
 
-    public class CapsuleGizmo(Vector4 color) : Gizmo
+    public class CapsuleGizmo(float radius, float height, Color color) : Gizmo
     {
-        public override void Render(PrimitiveBatch batch, Matrix4x4 m)
+        public void Render(Material mat, Matrix4x4 m)
         {
-            base.matrix = m;
+            CylinderGizmo cylinder = new CylinderGizmo(color);
+            
+            cylinder.Render(mat, Matrix4x4.CreateScale(new Vector3(radius, height, radius)) * m);
 
-            int numSegments = 12;  // Adjust for smoother or more segmented circle
+            ArcGizmo arc = new ArcGizmo(0.0f, 180.0f, color);
 
-            // Draw the cylinder part
-            for (int i = 0; i < numSegments; i++)
-            {
-                float angle = (float)i / numSegments * 2f * MathF.PI;
-                float angle2 = (float)(i + 1) / numSegments * 2f * MathF.PI;
+            Quaternion rotX90 = Quaternion.AngleAxis(90 * MathD.Deg2Rad, Vector3.right);
+            Quaternion rotXN90 = Quaternion.AngleAxis(-90 * MathD.Deg2Rad, Vector3.right);
+            Quaternion rotY90 = Quaternion.AngleAxis(90 * MathD.Deg2Rad, Vector3.up);
 
-                Vector3 point1 = new Vector3(MathF.Cos(angle), -1f, MathF.Sin(angle)) * 0.5;
-                Vector3 point2 = new Vector3(MathF.Cos(angle2), -1f, MathF.Sin(angle2)) * 0.5;
-                Vector3 point3 = new Vector3(MathF.Cos(angle), 1f, MathF.Sin(angle)) * 0.5;
-                Vector3 point4 = new Vector3(MathF.Cos(angle2), 1f, MathF.Sin(angle2)) * 0.5;
+            Vector3 size = new Vector3(radius, height, radius);
+            Vector3 top = new Vector3(0, height * 0.5, 0);
 
-                batch.Line(Pos(point1), Pos(point2), color, color);
-                batch.Line(Pos(point3), Pos(point4), color, color);
-                batch.Line(Pos(point1), Pos(point3), color, color);
-            }
+            arc.Render(mat, Matrix4x4.TRS(top, rotXN90, size) * m);
+            arc.Render(mat, Matrix4x4.TRS(top, rotY90 * rotXN90, size) * m);
 
-            // Draw the Top Half Sphere
-            Matrix4x4 topMatrix = Matrix4x4.CreateTranslation(0f, 0.5f, 0f) * m;
-            base.matrix = topMatrix;
-            DrawHalfSphere(batch, color, true);
-
-            // Draw the Bottom Half Sphere
-            Matrix4x4 bottomMatrix = Matrix4x4.CreateTranslation(0f, -0.5f, 0f) * m;
-            base.matrix = bottomMatrix;
-            DrawHalfSphere(batch, color, false);
-        }
-
-        private void DrawHalfSphere(PrimitiveBatch batch, Vector4 color, bool isTop)
-        {
-            int numSegments = 12; // Adjust for smoother or more segmented circle
-
-            float angleStart = isTop ? 0f : (float)Math.PI;
-            float angleEnd = isTop ? (float)Math.PI / 2f : (float)Math.PI * 3f / 2f;
-
-            for (int i = 0; i < numSegments / 4; i++)
-            {
-                float angle1 = angleStart + (float)i / (numSegments / 4) * (angleEnd - angleStart);
-                float angle2 = angleStart + (float)(i + 1) / (numSegments / 4) * (angleEnd - angleStart);
-
-                for (int j = 0; j < numSegments; j++)
-                {
-                    float longitude = (float)j / numSegments * 2f * MathF.PI;
-                    float longitude2 = (float)(j + 1) / numSegments * 2f * MathF.PI;
-
-                    Vector3 point1 = new Vector3(
-                        MathF.Sin(angle1) * MathF.Cos(longitude),
-                        MathF.Cos(angle1),
-                        MathF.Sin(angle1) * MathF.Sin(longitude)) * 0.5f;
-
-                    Vector3 point2 = new Vector3(
-                        MathF.Sin(angle1) * MathF.Cos(longitude2),
-                        MathF.Cos(angle1),
-                        MathF.Sin(angle1) * MathF.Sin(longitude2)) * 0.5f;
-
-                    Vector3 point3 = new Vector3(
-                        MathF.Sin(angle2) * MathF.Cos(longitude),
-                        MathF.Cos(angle2),
-                        MathF.Sin(angle2) * MathF.Sin(longitude)) * 0.5f;
-
-                    Vector3 point4 = new Vector3(
-                        MathF.Sin(angle2) * MathF.Cos(longitude2),
-                        MathF.Cos(angle2),
-                        MathF.Sin(angle2) * MathF.Sin(longitude2)) * 0.5f;
-
-                    batch.Line(Pos(point1), Pos(point2), color, color);
-                    batch.Line(Pos(point1), Pos(point3), color, color);
-
-                    // Connect top and bottom rings
-                    if (isTop)
-                    {
-                        batch.Line(Pos(point2), Pos(point4), color, color);
-                    }
-                    else
-                    {
-                        batch.Line(Pos(point3), Pos(point4), color, color);
-                    }
-                }
-            }
-        }
-    }
-
-    public class SpotlightGizmo(float distance, float angle, Vector4 color) : Gizmo
-    {
-        public override void Render(PrimitiveBatch batch, Matrix4x4 m)
-        {
-            base.matrix = m;
-
-            // Calculate the cone vertices
-            //Vector3 coneTip = Vector3.UnitZ * Distance;
-            Vector3 coneBaseLeft = Vector3.Transform(Vector3.forward * distance, Matrix4x4.CreateRotationY(-(angle / 2)));
-            Vector3 coneBaseRight = Vector3.Transform(Vector3.forward * distance, Matrix4x4.CreateRotationY((angle / 2)));
-            Vector3 coneBaseTop = Vector3.Transform(Vector3.forward * distance, Matrix4x4.CreateRotationX(-(angle / 2)));
-            Vector3 coneBaseBottom = Vector3.Transform(Vector3.forward * distance, Matrix4x4.CreateRotationX((angle / 2)));
-            float coneBaseRadius = MathF.Tan(angle / 2) * distance;
-            float coneBaseDistance = MathF.Sqrt((coneBaseRadius * coneBaseRadius) + (distance * distance));
-
-            // Draw cone lines
-            //batch.Line(Pos(Vector3.Zero), Pos(coneTip), ImGui.GetColorU32(Color));
-            batch.Line(Pos(Vector3.zero), Pos(coneBaseLeft), color, color);
-            batch.Line(Pos(Vector3.zero), Pos(coneBaseRight), color, color);
-            batch.Line(Pos(Vector3.zero), Pos(coneBaseTop), color, color);
-            batch.Line(Pos(Vector3.zero), Pos(coneBaseBottom), color, color);
-
-            // Use 3 Circle3D gizmo's
-            m = Matrix4x4.CreateTranslation(Vector3.forward * coneBaseDistance) * m;
-            m = Matrix4x4.CreateScale(coneBaseRadius) * m;
-            new CircleGizmo(color).Render(batch, m);
+            arc.Render(mat, Matrix4x4.TRS(-top, rotX90, size) * m);
+            arc.Render(mat, Matrix4x4.TRS(-top, rotY90 * rotX90, size) * m);
         }
     }
 }
