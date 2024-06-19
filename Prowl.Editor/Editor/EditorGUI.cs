@@ -196,8 +196,17 @@ namespace Prowl.Editor
                 if (field.GetCustomAttributes(typeof(HideInInspectorAttribute), true).Length > 0)
                     continue;
 
+                var attributes = field.GetCustomAttributes(true);
+                var imGuiAttributes = attributes.Where(attr => attr is InspectorUIAttribute).Cast<InspectorUIAttribute>();
+                if (!HandleBeginGUIAttributes("attrib" + i, target, imGuiAttributes))
+                    continue;
+
                 // Draw the property
                 changed |= DrawerAttribute.DrawProperty(ActiveGUI, field.Name, i++, fieldType, ref fieldValue, config);
+
+                HandleEndAttributes(imGuiAttributes);
+
+                HandleAttributeButtons("Btn" + i, target);
 
                 // Update the value
                 field.SetValue(target, fieldValue);
@@ -212,6 +221,95 @@ namespace Prowl.Editor
             bool changed = DrawerAttribute.DrawProperty(ActiveGUI, name, index, typeof(T), ref obj, config);
             value = (T?)obj;
             return changed;
+        }
+
+        static bool HandleBeginGUIAttributes(string id, object target, IEnumerable<InspectorUIAttribute> attribs)
+        {
+            foreach (InspectorUIAttribute guiAttribute in attribs)
+            {
+                switch (guiAttribute.AttribType())
+                {
+                    case GuiAttribType.Space:
+                        // Dummy node
+                        ActiveGUI.Node("Space" + id, guiAttribute.GetHashCode()).ExpandWidth().Height(GuiStyle.ItemHeight);
+                        break;
+
+                    case GuiAttribType.Text:
+                        var text = guiAttribute as TextAttribute;
+                        ActiveGUI.TextNode("Label" + id, text.text).ExpandWidth().Height(GuiStyle.ItemHeight);
+                        break;
+
+                    case GuiAttribType.ShowIf:
+                        var showIf = guiAttribute as ShowIfAttribute;
+                        var field = target.GetType().GetField(showIf.propertyName);
+                        if (field != null && field.FieldType == typeof(bool))
+                        {
+                            if ((bool)field.GetValue(target) == showIf.inverted)
+                                return false;
+                        }
+                        else
+                        {
+                            var prop = target.GetType().GetProperty(showIf.propertyName);
+                            if (prop != null && prop.PropertyType == typeof(bool))
+                            {
+                                if ((bool)prop.GetValue(target) == showIf.inverted)
+                                    return false;
+                            }
+                        }
+                        break;
+
+                    case GuiAttribType.Separator:
+                        EditorGUI.Separator(1, id.GetHashCode());
+                        break;
+
+                }
+            }
+            return true;
+        }
+
+        static void HandleEndAttributes(IEnumerable<InspectorUIAttribute> attribs)
+        {
+            foreach (InspectorUIAttribute guiAttribute in attribs)
+                switch (guiAttribute.AttribType())
+                {
+                    case GuiAttribType.Tooltip:
+                        var tooltip = guiAttribute as TooltipAttribute;
+                        ActiveGUI.Tooltip(tooltip.tooltip);
+                        break;
+
+                }
+        }
+
+        public static bool HandleAttributeButtons(string id, object target)
+        {
+            foreach (MethodInfo method in target.GetType().GetMethods())
+            {
+                var attribute = method.GetCustomAttribute<GUIButtonAttribute>();
+                if (attribute != null)
+                    using (ActiveGUI.Node("button" + id).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                    {
+                        if (ActiveGUI.IsNodePressed())
+                        {
+                            try
+                            {
+                                method.Invoke(target, null);
+                            }
+                            catch (Exception e)
+                            {
+                                Debug.LogError("Error During ImGui Button Execution: " + e.Message + "\n" + e.StackTrace);
+                            }
+                            ActiveGUI.Draw2D.DrawRectFilled(ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
+                        }
+                        else if (ActiveGUI.IsNodeHovered())
+                            ActiveGUI.Draw2D.DrawRectFilled(ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Base5 * 0.5f, 10);
+                        else
+                            ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 10);
+
+                        ActiveGUI.Draw2D.DrawText(attribute.buttonText, ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
+                        return true;
+                    }
+            }
+            return false;
         }
 
         #endregion

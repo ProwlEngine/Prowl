@@ -15,12 +15,10 @@ namespace Prowl.Editor.Preferences
         [ShowIf("LockFPS", true)]
         public bool VSync = true;
 
-        [Indent]
         [Text("Debugging:")]
         public bool ShowDebugLogs = true;
         public bool ShowDebugWarnings = true;
         public bool ShowDebugErrors = true;
-        [Unindent]
         public bool ShowDebugSuccess = true;
 
         [Text("Game View:")]
