@@ -49,8 +49,6 @@ namespace Prowl.Runtime.Utils
 
         protected string GetFilePath(string? dataPath)
         {
-            if(dataPath == null)
-                throw new InvalidOperationException("Application.DataPath is null, ensure Application.Run() has been called, and a DataPath has been assigned!");
 
             if (Attribute.GetCustomAttribute(GetType(), typeof(FilePathAttribute)) is FilePathAttribute attribute)
             {
@@ -58,12 +56,21 @@ namespace Prowl.Runtime.Utils
                 switch (attribute.FileLocation)
                 {
                     case FilePathAttribute.Location.Data:
+                        if (dataPath == null)
+                            throw new InvalidOperationException("Application.DataPath is null, ensure Application.Run() has been called, and a DataPath has been assigned!");
+
                         directory = Application.DataPath;
                         break;
                     case FilePathAttribute.Location.Setting:
+                        if (dataPath == null)
+                            throw new InvalidOperationException("Application.DataPath is null, ensure Application.Run() has been called, and a DataPath has been assigned!");
+
                         directory = Path.Combine(Application.DataPath, "ProjectSettings");
                         break;
                     case FilePathAttribute.Location.EditorSetting:
+                        if (dataPath == null)
+                            throw new InvalidOperationException("Application.DataPath is null, ensure Application.Run() has been called, and a DataPath has been assigned!");
+
                         // Persistent across sessions for a single project
                         if (Application.isEditor == false)
                             throw new InvalidOperationException("Editor Settings are only available in the editor");

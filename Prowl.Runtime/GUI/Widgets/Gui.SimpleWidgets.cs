@@ -102,6 +102,7 @@ namespace Prowl.Runtime.GUI
         
                 y.PixelOffset = 1;
                 var NewIndex = ItemIndex;
+                var popupHolder = g.CurrentNode;
                 if (g.BeginPopup(popupName, out var popupNode))
                 {
                     int longestText = 0;
@@ -123,7 +124,7 @@ namespace Prowl.Runtime.GUI
                                 if (g.IsNodePressed())
                                 {
                                     NewIndex = Index;
-                                    g.ClosePopup(popupNode.Parent);
+                                    g.ClosePopup(popupHolder);
                                 }
                                 else if (g.IsNodeHovered())
                                     g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.BtnHoveredColor, style.WidgetRoundness);

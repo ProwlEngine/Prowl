@@ -87,10 +87,12 @@ namespace Prowl.Runtime
         public double Right => Max.x;
         public double Top => Min.y;
         public double Bottom => Max.y;
-        public Vector2 TopLeft => new(Left, Top);
-        public Vector2 TopRight => new(Right, Top);
-        public Vector2 BottomLeft => new(Left, Bottom);
-        public Vector2 BottomRight => new(Right, Bottom);
+        public readonly Vector2 TopLeft => new(Left, Top);
+        public readonly Vector2 MiddleLeft => new(Left, (Top + Bottom) / 2);
+        public readonly Vector2 TopRight => new(Right, Top);
+        public readonly Vector2 MiddleRight => new(Right, (Top + Bottom) / 2);
+        public readonly Vector2 BottomLeft => new(Left, Bottom);
+        public readonly Vector2 BottomRight => new(Right, Bottom);
 
         public Rect(Vector2 position, Vector2 scale)
         {

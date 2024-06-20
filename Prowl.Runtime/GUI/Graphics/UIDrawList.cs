@@ -59,7 +59,9 @@ namespace Prowl.Runtime.GUI.Graphics
         internal UIBuffer<UIDrawChannel> _Channels; // [Internal] draw channels for columns API (not resized down so _ChannelsCount may be smaller than _Channels.Size)
         internal int _primitiveCount = -10000;
 
-        public UIDrawList()
+        private bool _AntiAliasing;
+
+        public UIDrawList(bool antiAliasing)
         {
             CmdBuffer = new();
             IdxBuffer = new();
@@ -69,10 +71,31 @@ namespace Prowl.Runtime.GUI.Graphics
             _Path = new();
             _Channels = new();
             _primitiveCount = -10000;
-
-            CreateDeviceResources();
+            _AntiAliasing = antiAliasing;
 
             Clear();
+        }
+
+        public void AntiAliasing(bool antiAliasing)
+        {
+            this._AntiAliasing = antiAliasing;
+        }
+
+        private static float[] u32FloatLookup;
+        public static Vector4 ColorConvertU32ToFloat4(uint @in)
+        {
+            float s = 1.0f / 255.0f;
+            return new Vector4(@in & 0xFF, @in >> 8 & 0xFF, @in >> 16 & 0xFF, @in >> 24) * s;
+        }
+
+        public static uint ColorConvertFloat4ToU32(Vector4 @in)
+        {
+            uint @out;
+            @out = (uint)(MathD.Clamp01(@in.x) * 255.0f + 0.5f);
+            @out |= (uint)(MathD.Clamp01(@in.y) * 255.0f + 0.5f) << 8;
+            @out |= (uint)(MathD.Clamp01(@in.z) * 255.0f + 0.5f) << 16;
+            @out |= (uint)(MathD.Clamp01(@in.w) * 255.0f + 0.5f) << 24;
+            return @out;
         }
 
         public UIDrawCmd? GetCurrentDrawCmd()
@@ -337,7 +360,7 @@ namespace Prowl.Runtime.GUI.Graphics
                 PopTextureID();
         }
 
-        public void AddPolyline(UIBuffer<Vector2> points, int points_count, Color32 col, bool closed, float thickness, bool anti_aliased)
+        public void AddPolyline(UIBuffer<Vector2> points, int points_count, uint col, bool closed, float thickness)
         {
             if (points_count < 2)
                 return;
@@ -350,7 +373,7 @@ namespace Prowl.Runtime.GUI.Graphics
                 count = points_count - 1;
 
             bool thick_line = thickness > 1.0f;
-            if (anti_aliased)
+            if (_AntiAliasing)
             {
                 // Anti-aliased stroke
                 float AA_SIZE = 1.0f;
@@ -524,7 +547,7 @@ namespace Prowl.Runtime.GUI.Graphics
             _primitiveCount++;
         }
 
-        public void AddConvexPolyFilled(UIBuffer<Vector2> points, int points_count, Color32 col, bool anti_aliased)
+        public void AddConvexPolyFilled(UIBuffer<Vector2> points, int points_count, uint col)
         {
             if (points_count < 3)
                 return;
@@ -532,7 +555,7 @@ namespace Prowl.Runtime.GUI.Graphics
             //Vector2 uv = ImGui.Instance.FontTexUvWhitePixel;
             Vector2 uv = DefaultFont.TexUvWhitePixel;
 
-            if (anti_aliased)
+            if (_AntiAliasing)
             {
                 // Anti-aliased Fill
                 float AA_SIZE = 1.0f;
@@ -631,14 +654,14 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void PathFill(Color32 col)
         {
-            AddConvexPolyFilled(_Path, _Path.Count, col, true);
-            _Path.Clear();
+            AddConvexPolyFilled(_Path, _Path.Count, col);
+            _Path.resize(0);
         }
 
         public void PathStroke(Color32 col, bool closed, float thickness = 1.0f)
         {
-            AddPolyline(_Path, _Path.Count, col, closed, thickness, true);
-            _Path.Clear();
+            AddPolyline(_Path, _Path.Count, col, closed, thickness);
+            _Path.resize(0);
         }
 
         public void PathArcTo(Vector2 centre, float radius, float amin, float amax, int num_segments = 10)
