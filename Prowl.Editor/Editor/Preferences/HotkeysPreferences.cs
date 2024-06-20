@@ -1,6 +1,6 @@
 ﻿using Prowl.Runtime;
 using Prowl.Runtime.Utils;
-using Veldrid;
+using Silk.NET.Input;
 
 namespace Prowl.Editor.Preferences
 {

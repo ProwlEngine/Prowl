@@ -66,7 +66,7 @@ namespace Prowl.Runtime.GUI
                     if (multiline)
                         render_pos.y -= g.CurrentNode.VScroll;
 
-                    uint colb = UIDrawList.ColorConvertFloat4ToU32(style.TextColor);
+                    Color32 colb = style.TextColor;
                     g.Draw2D.DrawList.AddText(font, (float)fontsize, render_pos, colb, value, 0, value.Length, 0.0f, null);
                 }
                 g.Draw2D.PopClip();
@@ -229,7 +229,7 @@ namespace Prowl.Runtime.GUI
 
             if ((Flags & InputFieldFlags.OnlyDisplay) == InputFieldFlags.OnlyDisplay)
             {
-                uint colb = UIDrawList.ColorConvertFloat4ToU32(style.TextColor);
+                Color32 colb = style.TextColor;
                 g.Draw2D.DrawList.AddText(font, (float)fontsize, render_pos - render_scroll, colb, stb.Text, 0, stb.Text.Length, 0.0f, (is_multiline ? null : (Vector4?)clip_rect));
                 return false;
             }
@@ -242,7 +242,7 @@ namespace Prowl.Runtime.GUI
 
                 float bg_offy_up = is_multiline ? 0.0f : -1.0f;    // FIXME: those offsets should be part of the style? they don't play so well with multi-line selection.
                 float bg_offy_dn = is_multiline ? 0.0f : 2.0f;
-                uint bg_color = UIDrawList.ColorConvertFloat4ToU32(style.TextHighlightColor);
+                Color32 bg_color = style.TextHighlightColor;
                 Vector2 rect_pos = render_pos + select_start_offset - render_scroll;
                 for (int p = text_selected_begin; p < text_selected_end;)
                 {
@@ -271,7 +271,7 @@ namespace Prowl.Runtime.GUI
             }
 
 
-            uint col = UIDrawList.ColorConvertFloat4ToU32(style.TextColor);
+            Color32 col = style.TextColor;
             g.Draw2D.DrawList.AddText(font, (float)fontsize, render_pos - render_scroll, col, stb.Text, 0, stb.Text.Length, 0.0f, (is_multiline ? null : (Vector4?)clip_rect));
             //g.DrawText(font, fontsize, Text, render_pos - render_scroll, Color.black, 0, stb.CurLenA, 0.0f, (is_multiline ? null : (ImVec4?)clip_rect));
 

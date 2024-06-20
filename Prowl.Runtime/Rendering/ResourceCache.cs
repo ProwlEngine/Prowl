@@ -8,7 +8,6 @@ namespace Prowl.Runtime
 {
     public static class ResourceCache    
     {
-        const bool scissorTest = false;
         const bool depthClip = true;
 
         private struct PassPipelineDescription
@@ -19,6 +18,7 @@ namespace Prowl.Runtime
             public PolygonFillMode fillMode;
             public FrontFace frontFace;
             public PrimitiveTopology topology;
+            public bool scissorTest;
 
             public override readonly int GetHashCode()
             {
@@ -71,15 +71,16 @@ namespace Prowl.Runtime
                     fillMode: passDesc.fillMode,
                     frontFace: passDesc.frontFace,
                     depthClipEnabled: depthClip,
-                    scissorTestEnabled: scissorTest
+                    scissorTestEnabled: passDesc.scissorTest
                 ),
 
                 PrimitiveTopology = passDesc.topology,
                 Outputs = passDesc.output ?? Graphics.Framebuffer.OutputDescription,
 
                 ShaderSet = new ShaderSetDescription(
-                    vertexLayouts: keywordProgram.vertexInputs.Select(x => Mesh.GetLayoutForResource(x)).ToArray(),
-                    shaders: keywordProgram.compiledPrograms
+                    vertexLayouts: keywordProgram.vertexInputs.Select(x => Mesh.GetLayoutForResource(x.Item1, x.Item2)).ToArray(),
+                    shaders: keywordProgram.compiledPrograms,
+                    [ new SpecializationConstant(0, Graphics.Device.IsClipSpaceYInverted) ]
                 ),
 
                 ResourceLayouts = resourceLayouts,
@@ -94,6 +95,7 @@ namespace Prowl.Runtime
             PolygonFillMode fillMode = PolygonFillMode.Solid,
             FrontFace frontFace = FrontFace.Clockwise,
             PrimitiveTopology topology = PrimitiveTopology.TriangleList,
+            bool scissor = false,
             OutputDescription? pipelineOutput = null)
         {
             PassPipelineDescription pipelineDesc = new()
@@ -103,6 +105,7 @@ namespace Prowl.Runtime
                 fillMode = fillMode,
                 frontFace = frontFace,
                 topology = topology,
+                scissorTest = scissor,
                 output = pipelineOutput
             };
 

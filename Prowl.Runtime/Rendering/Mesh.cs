@@ -278,8 +278,6 @@ namespace Prowl.Runtime
             {
                 Graphics.Device.UpdateBuffer(indexBuffer, 0, indices);
             }
-        
-            Debug.Log($"[Mesh] Uploaded successfully to VRAM (GPU)");
         }
 
         public void RecalculateBounds()
@@ -504,7 +502,7 @@ namespace Prowl.Runtime
             return offsets;
         }
 
-        public static VertexLayoutDescription GetLayoutForResource(MeshResource resource)
+        public static VertexLayoutDescription GetLayoutForResource(MeshResource resource, VertexLayoutDescription layout)
         {
             return resource switch 
             {
@@ -516,6 +514,7 @@ namespace Prowl.Runtime
                 MeshResource.Colors => new VertexLayoutDescription(new VertexElementDescription("COLOR", VertexElementFormat.Float4, VertexElementSemantic.Color)),
                 MeshResource.BoneIndices => new VertexLayoutDescription(new VertexElementDescription("BONEINDEX", VertexElementFormat.Float4, VertexElementSemantic.Position)),
                 MeshResource.BoneWeights => new VertexLayoutDescription(new VertexElementDescription("BONEWEIGHT", VertexElementFormat.Float4, VertexElementSemantic.Color)),
+                MeshResource.Custom => layout,
             };
         }
 
@@ -577,10 +576,10 @@ namespace Prowl.Runtime
                 {
                     foreach (var color in colors32)
                     {
-                        writer.Write(color.red);
-                        writer.Write(color.green);
-                        writer.Write(color.blue);
-                        writer.Write(color.alpha);
+                        writer.Write(color.r);
+                        writer.Write(color.g);
+                        writer.Write(color.b);
+                        writer.Write(color.a);
                     }
                 }
 

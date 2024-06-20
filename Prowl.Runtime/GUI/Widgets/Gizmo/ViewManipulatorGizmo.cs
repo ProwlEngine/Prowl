@@ -1,4 +1,5 @@
-﻿using Prowl.Runtime.GUI.Graphics;
+﻿using System.Collections.Generic;
+using Prowl.Runtime.GUI.Graphics;
 
 namespace Prowl.Runtime.GUI.Widgets.Gizmo
 {
@@ -170,7 +171,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
 
                     if (screenPoints.Count >= 3)
                     {
-                        _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, faceColors[i].GetUInt(), true);
+                        _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, faceColors[i], true);
 
                         // If mouse inside convex poly
                         var mouse = _gui.PointerPos;
@@ -178,8 +179,8 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                         {
                             var hovCol = GuiStyle.Base11;
                             hovCol.a = 0.25f;
-                            _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, ((Color32)hovCol).GetUInt(), true);
-                            //_gui.DrawList.AddPolyline(screenPoints, screenPoints.Count, hovCol.GetUInt(), true, 1, true);
+                            _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, ((Color32)hovCol), true);
+                            //_gui.DrawList.AddPolyline(screenPoints, screenPoints.Count, hovCol, true, 1, true);
                             hovering = true;
                             axis = faceNormal;
                         }

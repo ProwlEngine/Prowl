@@ -1,6 +1,6 @@
 ﻿using ImageMagick;
 using Prowl.Runtime;
-using Veldrid;
+using Prowl.Runtime.Rendering.Primitives;
 
 namespace Prowl.Editor
 {
@@ -20,21 +20,19 @@ namespace Prowl.Editor
 
             image.Flip();
 
-            // TODO: Format should not be limited to 4-channel 16-bit. Potentially add conversion function to different formats
-
-            PixelFormat format = PixelFormat.R16_G16_B16_A16_UNorm;
+            TextureImageFormat format = TextureImageFormat.UnsignedShort4;
             image.ColorSpace = ColorSpace.sRGB;
             image.ColorType = ColorType.TrueColorAlpha;
 
             var pixels = image.GetPixelsUnsafe().GetAreaPointer(0, 0, image.Width, image.Height);
 
-            Texture2D texture = new Texture2D((uint)image.Width, (uint)image.Height, 1, format);
+            Texture2D texture = new Texture2D((uint)image.Width, (uint)image.Height, false, format);
             try
             {
 
                 unsafe
                 {
-                    texture.SetDataPtr((void*)pixels, 0, 0, texture.Width, texture.Height);
+                    Graphics.Device.TexSubImage2D(texture.Handle, 0, 0, 0, (uint)image.Width, (uint)image.Height, (void*)pixels);
                 }
 
                 if (generateMipmaps)
@@ -44,7 +42,7 @@ namespace Prowl.Editor
             }
             catch
             {
-                texture.DestroyImmediate();
+                texture.Dispose();
                 throw;
             }
         }

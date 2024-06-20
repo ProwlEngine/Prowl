@@ -1,22 +1,15 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace Prowl.Runtime.GUI.Graphics
 {
-    public class UIBuffer<T> : IDisposable
+    public class UIBuffer<T>
     {
-        public int Count = 0;
-        public int _capacity = 0;
+        public int Count => Data.Count;
+        public int Capacity => Data.Capacity;
 
-        public int Capacity
-        {
-            get => _capacity;
-            set
-            {
-                reserve(value);
-            }
-        }
+        public List<T> Data = new();
 
-        public T[] Data;
 
         public T this[int i]
         {
@@ -33,8 +26,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void Clear()
         {
-            Count = _capacity = 0;
-            Data = null;
+            Data.Clear();
         }
 
         public T Peek()
@@ -42,88 +34,58 @@ namespace Prowl.Runtime.GUI.Graphics
             return Data[Count - 1];
         }
 
-        public int _grow_capacity(int new_size)
+        public void Resize(int new_size)
         {
-            int new_capacity = _capacity > 0 ? _capacity + _capacity / 2 : 8;
-            return new_capacity > new_size ? new_capacity : new_size;
+            int cur = Data.Count;
+
+            if (new_size < cur)
+                Data.RemoveRange(new_size, cur - new_size);
+            else if(new_size > cur)
+            {
+                if (new_size > Data.Capacity) //this bit is purely an optimisation, to avoid multiple automatic capacity changes.
+                    Data.Capacity = new_size;
+
+                Data.AddRange(System.Linq.Enumerable.Repeat<T>(default, new_size - cur));
+            }
         }
 
-        public void resize(int new_size)
+        public void Reserve(int new_capacity)
         {
-            if (new_size > _capacity)
-                reserve(_grow_capacity(new_size));
-            Count = new_size;
-        }
+            if (new_capacity <= Capacity) return;
 
-        public void reserve(int new_capacity)
-        {
-            if (new_capacity <= _capacity) return;
-            _capacity = new_capacity;
-            if (Data == null)
-                Data = new T[new_capacity];
-            else
-                Array.Resize(ref Data, new_capacity);
+            Resize(new_capacity);
         }
 
         public void Add(T v)
         {
-            if (Count == _capacity)
-                reserve(_grow_capacity(Count + 1));
-            Data[Count++] = v;
+            Data.Add(v);
         }
+
         public void Pop()
         {
-            Count--;
+            Data.RemoveAt(Data.Count - 1);
         }
 
-        public void erase(int it)
+        public void RemoveAt(int it)
         {
-            System.Diagnostics.Debug.Assert(it >= 0 && it < Count);
-            for (var i = it; i < Count - 1; i++)
-                Data[i] = Data[i + 1];
-            Count--;
+            Data.RemoveAt(it);
         }
 
-        public void insert(int it, T v)
+        public void Insert(int it, T v)
         {
-            System.Diagnostics.Debug.Assert(it >= 0 && it <= Count);
-            var off = it;
-            if (Count == _capacity)
-                reserve(_capacity > 0 ? _capacity * 2 : 4);
-            if (off < Count)
-            {
-                for (int i = Count; i > it; i--)
-                    Data[i] = Data[i - 1];
-            }
-            Data[off] = v;
-            Count++;
+            Data.Insert(it, v);
         }
 
-        public void sort(Func<T, T, int> sorter)
+        public void Sort(Comparison<T> sorter)
         {
-            Array.Sort(Data, new Comparison<T>(sorter));
+            Data.Sort(sorter);
         }
 
-        public void swap(UIBuffer<T> rhs)
+        public void Swap(UIBuffer<T> rhs)
         {
-            int rhs_size = rhs.Count;
-            rhs.Count = Count;
-            Count = rhs_size;
-
-            int rhs_cap = rhs._capacity;
-            rhs._capacity = _capacity;
-            _capacity = rhs_cap;
-
-            T[] rhs_data = rhs.Data;
+            List<T> rhs_data = rhs.Data;
             rhs.Data = Data;
             Data = rhs_data;
         }
-
-
-        public void Dispose()
-        {
-            Data = null;
-        }
-
     }
 }

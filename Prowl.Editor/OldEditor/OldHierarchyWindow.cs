@@ -3,7 +3,7 @@ using Hexa.NET.ImGui;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
-using Veldrid;
+using Silk.NET.Input;
 using Prowl.Editor.Preferences;
 using Prowl.Editor;
 

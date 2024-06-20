@@ -14,6 +14,25 @@ namespace Prowl.Runtime
         /// <summary>The height of this <see cref="Texture2D"/>.</summary>
         public uint Height => InternalTexture.Height;
 
+        public static Texture2D EmptyWhite = CreateDefaultTex(1, 1, [ Color.white]);
+
+        public static Texture2D Checker => CreateDefaultTex(4, 4, [
+            Color.white, new Color(0.25f, 0.25f, 0.25f, 1.0f), Color.white, new Color(0.25f, 0.25f, 0.25f, 1.0f),
+            new Color(0.25f, 0.25f, 0.25f, 1.0f), Color.white, new Color(0.25f, 0.25f, 0.25f, 1.0f), Color.white,
+            Color.white, new Color(0.25f, 0.25f, 0.25f, 1.0f), Color.white, new Color(0.25f, 0.25f, 0.25f, 1.0f),
+            new Color(0.25f, 0.25f, 0.25f, 1.0f), Color.white, new Color(0.25f, 0.25f, 0.25f, 1.0f), Color.white
+        ]);
+
+
+        private static Texture2D CreateDefaultTex(uint sizeX, uint sizeY, Color32[] colors)
+        {
+            Texture2D texture = new Texture2D(sizeX, sizeY, 0, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled);
+            texture.Sampler.SetFilter(FilterType.Point, FilterType.Point, FilterType.Point);
+            texture.SetData(new Memory<Color32>(colors));
+            return texture;
+        }
+
+
         internal Texture2D() : base() { }
 
         /// <summary>

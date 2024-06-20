@@ -2,9 +2,10 @@
 using Prowl.Editor.EditorWindows;
 using Prowl.Editor.Preferences;
 using Prowl.Runtime;
+using Prowl.Runtime.Rendering;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
-using Veldrid;
+using Silk.NET.Input;
 
 namespace Prowl.Editor;
 
@@ -33,7 +34,7 @@ public static class Program
             new ProjectsWindow();
         };
 
-        Application.Update += () =>
+        Application.Update += (delta) =>
         {
             //EditorGui.SetupDock();
 
@@ -74,13 +75,15 @@ public static class Program
 
                 if (GeneralPreferences.Instance.LockFPS)
                 {
-                    Graphics.VSync = false;
-                    Screen.FramesPerSecond = GeneralPreferences.Instance.TargetFPS;
+                    Window.InternalWindow.VSync = false;
+                    Window.InternalWindow.FramesPerSecond = GeneralPreferences.Instance.TargetFPS;
+                    Window.InternalWindow.UpdatesPerSecond = GeneralPreferences.Instance.TargetFPS;
                 }
                 else
                 {
-                    Screen.FramesPerSecond = 0;
-                    Graphics.VSync = GeneralPreferences.Instance.VSync;
+                    Window.InternalWindow.FramesPerSecond = 0;
+                    Window.InternalWindow.UpdatesPerSecond = 0;
+                    Window.InternalWindow.VSync = GeneralPreferences.Instance.VSync;
                 }
 
                 if (Hotkeys.IsHotkeyDown("SaveSceneAs", new() { Key = Key.S, Ctrl = true, Shift = true }))
@@ -109,7 +112,7 @@ public static class Program
             GameWindow.IsGameWindowFocused = false;
         };
 
-        Application.Render += () =>
+        Application.Render += (delta) =>
         {
             Graphics.StartFrame();
 
@@ -235,6 +238,7 @@ public static class Program
 
 
     public static Font font;
+    private static GraphicsTexture testImage;
 
     public static void CheckReloadingAssemblies()
     {

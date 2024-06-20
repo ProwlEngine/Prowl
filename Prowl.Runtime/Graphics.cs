@@ -27,6 +27,10 @@ namespace Prowl.Runtime
 
         private static CommandList _commandList;
 
+        private static GUI.Gui gui;
+
+        public static Action<GUI.Gui> onGUI;
+
         public static void Initialize(bool VSync = true, GraphicsBackend preferredBackend = GraphicsBackend.OpenGL)
         {
             GraphicsDeviceOptions deviceOptions = new()
@@ -43,6 +47,7 @@ namespace Prowl.Runtime
             Device = VeldridStartup.CreateGraphicsDevice(Screen.InternalWindow, deviceOptions, preferredBackend);
 
             Screen.Resize += (newSize) => Device.ResizeMainWindow((uint)newSize.x, (uint)newSize.y);
+            gui = new();
         }
 
 
@@ -78,6 +83,8 @@ namespace Prowl.Runtime
         {   
             if (_commandList == null)
                 return;
+            
+            gui.ProcessFrame(_commandList, new Rect(0, 0, Framebuffer.Width, Framebuffer.Height), 1.0f, new Vector2(Framebuffer.Width, Framebuffer.Height), onGUI);
 
             _commandList.End();
             Device.SubmitCommands(_commandList);
@@ -92,9 +99,9 @@ namespace Prowl.Runtime
             return ResourceFactory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
         }
 
-        public static void SetPass(Material mat, int pass, PolygonFillMode fill = PolygonFillMode.Solid, PrimitiveTopology topology = PrimitiveTopology.TriangleList)
+        public static void SetPass(Material mat, int pass, PolygonFillMode fill = PolygonFillMode.Solid, PrimitiveTopology topology = PrimitiveTopology.TriangleList, bool scissorTest = false)
         {
-            mat.SetPass(_commandList, pass, fill, topology);
+            mat.SetPass(_commandList, pass, fill, topology, scissorTest);
         }
 
 
@@ -129,13 +136,13 @@ namespace Prowl.Runtime
                 instanceStart: 0);
         }
 
-        private static void BindMeshBuffers(CommandList commandList, Mesh mesh, List<MeshResource> vertexInputs)
+        private static void BindMeshBuffers(CommandList commandList, Mesh mesh, List<(MeshResource, VertexLayoutDescription)> vertexInputs)
         {
             commandList.SetIndexBuffer(mesh.IndexBuffer, mesh.IndexFormat);
 
             for (uint i = 0; i < vertexInputs.Count; i++)
             {
-                MeshResource resource = vertexInputs[(int)i];
+                MeshResource resource = vertexInputs[(int)i].Item1;
 
                 switch (resource)
                 {

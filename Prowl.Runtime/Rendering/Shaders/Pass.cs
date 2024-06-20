@@ -37,7 +37,7 @@ namespace Prowl.Runtime
         public class Variant
         {
             public KeywordState keywords;
-            public List<MeshResource> vertexInputs = new();
+            public List<(MeshResource, VertexLayoutDescription)> vertexInputs = new();
             public List<ShaderResource[]> resourceSets = new();
             public Veldrid.Shader[] compiledPrograms;
         }
@@ -49,6 +49,9 @@ namespace Prowl.Runtime
         public Pass(string name, (string, string)[] tags)
         {
             this.name = name;
+
+            if (tags == null)
+                return;
 
             for (int i = 0; i < tags.Length; i++)
                 this.tags.Add(tags[i].Item1, tags[i].Item2);
@@ -78,7 +81,15 @@ namespace Prowl.Runtime
         public void AddVertexInput(MeshResource resource, KeywordState? keywordID = null)
         {
             if (variants.TryGetValue(keywordID ?? KeywordState.Empty, out Variant program))
-                program.vertexInputs.Add(resource);
+                program.vertexInputs.Add((resource, default));
+            else
+                throw new Exception("Could not find variant for keyword ID");
+        }
+
+        public void AddCustomVertexInput(VertexLayoutDescription description, KeywordState? keywordID = null)
+        {
+            if (variants.TryGetValue(keywordID ?? KeywordState.Empty, out Variant program))
+                program.vertexInputs.Add((MeshResource.Custom, description));
             else
                 throw new Exception("Could not find variant for keyword ID");
         }

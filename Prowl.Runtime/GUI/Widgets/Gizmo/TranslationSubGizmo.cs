@@ -158,11 +158,11 @@ namespace Prowl.Runtime.GUI
                     var w = stroke;
                     if (fullCircles > 0)
                     {
-                        w.Color.alpha = (byte)(stroke.Color.alpha * Math.Min(0.25f * fullCircles, 1f));
+                        w.Color.a = (byte)(stroke.Color.a * Math.Min(0.25f * fullCircles, 1f));
                         _gizmo._gui.Draw3D.Sector(radius, startAngle2 * MathD.Rad2Deg, endAngle2 * MathD.Rad2Deg, w);
                     }
 
-                    w.Color.alpha = (byte)(stroke.Color.alpha * Math.Min(0.25f * (fullCircles + 1), 1f));
+                    w.Color.a = (byte)(stroke.Color.a * Math.Min(0.25f * (fullCircles + 1), 1f));
                     _gizmo._gui.Draw3D.Sector(radius, startAngle * MathD.Rad2Deg, endAngle * MathD.Rad2Deg, w);
 
                     _gizmo._gui.Draw3D.Circle(radius, stroke);

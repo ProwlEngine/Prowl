@@ -30,15 +30,16 @@ namespace Prowl.Runtime.GUI
             foreach (var index in _drawList.Keys.OrderBy(x => x))
             {
                 _drawList[index].Clear();
-                #warning Veldrid change
-                //_drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
+                
+                //_drawList[index].PushTexture(UIDrawList.DefaultFont.Texture);
+
                 drawListsOrdered.Add(_drawList[index]);
             }
         }
 
-        public void EndFrame(Rect screenRect)
+        public void EndFrame(Veldrid.CommandList commandList, Rect screenRect)
         {
-            //UIDrawList.Draw(GLDevice.GL, new(screenRect.width, screenRect.height), drawListsOrdered.ToArray());
+            UIDrawList.Draw(commandList, new(screenRect.width, screenRect.height), drawListsOrdered.ToArray());
         }
 
         /// <summary>
@@ -65,8 +66,7 @@ namespace Prowl.Runtime.GUI
             if (!_drawList.ContainsKey(index))
             {
                 _drawList[index] = new UIDrawList();
-                #warning Veldrid change
-                //_drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
+                _drawList[index].PushTexture(UIDrawList.DefaultFont.Texture);
             }
 
             // Copy over the clip rect from the previous list
@@ -79,34 +79,34 @@ namespace Prowl.Runtime.GUI
 
         public void DrawVerticalBlackGradient(Vector2 top, Vector2 bottom, float right, float strength)
         {
-            uint col = new Color(0, 0, 0, strength).GetUInt();
-            _drawList[currentZIndex].AddRectFilledMultiColor(new(top.x, top.y), new(bottom.x + right, bottom.y), col, Color.clear.GetUInt(), Color.clear.GetUInt(), col);
+            Color col = new Color(0, 0, 0, strength);
+            _drawList[currentZIndex].AddRectFilledMultiColor(new(top.x, top.y), new(bottom.x + right, bottom.y), col, Color.clear, Color.clear, col);
         }
 
         public void DrawHorizontalBlackGradient(Vector2 left, Vector2 right, float down, float strength)
         {
-            uint col = new Color(0, 0, 0, strength).GetUInt();
-            _drawList[currentZIndex].AddRectFilledMultiColor(new(left.x, left.y), new(right.x, right.y + down), Color.clear.GetUInt(), Color.clear.GetUInt(), col, col);
+            Color col = new Color(0, 0, 0, strength);
+            _drawList[currentZIndex].AddRectFilledMultiColor(new(left.x, left.y), new(right.x, right.y + down), Color.clear, Color.clear, col, col);
         }
 
         public void DrawRect(Rect screenRect, Color color, float thickness = 1f, float roundness = 0.0f, int rounded_corners = 15)
             => DrawRect(new(screenRect.x, screenRect.y), new(screenRect.width, screenRect.height), color, thickness, roundness, rounded_corners);
         public void DrawRect(Vector2 topleft, Vector2 size, Color color, float thickness = 1f, float roundness = 0.0f, int rounded_corners = 15)
-            => _drawList[currentZIndex].AddRect(topleft, topleft + size, color.GetUInt(), roundness, rounded_corners, thickness);
+            => _drawList[currentZIndex].AddRect(topleft, topleft + size, color, roundness, rounded_corners, thickness);
         public void DrawRectFilled(Rect screenRect, Color color, float roundness = 0.0f, int rounded_corners = 15)
             => DrawRectFilled(new(screenRect.x, screenRect.y), new(screenRect.width, screenRect.height), color, roundness, rounded_corners);
         public void DrawRectFilled(Vector2 topleft, Vector2 size, Color color, float roundness = 0.0f, int rounded_corners = 15)
-            => _drawList[currentZIndex].AddRectFilled(topleft, topleft + size, color.GetUInt(), roundness, rounded_corners);
+            => _drawList[currentZIndex].AddRectFilled(topleft, topleft + size, color, roundness, rounded_corners);
         public void DrawLine(Vector2 start, Vector2 end, Color color, float thickness = 1f)
-            => _drawList[currentZIndex].AddLine(start, end, color.GetUInt(), thickness);
+            => _drawList[currentZIndex].AddLine(start, end, color, thickness);
         public void DrawCircle(Vector2 center, float radius, Color color, int segments = 12, float thickness = 1f)
-            => _drawList[currentZIndex].AddCircle(center, radius, color.GetUInt(), segments, thickness);
+            => _drawList[currentZIndex].AddCircle(center, radius, color, segments, thickness);
         public void DrawCircleFilled(Vector2 center, float radius, Color color, int segments = 12)
-            => _drawList[currentZIndex].AddCircleFilled(center, radius, color.GetUInt(), segments);
+            => _drawList[currentZIndex].AddCircleFilled(center, radius, color, segments);
         public void DrawTriangle(Vector2 a, Vector2 b, Vector2 c, Color color, float thickness = 1f)
-            => _drawList[currentZIndex].AddTriangle(a, b, c, color.GetUInt(), thickness);
+            => _drawList[currentZIndex].AddTriangle(a, b, c, color, thickness);
         public void DrawTriangleFilled(Vector2 a, Vector2 b, Vector2 c, Color color)
-            => _drawList[currentZIndex].AddTriangleFilled(a, b, c, color.GetUInt());
+            => _drawList[currentZIndex].AddTriangleFilled(a, b, c, color);
 
 
         #region DrawImage
@@ -147,8 +147,7 @@ namespace Prowl.Runtime.GUI
                 }
             }
 
-            #warning Veldrid change
-            //_drawList[currentZIndex].AddImage(texture.Handle, position, position + size, uv0, uv1, color.GetUInt());
+            _drawList[currentZIndex].AddImage(texture, position, position + size, uv0, uv1, color);
         }
 
         #endregion
@@ -185,17 +184,16 @@ namespace Prowl.Runtime.GUI
             => DrawText(UIDrawList.DefaultFont, text, fontSize, position, Color.white, wrapwidth);
 
         public void DrawText(string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f)
-            => _drawList[currentZIndex].AddText((float)fontSize, position, color.GetUInt(), text, wrap_width: (float)wrapwidth);
+            => _drawList[currentZIndex].AddText((float)fontSize, position, color, text, wrap_width: (float)wrapwidth);
 
         public void DrawText(Font font, string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f, Rect? clip = null)
         {
-            #warning Veldrid change
-            //_drawList[currentZIndex].PushTextureID(font.Texture.Handle);
-            
+            _drawList[currentZIndex].PushTexture(font.Texture);
+        
             if (clip != null)
-                _drawList[currentZIndex].AddText(font, (float)fontSize, position, color.GetUInt(), text, wrap_width: (float)wrapwidth, cpu_fine_clip_rect: new Vector4(clip.Value.Position, clip.Value.Position + clip.Value.Size));
+                _drawList[currentZIndex].AddText(font, (float)fontSize, position, color, text, wrap_width: (float)wrapwidth, cpu_fine_clip_rect: new Vector4(clip.Value.Position, clip.Value.Position + clip.Value.Size));
             else
-                _drawList[currentZIndex].AddText(font, (float)fontSize, position, color.GetUInt(), text, wrap_width: (float)wrapwidth);
+                _drawList[currentZIndex].AddText(font, (float)fontSize, position, color, text, wrap_width: (float)wrapwidth);
             _drawList[currentZIndex].PopTextureID();
         }
     }

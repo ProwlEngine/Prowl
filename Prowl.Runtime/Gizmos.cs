@@ -69,10 +69,17 @@ layout(set = 0, binding = 0) uniform MVPBuffer
     mat4 MVPMatrix;
 };
 
+layout (constant_id = 0) const bool UV_STARTS_AT_TOP = true;
+
 void main()
 {
     vec4 clipPos = MVPMatrix * vec4(vertexPosition, 1.0);
     gl_Position = clipPos;
+
+    if (UV_STARTS_AT_TOP)
+    {
+        gl_Position.y = -gl_Position.y;
+    }
 }
             ";
 
@@ -93,7 +100,7 @@ void main()
             ";
 
             // Pass creation info (Name, tags)
-            Pass pass = new Pass("DrawGizmos", []);
+            Pass pass = new Pass("Gizmos", null);
 
             pass.CreateProgram(Graphics.CreateFromSpirv(vertex, fragment));
 

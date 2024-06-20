@@ -39,7 +39,7 @@ namespace Prowl.Runtime.GUI
             Draw3D = new(this);
         }
 
-        public void ProcessFrame(Rect screenRect, float uiScale, Vector2 frameBufferScale, Action<Gui> gui)
+        public void ProcessFrame(Veldrid.CommandList commandList, Rect screenRect, float uiScale, Vector2 frameBufferScale, Action<Gui> gui)
         {
             UpdateAnimations(Time.deltaTime);
 
@@ -70,7 +70,7 @@ namespace Prowl.Runtime.GUI
             DoPass(gui, frameBufferScale);
             PopNode();
 
-            Draw2D.EndFrame(screenRect);
+            Draw2D.EndFrame(commandList, screenRect);
 
             // Look for any nodes whos HashCode does not match the previously computed nodes
             layoutDirty = _createdNodes.Count != _computedNodes.Count;

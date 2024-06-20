@@ -28,12 +28,12 @@ namespace Prowl.Runtime
             Keywords = keywords ?? KeywordState.Empty;
         }
 
-        public void SetPass(CommandList commandList, int passIndex = 0, PolygonFillMode fill = PolygonFillMode.Solid, PrimitiveTopology topology = PrimitiveTopology.TriangleList)
+        public void SetPass(CommandList commandList, int passIndex = 0, PolygonFillMode fill = PolygonFillMode.Solid, PrimitiveTopology topology = PrimitiveTopology.TriangleList, bool scissorTest = false)
         {
             activePass = passIndex;
             Pass pass = Shader.Res.GetPass(passIndex);
 
-            boundPipeline = ResourceCache.GetPipelineForPass(pass, fillMode: fill, topology: topology);
+            boundPipeline = ResourceCache.GetPipelineForPass(pass, fillMode: fill, topology: topology, scissor: scissorTest);
 
             commandList.SetPipeline(boundPipeline.pipeline);
         }
@@ -88,18 +88,13 @@ namespace Prowl.Runtime
 
                     if (resource.type == ResourceType.Texture || resource.type == ResourceType.Sampler)
                     {
-                        AssetRef<Texture> tex = PropertyBlock.GetTexture(resource.name).GetValueOrDefault(null);
-
-                        if (tex == null || tex.Res == null)
-                        {
-                            description.BoundResources[res] = null;
-                            continue;
-                        }
+                        AssetRef<Texture>? texRef = PropertyBlock.GetTexture(resource.name);
+                        Texture tex = texRef.GetValueOrDefault(Texture2D.EmptyWhite).Res ?? Texture2D.EmptyWhite;
                         
                         if (resource.type == ResourceType.Texture)
-                            description.BoundResources[res] = tex.Res.TextureView;
+                            description.BoundResources[res] = tex.TextureView;
                         else
-                            description.BoundResources[res] = tex.Res.Sampler.InternalSampler;
+                            description.BoundResources[res] = tex.Sampler.InternalSampler;
                         
                         continue;
                     }

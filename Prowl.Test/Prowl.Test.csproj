@@ -10,7 +10,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <EmbeddedResource Include="Cat.png" />
+      <EmbeddedResource Include="Sample1.png" />
+      <EmbeddedResource Include="Sample2.jpg" />
     </ItemGroup>
 
     <ItemGroup>

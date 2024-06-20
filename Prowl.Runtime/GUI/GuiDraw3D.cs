@@ -54,7 +54,7 @@ namespace Prowl.Runtime.GUI
 
             bool closed = points.Count > 0 && Vector2.Distance(points[0], points[points.Count - 1]) < 1e-2;
 
-            _gui.Draw2D.DrawList.AddPolyline(points, closed ? points.Count - 1 : points.Count, stroke.Color.GetUInt(), closed, (float)stroke.Thickness, stroke.AntiAliased);
+            _gui.Draw2D.DrawList.AddPolyline(points, closed ? points.Count - 1 : points.Count, stroke.Color, closed, (float)stroke.Thickness, stroke.AntiAliased);
         }
 
         public void Circle(double radius, Stroke3D stroke) => Arc(radius, 0.0, 360, stroke);
@@ -65,7 +65,7 @@ namespace Prowl.Runtime.GUI
 
             var points = QuadPoints(radius * 2.0);
             if (points.Count <= 0) return;
-            _gui.Draw2D.DrawList.AddPolyline(points, points.Count, stroke.Color.GetUInt(), true, (float)stroke.Thickness, stroke.AntiAliased);
+            _gui.Draw2D.DrawList.AddPolyline(points, points.Count, stroke.Color, true, (float)stroke.Thickness, stroke.AntiAliased);
         }
 
         public void FilledCircle(double radius, Stroke3D stroke)
@@ -75,7 +75,7 @@ namespace Prowl.Runtime.GUI
 
             var points = ArcPoints(radius, 0.0, Math.PI * 2);
             if (points.Count <= 0) return;
-            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count - 1, stroke.Color.GetUInt(), stroke.AntiAliased);
+            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count - 1, stroke.Color, stroke.AntiAliased);
         }
 
         public void LineSegment(Vector3 from, Vector3 to, Stroke3D stroke)
@@ -94,7 +94,7 @@ namespace Prowl.Runtime.GUI
                     return;
             }
 
-            _gui.Draw2D.DrawList.AddLine(points[0], points[1], stroke.Color.GetUInt(), (float)stroke.Thickness);
+            _gui.Draw2D.DrawList.AddLine(points[0], points[1], stroke.Color, (float)stroke.Thickness);
         }
 
         public void Arrow(Vector3 from, Vector3 to, Stroke3D stroke)
@@ -109,12 +109,12 @@ namespace Prowl.Runtime.GUI
                 Vector2 cross = new Vector2(-direction.y, direction.x) * stroke.Thickness / 2.0f;
 
                 UIBuffer<Vector2> points = new UIBuffer<Vector2>();
-                points.reserve(3);
+                points.Reserve(3);
                 points.Add(arrowStart - cross);
                 points.Add(arrowStart + cross);
                 points.Add(arrowEnd);
 
-                _gui.Draw2D.DrawList.AddConvexPolyFilled(points, 3, stroke.Color.GetUInt(), stroke.AntiAliased);
+                _gui.Draw2D.DrawList.AddConvexPolyFilled(points, 3, stroke.Color, stroke.AntiAliased);
             }
         }
 
@@ -129,7 +129,7 @@ namespace Prowl.Runtime.GUI
                     screenPoints.Add(screenPos);
 
             if (screenPoints.Count > 2)
-                _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, stroke.Color.GetUInt(), stroke.AntiAliased);
+                _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, stroke.Color, stroke.AntiAliased);
         }
 
         public void Polyline(IEnumerable<Vector3> points, Stroke3D stroke)
@@ -143,7 +143,7 @@ namespace Prowl.Runtime.GUI
                     screenPoints.Add(screenPos);
 
             if (screenPoints.Count > 1)
-                _gui.Draw2D.DrawList.AddPolyline(screenPoints, screenPoints.Count, stroke.Color.GetUInt(), false, (float)stroke.Thickness, stroke.AntiAliased);
+                _gui.Draw2D.DrawList.AddPolyline(screenPoints, screenPoints.Count, stroke.Color, false, (float)stroke.Thickness, stroke.AntiAliased);
         }
 
         public void Sector(double radius, double startAngle, double endAngle, Stroke3D stroke)
@@ -161,7 +161,7 @@ namespace Prowl.Runtime.GUI
                 return;
 
             var points = new UIBuffer<Vector2>();
-            points.reserve(stepCount + 1);
+            points.Reserve(stepCount + 1);
 
             double stepSize = angleDelta / (stepCount - 1);
 
@@ -196,7 +196,7 @@ namespace Prowl.Runtime.GUI
 
             if (points.Count <= 0) return;
 
-            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count, stroke.Color.GetUInt(), stroke.AntiAliased);
+            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count, stroke.Color, stroke.AntiAliased);
         }
 
         private UIBuffer<Vector2> ArcPoints(double radius, double startRad, double endRad)
@@ -205,7 +205,7 @@ namespace Prowl.Runtime.GUI
 
             int stepCount = Steps(angle);
             var points = new UIBuffer<Vector2>();
-            points.reserve(stepCount);
+            points.Reserve(stepCount);
 
             double stepSize = angle / (stepCount - 1);
 
@@ -227,7 +227,7 @@ namespace Prowl.Runtime.GUI
         private UIBuffer<Vector2> QuadPoints(double size)
         {
             var points = new UIBuffer<Vector2>();
-            points.reserve(4);
+            points.Reserve(4);
 
             double halfSize = size / 2.0;
 

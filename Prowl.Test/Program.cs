@@ -10,6 +10,10 @@ internal static class Program
 {
     static DirectoryInfo Data => new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
 
+
+    static Texture2D sampleImage1;
+    static Texture2D sampleImage2;
+
     static double secondCounter;
     static int temp;
     static Transform camTrs = new Transform();
@@ -23,7 +27,7 @@ internal static class Program
 
         Application.Initialize += () =>
         {
-            Graphics.VSync = false;
+            Graphics.VSync = true;
             Input.SetCursorVisible(false);
             Input.LockCursor(true);
 
@@ -31,6 +35,11 @@ internal static class Program
             camTrs.LookAt(Vector3.zero, Vector3.up);
 
             Graphics.SetCamera(camTrs, 1.0f);
+
+            sampleImage1 = Texture2DLoader.FromFile("Sample1.png");
+            sampleImage2 = Texture2DLoader.FromFile("Sample2.jpg");
+
+            Graphics.onGUI += OnGUI;
         };
 
         Application.Update += () =>
@@ -70,18 +79,6 @@ internal static class Program
             Gizmos.Matrix = Matrix4x4.CreateRotationX(90 * MathD.Deg2Rad);
             Gizmos.DrawArc(Vector3.zero, 1.0f, 0.0f, 360.0f);
 
-            Gizmos.Color = Color.red;
-            Gizmos.DrawCapsule(new Vector3(-2.0, 0.0, 0.0), 0.5f, 1f);
-
-            Gizmos.Color = Color.green;
-            Gizmos.DrawCylinder(new Vector3(2.0, 0.0, 0.0), 0.5f, 2.0f);
-
-            Gizmos.Color = Color.blue;
-            Gizmos.DrawSphere(new Vector3(0.0, -2.0, 0.0), 0.5f);
-
-            Gizmos.Color = Color.magenta;
-            Gizmos.DrawCube(new Vector3(0.0, 2.0, 0.0), Vector3.one);
-
             Gizmos.Render();
 
             Graphics.EndFrame();
@@ -95,6 +92,25 @@ internal static class Program
         Application.Run("Prowl Test", 1920, 1080, null, false);
 
         return 0;
+    }
+
+
+    private static void OnGUI(Prowl.Runtime.GUI.Gui gui)
+    {
+        Rect pos = new Rect(Screen.Size.x / 2 - 250, Screen.Size.y / 2 - 300, 500, 600);
+
+        gui.Draw2D.DrawRectFilled(pos, Color.green, 5, 5);
+
+        pos.height = 100;
+
+        gui.Draw2D.DrawText("Pollo 👍", 150, pos, Color.white, doclip:false);
+
+        pos.x += 25;
+        pos.y += 125;
+        pos.height = 450;
+        pos.width = 450;
+
+        gui.Draw2D.DrawImage(sampleImage2, pos, Color.white);
     }
 
 }

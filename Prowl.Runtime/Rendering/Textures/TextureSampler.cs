@@ -43,9 +43,9 @@ namespace Prowl.Runtime
         public uint MaximumLod;
         public uint MinimumLod;
 
-        public static readonly TextureSampler Aniso4x = new TextureSampler(SamplerDescription.Aniso4x);
-        public static readonly TextureSampler Linear = new TextureSampler(SamplerDescription.Linear);
-        public static readonly TextureSampler Point = new TextureSampler(SamplerDescription.Point);
+        public static TextureSampler CreateAniso4x() => new TextureSampler(SamplerDescription.Aniso4x);
+        public static TextureSampler CreateLinear() => new TextureSampler(SamplerDescription.Linear);
+        public static TextureSampler CreatePoint() => new TextureSampler(SamplerDescription.Point);
 
 
         internal TextureSampler() : base("New Sampler") { }

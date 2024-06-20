@@ -32,7 +32,7 @@ namespace Prowl.Runtime
         public bool IsMipmappable => Usage.HasFlag(TextureUsage.GenerateMipmaps);
 
         /// <summary>The sampler for this <see cref="Veldrid.Texture"/></summary>
-        public TextureSampler Sampler { get; private set; } = TextureSampler.Linear;
+        public TextureSampler Sampler = TextureSampler.CreateLinear();
 
 
         /// <summary>The internal <see cref="Veldrid.Texture"/> representation.</summary>

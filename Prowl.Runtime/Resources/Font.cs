@@ -31,7 +31,7 @@ namespace Prowl.Runtime
 
         public void CreateResource()
         {
-            Texture = new Texture2D((uint)Width, (uint)Height, 0, PixelFormat.R8_G8_B8_A8_SNorm, TextureUsage.Sampled | TextureUsage.Staging);
+            Texture = new Texture2D((uint)Width, (uint)Height, 0, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled);
             Memory<Color32> data = new Memory<Color32>(Bitmap);
             Texture.SetData(data);
         }
@@ -309,7 +309,7 @@ namespace Prowl.Runtime
             return s;
         }
 
-        public Rect RenderText(double size, Vector2 pos, uint color, Vector4 clipRect, string text, int textBegin, int textEnd, UIDrawList drawList, double wrapWidth = 0.0, bool cpuFineClip = false)
+        public Rect RenderText(double size, Vector2 pos, Color32 color, Vector4 clipRect, string text, int textBegin, int textEnd, UIDrawList drawList, double wrapWidth = 0.0, bool cpuFineClip = false)
         {
             if (textEnd == -1)
                 textEnd = text.Length;
@@ -476,10 +476,10 @@ namespace Prowl.Runtime
             {
                 for (int i = 0; i < Bitmap.Length; i++)
                 {
-                    writer.Write(Bitmap[i].red);
-                    writer.Write(Bitmap[i].green);
-                    writer.Write(Bitmap[i].blue);
-                    writer.Write(Bitmap[i].alpha);
+                    writer.Write(Bitmap[i].r);
+                    writer.Write(Bitmap[i].g);
+                    writer.Write(Bitmap[i].b);
+                    writer.Write(Bitmap[i].a);
                 }
                 compoundTag.Add("Bitmap", new(memoryStream.ToArray()));
             }
@@ -515,10 +515,10 @@ namespace Prowl.Runtime
                 Bitmap = new Color32[Width * Height];
                 for (int i = 0; i < Bitmap.Length; i++)
                 {
-                    Bitmap[i].red = reader.ReadByte();
-                    Bitmap[i].green = reader.ReadByte();
-                    Bitmap[i].blue = reader.ReadByte();
-                    Bitmap[i].alpha = reader.ReadByte();
+                    Bitmap[i].r = reader.ReadByte();
+                    Bitmap[i].g = reader.ReadByte();
+                    Bitmap[i].b = reader.ReadByte();
+                    Bitmap[i].a = reader.ReadByte();
                 }
             }
 
@@ -677,14 +677,14 @@ namespace Prowl.Runtime
                 for (var i = 0; i < _bitmap.Length; ++i)
                 {
                     var b = _bitmap[i];
-                    font.Bitmap[i].red = 255;
-                    font.Bitmap[i].green = 255;
-                    font.Bitmap[i].blue = 255;
+                    font.Bitmap[i].r = 255;
+                    font.Bitmap[i].g = 255;
+                    font.Bitmap[i].b = 255;
 
-                    font.Bitmap[i].alpha = b;
+                    font.Bitmap[i].a = b;
                 }
                 // Set the first pixel to white (TexUvWhitePixel)
-                font.Bitmap[0] = new Color32 { red = 255, green = 255, blue = 255, alpha = 255 };
+                font.Bitmap[0] = new Color32 { r = 255, g = 255, b = 255, a = 255 };
 
                 font.CreateResource();
 
