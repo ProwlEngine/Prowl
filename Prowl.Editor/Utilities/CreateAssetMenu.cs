@@ -24,7 +24,7 @@ namespace Prowl.Editor
                         {
                             var attribute = type.GetCustomAttribute<CreateAssetMenu>();
                             if (attribute != null)
-                                values.Add(("Create/" + attribute.Name, type));
+                                values.Add(("Assets/" + attribute.Name, type));
                         }
                 }
                 catch { }
@@ -59,21 +59,21 @@ namespace Prowl.Editor
             // Set menus as trees for testing
             //Menus = trees;
             // Add trees into Menu without overwriting
-            if (!Menus.ContainsKey("Create"))
-                Menus["Create"] = trees["Create"];
+            if (!Menus.ContainsKey("Assets"))
+                Menus["Assets"] = trees["Assets"];
             else
             {
-                foreach (var child in trees["Create"].Children)
-                    Menus["Create"].Children.Add(child);
+                foreach (var child in trees["Assets"].Children)
+                    Menus["Assets"].Children.Add(child);
             }
 
         }
 
         public static void CreateAsset(Type type)
         {
-            MainMenuItems.Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+            EditorGuiManager.Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
             var obj = Activator.CreateInstance(type);
-            FileInfo file = new FileInfo(MainMenuItems.Directory + $"/New {type.Name}.scriptobj");
+            FileInfo file = new FileInfo(EditorGuiManager.Directory + $"/New {type.Name}.scriptobj");
             while (File.Exists(file.FullName))
             {
                 file = new FileInfo(file.FullName.Replace(".scriptobj", "") + " New.scriptobj");

@@ -1,15 +1,10 @@
-﻿using Prowl.Runtime.GUI;
+﻿using Prowl.Icons;
 using Prowl.Runtime;
-using Prowl.Icons;
+using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
-using ImageMagick;
 
 namespace Prowl.Editor
 {
-
-    // 1. rename the configs to be easier to understand
-    // 2. Multi-Select, always return a List<FileSystemInfo> instead of a single file path
-
     public enum FileDialogType { OpenFile, SaveFile, Count }
     public enum FileDialogSortBy { Name, Date, Size, Type, None }
 
@@ -107,7 +102,9 @@ namespace Prowl.Editor
 
                         using (gui.Node("BackBtn").ExpandHeight().Left(left).Width(GuiStyle.ItemHeight).Enter())
                         {
-                            var hovered = gui.IsNodeHovered() && _BackStack.Count > 0;
+                            var hovered = gui.IsNodeHovered();
+                            if(_BackStack.Count > 0)
+                                hovered = !hovered;
                             gui.Draw2D.DrawText(FontAwesome6.ChevronLeft, 20, gui.CurrentNode.LayoutData.InnerRect,
                                 hovered ? GuiStyle.Base11 : GuiStyle.Base4);
 
@@ -123,7 +120,7 @@ namespace Prowl.Editor
                         {
                             var hovered = gui.IsNodeHovered();
                             gui.Draw2D.DrawText(FontAwesome6.ChevronUp, 20, gui.CurrentNode.LayoutData.InnerRect,
-                                hovered ? GuiStyle.Base11 : GuiStyle.Base4);
+                                hovered ? GuiStyle.Base4 : GuiStyle.Base11);
                             if (gui.IsNodePressed())
                             {
                                 _BackStack.Push(Dialog.directoryPath);
@@ -162,7 +159,7 @@ namespace Prowl.Editor
                         {
                             // name = 50%, size = 20%, date = 20%, type = 10%
 
-                            using (gui.Node("NameColumn").FitContentHeight().Layout(LayoutType.Column).Enter())
+                            using (gui.Node("NameCol").FitContentHeight().Layout(LayoutType.Column).Enter())
                             {
                                 gui.CurrentNode.Width(Size.Percentage(0.5f));
                                 using (gui.Node("sortName").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
@@ -179,7 +176,7 @@ namespace Prowl.Editor
                                 });
                             }
 
-                            using (gui.Node("SizeColumn").FitContentHeight().Layout(LayoutType.Column).Enter())
+                            using (gui.Node("SizeCol").FitContentHeight().Layout(LayoutType.Column).Enter())
                             {
                                 gui.CurrentNode.Width(Size.Percentage(0.2f));
                                 using (gui.Node("sortSize").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
@@ -191,7 +188,7 @@ namespace Prowl.Editor
                                 DrawEntries(true, f => (f is FileInfo file) ? toMemSizeReadable(file.Length) : "");
                             }
 
-                            using (gui.Node("DateColumn").FitContentHeight().Layout(LayoutType.Column).Enter())
+                            using (gui.Node("DateCol").FitContentHeight().Layout(LayoutType.Column).Enter())
                             {
                                 gui.CurrentNode.Width(Size.Percentage(0.2f));
                                 using (gui.Node("sortDate").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
@@ -204,7 +201,7 @@ namespace Prowl.Editor
                                 DrawEntries(true, f => f.LastWriteTime.ToString("dd/MM/yy HH:mm"));
                             }
 
-                            using (gui.Node("TypeColumn").FitContentHeight().Layout(LayoutType.Column).Enter())
+                            using (gui.Node("TypeCol").FitContentHeight().Layout(LayoutType.Column).Enter())
                             {
                                 gui.CurrentNode.Width(Size.Percentage(0.1f));
                                 using (gui.Node("typeDate").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
@@ -218,7 +215,6 @@ namespace Prowl.Editor
                             }
 
                             gui.ScrollV();
-
                         }
 
                         using (gui.Node("Footer").ExpandWidth().Height(GuiStyle.ItemHeight).Top(Offset.Percentage(1f, -GuiStyle.ItemHeight)).Enter())
@@ -266,6 +262,7 @@ namespace Prowl.Editor
 
                 if(gui.IsNodePressed())
                 {
+                    _BackStack.Push(Dialog.directoryPath);
                     Dialog.directoryPath = new DirectoryInfo(path);
                     Dialog.UpdateCache();
                 }

@@ -30,6 +30,7 @@ public class PreferencesWindow : SingletonEditorWindow
     public override void RenderSideView()
     {
         RenderSideViewElement(GeneralPreferences.Instance);
+        RenderSideViewElement(EditorPreferences.Instance);
         RenderSideViewElement(AssetPipelinePreferences.Instance);
         RenderSideViewElement(SceneViewPreferences.Instance);
     }

@@ -15,12 +15,10 @@ namespace Prowl.Editor.Preferences
         [ShowIf("LockFPS", true)]
         public bool VSync = true;
 
-        [Indent]
         [Text("Debugging:")]
         public bool ShowDebugLogs = true;
         public bool ShowDebugWarnings = true;
         public bool ShowDebugErrors = true;
-        [Unindent]
         public bool ShowDebugSuccess = true;
 
         [Text("Game View:")]
@@ -31,6 +29,14 @@ namespace Prowl.Editor.Preferences
         public int CurrentWidth = 1280;
         [HideInInspector]
         public int CurrentHeight = 720;
+
+    }
+
+    [FilePath("Editor.pref", FilePathAttribute.Location.EditorPreference)]
+    public class EditorPreferences : ScriptableSingleton<EditorPreferences>
+    {
+        [Text("UI:")]
+        public bool AntiAliasing = false;
 
     }
 }

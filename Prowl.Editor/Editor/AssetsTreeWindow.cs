@@ -1,4 +1,5 @@
 ﻿using Prowl.Editor.Assets;
+using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
@@ -8,73 +9,6 @@ using Prowl.Runtime.SceneManagement;
 
 namespace Prowl.Editor
 {
-    // TODO: Cache the directories and files - Do same for AssetsBrowserWindow
-    // Something like:
-    //public class DirectoryCache
-    //{
-    //    private class DirectoryNode(DirectoryInfo directory)
-    //    {
-    //        public DirectoryInfo Directory = directory;
-    //        public List<DirectoryNode> SubDirectories = [];
-    //        public List<FileInfo> Files = [];
-    //    }
-    //
-    //    private DirectoryNode _rootNode;
-    //
-    //    public void Refresh(string rootPath)
-    //    {
-    //        DirectoryInfo rootDirectory = new DirectoryInfo(rootPath);
-    //        _rootNode = BuildDirectoryTree(rootDirectory);
-    //    }
-    //
-    //    private DirectoryNode BuildDirectoryTree(DirectoryInfo directory)
-    //    {
-    //        DirectoryNode node = new(directory);
-    //        try
-    //        {
-    //            var directories = directory.GetDirectories();
-    //            foreach (DirectoryInfo subDirectory in directories)
-    //            {
-    //                if (!subDirectory.Exists)
-    //                    continue;
-    //
-    //                DirectoryNode subNode = BuildDirectoryTree(subDirectory);
-    //                node.SubDirectories.Add(subNode);
-    //            }
-    //
-    //            var files = directory.GetFiles();
-    //            foreach (FileInfo file in files)
-    //            {
-    //                if (!File.Exists(file.FullName))
-    //                    continue;
-    //
-    //                node.Files.Add(file);
-    //            }
-    //        }
-    //        catch (Exception)
-    //        {
-    //            // Handle any exceptions that occur during directory traversal
-    //        }
-    //
-    //        return node;
-    //    }
-    //
-    //    public void TraverseDirectoryTree(Action<DirectoryInfo, int> directoryAction, Action<FileInfo> fileAction)
-    //    {
-    //        TraverseDirectoryNode(_rootNode, 0, directoryAction, fileAction);
-    //    }
-    //
-    //    private void TraverseDirectoryNode(DirectoryNode node, int depth, Action<DirectoryInfo, int> directoryAction, Action<FileInfo> fileAction)
-    //    {
-    //        directoryAction(node.Directory, depth);
-    //
-    //        foreach (DirectoryNode subNode in node.SubDirectories)
-    //            TraverseDirectoryNode(subNode, depth + 1, directoryAction, fileAction);
-    //
-    //        foreach (FileInfo file in node.Files)
-    //            fileAction(file);
-    //    }
-    //}
     public class AssetsTreeWindow : EditorWindow
     {
         const double entryPadding = 4;
@@ -181,9 +115,9 @@ namespace Prowl.Editor
                 }
                 else
                 {
-                    RenderRootFolder(true, AssetDatabase.GetRootFolders()[2], GuiStyle.RandomPastelColor(100)); // Assets Folder
-                    RenderRootFolder(false, AssetDatabase.GetRootFolders()[0], GuiStyle.RandomPastelColor(200)); // Defaults Folder
-                    RenderRootFolder(false, AssetDatabase.GetRootFolders()[1], GuiStyle.RandomPastelColor(500)); // Packages Folder
+                    RenderRootFolder(true, AssetDatabase.GetRootFolderCache(2), GuiStyle.RandomPastelColor(100)); // Assets Folder
+                    RenderRootFolder(false, AssetDatabase.GetRootFolderCache(0), GuiStyle.RandomPastelColor(200)); // Defaults Folder
+                    RenderRootFolder(false, AssetDatabase.GetRootFolderCache(1), GuiStyle.RandomPastelColor(500)); // Packages Folder
                 }
 
                 if (!SelectHandler.SelectedThisFrame && dropInteract.TakeFocus())
@@ -201,7 +135,6 @@ namespace Prowl.Editor
             if (fileInfo == null)
             {
                 closePopup |= DrawCreateContextMenu(directory, fromAssetBrowser);
-                EditorGUI.Separator();
                 DrawProjectContextMenu(ref closePopup);
             }
             else if (fileInfo is FileInfo file)
@@ -285,15 +218,21 @@ namespace Prowl.Editor
 
         private static bool DrawCreateContextMenu(DirectoryInfo? directory, bool fromAssetBrowser)
         {
-            EditorGUI.Text("Create");
-
-            MainMenuItems.Directory = directory;
-            MainMenuItems.fromAssetBrowser = fromAssetBrowser;
+            EditorGuiManager.Directory = directory;
+            EditorGuiManager.fromAssetBrowser = fromAssetBrowser;
             return MenuItem.DrawMenuRoot("Create");
         }
 
         private static void DrawProjectContextMenu(ref bool closePopup)
         {
+            EditorGUI.Text("Editor");
+
+            if (EditorGUI.StyledButton("Refresh"))
+            {
+                AssetDatabase.Update(true, true);
+                closePopup = true;
+            }
+
             EditorGUI.Text("Project");
 
             if (EditorGUI.StyledButton("Reimport All"))
@@ -301,20 +240,9 @@ namespace Prowl.Editor
                 AssetDatabase.ReimportAll();
                 closePopup = true;
             }
-
-            if (EditorGUI.StyledButton("Open Project Settings"))
-            {
-                new ProjectSettingsWindow();
-                closePopup = true;
-            }
             if (EditorGUI.StyledButton("Recompile Project"))
             {
                 Program.RegisterReloadOfExternalAssemblies();
-                closePopup = true;
-            }
-            if (EditorGUI.StyledButton("Build Project"))
-            {
-                Project.BuildProject();
                 closePopup = true;
             }
             if (EditorGUI.StyledButton("Show Project In Explorer"))
@@ -324,58 +252,61 @@ namespace Prowl.Editor
             }
         }
 
-        private void RenderRootFolder(bool defaultOpen, DirectoryInfo root, Color col)
+        private void RenderRootFolder(bool defaultOpen, AssetDirectoryCache root, Color col)
         {
             bool expanded = false;
-            using (gui.Node(root.Name).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-gui.VScrollBarWidth()).Height(GuiStyle.ItemHeight).Enter())
+            using (gui.Node(root.RootName).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-gui.VScrollBarWidth()).Height(GuiStyle.ItemHeight).Enter())
             {
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, col, 4);
 
-                SelectHandler.AddSelectableAtIndex(_treeCounter, root);
+                SelectHandler.AddSelectableAtIndex(_treeCounter, root.Root);
                 var interact = gui.GetInteractable();
                 if (interact.TakeFocus())
-                    SelectHandler.Select(_treeCounter, root);
+                    SelectHandler.Select(_treeCounter, root.Root);
 
-                if (SelectHandler.IsSelected(root))
+                if (SelectHandler.IsSelected(root.Root))
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
                 else if (interact.IsHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
                 if (DragnDrop.Drop<FileSystemInfo>(out var systeminfo))
                 {
-                    string target = RuntimeUtils.GetUniquePath(Path.Combine(root.FullName, systeminfo.Name));
-                    if (systeminfo is FileInfo fileinfo)
-                        fileinfo?.MoveTo(target);
-                    else if (systeminfo is DirectoryInfo dirinfo)
-                        dirinfo?.MoveTo(target);
+                    string target = Path.Combine(root.RootDirectoryPath, systeminfo.Name);
+                    if (systeminfo is FileInfo file)
+                        AssetDatabase.Move(file, target);
+                    else if (systeminfo is DirectoryInfo dir)
+                        AssetDatabase.Move(dir, target);
                 }
 
-                expanded = gui.GetNodeStorage<bool>(root.FullName, defaultOpen);
+                expanded = gui.GetNodeStorage<bool>(root.RootDirectoryPath, defaultOpen);
                 using (gui.Node("ExpandBtn").TopLeft(5, 0).Scale(GuiStyle.ItemHeight).Enter())
                 {
                     if (gui.IsNodePressed())
                     {
                         expanded = !expanded;
-                        gui.SetNodeStorage(gui.CurrentNode.Parent, root.FullName, expanded);
+                        gui.SetNodeStorage(gui.CurrentNode.Parent, root.RootDirectoryPath, expanded);
                     }
                     gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
                 }
 
-                gui.Draw2D.DrawText(UIDrawList.DefaultFont, root.Name, 20, new Vector2(gui.CurrentNode.LayoutData.Rect.x + 40, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white);
+                gui.Draw2D.DrawText(UIDrawList.DefaultFont, root.RootName, 20, new Vector2(gui.CurrentNode.LayoutData.Rect.x + 40, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white);
 
                 _treeCounter++;
             }
 
-            float scaleAnim = gui.AnimateBool((ulong)root.FullName.GetHashCode(), expanded, 0.15f, EaseType.Linear);
+            float scaleAnim = gui.AnimateBool((ulong)root.RootDirectoryPath.GetHashCode(), expanded, 0.15f, EaseType.Linear);
             if (expanded || scaleAnim > 0f)
-                DrawDirectory(root, 1, scaleAnim);
+                DrawDirectory(root.RootNode, 1, scaleAnim);
         }
 
-        private void DrawDirectory(DirectoryInfo directory, int depth, float scaleHeight)
+        private Dictionary<string, bool> _ = new();
+
+        private void DrawDirectory(AssetDirectoryCache.DirNode dirNode, int depth, float scaleHeight)
         {
-            var directories = directory.GetDirectories();
-            foreach (DirectoryInfo subDirectory in directories)
+            var subDirs = dirNode.SubDirectories;
+            foreach (var subDirNode in subDirs)
             {
+                var subDirectory = subDirNode.Directory;
                 bool expanded = false;
                 var left = depth * GuiStyle.ItemHeight;
                 ulong subDirID = 0;
@@ -411,11 +342,11 @@ namespace Prowl.Editor
                     {
                         if (DragnDrop.Drop<FileSystemInfo>(out var systeminfo))
                         {
-                            string target = RuntimeUtils.GetUniquePath(Path.Combine(subDirectory.FullName, systeminfo.Name));
-                            if(systeminfo is FileInfo fileinfo)
-                                fileinfo?.MoveTo(target);
-                            else if(systeminfo is DirectoryInfo dirinfo)
-                                dirinfo?.MoveTo(target);
+                            string target = Path.Combine(subDirectory.FullName, systeminfo.Name);
+                            if(systeminfo is FileInfo file)
+                                AssetDatabase.Move(file, target);
+                            else if(systeminfo is DirectoryInfo dir)
+                                AssetDatabase.Move(dir, target);
                         }
                     }
 
@@ -430,22 +361,21 @@ namespace Prowl.Editor
                         gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
                     }
 
-                    var name = subDirectory.Name;
                     if (RenamingEntry == subDirectory.FullName)
                     {
                         var rect = gui.CurrentNode.LayoutData.Rect;
                         var inputRect = new Rect(rect.x + 33, rect.y + 4, rect.width - 40, 30 - 8);
                         gui.Draw2D.DrawRectFilled(inputRect, GuiStyle.WindowBackground, 8);
+                        var name = Path.GetFileNameWithoutExtension(subDirectory.Name);
                         bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 30, 0, Size.Percentage(1f), null, null, true);
                         if (justStartedRename)
                             gui.FocusPreviousInteractable();
                         if (!gui.PreviousInteractableIsFocus())
                             RenamingEntry = null;
                         //subDirectory.Name = name;
-                        string newPath = Path.Combine(subDirectory.Parent!.FullName, name);
-                        if (changed && !string.IsNullOrEmpty(name) && !subDirectory.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && !Directory.Exists(newPath))
+                        if (changed && !string.IsNullOrEmpty(name))
                         {
-                            subDirectory.MoveTo(newPath);
+                            AssetDatabase.Rename(subDirectory, name);
                             RenamingEntry = null;
                         }
 
@@ -461,26 +391,23 @@ namespace Prowl.Editor
                 gui.PushID(subDirID);
                 float scaleAnim = gui.AnimateBool((ulong)subDirectory.FullName.GetHashCode(), expanded, 0.15f, EaseType.Linear);
                 if (expanded || scaleAnim > 0f)
-                    DrawDirectory(subDirectory, depth + 1, scaleAnim);
+                    DrawDirectory(subDirNode, depth + 1, scaleAnim);
                 gui.PopID();
             }
 
-            var files = directory.GetFiles();
-            foreach (FileInfo file in files)
+            var subFiles = dirNode.Files;
+            foreach (var subFileNode in subFiles)
             {
-                string ext = file.Extension.ToLower().Trim();
+                var subFile = subFileNode.File;
+                string ext = subFile.Extension.ToLower().Trim();
                 if (ext.Equals(".meta", StringComparison.OrdinalIgnoreCase))
                     continue;
-
-                AssetDatabase.SubAssetCache[] subassets = Array.Empty<AssetDatabase.SubAssetCache>();
-                if (AssetDatabase.TryGetGuid(file, out var guid))
-                    subassets = AssetDatabase.GetSubAssetsCache(guid);
 
                 bool expanded = false;
                 var left = depth * GuiStyle.ItemHeight;
                 ulong fileNodeID = 0;
                 // File Entry
-                using (gui.Node(file.Name, depth).Left(left).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-(left + gui.VScrollBarWidth())).Height(GuiStyle.ItemHeight * scaleHeight).Enter())
+                using (gui.Node(subFile.Name, depth).Left(left).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).ExpandWidth(-(left + gui.VScrollBarWidth())).Height(GuiStyle.ItemHeight * scaleHeight).Enter())
                 {
                     fileNodeID = gui.CurrentNode.ID;
                     //if (_treeCounter++ % 2 == 0)
@@ -489,51 +416,49 @@ namespace Prowl.Editor
                     //    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GetFileColor(ext, 0.6f, 1f), 4);
 
                     var interact = gui.GetInteractable();
-                    HandleFileClick(_treeCounter, interact, file, 0);
+                    HandleFileClick(_treeCounter, interact, subFileNode, 0);
 
-                    if (SelectHandler.IsSelected(file))
+                    if (SelectHandler.IsSelected(subFile))
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
                     else if (interact.IsHovered())
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
-                    if (subassets.Length > 1)
+                    if (subFileNode.SubAssets.Length > 1)
                     {
-                        expanded = gui.GetNodeStorage<bool>(gui.CurrentNode.Parent, file.FullName, false);
+                        expanded = gui.GetNodeStorage<bool>(gui.CurrentNode.Parent, subFile.FullName, false);
                         using (gui.Node("ExpandBtn").TopLeft(Offset.Percentage(1f, -GuiStyle.ItemHeight), 0).Scale(GuiStyle.ItemHeight).Enter())
                         {
                             if (gui.IsNodePressed())
                             {
                                 expanded = !expanded;
-                                gui.SetNodeStorage(gui.CurrentNode.Parent.Parent, file.FullName, expanded);
+                                gui.SetNodeStorage(gui.CurrentNode.Parent.Parent, subFile.FullName, expanded);
                             }
                             gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
                         }
                     }
 
                     var textRect = gui.CurrentNode.LayoutData.Rect;
-                    if (subassets.Length > 1)
+                    if (subFileNode.SubAssets.Length > 1)
                         textRect.width -= GuiStyle.ItemHeight;
                     gui.Draw2D.DrawText(UIDrawList.DefaultFont, GetIcon(ext), 20, new Vector2(gui.CurrentNode.LayoutData.Rect.x + (GuiStyle.ItemHeight / 2), gui.CurrentNode.LayoutData.Rect.y + 7), GetFileColor(ext), 0, textRect);
 
                     // Display Name
-                    var name = file.Name;
-                    if (RenamingEntry == file.FullName)
+                    if (RenamingEntry == subFile.FullName)
                     {
                         var rect = gui.CurrentNode.LayoutData.Rect;
                         var inputRect = new Rect(rect.x + 33, rect.y + 4, rect.width - 40, 30 - 8);
                         gui.Draw2D.DrawRectFilled(inputRect, GuiStyle.WindowBackground, 8);
+                        var name = Path.GetFileNameWithoutExtension(subFile.Name);
                         bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 30, 0, Size.Percentage(1f), null, null, true);
                         if (justStartedRename)
                             gui.FocusPreviousInteractable();
                         if (!gui.PreviousInteractableIsFocus())
                             RenamingEntry = null;
 
-                        string newPath = Path.Combine(file.DirectoryName!, name);
-                        if (changed && !string.IsNullOrEmpty(name) && !file.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && !File.Exists(newPath))
+                        if (changed && !string.IsNullOrEmpty(name))
                         {
-                            file.MoveTo(newPath);
+                            AssetDatabase.Rename(subFile, name);
                             RenamingEntry = null;
-                            AssetDatabase.Update();
                         }
                         
 
@@ -541,7 +466,8 @@ namespace Prowl.Editor
                     }
                     else
                     {
-                        gui.Draw2D.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(gui.CurrentNode.LayoutData.Rect.x + 40, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white, 0, textRect);
+                        var text = AssetPipelinePreferences.Instance.HideExtensions ? Path.GetFileNameWithoutExtension(subFile.FullName) : Path.GetFileName(subFile.FullName);
+                        gui.Draw2D.DrawText(UIDrawList.DefaultFont, text, 20, new Vector2(gui.CurrentNode.LayoutData.Rect.x + 40, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white, 0, textRect);
                     }
                 }
 
@@ -553,25 +479,25 @@ namespace Prowl.Editor
                     gui.PushID(fileNodeID);
                     left = (depth + 1) * GuiStyle.ItemHeight;
 
-                    for (ushort i = 0; i < subassets.Length; i++)
+                    for (ushort i = 0; i < subFileNode.SubAssets.Length; i++)
                     {
-                        if (subassets[i].type == null) continue;
+                        if (subFileNode.SubAssets[i].type == null) continue;
 
                         // SubAsset Entry
-                        using (gui.Node(subassets[i].name, depth + 1 + i).Left(left).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).Width(Size.Percentage(1f, -(left + gui.VScrollBarWidth()))).Height(GuiStyle.ItemHeight * scaleHeight).Enter())
+                        using (gui.Node(subFileNode.SubAssets[i].name, depth + 1 + i).Left(left).Top(_treeCounter * (GuiStyle.ItemHeight + entryPadding)).Width(Size.Percentage(1f, -(left + gui.VScrollBarWidth()))).Height(GuiStyle.ItemHeight * scaleHeight).Enter())
                         {
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GetTypeColor(subassets[i].type!) * 0.5f, 4);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GetTypeColor(subFileNode.SubAssets[i].type!) * 0.5f, 4);
 
                             var interact = gui.GetInteractable();
-                            HandleFileClick(_treeCounter, interact, file, i);
+                            HandleFileClick(_treeCounter, interact, subFileNode, i);
 
-                            if (SelectHandler.IsSelected(file))
+                            if (SelectHandler.IsSelected(subFile))
                                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
                             else if (interact.IsHovered())
                                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
 
-                            gui.Draw2D.DrawText(UIDrawList.DefaultFont, GetIconForType(subassets[i].type!), 20, new Vector2(gui.CurrentNode.LayoutData.Rect.x + (GuiStyle.ItemHeight / 2), gui.CurrentNode.LayoutData.Rect.y + 7), GetTypeColor(subassets[i].type!));
-                            gui.Draw2D.DrawText(UIDrawList.DefaultFont, subassets[i].name, 20, new Vector2(gui.CurrentNode.LayoutData.Rect.x + 40, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white);
+                            gui.Draw2D.DrawText(UIDrawList.DefaultFont, GetIconForType(subFileNode.SubAssets[i].type!), 20, new Vector2(gui.CurrentNode.LayoutData.Rect.x + (GuiStyle.ItemHeight / 2), gui.CurrentNode.LayoutData.Rect.y + 7), GetTypeColor(subFileNode.SubAssets[i].type!));
+                            gui.Draw2D.DrawText(UIDrawList.DefaultFont, subFileNode.SubAssets[i].name, 20, new Vector2(gui.CurrentNode.LayoutData.Rect.x + 40, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white);
                         }
 
                         _treeCounter++;
@@ -583,16 +509,15 @@ namespace Prowl.Editor
             }
         }
 
-        public static void HandleFileClick(int index, Interactable interact, FileInfo entry, ushort fileID = 0, bool fromAssetBrowser = false)
+        public static void HandleFileClick(int index, Interactable interact, AssetDirectoryCache.FileNode entryNode, ushort fileID = 0, bool fromAssetBrowser = false)
         {
-            Guid guid;
-            bool isAsset = AssetDatabase.TryGetGuid(entry, out guid);
+            var entry = entryNode.File;
 
-            if (isAsset && ImporterAttribute.SupportsExtension(entry.Extension))
+            if (entryNode.AssetID != Guid.Empty && ImporterAttribute.SupportsExtension(entry.Extension))
             {
                 if (DragnDrop.OnBeginDrag(out var node))
                 {
-                    var serialized = AssetDatabase.LoadAsset(guid);
+                    var serialized = AssetDatabase.LoadAsset(entryNode.AssetID);
                     using (node.Width(20).Height(20).Enter())
                     {
                         Gui.ActiveGUI.Draw2D.DrawList.PushClipRectFullScreen();
@@ -607,6 +532,7 @@ namespace Prowl.Editor
                 DragnDrop.Drag(entry);
             }
 
+            // Skip handling Sub Assets
             if (fileID != 0) return;
 
             if(index != -1)
@@ -621,10 +547,10 @@ namespace Prowl.Editor
                 using (node2.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
                     DrawContextMenu(entry, null, fromAssetBrowser, popupHolder);
 
-            if (isAsset && interact.IsHovered() && Gui.ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+            if (entryNode.AssetID != Guid.Empty && interact.IsHovered() && Gui.ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
             {
                 if (entry.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase))
-                    SceneManager.LoadScene(new AssetRef<Runtime.Scene>(guid));
+                    SceneManager.LoadScene(new AssetRef<Runtime.Scene>(entryNode.AssetID));
                 else
                     AssetDatabase.OpenPath(entry);
             }
