@@ -101,7 +101,7 @@ namespace Prowl.Editor
             Menus = trees;
         }
 
-        public static bool DrawMenuRoot(string root)
+        public static bool DrawMenuRoot(string root, bool simpleRoot = false, Size? rootSize = null)
         {
             if (Menus == null) return false;
             if (root == null) return false;
@@ -110,13 +110,13 @@ namespace Prowl.Editor
             if (node.Children.Count == 0) return false;
 
             bool changed = false;
-            changed |= DrawMenu(node);
+            changed |= DrawMenu(node, simpleRoot, 0, rootSize);
             //foreach (var child in node.Children)
             //    changed |= DrawMenu(child);
             return changed;
         }
 
-        static bool DrawMenu(MenuPath menu)
+        static bool DrawMenu(MenuPath menu, bool simpleRoot, int depth, Size? rootSize = null)
         {
             if (menu == null) return false;
             if (menu.Children.Count == 0)
@@ -129,18 +129,28 @@ namespace Prowl.Editor
             }
             else
             {
-
                 if (EditorGUI.StyledButton(menu.Path))
-                    Gui.ActiveGUI.OpenPopup(menu.Path + "Popup", Gui.ActiveGUI.PreviousNode.LayoutData.Rect.TopRight);
+                {
+                    Vector2 pos = Gui.ActiveGUI.PreviousNode.LayoutData.Rect.TopRight;
+                    if (simpleRoot)
+                        pos = Gui.ActiveGUI.PreviousNode.LayoutData.Rect.BottomLeft;
+                    Gui.ActiveGUI.OpenPopup(menu.Path + "Popup", pos);
+                }
 
                 // Enter the Button's Node
                 using (Gui.ActiveGUI.PreviousNode.Enter())
                 {
+                    if (rootSize != null)
+                        Gui.ActiveGUI.CurrentNode.Width(rootSize.Value);
+
                     // Draw a > to indicate a popup
-                    Rect rect = Gui.ActiveGUI.CurrentNode.LayoutData.Rect;
-                    rect.x = rect.x + rect.width - 25;
-                    rect.width = 20;
-                    Gui.ActiveGUI.Draw2D.DrawText(FontAwesome6.ChevronRight, rect, Color.white);
+                    if (depth != 0 || !simpleRoot)
+                    {
+                        Rect rect = Gui.ActiveGUI.CurrentNode.LayoutData.Rect;
+                        rect.x = rect.x + rect.width - 25;
+                        rect.width = 20;
+                        Gui.ActiveGUI.Draw2D.DrawText(FontAwesome6.ChevronRight, rect, Color.white);
+                    }
                 }
 
                 if (Gui.ActiveGUI.BeginPopup(menu.Path + "Popup", out var node))
@@ -149,7 +159,7 @@ namespace Prowl.Editor
                     {
                         bool changed = false;
                         foreach (var child in menu.Children)
-                            changed |= DrawMenu(child);
+                            changed |= DrawMenu(child, false, depth + 1);
                         return changed;
                     }
                 }

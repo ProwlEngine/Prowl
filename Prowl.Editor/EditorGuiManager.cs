@@ -1,7 +1,13 @@
+using Prowl.Editor.Assets;
 using Prowl.Editor.Docking;
 using Prowl.Editor.Preferences;
+using Prowl.Editor.Utilities;
+using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
+using Prowl.Runtime.GUI.Graphics;
+using Prowl.Runtime.SceneManagement;
+using System.Reflection;
 
 namespace Prowl.Editor;
 
@@ -72,106 +78,158 @@ public static class EditorGuiManager
             // Draw Background
             g.Draw2D.DrawRectFilled(g.ScreenRect, GuiStyle.Background);
 
-            Container ??= new();
-            var rect = g.ScreenRect;
-            rect.Expand(-8);
-            Container.Update(rect);
+            g.CurrentNode.Layout(LayoutType.Column);
+            g.CurrentNode.ScaleChildren();
 
-
-            if (DragSplitter != null)
+            using (g.Node("Main_Header").ExpandWidth().MaxHeight(40).Padding(5, 15).Enter())
             {
-                DragSplitter.GetSplitterBounds(out var bmins, out var bmaxs, 4);
+                using (g.Node("MenuBar").ExpandHeight().FitContentWidth().Layout(LayoutType.Row).Enter())
+                {
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
+                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, GuiStyle.Borders, 2, 10);
 
-                g.SetZIndex(11000);
-                g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
-                g.SetZIndex(0);
+                    MenuItem.DrawMenuRoot("File", true, UIDrawList.DefaultFont.CalcTextSize("File", 0).x + 20);
+                    MenuItem.DrawMenuRoot("Edit", true, UIDrawList.DefaultFont.CalcTextSize("Edit", 0).x + 20);
+                    MenuItem.DrawMenuRoot("Assets", true, UIDrawList.DefaultFont.CalcTextSize("Assets", 0).x + 20);
+                    MenuItem.DrawMenuRoot("Create", true, UIDrawList.DefaultFont.CalcTextSize("Create", 0).x + 20);
+                    MenuItem.DrawMenuRoot("Windows", true, UIDrawList.DefaultFont.CalcTextSize("Windows", 0).x + 20);
+                }
 
-                if (!g.IsPointerDown(Silk.NET.Input.MouseButton.Left))
-                    DragSplitter = null;
+                using (g.Node("PlayMode").ExpandHeight().FitContentWidth().Layout(LayoutType.Row).Enter())
+                {
+                    g.CurrentNode.Left(Offset.Percentage(0.5f, -(g.CurrentNode.LayoutData.Scale.x / 2)));
+
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
+                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, GuiStyle.Borders, 2, 10);
+
+                    switch (PlayMode.Current)
+                    {
+                        case PlayMode.Mode.Editing:
+                            if (EditorGUI.StyledButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                                PlayMode.Start();
+                            break;
+                        case PlayMode.Mode.Playing:
+                            if (EditorGUI.StyledButton(FontAwesome6.Pause, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                                PlayMode.Pause();
+                            if (EditorGUI.StyledButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
+                                PlayMode.Stop();
+                            break;
+                        case PlayMode.Mode.Paused:
+                            if (EditorGUI.StyledButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                                PlayMode.Resume();
+                            if (EditorGUI.StyledButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
+                                PlayMode.Stop();
+                            break;
+
+                    }
+                }
             }
 
-            if (DraggingWindow == null)
+            using (g.Node("Main_Content").ExpandWidth().Enter())
             {
-                Vector2 cursorPos = g.PointerPos;
-                if (!g.IsPointerMoving && (g.ActiveID == 0 || g.ActiveID == null) && DragSplitter == null)
+                Container ??= new();
+                var rect = g.CurrentNode.LayoutData.Rect;
+                rect.Expand(-8);
+                rect.Min.y -= 15; // Top needs no padding
+                Container.Update(rect);
+
+
+                if (DragSplitter != null)
                 {
-                    if (!Gui.IsBlockedByInteractable(cursorPos))
+                    DragSplitter.GetSplitterBounds(out var bmins, out var bmaxs, 4);
+
+                    g.SetZIndex(11000);
+                    g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
+                    g.SetZIndex(0);
+
+                    if (!g.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+                        DragSplitter = null;
+                }
+
+                if (DraggingWindow == null)
+                {
+                    Vector2 cursorPos = g.PointerPos;
+                    if (!g.IsPointerMoving && (g.ActiveID == 0 || g.ActiveID == null) && DragSplitter == null)
                     {
-                        DockNode node = Container.Root.TraceSeparator(cursorPos.x, cursorPos.y);
-                        if (node != null)
+                        if (!Gui.IsBlockedByInteractable(cursorPos))
                         {
-                            node.GetSplitterBounds(out var bmins, out var bmaxs, 4);
-
-                            g.SetZIndex(11000);
-                            g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
-                            g.SetZIndex(0);
-
-                            if (g.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+                            DockNode node = Container.Root.TraceSeparator(cursorPos.x, cursorPos.y);
+                            if (node != null)
                             {
-                                m_DragPos = cursorPos;
-                                DragSplitter = node;
-                                if (DragSplitter.Type == DockNode.NodeType.SplitVertical)
-                                    m_StartSplitPos = MathD.Lerp(DragSplitter.Mins.x, DragSplitter.Maxs.x, DragSplitter.SplitDistance);
-                                else
-                                    m_StartSplitPos = MathD.Lerp(DragSplitter.Mins.y, DragSplitter.Maxs.y, DragSplitter.SplitDistance);
+                                node.GetSplitterBounds(out var bmins, out var bmaxs, 4);
+
+                                g.SetZIndex(11000);
+                                g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
+                                g.SetZIndex(0);
+
+                                if (g.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+                                {
+                                    m_DragPos = cursorPos;
+                                    DragSplitter = node;
+                                    if (DragSplitter.Type == DockNode.NodeType.SplitVertical)
+                                        m_StartSplitPos = MathD.Lerp(DragSplitter.Mins.x, DragSplitter.Maxs.x, DragSplitter.SplitDistance);
+                                    else
+                                        m_StartSplitPos = MathD.Lerp(DragSplitter.Mins.y, DragSplitter.Maxs.y, DragSplitter.SplitDistance);
+                                }
                             }
                         }
                     }
-                }
-                else if (g.IsPointerMoving && DragSplitter != null)
-                {
-                    Vector2 dragDelta = cursorPos - m_DragPos;
-
-                    if (DragSplitter.Type == DockNode.NodeType.SplitVertical)
+                    else if (g.IsPointerMoving && DragSplitter != null)
                     {
-                        double w = DragSplitter.Maxs.x - DragSplitter.Mins.x;
-                        double split = m_StartSplitPos + dragDelta.x;
-                        split -= DragSplitter.Mins.x;
-                        split = (double)Math.Floor(split);
-                        split = Math.Clamp(split, 1.0f, w - 1.0f);
-                        split /= w;
+                        Vector2 dragDelta = cursorPos - m_DragPos;
 
-                        DragSplitter.SplitDistance = split;
-                    }
-                    else if (DragSplitter.Type == DockNode.NodeType.SplitHorizontal)
-                    {
-                        double h = DragSplitter.Maxs.y - DragSplitter.Mins.y;
-                        double split = m_StartSplitPos + dragDelta.y;
-                        split -= DragSplitter.Mins.y;
-                        split = (double)Math.Floor(split);
-                        split = Math.Clamp(split, 1.0f, h - 1.0f);
-                        split /= h;
+                        if (DragSplitter.Type == DockNode.NodeType.SplitVertical)
+                        {
+                            double w = DragSplitter.Maxs.x - DragSplitter.Mins.x;
+                            double split = m_StartSplitPos + dragDelta.x;
+                            split -= DragSplitter.Mins.x;
+                            split = (double)Math.Floor(split);
+                            split = Math.Clamp(split, 1.0f, w - 1.0f);
+                            split /= w;
 
-                        DragSplitter.SplitDistance = split;
+                            DragSplitter.SplitDistance = split;
+                        }
+                        else if (DragSplitter.Type == DockNode.NodeType.SplitHorizontal)
+                        {
+                            double h = DragSplitter.Maxs.y - DragSplitter.Mins.y;
+                            double split = m_StartSplitPos + dragDelta.y;
+                            split -= DragSplitter.Mins.y;
+                            split = (double)Math.Floor(split);
+                            split = Math.Clamp(split, 1.0f, h - 1.0f);
+                            split /= h;
+
+                            DragSplitter.SplitDistance = split;
+                        }
                     }
                 }
-            }
 
-            // Focus Windows first
-            var windowList = new List<EditorWindow>(Windows);
-            for (int i = 0; i < windowList.Count; i++)
-            {
-                var window = windowList[i];
-                if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) || g.IsPointerClick(Silk.NET.Input.MouseButton.Right)))
-                    if (!g.IsBlockedByInteractable(g.PointerPos, window.MaxZ))
-                        FocusWindow(window);
-            }
-
-            // Draw/Update Windows
-            for (int i = 0; i < windowList.Count; i++)
-            {
-                var window = windowList[i];
-                if (!window.IsDocked || window.Leaf.LeafWindows[window.Leaf.WindowNum] == window)
+                // Focus Windows first
+                var windowList = new List<EditorWindow>(Windows);
+                for (int i = 0; i < windowList.Count; i++)
                 {
-                    g.SetZIndex(i * 100);
-                    g.PushID((ulong)window._id);
-                    window.ProcessFrame();
-                    g.PopID();
+                    var window = windowList[i];
+                    if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) || g.IsPointerClick(Silk.NET.Input.MouseButton.Right)))
+                        if (!g.IsBlockedByInteractable(g.PointerPos, window.MaxZ))
+                            FocusWindow(window);
                 }
 
+                // Draw/Update Windows
+                for (int i = 0; i < windowList.Count; i++)
+                {
+                    var window = windowList[i];
+                    if (!window.IsDocked || window.Leaf.LeafWindows[window.Leaf.WindowNum] == window)
+                    {
+                        g.SetZIndex(i * 100);
+                        g.PushID((ulong)window._id);
+                        window.ProcessFrame();
+                        g.PopID();
+                    }
+
+                }
+                g.SetZIndex(0);
             }
-            g.SetZIndex(0);
-        });
+        }
+        );
 
         foreach (var window in WindowsToRemove)
         {
@@ -182,5 +240,253 @@ public static class EditorGuiManager
             Windows.Remove(window);
         }
         WindowsToRemove.Clear();
+
     }
+
+    #region MenuBar
+
+
+
+    [MenuItem("File/New Scene")]
+    public static void NewScene()
+    {
+        SceneManager.Clear();
+        SceneManager.InstantiateNewScene();
+    }
+
+    [MenuItem("File/Save Scene")]
+    public static void SaveScene()
+    {
+        Scene scene = SceneManager.MainScene;
+        if (scene.AssetID == Guid.Empty || !AssetDatabase.Contains(scene.AssetID))
+        {
+            SaveSceneAs();
+            return;
+        }
+
+        if (AssetDatabase.TryGetFile(scene.AssetID, out var file))
+        {
+            AssetDatabase.Delete(file);
+
+            var allGameObjects = SceneManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
+            scene = Scene.Create(allGameObjects);
+            StringTagConverter.WriteToFile(Serializer.Serialize(scene), file);
+            AssetDatabase.Update();
+            AssetDatabase.Ping(file);
+        }
+    }
+
+    [MenuItem("File/Save Scene As")]
+    public static void SaveSceneAs()
+    {
+        FileDialogContext imFileDialogInfo = new FileDialogContext() {
+            title = "Save As",
+            fileName = "New Scene.scene",
+            directoryPath = new DirectoryInfo(Project.ProjectAssetDirectory),
+            type = FileDialogType.SaveFile,
+            OnComplete = (path) =>
+            {
+                // Make sure path is relative to ProjectAssetDirectory
+                var file = new FileInfo(path);
+                if (!AssetDatabase.FileIsInProject(file))
+                    return;
+
+                if (File.Exists(path))
+                    AssetDatabase.Delete(file);
+
+                // If no extension (or wrong extension) add .scene
+                if (!file.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase))
+                    file = new FileInfo(file.FullName + ".scene");
+
+                var allGameObjects = SceneManager.AllGameObjects.Where(x => !x.hideFlags.HasFlag(HideFlags.DontSave) && !x.hideFlags.HasFlag(HideFlags.HideAndDontSave)).ToArray();
+                Scene scene = Scene.Create(allGameObjects);
+                var tag = Serializer.Serialize(scene);
+                StringTagConverter.WriteToFile(tag, file);
+                AssetDatabase.Update();
+                AssetDatabase.Ping(file);
+            }
+        };
+        FileDialog.Open(imFileDialogInfo);
+    }
+
+    [MenuItem("File/Build Project")] public static void File_BuildProject() => Project.BuildProject();
+
+
+    #region Templates
+
+    static Vector3 GetPosition()
+    {
+        // Last Focused Editor camera
+        var cam = SceneViewWindow.LastFocusedCamera;
+        // get position 10 units infront
+        var t = cam.GameObject;
+        return t.Transform.position + t.Transform.forward * 10;
+    }
+
+    [MenuItem("Create/3D/Cube")] public static void Create_3D_Cube() => CreateDefaultModel("Cube", typeof(BoxCollider));
+    [MenuItem("Create/3D/Sphere")] public static void Create_3D_Sphere() => CreateDefaultModel("Sphere", typeof(SphereCollider));
+    [MenuItem("Create/3D/Cylinder")] public static void Create_3D_Cylinder() => CreateDefaultModel("Cylinder", typeof(CylinderCollider));
+    [MenuItem("Create/3D/Capsule")] public static void Create_3D_Capsule() => CreateDefaultModel("Capsule", typeof(CapsuleCollider));
+    [MenuItem("Create/3D/Plane")] public static void Create_3D_Plane() => CreateDefaultModel("Plane", typeof(MeshCollider));
+    [MenuItem("Create/3D/Quad")] public static void Create_3D_Quad() => CreateDefaultModel("Quad", null);
+
+    private static void CreateDefaultModel(string name, Type? component)
+    {
+        var original = Application.AssetProvider.LoadAsset<GameObject>($"Defaults/{name}.obj");
+        if (original.IsAvailable)
+        {
+            var go = GameObject.Instantiate(original.Res!);
+            go.Transform.position = GetPosition();
+            if (component != null)
+                go.AddComponent(component);
+            HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+        }
+    }
+
+    [MenuItem("Create/Light/Ambient Light")]
+    public static void Create_Light_AmbientLight()
+    {
+        var go = new GameObject("Ambient Light");
+        go.AddComponent<AmbientLight>();
+        HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+    }
+
+    [MenuItem("Create/Light/Directional Light")]
+    public static void Create_Light_DirectionalLight()
+    {
+        var go = new GameObject("Directional Light");
+        go.AddComponent<DirectionalLight>();
+        go.Transform.position = GetPosition();
+        go.Transform.localEulerAngles = new System.Numerics.Vector3(45, 70, 0);
+        HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+    }
+
+    [MenuItem("Create/Light/Point Light")]
+    public static void Create_Light_PointLight()
+    {
+        var go = new GameObject("Point Light");
+        go.AddComponent<PointLight>();
+        go.Transform.position = GetPosition();
+        HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+    }
+
+    [MenuItem("Create/Light/Spot Light")]
+    public static void Create_Light_SpotLight()
+    {
+        var go = new GameObject("Spot Light");
+        go.AddComponent<SpotLight>();
+        go.Transform.position = GetPosition();
+        HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
+    }
+
+    #endregion
+
+
+    #region Assets
+    public static DirectoryInfo? Directory { get; set; }
+    public static bool fromAssetBrowser = false;
+
+    [MenuItem("Assets/Create/Folder")]
+    public static void CreateDir()
+    {
+        Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+
+        DirectoryInfo dir = new(Path.Combine(Directory.FullName, "New Folder"));
+        AssetDatabase.GenerateUniqueAssetPath(ref dir);
+        dir.Create();
+        if (fromAssetBrowser)
+            AssetsBrowserWindow.StartRename(dir.FullName);
+        else
+            AssetsTreeWindow.StartRename(dir.FullName);
+    }
+
+    [MenuItem("Assets/Create/Material")]
+    public static void CreateMaterial()
+    {
+        Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+
+        FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New Material.mat"));
+        AssetDatabase.GenerateUniqueAssetPath(ref file);
+
+        Material mat = new Material(Shader.Find("Defaults/Standard.shader"));
+        StringTagConverter.WriteToFile(Serializer.Serialize(mat), file);
+        if (fromAssetBrowser)
+            AssetsBrowserWindow.StartRename(file.FullName);
+        else
+            AssetsTreeWindow.StartRename(file.FullName);
+
+        AssetDatabase.Update();
+        AssetDatabase.Ping(file);
+    }
+
+    [MenuItem("Assets/Create/GuiStyle")]
+    public static void CreateGuiStyle()
+    {
+        Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+
+        FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New GuiStyle.guistyle"));
+        AssetDatabase.GenerateUniqueAssetPath(ref file);
+
+        GuiStyle style = new GuiStyle();
+        StringTagConverter.WriteToFile(Serializer.Serialize(style), file);
+        if (fromAssetBrowser)
+            AssetsBrowserWindow.StartRename(file.FullName);
+        else
+            AssetsTreeWindow.StartRename(file.FullName);
+
+        AssetDatabase.Update();
+        AssetDatabase.Ping(file);
+    }
+
+    [MenuItem("Assets/Create/Script")]
+    public static void CreateScript()
+    {
+        Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+
+        FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New Script.cs"));
+        AssetDatabase.GenerateUniqueAssetPath(ref file);
+
+        using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
+        using StreamReader reader = new StreamReader(stream);
+        string script = reader.ReadToEnd();
+        script = script.Replace("%SCRIPTNAME%", EditorUtils.FilterAlpha(Path.GetFileNameWithoutExtension(file.Name)));
+        File.WriteAllText(file.FullName, script);
+        if (fromAssetBrowser)
+            AssetsBrowserWindow.StartRename(file.FullName);
+        else
+            AssetsTreeWindow.StartRename(file.FullName);
+
+        AssetDatabase.Update();
+        AssetDatabase.Ping(file);
+    }
+
+    [MenuItem("Assets/Refresh Cache")]
+    public static void RefreshCache() => AssetDatabase.Update(true, true);
+    [MenuItem("Assets/Reimport All")]
+    public static void ReimportAll() => AssetDatabase.ReimportAll();
+    [MenuItem("Assets/Recompile")]
+    public static void Recompile() => Program.RegisterReloadOfExternalAssemblies();
+
+
+    #endregion
+
+    [MenuItem("Edit/Project Settings")] public static void Edit_ProjectSettings() => new ProjectSettingsWindow();
+    [MenuItem("Edit/Editor Preferences")] public static void Edit_Preferences() => new PreferencesWindow();
+
+    [MenuItem("Windows/Scene View")] public static void Window_SceneView() => new SceneViewWindow();
+    [MenuItem("Windows/Game View")] public static void Window_GameView() => new GameWindow();
+    [MenuItem("Windows/Hierarchy")] public static void Window_Hierarchy() => new HierarchyWindow();
+    [MenuItem("Windows/Inspector")] public static void Window_Inspector() => new InspectorWindow();
+    [MenuItem("Windows/Assets Browser")] public static void Window_AssetsBrowser() => new AssetsBrowserWindow();
+    [MenuItem("Windows/Assets Tree")] public static void Window_AssetsTree() => new AssetsTreeWindow();
+    [MenuItem("Windows/Console")] public static void Window_Console() => new ConsoleWindow();
+    [MenuItem("Windows/Project Settings")] public static void Window_ProjectSettings() => new ProjectSettingsWindow();
+    [MenuItem("Windows/Editor Preferences")] public static void Window_Preferences() => new PreferencesWindow();
+
+
+
+    #endregion
+
+
+
 }

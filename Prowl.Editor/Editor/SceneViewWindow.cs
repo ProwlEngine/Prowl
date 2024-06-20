@@ -319,7 +319,6 @@ public class SceneViewWindow : EditorWindow
         }
 
         DrawViewportSettings();
-        DrawPlayMode();
 
         if (SceneViewPreferences.Instance.ShowFPS)
         {
@@ -417,38 +416,6 @@ public class SceneViewWindow : EditorWindow
         else if (DragnDrop.Drop<Scene>(out var scene))
         {
             SceneManager.LoadScene(scene);
-        }
-    }
-
-    private void DrawPlayMode()
-    {
-        using (gui.Node("PSP").FitContentWidth().Height(GuiStyle.ItemHeight).Top(5).Layout(LayoutType.Row).Enter())
-        {
-            // Center
-            gui.CurrentNode.Left(Offset.Percentage(0.5f, -(gui.CurrentNode.LayoutData.Rect.width / 2)));
-
-            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
-
-            switch (PlayMode.Current)
-            {
-                case PlayMode.Mode.Editing:
-                    if (EditorGUI.StyledButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
-                        PlayMode.Start();
-                    break;
-                case PlayMode.Mode.Playing:
-                    if (EditorGUI.StyledButton(FontAwesome6.Pause, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
-                        PlayMode.Pause();
-                    if (EditorGUI.StyledButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
-                        PlayMode.Stop();
-                    break;
-                case PlayMode.Mode.Paused:
-                    if (EditorGUI.StyledButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
-                        PlayMode.Resume();
-                    if (EditorGUI.StyledButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
-                        PlayMode.Stop();
-                    break;
-
-            }
         }
     }
 
