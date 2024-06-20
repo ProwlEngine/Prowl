@@ -1,7 +1,6 @@
 ﻿using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
-using Veldrid;
 using System.Text;
 
 namespace Prowl.Test;
@@ -28,8 +27,8 @@ internal static class Program
         Application.Initialize += () =>
         {
             Graphics.VSync = true;
-            Input.SetCursorVisible(false);
-            Input.LockCursor(true);
+            Input.CursorHidden = true;
+            Input.CursorLocked = true;
 
             camTrs.position = new Vector3(0, 1, -10);
             camTrs.LookAt(Vector3.zero, Vector3.up);
@@ -56,8 +55,8 @@ internal static class Program
                 temp = 0;
             }
 
-            double lr = (Input.GetKey(Veldrid.Key.A) ? -1.0 : 0.0) + (Input.GetKey(Veldrid.Key.D) ? 1.0 : 0.0);
-            double fw = (Input.GetKey(Veldrid.Key.S) ? 1.0 : 0.0) + (Input.GetKey(Veldrid.Key.W) ? -1.0 : 0.0);
+            double lr = (Input.GetKey(Key.A) ? -1.0 : 0.0) + (Input.GetKey(Key.D) ? 1.0 : 0.0);
+            double fw = (Input.GetKey(Key.S) ? 1.0 : 0.0) + (Input.GetKey(Key.W) ? -1.0 : 0.0);
 
             camTrs.eulerAngles = new Vector3(camTrs.eulerAngles.x - Input.MouseDelta.y / 50.0f, camTrs.eulerAngles.y - Input.MouseDelta.x / 50.0f, 0.0f);
 
