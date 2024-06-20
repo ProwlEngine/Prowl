@@ -1,2 +1,0 @@
-/home/amog_os/Projects/Prowl/Prowl.Test/Texture2DLoader.cs(42,13): warning CS0618: 'EngineObject.Dispose()' is obsolete: 'You are advised to not use this! Use Destroy() Instead.' [/home/amog_os/Projects/Prowl/Prowl.Test/Prowl.Test.csproj]
-CSC : error CS1566: Error reading resource 'Prowl.Test.Cat.png' -- 'Could not find file '/home/amog_os/Projects/Prowl/Prowl.Test/Cat.png'.' [/home/amog_os/Projects/Prowl/Prowl.Test/Prowl.Test.csproj]
