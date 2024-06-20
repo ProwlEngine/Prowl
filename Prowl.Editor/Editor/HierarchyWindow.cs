@@ -310,14 +310,15 @@ namespace Prowl.Editor
                 var name = entity.Name;
                 if (m_RenamingGO == entity)
                 {
-                    var inputRect = new Rect(rect.x + 33, rect.y + 4, maxwidth - (entryHeight * 2.25), 21);
+                    var inputRect = new Rect(rect.x + 33, rect.y + 4, maxwidth - (entryHeight * 2.25), 30 - 8);
                     gui.Draw2D.DrawRectFilled(inputRect, GuiStyle.WindowBackground, 8);
-                    gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.None, 30, 3, maxwidth - (entryHeight * 2.25), null, null, true);
+                    gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.None, 30, 0, maxwidth - (entryHeight * 2.25), null, null, true);
                     if (justStartedRename)
                         gui.FocusPreviousInteractable();
                     if (!gui.PreviousInteractableIsFocus())
                         m_RenamingGO = null;
                     entity.Name = name;
+                    justStartedRename = false;
                 }
                 else
                 {

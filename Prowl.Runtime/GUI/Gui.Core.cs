@@ -28,18 +28,18 @@ namespace Prowl.Runtime.GUI
         private HashSet<ulong> _createdNodes;
         private float uiScale = 1f;
 
-        public Gui()
+        public Gui(bool antiAliasing)
         {
             rootNode = null;
             _computedNodes = [];
             _previousLayoutData = [];
             _createdNodes = [];
 
-            Draw2D = new(this);
+            Draw2D = new(this, antiAliasing);
             Draw3D = new(this);
         }
 
-        public void ProcessFrame(Rect screenRect, float uiScale, Vector2 frameBufferScale, Action<Gui> gui)
+        public void ProcessFrame(Rect screenRect, float uiScale, Vector2 frameBufferScale, bool antiAliasing, Action<Gui> gui)
         {
             UpdateAnimations(Time.deltaTime);
 
@@ -56,7 +56,7 @@ namespace Prowl.Runtime.GUI
 
             nextPopupIndex = 0;
 
-            Draw2D.BeginFrame();
+            Draw2D.BeginFrame(antiAliasing);
 
             rootNode = new LayoutNode(null, this, 0);
             rootNode.Width(screenRect.width).Height(screenRect.height);

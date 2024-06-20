@@ -14,26 +14,32 @@ namespace Prowl.Runtime.GUI
         private int currentZIndex => _gui.CurrentZIndex;
 
         private Gui _gui;
+        private bool _AntiAliasing;
         List<UIDrawList> drawListsOrdered = new();
 
-        public GuiDraw2D(Gui gui)
+        public GuiDraw2D(Gui gui, bool antiAliasing)
         {
             _gui = gui;
-            _drawList[0] = new UIDrawList(); // Root Draw List
+            _AntiAliasing = antiAliasing;
+            _drawList[0] = new UIDrawList(_AntiAliasing); // Root Draw List
         }
 
-        public void BeginFrame()
+        public void BeginFrame(bool antiAliasing)
         {
             if (!_drawList.ContainsKey(0))
-                _drawList[0] = new UIDrawList(); // Root Draw List
+                _drawList[0] = new UIDrawList(_AntiAliasing); // Root Draw List
+
+            _AntiAliasing = antiAliasing;
 
             drawListsOrdered.Clear();
             foreach (var index in _drawList.Keys.OrderBy(x => x))
             {
+                _drawList[index].AntiAliasing(antiAliasing);
                 _drawList[index].Clear();
                 _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
                 drawListsOrdered.Add(_drawList[index]);
             }
+
         }
 
         public void EndFrame(Rect screenRect)
@@ -64,7 +70,7 @@ namespace Prowl.Runtime.GUI
         {
             if (!_drawList.ContainsKey(index))
             {
-                _drawList[index] = new UIDrawList();
+                _drawList[index] = new UIDrawList(_AntiAliasing);
                 _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
             }
 

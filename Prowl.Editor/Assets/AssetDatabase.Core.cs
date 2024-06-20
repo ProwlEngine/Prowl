@@ -13,7 +13,6 @@ namespace Prowl.Editor.Assets
     public static partial class AssetDatabase
     {
         #region Properties
-
         public static Guid LastLoadedAssetID { get; private set; } = Guid.Empty;
         public static string TempAssetDirectory => Path.Combine(Project.ProjectDirectory, "Library/AssetDatabase");
 
@@ -28,7 +27,7 @@ namespace Prowl.Editor.Assets
 
         #region Private Fields
 
-        static readonly List<DirectoryInfo> rootFolders = [];
+        static readonly List<(DirectoryInfo, AssetDirectoryCache)> rootFolders = [];
         static double RefreshTimer = 0f;
         static bool lastFocused = false;
         static readonly Dictionary<string, MetaFile> assetPathToMeta = new(StringComparer.OrdinalIgnoreCase);
@@ -52,10 +51,20 @@ namespace Prowl.Editor.Assets
         }
 
         /// <summary>
+        /// Gets the root folder cache at the specified index.
+        /// </summary>
+        public static AssetDirectoryCache GetRootFolderCache(int index)
+        {
+            if (index < 0 || index >= rootFolders.Count)
+                throw new IndexOutOfRangeException("Index out of range");
+            return rootFolders[index].Item2;
+        }
+
+        /// <summary>
         /// Gets the list of root folders in the AssetDatabase.
         /// </summary>
         /// <returns>List of root folders.</returns>
-        public static List<DirectoryInfo> GetRootFolders() => rootFolders;
+        public static List<DirectoryInfo> GetRootFolders() => rootFolders.Select(x => x.Item1).ToList();
 
         /// <summary>
         /// Adds a root folder to the AssetDatabase.
@@ -71,17 +80,17 @@ namespace Prowl.Editor.Assets
             if (!info.Exists)
                 info.Create();
 
-            if (rootFolders.Contains(info))
+            if (rootFolders.Any(x => x.Item1.FullName.Equals(info.FullName, StringComparison.OrdinalIgnoreCase)))
                 throw new ArgumentException("Root Folder already exists in the Asset Database");
 
-            rootFolders.Add(info);
+            rootFolders.Add((info, new AssetDirectoryCache(info)));
         }
 
         /// <summary>
         /// Checks for changes in the AssetDatabase.
         /// Call manually when you make changes to the asset files to ensure the changes are loaded
         /// </summary>
-        public static void Update(bool doUnload = true)
+        public static void Update(bool doUnload = true, bool forceCacheUpdate = false)
         {
             if (!Project.HasProject) return;
 
@@ -92,7 +101,7 @@ namespace Prowl.Editor.Assets
             bool cacheModified = false;
             foreach (var root in rootFolders)
             {
-                var files = Directory.GetFiles(root.FullName, "*", SearchOption.AllDirectories)
+                var files = Directory.GetFiles(root.Item1.FullName, "*", SearchOption.AllDirectories)
                     .Where(file => !file.EndsWith(".meta"));
 
                 foreach (var file in files)
@@ -175,6 +184,11 @@ namespace Prowl.Editor.Assets
 
                 }
             }
+
+            // If anything changed update DirectoryCaches for Editor UI
+            if (forceCacheUpdate || cacheModified || toReimport.Count > 0)
+                foreach (var root in rootFolders)
+                    root.Item2.Refresh();
 
             if (cacheModified)
                 LastWriteTimesCache.Instance.Save();
@@ -281,7 +295,7 @@ namespace Prowl.Editor.Assets
         public static void ReimportAll()
         {
             foreach (var root in rootFolders)
-                ReimportFolder(root);
+                ReimportFolder(root.Item1);
         }
 
         /// <summary>

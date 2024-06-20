@@ -1,4 +1,5 @@
 using Prowl.Editor.Docking;
+using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 
@@ -23,7 +24,7 @@ public static class EditorGuiManager
 
     public static void Initialize()
     {
-        Gui = new();
+        Gui = new(EditorPreferences.Instance.AntiAliasing);
         Input.OnKeyEvent += Gui.SetKeyState;
         Input.OnMouseEvent += Gui.SetPointerState;
         Gui.OnPointerPosSet += (pos) => { Input.MousePosition = pos; };
@@ -66,7 +67,7 @@ public static class EditorGuiManager
         Vector2 framebufferAndInputScale = new((float)Window.InternalWindow.FramebufferSize.X / (float)Window.InternalWindow.Size.X, (float)Window.InternalWindow.FramebufferSize.Y / (float)Window.InternalWindow.Size.Y);
 
         Gui.PointerWheel = Input.MouseWheelDelta;
-        EditorGuiManager.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, (g) => {
+        EditorGuiManager.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, EditorPreferences.Instance.AntiAliasing, (g) => {
 
             // Draw Background
             g.Draw2D.DrawRectFilled(g.ScreenRect, GuiStyle.Background);
@@ -182,104 +183,4 @@ public static class EditorGuiManager
         }
         WindowsToRemove.Clear();
     }
-
-    #region GUI attributes
-
-    public static bool HandleBeginGUIAttributes(object target, IEnumerable<InspectorUIAttribute> attribs)
-    {
-        foreach (InspectorUIAttribute guiAttribute in attribs)
-            switch (guiAttribute.AttribType())
-            {
-
-                case GuiAttribType.Space:
-                    break;
-
-                case GuiAttribType.Text:
-                    break;
-
-                case GuiAttribType.Indent:
-                    break;
-
-                case GuiAttribType.ShowIf:
-                    var showIf = guiAttribute as ShowIfAttribute;
-                    var field = target.GetType().GetField(showIf.propertyName);
-                    if (field != null && field.FieldType == typeof(bool))
-                    {
-                        if ((bool)field.GetValue(target) == showIf.inverted)
-                            return false;
-                    }
-                    else
-                    {
-                        var prop = target.GetType().GetProperty(showIf.propertyName);
-                        if (prop != null && prop.PropertyType == typeof(bool))
-                        {
-                            if ((bool)prop.GetValue(target) == showIf.inverted)
-                                return false;
-                        }
-                    }
-                    break;
-
-                case GuiAttribType.Separator:
-                    break;
-
-                case GuiAttribType.Sameline:
-                    break;
-
-                case GuiAttribType.Disabled:
-                    break;
-
-                case GuiAttribType.Header:
-                    break;
-
-                case GuiAttribType.StartGroup:
-                    break;
-
-            }
-        return true;
-    }
-
-    public static void HandleEndAttributes(IEnumerable<InspectorUIAttribute> attribs)
-    {
-        foreach (InspectorUIAttribute guiAttribute in attribs)
-            switch (guiAttribute.AttribType())
-            {
-
-                case GuiAttribType.Disabled:
-                    break;
-
-                case GuiAttribType.Unindent:
-                    break;
-
-                case GuiAttribType.EndGroup:
-                    break;
-
-                case GuiAttribType.Tooltip:
-                    break;
-
-            }
-    }
-
-    public static bool HandleAttributeButtons(object target)
-    {
-        //foreach (MethodInfo method in target.GetType().GetMethods())
-        //{
-        //    var attribute = method.GetCustomAttribute<GUIButtonAttribute>();
-        //    if (attribute != null)
-        //        if (ImGui.Button(attribute.buttonText))
-        //        {
-        //            try
-        //            {
-        //                method.Invoke(target, null);
-        //            }
-        //            catch (Exception e)
-        //            {
-        //                Debug.LogError("Error During ImGui Button Execution: " + e.Message + "\n" + e.StackTrace);
-        //            }
-        //            return true;
-        //        }
-        //}
-        return false;
-    }
-
-    #endregion
 }

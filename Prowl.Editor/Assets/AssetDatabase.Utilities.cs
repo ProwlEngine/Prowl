@@ -83,7 +83,7 @@ namespace Prowl.Editor.Assets
         {
             foreach (var rootFolder in rootFolders)
             {
-                string rootFolderPath = rootFolder.FullName;
+                string rootFolderPath = rootFolder.Item1.FullName;
                 if (fullFilePath.StartsWith(rootFolderPath, StringComparison.OrdinalIgnoreCase))
                 {
                     string relativePath = fullFilePath[rootFolderPath.Length..];
@@ -93,7 +93,7 @@ namespace Prowl.Editor.Assets
                         relativePath = relativePath[1..];
 
                     // Add the root folder name to the relative path
-                    relativePath = Path.Combine(rootFolder.Name, relativePath);
+                    relativePath = Path.Combine(rootFolder.Item1.Name, relativePath);
 
                     return relativePath;
                 }
