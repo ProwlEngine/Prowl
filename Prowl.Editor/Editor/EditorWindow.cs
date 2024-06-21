@@ -223,7 +223,17 @@ namespace Prowl.Editor
                                 gui.Draw2D.DrawText(UIDrawList.DefaultFont, Title, 20, gui.CurrentNode.LayoutData.Rect, Color.white);
                             }
 
-                            DrawWindowManagementButton();
+                            if (!IsDocked)
+                            {
+                                // If the window isnt docked then theres no tab with a Close button
+                                // So we need to draw the close button on the title bar instead
+                                using (gui.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -20)).Enter())
+                                {
+                                    if (gui.IsNodePressed())
+                                        isOpened = false;
+                                    gui.Draw2D.DrawText(FontAwesome6.Xmark, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base6);
+                                }
+                            }
                         }
 
 
@@ -254,71 +264,6 @@ namespace Prowl.Editor
             }
 
             MaxZ = gui.GetCurrentInteractableZLayer();
-        }
-
-        private void DrawWindowManagementButton()
-        {
-            using (gui.Node("_WindowManageBtn").Width(20).Height(20).Left(Offset.Percentage(1f, -20)).Enter())
-            {
-                if (gui.IsNodePressed())
-                    gui.OpenPopup("WindowManagement");
-                gui.Draw2D.DrawText(FontAwesome6.EllipsisVertical, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base6);
-
-                if (gui.BeginPopup("WindowManagement", out var node))
-                {
-                    var popupHolder = gui.CurrentNode;
-                    using (node.Width(150).Layout(LayoutType.Column).Padding(5).FitContentHeight().Enter())
-                    {
-                        bool closePopup = false;
-                        if (EditorGUI.StyledButton("Duplicate"))
-                        {
-                            _ = (EditorWindow)Activator.CreateInstance(GetType());
-                            closePopup = true;
-                        }
-
-                        if (EditorGUI.StyledButton("Close All"))
-                        {
-                            if(!IsDocked)
-                                EditorGuiManager.Remove(this);
-                            else
-                            {
-                                foreach (var window in Leaf.LeafWindows)
-                                {
-                                    EditorGuiManager.Remove(window);
-                                }
-                            }
-                            closePopup = true;
-                        }
-
-                        EditorGUI.Separator();
-
-                        if (EditorGUI.StyledButton("Scene View"))            { new SceneViewWindow(); closePopup = true; }
-                        if (EditorGUI.StyledButton("Game"))                  { new GameWindow(); closePopup = true; }
-                        if (EditorGUI.StyledButton("Hierarchy"))             { new HierarchyWindow(); closePopup = true; }
-                        if (EditorGUI.StyledButton("Inspector"))             { new InspectorWindow(); closePopup = true; }
-                        if (EditorGUI.StyledButton("Asset Browser"))         { new AssetsBrowserWindow(); closePopup = true; }
-                        if (EditorGUI.StyledButton("Asset Tree"))            { new AssetsTreeWindow(); closePopup = true; }
-                        if (EditorGUI.StyledButton("Console"))               { new ConsoleWindow(); closePopup = true; }
-                        if (EditorGUI.StyledButton("Project Settings"))      { new ProjectSettingsWindow(); closePopup = true; }
-                        if (EditorGUI.StyledButton("Editor Preferences"))    { new PreferencesWindow(); closePopup = true; }
-
-                        if (closePopup)
-                            gui.ClosePopup(popupHolder);
-                    }
-                }
-            }
-
-            if (!IsDocked)
-            {
-                // If the window isnt docked then theres no tab with a Close button
-                // So we need to draw the close button on the title bar instead
-                using (gui.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -45)).Enter())
-                {
-                    if (gui.IsNodePressed())
-                        isOpened = false;
-                    gui.Draw2D.DrawText(FontAwesome6.Xmark, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base6);
-                }
-            }
         }
 
         private bool _wasResizing = false;

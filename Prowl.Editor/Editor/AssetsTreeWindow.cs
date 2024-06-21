@@ -135,7 +135,6 @@ namespace Prowl.Editor
             if (fileInfo == null)
             {
                 closePopup |= DrawCreateContextMenu(directory, fromAssetBrowser);
-                EditorGUI.Separator();
                 DrawProjectContextMenu(ref closePopup);
             }
             else if (fileInfo is FileInfo file)
@@ -219,10 +218,8 @@ namespace Prowl.Editor
 
         private static bool DrawCreateContextMenu(DirectoryInfo? directory, bool fromAssetBrowser)
         {
-            EditorGUI.Text("Create");
-
-            MainMenuItems.Directory = directory;
-            MainMenuItems.fromAssetBrowser = fromAssetBrowser;
+            EditorGuiManager.Directory = directory;
+            EditorGuiManager.fromAssetBrowser = fromAssetBrowser;
             return MenuItem.DrawMenuRoot("Create");
         }
 
@@ -230,8 +227,9 @@ namespace Prowl.Editor
         {
             EditorGUI.Text("Editor");
 
-            if (EditorGUI.StyledButton("Refresh Assets"))
+            if (EditorGUI.StyledButton("Refresh"))
             {
+                AssetDatabase.Update(true, true);
                 closePopup = true;
             }
 
@@ -242,20 +240,9 @@ namespace Prowl.Editor
                 AssetDatabase.ReimportAll();
                 closePopup = true;
             }
-
-            if (EditorGUI.StyledButton("Open Project Settings"))
-            {
-                new ProjectSettingsWindow();
-                closePopup = true;
-            }
             if (EditorGUI.StyledButton("Recompile Project"))
             {
                 Program.RegisterReloadOfExternalAssemblies();
-                closePopup = true;
-            }
-            if (EditorGUI.StyledButton("Build Project"))
-            {
-                Project.BuildProject();
                 closePopup = true;
             }
             if (EditorGUI.StyledButton("Show Project In Explorer"))

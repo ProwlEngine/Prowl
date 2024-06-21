@@ -138,7 +138,7 @@ namespace Prowl.Editor
                 closePopup = true;
             }
 
-            closePopup |= MenuItem.DrawMenuRoot("Template");
+            closePopup |= MenuItem.DrawMenuRoot("Create");
 
             if (parent != null)
             {
@@ -189,13 +189,6 @@ namespace Prowl.Editor
                     SceneViewWindow.SetCamera(parent.Transform.position, parent.Transform.rotation);
                     closePopup = true;
                 }
-            }
-
-            if (parent == null)
-            {
-                EditorGUI.Separator();
-                EditorGUI.Text("Scene");
-                closePopup |= MenuItem.DrawMenuRoot("Scene");
             }
 
             if (closePopup)

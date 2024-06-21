@@ -102,9 +102,9 @@ public static class Program
                 }
 
                 if (Hotkeys.IsHotkeyDown("SaveSceneAs", new() { Key = Key.S, Ctrl = true, Shift = true }))
-                    MainMenuItems.SaveSceneAs();
+                    EditorGuiManager.SaveSceneAs();
                 else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Key.S, Ctrl = true }))
-                    MainMenuItems.SaveScene();
+                    EditorGuiManager.SaveScene();
                 else if (Hotkeys.IsHotkeyDown("BuildProject", new() { Key = Key.B, Ctrl = true }))
                     Project.BuildProject();
 
