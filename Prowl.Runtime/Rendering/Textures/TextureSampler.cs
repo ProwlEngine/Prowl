@@ -15,6 +15,14 @@ namespace Prowl.Runtime
         Point
     }
 
+    public enum TextureWrapMode
+    {
+        Border = SamplerAddressMode.Border,
+        Clamp = SamplerAddressMode.Clamp,
+        Mirror = SamplerAddressMode.Mirror,
+        Wrap = SamplerAddressMode.Wrap,
+    }
+
     public sealed class TextureSampler : EngineObject, ISerializable
     {
         private Sampler _internalSampler;
@@ -31,9 +39,9 @@ namespace Prowl.Runtime
         }
 
 
-        public SamplerAddressMode WrapModeU = SamplerAddressMode.Clamp;
-        public SamplerAddressMode WrapModeV = SamplerAddressMode.Clamp;
-        public SamplerAddressMode WrapModeW = SamplerAddressMode.Clamp;
+        public TextureWrapMode WrapModeU = TextureWrapMode.Clamp;
+        public TextureWrapMode WrapModeV = TextureWrapMode.Clamp;
+        public TextureWrapMode WrapModeW = TextureWrapMode.Clamp;
 
         public SamplerBorderColor BorderColor = SamplerBorderColor.OpaqueBlack;
         public SamplerFilter Filter = SamplerFilter.MinLinear_MagLinear_MipLinear;
@@ -52,9 +60,9 @@ namespace Prowl.Runtime
 
         internal TextureSampler(SamplerDescription description) : this()
         {
-            WrapModeU = description.AddressModeU;
-            WrapModeV = description.AddressModeV;
-            WrapModeW = description.AddressModeW;
+            WrapModeU = (TextureWrapMode)description.AddressModeU;
+            WrapModeV = (TextureWrapMode)description.AddressModeV;
+            WrapModeW = (TextureWrapMode)description.AddressModeW;
             BorderColor = description.BorderColor;
             Filter = description.Filter;
             LodBias = description.LodBias;
@@ -67,9 +75,9 @@ namespace Prowl.Runtime
         {
             SamplerDescription description = new()
             {
-                AddressModeU = WrapModeU,
-                AddressModeV = WrapModeV,
-                AddressModeW = WrapModeW,
+                AddressModeU = (SamplerAddressMode)WrapModeU,
+                AddressModeV = (SamplerAddressMode)WrapModeV,
+                AddressModeW = (SamplerAddressMode)WrapModeW,
                 BorderColor = BorderColor,
                 Filter = Filter,
                 LodBias = LodBias,
@@ -82,11 +90,11 @@ namespace Prowl.Runtime
             {
                 OnDispose();
                 _internalDescription = description;
-                _internalSampler = Graphics.ResourceFactory.CreateSampler(ref _internalDescription);
+                _internalSampler = Graphics.Factory.CreateSampler(ref _internalDescription);
             }
         }
 
-        public void SetWrapMode(SamplerAxis axis, SamplerAddressMode mode)
+        public void SetWrapMode(SamplerAxis axis, TextureWrapMode mode)
         {
             if (axis.HasFlag(SamplerAxis.U))
                 WrapModeU = mode;
@@ -185,9 +193,9 @@ namespace Prowl.Runtime
 
         public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
-            WrapModeU = (SamplerAddressMode)value["WrapModeU"].IntValue;
-            WrapModeV = (SamplerAddressMode)value["WrapModeV"].IntValue;
-            WrapModeW = (SamplerAddressMode)value["WrapModeW"].IntValue;
+            WrapModeU = (TextureWrapMode)value["WrapModeU"].IntValue;
+            WrapModeV = (TextureWrapMode)value["WrapModeV"].IntValue;
+            WrapModeW = (TextureWrapMode)value["WrapModeW"].IntValue;
             BorderColor = (SamplerBorderColor)value["BorderColor"].IntValue;
             Filter = (SamplerFilter)value["Filter"].IntValue;
             LodBias = value["LodBias"].IntValue;

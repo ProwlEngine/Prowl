@@ -62,6 +62,41 @@ namespace Prowl.Runtime
 
     public sealed class Shader : EngineObject, ISerializable
     {
+        const string defaultVertex = @"
+            #version 450
+
+            layout(location = 0) in vec3 Position;
+
+            void main()
+            {
+                gl_Position = vec4(Position.xyz, 1.0);
+            }
+            ";
+
+        const string defaultFragment = @"
+            #version 450
+
+            layout(location = 0) out vec4 Color;
+
+            void main()
+            {
+                Color = vec4(1.0, 1.0, 1.0, 1.0);
+            }
+            ";
+
+        public static readonly Shader Default = CreateDefault();
+
+        private static Shader CreateDefault()
+        {
+            Pass pass = new Pass("Default Pass", null);
+
+            pass.AddVertexInput(MeshResource.Position);
+            pass.CreateProgram(Graphics.CreateFromSpirv(defaultVertex, defaultFragment));
+
+            return new("Default Shader", pass);
+        }
+
+
         private List<Pass> passes = new();
         private Dictionary<string, int> nameIndexLookup = new();
         private Dictionary<string, List<int>> tagIndexLookup = new(); 

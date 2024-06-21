@@ -9,7 +9,7 @@ namespace Prowl.Runtime
     {
         [SerializeField] private Dictionary<string, System.Numerics.Vector4> values = new();
         [SerializeField] private Dictionary<string, System.Numerics.Matrix4x4> matrices = new();
-        [SerializeField] private Dictionary<string, AssetRef<Texture>> textures = new();
+        [SerializeField] private Dictionary<string, Texture> textures = new();
 
         public MaterialPropertyBlock() { }
 
@@ -43,9 +43,8 @@ namespace Prowl.Runtime
         public Matrix4x4 GetMatrix(string name) => matrices.ContainsKey(name) ? Matrix4x4.FromFloat(matrices[name]) : Matrix4x4.Identity;
 
         public void SetTexture(string name, Texture value) => textures[name] = value;
-        public void SetTexture(string name, AssetRef<Texture> value) => textures[name] = value;
-
-        public AssetRef<Texture>? GetTexture(string name) => textures.ContainsKey(name) ? textures[name] : null;
+        
+        public Texture? GetTexture(string name) => textures.ContainsKey(name) ? textures[name] : null;
 
         public void Clear()
         {

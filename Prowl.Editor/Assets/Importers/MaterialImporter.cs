@@ -21,7 +21,7 @@ namespace Prowl.Editor.Assets
             catch
             {
                 // something went wrong, lets just create a new material and save it
-                mat = new Material();
+                mat = new Material(Shader.Default);
                 string json = StringTagConverter.Write(Serializer.Serialize(mat));
                 File.WriteAllText(assetPath.FullName, json);
             }

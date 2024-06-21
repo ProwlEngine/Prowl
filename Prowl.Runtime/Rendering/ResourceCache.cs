@@ -57,7 +57,7 @@ namespace Prowl.Runtime
 
                 var description = new ResourceLayoutDescription(resources.Select(x => x.ToDescription()).ToArray());
 
-                resourceLayouts[i] = Graphics.ResourceFactory.CreateResourceLayout(description);
+                resourceLayouts[i] = Graphics.Factory.CreateResourceLayout(description);
             }
 
 
@@ -75,7 +75,7 @@ namespace Prowl.Runtime
                 ),
 
                 PrimitiveTopology = passDesc.topology,
-                Outputs = passDesc.output ?? Graphics.Framebuffer.OutputDescription,
+                Outputs = passDesc.output ?? Graphics.ScreenFramebuffer.OutputDescription,
 
                 ShaderSet = new ShaderSetDescription(
                     vertexLayouts: keywordProgram.vertexInputs.Select(x => Mesh.GetLayoutForResource(x.Item1, x.Item2)).ToArray(),
@@ -112,7 +112,7 @@ namespace Prowl.Runtime
             if (!pipelineCache.TryGetValue(pipelineDesc, out PipelineInfo pipelineInfo))
             {
                 var description = CreateDescriptionForPass(pipelineDesc);
-                var pipeline = Graphics.ResourceFactory.CreateGraphicsPipeline(description);
+                var pipeline = Graphics.Factory.CreateGraphicsPipeline(description);
 
                 pipelineInfo = new PipelineInfo(description, pipeline);
 

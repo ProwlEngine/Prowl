@@ -28,7 +28,7 @@ namespace Prowl.Runtime.GUI
 
         private void EndInteractionFrame()
         {
-            if (!IsPointerDown(Veldrid.MouseButton.Left))
+            if (!IsPointerDown(MouseButton.Left))
             {
                 ActiveID = 0;
                 DragDrop_Clear();
@@ -234,7 +234,7 @@ namespace Prowl.Runtime.GUI
         {
             if (IsDragDropActive)
             {
-                if (PreviousInteractableIsHovered() && !IsPointerDown(Veldrid.MouseButton.Left))
+                if (PreviousInteractableIsHovered() && !IsPointerDown(MouseButton.Left))
                 {
                     IsDragDropActive = false;
                     DragDropID = 0;
@@ -288,7 +288,7 @@ namespace Prowl.Runtime.GUI
                 {
                     _gui.HoveredID = _id;
 
-                    if (_gui.ActiveID == 0 && _gui.IsPointerDown(Veldrid.MouseButton.Left) && !onlyHovered)
+                    if (_gui.ActiveID == 0 && _gui.IsPointerDown(MouseButton.Left) && !onlyHovered)
                     {
                         _gui.ActiveID = _id;
                         _gui.ActiveRect = _rect;
@@ -309,7 +309,7 @@ namespace Prowl.Runtime.GUI
 
             // If we are hovered and active, we are focused
             //if (_gui.HoveredID == _id && _gui.ActiveID == _id && !_gui.IsPointerDown(Veldrid.MouseButton.Left))
-            if (_gui.HoveredID == _id && _gui.ActiveID == _id && _gui.IsPointerClick(Veldrid.MouseButton.Left))
+            if (_gui.HoveredID == _id && _gui.ActiveID == _id && _gui.IsPointerClick(MouseButton.Left))
             {
                 _gui.FocusID = _id;
                 return true;

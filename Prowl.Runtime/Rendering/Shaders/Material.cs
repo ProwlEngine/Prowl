@@ -68,7 +68,7 @@ namespace Prowl.Runtime
             }
 
             if (uniformBuffer == null || uniformBuffer.SizeInBytes != bufferSize)
-                uniformBuffer = Graphics.ResourceFactory.CreateBuffer(new BufferDescription((uint)bufferSize, BufferUsage.UniformBuffer));
+                uniformBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)bufferSize, BufferUsage.UniformBuffer));
 
             uint bufferOffset = 0;
 
@@ -88,8 +88,7 @@ namespace Prowl.Runtime
 
                     if (resource.type == ResourceType.Texture || resource.type == ResourceType.Sampler)
                     {
-                        AssetRef<Texture>? texRef = PropertyBlock.GetTexture(resource.name);
-                        Texture tex = texRef.GetValueOrDefault(Texture2D.EmptyWhite).Res ?? Texture2D.EmptyWhite;
+                        Texture tex = PropertyBlock.GetTexture(resource.name) ?? Texture2D.EmptyWhite;
                         
                         if (resource.type == ResourceType.Texture)
                             description.BoundResources[res] = tex.TextureView;
@@ -105,7 +104,7 @@ namespace Prowl.Runtime
                     bufferOffset += (uint)resource.size;
                 }
 
-                resources[set] = Graphics.ResourceFactory.CreateResourceSet(description);
+                resources[set] = Graphics.Factory.CreateResourceSet(description);
 
                 commandList.SetGraphicsResourceSet((uint)set, resources[set]);
             }
@@ -151,7 +150,7 @@ namespace Prowl.Runtime
         public void SetInt(string name, int value) => PropertyBlock.SetInt(name, value);
         public void SetMatrix(string name, Matrix4x4 value) => PropertyBlock.SetMatrix(name, value);
         public void SetTexture(string name, Texture value) => PropertyBlock.SetTexture(name, value);
-        public void SetTexture(string name, AssetRef<Texture> value) => PropertyBlock.SetTexture(name, value);
+
         public void SetMatrices(string name, System.Numerics.Matrix4x4[] value) { }
 
         //public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)

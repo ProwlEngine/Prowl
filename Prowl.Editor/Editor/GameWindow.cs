@@ -44,8 +44,9 @@ public class GameWindow : EditorWindow
 
     public void RefreshRenderTexture()
     {
-        RenderTarget?.Dispose();
-        RenderTarget = new RenderTexture(GeneralPreferences.Instance.CurrentWidth, GeneralPreferences.Instance.CurrentHeight);
+        RenderTarget?.DestroyImmediate();
+
+        RenderTarget = new RenderTexture((uint)GeneralPreferences.Instance.CurrentWidth, (uint)GeneralPreferences.Instance.CurrentHeight, [ Veldrid.PixelFormat.R8_G8_B8_A8_UNorm ], Veldrid.PixelFormat.R16_UNorm );
     }
 
     protected override void Draw()
@@ -172,7 +173,7 @@ public class GameWindow : EditorWindow
             }
 
             // Letter box the image into the render size
-            gui.Draw2D.DrawImage(RenderTarget.InternalTextures[0], innerRect.Position, innerRect.Size, Color.white, true);
+            gui.Draw2D.DrawImage(RenderTarget.ColorBuffers[0], innerRect.Position, innerRect.Size, Color.white, true);
         }
 
     }

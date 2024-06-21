@@ -89,7 +89,7 @@ namespace Prowl.Editor.PropertyDrawers
                     }
                 }
 
-                if (h && ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                if (h && ActiveGUI.IsPointerDoubleClick(MouseButton.Left))
                     GlobalSelectHandler.Select(value);
 
 
@@ -101,7 +101,7 @@ namespace Prowl.Editor.PropertyDrawers
                     changed = true;
                 }
 
-                if (Selected == assetDrawerID && ActiveGUI.IsKeyDown(Silk.NET.Input.Key.Delete))
+                if (Selected == assetDrawerID && ActiveGUI.IsKeyDown(Key.Delete))
                 {
                     value.AssetID = Guid.Empty;
                     value.FileID = 0;

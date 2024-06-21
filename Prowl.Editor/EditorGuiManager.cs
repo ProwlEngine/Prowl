@@ -28,7 +28,7 @@ public static class EditorGuiManager
         Input.OnKeyEvent += Gui.SetKeyState;
         Input.OnMouseEvent += Gui.SetPointerState;
         Gui.OnPointerPosSet += (pos) => { Input.MousePosition = pos; };
-        Gui.OnCursorVisibilitySet += (visible) => { Input.SetCursorVisible(visible); };
+        Gui.OnCursorVisibilitySet += (visible) => { Input.CursorHidden = !visible; };
     }
 
     public static void FocusWindow(EditorWindow editorWindow)
@@ -64,10 +64,17 @@ public static class EditorGuiManager
 
         Rect screenRect = new Rect(0, 0, Runtime.Graphics.Resolution.x, Runtime.Graphics.Resolution.y);
 
-        Vector2 framebufferAndInputScale = new((float)Window.InternalWindow.FramebufferSize.X / (float)Window.InternalWindow.Size.X, (float)Window.InternalWindow.FramebufferSize.Y / (float)Window.InternalWindow.Size.Y);
+        Vector2 framebufferAndInputScale = new((float)Runtime.Graphics.Resolution.x / Screen.Size.x, (float)Runtime.Graphics.Resolution.y / (float)Screen.Size.y);
 
         Gui.PointerWheel = Input.MouseWheelDelta;
-        EditorGuiManager.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, EditorPreferences.Instance.AntiAliasing, (g) => {
+
+        Veldrid.CommandList commandList = Graphics.GetCommandList();
+
+        commandList.SetFramebuffer(Graphics.ScreenFramebuffer);
+        commandList.ClearColorTarget(0, Veldrid.RgbaFloat.Black);
+        commandList.ClearDepthStencil(1f);
+
+        Gui.ProcessFrame(commandList, screenRect, 1f, framebufferAndInputScale, EditorPreferences.Instance.AntiAliasing, (g) => {
 
             // Draw Background
             g.Draw2D.DrawRectFilled(g.ScreenRect, GuiStyle.Background);
@@ -86,7 +93,7 @@ public static class EditorGuiManager
                 g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
                 g.SetZIndex(0);
 
-                if (!g.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+                if (!g.IsPointerDown(MouseButton.Left))
                     DragSplitter = null;
             }
 
@@ -106,7 +113,7 @@ public static class EditorGuiManager
                             g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
                             g.SetZIndex(0);
 
-                            if (g.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+                            if (g.IsPointerDown(MouseButton.Left))
                             {
                                 m_DragPos = cursorPos;
                                 DragSplitter = node;
@@ -152,7 +159,7 @@ public static class EditorGuiManager
             for (int i = 0; i < windowList.Count; i++)
             {
                 var window = windowList[i];
-                if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(Silk.NET.Input.MouseButton.Left) || g.IsPointerClick(Silk.NET.Input.MouseButton.Right)))
+                if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(MouseButton.Left) || g.IsPointerClick(MouseButton.Right)))
                     if (!g.IsBlockedByInteractable(g.PointerPos, window.MaxZ))
                         FocusWindow(window);
             }
@@ -181,6 +188,10 @@ public static class EditorGuiManager
                 FocusedWindow = null;
             Windows.Remove(window);
         }
+
         WindowsToRemove.Clear();
+
+        Graphics.SubmitCommands(commandList);
+        commandList.Dispose();
     }
 }

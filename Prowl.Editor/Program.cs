@@ -2,11 +2,11 @@
 using Prowl.Editor.EditorWindows;
 using Prowl.Editor.Preferences;
 using Prowl.Runtime;
-using Prowl.Runtime.Rendering;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
-using Silk.NET.Input;
 using Veldrid;
+
+using Key = Prowl.Runtime.Key;
 
 namespace Prowl.Editor;
 
@@ -19,6 +19,9 @@ public static class Program
     public static void RegisterReloadOfExternalAssemblies() => IsReloadingExternalAssemblies = true;
 
     private static bool CreatedDefaultWindows = false;
+
+    static double secondCounter;
+    static int temp;
 
     public static int Main(string[] args)
     {
@@ -33,10 +36,23 @@ public static class Program
             // Start with the project window open
             //new OldProjectsWindow();
             new ProjectsWindow();
+            Graphics.VSync = false;
         };
 
         Application.Update += () =>
         {
+            if (secondCounter <= 1) 
+            {
+                secondCounter += Time.deltaTime;
+                temp++;
+            }
+            else 
+            {
+                Console.WriteLine($"FPS: {temp}");
+                secondCounter = 0;
+                temp = 0;
+            }
+
             //EditorGui.SetupDock();
 
             AssetDatabase.InternalUpdate();

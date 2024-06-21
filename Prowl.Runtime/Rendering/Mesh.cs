@@ -230,7 +230,7 @@ namespace Prowl.Runtime
             bufferOffsets = CalcOffsets();
 
             // Vertex buffer upload
-            vertexBuffer = Graphics.ResourceFactory.CreateBuffer(new BufferDescription((uint)BufferLength, BufferUsage.VertexBuffer));
+            vertexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)BufferLength, BufferUsage.VertexBuffer));
 
             Graphics.Device.UpdateBuffer(vertexBuffer, 0, vertices);
             
@@ -260,7 +260,7 @@ namespace Prowl.Runtime
 
             // Index buffer upload
             uint indexByteSize = (uint)(indexFormat == IndexFormat.UInt16 ? sizeof(ushort) : sizeof(uint));
-            indexBuffer = Graphics.ResourceFactory.CreateBuffer(new BufferDescription((uint)indices.Length * indexByteSize, BufferUsage.IndexBuffer));
+            indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)indices.Length * indexByteSize, BufferUsage.IndexBuffer));
 
             if (indexFormat == IndexFormat.UInt16)
             {

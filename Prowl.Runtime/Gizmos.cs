@@ -128,10 +128,14 @@ void main()
         {
             EnsureMaterial();  
 
+            /*
+
             Graphics.SetPass(gizmoMaterial, 0, PolygonFillMode.Solid, PrimitiveTopology.LineList);
 
             foreach (var gizmo in gizmoDrawQueue)
                 gizmo.Item1.Render(gizmoMaterial, gizmo.Item2);
+
+            */
 
             Clear();
         }
@@ -162,7 +166,7 @@ void main()
 
             mat.SetColor("Color", color);
 
-            Graphics.DrawMesh(lineMesh, mat, m);
+            //Graphics.DrawMesh(lineMesh, mat, m);
         }
     }
 
@@ -209,7 +213,7 @@ void main()
 
             m = Matrix4x4.CreateRotationY(startAngle) * m;
 
-            Graphics.DrawMesh(arcMesh, mat, m);
+            //Graphics.DrawMesh(arcMesh, mat, m);
         }
     }
 
@@ -259,7 +263,7 @@ void main()
         {
             mat.SetColor("Color", color);
 
-            Graphics.DrawMesh(cubeMesh, mat, m);
+            //Graphics.DrawMesh(cubeMesh, mat, m);
         }
     }
 
@@ -296,7 +300,7 @@ void main()
             arc.Render(mat, Matrix4x4.CreateTranslation(new Vector3(0, -0.5, 0)) * m);
 
             mat.SetColor("Color", color);
-            Graphics.DrawMesh(cylinderMesh, mat, m);
+            //Graphics.DrawMesh(cylinderMesh, mat, m);
         }
     }
 

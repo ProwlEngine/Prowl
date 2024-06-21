@@ -30,8 +30,8 @@ public static class Input
     public static bool CursorHidden;
     public static bool CursorLocked;
 
-    public static bool ActualLockState { get; private set; }
-    public static bool ActualHideState => !Screen.InternalWindow.CursorVisible;
+    public static bool Locked { get; private set; }
+    public static bool Hidden => !Screen.InternalWindow.CursorVisible;
 
     public static char? LastPressedChar = null;
 
@@ -53,7 +53,7 @@ public static class Input
                 _prevMousePos = value;
                 _currentMousePos = value;
 
-                if (!ActualLockState)
+                if (!Locked)
                     Screen.InternalWindow.SetMousePosition(new Vector2(value.x, value.y));
             }
         }
@@ -110,37 +110,34 @@ public static class Input
     {
         Vector2Int mousePosition = new Vector2Int((int)InputSnapshot.MousePosition.X, (int)InputSnapshot.MousePosition.Y);
 
-        if (GetKey(Key.Escape) || !Screen.InternalWindow.Focused || !Screen.ScreenRect.Contains(mousePosition))
+        if ((GetKey(Key.Escape) || !Screen.InternalWindow.Focused || !Screen.ScreenRect.Contains(mousePosition)) && (Locked || !Screen.InternalWindow.CursorVisible))
         {
-            if (!ActualLockState || !Screen.InternalWindow.CursorVisible)
-            {
-                Screen.InternalWindow.CursorVisible = true;
-                ActualLockState = false;
+            Screen.InternalWindow.CursorVisible = true;
+            Locked = false;
 
-                Screen.InternalWindow.SetMousePosition(new Vector2(_currentMousePos.x, _currentMousePos.y));
-            }
+            Screen.InternalWindow.SetMousePosition(new Vector2(_currentMousePos.x, _currentMousePos.y));
         } 
-        else if (GetMouseButton(0))
+        else if (GetMouseButton(MouseButton.Left))
         {
             Screen.InternalWindow.CursorVisible = !CursorHidden;
-            ActualLockState = CursorLocked;
+            Locked = CursorLocked;
         }
 
-        if (!ActualLockState)
+        if (!Locked)
         {
             _prevMousePos = _currentMousePos;
             _currentMousePos = mousePosition;
-        }
-        else
-        {
-            Vector2Int center = Screen.Position + (Screen.Size / new Vector2Int(2, 2));
-            Vector2Int centerDelta = mousePosition - center;
 
-            Screen.InternalWindow.SetMousePosition(new Vector2(center.x, center.y));
-
-            _prevMousePos = _currentMousePos;
-            _currentMousePos += centerDelta;
+            return;
         }
+        
+        Vector2Int center = Screen.Position + (Screen.Size / new Vector2Int(2, 2));
+        Vector2Int centerDelta = mousePosition - center;
+
+        Screen.InternalWindow.SetMousePosition(new Vector2(center.x, center.y));
+
+        _prevMousePos = _currentMousePos;
+        _currentMousePos += centerDelta;
     }
 
     // Update the state of each key

@@ -1,14 +1,14 @@
 ﻿using Prowl.Runtime;
-using Prowl.Runtime.Rendering.Primitives;
 using Prowl.Runtime.Utils;
 using System.Text.RegularExpressions;
-using static Prowl.Runtime.Shader;
 
 namespace Prowl.Editor.Assets
 {
     [Importer("ShaderIcon.png", typeof(Shader), ".shader")]
     public class ShaderImporter : ScriptedImporter
     {
+        #warning Veldrid change
+
         public static readonly string[] Supported = { ".shader" };
 
         private static FileInfo currentAssetPath;
@@ -17,6 +17,7 @@ namespace Prowl.Editor.Assets
 
         public override void Import(SerializedAsset ctx, FileInfo assetPath)
         {
+            /*
             currentAssetPath = assetPath;
 
             string shaderScript = File.ReadAllText(assetPath.FullName);
@@ -55,12 +56,14 @@ namespace Prowl.Editor.Assets
                     Vertex = parsedShader.ShadowPass.Vertex,
                     Fragment = parsedShader.ShadowPass.Fragment,
                 };
+            */
 
-            ctx.SetMainObject(shader);
+            ctx.SetMainObject(Shader.Default);
         }
 
 #warning TODO: Replace regex with a proper parser, this works just fine for now though so Low Priority
 
+        /*
         public static ParsedShader ParseShader(string input)
         {
             var shader = new ParsedShader
@@ -270,6 +273,7 @@ namespace Prowl.Editor.Assets
                    input.Equals("on", StringComparison.OrdinalIgnoreCase) ||
                    input.Equals("yes", StringComparison.OrdinalIgnoreCase);
         }
+        */
 
         public static string ClearAllComments(string input)
         {
@@ -282,7 +286,7 @@ namespace Prowl.Editor.Assets
             return noComments;
         }
 
-
+        /*
         public class ParsedShader
         {
             public string Name;
@@ -306,6 +310,6 @@ namespace Prowl.Editor.Assets
             public string Vertex;
             public string Fragment;
         }
-
+        */
     }
 }

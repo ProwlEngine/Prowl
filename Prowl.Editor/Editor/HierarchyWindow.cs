@@ -6,7 +6,6 @@ using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.SceneManagement;
-using Silk.NET.Input;
 
 namespace Prowl.Editor
 {
@@ -90,7 +89,7 @@ namespace Prowl.Editor
                     if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
                         DuplicateSelected();
 
-                if (gui.IsPointerClick(Silk.NET.Input.MouseButton.Right) && dropInteract.IsHovered())
+                if (gui.IsPointerClick(MouseButton.Right) && dropInteract.IsHovered())
                 {
                     // POpup holder is our parent, since thats the Tree node
                     gui.OpenPopup("RightClickGameObject");
@@ -237,12 +236,12 @@ namespace Prowl.Editor
                     SelectHandler.Select(index, new WeakReference(entity));
 
                 bool justStartedRename = false;
-                if (SelectHandler.Count == 1 && gui.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left) && interact.IsHovered())
+                if (SelectHandler.Count == 1 && gui.IsPointerDoubleClick(MouseButton.Left) && interact.IsHovered())
                 {
                     justStartedRename = true;
                     m_RenamingGO = entity;
                 }
-                else if (gui.IsPointerClick(Silk.NET.Input.MouseButton.Right) && interact.IsHovered())
+                else if (gui.IsPointerClick(MouseButton.Right) && interact.IsHovered())
                 {
                     // POpup holder is our parent, since thats the Tree node
                     gui.OpenPopup("RightClickGameObject", null, gui.CurrentNode.Parent);

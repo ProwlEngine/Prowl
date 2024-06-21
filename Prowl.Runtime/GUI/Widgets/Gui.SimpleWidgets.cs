@@ -246,7 +246,7 @@ namespace Prowl.Runtime.GUI
                     long frame = GetNodeStorage<long>(parentNode, "Popup_Frame");
                     if (frame < Time.frameCount)
                     {
-                        if ((IsPointerClick(Veldrid.MouseButton.Left) || IsPointerClick(Veldrid.MouseButton.Right)) &&
+                        if ((IsPointerClick(MouseButton.Left) || IsPointerClick(MouseButton.Right)) &&
                             !IsPointerMoving &&
                             !node.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Popup
                             //!parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent

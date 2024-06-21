@@ -52,7 +52,7 @@ public class Camera : MonoBehaviour
     private Vector2 GetRenderTargetSize()
     {
         if (Target.IsAvailable) return new Vector2(Target.Res!.Width, Target.Res!.Height);
-        return new Vector2((int)Graphics.Framebuffer.Width, (int)Graphics.Framebuffer.Height);
+        return new Vector2((int)Graphics.ScreenFramebuffer.Width, (int)Graphics.ScreenFramebuffer.Height);
     }
 
     private void CheckGBuffer()

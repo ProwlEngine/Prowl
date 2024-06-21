@@ -12,24 +12,18 @@ namespace Prowl.Runtime
     {
         public static GraphicsDevice Device { get; internal set; }
 
-        public static Swapchain MainSwapchain => Device.MainSwapchain;
-        public static Framebuffer Framebuffer => Device.SwapchainFramebuffer;
-        public static ResourceFactory ResourceFactory => Device.ResourceFactory;
+        public static Framebuffer ScreenFramebuffer => Device.SwapchainFramebuffer;
+        public static ResourceFactory Factory => Device.ResourceFactory;
+
+        public static Vector2Int Resolution => new Vector2(ScreenFramebuffer.Width, ScreenFramebuffer.Height);
+
+        private static bool frameBegan;
 
         public static bool VSync
         {
             get { return Device.SyncToVerticalBlank; }
             set { Device.SyncToVerticalBlank = value; }
         }
-
-        // Veldrid quad stuff
-        private static bool createdResources = false;
-
-        private static CommandList _commandList;
-
-        private static GUI.Gui gui;
-
-        public static Action<GUI.Gui> onGUI;
 
         public static void Initialize(bool VSync = true, GraphicsBackend preferredBackend = GraphicsBackend.OpenGL)
         {
@@ -47,47 +41,48 @@ namespace Prowl.Runtime
             Device = VeldridStartup.CreateGraphicsDevice(Screen.InternalWindow, deviceOptions, preferredBackend);
 
             Screen.Resize += (newSize) => Device.ResizeMainWindow((uint)newSize.x, (uint)newSize.y);
-            gui = new();
-        }
-
-
-        private static void EnsureResources()
-        {
-            if (createdResources)
-                return;
-
-            createdResources = true;
-
-            _commandList = ResourceFactory.CreateCommandList();
-
-            Console.WriteLine("Initialized resources");
         }
 
 
         public static void StartFrame()
         {
             RenderTexture.UpdatePool();
+            frameBegan = true;
 
-            EnsureResources();
-
-            if (_commandList == null)
-                return;
-
+            /*
             _commandList.Begin();
-            _commandList.SetFramebuffer(Framebuffer);
+            _commandList.SetFramebuffer(ScreenFramebuffer);
             _commandList.ClearColorTarget(0, RgbaFloat.Black);
             _commandList.ClearDepthStencil(1f);
+            */
+        }
+
+        public static CommandList GetCommandList()
+        {
+            if (!frameBegan)
+                throw new Exception("GetCommandList was called before StartFrame or after EndFrame. This is not allowed.");
+
+            CommandList list = Factory.CreateCommandList();
+
+            list.Begin();
+
+            return list;
+        }
+
+
+        public static void SubmitCommands(CommandList list)
+        {   
+            if (!frameBegan)
+                throw new Exception("SubmitCommands was called before StartFrame or after EndFrame. This is not allowed.");
+
+            list.End();
+
+            Device.SubmitCommands(list);
         }
 
         public static void EndFrame()
         {   
-            if (_commandList == null)
-                return;
-            
-            gui.ProcessFrame(_commandList, new Rect(0, 0, Framebuffer.Width, Framebuffer.Height), 1.0f, new Vector2(Framebuffer.Width, Framebuffer.Height), onGUI);
-
-            _commandList.End();
-            Device.SubmitCommands(_commandList);
+            frameBegan = false;
             Device.SwapBuffers();
         }
 
@@ -96,24 +91,10 @@ namespace Prowl.Runtime
             ShaderDescription vertexShaderDesc = new ShaderDescription(ShaderStages.Vertex, Encoding.UTF8.GetBytes(vert), "main");
             ShaderDescription fragmentShaderDesc = new ShaderDescription(ShaderStages.Fragment, Encoding.UTF8.GetBytes(frag), "main");
 
-            return ResourceFactory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
+            return Factory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
         }
 
-        public static void SetPass(Material mat, int pass, PolygonFillMode fill = PolygonFillMode.Solid, PrimitiveTopology topology = PrimitiveTopology.TriangleList, bool scissorTest = false)
-        {
-            mat.SetPass(_commandList, pass, fill, topology, scissorTest);
-        }
-
-
-        private static Transform trs = new Transform() { position = new Vector3(0, 1, -10), localScale = Vector3.one };
-        private static float fov = 1.0f;
-
-        public static void SetCamera(Transform trs, float fov)
-        {
-            Graphics.trs = trs;
-            Graphics.fov = fov;
-        }
-
+        /*
         public static void DrawMesh(Mesh mesh, Material material, Matrix4x4 matrix)
         {
             mesh.Upload();
@@ -135,10 +116,12 @@ namespace Prowl.Runtime
                 vertexOffset: 0,
                 instanceStart: 0);
         }
+        */
 
-        private static void BindMeshBuffers(CommandList commandList, Mesh mesh, List<(MeshResource, VertexLayoutDescription)> vertexInputs)
+        public static void BindMeshBuffers(CommandList commandList, Mesh mesh, Material material, KeywordState? keywords = null)
         {
             commandList.SetIndexBuffer(mesh.IndexBuffer, mesh.IndexFormat);
+            var vertexInputs = material.GetPass().GetVariant(keywords).vertexInputs;
 
             for (uint i = 0; i < vertexInputs.Count; i++)
             {
@@ -160,8 +143,6 @@ namespace Prowl.Runtime
 
         internal static void Dispose()
         {
-            _commandList.Dispose();
-
             Device.Dispose();
             ResourceCache.Dispose();
         }
@@ -178,8 +159,8 @@ namespace Prowl.Runtime
 
         internal static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, bool waitForOperationCompletion = false)
         {
-            Fence fence = ResourceFactory.CreateFence(false);
-            CommandList commandList = ResourceFactory.CreateCommandList();
+            Fence fence = Factory.CreateFence(false);
+            CommandList commandList = Factory.CreateCommandList();
 
             commandList.Begin();
             commandList.CopyTexture(source, destination);
@@ -194,8 +175,8 @@ namespace Prowl.Runtime
 
         internal static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, uint mipLevel, uint arrayLayer, bool waitForOperationCompletion = false)
         {
-            Fence fence = ResourceFactory.CreateFence(false);
-            CommandList commandList = ResourceFactory.CreateCommandList();
+            Fence fence = Factory.CreateFence(false);
+            CommandList commandList = Factory.CreateCommandList();
 
             commandList.Begin();
             commandList.CopyTexture(source, destination, mipLevel, arrayLayer);

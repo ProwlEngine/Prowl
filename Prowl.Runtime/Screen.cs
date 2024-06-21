@@ -32,7 +32,7 @@ namespace Prowl.Runtime
             set { InternalWindow.X = value.x; InternalWindow.Y = value.y; }
         }
 
-        public static Rect ScreenRect => new(Size, Position);
+        public static Rect ScreenRect => new(Position, Size);
 
         public static float FramesPerSecond {
             get { return InternalWindow.PollIntervalInMs / 1000.0f; }

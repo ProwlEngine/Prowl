@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Veldrid;
 
 namespace Prowl.Runtime.GUI
 {
@@ -39,7 +40,7 @@ namespace Prowl.Runtime.GUI
             Draw3D = new(this);
         }
 
-        public void ProcessFrame(Rect screenRect, float uiScale, Vector2 frameBufferScale, bool antiAliasing, Action<Gui> gui)
+        public void ProcessFrame(CommandList commandList, Rect screenRect, float uiScale, Vector2 frameBufferScale, bool antiAliasing, Action<Gui> gui)
         {
             UpdateAnimations(Time.deltaTime);
 

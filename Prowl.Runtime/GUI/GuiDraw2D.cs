@@ -36,7 +36,7 @@ namespace Prowl.Runtime.GUI
                 _drawList[index].AntiAliasing(antiAliasing);
                 _drawList[index].Clear();
                 
-                //_drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture);
+                _drawList[index].PushTexture(UIDrawList.DefaultFont.Texture);
 
                 drawListsOrdered.Add(_drawList[index]);
             }
@@ -73,7 +73,7 @@ namespace Prowl.Runtime.GUI
             {
                 _drawList[index] = new UIDrawList(_AntiAliasing);
 
-                _//drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
+                //drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture.Handle);
             }
 
             // Copy over the clip rect from the previous list

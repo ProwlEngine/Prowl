@@ -4,7 +4,6 @@ using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Widgets.Gizmo;
 using Prowl.Runtime.SceneManagement;
-using Silk.NET.Input;
 
 namespace Prowl.Editor;
 
@@ -52,8 +51,8 @@ public class SceneViewWindow : EditorWindow
 
     public void RefreshRenderTexture(int width, int height)
     {
-        RenderTarget?.Dispose();
-        RenderTarget = new RenderTexture(width, height);
+        RenderTarget?.DestroyImmediate();
+        RenderTarget = new RenderTexture((uint)width, (uint)height, [ Veldrid.PixelFormat.R8_G8_B8_A8_UNorm ], Veldrid.PixelFormat.R16_UNorm);
         Cam.Target = RenderTarget;
     }
 
@@ -69,6 +68,11 @@ public class SceneViewWindow : EditorWindow
         }
 
         if (!Project.HasProject) return;
+
+        #warning Veldrid change
+
+        /*
+
         gui.CurrentNode.Padding(5);
 
         var renderSize = gui.CurrentNode.LayoutData.Rect.Size;
@@ -88,7 +92,7 @@ public class SceneViewWindow : EditorWindow
 
         var imagePos = gui.CurrentNode.LayoutData.Rect.Position;
         var imageSize = gui.CurrentNode.LayoutData.Rect.Size;
-        gui.Draw2D.DrawImage(RenderTarget.InternalTextures[0], imagePos, imageSize, Color.white);
+        gui.Draw2D.DrawImage(RenderTarget.ColorBuffers[0], imagePos, imageSize, Color.white);
 
 #warning TODO: Camera rendering clears Gizmos untill the rendering overhaul, so gizmos will Flicker here
         Camera.Current = Cam;
@@ -118,6 +122,7 @@ public class SceneViewWindow : EditorWindow
             gridMat.SetKeyword("GRID_XZ", SceneViewPreferences.Instance.GridType == GridType.XZ);
             gridMat.SetKeyword("GRID_XY", SceneViewPreferences.Instance.GridType == GridType.XY);
             gridMat.SetKeyword("GRID_YZ", SceneViewPreferences.Instance.GridType == GridType.YZ);
+
             Graphics.Blit(RenderTarget, gridMat, 0, false);
         }
 
@@ -168,7 +173,7 @@ public class SceneViewWindow : EditorWindow
         gui.SetCursorVisibility(true);
         if (IsFocused && viewportInteractable.IsHovered())
         {
-            if (gui.IsPointerClick(Silk.NET.Input.MouseButton.Left) && !gizmo.IsOver && !viewManipulator.IsOver)
+            if (gui.IsPointerClick(MouseButton.Left) && !gizmo.IsOver && !viewManipulator.IsOver)
             {
                 // If the Scene Camera has no Render Graph, the gBuffer may not be initialized
                 if (Cam.gBuffer != null)
@@ -180,7 +185,7 @@ public class SceneViewWindow : EditorWindow
                         var go = EngineObject.FindObjectByID<GameObject>(instanceID);
                         if (go != null)
                         {
-                            if (!go.IsPartOfPrefab || gui.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                            if (!go.IsPartOfPrefab || gui.IsPointerDoubleClick(MouseButton.Left))
                             {
                                 HierarchyWindow.SelectHandler.Select(new WeakReference(go));
                                 HierarchyWindow.Ping(go);
@@ -207,7 +212,7 @@ public class SceneViewWindow : EditorWindow
                     }
                 }
             }
-            else if (gui.IsPointerDown(Silk.NET.Input.MouseButton.Right))
+            else if (gui.IsPointerDown(MouseButton.Right))
             {
                 gui.SetCursorVisibility(false);
                 Vector3 moveDir = Vector3.zero;
@@ -326,6 +331,8 @@ public class SceneViewWindow : EditorWindow
             //g.DrawRectFilled(imagePos + new Vector2(5, imageSize.y - 25), new Vector2(75, 20), new Color(0, 0, 0, 0.25f));
             gui.Draw2D.DrawText($"FPS: {fps:0.0}", imagePos + new Vector2(10, imageSize.y - 22));
         }
+
+        */
     }
 
     private void HandleGizmos(List<GameObject> selectedGOs, Ray mouseRay, Matrix4x4 view, Matrix4x4 projection, bool blockPicking)
@@ -385,6 +392,10 @@ public class SceneViewWindow : EditorWindow
 
     private void HandleDragnDrop()
     {
+        #warning Veldrid change
+
+        /*
+
         if (DragnDrop.Drop<GameObject>(out var original))
         {
             if (original.AssetID == Guid.Empty) return;
@@ -418,6 +429,8 @@ public class SceneViewWindow : EditorWindow
         {
             SceneManager.LoadScene(scene);
         }
+
+        */
     }
 
     private void DrawPlayMode()

@@ -63,7 +63,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                 {
                     if (blockPicking) return false;
                     isHovering = true;
-                    if (_gui.IsPointerClick(Veldrid.MouseButton.Left))
+                    if (_gui.IsPointerClick(MouseButton.Left))
                     {
                         // Rotate Camera
                         // FIXME: Why is forward vector inverted?
@@ -91,7 +91,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                         hovCol.a = 0.25f;
                         _gui.Draw2D.DrawCircleFilled(rect.Center, (float)rect.width / 2, hovCol, 48);
                         
-                        if (_gui.IsPointerClick(Veldrid.MouseButton.Left))
+                        if (_gui.IsPointerClick(MouseButton.Left))
                         {
                             // Toggle Perspective / Orthographic
                             isOrthographic = !isOrthographic;
@@ -179,7 +179,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                         {
                             var hovCol = GuiStyle.Base11;
                             hovCol.a = 0.25f;
-                            _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, ((Color32)hovCol));
+                            _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, (Color32)hovCol);
                             //_gui.DrawList.AddPolyline(screenPoints, screenPoints.Count, hovCol, true, 1, true);
                             hovering = true;
                             axis = faceNormal;

@@ -1,6 +1,5 @@
 ﻿using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.Rendering.Primitives;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Assets
@@ -11,9 +10,12 @@ namespace Prowl.Editor.Assets
         public static readonly string[] Supported = { ".png", ".bmp", ".jpg", ".jpeg", ".qoi", ".psd", ".tga", ".dds", ".hdr", ".ktx", ".pkm", ".pvr" };
 
         public bool generateMipmaps = true;
-        public TextureWrap textureWrap = TextureWrap.Repeat;
-        public TextureMin textureMinFilter = TextureMin.LinearMipmapLinear;
-        public TextureMag textureMagFilter = TextureMag.Linear;
+
+        public TextureWrapMode textureWrap = TextureWrapMode.Wrap;
+
+        public FilterType textureMinFilter = FilterType.Linear;
+        public FilterType textureMagFilter = FilterType.Linear;
+        public FilterType textureMipFilter = FilterType.Linear;
 
         public override void Import(SerializedAsset ctx, FileInfo assetPath)
         {
@@ -21,8 +23,8 @@ namespace Prowl.Editor.Assets
             Texture2D texture = Texture2DLoader.FromFile(assetPath.FullName);
             texture.Name = Path.GetFileNameWithoutExtension(assetPath.Name);
 
-            texture.SetTextureFilters(textureMinFilter, textureMagFilter);
-            texture.SetWrapModes(textureWrap, textureWrap);
+            texture.Sampler.SetFilter(textureMinFilter, textureMagFilter, textureMipFilter);
+            texture.Sampler.SetWrapMode(SamplerAxis.U | SamplerAxis.V | SamplerAxis.W, textureWrap);
 
             if (generateMipmaps)
                 texture.GenerateMipmaps();

@@ -138,7 +138,7 @@ namespace Prowl.Runtime
 
             FramebufferDescription description = new FramebufferDescription(DepthBuffer.InternalTexture, ColorBuffers.Select(x => x.InternalTexture).ToArray());
 
-            this.Framebuffer = Graphics.ResourceFactory.CreateFramebuffer(description);
+            this.Framebuffer = Graphics.Factory.CreateFramebuffer(description);
         }
 
         public override void OnDispose()

@@ -63,6 +63,8 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public UIDrawList(bool antiAliasing)
         {
+            CreateDeviceResources();
+
             CmdBuffer = new();
             IdxBuffer = new();
             VtxBuffer = new();
@@ -360,7 +362,7 @@ namespace Prowl.Runtime.GUI.Graphics
                 PopTextureID();
         }
 
-        public void AddPolyline(UIBuffer<Vector2> points, int points_count, uint col, bool closed, float thickness)
+        public void AddPolyline(UIBuffer<Vector2> points, int points_count, Color32 col, bool closed, float thickness)
         {
             if (points_count < 2)
                 return;
@@ -547,7 +549,7 @@ namespace Prowl.Runtime.GUI.Graphics
             _primitiveCount++;
         }
 
-        public void AddConvexPolyFilled(UIBuffer<Vector2> points, int points_count, uint col)
+        public void AddConvexPolyFilled(UIBuffer<Vector2> points, int points_count, Color32 col)
         {
             if (points_count < 3)
                 return;
@@ -655,13 +657,13 @@ namespace Prowl.Runtime.GUI.Graphics
         public void PathFill(Color32 col)
         {
             AddConvexPolyFilled(_Path, _Path.Count, col);
-            _Path.resize(0);
+            _Path.Clear();
         }
 
         public void PathStroke(Color32 col, bool closed, float thickness = 1.0f)
         {
             AddPolyline(_Path, _Path.Count, col, closed, thickness);
-            _Path.resize(0);
+            _Path.Clear();
         }
 
         public void PathArcTo(Vector2 centre, float radius, float amin, float amax, int num_segments = 10)
@@ -1116,14 +1118,14 @@ namespace Prowl.Runtime.GUI.Graphics
             if (DeviceIdxBuffer == null || DeviceIdxBuffer.SizeInBytes < idxBufferSize)
             {
                 DeviceIdxBuffer?.Dispose();
-                DeviceIdxBuffer = Runtime.Graphics.ResourceFactory.CreateBuffer(new BufferDescription(idxBufferSize, BufferUsage.IndexBuffer));
+                DeviceIdxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription(idxBufferSize, BufferUsage.IndexBuffer));
             }
 
             uint vtxBufferSize = (uint)(VtxBuffer.Count * sizeof(UIVertex));
             if (DeviceVtxBuffer == null || DeviceVtxBuffer.SizeInBytes < vtxBufferSize)
             {
                 DeviceVtxBuffer?.Dispose();
-                DeviceVtxBuffer = Runtime.Graphics.ResourceFactory.CreateBuffer(new BufferDescription(vtxBufferSize, BufferUsage.VertexBuffer));
+                DeviceVtxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription(vtxBufferSize, BufferUsage.VertexBuffer));
             }
 
             commandList.UpdateBuffer(DeviceVtxBuffer, 0, VtxBuffer.Data.ToArray());
