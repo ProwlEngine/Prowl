@@ -178,13 +178,14 @@ public static class EditorGuiManager
                     {
                         Vector2 dragDelta = cursorPos - m_DragPos;
 
+                        const double minSize = 100;
                         if (DragSplitter.Type == DockNode.NodeType.SplitVertical)
                         {
                             double w = DragSplitter.Maxs.x - DragSplitter.Mins.x;
                             double split = m_StartSplitPos + dragDelta.x;
                             split -= DragSplitter.Mins.x;
                             split = (double)Math.Floor(split);
-                            split = Math.Clamp(split, 1.0f, w - 1.0f);
+                            split = Math.Clamp(split, minSize, w - minSize);
                             split /= w;
 
                             DragSplitter.SplitDistance = split;
@@ -195,7 +196,7 @@ public static class EditorGuiManager
                             double split = m_StartSplitPos + dragDelta.y;
                             split -= DragSplitter.Mins.y;
                             split = (double)Math.Floor(split);
-                            split = Math.Clamp(split, 1.0f, h - 1.0f);
+                            split = Math.Clamp(split, minSize, h - minSize);
                             split /= h;
 
                             DragSplitter.SplitDistance = split;
