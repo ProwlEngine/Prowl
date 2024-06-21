@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace Prowl.Runtime
 {
     [Flags]
-    public enum HideFlags
+    public enum HideFlags : byte
     {
         None = 0,
         Hide = 1 << 0,

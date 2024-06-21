@@ -55,8 +55,12 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 go.Name = name.Trim();
 
             var invisStyle = new GuiStyle { WidgetColor = new Color(0, 0, 0, 0), Border = new Color(0, 0, 0, 0) };
-            gui.Combo("#_TagID", "#_TagPopupID", ref go.tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(GuiStyle.ItemHeight * 2)), 0, GuiStyle.ItemHeight, GuiStyle.ItemHeight, invisStyle, FontAwesome6.Tag);
-            gui.Combo("#_LayerID", "#_LayerPopupID", ref go.layerIndex, TagLayerManager.Instance.layers.ToArray(), Offset.Percentage(1f, -(GuiStyle.ItemHeight)), 0, GuiStyle.ItemHeight, GuiStyle.ItemHeight, invisStyle, FontAwesome6.LayerGroup);
+            int tagIndex = go.tagIndex;
+            gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(GuiStyle.ItemHeight * 2)), 0, GuiStyle.ItemHeight, GuiStyle.ItemHeight, invisStyle, FontAwesome6.Tag);
+            go.tagIndex = (byte)tagIndex;
+            int layerIndex = go.layerIndex;
+            gui.Combo("#_LayerID", "#_LayerPopupID", ref layerIndex, TagLayerManager.Instance.layers.ToArray(), Offset.Percentage(1f, -(GuiStyle.ItemHeight)), 0, GuiStyle.ItemHeight, GuiStyle.ItemHeight, invisStyle, FontAwesome6.LayerGroup);
+            go.layerIndex = (byte)layerIndex;
 
             if (go.IsPrefab)
             {
