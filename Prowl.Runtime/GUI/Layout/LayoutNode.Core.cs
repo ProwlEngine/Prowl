@@ -36,12 +36,12 @@ namespace Prowl.Runtime.GUI.Layout
             public readonly double GlobalContentHeight => Scale.y - Paddings.Vertical;
 
             // Cached
-            public Vector2 Scale;
-            public Vector2 MaxScale;
-            public Spacing Margins;
-            public Spacing Paddings;
-            public Vector2 Position;
-            public Rect ContentRect;
+            public Vector2 Scale = node._data.Scale;
+            public Vector2 MaxScale = node._data.MaxScale;
+            public Spacing Margins = node._data.Margins;
+            public Spacing Paddings = node._data.Paddings;
+            public Vector2 Position = node._data.Position;
+            public Rect ContentRect = node._data.ContentRect;
         }
 
         public bool HasLayoutData => _data._node == this;
