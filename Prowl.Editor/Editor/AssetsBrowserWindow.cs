@@ -91,6 +91,8 @@ namespace Prowl.Editor
             if (!Project.HasProject)
                 return;
 
+            CurDirectoryNode ??= AssetDatabase.GetRootFolderCache(2).RootNode;
+
             gui.CurrentNode.Layout(LayoutType.Column);
             gui.CurrentNode.ScaleChildren();
             gui.CurrentNode.Padding(0, 10, 10, 10);
