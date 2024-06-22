@@ -11,14 +11,14 @@ namespace Prowl.Editor
 
     public class AssetsBrowserWindow : EditorWindow
     {
-        public DirectoryInfo CurDirectory;
+        public AssetDirectoryCache.DirNode CurDirectoryNode;
         public bool Locked = false;
 
         double itemHeight => GuiStyle.ItemHeight;
         double itemPadding => GuiStyle.ItemPadding;
 
         private string _searchText = "";
-        private readonly List<FileSystemInfo> _found = new();
+        private readonly List<FileInfo> _found = new();
         private readonly Dictionary<string, AssetRef<Texture2D>> _cachedThumbnails = new();
         private static (long, bool) _lastGenerated = (-1, false);
         internal static string? RenamingEntry = null;
@@ -34,6 +34,7 @@ namespace Prowl.Editor
         {
             Title = FontAwesome6.FolderTree + " Asset Browser";
             Project.OnProjectChanged += Invalidate;
+            AssetDatabase.AssetCacheUpdated += Invalidate;
             AssetsTreeWindow.SelectHandler.OnSelectObject += SelectionChanged;
             AssetDatabase.Pinged += OnAssetPinged;
             Invalidate();
@@ -42,13 +43,18 @@ namespace Prowl.Editor
         ~AssetsBrowserWindow()
         {
             Project.OnProjectChanged -= Invalidate;
+            AssetDatabase.AssetCacheUpdated -= Invalidate;
             AssetsTreeWindow.SelectHandler.OnSelectObject -= SelectionChanged;
             AssetDatabase.Pinged -= OnAssetPinged;
         }
 
         public void Invalidate()
         {
-            CurDirectory = new DirectoryInfo(Project.ProjectAssetDirectory);
+            // Ensure we always have a valid Directory, if the current one is deleted move to its parent
+            // if theres no parent move to the Assets Directory
+            // If theres no project directory well why the hell are we here? the line above should have stopped us
+            while (!Path.Exists(CurDirectoryNode.Directory.FullName))
+                CurDirectoryNode = CurDirectoryNode.Parent ?? AssetDatabase.GetRootFolderCache(2).RootNode;
         }
 
         private void SelectionChanged(object to)
@@ -56,17 +62,22 @@ namespace Prowl.Editor
             if (Locked)
                 return;
 
-            if (to is DirectoryInfo directory)
-                CurDirectory = directory;
-            else if (to is FileInfo file)
-                CurDirectory = file.Directory;
+            string path = to switch {
+                DirectoryInfo dir => dir.FullName,
+                FileInfo file => file.Directory.FullName,
+                _ => CurDirectoryNode.Directory.FullName
+            };
+
+            if (AssetDatabase.PathToCachedNode(path, out var node))
+                CurDirectoryNode = node;
         }
 
         private void OnAssetPinged(FileInfo assetPath)
         {
             _pingTimer = PingDuration;
             _pingedFile = assetPath;
-            CurDirectory = _pingedFile.Directory;
+            if (AssetDatabase.PathToCachedNode(_pingedFile.Directory.FullName, out var node))
+                CurDirectoryNode = node;
         }
 
         public static void StartRename(string? entry)
@@ -79,13 +90,6 @@ namespace Prowl.Editor
         {
             if (!Project.HasProject)
                 return;
-
-            // Ensure we always have a Directory, if the current one is deleted move to its parent
-            // if theres no parent move to the Assets Directory
-            // If theres no project directory well why the hell are we here? the line above should have stopped us
-            while (!Path.Exists(CurDirectory.FullName))
-                CurDirectory = CurDirectory.Parent ?? new DirectoryInfo(Project.ProjectAssetDirectory);
-
 
             gui.CurrentNode.Layout(LayoutType.Column);
             gui.CurrentNode.ScaleChildren();
@@ -100,15 +104,12 @@ namespace Prowl.Editor
         {
             using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(itemHeight).Clip().Enter())
             {
-                bool cantGoUp = CurDirectory.FullName.Equals(Project.ProjectAssetDirectory, StringComparison.OrdinalIgnoreCase)
-                    || CurDirectory.FullName.Equals(Project.ProjectDefaultsDirectory, StringComparison.OrdinalIgnoreCase)
-                    || CurDirectory.FullName.Equals(Project.ProjectPackagesDirectory, StringComparison.OrdinalIgnoreCase)
-                    || CurDirectory.Parent == null;
+                bool cantGoUp = CurDirectoryNode.Parent == null;
 
                 using (gui.Node("DirUpBtn").Scale(itemHeight).Enter())
                 {
                     if (!cantGoUp && gui.IsNodePressed())
-                        CurDirectory = CurDirectory.Parent!;
+                        CurDirectoryNode = CurDirectoryNode.Parent!;
                     gui.Draw2D.DrawText(FontAwesome6.ArrowUp, 30, gui.CurrentNode.LayoutData.Rect, cantGoUp ? GuiStyle.Base4 : (gui.IsNodeHovered() ? GuiStyle.Base11 * 0.8f : GuiStyle.Base11));
                 }
 
@@ -117,8 +118,7 @@ namespace Prowl.Editor
                     _found.Clear();
                     if (!string.IsNullOrEmpty(_searchText))
                     {
-                        _found.AddRange(CurDirectory.EnumerateFiles("*", SearchOption.AllDirectories));
-                        _found.AddRange(CurDirectory.EnumerateDirectories("*", SearchOption.AllDirectories));
+                        _found.AddRange(CurDirectoryNode.Directory.EnumerateFiles("*", SearchOption.AllDirectories));
                         _found.RemoveAll(f => f.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase) || !f.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
                     }
                 }
@@ -126,7 +126,7 @@ namespace Prowl.Editor
                 //var pathPos = new Vector2(itemHeight + 200 + (itemPadding * 3), 7);
                 //pathPos += g.CurrentNode.LayoutData.GlobalContentPosition;
                 var pathPos = new Vector2(itemHeight + 200 + (itemPadding * 3), 0);
-                string assetPath = Path.GetRelativePath(Project.ProjectDirectory, CurDirectory.FullName);
+                string assetPath = Path.GetRelativePath(Project.ProjectDirectory, CurDirectoryNode.Directory.FullName);
                 //g.DrawText(UIDrawList.DefaultFont, assetPath, 20, pathPos, GuiStyle.Base11);
                 string[] nodes = assetPath.Split(Path.DirectorySeparatorChar);
                 double[] nodeSizes = new double[nodes.Length];
@@ -163,7 +163,11 @@ namespace Prowl.Editor
                     using (gui.Node($"PathNode{i}").Left(pathPos.x).Scale(textSize, itemHeight).Enter())
                     {
                         if (gui.IsNodePressed())
-                            CurDirectory = new(Project.ProjectDirectory + "/" + string.Join("/", nodes.Take(i + 1)));
+                        {
+                            string path = Project.ProjectDirectory + "/" + string.Join("/", nodes.Take(i + 1));
+                            if (AssetDatabase.PathToCachedNode(path, out var node))
+                                CurDirectoryNode = node;
+                        }
 
                         gui.Draw2D.DrawText(nodes[i], 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base5);
                     }
@@ -195,7 +199,7 @@ namespace Prowl.Editor
                 var popupHolder = gui.CurrentNode;
                 if (gui.BeginPopup("RightClickBodyBrowser", out var node))
                     using (node.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
-                        AssetsTreeWindow.DrawContextMenu(null, CurDirectory, true, popupHolder);
+                        AssetsTreeWindow.DrawContextMenu(null, CurDirectoryNode.Directory, true, popupHolder);
 
                 if (DragnDrop.Drop<GameObject>(out var go))
                 {
@@ -205,7 +209,7 @@ namespace Prowl.Editor
                             GameObject = Serializer.Serialize(go),
                             Name = go.Name
                         };
-                        FileInfo file = new FileInfo(CurDirectory + $"/{prefab.Name}.prefab");
+                        FileInfo file = new FileInfo(CurDirectoryNode.Directory + $"/{prefab.Name}.prefab");
                         while (File.Exists(file.FullName))
                             file = new FileInfo(file.FullName.Replace(".prefab", "") + " new.prefab");
 
@@ -225,121 +229,105 @@ namespace Prowl.Editor
                 int i = 0;
                 if (!string.IsNullOrEmpty(_searchText))
                 {
-                    foreach (var entry in _found)
-                        RenderEntry(ref i, entry);
+                    //foreach (var entry in _found)
+                    //    RenderEntry(ref i, entry);
                 }
                 else
                 {
-                    var directories = CurDirectory.GetDirectories();
-                    foreach (var folder in directories)
-                    {
-                        if (folder.Exists)
-                            RenderEntry(ref i, folder);
-                    }
+                    foreach (var folder in CurDirectoryNode.SubDirectories)
+                        RenderEntry(ref i, folder);
 
-                    var files = CurDirectory.GetFiles();
-                    foreach (var file in files)
-                    {
-                        if (file.Exists && !file.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase))
-                            RenderEntry(ref i, file);
-                    }
+                    foreach (var file in CurDirectoryNode.Files)
+                        RenderEntry(ref i, file);
                 }
 
                 gui.ScrollV();
             }
         }
 
-        public void RenderEntry(ref int index, FileSystemInfo entry)
+        public void RenderEntry(ref int index, AssetDirectoryCache.DirNode entry)
         {
-            if (entry is DirectoryInfo dir)
+            using (gui.Node(entry.Directory.Name).Scale(EntrySize).Margin(itemPadding).Enter())
             {
+                var interact = gui.GetInteractable();
 
-                using (gui.Node(dir.Name).Scale(EntrySize).Margin(itemPadding).Enter())
+                if (gui.IsNodeHovered() && gui.IsPointerClick(Silk.NET.Input.MouseButton.Right))
+                    gui.OpenPopup("RightClickFileBrowser");
+                var popupHolder = gui.CurrentNode;
+                if (gui.BeginPopup("RightClickFileBrowser", out var node))
+                    using (node.Width(180).Padding(5).Layout(LayoutType.Column).FitContentHeight().Enter())
+                        AssetsTreeWindow.DrawContextMenu(entry.Directory, null, true, popupHolder);
+
+                if (interact.TakeFocus())
                 {
-                    var interact = gui.GetInteractable();
-
-                    if (gui.IsNodeHovered() && gui.IsPointerClick(Silk.NET.Input.MouseButton.Right))
-                        gui.OpenPopup("RightClickFileBrowser");
-                    var popupHolder = gui.CurrentNode;
-                    if (gui.BeginPopup("RightClickFileBrowser", out var node))
-                        using (node.Width(180).Padding(5).Layout(LayoutType.Column).FitContentHeight().Enter())
-                            AssetsTreeWindow.DrawContextMenu(dir, null, true, popupHolder);
-
-                    if (interact.TakeFocus())
-                    {
-                        var old = CurDirectory;
-                        AssetsTreeWindow.SelectHandler.Select(entry);
-                        CurDirectory = old;
-                    }
-
-                    if (interact.IsHovered() && gui.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
-                    {
-                        CurDirectory = new DirectoryInfo(entry.FullName);
-                    }
-
-                    DragnDrop.Drag(entry);
-
-                    if (dir.Exists)
-                    {
-                        if (DragnDrop.Drop<FileSystemInfo>(out var systeminfo))
-                        {
-                            string target = Path.Combine(dir.FullName, systeminfo.Name);
-                            if (systeminfo is FileInfo file)
-                                AssetDatabase.Move(file, target);
-                            else if (systeminfo is DirectoryInfo d)
-                                AssetDatabase.Move(d, target);
-                        }
-                    }
-
-                    DrawFileEntry(index++, entry, interact);
-
-                    DrawPingEffect(entry);
+                    var old = CurDirectoryNode;
+                    AssetsTreeWindow.SelectHandler.Select(entry.Directory);
+                    CurDirectoryNode = old;
                 }
 
+                if (interact.IsHovered() && gui.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                {
+                    CurDirectoryNode = entry;
+                }
+
+                DragnDrop.Drag(entry);
+
+                if (DragnDrop.Drop<FileSystemInfo>(out var systeminfo))
+                {
+                    string target = Path.Combine(entry.Directory.FullName, systeminfo.Name);
+                    if (systeminfo is FileInfo file)
+                        AssetDatabase.Move(file, target);
+                    else if (systeminfo is DirectoryInfo d)
+                        AssetDatabase.Move(d, target);
+                }
+
+                DrawFileEntry(index++, entry.Directory, interact);
+
+                DrawPingEffect(entry.Directory.FullName);
             }
-            else if (entry is FileInfo file)
+        }
+
+        public void RenderEntry(ref int index, AssetDirectoryCache.FileNode entry)
+        {
+
+            AssetDatabase.SubAssetCache[] subAssets = entry.SubAssets;
+
+            bool expanded = false;
+            using (gui.Node(entry.File.Name).Scale(EntrySize).Margin(itemPadding).Enter())
             {
-                AssetDatabase.SubAssetCache[] subAssets = Array.Empty<AssetDatabase.SubAssetCache>();
-                if (AssetDatabase.TryGetGuid(file, out var guid))
-                    subAssets = AssetDatabase.GetSubAssetsCache(guid);
+                var interact = gui.GetInteractable();
+                AssetsTreeWindow.HandleFileClick(-1, interact, entry, 0, true);
 
-                bool expanded = false;
-                using (gui.Node(file.Name).Scale(EntrySize).Margin(itemPadding).Enter())
+                DrawFileEntry(index++, entry.File, interact);
+
+                if (subAssets.Length > 1)
                 {
-                    var interact = gui.GetInteractable();
-                    //AssetsTreeWindow.HandleFileClick(-1, interact, file, 0, true);
+                    expanded = gui.GetNodeStorage<bool>(gui.CurrentNode.Parent, entry.File.FullName, false);
 
-                    DrawFileEntry(0, entry, interact);
-
-                    if (subAssets.Length > 1)
+                    using (gui.Node("ExpandBtn").TopLeft(Offset.Percentage(1f, -(itemHeight * 0.5)), 2).Scale(itemHeight * 0.5).Enter())
                     {
-                        expanded = gui.GetNodeStorage<bool>(gui.CurrentNode.Parent, file.FullName, false);
-
-                        using (gui.Node("ExpandBtn").TopLeft(Offset.Percentage(1f, -(itemHeight * 0.5)), 2).Scale(itemHeight * 0.5).Enter())
+                        if (gui.IsNodePressed())
                         {
-                            if (gui.IsNodePressed())
-                            {
-                                expanded = !expanded;
-                                gui.SetNodeStorage(gui.CurrentNode.Parent.Parent, file.FullName, expanded);
-                            }
-                            gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronRight : FontAwesome6.ChevronLeft, 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base5);
+                            expanded = !expanded;
+                            gui.SetNodeStorage(gui.CurrentNode.Parent.Parent, entry.File.FullName, expanded);
                         }
+                        gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronRight : FontAwesome6.ChevronLeft, 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base5);
                     }
-
-                    DrawPingEffect(entry);
                 }
 
-                if (expanded)
-                {
-                    for (ushort i = 0; i < subAssets.Length; i++)
-                    {
-                        using (gui.Node(subAssets[i].name, i).Scale(EntrySize * 0.75).Margin(itemPadding).Enter())
-                        {
-                            var interact = gui.GetInteractable();
-                            //AssetsTreeWindow.HandleFileClick(-1, interact, file, i, true);
+                DrawPingEffect(entry.File.FullName);
+            }
 
-                            DrawFileEntry(0, entry, interact, true, subAssets[i]);
-                        }
+            if (expanded)
+            {
+                for (ushort i = 0; i < subAssets.Length; i++)
+                {
+                    using (gui.Node(subAssets[i].name, i).Scale(EntrySize * 0.75).Margin(itemPadding).Enter())
+                    {
+                        var interact = gui.GetInteractable();
+                        AssetsTreeWindow.HandleFileClick(-1, interact, entry, i, true);
+
+                        DrawFileEntry(index++, entry.File, interact, true, subAssets[i]);
                     }
                 }
             }
@@ -428,14 +416,15 @@ namespace Prowl.Editor
             }
         }
 
-        private void DrawPingEffect(FileSystemInfo entry)
+        private void DrawPingEffect(string fullPath)
         {
-            if (_pingTimer > 0 && _pingedFile.FullName.Equals(entry.FullName, StringComparison.OrdinalIgnoreCase))
+            if (_pingTimer > 0 && _pingedFile.FullName.Equals(fullPath, StringComparison.OrdinalIgnoreCase))
             {
                 _pingTimer -= Time.deltaTimeF;
                 if (_pingTimer > PingDuration - 1f)
                 {
-                    CurDirectory = _pingedFile.Directory;
+                    if(AssetDatabase.PathToCachedNode(_pingedFile.Directory.FullName, out var node))
+                        CurDirectoryNode = node;
                     //ScrollToItem();
                 }
                 var pingRect = gui.CurrentNode.LayoutData.Rect;
