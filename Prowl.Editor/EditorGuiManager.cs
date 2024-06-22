@@ -54,7 +54,7 @@ public static class EditorGuiManager
 
     public static DockNode DockWindowTo(EditorWindow window, DockNode? node, DockZone zone, double split = 0.5f)
     {
-        if(node != null)
+        if (node != null)
             return Container.AttachWindow(window, node, zone, split);
         else
             return Container.AttachWindow(window, Container.Root, DockZone.Center, split);
@@ -73,7 +73,8 @@ public static class EditorGuiManager
         Vector2 framebufferAndInputScale = new((float)Window.InternalWindow.FramebufferSize.X / (float)Window.InternalWindow.Size.X, (float)Window.InternalWindow.FramebufferSize.Y / (float)Window.InternalWindow.Size.Y);
 
         Gui.PointerWheel = Input.MouseWheelDelta;
-        EditorGuiManager.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, EditorPreferences.Instance.AntiAliasing, (g) => {
+        EditorGuiManager.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, EditorPreferences.Instance.AntiAliasing, (g) =>
+        {
 
             // Draw Background
             g.Draw2D.DrawRectFilled(g.ScreenRect, GuiStyle.Background);
@@ -81,7 +82,7 @@ public static class EditorGuiManager
             g.CurrentNode.Layout(LayoutType.Column);
             g.CurrentNode.ScaleChildren();
 
-            using (g.Node("Main_Header").ExpandWidth().MaxHeight(40).Padding(5, 15).Enter())
+            using (g.Node("Main_Header").ExpandWidth().MaxHeight(50).Padding(10, 15).Enter())
             {
                 using (g.Node("MenuBar").ExpandHeight().FitContentWidth().Layout(LayoutType.Row).Enter())
                 {
@@ -234,7 +235,7 @@ public static class EditorGuiManager
 
         foreach (var window in WindowsToRemove)
         {
-            if(window.IsDocked)
+            if (window.IsDocked)
                 Container.DetachWindow(window);
             if (FocusedWindow != null && FocusedWindow.Target == window)
                 FocusedWindow = null;
@@ -280,7 +281,8 @@ public static class EditorGuiManager
     [MenuItem("File/Save Scene As")]
     public static void SaveSceneAs()
     {
-        FileDialogContext imFileDialogInfo = new FileDialogContext() {
+        FileDialogContext imFileDialogInfo = new FileDialogContext()
+        {
             title = "Save As",
             fileName = "New Scene.scene",
             directoryPath = new DirectoryInfo(Project.ProjectAssetDirectory),
