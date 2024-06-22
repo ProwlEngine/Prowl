@@ -50,6 +50,9 @@ namespace Prowl.Editor
 
         public void Invalidate()
         {
+            if(CurDirectoryNode == null)
+                CurDirectoryNode = AssetDatabase.GetRootFolderCache(2).RootNode;
+
             // Ensure we always have a valid Directory, if the current one is deleted move to its parent
             // if theres no parent move to the Assets Directory
             // If theres no project directory well why the hell are we here? the line above should have stopped us
