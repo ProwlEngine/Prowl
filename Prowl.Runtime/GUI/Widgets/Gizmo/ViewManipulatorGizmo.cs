@@ -158,7 +158,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                 double dotProduct = Vector3.Dot(faceNormal, -camForward);
                 if (dotProduct > 0.01)
                 {
-                    UIBuffer<Vector2> screenPoints = new UIBuffer<Vector2>();
+                    List<Vector2> screenPoints = new List<Vector2>();
                     for (int j = 0; j < face.Length; j++)
                     {
                         Vector3 vertex = cubeVertices[face[j]];

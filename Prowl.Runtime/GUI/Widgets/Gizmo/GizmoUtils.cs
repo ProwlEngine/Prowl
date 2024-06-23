@@ -541,7 +541,7 @@ namespace Prowl.Runtime.GUI
             );
         }
 
-        internal static bool IsPointInPolygon(Vector2 mouse, UIBuffer<Vector2> screenPoints)
+        internal static bool IsPointInPolygon(Vector2 mouse, List<Vector2> screenPoints)
         {
             int count = screenPoints.Count;
             bool inside = false;

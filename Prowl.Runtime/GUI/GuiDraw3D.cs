@@ -107,7 +107,7 @@ namespace Prowl.Runtime.GUI
                 Vector2 direction = (arrowEnd - arrowStart).normalized;
                 Vector2 cross = new Vector2(-direction.y, direction.x) * stroke.Thickness / 2.0f;
 
-                UIBuffer<Vector2> points = new UIBuffer<Vector2>();
+                List<Vector2> points = new List<Vector2>();
                 points.Reserve(3);
                 points.Add(arrowStart - cross);
                 points.Add(arrowStart + cross);
@@ -122,7 +122,7 @@ namespace Prowl.Runtime.GUI
             if (!hasViewport) throw new InvalidOperationException("No viewport set.");
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");
 
-            var screenPoints = new UIBuffer<Vector2>();
+            var screenPoints = new List<Vector2>();
             foreach (Vector3 pos in points)
                 if (WorldToScreen(_viewport, _mvp, pos, out Vector2 screenPos))
                     screenPoints.Add(screenPos);
@@ -136,7 +136,7 @@ namespace Prowl.Runtime.GUI
             if (!hasViewport) throw new InvalidOperationException("No viewport set.");
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");
 
-            var screenPoints = new UIBuffer<Vector2>();
+            var screenPoints = new List<Vector2>();
             foreach (Vector3 pos in points)
                 if (WorldToScreen(_viewport, _mvp, pos, out Vector2 screenPos))
                     screenPoints.Add(screenPos);
@@ -159,7 +159,7 @@ namespace Prowl.Runtime.GUI
             if (stepCount < 2)
                 return;
 
-            var points = new UIBuffer<Vector2>();
+            var points = new List<Vector2>();
             points.Reserve(stepCount + 1);
 
             double stepSize = angleDelta / (stepCount - 1);
@@ -198,12 +198,12 @@ namespace Prowl.Runtime.GUI
             _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count, stroke.Color);
         }
 
-        private UIBuffer<Vector2> ArcPoints(double radius, double startRad, double endRad)
+        private List<Vector2> ArcPoints(double radius, double startRad, double endRad)
         {
             double angle = Math.Clamp(endRad - startRad, -Math.PI * 2, Math.PI * 2);
 
             int stepCount = Steps(angle);
-            var points = new UIBuffer<Vector2>();
+            var points = new List<Vector2>();
             points.Reserve(stepCount);
 
             double stepSize = angle / (stepCount - 1);
@@ -223,9 +223,9 @@ namespace Prowl.Runtime.GUI
             return points;
         }
 
-        private UIBuffer<Vector2> QuadPoints(double size)
+        private List<Vector2> QuadPoints(double size)
         {
-            var points = new UIBuffer<Vector2>();
+            var points = new List<Vector2>();
             points.Reserve(4);
 
             double halfSize = size / 2.0;

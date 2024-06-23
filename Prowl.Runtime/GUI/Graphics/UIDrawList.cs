@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Collections.Generic;
 using Veldrid;
 
 namespace Prowl.Runtime.GUI.Graphics
@@ -12,8 +13,8 @@ namespace Prowl.Runtime.GUI.Graphics
     {
         public class UIDrawChannel
         {
-            public UIBuffer<UIDrawCmd> CmdBuffer { get; private set; } = new();
-            public UIBuffer<ushort> IdxBuffer { get; private set; } = new();
+            public List<UIDrawCmd> CmdBuffer { get; private set; } = new();
+            public List<ushort> IdxBuffer { get; private set; } = new();
         };
 
         // A single vertex (20 bytes by default, override layout with IMGUI_OVERRIDE_DRAWVERT_STRUCT_LAYOUT)
@@ -37,10 +38,10 @@ namespace Prowl.Runtime.GUI.Graphics
         internal static Material material;
 
         // This is what you have to render
-        internal UIBuffer<UIDrawCmd> CmdBuffer; // Commands. Typically 1 command = 1 gpu draw call.
+        internal List<UIDrawCmd> CmdBuffer; // Commands. Typically 1 command = 1 gpu draw call.
 
-        public UIBuffer<ushort> IdxBuffer; // Index buffer. Each command consume ImDrawCmd::ElemCount of those
-        public UIBuffer<UIVertex> VtxBuffer; // Vertex buffer.
+        public List<ushort> IdxBuffer; // Index buffer. Each command consume ImDrawCmd::ElemCount of those
+        public List<UIVertex> VtxBuffer; // Vertex buffer.
         public DeviceBuffer DeviceIdxBuffer;
         public DeviceBuffer DeviceVtxBuffer;
 
@@ -49,14 +50,14 @@ namespace Prowl.Runtime.GUI.Graphics
         internal int _VtxWritePtr; // [Internal] point within VtxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
         internal int _IdxWritePtr; // [Internal] point within IdxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
 
-        internal UIBuffer<Vector4> _ClipRectStack; // [Internal]
-        internal UIBuffer<Texture2D> _TextureIdStack; // [Internal]
-        internal UIBuffer<Vector2> _Path; // [Internal] current path building
+        internal List<Vector4> _ClipRectStack; // [Internal]
+        internal List<Texture2D> _TextureIdStack; // [Internal]
+        internal List<Vector2> _Path; // [Internal] current path building
 
         internal int _ChannelsCurrent; // [Internal] current channel number (0)
         internal int _ChannelsCount; // [Internal] number of active channels (1+)
 
-        internal UIBuffer<UIDrawChannel> _Channels; // [Internal] draw channels for columns API (not resized down so _ChannelsCount may be smaller than _Channels.Size)
+        internal List<UIDrawChannel> _Channels; // [Internal] draw channels for columns API (not resized down so _ChannelsCount may be smaller than _Channels.Size)
         internal int _primitiveCount = -10000;
 
         private bool _AntiAliasing;
@@ -362,7 +363,7 @@ namespace Prowl.Runtime.GUI.Graphics
                 PopTextureID();
         }
 
-        public void AddPolyline(UIBuffer<Vector2> points, int points_count, Color32 col, bool closed, float thickness)
+        public void AddPolyline(List<Vector2> points, int points_count, Color32 col, bool closed, float thickness)
         {
             if (points_count < 2)
                 return;
@@ -549,7 +550,7 @@ namespace Prowl.Runtime.GUI.Graphics
             _primitiveCount++;
         }
 
-        public void AddConvexPolyFilled(UIBuffer<Vector2> points, int points_count, Color32 col)
+        public void AddConvexPolyFilled(List<Vector2> points, int points_count, Color32 col)
         {
             if (points_count < 3)
                 return;
@@ -736,7 +737,7 @@ namespace Prowl.Runtime.GUI.Graphics
             }
         }
 
-        void PathBezierToCasteljau(UIBuffer<Vector2> path, float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4, float tess_tol, int level)
+        void PathBezierToCasteljau(List<Vector2> path, float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4, float tess_tol, int level)
         {
             float dx = x4 - x1;
             float dy = y4 - y1;
@@ -1128,8 +1129,8 @@ namespace Prowl.Runtime.GUI.Graphics
                 DeviceVtxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription(vtxBufferSize, BufferUsage.VertexBuffer));
             }
 
-            commandList.UpdateBuffer(DeviceVtxBuffer, 0, VtxBuffer.Data.ToArray());
-            commandList.UpdateBuffer(DeviceIdxBuffer, 0, IdxBuffer.Data.ToArray());
+            commandList.UpdateBuffer(DeviceVtxBuffer, 0, VtxBuffer.ToArray());
+            commandList.UpdateBuffer(DeviceIdxBuffer, 0, IdxBuffer.ToArray());
 
             commandList.SetIndexBuffer(DeviceIdxBuffer, IndexFormat.UInt16);
             commandList.SetVertexBuffer(0, DeviceVtxBuffer);
@@ -1167,9 +1168,10 @@ namespace Prowl.Runtime.GUI.Graphics
 
                     if (clipRect.x < framebufferWidth && clipRect.y < framebufferHeight && clipRect.z >= 0.0f && clipRect.w >= 0.0f)
                     {
-                        commandList.SetScissorRect(0, (uint)clipRect.x, (uint)(framebufferHeight - clipRect.w), (uint)(clipRect.z - clipRect.x), (uint)(clipRect.w - clipRect.y));
+                        commandList.SetScissorRect(0, (uint)clipRect.x, (uint)clipRect.y, (uint)(clipRect.z - clipRect.x), (uint)(clipRect.w - clipRect.y));
 
                         material.SetTexture("SurfaceTexture", cmdPtr.TextureId);
+
                         material.Upload(commandList);
 
                         commandList.DrawIndexed(
@@ -1183,7 +1185,7 @@ namespace Prowl.Runtime.GUI.Graphics
                     idxoffset += (int)cmdPtr.ElemCount;
                 }
 
-                commandList.ClearDepthStencil(0.0f);
+                commandList.ClearDepthStencil(1f);
             }
             
         }
@@ -1206,6 +1208,9 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public static void CreateDeviceResources()
         {
+            if (DefaultFont != null && material != null && shader != null)
+                return;
+
             const string vertexSource = @"
         #version 450
 
@@ -1221,15 +1226,16 @@ namespace Prowl.Runtime.GUI.Graphics
         layout (location = 0) out vec2 Frag_UV;
         layout (location = 1) out vec4 Frag_Color;
 
-        layout (constant_id = 0) const bool UV_STARTS_AT_TOP = true;
+        layout (constant_id = 100) const bool ClipYInverted = true;
 
         void main()
         {
             Frag_UV = UV;
             Frag_Color = Color;
+
             gl_Position = ProjMtx * vec4(Position, 1.0);
 
-            if (UV_STARTS_AT_TOP)
+            if (ClipYInverted)
             {
                 gl_Position.y = -gl_Position.y;
             }
@@ -1267,17 +1273,18 @@ namespace Prowl.Runtime.GUI.Graphics
                 new VertexElementDescription("Color", VertexElementFormat.Byte4_Norm, VertexElementSemantic.Color)
             ));
 
-            // MVP matrix resources
-            pass.AddResourceElement([ 
-                new ShaderResource("ProjMtx", ResourceType.Matrix4x4, ShaderStages.Vertex)
+            pass.AddResourceSet([
+                new BufferResource("ProjBuffer", ShaderStages.Vertex, 
+                    ("ProjMtx", ResourceType.Matrix4x4)
+                )
             ]);
             
             // Other shader resources
-            pass.AddResourceElement([
-                new ShaderResource("SurfaceTexture", ResourceType.Texture, ShaderStages.Fragment),
-                new ShaderResource("SurfaceTexture", ResourceType.Sampler, ShaderStages.Fragment)
+            pass.AddResourceSet([
+                new TextureResource("SurfaceTexture", false, ShaderStages.Fragment)
             ]);
 
+            pass.depthStencil.DepthTestEnabled = true;
             pass.depthStencil.StencilTestEnabled = false;
             pass.cullMode = FaceCullMode.None;
 
