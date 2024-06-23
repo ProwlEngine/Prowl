@@ -481,7 +481,9 @@ namespace Prowl.Runtime.GUI.Layout
             hash = hash * 23 + (ulong)_paddingBottom.GetHashCode64();
             hash = hash * 23 + (ulong)_ignore.GetHashCode();
             hash = hash * 23 + (ulong)_fitContentX.GetHashCode();
+            hash = hash * 23 + (ulong)_fitContentXPerc.GetHashCode();
             hash = hash * 23 + (ulong)_fitContentY.GetHashCode();
+            hash = hash * 23 + (ulong)_fitContentYPerc.GetHashCode();
             hash = hash * 23 + (ulong)_centerContent.GetHashCode();
             hash = hash * 23 + (ulong)_canScaleChildren.GetHashCode();
             hash = hash * 23 + (ulong)_layout.GetHashCode();
