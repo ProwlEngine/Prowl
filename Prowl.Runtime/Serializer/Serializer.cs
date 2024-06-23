@@ -390,7 +390,7 @@ namespace Prowl.Runtime
 
         static object CreateInstance(Type type)
         {
-            return Activator.CreateInstance(type) ?? throw new InvalidOperationException("Failed to create instance of type: " + type);
+            return Activator.CreateInstance(type, true) ?? throw new InvalidOperationException("Failed to create instance of type: " + type);
         }
 
         #endregion
