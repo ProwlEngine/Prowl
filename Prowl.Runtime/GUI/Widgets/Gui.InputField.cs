@@ -470,12 +470,10 @@ namespace Prowl.Runtime.GUI
                 StbTextEdit.Key(stb, stb_key.Value);
             }
 
-            if(Input.LastPressedChar != null)
+            if (Input.InputString.Count > 0)
             {
-                OnTextInput(stb, Input.LastPressedChar.ToString(), MaxLength, Flags);
-                // Consume the key
-                // TODO: We should have a proper API to recieve Input Characters rather then consuming the only source of input so nothing else can see it
-                Input.LastPressedChar = null;
+                for (int i = 0; i < Input.InputString.Count; i++)
+                    OnTextInput(stb, Input.InputString[i].ToString(), MaxLength, Flags);
             }
         }
 

@@ -1,5 +1,4 @@
 ﻿using System;
-using Veldrid;
 
 namespace Prowl.Runtime.GUI
 {
@@ -7,15 +6,18 @@ namespace Prowl.Runtime.GUI
     {
         public event Action<Vector2> OnPointerPosSet;
         public event Action<bool> OnCursorVisibilitySet;
-        internal bool[] KeyCurState = new bool[(int)Key.Menu];
-        internal bool[] KeyPreState = new bool[(int)Key.Menu];
-        internal double[] KeyPressedTime = new double[(int)Key.Menu];
+        
+        internal bool[] KeyCurState = new bool[Input.KeyValues.Length];
+        internal bool[] KeyPreState = new bool[Input.KeyValues.Length];
+
+        internal double[] KeyPressedTime = new double[Input.KeyValues.Length];
         internal Key KeyCode = Key.Unknown;
 
-        internal bool[] PointerCurState = new bool[(int)MouseButton.LastButton];
-        internal bool[] PointerPreState = new bool[(int)MouseButton.LastButton];
-        internal double[] PointerPressedTime = new double[(int)MouseButton.LastButton];
-        internal Vector2[] PointerClickPos = new Vector2[(int)MouseButton.LastButton];
+        internal bool[] PointerCurState = new bool[Input.MouseValues.Length];
+        internal bool[] PointerPreState = new bool[Input.MouseValues.Length];
+
+        internal double[] PointerPressedTime = new double[Input.MouseValues.Length];
+        internal Vector2[] PointerClickPos = new Vector2[Input.MouseValues.Length];
         internal MouseButton PointerButton = (MouseButton)(-1);
         public Vector2 PreviousPointerPos = Vector2.zero;
 
@@ -34,8 +36,8 @@ namespace Prowl.Runtime.GUI
         public Vector2 PointerDelta => PointerPos - PreviousPointerPos;
         public bool IsPointerMoving => PointerDelta.sqrMagnitude > 0;
 
-        public double[] PointerLastClickTime = new double[(int)MouseButton.LastButton];
-        public Vector2[] PointerLastClickPos = new Vector2[(int)MouseButton.LastButton];
+        public double[] PointerLastClickTime = new double[Input.MouseValues.Length];
+        public Vector2[] PointerLastClickPos = new Vector2[Input.MouseValues.Length];
         public const double MaxDoubleClickTime = 0.25;
 
         private Vector2 frameBufferScale;
@@ -127,7 +129,7 @@ namespace Prowl.Runtime.GUI
             }
             else
             {
-                PointerPos = new Vector2(X, Y);
+                _pointerPos = new Vector2(X, Y);
             }
         }
 
