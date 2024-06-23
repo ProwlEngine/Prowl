@@ -96,7 +96,7 @@ namespace Prowl.Editor.PropertyDrawers
                     OnLabelGUI(gui, label);
 
                 // Value
-                using (gui.Node("#_Value").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                using (gui.Node("#_Value").Height(GuiStyle.ItemHeight).Enter())
                     return OnValueGUI(gui, $"#{label}_{index}", propertyType, ref propertyValue);
             }
         }
