@@ -32,10 +32,11 @@ namespace Prowl.Runtime
 
         private static Shader CreateDefault()
         {
+            Debug.Log("Making default");
             Pass pass = new Pass("Default Pass", null);
 
-            pass.AddVertexInput(MeshResource.Position);
             pass.CreateProgram(Graphics.CreateFromSpirv(defaultVertex, defaultFragment));
+            pass.AddVertexInput(MeshResource.Position);
 
             return new("Default Shader", pass);
         }
@@ -136,7 +137,10 @@ namespace Prowl.Runtime
 
         public SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
-            /*SerializedProperty compoundTag = SerializedProperty.NewCompound();
+            SerializedProperty compoundTag = SerializedProperty.NewCompound();
+
+            compoundTag.Add("Name", new(Name));
+
             if (AssetID != Guid.Empty)
             {
                 compoundTag.Add("AssetID", new SerializedProperty(AssetID.ToString()));
@@ -144,6 +148,7 @@ namespace Prowl.Runtime
                     compoundTag.Add("FileID", new SerializedProperty(FileID));
             }
 
+            /*
             SerializedProperty propertiesTag = SerializedProperty.NewList();
             foreach (var property in Properties)
             {
@@ -153,13 +158,15 @@ namespace Prowl.Runtime
                 propertyTag.Add("Type", new((byte)property.Type));
                 propertiesTag.ListAdd(propertyTag);
             }
-            compoundTag.Add("Properties", propertiesTag);*/
-            return null;
+            compoundTag.Add("Properties", propertiesTag);
+            */
+
+            return compoundTag;
         }
 
         public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
-            /*Name = value.Get("Name")?.StringValue;
+            Name = value.Get("Name")?.StringValue;
 
             if (value.TryGet("AssetID", out var assetIDTag))
             {
@@ -167,6 +174,7 @@ namespace Prowl.Runtime
                 FileID = value.Get("FileID").UShortValue;
             }
 
+            /*
             Properties.Clear();
             var propertiesTag = value.Get("Properties");
             foreach (var propertyTag in propertiesTag.List)
@@ -194,7 +202,8 @@ namespace Prowl.Runtime
                 shadowPass.Vertex = shadowPassTag.Get("Vertex").StringValue;
                 shadowPass.Fragment = shadowPassTag.Get("Fragment").StringValue;
                 ShadowPass = shadowPass;
-            }*/
+            }
+            */
         }
     }
 }
