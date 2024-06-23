@@ -60,4 +60,5 @@ public class TestDrawers : MonoBehaviour
     }
     public Nested aNested = new();
 
+    public LayerMask aLayerMask;
 }

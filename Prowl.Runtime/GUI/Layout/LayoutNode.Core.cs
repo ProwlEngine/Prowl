@@ -339,11 +339,11 @@ namespace Prowl.Runtime.GUI.Layout
                     else if (interact.IsHovered()) Gui.Draw2D.DrawRectFilled(barRect, style.ScrollBarHoveredColor, (float)style.ScrollBarRoundness);
                     else Gui.Draw2D.DrawRectFilled(barRect, style.WidgetColor, style.ScrollBarRoundness);
 
-                    if (Gui.IsPointerHovering(LayoutData.Rect) && Gui.PointerWheel != 0)
-                    {
-                        HScroll -= Gui.PointerWheel * 10;
-                        Gui.layoutDirty = true;
-                    }
+                    //if (Gui.IsPointerHovering(LayoutData.Rect) && Gui.PointerWheel != 0)
+                    //{
+                    //    HScroll -= Gui.PointerWheel * 10;
+                    //    Gui.layoutDirty = true;
+                    //}
 
                     HScroll = MathD.Clamp(HScroll, 0, overflowHeight);
                 }
