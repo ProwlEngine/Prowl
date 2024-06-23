@@ -31,11 +31,11 @@ namespace Prowl.Runtime
             {
                 SyncToVerticalBlank = VSync,
                 PreferStandardClipSpaceYDirection = true,
-                PreferDepthRangeZeroToOne = true,
+                PreferDepthRangeZeroToOne = false,
                 ResourceBindingModel = ResourceBindingModel.Default,
                 HasMainSwapchain = true,
                 SwapchainDepthFormat = PixelFormat.R16_UNorm,
-                SwapchainSrgbFormat = true,
+                SwapchainSrgbFormat = false,
             };
 
             Device = VeldridStartup.CreateGraphicsDevice(Screen.InternalWindow, deviceOptions, preferredBackend);
@@ -86,59 +86,40 @@ namespace Prowl.Runtime
             Device.SwapBuffers();
         }
 
+
+        public static SpecializationConstant[] GetSpecializations()
+        {
+            bool glOrGles = Device.BackendType == GraphicsBackend.OpenGL || Device.BackendType == GraphicsBackend.OpenGLES;
+
+            List<SpecializationConstant> specializations =
+            [
+                new SpecializationConstant(100, Device.IsClipSpaceYInverted),
+                new SpecializationConstant(101, glOrGles), // TextureCoordinatesInvertedY
+                new SpecializationConstant(102, Device.IsDepthRangeZeroToOne),
+            ];
+
+            PixelFormat swapchainFormat = ScreenFramebuffer.OutputDescription.ColorAttachments[0].Format;
+            bool swapchainIsSrgb = swapchainFormat == PixelFormat.B8_G8_R8_A8_UNorm_SRgb
+                || swapchainFormat == PixelFormat.R8_G8_B8_A8_UNorm_SRgb;
+
+            specializations.Add(new SpecializationConstant(103, swapchainIsSrgb));
+
+            return specializations.ToArray();
+        }
+
         public static Veldrid.Shader[] CreateFromSpirv(string vert, string frag)
         {
+            CrossCompileOptions options = new()
+            {
+                FixClipSpaceZ = (Device.BackendType == GraphicsBackend.OpenGL || Device.BackendType == GraphicsBackend.OpenGLES) && !Device.IsDepthRangeZeroToOne,
+                InvertVertexOutputY = false,
+                Specializations = GetSpecializations()
+            };
+
             ShaderDescription vertexShaderDesc = new ShaderDescription(ShaderStages.Vertex, Encoding.UTF8.GetBytes(vert), "main");
             ShaderDescription fragmentShaderDesc = new ShaderDescription(ShaderStages.Fragment, Encoding.UTF8.GetBytes(frag), "main");
 
-            return Factory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc);
-        }
-
-        /*
-        public static void DrawMesh(Mesh mesh, Material material, Matrix4x4 matrix)
-        {
-            mesh.Upload();
-            Matrix4x4 proj = Matrix4x4.CreatePerspectiveFieldOfView(fov, (float)Screen.Size.x / Screen.Size.y, 0.5f, 1000f);
-            Matrix4x4 view = trs.worldToLocalMatrix;
-
-            Matrix4x4 MVP = matrix * view * proj;
-
-            material.SetMatrix("MVPMatrix", MVP);
-
-            material.Upload(_commandList);
-
-            BindMeshBuffers(_commandList, mesh, material.GetPass().GetVariant(material.Keywords).vertexInputs);
-
-            _commandList.DrawIndexed(
-                indexCount: (uint)mesh.IndexCount,
-                instanceCount: 1,
-                indexStart: 0,
-                vertexOffset: 0,
-                instanceStart: 0);
-        }
-        */
-
-        public static void BindMeshBuffers(CommandList commandList, Mesh mesh, Material material, KeywordState? keywords = null)
-        {
-            commandList.SetIndexBuffer(mesh.IndexBuffer, mesh.IndexFormat);
-            var vertexInputs = material.GetPass().GetVariant(keywords).vertexInputs;
-
-            for (uint i = 0; i < vertexInputs.Count; i++)
-            {
-                MeshResource resource = vertexInputs[(int)i].Item1;
-
-                switch (resource)
-                {
-                    case MeshResource.Position:     commandList.SetVertexBuffer(i, mesh.VertexBuffer, 0);                           break;
-                    case MeshResource.UV0:          commandList.SetVertexBuffer(i, mesh.VertexBuffer, (uint)mesh.UVStart);          break;
-                    case MeshResource.UV1:          commandList.SetVertexBuffer(i, mesh.VertexBuffer, (uint)mesh.UV2Start);         break;
-                    case MeshResource.Normals:      commandList.SetVertexBuffer(i, mesh.VertexBuffer, (uint)mesh.NormalsStart);     break;
-                    case MeshResource.Tangents:     commandList.SetVertexBuffer(i, mesh.VertexBuffer, (uint)mesh.TangentsStart);    break;
-                    case MeshResource.Colors:       commandList.SetVertexBuffer(i, mesh.VertexBuffer, (uint)mesh.ColorsStart);      break;
-                    case MeshResource.BoneIndices:  commandList.SetVertexBuffer(i, mesh.VertexBuffer, (uint)mesh.BoneIndexStart);   break;
-                    case MeshResource.BoneWeights:  commandList.SetVertexBuffer(i, mesh.VertexBuffer, (uint)mesh.BoneWeightStart);  break;
-                };
-            }
+            return Factory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc, options);
         }
 
         internal static void Dispose()
