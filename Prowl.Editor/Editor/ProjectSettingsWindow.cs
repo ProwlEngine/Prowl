@@ -53,16 +53,17 @@ public abstract class SingletonEditorWindow : EditorWindow
         if (!Project.HasProject) return;
 
         gui.CurrentNode.Layout(LayoutType.Row);
+        gui.CurrentNode.ScaleChildren();
 
         elementCounter = 0;
 
-        using (gui.Node("SidePanel").Padding(5, 10, 10, 10).Width(150).ExpandHeight().Layout(LayoutType.Column).Spacing(5).Clip().Enter())
+        using (gui.Node("SidePanel").Padding(5, 10, 10, 10).MaxWidth(150).ExpandHeight().Layout(LayoutType.Column).Spacing(5).Clip().Enter())
         {
             gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
             RenderSideView();
         }
 
-        using (gui.Node("ContentPanel").PaddingRight(28).Left(150).Width(Size.Percentage(0.8f)).ExpandHeight().Enter())
+        using (gui.Node("ContentPanel").PaddingRight(10).ExpandHeight().Enter())
         {
             RenderBody();
         }

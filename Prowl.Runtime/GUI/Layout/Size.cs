@@ -36,14 +36,14 @@ namespace Prowl.Runtime.GUI
 
         public double ToPixels(double parentValue)
         {
-            if (isLerp)
+            if (Type == LayoutValueType.Percent)
+                return (Value * parentValue) + PixelOffset;
+            else if(isLerp)
             {
                 Size a = new(Value, PixelOffset, Type);
                 Size b = new(_lerpValue, _lerpPixelOffset, _lerpType);
                 return MathD.Lerp(a.ToPixels(parentValue), b.ToPixels(parentValue), _lerpTime);
             }
-            else if(Type == LayoutValueType.Percent)
-                return (Value * parentValue) + PixelOffset;
             else
                 return Value + PixelOffset;
         }
