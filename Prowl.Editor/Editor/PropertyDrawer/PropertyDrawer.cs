@@ -23,8 +23,26 @@ namespace Prowl.Editor.PropertyDrawers
                 if (propertyType.IsAssignableTo(kvp.Key))
                     return kvp.Value.PropertyLayout(gui, label, index, propertyType, ref propertyValue, config);
 
-            // No drawer found
-            return false;
+            if (propertyType.IsInterface || propertyType.IsAbstract)
+            {
+                // its an Interface/Abstract class, 
+            }
+
+            // No drawer found, Fallback to Default Drawer
+            bool changed = false;
+            var fields = RuntimeUtils.GetSerializableFields(propertyValue);
+            if (fields.Length != 0)
+            {
+                using (gui.Node(label + "_Header", index).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Padding(10).Enter())
+                {
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Background);
+
+                    gui.TextNode("H_Text", label).ExpandWidth().Height(GuiStyle.ItemHeight);
+
+                    changed |= EditorGUI.PropertyGrid(propertyType.Name + " | " + label, ref propertyValue, EditorGUI.TargetFields.Serializable, config);
+                }
+            }
+            return changed;
         }
 
         [OnAssemblyUnload]

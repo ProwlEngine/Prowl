@@ -40,11 +40,33 @@ namespace Prowl.Editor
             gui.CurrentNode.Layout(LayoutType.Column);
             gui.CurrentNode.ScaleChildren();
 
-            //using(g.Node().Width(Size.Percentage(1f)).MaxHeight(20).Enter())
-            //{
-            //    g.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.SelectedColor);
-            //}
-            using (gui.Node("List").Width(Size.Percentage(1f)).Padding(0, 3, 3, 3).Clip().Enter())
+            using(gui.Node("Header").Width(Size.Percentage(1f)).MaxHeight(GuiStyle.ItemHeight).Layout(LayoutType.Row).Enter())
+            {
+                if (EditorGUI.StyledButton(FontAwesome6.TrashCan + " Clear", 75, GuiStyle.ItemHeight, false, null, null, 0))
+                {
+                    _logMessages.Clear();
+                    _logCount = 0;
+                }
+
+                // Logs
+                if (EditorGUI.StyledButton(FontAwesome6.Terminal, 30, GuiStyle.ItemHeight, false, null, null, 0))
+                    GeneralPreferences.Instance.ShowDebugLogs = !GeneralPreferences.Instance.ShowDebugLogs;
+                DrawHand(GeneralPreferences.Instance.ShowDebugLogs);
+                // Warnings
+                if (EditorGUI.StyledButton(FontAwesome6.TriangleExclamation, 30, GuiStyle.ItemHeight, false, null, null, 0))
+                    GeneralPreferences.Instance.ShowDebugWarnings = !GeneralPreferences.Instance.ShowDebugWarnings;
+                DrawHand(GeneralPreferences.Instance.ShowDebugWarnings);
+                // Errors
+                if (EditorGUI.StyledButton(FontAwesome6.CircleExclamation, 30, GuiStyle.ItemHeight, false, null, null, 0))
+                    GeneralPreferences.Instance.ShowDebugErrors = !GeneralPreferences.Instance.ShowDebugErrors;
+                DrawHand(GeneralPreferences.Instance.ShowDebugErrors);
+                // Success
+                if (EditorGUI.StyledButton(FontAwesome6.CircleCheck, 30, GuiStyle.ItemHeight, false, null, null, 0))
+                    GeneralPreferences.Instance.ShowDebugSuccess = !GeneralPreferences.Instance.ShowDebugSuccess;
+                DrawHand(GeneralPreferences.Instance.ShowDebugSuccess);
+            }
+
+            using (gui.Node("List").Width(Size.Percentage(1f)).Padding(0, 3, 3, 3).Clip().Scroll().Enter())
             {
                 double height = 0;
                 for (int i = _logMessages.Count; i-- > 0;)
@@ -68,8 +90,20 @@ namespace Prowl.Editor
 
                 // Dummy node to set the height of the scroll area
                 gui.Node("Dummy").Width(5).Height(height);
+            }
+        }
 
-                gui.ScrollV();
+        private void DrawHand(bool v)
+        {
+            if (v) return;
+            using (gui.PreviousNode.Enter())
+            {
+                var rect = gui.CurrentNode.LayoutData.Rect;
+                rect.Expand(-10);
+                rect.Min += new Vector2(7, -7);
+                rect.Max += new Vector2(7, -7);
+
+                gui.Draw2D.DrawText(FontAwesome6.Hand, 20, rect, GuiStyle.Red, false, false);
             }
         }
 

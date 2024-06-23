@@ -65,7 +65,7 @@ namespace Prowl.Editor
 
             gui.InputField("SearchInput", ref _searchText, 0x100, Gui.InputFieldFlags.None, 25, 50, 150);
 
-            using (gui.Node("List").Width(565).Height(345).Left(25).Top(80).Layout(LayoutType.Column).Spacing(5).Clip().Enter())
+            using (gui.Node("List").Width(565).Height(345).Left(25).Top(80).Layout(LayoutType.Column).Spacing(5).Clip().Scroll().Enter())
             {
                 Directory.CreateDirectory(Project.Projects_Directory);
                 var folders = new DirectoryInfo(Project.Projects_Directory).EnumerateDirectories();
@@ -74,8 +74,6 @@ namespace Prowl.Editor
                 foreach (var projectFolder in folders)
                     if (string.IsNullOrEmpty(_searchText) || projectFolder.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
                         DisplayProject(projectFolder.Name);
-
-                gui.ScrollV();
             }
 
             using (gui.Node("OpenBtn").TopLeft(455, 452).Scale(162, 60).Enter())

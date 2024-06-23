@@ -155,7 +155,7 @@ namespace Prowl.Editor
 
                     if (Dialog.directoryPath.Exists)
                     {
-                        using (gui.Node("Content").ExpandWidth().Layout(LayoutType.Row).Height(Size.Percentage(1f, -GuiStyle.ItemHeight * 2)).Top(GuiStyle.ItemHeight).PaddingTop(10).Clip().Enter())
+                        using (gui.Node("Content").ExpandWidth().Layout(LayoutType.Row).Height(Size.Percentage(1f, -GuiStyle.ItemHeight * 2)).Top(GuiStyle.ItemHeight).PaddingTop(10).Clip().Scroll().Enter())
                         {
                             // name = 50%, size = 20%, date = 20%, type = 10%
 
@@ -213,8 +213,6 @@ namespace Prowl.Editor
 
                                 DrawEntries(true, f => f.Extension);
                             }
-
-                            gui.ScrollV();
                         }
 
                         using (gui.Node("Footer").ExpandWidth().Height(GuiStyle.ItemHeight).Top(Offset.Percentage(1f, -GuiStyle.ItemHeight)).Enter())

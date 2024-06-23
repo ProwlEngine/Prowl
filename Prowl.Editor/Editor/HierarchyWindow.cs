@@ -76,7 +76,7 @@ namespace Prowl.Editor
             }
 
 
-            using (gui.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Clip().Enter())
+            using (gui.Node("Tree").Width(Size.Percentage(1f)).MarginTop(5).Clip().Scroll().Enter())
             {
                 //gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 4);
 
@@ -119,8 +119,6 @@ namespace Prowl.Editor
                         DrawContextMenu(go, popupHolder);
                     }
                 }
-
-                gui.ScrollV();
             }
         }
 
@@ -212,7 +210,9 @@ namespace Prowl.Editor
             bool isPrefab = entity.IsPrefab;
             double left = depth * entryHeight;
             ulong goNodeID = 0;
-            using (gui.Node(entity.GetHashCode().ToString()).Left(left).Top(index * (entryHeight + entryPadding)).ExpandWidth(-(left + gui.VScrollBarWidth())).Height(entryHeight).Margin(2, 0).Enter())
+            double width = gui.CurrentNode.LayoutData.InnerRect.width - left;
+            width = Math.Max(width, 200);
+            using (gui.Node(entity.GetHashCode().ToString()).Left(left).Top(index * (entryHeight + entryPadding)).Width(width).Height(entryHeight).Margin(2, 0).Enter())
             {
                 goNodeID = gui.CurrentNode.ID;
                 float colMult = entity.enabledInHierarchy ? 1 : 0.5f;

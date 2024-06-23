@@ -40,10 +40,10 @@ public class GameObject : EngineObject, ISerializable
     #region Public Fields/Properties
 
     /// <summary> The Tag Index of this GameObject </summary>
-    public int tagIndex;
+    public byte tagIndex;
 
     /// <summary> The Layer Index of this GameObject </summary>
-    public int layerIndex;
+    public byte layerIndex;
 
     /// <summary> The Hide Flags of this GameObject, Used to hide the GameObject from a variety of places like Serializing, Inspector or Hierarchy </summary>
     public HideFlags hideFlags = HideFlags.None;
@@ -242,7 +242,7 @@ public class GameObject : EngineObject, ISerializable
         return false;
     }
 
-    public bool CompareTag(string otherTag) => tagIndex == TagLayerManager.GetTagIndex(otherTag);
+    public bool CompareTag(string otherTag) => TagLayerManager.GetTag(tagIndex).Equals(otherTag, StringComparison.OrdinalIgnoreCase);
 
     public static GameObject Find(string otherName) => FindObjectsOfType<GameObject>().FirstOrDefault(gameObject => gameObject.Name == otherName);
 
@@ -651,8 +651,8 @@ public class GameObject : EngineObject, ISerializable
         Name = value["Name"].StringValue;
         _enabled = value["Enabled"].ByteValue == 1;
         _enabledInHierarchy = value["EnabledInHierarchy"].ByteValue == 1;
-        tagIndex = value["TagIndex"].IntValue;
-        layerIndex = value["LayerIndex"].IntValue;
+        tagIndex = value["TagIndex"].ByteValue;
+        layerIndex = value["LayerIndex"].ByteValue;
         hideFlags = (HideFlags)value["HideFlags"].IntValue;
 
         _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx);

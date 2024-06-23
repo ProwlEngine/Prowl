@@ -76,7 +76,7 @@ namespace Prowl.Runtime.GUI
                     Vector2 textSize = (style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont).CalcTextSize(value, 0, g.CurrentNode.LayoutData.InnerRect.width);
                     // Dummy node to update ContentRect
                     g.Node(ID).Width(textSize.x).Height(textSize.y).IgnoreLayout();
-                    g.ScrollV();
+                    g.CurrentNode.Scroll();
                 }
 
                 return ValueChanged;

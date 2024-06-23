@@ -20,6 +20,8 @@ namespace Prowl.Editor.Assets
 
         #region Events
 
+        public static event Action? AssetCacheUpdated;
+
         public static event Action<Guid, FileInfo>? AssetRemoved;
         public static event Action<FileInfo>? Pinged;
 
@@ -187,8 +189,11 @@ namespace Prowl.Editor.Assets
 
             // If anything changed update DirectoryCaches for Editor UI
             if (forceCacheUpdate || cacheModified || toReimport.Count > 0)
+            {
                 foreach (var root in rootFolders)
                     root.Item2.Refresh();
+                AssetCacheUpdated?.Invoke();
+            }
 
             if (cacheModified)
                 LastWriteTimesCache.Instance.Save();
