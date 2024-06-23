@@ -287,7 +287,7 @@ namespace Prowl.Runtime.GUI.Layout
                     {
                         Gui.Draw2D.DrawRectFilled(barRect, style.ScrollBarActiveColor, style.ScrollBarRoundness);
                         {
-                            VScroll += Gui.PointerDelta.y * 2f;
+                            VScroll += Gui.PointerDelta.y / scrollRatio;
                             Gui.layoutDirty = true;
                         }
                     }
@@ -332,7 +332,7 @@ namespace Prowl.Runtime.GUI.Layout
                     {
                         Gui.Draw2D.DrawRectFilled(barRect, style.ScrollBarActiveColor, style.ScrollBarRoundness);
                         {
-                            HScroll += Gui.PointerDelta.x * 2f;
+                            HScroll += Gui.PointerDelta.x / scrollRatio;
                             Gui.layoutDirty = true;
                         }
                     }
