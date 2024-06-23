@@ -502,23 +502,6 @@ namespace Prowl.Runtime
             return offsets;
         }
 
-        public static VertexLayoutDescription GetLayoutForResource(MeshResource resource, VertexLayoutDescription layout)
-        {
-            return resource switch 
-            {
-                MeshResource.Position => new VertexLayoutDescription(new VertexElementDescription("POSITION", VertexElementFormat.Float3, VertexElementSemantic.Position)),
-                MeshResource.UV0 => new VertexLayoutDescription(new VertexElementDescription("TEXCOORD0", VertexElementFormat.Float2, VertexElementSemantic.TextureCoordinate)),
-                MeshResource.UV1 => new VertexLayoutDescription(new VertexElementDescription("TEXCOORD1", VertexElementFormat.Float2, VertexElementSemantic.TextureCoordinate)),
-                MeshResource.Normals => new VertexLayoutDescription(new VertexElementDescription("NORMAL", VertexElementFormat.Float3, VertexElementSemantic.Normal)),
-                MeshResource.Tangents => new VertexLayoutDescription(new VertexElementDescription("TANGENT", VertexElementFormat.Float3, VertexElementSemantic.Normal)),
-                MeshResource.Colors => new VertexLayoutDescription(new VertexElementDescription("COLOR", VertexElementFormat.Float4, VertexElementSemantic.Color)),
-                MeshResource.BoneIndices => new VertexLayoutDescription(new VertexElementDescription("BONEINDEX", VertexElementFormat.Float4, VertexElementSemantic.Position)),
-                MeshResource.BoneWeights => new VertexLayoutDescription(new VertexElementDescription("BONEWEIGHT", VertexElementFormat.Float4, VertexElementSemantic.Color)),
-                MeshResource.Custom => layout,
-            };
-        }
-
-
         public SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
             var compoundTag = SerializedProperty.NewCompound();
@@ -528,6 +511,11 @@ namespace Prowl.Runtime
             {
                 writer.Write((byte)indexFormat);
                 writer.Write((byte)meshTopology);
+
+                void WriteVector3Array(System.Numerics.Vector3[] vectors)
+                {
+
+                }
 
                 writer.Write(vertices.Length);
                 foreach (var vertex in vertices)

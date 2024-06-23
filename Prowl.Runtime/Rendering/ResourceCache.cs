@@ -45,6 +45,22 @@ namespace Prowl.Runtime
         private static Dictionary<string, WeakReference<Shader>> shaderCache = new();
 
 
+        private static VertexLayoutDescription GetLayoutForResource(MeshResource resource, VertexLayoutDescription layout)
+        {
+            return resource switch 
+            {
+                MeshResource.Position => new VertexLayoutDescription(new VertexElementDescription("POSITION", VertexElementFormat.Float3, VertexElementSemantic.Position)),
+                MeshResource.UV0 => new VertexLayoutDescription(new VertexElementDescription("TEXCOORD0", VertexElementFormat.Float2, VertexElementSemantic.TextureCoordinate)),
+                MeshResource.UV1 => new VertexLayoutDescription(new VertexElementDescription("TEXCOORD1", VertexElementFormat.Float2, VertexElementSemantic.TextureCoordinate)),
+                MeshResource.Normals => new VertexLayoutDescription(new VertexElementDescription("NORMAL", VertexElementFormat.Float3, VertexElementSemantic.Normal)),
+                MeshResource.Tangents => new VertexLayoutDescription(new VertexElementDescription("TANGENT", VertexElementFormat.Float3, VertexElementSemantic.Normal)),
+                MeshResource.Colors => new VertexLayoutDescription(new VertexElementDescription("COLOR", VertexElementFormat.Float4, VertexElementSemantic.Color)),
+                MeshResource.BoneIndices => new VertexLayoutDescription(new VertexElementDescription("BONEINDEX", VertexElementFormat.Float4, VertexElementSemantic.Position)),
+                MeshResource.BoneWeights => new VertexLayoutDescription(new VertexElementDescription("BONEWEIGHT", VertexElementFormat.Float4, VertexElementSemantic.Color)),
+                MeshResource.Custom => layout,
+            };
+        }
+
         private static GraphicsPipelineDescription CreateDescriptionForPass(in PassPipelineDescription passDesc)
         {
             Pass.Variant keywordProgram = passDesc.pass.GetVariant(passDesc.keywordState);
@@ -55,9 +71,12 @@ namespace Prowl.Runtime
             {
                 ShaderResource[] resources = keywordProgram.resourceSets[i];
 
-                var description = new ResourceLayoutDescription(resources.Select(x => x.ToDescription()).ToArray());
+                List<ResourceLayoutElementDescription> elements = new();                
 
-                resourceLayouts[i] = Graphics.Factory.CreateResourceLayout(description);
+                for (int res = 0; res < resources.Length; res++)
+                    resources[res].GetDescription(elements);
+
+                resourceLayouts[i] = Graphics.Factory.CreateResourceLayout(new ResourceLayoutDescription(elements.ToArray()));
             }
 
 
@@ -78,9 +97,9 @@ namespace Prowl.Runtime
                 Outputs = passDesc.output ?? Graphics.ScreenFramebuffer.OutputDescription,
 
                 ShaderSet = new ShaderSetDescription(
-                    vertexLayouts: keywordProgram.vertexInputs.Select(x => Mesh.GetLayoutForResource(x.Item1, x.Item2)).ToArray(),
+                    vertexLayouts: keywordProgram.vertexInputs.Select(x => GetLayoutForResource(x.Item1, x.Item2)).ToArray(),
                     shaders: keywordProgram.compiledPrograms,
-                    [ new SpecializationConstant(0, Graphics.Device.IsClipSpaceYInverted) ]
+                    Graphics.GetSpecializations()
                 ),
 
                 ResourceLayouts = resourceLayouts,
@@ -143,7 +162,8 @@ namespace Prowl.Runtime
 
         internal static void RegisterShader(Shader shader)
         {
-            shaderCache.Add(shader.Name, new WeakReference<Shader>(shader));
+            if (!shaderCache.ContainsKey(shader.Name))
+                shaderCache.Add(shader.Name, new WeakReference<Shader>(shader));
         }
     }
 }
