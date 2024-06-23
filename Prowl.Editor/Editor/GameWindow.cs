@@ -39,6 +39,7 @@ public class GameWindow : EditorWindow
         Title = FontAwesome6.Gamepad + " Game";
         GeneralPreferences.Instance.CurrentWidth = (int)Width;
         GeneralPreferences.Instance.CurrentHeight = (int)Height - HeaderHeight;
+
         RefreshRenderTexture();
     }
 
@@ -51,6 +52,10 @@ public class GameWindow : EditorWindow
 
     protected override void Draw()
     {
+        #warning Veldrid change
+
+        /*
+
         if (!Project.HasProject) return;
 
         // TODO: Add Window Focus
@@ -173,7 +178,7 @@ public class GameWindow : EditorWindow
             // Letter box the image into the render size
             gui.Draw2D.DrawImage(RenderTarget.ColorBuffers[0], innerRect.Position, innerRect.Size, Color.white, true);
         }
-
+        */
     }
 
     void UpdateResolution(Resolutions resolution)
