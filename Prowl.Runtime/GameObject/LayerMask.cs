@@ -1,9 +1,11 @@
 ﻿namespace Prowl.Runtime;
 
-public class LayerMask
+public struct LayerMask
 {
     [SerializeField]
-    private uint mask = 0;
+    private uint mask;
+
+    public uint Mask => mask;
 
     public bool HasLayer(byte index) => (mask & (1 << index)) == (1 << index);
     public void SetLayer(byte index) => mask |= 1u << index;

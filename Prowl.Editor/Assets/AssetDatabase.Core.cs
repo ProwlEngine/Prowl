@@ -500,9 +500,9 @@ namespace Prowl.Editor.Assets
                 guidToAssetData[assetGuid] = serializedAsset;
                 return serializedAsset;
             }
-            catch
+            catch (Exception e)
             {
-                Debug.LogError($"Failed to load serialized asset {serializedAssetPath.FullName}!");
+                Debug.LogError($"Failed to load serialized asset {serializedAssetPath.FullName}! Reason: {e.Message}");
                 return null; // Failed file might be in use?
             }
         }
