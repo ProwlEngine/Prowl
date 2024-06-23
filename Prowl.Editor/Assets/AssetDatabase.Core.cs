@@ -361,7 +361,7 @@ namespace Prowl.Editor.Assets
             }
             catch (Exception e)
             {
-                Debug.LogError($"Failed to import {ToRelativePath(assetFile)}. Reason: {e.Message}");
+                Debug.LogError($"Failed to import {ToRelativePath(assetFile)}", e);
                 return false; // Import failed
             }
 

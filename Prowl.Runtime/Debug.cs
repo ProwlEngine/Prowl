@@ -27,9 +27,12 @@ public static class Debug
         Log("Warning: ", message, ConsoleColor.Yellow, LogSeverity.Warning);
     }
 
-    public static void LogError(string message)
+    public static void LogError(string message, Exception exception = null)
     {
         Log("Error: ", message, ConsoleColor.Red, LogSeverity.Error);
+
+        if (exception != null)
+            Log(exception.ToString(), "", ConsoleColor.Red, LogSeverity.Error);
     }
 
     public static void LogSuccess(string message)
