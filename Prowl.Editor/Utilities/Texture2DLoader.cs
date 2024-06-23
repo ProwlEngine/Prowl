@@ -51,7 +51,7 @@ namespace Prowl.Editor
             }
             catch
             {
-                texture.DestroyImmediate();
+                texture.Dispose();
                 throw;
             }
         }

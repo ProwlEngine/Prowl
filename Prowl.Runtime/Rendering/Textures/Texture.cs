@@ -57,13 +57,14 @@ namespace Prowl.Runtime
         {
             InternalTexture?.Dispose();
             TextureView?.Dispose();
+
             stagingTexture?.Dispose();
 
             InternalTexture = null;
             TextureView = null;
             stagingTexture = null;
 
-            DestroyImmediate(Sampler);
+            Sampler?.Dispose();
         }
 
         public void GenerateMipmaps(bool waitForCompletion = false)

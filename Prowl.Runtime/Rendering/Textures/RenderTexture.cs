@@ -143,11 +143,11 @@ namespace Prowl.Runtime
 
         public override void OnDispose()
         {
-            DepthBuffer?.DestroyImmediate();
+            DepthBuffer?.Dispose();
 
             if (ColorBuffers != null)
                 foreach (var tex in ColorBuffers)
-                    tex?.DestroyImmediate();
+                    tex?.Dispose();
 
             Framebuffer?.Dispose();
 
