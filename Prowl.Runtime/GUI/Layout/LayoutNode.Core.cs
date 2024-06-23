@@ -12,8 +12,8 @@ namespace Prowl.Runtime.GUI.Layout
         {
             internal LayoutNode _node = node;
 
-            public readonly bool IsVScrollVisible => ContentRect.height > Rect.height;
-            public readonly bool IsHScrollVisible => ContentRect.width > Rect.width;
+            public readonly bool IsVScrollVisible => ShowVScroll && ContentRect.height > Rect.height;
+            public readonly bool IsHScrollVisible => ShowHScroll && ContentRect.width > Rect.width;
 
             public readonly double VScrollWidth => IsVScrollVisible ? ScrollBarSize : 0;
             public readonly double HScrollHeight => IsHScrollVisible ? ScrollBarSize : 0;
@@ -39,6 +39,7 @@ namespace Prowl.Runtime.GUI.Layout
             public readonly double GlobalContentHeight => Scale.y - Paddings.Vertical - HScrollHeight;
 
             // Cached
+            //public Vector2 Scale = node._data.Scale;
             public Vector2 Scale = node._data.Scale;
             public Vector2 MaxScale = node._data.MaxScale;
             public Spacing Margins = node._data.Margins;
@@ -138,6 +139,7 @@ namespace Prowl.Runtime.GUI.Layout
             return _nextAnimation++;
         }
 
+        // TODO: This cache needs to be improved, we should only update what we absolutely need to when we need it, right now its possibly slower than just recalculating on get
         public void UpdateCache()
         {
             _data = new(this);
@@ -155,40 +157,73 @@ namespace Prowl.Runtime.GUI.Layout
         public void UpdateScaleCache()
         {
             // Then Margin/Paddings (They rely on Scale)
-            _data.Margins = new(
-                    _marginLeft.ToPixels(_positionRelativeTo?._data.Scale.x ?? 0),
-                    _marginRight.ToPixels(_positionRelativeTo?._data.Scale.x ?? 0),
-                    _marginTop.ToPixels(_positionRelativeTo?._data.Scale.y ?? 0),
-                    _marginBottom.ToPixels(_positionRelativeTo?._data.Scale.y ?? 0)
-                );
-            _data.Paddings = new(
-                    _paddingLeft.ToPixels(_positionRelativeTo?._data.Scale.x ?? 0),
-                    _paddingRight.ToPixels(_positionRelativeTo?._data.Scale.x ?? 0),
-                    _paddingTop.ToPixels(_positionRelativeTo?._data.Scale.y ?? 0),
-                    _paddingBottom.ToPixels(_positionRelativeTo?._data.Scale.y ?? 0)
+            if(_positionRelativeTo != null)
+            {
+                double x = _positionRelativeTo._data.Scale.x;
+                double y = _positionRelativeTo._data.Scale.y;
+                _data.Margins = new(
+                        _marginLeft.ToPixels(x),
+                        _marginRight.ToPixels(x),
+                        _marginTop.ToPixels(y),
+                        _marginBottom.ToPixels(y)
+                    );
+                _data.Paddings = new(
+                        _paddingLeft.ToPixels(x),
+                        _paddingRight.ToPixels(x),
+                        _paddingTop.ToPixels(y),
+                        _paddingBottom.ToPixels(y)
+                    );
+            }
+            else
+            {
+                _data.Margins = new(_marginLeft.ToPixels(0), _marginRight.ToPixels(0), _marginTop.ToPixels(0), _marginBottom.ToPixels(0));
+                _data.Paddings = new(_paddingLeft.ToPixels(0), _paddingRight.ToPixels(0), _paddingTop.ToPixels(0), _paddingBottom.ToPixels(0));
+            }
+
+            if (_sizeRelativeTo != null)
+            {
+                var width = _sizeRelativeTo._data.GlobalContentWidth;
+                var height = _sizeRelativeTo._data.GlobalContentHeight;
+                var maxW = _maxWidth.ToPixels(width);
+                var maxH = _maxHeight.ToPixels(height);
+
+                _data.Scale = new(
+                    Math.Min(_width.ToPixels(width) - _data.Margins.Horizontal, maxW),
+                    Math.Min(_height.ToPixels(height) - _data.Margins.Vertical, maxH)
                 );
 
-            _data.Scale = new(
-                Math.Min(_width.ToPixels(_sizeRelativeTo?._data.GlobalContentWidth ?? 0) - _data.Margins.Horizontal,
-                         _maxWidth.ToPixels(_sizeRelativeTo?._data.GlobalContentWidth ?? 0)
-                ),
-                Math.Min(_height.ToPixels(_sizeRelativeTo?._data.GlobalContentHeight ?? 0) - _data.Margins.Vertical,
-                         _maxHeight.ToPixels(_sizeRelativeTo?._data.GlobalContentHeight ?? 0)
-                )
-            );
+                _data.MaxScale = new( maxW, maxH);
+            }
+            else
+            {
+                var maxW = _maxWidth.ToPixels(0);
+                var maxH = _maxHeight.ToPixels(0);
 
-            _data.MaxScale = new(
-                _maxWidth.ToPixels(_sizeRelativeTo?._data.GlobalContentWidth ?? 0),
-                _maxHeight.ToPixels(_sizeRelativeTo?._data.GlobalContentHeight ?? 0)
-            );
+                _data.Scale = new(
+                    Math.Min(_width.ToPixels(0) - _data.Margins.Horizontal, maxW),
+                    Math.Min(_height.ToPixels(0) - _data.Margins.Vertical, maxH)
+                );
+
+                _data.MaxScale = new( maxW, maxH);
+            }
         }
 
         public void UpdatePositionCache()
         {
-            _data.Position = new(
-                    _positionX.ToPixels(_positionRelativeTo?._data.GlobalContentWidth ?? 0),
-                    _positionY.ToPixels(_positionRelativeTo?._data.GlobalContentHeight ?? 0)
-                );
+            if (_positionRelativeTo != null)
+            {
+                _data.Position = new(
+                        _positionX.ToPixels(_positionRelativeTo._data.GlobalContentWidth),
+                        _positionY.ToPixels(_positionRelativeTo._data.GlobalContentHeight)
+                    );
+            }
+            else
+            {
+                _data.Position = new(
+                        _positionX.ToPixels(0),
+                        _positionY.ToPixels(0)
+                    );
+            }
         }
 
         public void ProcessLayout()
@@ -196,7 +231,7 @@ namespace Prowl.Runtime.GUI.Layout
             DoScaleChildren();
             foreach (var child in Children)
                 child.ProcessLayout();
-            DoScaleChildren();
+            //DoScaleChildren(); // TODO: Do we need to do this twice?
 
             UpdatePositionCache();
 
@@ -375,7 +410,6 @@ namespace Prowl.Runtime.GUI.Layout
                     child._width = Math.Max(width - child._data.Margins.Horizontal, 0);
                     remainingWidth -= width;
                     remainingChildren--;
-                    child.UpdateCache();
                 }
             }
 
@@ -391,9 +425,10 @@ namespace Prowl.Runtime.GUI.Layout
                     child._height = Math.Max(height - child._data.Margins.Vertical, 0);
                     remainingHeight -= height;
                     remainingChildren--;
-                    child.UpdateCache();
                 }
             }
+
+            UpdateCache();
         }
 
         internal void ApplyLayout()
@@ -481,7 +516,9 @@ namespace Prowl.Runtime.GUI.Layout
             hash = hash * 23 + (ulong)_paddingBottom.GetHashCode64();
             hash = hash * 23 + (ulong)_ignore.GetHashCode();
             hash = hash * 23 + (ulong)_fitContentX.GetHashCode();
+            hash = hash * 23 + (ulong)_fitContentXPerc.GetHashCode();
             hash = hash * 23 + (ulong)_fitContentY.GetHashCode();
+            hash = hash * 23 + (ulong)_fitContentYPerc.GetHashCode();
             hash = hash * 23 + (ulong)_centerContent.GetHashCode();
             hash = hash * 23 + (ulong)_canScaleChildren.GetHashCode();
             hash = hash * 23 + (ulong)_layout.GetHashCode();
