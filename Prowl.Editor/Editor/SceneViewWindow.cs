@@ -417,6 +417,25 @@ public class SceneViewWindow : EditorWindow
         {
             SceneManager.LoadScene(scene);
         }
+        else if (DragnDrop.Drop<Material>(out var material))
+        {
+            if (Cam.gBuffer != null)
+            {
+                var instanceID = Cam.gBuffer.GetObjectIDAt(mouseUV);
+                if (instanceID != 0)
+                {
+                    // find InstanceID Object
+                    var go = EngineObject.FindObjectByID<GameObject>(instanceID);
+                    if (go != null)
+                    {
+                        // Look for a MeshRenderer
+                        var renderer = go.GetComponent<MeshRenderer>();
+                        if (renderer != null)
+                            renderer.Material = material;
+                    }
+                }
+            }
+        }
     }
 
     private void DrawViewportSettings()
