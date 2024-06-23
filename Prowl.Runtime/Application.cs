@@ -20,6 +20,28 @@ public static class Application
     public static event Action Render;
     public static event Action Quitting;
 
+
+    private static GraphicsBackend[] preferredBackends = 
+    [
+        GraphicsBackend.Vulkan,
+        GraphicsBackend.OpenGL,
+        GraphicsBackend.OpenGLES,
+    ];
+
+    public static GraphicsBackend GetBackend()
+    {
+        if (RuntimeUtils.IsWindows())
+        {
+            return GraphicsBackend.Direct3D11;
+        }
+        else if (RuntimeUtils.IsMac())
+        {
+            return GraphicsBackend.Metal;
+        }
+
+        return preferredBackends[0];
+    }
+
     public static void Run(string title, int width, int height, IAssetProvider assetProvider, bool editor)
     {
         AssetProvider = assetProvider;
@@ -36,13 +58,13 @@ public static class Application
         isRunning = true;
         isPlaying = true; // Base application is not the editor, isplaying is always true
         
-        Screen.Start(title, new Vector2Int(width, height), new Vector2Int(100, 100), WindowState.Normal);
+        Screen.Start($"{title} - {GetBackend()}", new Vector2Int(width, height), new Vector2Int(100, 100), WindowState.Normal);
     }
 
     static void AppInitialize()
     {
         Input.Initialize();
-        Graphics.Initialize(true, GraphicsBackend.Vulkan);
+        Graphics.Initialize(true, GetBackend());
         SceneManager.Initialize();
         AudioSystem.Initialize();
         Time.Initialize();
@@ -50,10 +72,7 @@ public static class Application
         AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
 
         AssemblyManager.Initialize();
-
-        //if (UIDrawList.DefaultFont == null)
-        //    UIDrawList.CreateDeviceResources(GLDevice.GL);
-
+        
         Initialize?.Invoke();
 
         Debug.LogSuccess("Initialization complete");
