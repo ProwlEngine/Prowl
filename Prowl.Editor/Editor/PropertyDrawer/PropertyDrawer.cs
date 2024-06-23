@@ -25,7 +25,8 @@ namespace Prowl.Editor.PropertyDrawers
 
             if (propertyType.IsInterface || propertyType.IsAbstract)
             {
-                // its an Interface/Abstract class, 
+                // TODO
+                return false;
             }
 
             // No drawer found, Fallback to Default Drawer
