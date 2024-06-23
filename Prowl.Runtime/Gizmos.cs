@@ -64,9 +64,10 @@ namespace Prowl.Runtime
 
 layout (location = 0) in vec3 vertexPosition;
 
-layout(set = 0, binding = 0) uniform MVPBuffer
+layout(set = 0, binding = 0) uniform GizmoBuffer
 {
     mat4 MVPMatrix;
+    vec4 Color;
 };
 
 layout (constant_id = 0) const bool UV_STARTS_AT_TOP = true;
@@ -88,8 +89,9 @@ void main()
 
 layout (location = 0) out vec4 finalColor;
 
-layout(set = 1, binding = 0) uniform ColorBuffer
+layout(set = 0, binding = 0) uniform GizmoBuffer
 {
+    mat4 MVPMatrix; 
     vec4 Color;
 };
 
@@ -108,13 +110,11 @@ void main()
             pass.AddVertexInput(MeshResource.Position);
 
             // MVP matrix resources
-            pass.AddResourceElement([ 
-                new ShaderResource("MVPMatrix", ResourceType.Matrix4x4, ShaderStages.Vertex)
-            ]);
-            
-            // Other shader resources
-            pass.AddResourceElement([
-                new ShaderResource("Color", ResourceType.Vector4, ShaderStages.Fragment) 
+            pass.AddResourceSet([ 
+                new BufferResource("GizmoBuffer", ShaderStages.Vertex | ShaderStages.Fragment,
+                    ("MVPMatrix", ResourceType.Matrix4x4),
+                    ("Color", ResourceType.Vector4)
+                )
             ]);
 
             pass.cullMode = FaceCullMode.None;
