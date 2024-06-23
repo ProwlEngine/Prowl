@@ -67,4 +67,6 @@ public class TagLayerManager : ScriptableSingleton<TagLayerManager>
         foreach (var gameObject in EngineObject.FindObjectsOfType<GameObject>())
             gameObject.tagIndex = (byte)tags.IndexOf(gameObject.tag);
     }
+
+    public static string[] GetLayers() => (string[])Instance.layers.Clone();
 }
