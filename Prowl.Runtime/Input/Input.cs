@@ -35,6 +35,8 @@ public static class Input
     private static Vector2Int _currentMousePos;
     private static Vector2Int _prevMousePos;
 
+
+    private static bool _receivedDeltaEvent = false;
     private static float _mouseWheelDelta;
     public static float MouseWheelDelta => Enabled ? _mouseWheelDelta : 0f;
 
@@ -70,7 +72,7 @@ public static class Input
         }
     }
 
-    public static Vector2 MouseDelta => Enabled ? Screen.InternalWindow.MouseDelta : Vector2.zero;
+    public static Vector2 MouseDelta => Enabled ? MousePosition - PrevMousePosition : Vector2.zero;
     public static event Action<Key, bool> OnKeyEvent;
     public static Action<MouseButton, double, double, bool, bool> OnMouseEvent;
 
@@ -80,7 +82,10 @@ public static class Input
 
     internal static void Initialize()
     {
-        Screen.InternalWindow.MouseWheel += (mouseWheelEvent) => { _mouseWheelDelta = mouseWheelEvent.WheelDelta; };
+        Screen.InternalWindow.MouseWheel += (mouseWheelEvent) => { 
+            _receivedDeltaEvent = true;
+            _mouseWheelDelta = mouseWheelEvent.WheelDelta; 
+        };
 
         _prevMousePos = new Vector2Int((int)InputSnapshot.MousePosition.X, (int)InputSnapshot.MousePosition.Y);
         _currentMousePos = _prevMousePos;
@@ -102,6 +107,12 @@ public static class Input
 
     internal static void EarlyUpdate()
     {
+        if (!_receivedDeltaEvent)
+            _mouseWheelDelta = 0.0f;
+
+        if (_receivedDeltaEvent)
+            _receivedDeltaEvent = false;
+
         UpdateCursorState();
         UpdateKeyStates();
 

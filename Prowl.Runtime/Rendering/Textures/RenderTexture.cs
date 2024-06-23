@@ -14,14 +14,16 @@ namespace Prowl.Runtime
         public PixelFormat[] colorBufferFormats;
         public PixelFormat? depthBufferFormat;
 
+        public bool sampled;
         public bool enableRandomWrite;
 
-        public RenderTextureDescription(uint width, uint height, PixelFormat? depthFormat, PixelFormat[] colorFormats, bool randomWrite)
+        public RenderTextureDescription(uint width, uint height, PixelFormat? depthFormat, PixelFormat[] colorFormats, bool sampled, bool randomWrite)
         {
             this.width = width;
             this.height = height;
             this.depthBufferFormat = depthFormat;
             this.colorBufferFormats = colorFormats;
+            this.sampled = sampled;
             this.enableRandomWrite = randomWrite;
         }
 
@@ -31,6 +33,7 @@ namespace Prowl.Runtime
             this.height = texture.Height;
             this.depthBufferFormat = texture.DepthBufferFormat;
             this.colorBufferFormats = texture.ColorBufferFormats;
+            this.sampled = texture.Sampled;
             this.enableRandomWrite = texture.RandomWriteEnabled;
         }
 
@@ -49,6 +52,12 @@ namespace Prowl.Runtime
                 return false;
 
             if (!colorBufferFormats.SequenceEqual(key.colorBufferFormats))
+                return false;
+            
+            if (key.sampled != sampled)
+                return false;
+            
+            if (key.enableRandomWrite != enableRandomWrite)
                 return false;
 
             return true;
@@ -90,6 +99,7 @@ namespace Prowl.Runtime
         public uint Width { get; private set; }
         public uint Height { get; private set; }
 
+        public bool Sampled { get; private set; }
         public bool RandomWriteEnabled { get; private set; }
 
         public RenderTexture(RenderTextureDescription description) : this(
@@ -109,30 +119,31 @@ namespace Prowl.Runtime
         /// <param name="colorFormats">The format of the color buffer(s) in the <see cref="RenderTexture"/>. Passing null or empty will omit the creation of a color buffer.</param>
         /// <param name="depthFormat">The format of the depth stencil buffer in the <see cref="RenderTexture"/>. Passing null or empty will omit the creation of the depth stencil buffer.</param>
         /// <param name="enableRandomWrite">Enable random reads/writes to the <see cref="RenderTexture"/> internal buffers. This is useful within compute shaders which draw to the texture.</param>
-        public RenderTexture(uint width, uint height, PixelFormat[] colorFormats = null, PixelFormat? depthFormat = null, bool enableRandomWrite = false) : base("RenderTexture")
+        public RenderTexture(uint width, uint height, PixelFormat[] colorFormats = null, PixelFormat? depthFormat = null, bool sampled = false, bool enableRandomWrite = false) : base("RenderTexture")
         {
             if (colorFormats != null && colorFormats.Length > colorAttachmentLimit)
                 throw new Exception($"Invalid number of color buffers! [0-{colorAttachmentLimit}]");
 
             this.Width = width;
             this.Height = height;
+            this.Sampled = sampled;
             this.RandomWriteEnabled = enableRandomWrite;
-
-            TextureUsage usage = (enableRandomWrite ? TextureUsage.Sampled : TextureUsage.Storage) | TextureUsage.RenderTarget;
 
             if (depthFormat != null)
             {
-                TextureUsage depthUsage = usage | TextureUsage.DepthStencil;
-
+                TextureUsage depthUsage = sampled ? TextureUsage.Sampled | TextureUsage.DepthStencil : TextureUsage.DepthStencil;
                 DepthBuffer = new Texture2D(Width, Height, 1, depthFormat.Value, depthUsage);
             }
 
             ColorBuffers = new Texture2D[colorFormats.Length];
             if (colorFormats != null)
             {
+                TextureUsage sampleType = enableRandomWrite ? TextureUsage.Storage : TextureUsage.Sampled;
+                TextureUsage colorUsage = sampled ? sampleType | TextureUsage.RenderTarget : TextureUsage.RenderTarget;
+
                 for (int i = 0; i < ColorBuffers.Length; i++)
                 {
-                    ColorBuffers[i] = new Texture2D(Width, Height, 1, colorFormats[i], usage);
+                    ColorBuffers[i] = new Texture2D(Width, Height, 1, colorFormats[i], colorUsage);
                 }
             }
 
@@ -208,9 +219,9 @@ namespace Prowl.Runtime
 
         private const int MaxUnusedFrames = 10;
 
-        public static RenderTexture GetTemporaryRT(uint width, uint height, PixelFormat? depthFormat, PixelFormat[] colorFormats, bool randomWrite)
+        public static RenderTexture GetTemporaryRT(uint width, uint height, PixelFormat? depthFormat, PixelFormat[] colorFormats, bool sampled, bool randomWrite)
         {
-            return GetTemporaryRT(new RenderTextureDescription(width, height, depthFormat, colorFormats, randomWrite));
+            return GetTemporaryRT(new RenderTextureDescription(width, height, depthFormat, colorFormats, sampled, randomWrite));
         }
 
         public static RenderTexture GetTemporaryRT(RenderTextureDescription description)

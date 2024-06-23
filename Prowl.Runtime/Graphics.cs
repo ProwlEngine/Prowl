@@ -59,9 +59,6 @@ namespace Prowl.Runtime
 
         public static CommandList GetCommandList()
         {
-            if (!frameBegan)
-                throw new Exception("GetCommandList was called before StartFrame or after EndFrame. This is not allowed.");
-
             CommandList list = Factory.CreateCommandList();
 
             list.Begin();
@@ -70,14 +67,21 @@ namespace Prowl.Runtime
         }
 
 
-        public static void SubmitCommands(CommandList list)
+        public static void SubmitCommands(CommandList list, bool waitForCompletion = false)
         {   
-            if (!frameBegan)
-                throw new Exception("SubmitCommands was called before StartFrame or after EndFrame. This is not allowed.");
-
             list.End();
 
-            Device.SubmitCommands(list);
+            if (waitForCompletion)
+            {
+                Fence fence = Factory.CreateFence(false);
+                Device.SubmitCommands(list, fence);
+                Device.WaitForFence(fence);
+                fence.Dispose();
+            }
+            else
+            {
+                Device.SubmitCommands(list);
+            }
         }
 
         public static void EndFrame()
@@ -128,46 +132,36 @@ namespace Prowl.Runtime
             ResourceCache.Dispose();
         }
 
-        public static void CopyTexture(Texture source, Texture destination, bool waitForOperationCompletion = false)
+        public static void CopyTexture(Texture source, Texture destination, bool waitForCompletion = false)
         {
-            InternalCopyTexture(source.InternalTexture, destination.InternalTexture, waitForOperationCompletion);
+            InternalCopyTexture(source.InternalTexture, destination.InternalTexture, waitForCompletion);
         }
 
-        public static void CopyTexture(Texture source, Texture destination, uint mipLevel, uint arrayLayer, bool waitForOperationCompletion = false)
+        public static void CopyTexture(Texture source, Texture destination, uint mipLevel, uint arrayLayer, bool waitForCompletion = false)
         {
-            InternalCopyTexture(source.InternalTexture, destination.InternalTexture, mipLevel, arrayLayer, waitForOperationCompletion);
+            InternalCopyTexture(source.InternalTexture, destination.InternalTexture, mipLevel, arrayLayer, waitForCompletion);
         }
 
-        internal static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, bool waitForOperationCompletion = false)
+        internal static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, bool waitForCompletion = false)
         {
-            Fence fence = Factory.CreateFence(false);
-            CommandList commandList = Factory.CreateCommandList();
+            CommandList commandList = GetCommandList();
 
-            commandList.Begin();
             commandList.CopyTexture(source, destination);
-            commandList.End();
+            
+            SubmitCommands(commandList, waitForCompletion);
 
-            Device.SubmitCommands(commandList, fence);
-
-            if (waitForOperationCompletion)
-                Device.WaitForFence(fence);
-            fence.Dispose();
+            commandList.Dispose();
         }
 
-        internal static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, uint mipLevel, uint arrayLayer, bool waitForOperationCompletion = false)
+        internal static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, uint mipLevel, uint arrayLayer, bool waitForCompletion = false)
         {
-            Fence fence = Factory.CreateFence(false);
-            CommandList commandList = Factory.CreateCommandList();
+            CommandList commandList = GetCommandList();
 
-            commandList.Begin();
             commandList.CopyTexture(source, destination, mipLevel, arrayLayer);
-            commandList.End();
+            
+            SubmitCommands(commandList, waitForCompletion);
 
-            Device.SubmitCommands(commandList, fence);
-
-            if (waitForOperationCompletion)
-                Device.WaitForFence(fence);
-            fence.Dispose();
+            commandList.Dispose();
         }
     }
 }

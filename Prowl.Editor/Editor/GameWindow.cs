@@ -47,7 +47,11 @@ public class GameWindow : EditorWindow
     {
         RenderTarget?.DestroyImmediate();
 
-        RenderTarget = new RenderTexture((uint)GeneralPreferences.Instance.CurrentWidth, (uint)GeneralPreferences.Instance.CurrentHeight, [ Veldrid.PixelFormat.R8_G8_B8_A8_UNorm ], Veldrid.PixelFormat.R16_UNorm );
+        RenderTarget = new RenderTexture(
+            (uint)GeneralPreferences.Instance.CurrentWidth, 
+            (uint)GeneralPreferences.Instance.CurrentHeight, 
+            [ Veldrid.PixelFormat.R8_G8_B8_A8_UNorm ], 
+            Veldrid.PixelFormat.R16_UNorm );
     }
 
     protected override void Draw()

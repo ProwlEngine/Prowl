@@ -19,8 +19,9 @@ namespace Prowl.Editor.Assets
 
         public override void Import(SerializedAsset ctx, FileInfo assetPath)
         {
-            // Load the Texture into a TextureData Object and serialize to Asset Folder
-            Texture2D texture = Texture2DLoader.FromFile(assetPath.FullName);
+            // Load the Texture into a TextureData Object and serialize to Asset Folder 
+            Texture2D texture = Texture2DLoader.FromFile(assetPath.FullName, generateMipmaps);
+
             texture.Name = Path.GetFileNameWithoutExtension(assetPath.Name);
 
             texture.Sampler.SetFilter(textureMinFilter, textureMagFilter, textureMipFilter);

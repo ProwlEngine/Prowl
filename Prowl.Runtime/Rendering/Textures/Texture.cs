@@ -72,16 +72,13 @@ namespace Prowl.Runtime
             if (!IsMipmappable)
                 throw new InvalidOperationException($"Cannot generate mipmaps on a non-mipmappable texture. Ensure texture is created with the {TextureUsage.GenerateMipmaps} flag.");
 
-            Fence fence = Graphics.Factory.CreateFence(false);
-            CommandList commandList = Graphics.Factory.CreateCommandList();
+            CommandList commandList = Graphics.GetCommandList();
 
             commandList.GenerateMipmaps(InternalTexture);
 
-            Graphics.Device.SubmitCommands(commandList, fence);
+            Graphics.SubmitCommands(commandList, waitForCompletion);
 
-            if (waitForCompletion)
-                Graphics.Device.WaitForFence(fence);
-            fence.Dispose();
+            commandList.Dispose();
 
             IsMipmapped = true;
         }
@@ -120,8 +117,11 @@ namespace Prowl.Runtime
                 Format = description.Format,
                 Target = InternalTexture
             };
-
-            TextureView = Graphics.Factory.CreateTextureView(ref viewDescription);
+            
+            if (description.Usage.HasFlag(TextureUsage.Sampled) || description.Usage.HasFlag(TextureUsage.Storage))
+                TextureView = Graphics.Factory.CreateTextureView(ref viewDescription);
+            else
+                TextureView = null;
 
             IsMipmapped = false;
         }

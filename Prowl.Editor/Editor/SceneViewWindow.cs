@@ -394,7 +394,6 @@ public class SceneViewWindow : EditorWindow
         #warning Veldrid change
 
         /*
-
         if (DragnDrop.Drop<GameObject>(out var original))
         {
             if (original.AssetID == Guid.Empty) return;
@@ -447,6 +446,7 @@ public class SceneViewWindow : EditorWindow
                 }
             }
         }
+        */
     }
 
     private void DrawViewportSettings()
