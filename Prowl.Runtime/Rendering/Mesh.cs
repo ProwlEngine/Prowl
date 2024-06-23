@@ -512,11 +512,6 @@ namespace Prowl.Runtime
                 writer.Write((byte)indexFormat);
                 writer.Write((byte)meshTopology);
 
-                void WriteVector3Array(System.Numerics.Vector3[] vectors)
-                {
-
-                }
-
                 writer.Write(vertices.Length);
                 foreach (var vertex in vertices)
                 {
