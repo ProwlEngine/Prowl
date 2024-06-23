@@ -32,7 +32,6 @@ namespace Prowl.Runtime
 
         private static Shader CreateDefault()
         {
-            Debug.Log("Making default");
             Pass pass = new Pass("Default Pass", null);
 
             pass.CreateProgram(Graphics.CreateFromSpirv(defaultVertex, defaultFragment));
