@@ -75,7 +75,7 @@ namespace Prowl.Editor
                 }
             }
 
-            using (gui.Node("Content").ExpandWidth().Padding(5, 10, 10, 10).Clip().Enter())
+            using (gui.Node("Content").ExpandWidth().Padding(5, 10, 10, 10).Clip().Scroll().Enter())
             {
                 if (Selected == null)
                 {
@@ -172,8 +172,6 @@ namespace Prowl.Editor
                     customEditor?.Item2.OnDisable();
                     customEditor = null;
                 }
-
-                gui.ScrollV();
             }
         }
 

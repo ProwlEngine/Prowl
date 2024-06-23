@@ -193,7 +193,7 @@ namespace Prowl.Editor
 
         public void RenderBody()
         {
-            using (gui.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Grid).Clip().Enter())
+            using (gui.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Grid).Clip().Scroll().Enter())
             {
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 4);
                 var dropInteract = gui.GetInteractable();
@@ -245,8 +245,6 @@ namespace Prowl.Editor
                     foreach (var file in CurDirectoryNode.Files)
                         RenderEntry(ref i, file);
                 }
-
-                gui.ScrollV();
             }
         }
 
@@ -417,7 +415,7 @@ namespace Prowl.Editor
             else
             {
                 var text = AssetPipelinePreferences.Instance.HideExtensions ? Path.GetFileNameWithoutExtension(entry.FullName) : Path.GetFileName(entry.FullName);
-                gui.Draw2D.DrawText(text, nameRect, GuiStyle.Base11);
+                gui.Draw2D.DrawText(text, nameRect, GuiStyle.Base11, false, true);
             }
         }
 

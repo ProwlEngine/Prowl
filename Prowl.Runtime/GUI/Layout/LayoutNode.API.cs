@@ -103,6 +103,14 @@
             return this;
         }
 
+        public LayoutNode Scroll(bool vertical = true, bool horizontal = true)
+        {
+            Gui.ScollableNodes.Add(this);
+            _showVScroll = vertical;
+            _showHScroll = horizontal;
+            return this;
+        }
+
         public LayoutNode Margin(Offset margins) => Margin(margins, margins, margins, margins);
         public LayoutNode MarginTop(Offset margin) => Margin(margin, 0, 0, 0);
         public LayoutNode MarginRight(Offset margin) => Margin(0, margin, 0, 0);

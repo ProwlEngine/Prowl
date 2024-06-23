@@ -107,7 +107,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
             var height = (GuiStyle.ItemHeight + 5) * (go.IsPrefab ? 2 : 1) + 10;
             var addComponentHeight = 0.0;
-            using (gui.Node("#_InspContent").Top(height).ExpandWidth(-gui.VScrollBarWidth()).FitContentHeight().Layout(LayoutType.Column).Clip().Enter())
+            using (gui.Node("#_InspContent").Top(height).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Clip().Enter())
             {
                 addComponentHeight = gui.CurrentNode.LayoutData.Rect.height;
 

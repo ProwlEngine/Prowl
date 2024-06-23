@@ -21,6 +21,7 @@ namespace Prowl.Runtime.GUI
         internal Stack<ulong> IDStack = new();
         internal bool layoutDirty = false;
         internal ulong frameCount = 0;
+        internal readonly List<LayoutNode> ScollableNodes = new();
 
         private Dictionary<ulong, LayoutNode.PostLayoutData> _previousLayoutData;
         private LayoutNode rootNode;
@@ -53,6 +54,8 @@ namespace Prowl.Runtime.GUI
             nodeCountPerLine.Clear();
             _createdNodes.Clear();
             IDStack.Clear();
+
+            ScollableNodes.Clear();
 
             nextPopupIndex = 0;
 
@@ -105,6 +108,9 @@ namespace Prowl.Runtime.GUI
                 StartInputFrame(frameBufferScale * uiScale);
                 StartInteractionFrame();
                 gui?.Invoke(this);
+                // Draw Scrollbars
+                foreach (var node in ScollableNodes)
+                    node.DrawScrollbars();
                 frameCount++;
             }
             catch (Exception e)
@@ -134,12 +140,12 @@ namespace Prowl.Runtime.GUI
         private Dictionary<ulong, uint> nodeCountPerLine = [];
         public LayoutNode Node(LayoutNode parent, string stringID, [CallerLineNumber] int intID = 0)
         {
-            ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), stringID, intID);
+            ulong storageHash = (ulong)HashCode.Combine(parent.ID, IDStack.Peek(), stringID, intID);
 
             if (_createdNodes.Contains(storageHash))
             {
                 Debug.LogWarning("Node already exists with this ID: " + stringID + ":" + intID + " = " + storageHash + "\nForcing a new ID, This may cause increased flickering in the UI.");
-                storageHash = (ulong)HashCode.Combine(storageHash, storageHash);
+                storageHash = (ulong)HashCode.Combine(storageHash, storageHash, intID);
                 //throw new InvalidOperationException("Node already exists with this ID: " + stringID + ":" + intID + " = " + storageHash);
             }
 
@@ -170,7 +176,7 @@ namespace Prowl.Runtime.GUI
 
             if (CurrentNode._clipped != ClipType.None)
             {
-                var rect = scope._node._clipped == ClipType.Inner ? scope._node.LayoutData.InnerRect : scope._node.LayoutData.Rect;
+                var rect = scope._node._clipped == ClipType.Inner ? scope._node.LayoutData.InnerRect_NoScroll : scope._node.LayoutData.Rect;
                 Draw2D.PushClip(rect);
             }
         }

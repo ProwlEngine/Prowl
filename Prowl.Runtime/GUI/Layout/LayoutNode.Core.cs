@@ -1,26 +1,29 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using static BepuPhysics.Collidables.CompoundBuilder;
 
 namespace Prowl.Runtime.GUI.Layout
 {
     public partial class LayoutNode
     {
+        private const double ScrollBarSize = 10;
+
         public struct PostLayoutData(LayoutNode node)
         {
             internal LayoutNode _node = node;
 
-            // Keep the Scrolls cached
-            public double VScroll = node.VScroll;
-            public double HScroll = node.HScroll;
+            public readonly bool IsVScrollVisible => ContentRect.height > Rect.height;
+            public readonly bool IsHScrollVisible => ContentRect.width > Rect.width;
+
+            public readonly double VScrollWidth => IsVScrollVisible ? ScrollBarSize : 0;
+            public readonly double HScrollHeight => IsHScrollVisible ? ScrollBarSize : 0;
 
             public readonly Rect InnerRect => new(GlobalContentPosition, new(GlobalContentWidth, GlobalContentHeight));
+            public readonly Rect InnerRect_NoScroll => new(GlobalContentPosition, new(GlobalContentWidth + VScrollWidth, GlobalContentHeight + HScrollHeight));
             public readonly Rect Rect => new(GlobalPosition, new(Scale.x, Scale.y));
             public readonly Rect OuterRect => new(GlobalPosition - Margins.TopLeft, new(Scale.x + Margins.Horizontal, Scale.y + Margins.Vertical));
 
-            public Vector2 GlobalPosition {
+            public readonly Vector2 GlobalPosition {
                 get {
                     if(_node == null)
                         return Vector2.zero;
@@ -32,8 +35,8 @@ namespace Prowl.Runtime.GUI.Layout
             }
 
             public readonly Vector2 GlobalContentPosition => GlobalPosition + Paddings.TopLeft;
-            public readonly double GlobalContentWidth => Scale.x - Paddings.Horizontal;
-            public readonly double GlobalContentHeight => Scale.y - Paddings.Vertical;
+            public readonly double GlobalContentWidth => Scale.x - Paddings.Horizontal - VScrollWidth;
+            public readonly double GlobalContentHeight => Scale.y - Paddings.Vertical - HScrollHeight;
 
             // Cached
             public Vector2 Scale = node._data.Scale;
@@ -42,6 +45,12 @@ namespace Prowl.Runtime.GUI.Layout
             public Spacing Paddings = node._data.Paddings;
             public Vector2 Position = node._data.Position;
             public Rect ContentRect = node._data.ContentRect;
+
+            // Keep the Scrolls cached
+            public double VScroll = node.VScroll;
+            public double HScroll = node.HScroll;
+            public bool ShowVScroll = node._showVScroll;
+            public bool ShowHScroll = node._showHScroll;
         }
 
         public bool HasLayoutData => _data._node == this;
@@ -81,6 +90,8 @@ namespace Prowl.Runtime.GUI.Layout
         private Offset _paddingRight = Offset.Default;
         private Offset _paddingTop = Offset.Default;
         private Offset _paddingBottom = Offset.Default;
+        private bool _showVScroll = false;
+        private bool _showHScroll = false;
         private bool _ignore = false;
         private bool _fitContentX = false;
         private double _fitContentXPerc = 1f;
@@ -247,6 +258,101 @@ namespace Prowl.Runtime.GUI.Layout
 
 
             ApplyFitContent();
+
+        }
+
+        internal void DrawScrollbars()
+        {
+            // Draw Scroll bars
+            if (_data.IsVScrollVisible)
+            {
+                GuiStyle style = new();
+
+                LayoutNode n;
+                using ((n = AppendNode("_VScroll")).Width(ScrollBarSize).Height(Size.Percentage(1f)).Left(Offset.Percentage(1f)).IgnoreLayout().Enter())
+                {
+                    Rect scrollRect = n.LayoutData.Rect;
+                    double overflowHeight = LayoutData.ContentRect.height - LayoutData.Rect.height;
+
+                    double scrollRatio = LayoutData.Rect.height / LayoutData.ContentRect.height;
+                    double scrollBarHeight = scrollRatio * scrollRect.height;
+
+                    double scrollBarY = (VScroll / overflowHeight) * (scrollRect.height - scrollBarHeight);
+
+                    Rect barRect = new(scrollRect.x, scrollRect.y + scrollBarY, scrollRect.width, scrollBarHeight);
+
+                    Interactable interact = Gui.GetInteractable(barRect);
+
+                    if (interact.TakeFocus() || interact.IsActive())
+                    {
+                        Gui.Draw2D.DrawRectFilled(barRect, style.ScrollBarActiveColor, style.ScrollBarRoundness);
+                        {
+                            VScroll += Gui.PointerDelta.y * 2f;
+                            Gui.layoutDirty = true;
+                        }
+                    }
+                    else if (interact.IsHovered()) Gui.Draw2D.DrawRectFilled(barRect, style.ScrollBarHoveredColor, (float)style.ScrollBarRoundness);
+                    else Gui.Draw2D.DrawRectFilled(barRect, style.WidgetColor, style.ScrollBarRoundness);
+
+                    if (Gui.IsPointerHovering(LayoutData.Rect) && Gui.PointerWheel != 0)
+                    {
+                        VScroll -= Gui.PointerWheel * 10;
+                        Gui.layoutDirty = true;
+                    }
+
+                    VScroll = MathD.Clamp(VScroll, 0, overflowHeight);
+                }
+            }
+            else if (VScroll != 0)
+            {
+                VScroll = 0;
+                Gui.layoutDirty = true;
+            }
+
+            if (_data.IsHScrollVisible)
+            {
+                GuiStyle style = new();
+
+                LayoutNode n;
+                using ((n = AppendNode("_HScroll")).Height(ScrollBarSize).Width(Size.Percentage(1f)).Top(Offset.Percentage(1f)).IgnoreLayout().Enter())
+                {
+                    Rect scrollRect = n.LayoutData.Rect;
+                    double overflowHeight = LayoutData.ContentRect.width - LayoutData.Rect.width;
+
+                    double scrollRatio = LayoutData.Rect.width / LayoutData.ContentRect.width;
+                    double scrollBarWidth = scrollRatio * scrollRect.width;
+
+                    double scrollBarX = (HScroll / overflowHeight) * (scrollRect.width - scrollBarWidth);
+
+                    Rect barRect = new(scrollRect.x + scrollBarX, scrollRect.y, scrollBarWidth, scrollRect.height);
+
+                    Interactable interact = Gui.GetInteractable(barRect);
+
+                    if (interact.TakeFocus() || interact.IsActive())
+                    {
+                        Gui.Draw2D.DrawRectFilled(barRect, style.ScrollBarActiveColor, style.ScrollBarRoundness);
+                        {
+                            HScroll += Gui.PointerDelta.x * 2f;
+                            Gui.layoutDirty = true;
+                        }
+                    }
+                    else if (interact.IsHovered()) Gui.Draw2D.DrawRectFilled(barRect, style.ScrollBarHoveredColor, (float)style.ScrollBarRoundness);
+                    else Gui.Draw2D.DrawRectFilled(barRect, style.WidgetColor, style.ScrollBarRoundness);
+
+                    if (Gui.IsPointerHovering(LayoutData.Rect) && Gui.PointerWheel != 0)
+                    {
+                        HScroll -= Gui.PointerWheel * 10;
+                        Gui.layoutDirty = true;
+                    }
+
+                    HScroll = MathD.Clamp(HScroll, 0, overflowHeight);
+                }
+            }
+            else if (HScroll != 0)
+            {
+                HScroll = 0;
+                Gui.layoutDirty = true;
+            }
         }
 
         internal void DoScaleChildren()

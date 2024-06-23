@@ -7,66 +7,7 @@ namespace Prowl.Runtime.GUI
 {
     public partial class Gui
     {
-        public const int ScrollVWidth = 6;
-        public const int ScrollVPadding = 2;
-
-        public double VScrollBarWidth() => CurrentNode.LayoutData.ContentRect.height > CurrentNode.LayoutData.Rect.height ? ScrollVWidth + (ScrollVPadding * 5) : 0;
-
-        public void ScrollV(GuiStyle? style = null)
-        {
-            style ??= new();
-            var n = CurrentNode;
-            CurrentNode.VScroll = GetNodeStorage<double>("VScroll");
-            //CurrentNode.PaddingRight(ScrollVWidth + ScrollVPadding);
-
-            using (Node("_VScroll").Width(ScrollVWidth).Height(Size.Percentage(1f, -(ScrollVPadding * 2))).Left(Offset.Percentage(1f, -(ScrollVWidth + ScrollVPadding))).Top(ScrollVPadding).IgnoreLayout().Enter())
-            {
-                Rect scrollRect = CurrentNode.LayoutData.Rect;
-                if (n.HasLayoutData)
-                {
-                    if (n.LayoutData.ContentRect.height > n.LayoutData.Rect.height)
-                    {
-                        double overflowHeight = n.LayoutData.ContentRect.height - n.LayoutData.Rect.height;
-
-                        double scrollRatio = n.LayoutData.Rect.height / n.LayoutData.ContentRect.height;
-                        double scrollBarHeight = scrollRatio * scrollRect.height;
-
-                        double scrollBarY = (n.VScroll / overflowHeight) * (scrollRect.height - scrollBarHeight);
-
-                        Rect barRect = new(scrollRect.x, scrollRect.y + scrollBarY, scrollRect.width, scrollBarHeight);
-
-                        Interactable interact = GetInteractable(barRect);
-
-                        if (interact.TakeFocus() || interact.IsActive())
-                        {
-                            Draw2D.DrawRectFilled(barRect, style.ScrollBarActiveColor, style.ScrollBarRoundness);
-                            {
-                                n.VScroll += PointerDelta.y * 2f;
-                                layoutDirty = true;
-                            }
-                        }
-                        else if (interact.IsHovered()) Draw2D.DrawRectFilled(barRect, style.ScrollBarHoveredColor, (float)style.ScrollBarRoundness);
-                        else Draw2D.DrawRectFilled(barRect, style.WidgetColor, style.ScrollBarRoundness);
-
-                        if (IsPointerHovering(n.LayoutData.Rect) && PointerWheel != 0)
-                        {
-                            n.VScroll -= PointerWheel * 10;
-                            layoutDirty = true;
-                        }
-
-                        n.VScroll = MathD.Clamp(n.VScroll, 0, overflowHeight);
-                    }
-                    else if (n.VScroll != 0)
-                    {
-                        n.VScroll = 0;
-                        layoutDirty = true;
-                    }
-                }
-            }
-
-            SetStorage("VScroll", CurrentNode.VScroll);
-        }
-
+        
         public LayoutNode TextNode(string id, string text, Font? font = null)
         {
             using (Node("#_Text_" + id).Enter())
@@ -185,8 +126,7 @@ namespace Prowl.Runtime.GUI
             if (PreviousInteractableIsHovered())
             {
                 var oldZ = Gui.ActiveGUI.CurrentZIndex;
-                Gui.ActiveGUI.Draw2D.DrawList.PushClipRectFullScreen();
-                Gui.ActiveGUI.SetZIndex(11000);
+                Gui.ActiveGUI.SetZIndex(500000);
 
                 var font = style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont;
                 var pos = (topleft ?? PointerPos) + new Vector2(10, 10);
@@ -195,7 +135,6 @@ namespace Prowl.Runtime.GUI
                 Draw2D.DrawRect(pos - new Vector2(5), size + new Vector2(10), GuiStyle.Borders, 2, 10);
                 Draw2D.DrawText(font, tip, style.FontSize, pos, style.TextColor, wrapWidth);
 
-                Gui.ActiveGUI.Draw2D.DrawList.PopClipRect();
                 Gui.ActiveGUI.SetZIndex(oldZ);
             }
 
