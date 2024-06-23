@@ -1,4 +1,5 @@
 ﻿using Prowl.Runtime.Utils;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -19,43 +20,44 @@ public class TagLayerManager : ScriptableSingleton<TagLayerManager>
             "Game Controller",
         };
 
-    public List<string> layers =
-        new List<string>
-        {
+    public string[] layers =
+        [
             "Default",
             "TransparentFX",
             "Ignore Raycast",
             "Water",
-        };
+            "", "", "", "", "", "", "", "", "", "",
+            "", "", "", "", "", "", "", "", "", "",
+            "", "", "", "", "", "", "", "",
+        ];
 
-    public static List<string> Tags => Instance.tags;
-    public static List<string> Layers => Instance.layers;
-
-    public static string GetTag(int index) 
+    public static string GetTag(byte index) 
     { 
         if (index < 0 || index >= Instance.tags.Count)
             return "Untagged";
         return Instance.tags[index]; 
     }
-    public static string GetLayer(int index) 
+
+    public static string GetLayer(byte index) 
     {
-        if (index < 0 || index >= Instance.layers.Count)
-            return "Default";
+        if (index < 0 || index >= Instance.layers.Length)
+            throw new System.ArgumentOutOfRangeException(nameof(index), index, "Layer index is out of range.");
         return Instance.layers[index];
     }
 
-    public static int GetTagIndex(string tag) 
+    public static byte GetTagIndex(string tag) 
     {
         int index = Instance.tags.IndexOf(tag);
-        return index == -1 ? 0 : index;
-    }
-    public static int GetLayerIndex(string layer)
-    {
-        int index = Instance.layers.IndexOf(layer);
-        return index == -1 ? 0 : index;
+        return (byte)(index == -1 ? 0 : index);
     }
 
-    public static void RemoveTag(int index)
+    public static byte GetLayerIndex(string layer)
+    {
+        int index = Array.IndexOf(Instance.layers, layer);
+        return (byte)(index == -1 ? 0 : index);
+    }
+
+    public static void RemoveTag(byte index)
     {
         foreach (var gameObject in GameObject.FindGameObjectsWithTag(Instance.tags[index]))
             gameObject.tagIndex = 0;
@@ -63,20 +65,6 @@ public class TagLayerManager : ScriptableSingleton<TagLayerManager>
         var tags = Instance.tags.ToList();
         tags.RemoveAt(index);
         foreach (var gameObject in EngineObject.FindObjectsOfType<GameObject>())
-            gameObject.tagIndex = tags.IndexOf(gameObject.tag);
-    }
-
-    public static void RemoveLayer(int index)
-    {
-        foreach (var gameObject in EngineObject.FindObjectsOfType<GameObject>())
-        {
-            if (gameObject.layerIndex == index)
-                gameObject.layerIndex = 0;
-        }
-
-        var layers = Instance.layers.ToList();
-        layers.RemoveAt(index);
-        foreach (var gameObject in EngineObject.FindObjectsOfType<GameObject>())
-            gameObject.layerIndex = layers.IndexOf(gameObject.layer);
+            gameObject.tagIndex = (byte)tags.IndexOf(gameObject.tag);
     }
 }

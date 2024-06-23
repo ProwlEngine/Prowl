@@ -81,14 +81,12 @@ namespace Prowl.Editor
                 if (target != null)
                 {
                     var oldZ = Gui.ActiveGUI.CurrentZIndex;
-                    Gui.ActiveGUI.Draw2D.DrawList.PushClipRectFullScreen();
-                    Gui.ActiveGUI.SetZIndex(11000);
+                    Gui.ActiveGUI.SetZIndex(1000000);
 
                     var rect = Gui.ActiveGUI.PreviousInteractable!.Value.Rect;
                     rect.Expand(1);
                     Gui.ActiveGUI.Draw2D.DrawRect(rect, GuiStyle.Orange, 2, 8);
 
-                    Gui.ActiveGUI.Draw2D.DrawList.PopClipRect();
                     Gui.ActiveGUI.SetZIndex(oldZ);
 
                     if (Gui.ActiveGUI.DragDrop_Accept())

@@ -59,26 +59,28 @@ namespace Prowl.Editor
             }
         }
 
-        public static bool StyledButton(string label, double width, double height, bool border = true, Color? textcolor = null)
+        public static bool StyledButton(string label, double width, double height, bool border = true, Color? textcolor = null, Color? bgcolor = null, float roundness = 10)
         {
             var g = ActiveGUI;
             using (g.Node(label).Width(width).Height(height).Enter())
             {
                 if(border)
-                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 10);
+                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, roundness);
+                if(bgcolor != null)
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, bgcolor.Value, roundness);
 
                 g.Draw2D.DrawText(label, g.CurrentNode.LayoutData.Rect, textcolor ?? GuiStyle.Base11);
                 
                 if (g.IsNodePressed())
                 {
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, roundness);
                     return true;
                 }
 
                 var hovCol = GuiStyle.Base11;
                 hovCol.a = 0.25f;
                 if (g.IsNodeHovered())
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, 10);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, roundness);
 
 
                 return false;

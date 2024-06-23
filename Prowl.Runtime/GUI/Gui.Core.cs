@@ -22,17 +22,18 @@ namespace Prowl.Runtime.GUI
         internal Stack<ulong> IDStack = new();
         internal bool layoutDirty = false;
         internal ulong frameCount = 0;
+        internal readonly List<LayoutNode> ScollableNodes = new();
 
         private Dictionary<ulong, LayoutNode.PostLayoutData> _previousLayoutData;
         private LayoutNode rootNode;
-        private Dictionary<ulong, ulong> _computedNodes;
+        private Dictionary<ulong, ulong> _computedNodeHashes;
         private HashSet<ulong> _createdNodes;
         private float uiScale = 1f;
 
         public Gui(bool antiAliasing)
         {
             rootNode = null;
-            _computedNodes = [];
+            _computedNodeHashes = [];
             _previousLayoutData = [];
             _createdNodes = [];
 
@@ -55,6 +56,8 @@ namespace Prowl.Runtime.GUI
             _createdNodes.Clear();
             IDStack.Clear();
 
+            ScollableNodes.Clear();
+
             nextPopupIndex = 0;
 
             Draw2D.BeginFrame(antiAliasing);
@@ -74,8 +77,13 @@ namespace Prowl.Runtime.GUI
             Draw2D.EndFrame(commandList, screenRect);
 
             // Look for any nodes whos HashCode does not match the previously computed nodes
-            layoutDirty = _createdNodes.Count != _computedNodes.Count;
-            layoutDirty |= MatchHash(rootNode);
+            layoutDirty |= _createdNodes.Count != (_computedNodeHashes.Count - 1); // -1 because createdNodes doesn't count the root node but computedNodeHashes does
+
+            var newNodeHashes = new Dictionary<ulong, ulong>();
+            if(MatchHash(rootNode, ref newNodeHashes))
+                layoutDirty = true;
+            _computedNodeHashes = newNodeHashes;
+
 
             // Now that we have the nodes we can properly process their LayoutNode
             // Like if theres a GridLayout node we can process that here
@@ -83,8 +91,8 @@ namespace Prowl.Runtime.GUI
             {
                 rootNode.UpdateCache();
                 rootNode.ProcessLayout();
-                rootNode.UpdateCache();
-                rootNode.ProcessLayout(); // TODO: Why do we need to run the UI twice?
+                //rootNode.UpdateCache();
+                //rootNode.ProcessLayout(); // TODO: Why do we need to run the UI twice? - Commented this out and it seems to work fine 23/06/2024
                 // Cache layout data
                 _previousLayoutData.Clear();
                 CacheLayoutData(rootNode);
@@ -106,6 +114,9 @@ namespace Prowl.Runtime.GUI
                 StartInputFrame(frameBufferScale * uiScale);
                 StartInteractionFrame();
                 gui?.Invoke(this);
+                // Draw Scrollbars
+                foreach (var node in ScollableNodes)
+                    node.DrawScrollbars();
                 frameCount++;
             }
             catch (Exception e)
@@ -120,13 +131,13 @@ namespace Prowl.Runtime.GUI
             }
         }
 
-        private bool MatchHash(LayoutNode node)
+        private bool MatchHash(LayoutNode node, ref Dictionary<ulong, ulong> newNodeHashes)
         {
             var newHash = node.GetHashCode64();
-            bool dirty = !_computedNodes.TryGetValue(node.ID, out var hash) || hash != newHash;
-            _computedNodes[node.ID] = newHash;
+            bool dirty = !_computedNodeHashes.TryGetValue(node.ID, out var hash) || hash != newHash;
+            newNodeHashes[node.ID] = newHash;
             foreach (var child in node.Children)
-                dirty |= MatchHash(child);
+                dirty |= MatchHash(child, ref newNodeHashes);
             return dirty;
         }
 
@@ -135,12 +146,12 @@ namespace Prowl.Runtime.GUI
         private Dictionary<ulong, uint> nodeCountPerLine = [];
         public LayoutNode Node(LayoutNode parent, string stringID, [CallerLineNumber] int intID = 0)
         {
-            ulong storageHash = (ulong)HashCode.Combine(IDStack.Peek(), stringID, intID);
+            ulong storageHash = (ulong)HashCode.Combine(parent.ID, IDStack.Peek(), stringID, intID);
 
             if (_createdNodes.Contains(storageHash))
             {
                 Debug.LogWarning("Node already exists with this ID: " + stringID + ":" + intID + " = " + storageHash + "\nForcing a new ID, This may cause increased flickering in the UI.");
-                storageHash = (ulong)HashCode.Combine(storageHash, storageHash);
+                storageHash = (ulong)HashCode.Combine(storageHash, storageHash, intID);
                 //throw new InvalidOperationException("Node already exists with this ID: " + stringID + ":" + intID + " = " + storageHash);
             }
 
@@ -171,7 +182,7 @@ namespace Prowl.Runtime.GUI
 
             if (CurrentNode._clipped != ClipType.None)
             {
-                var rect = scope._node._clipped == ClipType.Inner ? scope._node.LayoutData.InnerRect : scope._node.LayoutData.Rect;
+                var rect = scope._node._clipped == ClipType.Inner ? scope._node.LayoutData.InnerRect_NoScroll : scope._node.LayoutData.Rect;
                 Draw2D.PushClip(rect);
             }
         }

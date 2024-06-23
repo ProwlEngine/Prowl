@@ -2,9 +2,10 @@
 {
     public class AssetDirectoryCache(DirectoryInfo root)
     {
-        public class DirNode(DirectoryInfo directory)
+        public class DirNode(DirectoryInfo directory, DirNode parent)
         {
             public DirectoryInfo Directory = directory;
+            public DirNode Parent = parent;
             public List<DirNode> SubDirectories = [];
             public List<FileNode> Files = [];
         }
@@ -38,14 +39,57 @@
         private DirNode _rootNode;
         private DirectoryInfo _rootDir = root;
 
-        public void Refresh()
+        public bool PathToNode(string path, out DirNode node)
         {
-            _rootNode = BuildDirectoryTree(_rootDir);
+            node = _rootNode;
+
+            if (!IsPathInsideDirectory(path, node.Directory, out var relativePath))
+                return false;
+
+            string[] pathParts = relativePath.Split(Path.DirectorySeparatorChar);
+            for (int i = 0; i < pathParts.Length; i++)
+            {
+                string part = pathParts[i];
+                if (string.IsNullOrEmpty(part))
+                    continue;
+
+                DirNode nextNode = node.SubDirectories.Find(n => n.Directory.Name.Equals(part, StringComparison.OrdinalIgnoreCase));
+                if (nextNode is null)
+                    return false;
+
+                node = nextNode;
+            }
+            return true;
         }
 
-        private DirNode BuildDirectoryTree(DirectoryInfo directory)
+        static bool IsPathInsideDirectory(string path, DirectoryInfo directoryInfo, out string relativePath)
         {
-            DirNode node = new(directory);
+            relativePath = string.Empty;
+            if (string.IsNullOrEmpty(path))
+                throw new ArgumentNullException(nameof(path), "Path cannot be null or empty.");
+
+            if (directoryInfo == null)
+                throw new ArgumentNullException(nameof(directoryInfo), "DirectoryInfo cannot be null.");
+
+            // Get the absolute paths
+            string directoryFullPath = Path.GetFullPath(directoryInfo.FullName);
+            string fullPath = Path.GetFullPath(path);
+
+            // Check if the fullPath starts with the directoryFullPath
+            bool result = fullPath.StartsWith(directoryFullPath, StringComparison.OrdinalIgnoreCase);
+            if (result) // Get the relative path
+                relativePath = fullPath.Substring(directoryFullPath.Length);
+            return result;
+        }
+
+        public void Refresh()
+        {
+            _rootNode = BuildDirectoryTree(_rootDir, null);
+        }
+
+        private DirNode BuildDirectoryTree(DirectoryInfo directory, DirNode parent)
+        {
+            DirNode node = new(directory, parent);
             try
             {
                 var directories = directory.GetDirectories();
@@ -54,7 +98,7 @@
                     if (!subDirectory.Exists)
                         continue;
 
-                    DirNode subNode = BuildDirectoryTree(subDirectory);
+                    DirNode subNode = BuildDirectoryTree(subDirectory, node);
                     node.SubDirectories.Add(subNode);
                 }
 

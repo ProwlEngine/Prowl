@@ -108,12 +108,12 @@ namespace Prowl.Editor
                     height = DockSize.y;
                 }
 
-                using (gui.Node("_" + Title, _id).Width(width).Height(height).Padding(Padding).Left(_x).Top(_y).Layout(LayoutType.Column).ScaleChildren().Enter())
+                using (gui.Node("_" + Title, _id).Width(width).Height(height).Margin(Padding).Left(_x).Top(_y).Layout(LayoutType.Column).ScaleChildren().Enter())
                 {
-                    gui.BlockInteractables(gui.CurrentNode.LayoutData.InnerRect);
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
+                    gui.BlockInteractables(gui.CurrentNode.LayoutData.Rect);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground, 10);
 
-                    Rect = gui.CurrentNode.LayoutData.InnerRect;
+                    Rect = gui.CurrentNode.LayoutData.Rect;
 
                     if (!LockSize && !IsDocked)
                         HandleResize();
@@ -137,11 +137,11 @@ namespace Prowl.Editor
                                 }
 
                                 double updatedTotal = 0;
-                                if (total > gui.CurrentNode.LayoutData.InnerRect.width - 35)
+                                if (total > gui.CurrentNode.LayoutData.Rect.width - 35)
                                 {
                                     for (int i = 0; i < tabWidths.Length; i++)
                                     {
-                                        tabWidths[i] = (tabWidths[i] / total) * (gui.CurrentNode.LayoutData.InnerRect.width - 35);
+                                        tabWidths[i] = (tabWidths[i] / total) * (gui.CurrentNode.LayoutData.Rect.width - 35);
                                         updatedTotal += tabWidths[i];
                                     }
                                 }
@@ -149,17 +149,7 @@ namespace Prowl.Editor
                                 {
                                     updatedTotal = total;
                                 }
-
-                                // background rect for all tabs
-                                if (Leaf.LeafWindows.Count > 1)
-                                {
-                                    var tabsRect = gui.CurrentNode.LayoutData.InnerRect;
-                                    tabsRect.x += 2;
-                                    tabsRect.width = updatedTotal;
-                                    tabsRect.Expand(6);
-                                    gui.Draw2D.DrawRectFilled(tabsRect, GuiStyle.WindowBackground * 0.8f, 10);
-                                }
-
+                                
                                 double left = 0;
                                 for (int i = 0; i < Leaf.LeafWindows.Count; i++)
                                 {
@@ -179,11 +169,11 @@ namespace Prowl.Editor
                                                 EditorGuiManager.FocusWindow(window);
                                             }
                                             if (gui.IsNodeHovered())
-                                                gui.Draw2D.DrawRectFilled(tabRect, GuiStyle.Borders, 10);
+                                                gui.Draw2D.DrawRectFilled(tabRect, GuiStyle.Borders, 5);
                                         }
                                         if (window == this)
                                         {
-                                            gui.Draw2D.DrawRectFilled(tabRect, GuiStyle.Indigo, 10);
+                                            gui.Draw2D.DrawRectFilled(tabRect, GuiStyle.Indigo, 5);
                                         }
 
                                         var textSize = UIDrawList.DefaultFont.CalcTextSize(window.Title, 0);
@@ -200,7 +190,7 @@ namespace Prowl.Editor
                                         {
                                             using (gui.Node("_CloseButton").Width(20).Height(20).Left(Offset.Percentage(1f, -23)).Enter())
                                             {
-                                                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new Color(1, 1, 1, 150), 10);
+                                                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new Color(1, 1, 1, 150), 5);
                                                 if (gui.IsPointerHovering() && gui.IsPointerClick())
                                                 {
                                                     //Leaf.LeafWindows.Remove(window);
@@ -246,7 +236,7 @@ namespace Prowl.Editor
                     {
                         Draw();
                     }
-                    gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.InnerRect, GuiStyle.Borders, 2, 10);
+                    gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 2, 10);
                 }
 
 

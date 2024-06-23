@@ -674,7 +674,7 @@ namespace Prowl.Editor.Assets
             }
 
 
-            using (gui.Node("Content").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column).Enter())
+            using (gui.Node("Content").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column).Scroll().Enter())
             {
                 switch (selectedTab)
                 {
@@ -697,8 +697,6 @@ namespace Prowl.Editor.Assets
                     (target as MetaFile).Save();
                     AssetDatabase.Reimport((target as MetaFile).AssetPath);
                 }
-
-                gui.ScrollV();
             }
 
         }
@@ -776,7 +774,7 @@ namespace Prowl.Editor.Assets
 
             if (animations.Count() <= 0) return;
 
-            using (gui.Node("AnimationList").Padding(10).ExpandWidth().MaxHeight(300).Clip().FitContentHeight().Layout(LayoutType.Column).Enter())
+            using (gui.Node("AnimationList").Padding(10).ExpandWidth().MaxHeight(300).Clip().FitContentHeight().Layout(LayoutType.Column).Scroll().Enter())
             {
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
                 for (int i = 0; i < animations.Count(); i++)
@@ -786,7 +784,6 @@ namespace Prowl.Editor.Assets
                         selectedAnim = i + 1;
                     }
                 }
-                gui.ScrollV();
             }
 
             if (selectedAnim > 0 && selectedAnim <= animations.Count())
@@ -800,7 +797,7 @@ namespace Prowl.Editor.Assets
 
                 if (anim.Bones.Count <= 0) return;
 
-                using (gui.Node("BoneList").Padding(10).ExpandWidth().MaxHeight(300).Clip().FitContentHeight().Layout(LayoutType.Column).Enter())
+                using (gui.Node("BoneList").Padding(10).ExpandWidth().MaxHeight(300).Clip().FitContentHeight().Layout(LayoutType.Column).Scroll().Enter())
                 {
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
                     for (int i = 0; i < anim.Bones.Count; i++)
@@ -810,7 +807,6 @@ namespace Prowl.Editor.Assets
                             selectedAnimBone = i;
                         }
                     }
-                    gui.ScrollV();
                 }
 
                 if (selectedAnimBone > 0 && selectedAnimBone <= anim.Bones.Count)

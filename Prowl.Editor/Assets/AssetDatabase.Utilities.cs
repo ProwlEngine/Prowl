@@ -9,6 +9,17 @@ namespace Prowl.Editor.Assets
 
         #region Public Methods
 
+        public static bool PathToCachedNode(string path, out AssetDirectoryCache.DirNode node)
+        {
+            node = null;
+            foreach (var tuple in rootFolders)
+            {
+                if (tuple.Item2.PathToNode(path, out node))
+                    return true;
+            }
+            return false;
+        }
+
         /// <summary>
         /// Converts a file path to a relative path within the project.
         /// </summary>
