@@ -18,21 +18,9 @@ namespace Prowl.Runtime
         private ResourceSet[] resources;
         private Dictionary<ShaderResource, DeviceBuffer> uniformBuffers = new();
 
+        internal Material() : base("New Material") { }
 
-        internal DeviceBuffer GetUniformBuffer(ShaderResource resource, uint size)
-        {
-            bool hasBuffer = uniformBuffers.TryGetValue(resource, out DeviceBuffer buffer);
-
-            if (!hasBuffer || buffer.SizeInBytes != size)
-            {
-                buffer = Graphics.Factory.CreateBuffer(new BufferDescription(size, BufferUsage.UniformBuffer));
-                uniformBuffers[resource] = buffer;
-            }
-
-            return buffer;
-        }
-
-        public Material(AssetRef<Shader> shader, MaterialPropertyBlock? properties = null, KeywordState? keywords = null)
+        public Material(AssetRef<Shader> shader, MaterialPropertyBlock? properties = null, KeywordState? keywords = null) : base("New Material")
         {
             if (shader.Res == null) 
                 throw new ArgumentNullException(nameof(shader));
@@ -53,6 +41,19 @@ namespace Prowl.Runtime
         }
 
         public Pass GetPass() => Shader.Res.GetPass(activePass);
+
+        internal DeviceBuffer GetUniformBuffer(ShaderResource resource, uint size)
+        {
+            bool hasBuffer = uniformBuffers.TryGetValue(resource, out DeviceBuffer buffer);
+
+            if (!hasBuffer || buffer.SizeInBytes != size)
+            {
+                buffer = Graphics.Factory.CreateBuffer(new BufferDescription(size, BufferUsage.UniformBuffer));
+                uniformBuffers[resource] = buffer;
+            }
+
+            return buffer;
+        }
 
         // Suboptimal solution that recreates every resource set to ensure that textures are properly sent to shader.
         // When shaders are being compiled by us, we can optimize this so textures go into their own resource set and then we only have to update the uniform buffer.
