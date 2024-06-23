@@ -32,7 +32,7 @@ public static class Debug
         Log("Error: ", message, ConsoleColor.Red, LogSeverity.Error);
 
         if (exception != null)
-            Log(exception.ToString(), "", ConsoleColor.Red, LogSeverity.Error);
+            Log("", exception.ToString(), ConsoleColor.Red, LogSeverity.Error);
     }
 
     public static void LogSuccess(string message)
