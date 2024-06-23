@@ -94,10 +94,10 @@ namespace Prowl.Runtime
                 throw new Exception("Could not find variant for keyword ID");
         }
 
-        public void AddResourceElement(ShaderResource[] resourceTypes, KeywordState? keywordID = null)
+        public void AddResourceSet(ShaderResource[] resources, KeywordState? keywordID = null)
         {
             if (variants.TryGetValue(keywordID ?? KeywordState.Empty, out Variant program))
-                program.resourceSets.Add(resourceTypes);
+                program.resourceSets.Add(resources);
             else
                 throw new Exception("Could not variant for keyword ID");
         }

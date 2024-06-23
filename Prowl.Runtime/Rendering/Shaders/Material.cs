@@ -14,9 +14,23 @@ namespace Prowl.Runtime
 
         private int activePass = -1;
         private ResourceCache.PipelineInfo boundPipeline;
-        private DeviceBuffer uniformBuffer;
-        private ResourceSet[] resources;
 
+        private ResourceSet[] resources;
+        private Dictionary<ShaderResource, DeviceBuffer> uniformBuffers = new();
+
+
+        internal DeviceBuffer GetUniformBuffer(ShaderResource resource, uint size)
+        {
+            bool hasBuffer = uniformBuffers.TryGetValue(resource, out DeviceBuffer buffer);
+
+            if (!hasBuffer || buffer.SizeInBytes != size)
+            {
+                buffer = Graphics.Factory.CreateBuffer(new BufferDescription(size, BufferUsage.UniformBuffer));
+                uniformBuffers[resource] = buffer;
+            }
+
+            return buffer;
+        }
 
         public Material(AssetRef<Shader> shader, MaterialPropertyBlock? properties = null, KeywordState? keywords = null)
         {
@@ -49,28 +63,15 @@ namespace Prowl.Runtime
 
             if (resources != null)
             {
-                for (int i = 0; i < resources.Length; i++)
-                    resources[i].Dispose();
+                foreach (var resource in resources)
+                    resource.Dispose();
             }
 
             Pass pass = Shader.Res.GetPass(activePass);
             
             Pass.Variant variant = pass.GetVariant(Keywords);
 
-            int bufferSize = 0;
-
-            for (int set = 0; set < variant.resourceSets.Count; set++)
-            {
-                ShaderResource[] resourceSet = variant.resourceSets[set];
-
-                for (int res = 0; res < resourceSet.Length; res++)
-                    bufferSize += Math.Max(0, resourceSet[res].size);
-            }
-
-            if (uniformBuffer == null || uniformBuffer.SizeInBytes != bufferSize)
-                uniformBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)bufferSize, BufferUsage.UniformBuffer));
-
-            uint bufferOffset = 0;
+            List<BindableResource> bindableResources = new();
 
             resources = new ResourceSet[variant.resourceSets.Count];
 
@@ -78,62 +79,20 @@ namespace Prowl.Runtime
             {
                 ShaderResource[] resourceSet = variant.resourceSets[set];
 
-                ResourceSetDescription description = new ResourceSetDescription();
-                description.Layout = boundPipeline.description.ResourceLayouts[set];
-                description.BoundResources = new BindableResource[resourceSet.Length];
+                bindableResources.Clear();
 
                 for (int res = 0; res < resourceSet.Length; res++)
+                    resourceSet[res].BindResource(commandList, this, bindableResources);
+
+                ResourceSetDescription description = new ResourceSetDescription
                 {
-                    ShaderResource resource = resourceSet[res];
-
-                    if (resource.type == ResourceType.Texture || resource.type == ResourceType.Sampler)
-                    {
-                        Texture tex = PropertyBlock.GetTexture(resource.name) ?? Texture2D.EmptyWhite;
-                        
-                        if (resource.type == ResourceType.Texture)
-                            description.BoundResources[res] = tex.TextureView;
-                        else
-                            description.BoundResources[res] = tex.Sampler.InternalSampler;
-                        
-                        continue;
-                    }
-
-                    UpdateBuffer(commandList, resource, bufferOffset);
-
-                    description.BoundResources[res] = new DeviceBufferRange(uniformBuffer, bufferOffset, (uint)resource.size);
-                    bufferOffset += (uint)resource.size;
-                }
+                    Layout = boundPipeline.description.ResourceLayouts[set],
+                    BoundResources = bindableResources.ToArray()
+                };
 
                 resources[set] = Graphics.Factory.CreateResourceSet(description);
 
                 commandList.SetGraphicsResourceSet((uint)set, resources[set]);
-            }
-        }
-
-
-        private void UpdateBuffer(CommandList commandList, ShaderResource resource, uint offset)
-        {
-            switch (resource.type)
-            {
-                case ResourceType.Float:    
-                    commandList.UpdateBuffer(uniformBuffer, offset, PropertyBlock.GetFloat(resource.name));      
-                break;
-
-                case ResourceType.Vector2:  
-                    commandList.UpdateBuffer(uniformBuffer, offset, (System.Numerics.Vector2)PropertyBlock.GetVector2(resource.name));    
-                break;
-
-                case ResourceType.Vector3:  
-                    commandList.UpdateBuffer(uniformBuffer, offset, (System.Numerics.Vector3)PropertyBlock.GetVector3(resource.name));    
-                break;
-
-                case ResourceType.Vector4:  
-                    commandList.UpdateBuffer(uniformBuffer, offset, (System.Numerics.Vector4)PropertyBlock.GetVector4(resource.name));    
-                break;
-
-                case ResourceType.Matrix4x4:
-                    commandList.UpdateBuffer(uniformBuffer, offset, PropertyBlock.GetMatrix(resource.name).ToFloat());
-                break;
             }
         }
 
@@ -152,6 +111,18 @@ namespace Prowl.Runtime
         public void SetTexture(string name, Texture value) => PropertyBlock.SetTexture(name, value);
 
         public void SetMatrices(string name, System.Numerics.Matrix4x4[] value) { }
+
+        public override void OnDispose()
+        {
+            if (resources != null)
+            {
+                foreach (var resource in resources)
+                    resource.Dispose();
+
+                foreach (var buffer in uniformBuffers.Values)
+                    buffer.Dispose();
+            }
+        }
 
         //public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
         //{
