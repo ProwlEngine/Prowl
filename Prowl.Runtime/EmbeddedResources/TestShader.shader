@@ -20,7 +20,7 @@ Global
     Tags { "SomeShaderID" = "IsADeferredShader" }
 
     // Blend state- can be predefined state...
-    Blend Off/SingleAdditive/SingleAlpha/SingleOverride
+    Blend <Off/SingleAdditive/SingleAlpha/SingleOverride>
     
     // ...or custom values
     Blend
@@ -48,16 +48,15 @@ Global
     }
 
     // Depth write
-    DepthWrite On/Off
+    DepthWrite <On/Off>
     
     // Comparison kind
     DepthTest <Always/Equal/Greater/GreaterEqual/Less/LessEqual/Never/NotEqual/Off 
 
     // Rasterizer culling mode
-    Cull Back/Front/Off
+    Cull <Back/Front/Off>
 
-    // Programs in Global block are included into the source of every pass and don't represent an actual shader program
-    Program 
+    GlobalInclude 
     {
         vec4 aDefaultValue = vec4(0.5, 0.25, 0.75, 1.0);
     }
