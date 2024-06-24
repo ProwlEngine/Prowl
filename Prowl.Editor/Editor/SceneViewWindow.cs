@@ -52,7 +52,13 @@ public class SceneViewWindow : EditorWindow
     public void RefreshRenderTexture(int width, int height)
     {
         RenderTarget?.DestroyImmediate();
-        RenderTarget = new RenderTexture((uint)width, (uint)height, [ Veldrid.PixelFormat.R8_G8_B8_A8_UNorm ], Veldrid.PixelFormat.R16_UNorm);
+
+        RenderTarget = new RenderTexture(
+            (uint)width, (uint)height, 
+            [ Veldrid.PixelFormat.R8_G8_B8_A8_UNorm ], 
+            Veldrid.PixelFormat.R16_UNorm, 
+            true);
+
         Cam.Target = RenderTarget;
     }
 
@@ -69,10 +75,6 @@ public class SceneViewWindow : EditorWindow
 
         if (!Project.HasProject) return;
 
-        #warning Veldrid change
-
-        /*
-
         gui.CurrentNode.Padding(5);
 
         var renderSize = gui.CurrentNode.LayoutData.Rect.Size;
@@ -86,9 +88,13 @@ public class SceneViewWindow : EditorWindow
         // Manually Render to the RenderTexture
         Cam.NearClip = SceneViewPreferences.Instance.NearClip;
         Cam.FarClip = SceneViewPreferences.Instance.FarClip;
-        Cam.Render((int)renderSize.x, (int)renderSize.y);
-        SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
-        Cam.RenderResolution = SceneViewPreferences.Instance.RenderResolution;
+
+        Graphics.Render([ Cam ], RenderTarget.Framebuffer);
+
+        #warning Veldrid change
+        // SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
+        // 
+        // Cam.RenderResolution = SceneViewPreferences.Instance.RenderResolution;
 
         var imagePos = gui.CurrentNode.LayoutData.Rect.Position;
         var imageSize = gui.CurrentNode.LayoutData.Rect.Size;
@@ -117,6 +123,9 @@ public class SceneViewWindow : EditorWindow
 
         if (SceneViewPreferences.Instance.GridType != GridType.None)
         {
+            #warning Veldrid change
+
+            /*
             gridMat ??= new Material(Shader.Find("Defaults/Grid.shader"));
             gridMat.SetTexture("gPositionRoughness", Cam.gBuffer.PositionRoughness);
             gridMat.SetKeyword("GRID_XZ", SceneViewPreferences.Instance.GridType == GridType.XZ);
@@ -124,12 +133,13 @@ public class SceneViewWindow : EditorWindow
             gridMat.SetKeyword("GRID_YZ", SceneViewPreferences.Instance.GridType == GridType.YZ);
 
             Graphics.Blit(RenderTarget, gridMat, 0, false);
+            */
         }
 
         var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Transform.position, Cam.GameObject.Transform.forward, Cam.GameObject.Transform.up);
         var projection = Cam.GetProjectionMatrix((float)renderSize.x, (float)renderSize.y);
 
-        Ray mouseRay = Cam.ScreenPointToRay(gui.PointerPos - imagePos);
+        Ray mouseRay = Cam.ScreenPointToRay(gui.PointerPos - imagePos, new Vector2(RenderTarget.Width, RenderTarget.Height));
 
         bool blockPicking = gui.IsBlockedByInteractable(gui.PointerPos);
         HandleGizmos(selectedGOs, mouseRay, view, projection, blockPicking);
@@ -175,41 +185,34 @@ public class SceneViewWindow : EditorWindow
         {
             if (gui.IsPointerClick(MouseButton.Left) && !gizmo.IsOver && !viewManipulator.IsOver)
             {
-                // If the Scene Camera has no Render Graph, the gBuffer may not be initialized
-                if (Cam.gBuffer != null)
-                {
-                    var instanceID = Cam.gBuffer.GetObjectIDAt(mouseUV);
-                    if (instanceID != 0)
-                    {
-                        // find InstanceID Object
-                        var go = EngineObject.FindObjectByID<GameObject>(instanceID);
-                        if (go != null)
-                        {
-                            if (!go.IsPartOfPrefab || gui.IsPointerDoubleClick(MouseButton.Left))
-                            {
-                                HierarchyWindow.SelectHandler.Select(new WeakReference(go));
-                                HierarchyWindow.Ping(go);
-                            }
-                            else
-                            {
-                                // Find Prefab go.IsPrefab
-                                var prefab = go.Transform;
-                                while (prefab.parent != null)
-                                {
-                                    prefab = prefab.parent;
-                                    if (prefab.gameObject.IsPrefab)
-                                        break;
-                                }
+                var hit = MeshRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
 
-                                HierarchyWindow.SelectHandler.Select(new WeakReference(prefab.gameObject));
-                                HierarchyWindow.Ping(prefab.gameObject);
-                            }
-                        }
+                // If the Scene Camera has no Render Graph, the gBuffer may not be initialized
+                if (hit.gameObject != null)
+                {
+                    if (!hit.gameObject.IsPartOfPrefab || gui.IsPointerDoubleClick(MouseButton.Left))
+                    {
+                        HierarchyWindow.SelectHandler.Select(new WeakReference(hit.gameObject));
+                        HierarchyWindow.Ping(hit.gameObject);
                     }
                     else
                     {
-                        HierarchyWindow.SelectHandler.Clear();
+                        // Find Prefab go.IsPrefab
+                        var prefab = hit.gameObject.Transform;
+                        while (prefab.parent != null)
+                        {
+                            prefab = prefab.parent;
+                            if (prefab.gameObject.IsPrefab)
+                                break;
+                        }
+
+                        HierarchyWindow.SelectHandler.Select(new WeakReference(prefab.gameObject));
+                        HierarchyWindow.Ping(prefab.gameObject);
                     }
+                }
+                else
+                {
+                    HierarchyWindow.SelectHandler.Clear();
                 }
             }
             else if (gui.IsPointerDown(MouseButton.Right))
@@ -330,8 +333,6 @@ public class SceneViewWindow : EditorWindow
             //g.DrawRectFilled(imagePos + new Vector2(5, imageSize.y - 25), new Vector2(75, 20), new Color(0, 0, 0, 0.25f));
             gui.Draw2D.DrawText($"FPS: {fps:0.0}", imagePos + new Vector2(10, imageSize.y - 22));
         }
-
-        */
     }
 
     private void HandleGizmos(List<GameObject> selectedGOs, Ray mouseRay, Matrix4x4 view, Matrix4x4 projection, bool blockPicking)
@@ -391,9 +392,6 @@ public class SceneViewWindow : EditorWindow
 
     private void HandleDragnDrop()
     {
-        #warning Veldrid change
-
-        /*
         if (DragnDrop.Drop<GameObject>(out var original))
         {
             if (original.AssetID == Guid.Empty) return;
@@ -401,11 +399,12 @@ public class SceneViewWindow : EditorWindow
             GameObject go = (GameObject)EngineObject.Instantiate(original, true);
             if (go != null)
             {
-                var pos = Cam.gBuffer.GetViewPositionAt(mouseUV);
-                if (pos == Vector3.zero)
+                var hit = MeshRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+
+                if (hit.worldPosition == Vector3.zero)
                     go.Transform.position = Cam.GameObject.Transform.position + Cam.GameObject.Transform.forward * 10;
                 else
-                    go.Transform.position = Cam.Transform.TransformPoint(pos);
+                    go.Transform.position = hit.worldPosition;
             }
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
@@ -415,12 +414,14 @@ public class SceneViewWindow : EditorWindow
             var t = go;
             if (t != null)
             {
-                var pos = Cam.gBuffer.GetViewPositionAt(mouseUV);
-                if (pos == Vector3.zero)
+                var hit = MeshRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+
+                if (hit.worldPosition == Vector3.zero)
                     t.Transform.position = Cam.GameObject.Transform.position + Cam.GameObject.Transform.forward * 10;
                 else
-                    go.Transform.position = Cam.Transform.TransformPoint(pos);
+                    go.Transform.position = hit.worldPosition;
             }
+
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
         else if (DragnDrop.Drop<Scene>(out var scene))
@@ -429,24 +430,16 @@ public class SceneViewWindow : EditorWindow
         }
         else if (DragnDrop.Drop<Material>(out var material))
         {
-            if (Cam.gBuffer != null)
+            var hit = MeshRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+
+            if (hit.gameObject != null)
             {
-                var instanceID = Cam.gBuffer.GetObjectIDAt(mouseUV);
-                if (instanceID != 0)
-                {
-                    // find InstanceID Object
-                    var go = EngineObject.FindObjectByID<GameObject>(instanceID);
-                    if (go != null)
-                    {
-                        // Look for a MeshRenderer
-                        var renderer = go.GetComponent<MeshRenderer>();
-                        if (renderer != null)
-                            renderer.Material = material;
-                    }
-                }
+                // Look for a MeshRenderer
+                var renderer = hit.gameObject.GetComponent<MeshRenderer>();
+                if (renderer != null)
+                    renderer.Material = material;
             }
         }
-        */
     }
 
     private void DrawViewportSettings()

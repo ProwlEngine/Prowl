@@ -6,18 +6,19 @@ using System.Text;
 using System.Collections.Generic;
 
 namespace Prowl.Runtime
-{
+{   
+    using RenderPipelines;
 
     public static class Graphics
     {
         public static GraphicsDevice Device { get; internal set; }
 
         public static Framebuffer ScreenFramebuffer => Device.SwapchainFramebuffer;
+        public static Vector2Int ScreenResolution => new Vector2(ScreenFramebuffer.Width, ScreenFramebuffer.Height);
+
         public static ResourceFactory Factory => Device.ResourceFactory;
 
-        public static Vector2Int Resolution => new Vector2(ScreenFramebuffer.Width, ScreenFramebuffer.Height);
-
-        private static bool frameBegan;
+        public static RenderPipeline ActivePipeline { get; private set; }
 
         public static bool VSync
         {
@@ -43,18 +44,33 @@ namespace Prowl.Runtime
             Screen.Resize += (newSize) => Device.ResizeMainWindow((uint)newSize.x, (uint)newSize.y);
         }
 
+        private static void SetRenderPipeline(RenderPipeline renderPipeline)
+        {
+            if (ActivePipeline == renderPipeline)
+                return;
+            
+            ActivePipeline?.ReleaseResources();
+            ActivePipeline = renderPipeline;
+            ActivePipeline?.InitializeResources();
+        }
 
-        public static void StartFrame()
+        public static void StartFrame(RenderPipeline renderPipeline = null)
         {
             RenderTexture.UpdatePool();
-            frameBegan = true;
+            SetRenderPipeline(renderPipeline ?? Quality.GetQualitySettings().RenderPipeline.Res);
+        }
 
-            /*
-            _commandList.Begin();
-            _commandList.SetFramebuffer(ScreenFramebuffer);
-            _commandList.ClearColorTarget(0, RgbaFloat.Black);
-            _commandList.ClearDepthStencil(1f);
-            */
+        public static void Render(Camera[] cameras, Framebuffer targetFramebuffer)
+        {
+            if (ActivePipeline == null)
+                return;
+            
+            RenderingContext context = new()
+            {
+                TargetFramebuffer = targetFramebuffer
+            };
+
+            ActivePipeline.Render(context, cameras);
         }
 
         public static CommandList GetCommandList()
@@ -86,7 +102,6 @@ namespace Prowl.Runtime
 
         public static void EndFrame()
         {   
-            frameBegan = false;
             Device.SwapBuffers();
         }
 
@@ -126,11 +141,6 @@ namespace Prowl.Runtime
             return Factory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc, options);
         }
 
-        internal static void Dispose()
-        {
-            Device.Dispose();
-            ResourceCache.Dispose();
-        }
 
         public static void CopyTexture(Texture source, Texture destination, bool waitForCompletion = false)
         {
@@ -162,6 +172,14 @@ namespace Prowl.Runtime
             SubmitCommands(commandList, waitForCompletion);
 
             commandList.Dispose();
+        }
+
+        internal static void Dispose()
+        {
+            Device.Dispose();
+
+            PipelineCache.Dispose();
+            ShaderCache.Dispose();
         }
     }
 }

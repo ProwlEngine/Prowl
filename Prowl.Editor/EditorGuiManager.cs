@@ -68,9 +68,9 @@ public static class EditorGuiManager
         // Sort by docking as well, Docked windows are guranteed to come first
         Windows.Sort((a, b) => b.IsDocked.CompareTo(a.IsDocked));
 
-        Rect screenRect = new Rect(0, 0, Runtime.Graphics.Resolution.x, Runtime.Graphics.Resolution.y);
+        Rect screenRect = new Rect(0, 0, Runtime.Graphics.ScreenResolution.x, Runtime.Graphics.ScreenResolution.y);
 
-        Vector2 framebufferAndInputScale = new((float)Runtime.Graphics.Resolution.x / Screen.Size.x, (float)Runtime.Graphics.Resolution.y / (float)Screen.Size.y);
+        Vector2 framebufferAndInputScale = new((float)Runtime.Graphics.ScreenResolution.x / Screen.Size.x, (float)Runtime.Graphics.ScreenResolution.y / (float)Screen.Size.y);
 
         Gui.PointerWheel = Input.MouseWheelDelta;
 

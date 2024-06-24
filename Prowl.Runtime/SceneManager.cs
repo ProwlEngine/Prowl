@@ -143,10 +143,12 @@ public static class SceneManager
     public static void Draw()
     {
         var Cameras = MonoBehaviour.FindObjectsOfType<Camera>().ToList();
+        
+        Cameras.RemoveAll(x => !x.EnabledInHierarchy);
+
         Cameras.Sort((a, b) => a.RenderOrder.CompareTo(b.DrawOrder));
-        foreach (var cam in Cameras)
-            if (cam.EnabledInHierarchy)
-                cam.Render(-1, -1);
+
+        Graphics.Render(Cameras.ToArray(), Graphics.ScreenFramebuffer);
     }
 
     public static void LoadScene(Scene scene)
