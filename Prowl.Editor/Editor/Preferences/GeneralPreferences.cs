@@ -36,7 +36,7 @@ namespace Prowl.Editor.Preferences
     public class EditorPreferences : ScriptableSingleton<EditorPreferences>
     {
         [Text("UI:")]
-        public bool AntiAliasing = false;
+        public bool AntiAliasing = true;
 
     }
 }
