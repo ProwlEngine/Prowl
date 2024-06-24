@@ -1,4 +1,5 @@
 ﻿using Prowl.Editor.Utilities;
+using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Utils;
@@ -34,13 +35,27 @@ namespace Prowl.Editor.PropertyDrawers
             var fields = RuntimeUtils.GetSerializableFields(propertyValue);
             if (fields.Length != 0)
             {
-                using (gui.Node(label + "_Header", index).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Padding(10).Enter())
+                using (gui.Node(label + "_Header", index).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Enter())
                 {
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Background);
+                    if (!config.HasFlag(EditorGUI.PropertyGridConfig.NoBackground))
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Background);
 
-                    gui.TextNode("H_Text", label).ExpandWidth().Height(GuiStyle.ItemHeight);
+                    gui.TextNode("H_Text", label).ExpandWidth().Height(GuiStyle.ItemHeight).IgnoreLayout();
 
-                    changed |= EditorGUI.PropertyGrid(propertyType.Name + " | " + label, ref propertyValue, EditorGUI.TargetFields.Serializable, config);
+                    bool enumexpanded = gui.GetNodeStorage<bool>("enumexpanded", false);
+                    using (gui.Node("EnumExpandBtn").TopLeft(5, 0).Scale(GuiStyle.ItemHeight).Enter())
+                    {
+                        if (gui.IsNodePressed())
+                        {
+                            enumexpanded = !enumexpanded;
+                            gui.SetNodeStorage(gui.CurrentNode.Parent, "enumexpanded", enumexpanded);
+                        }
+                        gui.Draw2D.DrawText(enumexpanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.InnerRect, gui.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
+                    }
+
+                    float scaleAnimContent = gui.AnimateBool(enumexpanded, 0.15f, EaseType.Linear);
+                    if (enumexpanded || scaleAnimContent > 0)
+                        changed |= EditorGUI.PropertyGrid(propertyType.Name + " | " + label, ref propertyValue, EditorGUI.TargetFields.Serializable, config);
                 }
             }
             return changed;
