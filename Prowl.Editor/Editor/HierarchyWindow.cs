@@ -226,7 +226,7 @@ namespace Prowl.Editor
                 // Interaction
                 SelectHandler.AddSelectableAtIndex(index, new WeakReference(entity));
                 var interact = gui.GetInteractable(rect);
-                if (interact.TakeFocus())
+                if (interact.TakeFocus(true))
                     SelectHandler.Select(index, new WeakReference(entity));
 
                 bool justStartedRename = false;
