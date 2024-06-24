@@ -53,6 +53,7 @@ namespace Prowl.Runtime
             get { return isFocused; }
         }
 
+
         public static void Start(string name, Vector2Int size, Vector2Int position, WindowState initialState = WindowState.Normal)
         {
             WindowCreateInfo windowInfo = new()
@@ -69,16 +70,16 @@ namespace Prowl.Runtime
 
             LatestInputSnapshot = InternalWindow.PumpEvents(); 
 
-            OnLoad();
+            Load?.Invoke();
 
             InternalWindow.DragDrop += (dragDropEvent) => { FileDrop?.Invoke([dragDropEvent.File]); };
 
-            InternalWindow.Resized += OnResize;
+            InternalWindow.Resized += () => Resize?.Invoke(Size);
 
-            InternalWindow.FocusGained += () => { OnFocusChanged(isFocused = true); };
-            InternalWindow.FocusLost += () => { OnFocusChanged(isFocused = false); };
+            InternalWindow.FocusGained += () => FocusChanged?.Invoke(isFocused = true); 
+            InternalWindow.FocusLost += () => FocusChanged?.Invoke(isFocused = false); 
 
-            InternalWindow.Closing += OnClose;
+            InternalWindow.Closing += Closing;
             InternalWindow.Closed += () => Environment.Exit(0); 
 
             while (InternalWindow.Exists)
@@ -86,36 +87,10 @@ namespace Prowl.Runtime
                 Sdl2Events.ProcessEvents();
                 LatestInputSnapshot = InternalWindow.PumpEvents(); 
                 
-                OnUpdate();
+                Update?.Invoke();
             }
         }
 
-
         public static void Stop() => InternalWindow.Close();
-
-        public static void OnLoad()
-        {
-            Load?.Invoke();
-        }
-
-        public static void OnFocusChanged(bool focused)
-        {
-            FocusChanged?.Invoke(focused);
-        }
-
-        public static void OnResize()
-        {
-            Resize?.Invoke(Size);
-        }
-
-        public static void OnUpdate()
-        {
-            Update?.Invoke();
-        }
-
-        public static void OnClose()
-        {
-            Closing?.Invoke();
-        }
     }
 }
