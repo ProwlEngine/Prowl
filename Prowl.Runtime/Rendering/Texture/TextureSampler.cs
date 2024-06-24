@@ -12,7 +12,7 @@ namespace Prowl.Runtime
     public enum FilterType
     {
         Linear,
-        Point
+        Point,
     }
 
     public enum TextureWrapMode
@@ -29,7 +29,7 @@ namespace Prowl.Runtime
         private SamplerDescription _internalDescription;
 
         /// <summary>The internal <see cref="Sampler"/> representation.</summary>
-        public Sampler InternalSampler 
+        internal Sampler InternalSampler 
         { 
             get
             {
@@ -50,6 +50,8 @@ namespace Prowl.Runtime
         public uint MaximumAnisotropy;
         public uint MaximumLod;
         public uint MinimumLod;
+
+        public bool Anisotropic => Filter == SamplerFilter.Anisotropic;
 
         public static TextureSampler CreateAniso4x() => new TextureSampler(SamplerDescription.Aniso4x);
         public static TextureSampler CreateLinear() => new TextureSampler(SamplerDescription.Linear);
@@ -93,6 +95,19 @@ namespace Prowl.Runtime
                 _internalSampler = Graphics.Factory.CreateSampler(ref _internalDescription);
             }
         }
+
+        public void Copy(TextureSampler other)
+        {
+            this.WrapModeU = other.WrapModeU;
+            this.WrapModeV = other.WrapModeV;
+            this.WrapModeW = other.WrapModeW;
+            this.BorderColor = other.BorderColor;
+            this.Filter = other.Filter;
+            this.LodBias = other.LodBias;
+            this.MaximumAnisotropy = other.MaximumAnisotropy;
+            this.MaximumLod = other.MaximumLod;
+            this.MinimumLod = other.MinimumLod;
+        }   
 
         public void SetWrapMode(SamplerAxis axis, TextureWrapMode mode)
         {
