@@ -1263,7 +1263,7 @@ namespace Prowl.Runtime.GUI.Graphics
         }
         ";
 
-            Pass pass = new Pass("UI", null);
+            ShaderPass pass = new ShaderPass("UI", null);
 
             pass.CreateProgram(Runtime.Graphics.CreateFromSpirv(vertexSource, fragmentSource));
 
