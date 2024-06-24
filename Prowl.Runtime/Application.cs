@@ -21,9 +21,24 @@ public static class Application
     public static event Action Quitting;
 
 
-    private static GraphicsBackend[] preferredBackends = 
+    private static GraphicsBackend[] preferredWindowsBackends = // Covers Windows/UWP
+    [
+        GraphicsBackend.Direct3D11,
+        GraphicsBackend.Vulkan,
+        GraphicsBackend.OpenGL,
+        GraphicsBackend.OpenGLES,
+    ];
+
+    private static GraphicsBackend[] preferredUnixBackends = // Cover Unix-like (Linux, FreeBSD, OpenBSD)
     [
         GraphicsBackend.Vulkan,
+        GraphicsBackend.OpenGL,
+        GraphicsBackend.OpenGLES,
+    ];
+
+    private static GraphicsBackend[] preferredMacBackends = // Covers MacOS/Apple 
+    [
+        GraphicsBackend.Metal,
         GraphicsBackend.OpenGL,
         GraphicsBackend.OpenGLES,
     ];
@@ -32,14 +47,14 @@ public static class Application
     {
         if (RuntimeUtils.IsWindows())
         {
-            return GraphicsBackend.Direct3D11;
+            return preferredWindowsBackends[0];
         }
         else if (RuntimeUtils.IsMac())
         {
-            return GraphicsBackend.Metal;
+            return preferredMacBackends[0];
         }
 
-        return preferredBackends[0];
+        return preferredUnixBackends[0];
     }
 
     public static void Run(string title, int width, int height, IAssetProvider assetProvider, bool editor)
