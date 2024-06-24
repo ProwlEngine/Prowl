@@ -1,6 +1,4 @@
-﻿using Prowl.Editor.EditorWindows;
-using Prowl.Editor.Utilities;
-using Prowl.Runtime;
+﻿using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Preferences
