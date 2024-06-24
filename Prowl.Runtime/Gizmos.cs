@@ -102,7 +102,7 @@ void main()
             ";
 
             // Pass creation info (Name, tags)
-            Pass pass = new Pass("Gizmos", null);
+            ShaderPass pass = new ShaderPass("Gizmos", null);
 
             pass.CreateProgram(Graphics.CreateFromSpirv(vertex, fragment));
 
