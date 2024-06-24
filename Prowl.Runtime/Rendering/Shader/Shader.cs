@@ -32,7 +32,7 @@ namespace Prowl.Runtime
 
         private static Shader CreateDefault()
         {
-            Pass pass = new Pass("Default Pass", null);
+            ShaderPass pass = new ShaderPass("Default Pass", null);
 
             pass.CreateProgram(Graphics.CreateFromSpirv(defaultVertex, defaultFragment));
             pass.AddVertexInput(MeshResource.Position);
@@ -41,22 +41,22 @@ namespace Prowl.Runtime
         }
 
 
-        private List<Pass> passes = new();
+        private List<ShaderPass> passes = new();
         private Dictionary<string, int> nameIndexLookup = new();
         private Dictionary<string, List<int>> tagIndexLookup = new(); 
 
 
         internal Shader() : base("New Shader") { }
 
-        public Shader(string name, params Pass[] passes) : base(name)
+        internal Shader(string name, params ShaderPass[] passes) : base(name)
         {
-            foreach (Pass pass in passes)
+            foreach (ShaderPass pass in passes)
                 AddPass(pass);
 
-            ResourceCache.RegisterShader(this);
+            ShaderCache.RegisterShader(this);
         }
 
-        public void AddPass(Pass pass)
+        public void AddPass(ShaderPass pass)
         {
             int passIndex = passes.Count;
             passes.Add(pass);
@@ -82,31 +82,31 @@ namespace Prowl.Runtime
             }
         }
 
-        public Pass GetPass(int passIndex)
+        public ShaderPass GetPass(int passIndex)
         {
             return passes[passIndex];
         }
 
-        public Pass GetPass(string passName)
+        public ShaderPass GetPass(string passName)
         {   
             return passes[nameIndexLookup.GetValueOrDefault(passName, -1)];
         }
 
-        public Pass GetPassWithTag(string tag, string? tagValue)
+        public ShaderPass GetPassWithTag(string tag, string? tagValue)
         {   
-            List<Pass> passes = GetPassesWithTag(tag, tagValue);
+            List<ShaderPass> passes = GetPassesWithTag(tag, tagValue);
             return passes.Count > 0 ? passes[0] : null;
         }
 
-        public List<Pass> GetPassesWithTag(string tag, string? tagValue)
+        public List<ShaderPass> GetPassesWithTag(string tag, string? tagValue)
         {   
-            List<Pass> passes = [];
+            List<ShaderPass> passes = [];
 
             if (tagIndexLookup.TryGetValue(tag, out List<int> passesWithTag))
             {
                 foreach (int index in passesWithTag)
                 {
-                    Pass pass = passes[index];
+                    ShaderPass pass = passes[index];
 
                     if (tagValue != null)
                     {
@@ -125,7 +125,7 @@ namespace Prowl.Runtime
 
         public override void OnDispose()
         {
-            foreach (Pass pass in passes)
+            foreach (ShaderPass pass in passes)
                 pass.Dispose();
         }
 

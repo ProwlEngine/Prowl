@@ -6,29 +6,26 @@ using System.Linq;
 
 namespace Prowl.Runtime
 {
-    public static class ResourceCache    
+    public static class PipelineCache    
     {
-        const bool depthClip = true;
-
         private struct PassPipelineDescription
         {
-            public Pass pass;
+            public ShaderPass pass;
             public KeywordState? keywordState;
             public OutputDescription? output;
             public PolygonFillMode fillMode;
             public FrontFace frontFace;
             public PrimitiveTopology topology;
             public bool scissorTest;
+            public bool depthClip;
 
             public override readonly int GetHashCode()
             {
-                return HashCode.Combine(pass, keywordState, output, fillMode, frontFace, topology);
+                return HashCode.Combine(pass, keywordState, output, fillMode, frontFace, topology, scissorTest, depthClip);
             }
         }
 
-        /// <summary>
-        /// Bundles a pipeline instance with its description.
-        /// </summary>
+        // Bundles a pipeline instance with its description.
         public readonly struct PipelineInfo
         {
             public readonly Pipeline pipeline;
@@ -42,28 +39,11 @@ namespace Prowl.Runtime
         }
 
         private static Dictionary<PassPipelineDescription, PipelineInfo> pipelineCache = new();
-        private static Dictionary<string, WeakReference<Shader>> shaderCache = new();
 
-
-        private static VertexLayoutDescription GetLayoutForResource(MeshResource resource, VertexLayoutDescription layout)
-        {
-            return resource switch 
-            {
-                MeshResource.Position => new VertexLayoutDescription(new VertexElementDescription("POSITION", VertexElementFormat.Float3, VertexElementSemantic.Position)),
-                MeshResource.UV0 => new VertexLayoutDescription(new VertexElementDescription("TEXCOORD0", VertexElementFormat.Float2, VertexElementSemantic.TextureCoordinate)),
-                MeshResource.UV1 => new VertexLayoutDescription(new VertexElementDescription("TEXCOORD1", VertexElementFormat.Float2, VertexElementSemantic.TextureCoordinate)),
-                MeshResource.Normals => new VertexLayoutDescription(new VertexElementDescription("NORMAL", VertexElementFormat.Float3, VertexElementSemantic.Normal)),
-                MeshResource.Tangents => new VertexLayoutDescription(new VertexElementDescription("TANGENT", VertexElementFormat.Float3, VertexElementSemantic.Normal)),
-                MeshResource.Colors => new VertexLayoutDescription(new VertexElementDescription("COLOR", VertexElementFormat.Float4, VertexElementSemantic.Color)),
-                MeshResource.BoneIndices => new VertexLayoutDescription(new VertexElementDescription("BONEINDEX", VertexElementFormat.Float4, VertexElementSemantic.Position)),
-                MeshResource.BoneWeights => new VertexLayoutDescription(new VertexElementDescription("BONEWEIGHT", VertexElementFormat.Float4, VertexElementSemantic.Color)),
-                MeshResource.Custom => layout,
-            };
-        }
 
         private static GraphicsPipelineDescription CreateDescriptionForPass(in PassPipelineDescription passDesc)
         {
-            Pass.Variant keywordProgram = passDesc.pass.GetVariant(passDesc.keywordState);
+            ShaderPass.Variant keywordProgram = passDesc.pass.GetVariant(passDesc.keywordState);
 
             ResourceLayout[] resourceLayouts = new ResourceLayout[keywordProgram.resourceSets.Count];
 
@@ -79,6 +59,17 @@ namespace Prowl.Runtime
                 resourceLayouts[i] = Graphics.Factory.CreateResourceLayout(new ResourceLayoutDescription(elements.ToArray()));
             }
 
+            VertexLayoutDescription[] vertexInputs = new VertexLayoutDescription[keywordProgram.vertexInputs.Count];
+
+            for (int i = 0; i < vertexInputs.Length; i++)
+            {   
+                (MeshResource, VertexLayoutDescription) inputs = keywordProgram.vertexInputs[i];
+
+                if (inputs.Item1 == MeshResource.Custom)
+                    vertexInputs[i] = inputs.Item2;
+                else
+                    vertexInputs[i] = MeshUtility.GetLayoutForResource(inputs.Item1);
+            }
 
             GraphicsPipelineDescription pipelineDesc = new()
             {
@@ -89,7 +80,7 @@ namespace Prowl.Runtime
                     cullMode: passDesc.pass.cullMode,
                     fillMode: passDesc.fillMode,
                     frontFace: passDesc.frontFace,
-                    depthClipEnabled: depthClip,
+                    depthClipEnabled: passDesc.depthClip,
                     scissorTestEnabled: passDesc.scissorTest
                 ),
 
@@ -97,7 +88,7 @@ namespace Prowl.Runtime
                 Outputs = passDesc.output ?? Graphics.ScreenFramebuffer.OutputDescription,
 
                 ShaderSet = new ShaderSetDescription(
-                    vertexLayouts: keywordProgram.vertexInputs.Select(x => GetLayoutForResource(x.Item1, x.Item2)).ToArray(),
+                    vertexLayouts: vertexInputs,
                     shaders: keywordProgram.compiledPrograms,
                     Graphics.GetSpecializations()
                 ),
@@ -109,12 +100,13 @@ namespace Prowl.Runtime
         }
 
         public static PipelineInfo GetPipelineForPass(
-            Pass pass, 
+            ShaderPass pass, 
             KeywordState? keywords = null,
             PolygonFillMode fillMode = PolygonFillMode.Solid,
             FrontFace frontFace = FrontFace.Clockwise,
             PrimitiveTopology topology = PrimitiveTopology.TriangleList,
-            bool scissor = false,
+            bool scissorTest = false,
+            bool depthClip = true,
             OutputDescription? pipelineOutput = null)
         {
             PassPipelineDescription pipelineDesc = new()
@@ -124,7 +116,8 @@ namespace Prowl.Runtime
                 fillMode = fillMode,
                 frontFace = frontFace,
                 topology = topology,
-                scissorTest = scissor,
+                scissorTest = scissorTest,
+                depthClip = depthClip,
                 output = pipelineOutput
             };
 
@@ -152,18 +145,6 @@ namespace Prowl.Runtime
             }
 
             pipelineCache.Clear();
-
-            foreach (var shader in shaderCache.Values)
-                if (shader.TryGetTarget(out Shader sh))
-                    sh.Destroy();
-                
-            shaderCache.Clear();
-        }
-
-        internal static void RegisterShader(Shader shader)
-        {
-            if (!shaderCache.ContainsKey(shader.Name))
-                shaderCache.Add(shader.Name, new WeakReference<Shader>(shader));
         }
     }
 }

@@ -4,25 +4,25 @@ using Veldrid;
 
 namespace Prowl.Runtime
 {
-    public class Pass 
+    public class ShaderPass 
     {
         /// <summary>
-        /// The name to identify this <see cref="Pass"/> 
+        /// The name to identify this <see cref="ShaderPass"/> 
         /// </summary>
         public string name;
 
         /// <summary>
-        /// The tags to identify this <see cref="Pass"/> 
+        /// The tags to identify this <see cref="ShaderPass"/> 
         /// </summary>
         public Dictionary<string, string> tags = new();
 
         /// <summary>
-        /// The blending options to use when rendering this <see cref="Pass"/> 
+        /// The blending options to use when rendering this <see cref="ShaderPass"/> 
         /// </summary>
         public BlendStateDescription blend = BlendStateDescription.SingleOverrideBlend;
 
         /// <summary>
-        /// The depth stencil state to use when rendering this <see cref="Pass"/> 
+        /// The depth stencil state to use when rendering this <see cref="ShaderPass"/> 
         /// </summary>
         public DepthStencilStateDescription depthStencil = new DepthStencilStateDescription(
             depthTestEnabled: true,
@@ -46,7 +46,7 @@ namespace Prowl.Runtime
         private Dictionary<KeywordState, Variant> variants = new();
 
 
-        public Pass(string name, (string, string)[] tags)
+        public ShaderPass(string name, (string, string)[] tags)
         {
             this.name = name;
 

@@ -7,19 +7,6 @@ using System.Runtime.InteropServices;
 
 namespace Prowl.Runtime
 {  
-    public enum MeshResource
-    {
-        Position,
-        UV0,
-        UV1,
-        Normals,
-        Tangents,
-        Colors,
-        BoneIndices,
-        BoneWeights,
-        Custom
-    }
-
     public class Mesh : EngineObject, ISerializable
     {
         /// <summary> Whether this mesh is readable by the CPU </summary>
@@ -285,7 +272,9 @@ namespace Prowl.Runtime
             if (vertices == null)
                 throw new ArgumentNullException();
 
-            var empty = true;
+            if (vertices.Length < 1)
+                throw new ArgumentException();
+
             var minVec = System.Numerics.Vector3.One * 99999f;
             var maxVec = System.Numerics.Vector3.One * -99999f;
             foreach (var ptVector in vertices)
@@ -297,11 +286,7 @@ namespace Prowl.Runtime
                 maxVec.X = (maxVec.X > ptVector.X) ? maxVec.X : ptVector.X;
                 maxVec.Y = (maxVec.Y > ptVector.Y) ? maxVec.Y : ptVector.Y;
                 maxVec.Z = (maxVec.Z > ptVector.Z) ? maxVec.Z : ptVector.Z;
-
-                empty = false;
             }
-            if (empty)
-                throw new ArgumentException();
 
             bounds = new Bounds(minVec, maxVec);
         }
@@ -379,20 +364,24 @@ namespace Prowl.Runtime
         public static Mesh GetFullscreenQuad()
         {
             if (fullScreenQuad != null) return fullScreenQuad;
-            Mesh mesh = new Mesh();
-            mesh.vertices = new System.Numerics.Vector3[4];
-            mesh.vertices[0] = new System.Numerics.Vector3(-1, -1, 0);
-            mesh.vertices[1] = new System.Numerics.Vector3(1, -1, 0);
-            mesh.vertices[2] = new System.Numerics.Vector3(-1, 1, 0);
-            mesh.vertices[3] = new System.Numerics.Vector3(1, 1, 0);
+            Mesh mesh = new Mesh
+            {
+                vertices = [
+                    new System.Numerics.Vector3(-1, -1, 0),
+                    new System.Numerics.Vector3(1, -1, 0),
+                    new System.Numerics.Vector3(-1, 1, 0),
+                    new System.Numerics.Vector3(1, 1, 0),
+                ],
 
-            mesh.uv = new System.Numerics.Vector2[4];
-            mesh.uv[0] = new System.Numerics.Vector2(0, 0);
-            mesh.uv[1] = new System.Numerics.Vector2(1, 0);
-            mesh.uv[2] = new System.Numerics.Vector2(0, 1);
-            mesh.uv[3] = new System.Numerics.Vector2(1, 1);
+                uv = [
+                    new System.Numerics.Vector2(0, 0),
+                    new System.Numerics.Vector2(1, 0),
+                    new System.Numerics.Vector2(0, 1),
+                    new System.Numerics.Vector2(1, 1),
+                ],
 
-            mesh.indices = [0, 2, 1, 2, 3, 1];
+                indices = [0, 2, 1, 2, 3, 1]
+            };
 
             fullScreenQuad = mesh;
             return mesh;

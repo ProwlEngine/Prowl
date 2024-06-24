@@ -13,7 +13,7 @@ namespace Prowl.Runtime
 
 
         private int activePass = -1;
-        private ResourceCache.PipelineInfo boundPipeline;
+        private PipelineCache.PipelineInfo boundPipeline;
 
         private ResourceSet[] resources;
         private Dictionary<ShaderResource, DeviceBuffer> uniformBuffers = new();
@@ -33,14 +33,14 @@ namespace Prowl.Runtime
         public void SetPass(CommandList commandList, int passIndex = 0, PolygonFillMode fill = PolygonFillMode.Solid, PrimitiveTopology topology = PrimitiveTopology.TriangleList, bool scissorTest = false)
         {
             activePass = passIndex;
-            Pass pass = Shader.Res.GetPass(passIndex);
+            ShaderPass pass = Shader.Res.GetPass(passIndex);
 
-            boundPipeline = ResourceCache.GetPipelineForPass(pass, fillMode: fill, topology: topology, scissor: scissorTest);
+            boundPipeline = PipelineCache.GetPipelineForPass(pass, fillMode: fill, topology: topology, scissorTest: scissorTest);
 
             commandList.SetPipeline(boundPipeline.pipeline);
         }
 
-        public Pass GetPass() => Shader.Res.GetPass(activePass);
+        public ShaderPass GetPass() => Shader.Res.GetPass(activePass);
 
         internal DeviceBuffer GetUniformBuffer(ShaderResource resource, uint size)
         {
@@ -68,9 +68,9 @@ namespace Prowl.Runtime
                     resource.Dispose();
             }
 
-            Pass pass = Shader.Res.GetPass(activePass);
+            ShaderPass pass = Shader.Res.GetPass(activePass);
             
-            Pass.Variant variant = pass.GetVariant(Keywords);
+            ShaderPass.Variant variant = pass.GetVariant(Keywords);
 
             List<BindableResource> bindableResources = new();
 

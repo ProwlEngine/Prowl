@@ -10,7 +10,7 @@ namespace Prowl.Runtime
         public static KeywordState Empty => new KeywordState();
 
         private readonly HashSet<string> keywords;
-        public IEnumerable<string> Keywords => keywords;
+        public readonly IEnumerable<string> Keywords => keywords;
 
         public int Hash { get; private set; }
 
