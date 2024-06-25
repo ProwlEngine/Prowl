@@ -21,7 +21,7 @@ public static class Project
     public static string ProjectAssetDirectory => Path.Combine(ProjectDirectory, @"Assets");
     public static string ProjectDefaultsDirectory => Path.Combine(ProjectDirectory, @"Defaults");
     public static string ProjectPackagesDirectory => Path.Combine(ProjectDirectory, @"Packages");
-    public static string TempDirectory => Path.Combine(Project.ProjectDirectory, @"Temp");
+    public static string TempDirectory => Path.Combine(ProjectDirectory, @"Temp");
 
     public static string Assembly_Proj => Path.Combine(ProjectDirectory, @"CSharp.csproj");
     public static string Assembly_DLL => Path.Combine(ProjectDirectory, @"Temp/bin/Debug/net8.0/CSharp.dll");
