@@ -1,15 +1,19 @@
 using System;
 using System.IO;
+using Prowl.Runtime.Utils;
+using Prowl.Runtime.RenderPipelines;
 
 namespace Prowl.Runtime
 {
+    [FilePath("QualitySettings.projsetting", FilePathAttribute.Location.Setting)]
+    public class QualitySettings : ScriptableSingleton<QualitySettings>
+    {
+        public AssetRef<RenderPipeline> RenderPipeline; 
+
+    }
+
     public static class Quality
     {
-        public class QualitySettings
-        {
-            public AssetRef<RenderPipelines.RenderPipeline> RenderPipeline;
-        }
-
         private static QualitySettings[] Qualities;
 
 
