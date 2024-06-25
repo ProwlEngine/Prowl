@@ -40,28 +40,28 @@ namespace Prowl.Editor
             gui.CurrentNode.Layout(LayoutType.Column);
             gui.CurrentNode.ScaleChildren();
 
-            using(gui.Node("Header").Width(Size.Percentage(1f)).MaxHeight(GuiStyle.ItemHeight).Layout(LayoutType.Row).Enter())
+            using(gui.Node("Header").Width(Size.Percentage(1f)).MaxHeight(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.Row).Enter())
             {
-                if (EditorGUI.StyledButton(FontAwesome6.TrashCan + " Clear", 75, GuiStyle.ItemHeight, false, null, null, 0))
+                if (EditorGUI.StyledButton(FontAwesome6.TrashCan + " Clear", 75, EditorStylePrefs.Instance.ItemSize, false, null, null, 0))
                 {
                     _logMessages.Clear();
                     _logCount = 0;
                 }
 
                 // Logs
-                if (EditorGUI.StyledButton(FontAwesome6.Terminal, 30, GuiStyle.ItemHeight, false, null, null, 0))
+                if (EditorGUI.StyledButton(FontAwesome6.Terminal, 30, EditorStylePrefs.Instance.ItemSize, false, null, null, 0))
                     GeneralPreferences.Instance.ShowDebugLogs = !GeneralPreferences.Instance.ShowDebugLogs;
                 DrawHand(GeneralPreferences.Instance.ShowDebugLogs);
                 // Warnings
-                if (EditorGUI.StyledButton(FontAwesome6.TriangleExclamation, 30, GuiStyle.ItemHeight, false, null, null, 0))
+                if (EditorGUI.StyledButton(FontAwesome6.TriangleExclamation, 30, EditorStylePrefs.Instance.ItemSize, false, null, null, 0))
                     GeneralPreferences.Instance.ShowDebugWarnings = !GeneralPreferences.Instance.ShowDebugWarnings;
                 DrawHand(GeneralPreferences.Instance.ShowDebugWarnings);
                 // Errors
-                if (EditorGUI.StyledButton(FontAwesome6.CircleExclamation, 30, GuiStyle.ItemHeight, false, null, null, 0))
+                if (EditorGUI.StyledButton(FontAwesome6.CircleExclamation, 30, EditorStylePrefs.Instance.ItemSize, false, null, null, 0))
                     GeneralPreferences.Instance.ShowDebugErrors = !GeneralPreferences.Instance.ShowDebugErrors;
                 DrawHand(GeneralPreferences.Instance.ShowDebugErrors);
                 // Success
-                if (EditorGUI.StyledButton(FontAwesome6.CircleCheck, 30, GuiStyle.ItemHeight, false, null, null, 0))
+                if (EditorGUI.StyledButton(FontAwesome6.CircleCheck, 30, EditorStylePrefs.Instance.ItemSize, false, null, null, 0))
                     GeneralPreferences.Instance.ShowDebugSuccess = !GeneralPreferences.Instance.ShowDebugSuccess;
                 DrawHand(GeneralPreferences.Instance.ShowDebugSuccess);
             }
@@ -82,7 +82,7 @@ namespace Prowl.Editor
                     pos.y -= gui.CurrentNode.LayoutData.VScroll;
                     var size = UIDrawList.DefaultFont.CalcTextSize(_logMessages[i].Message, 0, width - 24);
 
-                    gui.Draw2D.DrawLine(new(pos.x + 12, pos.y + height), new(pos.x + width - 12, pos.y + height), GuiStyle.Borders, 1);
+                    gui.Draw2D.DrawLine(new(pos.x + 12, pos.y + height), new(pos.x + width - 12, pos.y + height), EditorStylePrefs.Instance.Borders, 1);
 
                     _logMessages[i].Draw(pos + new Vector2(12, height + 8), width - 24);
                     height += size.y + 8;
@@ -103,7 +103,7 @@ namespace Prowl.Editor
                 rect.Min += new Vector2(7, -7);
                 rect.Max += new Vector2(7, -7);
 
-                gui.Draw2D.DrawText(FontAwesome6.Hand, 20, rect, GuiStyle.Red, false, false);
+                gui.Draw2D.DrawText(FontAwesome6.Hand, 20, rect, EditorStylePrefs.Instance.Warning, false, false);
             }
         }
 

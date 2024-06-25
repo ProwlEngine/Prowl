@@ -1,4 +1,5 @@
-﻿using Prowl.Icons;
+﻿using Prowl.Editor.Preferences;
+using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
@@ -54,12 +55,12 @@ namespace Prowl.Editor
         private void DrawProjectsTab()
         {
             var rect = gui.CurrentNode.LayoutData.Rect;
-            gui.Draw2D.DrawRectFilled(rect, GuiStyle.WindowBackground * 0.25f, 10);
+            gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.WindowBGOne * 0.25f, (float)EditorStylePrefs.Instance.WindowRoundness);
             Vector2 shadowA = new(rect.x, rect.y);
             Vector2 shadowB = new(rect.x, rect.y + (rect.height - 60));
             gui.Draw2D.DrawVerticalBlackGradient(shadowA, shadowB, 30, 0.25f);
             Rect footer = new(shadowB.x, shadowB.y, rect.width, 60);
-            gui.Draw2D.DrawRectFilled(footer, GuiStyle.WindowBackground, 10, 4);
+            gui.Draw2D.DrawRectFilled(footer, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
             Vector2 shadowC = new(rect.x, rect.y + rect.height);
             gui.Draw2D.DrawVerticalBlackGradient(shadowB, shadowC, 20, 0.25f);
 
@@ -86,15 +87,15 @@ namespace Prowl.Editor
                         isOpened = false;
                     }
 
-                    var col = gui.IsNodeActive() ? GuiStyle.SelectedColor :
-                              gui.IsNodeHovered() ? GuiStyle.HoveredColor * 0.8f : GuiStyle.HoveredColor;
+                    var col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
+                              gui.IsNodeHovered() ? EditorStylePrefs.Instance.Hovering * 0.8f : EditorStylePrefs.Instance.Hovering;
 
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, col, 10, 4);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, col, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
                     gui.Draw2D.DrawText("Open", gui.CurrentNode.LayoutData.Rect);
                 }
                 else
                 {
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, Color.white * 0.4f, 10, 4);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, Color.white * 0.4f, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
                     gui.Draw2D.DrawText("Open", gui.CurrentNode.LayoutData.Rect);
                 }
             }
@@ -148,12 +149,12 @@ namespace Prowl.Editor
         private void CreateProjectTab()
         {
             var rect = gui.CurrentNode.LayoutData.Rect;
-            gui.Draw2D.DrawRectFilled(rect, GuiStyle.WindowBackground * 0.25f, 10);
+            gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.WindowBGOne * 0.25f, (float)EditorStylePrefs.Instance.WindowRoundness);
             Vector2 shadowA = new(rect.x, rect.y);
             Vector2 shadowB = new(rect.x, rect.y + (rect.height - 77));
             gui.Draw2D.DrawVerticalBlackGradient(shadowA, shadowB, 30, 0.25f);
             Rect footer = new(shadowB.x, shadowB.y, rect.width, 77);
-            gui.Draw2D.DrawRectFilled(footer, GuiStyle.WindowBackground, 10, 4);
+            gui.Draw2D.DrawRectFilled(footer, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
             Vector2 shadowC = new(rect.x, rect.y + rect.height);
             gui.Draw2D.DrawVerticalBlackGradient(shadowB, shadowC, 20, 0.25f);
 
@@ -170,10 +171,10 @@ namespace Prowl.Editor
                     Project.CreateNew(createName);
                     currentTab = 0;
                 }
-                var col = gui.IsNodeActive() ? GuiStyle.Indigo :
-                          gui.IsNodeHovered() ? GuiStyle.SelectedColor * 0.8f : GuiStyle.HoveredColor;
+                var col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
+                          gui.IsNodeHovered() ? EditorStylePrefs.Instance.Highlighted * 0.8f : EditorStylePrefs.Instance.Hovering;
 
-                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, col, 10, 4);
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, col, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
                 gui.Draw2D.DrawText("Create", gui.CurrentNode.LayoutData.Rect);
             }
         }
@@ -195,13 +196,13 @@ namespace Prowl.Editor
                     var interact = gui.GetInteractable();
                     if (interact.TakeFocus() || currentTab == i)
                     {
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.SelectedColor);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
                         currentTab = i;
                         if (i == 3)
                             Application.Quit();
                     }
                     else if (interact.IsHovered())
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.HoveredColor, i == 3 ? 10 : 0, 8);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, i == 3 ? (float)EditorStylePrefs.Instance.WindowRoundness : 0, 8);
 
                     Rect rect = gui.CurrentNode.LayoutData.Rect;
                     gui.Draw2D.DrawText(UIDrawList.DefaultFont, tabNames[i], 20, rect, Color.white);

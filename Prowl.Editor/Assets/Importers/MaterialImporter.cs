@@ -1,4 +1,5 @@
-﻿using Prowl.Editor.ScriptedEditors;
+﻿using Prowl.Editor.Preferences;
+using Prowl.Editor.ScriptedEditors;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
@@ -50,7 +51,7 @@ namespace Prowl.Editor.Assets
             }
             catch (Exception e)
             {
-                gui.Node("DummyForText").ExpandWidth().Height(GuiStyle.ItemHeight * 10);
+                gui.Node("DummyForText").ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize * 10);
                 gui.Draw2D.DrawText("Failed to Deserialize Material: " + e.Message + "\n" + e.StackTrace, gui.CurrentNode.LayoutData.Rect);
             }
         }

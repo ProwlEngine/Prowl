@@ -73,20 +73,23 @@ public static class EditorGuiManager
         Vector2 framebufferAndInputScale = new((float)Window.InternalWindow.FramebufferSize.X / (float)Window.InternalWindow.Size.X, (float)Window.InternalWindow.FramebufferSize.Y / (float)Window.InternalWindow.Size.Y);
 
         Gui.PointerWheel = Input.MouseWheelDelta;
-        EditorGuiManager.Gui.ProcessFrame(screenRect, 1f, framebufferAndInputScale, EditorPreferences.Instance.AntiAliasing, (g) => {
+        double scale = EditorStylePrefs.Instance.Scale;
+        EditorGuiManager.Gui.ProcessFrame(screenRect, (float)scale, framebufferAndInputScale, EditorPreferences.Instance.AntiAliasing, (g) => {
 
             // Draw Background
-            g.Draw2D.DrawRectFilled(g.ScreenRect, GuiStyle.Background);
+            g.Draw2D.DrawRectFilled(g.ScreenRect, EditorStylePrefs.Instance.Background);
 
             g.CurrentNode.Layout(LayoutType.Column);
             g.CurrentNode.ScaleChildren();
 
-            using (g.Node("Main_Header").ExpandWidth().MaxHeight(40).Padding(5, 15).Enter())
+            var padding = EditorStylePrefs.Instance.DockSpacing;
+            var padx2 = padding * 2;
+            using (g.Node("Main_Header").ExpandWidth().MaxHeight(EditorStylePrefs.Instance.ItemSize + (padding * 3)).Padding(padding * 2, padx2, padding, padx2).Enter())
             {
                 using (g.Node("MenuBar").ExpandHeight().FitContentWidth().Layout(LayoutType.Row).Enter())
                 {
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
-                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, GuiStyle.Borders, 2, 10);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
+                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.Borders, 2, (float)EditorStylePrefs.Instance.WindowRoundness);
 
                     MenuItem.DrawMenuRoot("File", true, UIDrawList.DefaultFont.CalcTextSize("File", 0).x + 20);
                     MenuItem.DrawMenuRoot("Edit", true, UIDrawList.DefaultFont.CalcTextSize("Edit", 0).x + 20);
@@ -99,25 +102,25 @@ public static class EditorGuiManager
                 {
                     g.CurrentNode.Left(Offset.Percentage(0.5f, -(g.CurrentNode.LayoutData.Scale.x / 2)));
 
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, GuiStyle.WindowBackground, 10);
-                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, GuiStyle.Borders, 2, 10);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
+                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.Borders, 2, (float)EditorStylePrefs.Instance.WindowRoundness);
 
                     switch (PlayMode.Current)
                     {
                         case PlayMode.Mode.Editing:
-                            if (EditorGUI.StyledButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                            if (EditorGUI.StyledButton(FontAwesome6.Play, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false))
                                 PlayMode.Start();
                             break;
                         case PlayMode.Mode.Playing:
-                            if (EditorGUI.StyledButton(FontAwesome6.Pause, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                            if (EditorGUI.StyledButton(FontAwesome6.Pause, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false))
                                 PlayMode.Pause();
-                            if (EditorGUI.StyledButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
+                            if (EditorGUI.StyledButton(FontAwesome6.Stop, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, EditorStylePrefs.Red))
                                 PlayMode.Stop();
                             break;
                         case PlayMode.Mode.Paused:
-                            if (EditorGUI.StyledButton(FontAwesome6.Play, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false))
+                            if (EditorGUI.StyledButton(FontAwesome6.Play, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false))
                                 PlayMode.Resume();
-                            if (EditorGUI.StyledButton(FontAwesome6.Stop, GuiStyle.ItemHeight, GuiStyle.ItemHeight, false, GuiStyle.Red))
+                            if (EditorGUI.StyledButton(FontAwesome6.Stop, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, EditorStylePrefs.Red))
                                 PlayMode.Stop();
                             break;
 
@@ -129,8 +132,12 @@ public static class EditorGuiManager
             {
                 Container ??= new();
                 var rect = g.CurrentNode.LayoutData.Rect;
-                rect.Expand(-8);
-                rect.Min.y -= 15; // Top needs no padding
+                //rect.Expand(-(float)EditorStylePrefs.Instance.DockSpacing);
+                rect.Min.x += (float)EditorStylePrefs.Instance.DockSpacing; 
+                //rect.Min.y += (float)EditorStylePrefs.Instance.DockSpacing; 
+                rect.Max.x -= (float)EditorStylePrefs.Instance.DockSpacing; 
+                rect.Max.y -= (float)EditorStylePrefs.Instance.DockSpacing;
+                //rect.Min.y = (float)EditorStylePrefs.Instance.DockSpacing; // Top needs no padding
                 Container.Update(rect);
 
 
@@ -411,25 +418,6 @@ public static class EditorGuiManager
 
         Material mat = new Material(Shader.Find("Defaults/Standard.shader"));
         StringTagConverter.WriteToFile(Serializer.Serialize(mat), file);
-        if (fromAssetBrowser)
-            AssetsBrowserWindow.StartRename(file.FullName);
-        else
-            AssetsTreeWindow.StartRename(file.FullName);
-
-        AssetDatabase.Update();
-        AssetDatabase.Ping(file);
-    }
-
-    [MenuItem("Assets/Create/GuiStyle")]
-    public static void CreateGuiStyle()
-    {
-        Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
-
-        FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New GuiStyle.guistyle"));
-        AssetDatabase.GenerateUniqueAssetPath(ref file);
-
-        GuiStyle style = new GuiStyle();
-        StringTagConverter.WriteToFile(Serializer.Serialize(style), file);
         if (fromAssetBrowser)
             AssetsBrowserWindow.StartRename(file.FullName);
         else

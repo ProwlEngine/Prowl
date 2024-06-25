@@ -1,5 +1,6 @@
 ﻿using ImageMagick;
 using Prowl.Editor.Assets;
+using Prowl.Editor.Preferences;
 using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
@@ -36,6 +37,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
         public override void OnInspectorGUI()
         {
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
             var go = target as GameObject;
             if (go.hideFlags.HasFlag(HideFlags.NotEditable))
                 gui.Draw2D.DrawText("This GameObject is not editable", gui.CurrentNode.LayoutData.InnerRect);
@@ -45,67 +48,65 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 go.enabled = isEnabled;
             gui.Tooltip("Is Enabled");
 
-            GuiStyle style = new();
-            style.WidgetColor = GuiStyle.WindowBackground;
-            style.Border = GuiStyle.Borders;
-            style.WidgetRoundness = 8f;
+            Gui.WidgetStyle style = new(30);
+            style.Roundness = 8f;
             style.BorderThickness = 1f;
             string name = go.Name;
-            if (gui.InputField("NameInput", ref name, 32, InputFieldFlags.None, GuiStyle.ItemHeight, 0, Size.Percentage(1f, -(GuiStyle.ItemHeight * 3)), GuiStyle.ItemHeight, style))
+            if (gui.InputField("NameInput", ref name, 32, InputFieldFlags.None, ItemSize, 0, Size.Percentage(1f, -(ItemSize * 3)), ItemSize, style))
                 go.Name = name.Trim();
 
-            var invisStyle = new GuiStyle { WidgetColor = new Color(0, 0, 0, 0), Border = new Color(0, 0, 0, 0) };
+            var invisStyle = new Gui.WidgetStyle(30) { BGColor = new Color(0, 0, 0, 0), BorderColor = new Color(0, 0, 0, 0) };
             int tagIndex = go.tagIndex;
-            gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(GuiStyle.ItemHeight * 2)), 0, GuiStyle.ItemHeight, GuiStyle.ItemHeight, invisStyle, FontAwesome6.Tag);
+            gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(ItemSize * 2)), 0, ItemSize, ItemSize, invisStyle, FontAwesome6.Tag);
             go.tagIndex = (byte)tagIndex;
             int layerIndex = go.layerIndex;
-            gui.Combo("#_LayerID", "#_LayerPopupID", ref layerIndex, TagLayerManager.Instance.layers.ToArray(), Offset.Percentage(1f, -(GuiStyle.ItemHeight)), 0, GuiStyle.ItemHeight, GuiStyle.ItemHeight, invisStyle, FontAwesome6.LayerGroup);
+            gui.Combo("#_LayerID", "#_LayerPopupID", ref layerIndex, TagLayerManager.Instance.layers.ToArray(), Offset.Percentage(1f, -(ItemSize)), 0, ItemSize, ItemSize, invisStyle, FontAwesome6.LayerGroup);
             go.layerIndex = (byte)layerIndex;
 
             if (go.IsPrefab)
             {
                 // Show buttons to Ping Prefab Asset, Revert Prefab, and Apply Prefab
-                using (gui.Node("#_PrefabBtns").ExpandWidth().Height(GuiStyle.ItemHeight).Top((GuiStyle.ItemHeight + 5)).Layout(LayoutType.Row).ScaleChildren().Enter())
+                using (gui.Node("#_PrefabBtns").ExpandWidth().Height(ItemSize).Top((ItemSize + 5)).Layout(LayoutType.Row).ScaleChildren().Enter())
                 {
                     using (gui.Node("#_SelectBtn").ExpandHeight().Margin(0, 4).Enter())
                     {
                         if (gui.IsNodePressed())
                         {
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10, 9);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, 10, 9);
                             AssetDatabase.Ping(go.AssetID);
                         }
                         else if (gui.IsNodeHovered())
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f, 10, 9);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted * 0.8f, 10, 9);
                         else
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Blue, 10, 9);
-                        gui.Draw2D.DrawText("Select", gui.CurrentNode.LayoutData.InnerRect, GuiStyle.Base11, false);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Blue, 10, 9);
+                        gui.Draw2D.DrawText("Select", gui.CurrentNode.LayoutData.InnerRect, Color.white, false);
                     }
 
                     using (gui.Node("#_RevertBtn").ExpandHeight().Margin(0, 4).Enter())
                     {
                         if (gui.IsNodePressed())
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
                         else if (gui.IsNodeHovered())
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted * 0.8f);
                         else
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Red);
-                        gui.Draw2D.DrawText("Revert", gui.CurrentNode.LayoutData.InnerRect, GuiStyle.Base11, false);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Warning);
+                        gui.Draw2D.DrawText("Revert", gui.CurrentNode.LayoutData.InnerRect, Color.white, false);
                     }
 
                     using (gui.Node("#_ApplyBtn").ExpandHeight().Margin(0, 4).Enter())
                     {
                         if (gui.IsNodePressed())
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10, 6);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, 10, 6);
                         else if (gui.IsNodeHovered())
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f, 10, 6);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted * 0.8f, 10, 6);
                         else
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Green, 10, 6);
-                        gui.Draw2D.DrawText("Apply", gui.CurrentNode.LayoutData.InnerRect, GuiStyle.Base11, false);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Green, 10, 6);
+                        gui.Draw2D.DrawText("Apply", gui.CurrentNode.LayoutData.InnerRect, Color.white, false);
                     }
                 }
             }
 
-            var height = (GuiStyle.ItemHeight + 5) * (go.IsPrefab ? 2 : 1) + 10;
+            var height = (ItemSize + 5) * (go.IsPrefab ? 2 : 1) + 10;
             var addComponentHeight = 0.0;
             using (gui.Node("#_InspContent").Top(height).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Clip().Enter())
             {
@@ -120,7 +121,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 // Header
                 bool opened = gui.GetNodeStorage("#_Opened_TransformH", true);
                 float animState = 0;
-                using (gui.Node("#_TransformH").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                using (gui.Node("#_TransformH").ExpandWidth().Height(ItemSize).Enter())
                 {
                     animState = DrawCompHeader(typeof(Transform), opened);
 
@@ -141,24 +142,24 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 {
                     using (gui.Node("#_TansformC_").ExpandWidth().Layout(LayoutType.Column).Spacing(5).Padding(10).FitContentHeight(animState).Enter())
                     {
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.6f, 10, 12);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne * 0.6f, 10, 12);
 
                         var t = go.Transform;
-                        using (ActiveGUI.Node("PosParent", 0).ExpandWidth().Height(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
+                        using (ActiveGUI.Node("PosParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
                             var tpos = t.localPosition;
                             EditorGUI.DrawProperty(0, "Position", ref tpos);
                             t.localPosition = tpos;
                         }
 
-                        using (ActiveGUI.Node("RotParent", 0).ExpandWidth().Height(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
+                        using (ActiveGUI.Node("RotParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
                             var tpos = t.localEulerAngles;
                             EditorGUI.DrawProperty(1, "Rotation", ref tpos);
                             t.localEulerAngles = tpos;
                         }
 
-                        using (ActiveGUI.Node("ScaleParent", 0).ExpandWidth().Height(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
+                        using (ActiveGUI.Node("ScaleParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
                             var tpos = t.localScale;
                             EditorGUI.DrawProperty(2, "Scale", ref tpos);
@@ -167,6 +168,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     }
                 }
 
+                gui.Node("#_TransformPadding").ExpandWidth().Height(10);
 
                 // Draw Components
                 HashSet<int> editorsNeeded = [];
@@ -186,7 +188,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     string openedID = "#_Opened_CompH" + comp.InstanceID;
                     bool compOpened = gui.GetNodeStorage(openedID, true);
                     float animStateC = 0;
-                    using (gui.Node("#_CompH_" + comp.InstanceID).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                    using (gui.Node("#_CompH_" + comp.InstanceID).ExpandWidth().Height(ItemSize).Enter())
                     {
                         animStateC = DrawCompHeader(cType, compOpened);
 
@@ -198,7 +200,6 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                         DragnDrop.Drag((MonoBehaviour)comp, comp!.GetType());
 
-                        //g.SeperatorHNode(1f, GuiStyle.Base4 * 0.8f);
                         gui.Draw2D.DrawText((compOpened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, 8));
                         gui.Draw2D.DrawText(GetComponentDisplayName(cType), 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, 7));
                         isEnabled = comp.Enabled;
@@ -231,7 +232,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     {
                         using (gui.Node("#_CompC_" + comp.InstanceID).ExpandWidth().FitContentHeight(animStateC).Padding(10).Enter())
                         {
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.6f, 10, 12);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne * 0.6f, 10, 12);
 
                             // Handle Editors for this type if we have any
                             if (compEditors.TryGetValue(comp.InstanceID, out var editor))
@@ -268,6 +269,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         }
                     }
 
+                    gui.Node("#_CompPadding", comp.InstanceID).ExpandWidth().Height(10);
+
                     //HandleComponentContextMenu(go, comp, ref toDelete);
                 }
 
@@ -278,10 +281,10 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 // Remove any editors that are no longer needed
                 HandleUnusedEditors(editorsNeeded);
 
-                using (gui.Node("AddCompBtn").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                using (gui.Node("AddCompBtn").ExpandWidth().Height(ItemSize).Enter())
                 {
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Violet : GuiStyle.Indigo, 10);
-                    gui.Draw2D.DrawText("Add Component", gui.CurrentNode.LayoutData.InnerRect, GuiStyle.Base11, false);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? EditorStylePrefs.Violet : EditorStylePrefs.Instance.Highlighted, 10);
+                    gui.Draw2D.DrawText("Add Component", gui.CurrentNode.LayoutData.InnerRect, Color.white, false);
 
                     if (gui.IsNodePressed())
                         gui.OpenPopup("AddComponentPopup", null, gui.CurrentNode);
@@ -309,7 +312,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
         private float DrawCompHeader(Type cType, bool compOpened)
         {
             float animState = gui.AnimateBool(compOpened, 0.1f, EaseType.Linear);
-            var compColor = GuiStyle.RandomPastelColor(cType.GetHashCode());
+            var compColor = EditorStylePrefs.RandomPastelColor(cType.GetHashCode());
             if (compOpened || animState > 0)
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, compColor, 10, 3);
             else

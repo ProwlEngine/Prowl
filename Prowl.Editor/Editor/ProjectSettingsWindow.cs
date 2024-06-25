@@ -31,6 +31,7 @@ public class PreferencesWindow : SingletonEditorWindow
     {
         RenderSideViewElement(GeneralPreferences.Instance);
         RenderSideViewElement(EditorPreferences.Instance);
+        RenderSideViewElement(EditorStylePrefs.Instance);
         RenderSideViewElement(AssetPipelinePreferences.Instance);
         RenderSideViewElement(SceneViewPreferences.Instance);
     }
@@ -59,7 +60,7 @@ public abstract class SingletonEditorWindow : EditorWindow
 
         using (gui.Node("SidePanel").Padding(5, 10, 10, 10).MaxWidth(150).ExpandHeight().Layout(LayoutType.Column).Spacing(5).Clip().Enter())
         {
-            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
+            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
             RenderSideView();
         }
 
@@ -75,13 +76,13 @@ public abstract class SingletonEditorWindow : EditorWindow
     protected void RenderSideViewElement<T>(T elementInstance)
     {
         Type settingType = elementInstance.GetType();
-        using (gui.Node("Element" + elementCounter++).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+        using (gui.Node("Element" + elementCounter++).ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize).Enter())
         {
 
             if (currentType == settingType)
-                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.ButtonRoundness);
             else if (gui.IsNodeHovered())
-                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 10);
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
             // remove 'Preferences'
             string name = settingType.Name.Replace("Preferences", "");
@@ -106,8 +107,8 @@ public abstract class SingletonEditorWindow : EditorWindow
         string name = currentType.Name.Replace("Preferences", "");
         if (PropertyGrid(name, ref setting, TargetFields.Serializable, PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground))
         {
-            // Use reflection to find a method "protected void Save()" and Validate
-            MethodInfo? validateMethod = setting.GetType().GetMethod("Validate", BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
+            // Use reflection to find a method "protected void Save()" and OnValidate
+            MethodInfo? validateMethod = setting.GetType().GetMethod("OnValidate", BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
             validateMethod?.Invoke(setting, null);
             MethodInfo? saveMethod = setting.GetType().GetMethod("Save", BindingFlags.Instance | BindingFlags.Public);
             saveMethod?.Invoke(setting, null);

@@ -1,4 +1,5 @@
-﻿using Prowl.Icons;
+﻿using Prowl.Editor.Preferences;
+using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
@@ -85,7 +86,7 @@ namespace Prowl.Editor
 
                     var rect = Gui.ActiveGUI.PreviousInteractable!.Value.Rect;
                     rect.Expand(1);
-                    Gui.ActiveGUI.Draw2D.DrawRect(rect, GuiStyle.Orange, 2, 8);
+                    Gui.ActiveGUI.Draw2D.DrawRect(rect, EditorStylePrefs.Instance.DropHighlight, 2, 8);
 
                     Gui.ActiveGUI.SetZIndex(oldZ);
 

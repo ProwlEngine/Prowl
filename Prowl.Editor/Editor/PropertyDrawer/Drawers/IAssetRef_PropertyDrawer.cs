@@ -1,4 +1,5 @@
 ﻿using Prowl.Editor.Assets;
+using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
@@ -16,6 +17,8 @@ namespace Prowl.Editor.PropertyDrawers
 
         public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? targetValue)
         {
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
             gui.CurrentNode.Layout(LayoutType.Row).ScaleChildren();
 
             var value = (IAssetRef)targetValue;
@@ -32,15 +35,15 @@ namespace Prowl.Editor.PropertyDrawers
                 changed = true;
             }
 
-            ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 2);
+            ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 1, 2);
 
             bool p = false;
             bool h = false;
-            using (ActiveGUI.Node(ID + "Selector").MaxWidth(GuiStyle.ItemHeight).ExpandHeight().Enter())
+            using (ActiveGUI.Node(ID + "Selector").MaxWidth(ItemSize).ExpandHeight().Enter())
             {
                 var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
                 pos += new Vector2(8, 8);
-                ActiveGUI.Draw2D.DrawText(FontAwesome6.MagnifyingGlass, pos, GuiStyle.Base11 * (h ? 1f : 0.8f));
+                ActiveGUI.Draw2D.DrawText(FontAwesome6.MagnifyingGlass, pos, Color.white * (h ? 1f : 0.8f));
                 if (ActiveGUI.IsNodePressed())
                 {
                     Selected = assetDrawerID;
@@ -51,13 +54,13 @@ namespace Prowl.Editor.PropertyDrawers
             // Thumbnail for Textures
             if (value.InstanceType == typeof(Texture2D) && value.IsAvailable)
             {
-                using (ActiveGUI.Node(ID + "Thumbnail").MaxWidth(GuiStyle.ItemHeight + 5).ExpandHeight().Enter())
+                using (ActiveGUI.Node(ID + "Thumbnail").MaxWidth(ItemSize + 5).ExpandHeight().Enter())
                 {
                     var tex = value.GetInstance();
                     if (tex != null)
                     {
                         var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
-                        ActiveGUI.Draw2D.DrawImage((Texture2D)tex, pos, new Vector2(GuiStyle.ItemHeight), true);
+                        ActiveGUI.Draw2D.DrawImage((Texture2D)tex, pos, new Vector2(ItemSize), true);
                     }
                 }
             }
@@ -69,9 +72,9 @@ namespace Prowl.Editor.PropertyDrawers
                 if (value.IsExplicitNull || value.IsRuntimeResource)
                 {
                     string text = value.IsExplicitNull ? "(Null)" : "(Runtime)" + value.Name;
-                    var col = GuiStyle.Base11 * (h ? 1f : 0.8f);
+                    var col = Color.white * (h ? 1f : 0.8f);
                     if (value.IsExplicitNull)
-                        col = GuiStyle.Red * (h ? 1f : 0.8f);
+                        col = EditorStylePrefs.Red * (h ? 1f : 0.8f);
                     ActiveGUI.Draw2D.DrawText(text, pos, col);
                     if (ActiveGUI.IsNodePressed())
                         Selected = assetDrawerID;
@@ -81,7 +84,7 @@ namespace Prowl.Editor.PropertyDrawers
                     string name = value.Name;
                     if(string.IsNullOrWhiteSpace(name))
                         name = AssetDatabase.ToRelativePath(assetPath);
-                    ActiveGUI.Draw2D.DrawText(name, pos, GuiStyle.Base11 * (h ? 1f : 0.8f));
+                    ActiveGUI.Draw2D.DrawText(name, pos, Color.white * (h ? 1f : 0.8f));
                     if (ActiveGUI.IsNodePressed())
                     {
                         Selected = assetDrawerID;

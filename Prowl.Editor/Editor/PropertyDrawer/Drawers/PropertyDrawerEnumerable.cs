@@ -1,4 +1,5 @@
-﻿using Prowl.Icons;
+﻿using Prowl.Editor.Preferences;
+using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 
@@ -7,7 +8,10 @@ namespace Prowl.Editor.PropertyDrawers
     public abstract class PropertyDrawerEnumerable<T> : PropertyDrawer where T : class
     {
         public static ulong selectedDrawer = 0;
-        public static int selectedElement = 0;
+        public static int selectedElement = -1;
+
+        private static int windowBG = 0;
+        private static Color bg => windowBG % 2 == 0 ? EditorStylePrefs.Instance.WindowBGOne : EditorStylePrefs.Instance.WindowBGTwo;
 
         protected abstract Type ElementType(T value);
         protected abstract int GetCount(T value);
@@ -22,25 +26,26 @@ namespace Prowl.Editor.PropertyDrawers
 
             T list = (T)propertyValue;
 
-            // Clamped selected to range
-            selectedElement = MathD.Clamp(selectedElement, -1, GetCount(list));
 
             using (gui.Node(label, index).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Enter())
             {
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
                 ulong drawerID = gui.CurrentNode.ID;
-                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Background);
 
-                gui.TextNode("H_Text", label).ExpandWidth().Height(GuiStyle.ItemHeight).IgnoreLayout();
+                if(drawerID == selectedDrawer)
+                    selectedElement = MathD.Clamp(selectedElement, -1, GetCount(list));
+
+                gui.TextNode("H_Text", label).ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize).IgnoreLayout();
 
                 bool enumexpanded = gui.GetNodeStorage<bool>("enumexpanded", false);
-                using (gui.Node("EnumExpandBtn").TopLeft(5, 0).Scale(GuiStyle.ItemHeight).Enter())
+                using (gui.Node("EnumExpandBtn").TopLeft(5, 0).Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                 {
                     if (gui.IsNodePressed())
                     {
                         enumexpanded = !enumexpanded;
                         gui.SetNodeStorage(gui.CurrentNode.Parent, "enumexpanded", enumexpanded);
                     }
-                    gui.Draw2D.DrawText(enumexpanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.InnerRect, gui.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
+                    gui.Draw2D.DrawText(enumexpanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.InnerRect, gui.IsNodeHovered() ? EditorStylePrefs.Instance.LesserText : Color.white);
                 }
 
 
@@ -49,49 +54,38 @@ namespace Prowl.Editor.PropertyDrawers
                 {
                     using (gui.Node("_EnumDrawer").ExpandWidth().FitContentHeight(scaleAnimContent).Layout(LayoutType.Column).Spacing(5).Padding(10).Clip().Enter())
                     {
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Background);
 
                         bool isPrimitive = ElementType(list).IsPrimitive || ElementType(list) == typeof(string);
 
                         for (int i = 0; i < GetCount(list); i++)
                         {
                             var element = GetElement(list, i);
-                            if (isPrimitive)
+                            using (gui.Node("_EnumElement", i).ExpandWidth().FitContentHeight().Enter())
                             {
+                                if (drawerID == selectedDrawer && i == selectedElement)
+                                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
+
+                                if (gui.IsNodePressed())
+                                {
+                                    selectedDrawer = drawerID;
+                                    selectedElement = i;
+                                }
+                                else if (gui.IsNodeHovered())
+                                {
+                                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
+                                }
+
                                 changed |= DrawerAttribute.DrawProperty(gui, "Element " + i, i, ElementType(list), ref element, config);
                                 if (changed)
                                     SetElement(list, i, element);
                             }
-                            else
-                            {
-                                using (gui.Node("_EnumElement", i).ExpandWidth().FitContentHeight().Enter())
-                                {
-                                    if (drawerID == selectedDrawer && i == selectedElement)
-                                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
-
-                                    if (gui.IsNodePressed())
-                                    {
-                                        selectedDrawer = drawerID;
-                                        selectedElement = i;
-                                    }
-                                    else if (gui.IsNodeHovered())
-                                    {
-                                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4);
-                                    }
-
-                                    config |= EditorGUI.PropertyGridConfig.NoBackground;
-                                    changed |= DrawerAttribute.DrawProperty(gui, "Element " + i, i, ElementType(list), ref element, config);
-                                    if(changed)
-                                        SetElement(list, i, element);
-                                }
-                            }
                         }
 
-                        using (gui.Node("_Footer").ExpandWidth().Height(GuiStyle.ItemHeight).Layout(LayoutType.RowReversed).Enter())
+                        using (gui.Node("_Footer").ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.RowReversed).Enter())
                         {
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Red);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
 
-                            using (gui.Node("AddBtn").Scale(GuiStyle.ItemHeight).Enter())
+                            using (gui.Node("AddBtn").Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                             {
                                 if (gui.IsNodePressed())
                                 {
@@ -100,12 +94,12 @@ namespace Prowl.Editor.PropertyDrawers
                                 }
                                 else if (gui.IsNodeHovered())
                                 {
-                                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4);
+                                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
                                 }
                                 gui.Draw2D.DrawText(FontAwesome6.Plus, gui.CurrentNode.LayoutData.Rect);
                             }
 
-                            using (gui.Node("RemoveBtn").Scale(GuiStyle.ItemHeight).Enter())
+                            using (gui.Node("RemoveBtn").Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                             {
                                 if (drawerID == selectedDrawer && selectedElement >= 0)
                                 {
@@ -116,13 +110,13 @@ namespace Prowl.Editor.PropertyDrawers
                                     }
                                     else if (gui.IsNodeHovered())
                                     {
-                                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4);
+                                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
                                     }
                                 }
                                 gui.Draw2D.DrawText(FontAwesome6.Minus, gui.CurrentNode.LayoutData.Rect);
                             }
 
-                            using (gui.Node("MoveDownBtn").Scale(GuiStyle.ItemHeight).Enter())
+                            using (gui.Node("MoveDownBtn").Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                             {
                                 if (drawerID == selectedDrawer && selectedElement >= 0 && selectedElement < GetCount(list) - 1)
                                 {
@@ -137,13 +131,17 @@ namespace Prowl.Editor.PropertyDrawers
                                     }
                                     else if (gui.IsNodeHovered())
                                     {
-                                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4);
+                                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
                                     }
+                                    gui.Draw2D.DrawText(FontAwesome6.ArrowDown, gui.CurrentNode.LayoutData.Rect);
                                 }
-                                gui.Draw2D.DrawText(FontAwesome6.ArrowDown, gui.CurrentNode.LayoutData.Rect);
+                                else
+                                {
+                                    gui.Draw2D.DrawText(FontAwesome6.ArrowDown, gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.LesserText);
+                                }
                             }
 
-                            using (gui.Node("MoveUpBtn").Scale(GuiStyle.ItemHeight).Enter())
+                            using (gui.Node("MoveUpBtn").Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                             {
                                 if (drawerID == selectedDrawer && selectedElement > 0)
                                 {
@@ -159,10 +157,14 @@ namespace Prowl.Editor.PropertyDrawers
                                     }
                                     else if (gui.IsNodeHovered())
                                     {
-                                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4);
+                                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
                                     }
+                                    gui.Draw2D.DrawText(FontAwesome6.ArrowUp, gui.CurrentNode.LayoutData.Rect);
                                 }
-                                gui.Draw2D.DrawText(FontAwesome6.ArrowUp, gui.CurrentNode.LayoutData.Rect);
+                                else
+                                {
+                                    gui.Draw2D.DrawText(FontAwesome6.ArrowUp, gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.LesserText);
+                                }
                             }
                         }
                     }

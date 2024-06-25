@@ -1,4 +1,5 @@
 ﻿using Prowl.Editor.Assets;
+using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
@@ -51,26 +52,28 @@ namespace Prowl.Editor
 
         protected override void Draw()
         {
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
             gui.CurrentNode.Layout(Runtime.GUI.LayoutType.Column);
             gui.CurrentNode.ScaleChildren();
 
-            using (gui.Node("Header").ExpandWidth().MaxHeight(GuiStyle.ItemHeight).Layout(Runtime.GUI.LayoutType.Row).Padding(0, 10, 10, 10).Enter())
+            using (gui.Node("Header").ExpandWidth().MaxHeight(ItemSize).Layout(Runtime.GUI.LayoutType.Row).Padding(0, 10, 10, 10).Enter())
             {
                 ForwardBackButtons();
 
-                using (gui.Node("LockBtn").Scale(GuiStyle.ItemHeight).IgnoreLayout().Left(Offset.Percentage(1f, -GuiStyle.ItemHeight)).Enter())
+                using (gui.Node("LockBtn").Scale(ItemSize).IgnoreLayout().Left(Offset.Percentage(1f, -ItemSize)).Enter())
                 {
-                    gui.Draw2D.DrawText(lockSelection ? FontAwesome6.Lock : FontAwesome6.LockOpen, gui.CurrentNode.LayoutData.InnerRect, GuiStyle.Base4, false);
+                    gui.Draw2D.DrawText(lockSelection ? FontAwesome6.Lock : FontAwesome6.LockOpen, gui.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.LesserText, false);
 
                     if (gui.IsNodePressed())
                     {
                         lockSelection = !lockSelection;
 
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
                     }
                     else if (gui.IsNodeHovered())
                     {
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted * 0.8f);
                     }
                 }
             }
@@ -79,13 +82,13 @@ namespace Prowl.Editor
             {
                 if (Selected == null)
                 {
-                    gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.InnerRect, GuiStyle.Red, 2, 6);
+                    gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.Warning, 2, (float)EditorStylePrefs.Instance.ButtonRoundness);
                     DrawInspectorLabel("Nothing Selecting.");
                     return;
                 }
                 if (Selected is EngineObject eo1 && eo1.IsDestroyed)
                 {
-                    gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.InnerRect, GuiStyle.Red, 2, 6);
+                    gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.Warning, 2, (float)EditorStylePrefs.Instance.ButtonRoundness);
                     DrawInspectorLabel("Object Destroyed.");
                     return;
                 }
@@ -177,12 +180,16 @@ namespace Prowl.Editor
 
         private void DrawInspectorLabel(string message)
         {
-            gui.Node("DummyForText").ExpandWidth().Height(GuiStyle.ItemHeight * 10);
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
+            gui.Node("DummyForText").ExpandWidth().Height(ItemSize * 10);
             gui.Draw2D.DrawText(message, gui.CurrentNode.LayoutData.Rect);
         }
 
         private void ForwardBackButtons()
         {
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
             // remove nulls or destroyed
             while (_BackStack.Count > 0)
             {
@@ -193,7 +200,7 @@ namespace Prowl.Editor
                     break;
             }
 
-            using (gui.Node("BackBtn").Scale(GuiStyle.ItemHeight).Enter())
+            using (gui.Node("BackBtn").Scale(ItemSize).Enter())
             {
                 Color backCol = _BackStack.Count == 0 ? Color.white * 0.7f : Color.white;
                 gui.Draw2D.DrawText(FontAwesome6.ArrowLeft, gui.CurrentNode.LayoutData.InnerRect, backCol, false);
@@ -204,11 +211,11 @@ namespace Prowl.Editor
                         _ForwardStack.Push(Selected);
                         Selected = _BackStack.Pop();
 
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
                     }
                     else if (gui.IsNodeHovered())
                     {
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted * 0.8f);
                     }
                 }
             }
@@ -224,7 +231,7 @@ namespace Prowl.Editor
                     break;
             }
 
-            using (gui.Node("ForwardBtn").Scale(GuiStyle.ItemHeight).Enter())
+            using (gui.Node("ForwardBtn").Scale(ItemSize).Enter())
             {
                 Color forwardCol = _ForwardStack.Count == 0 ? Color.white * 0.7f : Color.white;
                 gui.Draw2D.DrawText(FontAwesome6.ArrowRight, gui.CurrentNode.LayoutData.InnerRect, forwardCol, false);
@@ -236,11 +243,11 @@ namespace Prowl.Editor
                         _BackStack.Push(Selected);
                         Selected = _ForwardStack.Pop();
 
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
                     }
                     else if (gui.IsNodeHovered())
                     {
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted * 0.8f);
                     }
                 }
             }

@@ -443,16 +443,16 @@ public class SceneViewWindow : EditorWindow
         // TODO: Support custom Viewport Settings for tooling like A Terrain Editor having Brush Size, Strength, etc all in the Viewport
 
         int buttonCount = 4;
-        double buttonSize = GuiStyle.ItemHeight;
+        double buttonSize = EditorStylePrefs.Instance.ItemSize;
 
         bool vertical = true;
 
-        double width = (vertical ? buttonSize : buttonSize * buttonCount) + GuiStyle.ItemPadding * 2;
-        double height = (vertical ? buttonSize * buttonCount : buttonSize) + GuiStyle.ItemPadding * 2;
+        double width = (vertical ? buttonSize : buttonSize * buttonCount) + 8;
+        double height = (vertical ? buttonSize * buttonCount : buttonSize) + 8;
 
-        using (gui.Node("VpSettings").TopLeft(5).Scale(width, height).Padding(GuiStyle.ItemPadding).Layout(vertical ? LayoutType.Column : LayoutType.Row).Enter())
+        using (gui.Node("VpSettings").TopLeft(5).Scale(width, height).Padding(4).Layout(vertical ? LayoutType.Column : LayoutType.Row).Enter())
         {
-            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), 10f);
+            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new Color(0.1f, 0.1f, 0.1f, 0.5f), (float)EditorStylePrefs.Instance.WindowRoundness);
 
             using (gui.Node("EditorCam").Scale(buttonSize).Enter())
             {
@@ -460,18 +460,16 @@ public class SceneViewWindow : EditorWindow
                     GlobalSelectHandler.Select(new WeakReference(Cam.GameObject));
 
                 gui.TextNode("Label", FontAwesome6.Camera).Expand();
-                var hovCol = GuiStyle.Base11;
-                hovCol.a = 0.25f;
                 if (gui.IsNodeHovered())
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, hovCol, 10);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
             }
             gui.Tooltip("Select Editor Camera");
 
             var gridType = SceneViewPreferences.Instance.GridType;
             int gridTypeIndex = (int)gridType;
-            GuiStyle style = new();
-            style.WidgetColor = Color.clear;
-            style.BorderThickness = 0;
+            Gui.WidgetStyle style = new(30);
+            style.BGColor = Color.clear;
+            style.BorderColor = Color.clear;
             if (gui.Combo("GridType", "_GridTypePopup", ref gridTypeIndex, Enum.GetNames(typeof(GridType)), 0, 0, buttonSize, buttonSize, style, FontAwesome6.TableCells))
                 SceneViewPreferences.Instance.GridType = (GridType)gridTypeIndex;
 
@@ -481,10 +479,8 @@ public class SceneViewWindow : EditorWindow
                     gizmo.Orientation = (TransformGizmo.GizmoOrientation)((int)gizmo.Orientation == 1 ? 0 : 1);
 
                 gui.TextNode("Label", gizmo.Orientation == 0 ? FontAwesome6.Globe : FontAwesome6.Cube).Expand();
-                var hovCol = GuiStyle.Base11;
-                hovCol.a = 0.25f;
                 if (gui.IsNodeHovered())
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, hovCol, 10);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
             }
             gui.Tooltip("Gizmo Mode: " + (gizmo.Orientation == 0 ? "World" : "Local"));
 
@@ -494,10 +490,8 @@ public class SceneViewWindow : EditorWindow
                     new PreferencesWindow(typeof(SceneViewPreferences));
 
                 gui.TextNode("Label", FontAwesome6.Gear).Expand();
-                var hovCol = GuiStyle.Base11;
-                hovCol.a = 0.25f;
                 if (gui.IsNodeHovered())
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, hovCol, 10);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
             }
             gui.Tooltip("Open Editor Preferences");
         }

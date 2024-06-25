@@ -36,9 +36,9 @@ namespace Prowl.Runtime.Utils
 
     public abstract class ScriptableSingleton<T> where T : ScriptableSingleton<T>, new()
     {
-        private static T? instance;
+        protected static T? _instance;
 
-        public static T Instance => instance ??= LoadOrCreateInstance();
+        public static T Instance => _instance ??= LoadOrCreateInstance();
 
         public virtual void OnValidate() { }
 

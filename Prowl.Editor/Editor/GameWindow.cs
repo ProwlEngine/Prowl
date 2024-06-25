@@ -70,9 +70,9 @@ public class GameWindow : EditorWindow
 
         gui.CurrentNode.Layout(Runtime.GUI.LayoutType.Column).ScaleChildren();
 
-        using (gui.Node("MenuBar").ExpandWidth().MaxHeight(GuiStyle.ItemHeight).Layout(LayoutType.Row).Enter())
+        using (gui.Node("MenuBar").ExpandWidth().MaxHeight(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.Row).Enter())
         {
-            gui.TextNode("displayIcon", FontAwesome6.Display).Scale(GuiStyle.ItemHeight);
+            gui.TextNode("displayIcon", FontAwesome6.Display).Scale(EditorStylePrefs.Instance.ItemSize);
 
             bool changed = false;
 

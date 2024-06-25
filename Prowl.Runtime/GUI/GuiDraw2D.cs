@@ -1,5 +1,6 @@
 ﻿using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.Rendering.OpenGL;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -198,6 +199,11 @@ namespace Prowl.Runtime.GUI
             else
                 _drawList[currentZIndex].AddText(font, (float)fontSize, position, color.GetUInt(), text, wrap_width: (float)wrapwidth);
             _drawList[currentZIndex].PopTextureID();
+        }
+
+        internal void DrawRect(Rect rect, object border, object borderThickness, object widgetRoundness)
+        {
+            throw new NotImplementedException();
         }
     }
 

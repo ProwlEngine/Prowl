@@ -26,12 +26,40 @@ namespace Prowl.Runtime.GUI
             NoHorizontalScroll = 1 << 8,
         }
 
-        public bool InputField(string ID, ref string value, uint maxLength, InputFieldFlags flags, Offset x, Offset y, Size width, Size? height = null, GuiStyle? style = null, bool invisible = false)
+        public struct WidgetStyle 
+        { 
+            public Color TextColor;
+            public Color ActiveColor;
+            public Color HoveredColor;
+            public Color BGColor;
+            public Color BorderColor;
+            public float BorderThickness;
+            public float Roundness;
+            public AssetRef<Font> Font;
+            public float FontSize;
+            public float ItemSize;
+
+            public WidgetStyle(float itemSize)
+            {
+                ItemSize = itemSize;
+                TextColor = Color.white;
+                ActiveColor = new(84, 21, 241);
+                HoveredColor = new Color(255, 255, 255) * 0.8f;
+                BGColor = new(31, 33, 40);
+                BorderColor = new(49, 52, 66);
+                BorderThickness = 1;
+                Roundness = 5;
+                Font = UIDrawList.DefaultFont;
+                FontSize = 20;
+            }
+        }
+
+        public bool InputField(string ID, ref string value, uint maxLength, InputFieldFlags flags, Offset x, Offset y, Size width, Size? height = null, WidgetStyle? inputstyle = null, bool invisible = false)
         {
-            style ??= new();
+            var style = inputstyle ?? new WidgetStyle(30);
             var g = Gui.ActiveGUI;
             bool multiline = ((flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline);
-            Size h = (multiline ? style.FontSize * 8 : GuiStyle.ItemHeight);
+            Size h = (multiline ? style.FontSize * 8 : style.ItemSize);
             if(height != null) h = height.Value;
             using (g.Node(ID).Left(x).Top(y).Width(width).Height(h).Padding(5).Enter())
             {
@@ -39,9 +67,9 @@ namespace Prowl.Runtime.GUI
 
                 if (!invisible)
                 {
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.WidgetColor, style.WidgetRoundness);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.BGColor, style.Roundness);
                     if (style.BorderThickness > 0)
-                        g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
+                        g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, style.BorderColor, style.BorderThickness, style.Roundness);
                 }
 
                 interact.TakeFocus();
@@ -95,7 +123,7 @@ namespace Prowl.Runtime.GUI
 
         private static StbTextEditState stb;
 
-        internal static bool OnProcess(GuiStyle style, Interactable interact, ref string Text, uint MaxLength, InputFieldFlags Flags)
+        internal static bool OnProcess(WidgetStyle style, Interactable interact, ref string Text, uint MaxLength, InputFieldFlags Flags)
         {
             var g = Gui.ActiveGUI;
             var font = style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont;
@@ -242,7 +270,7 @@ namespace Prowl.Runtime.GUI
 
                 float bg_offy_up = is_multiline ? 0.0f : -1.0f;    // FIXME: those offsets should be part of the style? they don't play so well with multi-line selection.
                 float bg_offy_dn = is_multiline ? 0.0f : 2.0f;
-                uint bg_color = UIDrawList.ColorConvertFloat4ToU32(style.TextHighlightColor);
+                uint bg_color = UIDrawList.ColorConvertFloat4ToU32(style.ActiveColor);
                 Vector2 rect_pos = render_pos + select_start_offset - render_scroll;
                 for (int p = text_selected_begin; p < text_selected_end;)
                 {

@@ -83,22 +83,30 @@ namespace Prowl.Runtime.GUI
         /// Otherwise returned the existing one found on this node
         /// </summary>
         /// <returns></returns>
-        public Interactable GetInteractable(Rect? interactArea = null)
+        public Interactable GetInteractable(Rect? interactArea = null) => GetInteractable(CurrentNode, interactArea);
+
+        /// <summary>
+        /// Get an interactable for the current node
+        /// Creates a new interactable if one does not exist
+        /// Otherwise returned the existing one found on this node
+        /// </summary>
+        /// <returns></returns>
+        public Interactable GetInteractable(LayoutNode target, Rect? interactArea = null)
         {
-            var rect = interactArea ?? CurrentNode.LayoutData.Rect;
+            var rect = interactArea ?? target.LayoutData.Rect;
 
-            if (_interactables.ContainsKey(CurrentNode.ID))
-                return _interactables[CurrentNode.ID];
+            if (_interactables.ContainsKey(target.ID))
+                return _interactables[target.ID];
 
-            if (!_oldinteractables.TryGetValue(CurrentNode.ID, out Interactable interact))
-                interact = new(this, CurrentNode.ID, rect, GetNextInteractableLayer(CurrentZIndex));
+            if (!_oldinteractables.TryGetValue(target.ID, out Interactable interact))
+                interact = new(this, target.ID, rect, GetNextInteractableLayer(CurrentZIndex));
             else
             {
                 interact._rect = rect;
                 interact.zIndex = GetNextInteractableLayer(CurrentZIndex);
             }
 
-            _interactables[CurrentNode.ID] = interact;
+            _interactables[target.ID] = interact;
             interact.UpdateContext();
             PreviousInteractable = interact;
             return interact;

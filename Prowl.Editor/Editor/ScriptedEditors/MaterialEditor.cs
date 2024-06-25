@@ -1,4 +1,5 @@
 ﻿using Prowl.Editor.Assets;
+using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
@@ -26,6 +27,8 @@ namespace Prowl.Editor.ScriptedEditors
 
         public override void OnInspectorGUI()
         {
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
             var mat = (Material)target;
             mat ??= new Material();
 
@@ -35,7 +38,7 @@ namespace Prowl.Editor.ScriptedEditors
             g.CurrentNode.ScaleChildren();
 
             bool changed = false;
-            using (g.Node("Shader").ExpandWidth().MaxHeight(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
+            using (g.Node("Shader").ExpandWidth().MaxHeight(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
             {
                 IAssetRef assetref = mat.Shader;
                 changed |= EditorGUI.DrawProperty(0, "Shader", ref assetref);
@@ -49,7 +52,7 @@ namespace Prowl.Editor.ScriptedEditors
                     int id = 1;
                     foreach (var property in mat.Shader.Res.Properties)
                     {
-                        using (g.Node("prop", id++).ExpandWidth().Height(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
+                        using (g.Node("prop", id++).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
                             int index = 0;
                             switch (property.Type)

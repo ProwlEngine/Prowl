@@ -1,9 +1,8 @@
-﻿using Prowl.Runtime;
+﻿using Prowl.Editor.Preferences;
+using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.Utils;
-using System;
-using System.Reflection;
 
 namespace Prowl.Editor.Assets
 {
@@ -29,7 +28,9 @@ namespace Prowl.Editor.Assets
         private int numberOfProperties = 0;
         public void InputFloat(string name, ref float val)
         {
-            using (gui.Node("f" + name, numberOfProperties).ExpandWidth().Height(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
+            using (gui.Node("f" + name, numberOfProperties).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
             {
                 // Label
                 using (gui.Node("#_Label").ExpandHeight().Clip().Enter())
@@ -37,7 +38,7 @@ namespace Prowl.Editor.Assets
                     var pos = gui.CurrentNode.LayoutData.Rect.Min;
                     pos.x += 28;
                     pos.y += 5;
-                    gui.Draw2D.DrawText(name, pos, GuiStyle.Base8);
+                    gui.Draw2D.DrawText(name, pos, Color.white);
                 }
 
                 // Value
@@ -48,7 +49,9 @@ namespace Prowl.Editor.Assets
 
         public void InputInt<T>(string name, ref T val) where T : struct
         {
-            using (gui.Node("f" + name, numberOfProperties).ExpandWidth().Height(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
+            using (gui.Node("f" + name, numberOfProperties).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
             {
                 // Label
                 using (gui.Node("#_Label").ExpandHeight().Clip().Enter())
@@ -56,7 +59,7 @@ namespace Prowl.Editor.Assets
                     var pos = gui.CurrentNode.LayoutData.Rect.Min;
                     pos.x += 28;
                     pos.y += 5;
-                    gui.Draw2D.DrawText(name, pos, GuiStyle.Base8);
+                    gui.Draw2D.DrawText(name, pos, Color.white);
                 }
 
                 // Value
@@ -67,22 +70,24 @@ namespace Prowl.Editor.Assets
 
         public bool QuickButton(string label, LayoutNode popupHolder)
         {
-            using (gui.Node(label).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
-            {
-                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
-                gui.Draw2D.DrawText(label, gui.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
+            using (gui.Node(label).ExpandWidth().Height(ItemSize).Enter())
+            {
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.LesserText * 0.8f, (float)EditorStylePrefs.Instance.ButtonRoundness);
+
+                gui.Draw2D.DrawText(label, gui.CurrentNode.LayoutData.Rect, Color.white);
 
                 if (gui.IsNodePressed())
                 {
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 4);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.ButtonRoundness);
                     if(popupHolder != null)
                         gui.ClosePopup(popupHolder);
                     return true;
                 }
 
                 if (gui.IsNodeHovered())
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
 
                 return false;
@@ -91,6 +96,8 @@ namespace Prowl.Editor.Assets
 
         public override void OnInspectorGUI()
         {
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
             var importer = (FontImporter)(target as MetaFile).importer;
 
             gui.CurrentNode.Layout(LayoutType.Column);
@@ -101,39 +108,39 @@ namespace Prowl.Editor.Assets
 
             using (gui.Node("Ranges").ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Enter())
             {
-                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 10);
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne * 0.8f, (float)EditorStylePrefs.Instance.WindowRoundness);
 
                 int rangeIndex = 0;
                 foreach (var range in importer.characterRanges)
                 {
-                    using (gui.Node("DelRange" + rangeIndex++).Scale(GuiStyle.ItemHeight).Enter())
+                    using (gui.Node("DelRange" + rangeIndex++).Scale(ItemSize).Enter())
                     {
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.LesserText * 0.8f, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
-                        gui.Draw2D.DrawText("X", gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, 8), GuiStyle.Base8);
+                        gui.Draw2D.DrawText("X", gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, 8), Color.white);
 
                         if (gui.IsNodeHovered())
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
                         if (gui.IsNodePressed())
                         {
                             importer.characterRanges.Remove(range);
                         }
                         var pos = new Vector2(gui.CurrentNode.LayoutData.Rect.Right, ((gui.CurrentNode.LayoutData.Rect.Top + gui.CurrentNode.LayoutData.Rect.Bottom) / 2) - 15);
-                        gui.Draw2D.DrawText($"{range.Start:X} - {range.End:X}", pos + new Vector2(8, 8), GuiStyle.Base8);
+                        gui.Draw2D.DrawText($"{range.Start:X} - {range.End:X}", pos + new Vector2(8, 8), Color.white);
                     }
                 }
             }
 
 
-            using (gui.Node("AddRange").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+            using (gui.Node("AddRange").ExpandWidth().Height(ItemSize).Enter())
             {
-                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.8f, 4);
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.LesserText * 0.8f, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
-                gui.Draw2D.DrawText("Add Range", gui.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
+                gui.Draw2D.DrawText("Add Range", gui.CurrentNode.LayoutData.Rect, Color.white);
 
                 if (gui.IsNodeHovered())
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5, 4);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
                 if(gui.IsNodePressed())
                     gui.OpenPopup("AddRangePopup");

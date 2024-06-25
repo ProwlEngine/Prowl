@@ -23,6 +23,7 @@ namespace Prowl.Editor
         private const float PingDuration = 3f;
         private static float pingTimer = 0;
         private static WeakReference pingedGO;
+        private bool justStartedRename = false;
 
         public HierarchyWindow() : base()
         {
@@ -58,7 +59,7 @@ namespace Prowl.Editor
 
                 using (gui.Node("CreateGOBtn").Left(Offset.Percentage(1f, -entryHeight + 3)).Scale(entryHeight).Enter())
                 {
-                    gui.Draw2D.DrawText(FontAwesome6.CirclePlus, 30, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base4);
+                    gui.Draw2D.DrawText(FontAwesome6.CirclePlus, 30, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? Color.white : EditorStylePrefs.Instance.LesserText);
 
                     if (gui.IsNodePressed())
                         gui.OpenPopup("CreateGameObject");
@@ -148,6 +149,7 @@ namespace Prowl.Editor
                 if (EditorGUI.StyledButton("Rename"))
                 {
                     m_RenamingGO = parent;
+                    justStartedRename = true;
                     closePopup = true;
                 }
                 if (EditorGUI.StyledButton("Duplicate"))
@@ -229,7 +231,6 @@ namespace Prowl.Editor
                 if (interact.TakeFocus(true))
                     SelectHandler.Select(index, new WeakReference(entity));
 
-                bool justStartedRename = false;
                 if (SelectHandler.Count == 1 && gui.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left) && interact.IsHovered())
                 {
                     justStartedRename = true;
@@ -251,14 +252,14 @@ namespace Prowl.Editor
                 HandleDrop(entity);
                 DragnDrop.Drag(entity);
 
-                var col = (interact.IsHovered() ? GuiStyle.Base5 : GuiStyle.Base4 * 0.8f) * colMult;
-                gui.Draw2D.DrawRectFilled(rect, (isSelected ? GuiStyle.Indigo : col), 8);
-                gui.Draw2D.DrawRectFilled(rect.Min, new Vector2(entryHeight, entryHeight), GuiStyle.Borders, 8, 9);
+                var col = (interact.IsHovered() ? EditorStylePrefs.Instance.Hovering : Color.white * 0.5f) * colMult;
+                gui.Draw2D.DrawRectFilled(rect, (isSelected ? EditorStylePrefs.Instance.Highlighted : col), (float)EditorStylePrefs.Instance.ButtonRoundness);
+                gui.Draw2D.DrawRectFilled(rect.Min, new Vector2(entryHeight, entryHeight), EditorStylePrefs.Instance.Borders, (float)EditorStylePrefs.Instance.ButtonRoundness, 9);
                 if (isPrefab || isPartOfPrefab || !entity.enabledInHierarchy)
                 {
-                    var lineColor = (isPrefab ? GuiStyle.Orange : GuiStyle.Yellow);
+                    var lineColor = (isPrefab ? EditorStylePrefs.Orange : EditorStylePrefs.Yellow);
                     if(!entity.enabledInHierarchy)
-                        lineColor = GuiStyle.Red;
+                        lineColor = EditorStylePrefs.Instance.Warning;
                     gui.Draw2D.DrawLine(new Vector2(rect.x + entryHeight + 1, rect.y - 1), new Vector2(rect.x + entryHeight + 1, rect.y + entryHeight - 1), lineColor, 3);
                 }
 
@@ -266,7 +267,7 @@ namespace Prowl.Editor
                 {
                     if (gui.IsNodePressed())
                         entity.enabled = !entity.enabled;
-                    gui.Draw2D.DrawText(entity.enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash, 20, gui.CurrentNode.LayoutData.Rect, entity.enabledInHierarchy ? GuiStyle.Base11 : GuiStyle.Base4);
+                    gui.Draw2D.DrawText(entity.enabled ? FontAwesome6.Eye : FontAwesome6.EyeSlash, 20, gui.CurrentNode.LayoutData.Rect, entity.enabledInHierarchy ? Color.white : Color.white * (float)EditorStylePrefs.Instance.Disabled);
                 }
 
                 // if were pinging we need to open the tree to the pinged object
@@ -280,7 +281,7 @@ namespace Prowl.Editor
                         // TODO: Scroll to Rect
                         var pingRect = rect;
                         pingRect.Expand(MathF.Sin(pingTimer) * 6f);
-                        gui.Draw2D.DrawRect(pingRect, GuiStyle.Yellow, 2f, 4f);
+                        gui.Draw2D.DrawRect(pingRect, EditorStylePrefs.Yellow, 2f, 4f);
                     }
                 }
 
@@ -294,7 +295,7 @@ namespace Prowl.Editor
                             expanded = !expanded;
                             gui.SetNodeStorage(gui.CurrentNode.Parent, entity.InstanceID.ToString(), expanded);
                         }
-                        gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.Rect, entity.enabledInHierarchy ? GuiStyle.Base11 : GuiStyle.Base4);
+                        gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.Rect, entity.enabledInHierarchy ? Color.white : Color.white * (float)EditorStylePrefs.Instance.Disabled);
                     }
                     drawChildren = expanded;
                 }
@@ -304,7 +305,7 @@ namespace Prowl.Editor
                 if (m_RenamingGO == entity)
                 {
                     var inputRect = new Rect(rect.x + 33, rect.y + 4, maxwidth - (entryHeight * 2.25), 30 - 8);
-                    gui.Draw2D.DrawRectFilled(inputRect, GuiStyle.WindowBackground, 8);
+                    gui.Draw2D.DrawRectFilled(inputRect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.ButtonRoundness);
                     gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.None, 30, 0, maxwidth - (entryHeight * 2.25), null, null, true);
                     if (justStartedRename)
                         gui.FocusPreviousInteractable();
@@ -317,7 +318,7 @@ namespace Prowl.Editor
                 {
                     var textRect = rect;
                     textRect.width -= entryHeight;
-                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, name, 20, new Vector2(rect.x + 40, rect.y + 7), GuiStyle.Base11, 0, textRect);
+                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, name, 20, new Vector2(rect.x + 40, rect.y + 7), Color.white, 0, textRect);
                 }
 
                 index++;

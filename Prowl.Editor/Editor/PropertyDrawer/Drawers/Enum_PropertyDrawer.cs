@@ -1,4 +1,5 @@
-﻿using Prowl.Runtime;
+﻿using Prowl.Editor.Preferences;
+using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using System.Reflection;
 
@@ -21,7 +22,7 @@ namespace Prowl.Editor.PropertyDrawers
                 names[i] = attribute != null ? attribute.text : fieldInfo.Name;
             }
 
-            bool changed = gui.Combo("#_PropID", "#_PropPopupID", ref selectedIndex, names, 0, 0, Size.Percentage(1f), GuiStyle.ItemHeight);
+            bool changed = gui.Combo("#_PropID", "#_PropPopupID", ref selectedIndex, names, 0, 0, Size.Percentage(1f), EditorStylePrefs.Instance.ItemSize);
 
             if (selectedIndex >= 0 && selectedIndex < values.Length)
             {

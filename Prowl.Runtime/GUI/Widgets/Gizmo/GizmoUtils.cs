@@ -127,9 +127,9 @@ namespace Prowl.Runtime.GUI
         public static Color32 GizmoColor(TransformGizmo gizmo, bool focused, GizmoDirection direction)
         {
             var col = direction switch {
-                GizmoDirection.X => (Color32)GuiStyle.Red,
-                GizmoDirection.Y => (Color32)GuiStyle.Emerald,
-                GizmoDirection.Z => (Color32)GuiStyle.Blue,
+                GizmoDirection.X => new Color32(226, 55, 56, 255),
+                GizmoDirection.Y => new Color32(94, 234, 141, 255),
+                GizmoDirection.Z => new Color32(39, 117, 255, 255),
                 _ => new Color32(255, 255, 255, 255),
             };
 

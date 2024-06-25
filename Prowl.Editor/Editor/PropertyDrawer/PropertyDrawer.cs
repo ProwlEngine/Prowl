@@ -1,4 +1,5 @@
-﻿using Prowl.Editor.Utilities;
+﻿using Prowl.Editor.Preferences;
+using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
@@ -35,27 +36,29 @@ namespace Prowl.Editor.PropertyDrawers
             var fields = RuntimeUtils.GetSerializableFields(propertyValue);
             if (fields.Length != 0)
             {
+                double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
                 using (gui.Node(label + "_Header", index).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Enter())
                 {
-                    if (!config.HasFlag(EditorGUI.PropertyGridConfig.NoBackground))
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Background);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
 
-                    gui.TextNode("H_Text", label).ExpandWidth().Height(GuiStyle.ItemHeight).IgnoreLayout();
+                    gui.TextNode("H_Text", label).ExpandWidth().Height(ItemSize).IgnoreLayout();
 
                     bool enumexpanded = gui.GetNodeStorage<bool>("enumexpanded", false);
-                    using (gui.Node("EnumExpandBtn").TopLeft(5, 0).Scale(GuiStyle.ItemHeight).Enter())
+                    using (gui.Node("EnumExpandBtn").TopLeft(5, 0).Scale(ItemSize).Enter())
                     {
                         if (gui.IsNodePressed())
                         {
                             enumexpanded = !enumexpanded;
                             gui.SetNodeStorage(gui.CurrentNode.Parent, "enumexpanded", enumexpanded);
                         }
-                        gui.Draw2D.DrawText(enumexpanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.InnerRect, gui.IsNodeHovered() ? GuiStyle.Base4 : GuiStyle.Base11);
+                        gui.Draw2D.DrawText(enumexpanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.InnerRect, gui.IsNodeHovered() ? EditorStylePrefs.Instance.LesserText : Color.white);
                     }
 
                     float scaleAnimContent = gui.AnimateBool(enumexpanded, 0.15f, EaseType.Linear);
                     if (enumexpanded || scaleAnimContent > 0)
-                        changed |= EditorGUI.PropertyGrid(propertyType.Name + " | " + label, ref propertyValue, EditorGUI.TargetFields.Serializable, config);
+                        using (gui.Node("PropertyGridHolder").ExpandWidth().FitContentHeight(scaleAnimContent).Enter())
+                            changed |= EditorGUI.PropertyGrid(propertyType.Name + " | " + label, ref propertyValue, EditorGUI.TargetFields.Serializable, config);
                 }
             }
             return changed;
@@ -99,19 +102,21 @@ namespace Prowl.Editor.PropertyDrawers
     {
         public virtual bool PropertyLayout(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config)
         {
-            using (gui.Node(label, index).ExpandWidth().Height(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
+            using (gui.Node(label, index).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
             {
                 // Draw line down the middle
                 //var start = new Vector2(ActiveGUI.CurrentNode.LayoutData.Rect.x + ActiveGUI.CurrentNode.LayoutData.Rect.width / 2, ActiveGUI.CurrentNode.LayoutData.Rect.y);
                 //var end = new Vector2(start.x, ActiveGUI.CurrentNode.LayoutData.Rect.y + ActiveGUI.CurrentNode.LayoutData.Rect.height);
-                //ActiveGUI.DrawLine(start, end, GuiStyle.Borders);
+                //ActiveGUI.DrawLine(start, end, EditorStylePrefs.Instance.Borders);
 
                 // Label
                 if (!config.HasFlag(EditorGUI.PropertyGridConfig.NoLabel))
                     OnLabelGUI(gui, label);
 
                 // Value
-                using (gui.Node("#_Value").Height(GuiStyle.ItemHeight).Enter())
+                using (gui.Node("#_Value").Height(ItemSize).Enter())
                     return OnValueGUI(gui, $"#{label}_{index}", propertyType, ref propertyValue);
             }
         }
@@ -124,13 +129,13 @@ namespace Prowl.Editor.PropertyDrawers
                 pos.x += 28;
                 pos.y += 5;
                 string pretty = RuntimeUtils.Prettify(label);
-                gui.Draw2D.DrawText(pretty, pos, GuiStyle.Base8);
+                gui.Draw2D.DrawText(pretty, pos, EditorStylePrefs.Instance.LesserText * 1.5f);
             }
         }
 
         public virtual bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? targetValue)
         {
-            var col = GuiStyle.Red * (gui.IsNodeHovered() ? 1f : 0.8f);
+            var col = EditorStylePrefs.Instance.Warning * (gui.IsNodeHovered() ? 1f : 0.8f);
             var pos = gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(0, 8);
             gui.Draw2D.DrawText(targetValue.ToString(), pos, col);
             return false;
