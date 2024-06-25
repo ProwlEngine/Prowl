@@ -272,7 +272,7 @@ namespace Prowl.Editor
                 if (pingTimer > 0 && pingedGO != null && pingedGO.Target is GameObject go)
                 {
                     if (entity.IsParentOf(go)) // Set the tree open
-                        gui.SetStorage(entity.InstanceID.ToString(), true);
+                        gui.SetNodeStorage(entity.InstanceID.ToString(), true);
                     else if (entity.InstanceID == go.InstanceID)
                     {
                         // Draw a ping effect

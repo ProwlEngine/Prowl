@@ -197,7 +197,7 @@ namespace Prowl.Runtime.GUI
         }
     }
 
-    public enum LayoutType { None, Column, Row, Grid }
+    public enum LayoutType { None, Column, ColumnReversed, Row, RowReversed, Grid, GridReversed }
 
     public enum ClipType { None, Inner, Outer }
 

@@ -1,6 +1,4 @@
-﻿using Prowl.Editor.EditorWindows;
-using Prowl.Editor.Utilities;
-using Prowl.Runtime;
+﻿using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Preferences
@@ -36,7 +34,7 @@ namespace Prowl.Editor.Preferences
     public class EditorPreferences : ScriptableSingleton<EditorPreferences>
     {
         [Text("UI:")]
-        public bool AntiAliasing = false;
+        public bool AntiAliasing = true;
 
     }
 }

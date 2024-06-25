@@ -31,5 +31,4 @@ namespace Prowl.Editor.PropertyDrawers
             return changed;
         }
     }
-
 }

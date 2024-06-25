@@ -447,22 +447,57 @@ namespace Prowl.Runtime.GUI.Layout
                         child.UpdatePositionCache();
                     }
                     break;
-                case LayoutType.Row:
+                case LayoutType.ColumnReversed:
+                    y = _data.GlobalContentHeight;
                     foreach (var child in Children)
                     {
                         if (child._ignore) continue;
-                        if (_layoutX) child._positionX = x;
+                        if (_layoutY)
+                        {
+                            y -= child._data.Margins.Vertical + child._data.Scale.y;
+                            child._positionY = y;
+                        }
+                        if (_layoutX) child._positionX = 0;
+                        y -= _layoutYSpacing.ToPixels(_data.GlobalContentHeight);
+                        child.UpdatePositionCache();
+                    }
+                    break;
+                case LayoutType.Row:
+                        foreach (var child in Children)
+                        {
+                            if (child._ignore) continue;
+                            if (_layoutX) child._positionX = x;
+                            if (_layoutY) child._positionY = 0;
+                            x += child._data.Margins.Horizontal + child._data.Scale.x;
+                            x += _layoutXSpacing.ToPixels(_data.GlobalContentWidth);
+                            child.UpdatePositionCache();
+                        }
+                    break;
+                case LayoutType.RowReversed:
+                    x = _data.GlobalContentWidth;
+                    foreach (var child in Children)
+                    {
+                        if (child._ignore) continue;
+                        if (_layoutX)
+                        {
+                            x -= child._data.Margins.Horizontal + child._data.Scale.x;
+                            child._positionX = x;
+                        }
                         if (_layoutY) child._positionY = 0;
-                        x += child._data.Margins.Horizontal + child._data.Scale.x;
-                        y += _layoutXSpacing.ToPixels(_data.GlobalContentWidth);
+                        x -= _layoutXSpacing.ToPixels(_data.GlobalContentWidth);
                         child.UpdatePositionCache();
                     }
                     break;
                 case LayoutType.Grid:
+                case LayoutType.GridReversed:
+
+                    List<LayoutNode> gridChildren = Children.Where(c => !c._ignore).ToList();
+                    if(_layout == LayoutType.GridReversed)
+                        gridChildren.Reverse();
+                        
                     double maxY = 0;
-                    foreach (var child in Children)
+                    foreach (var child in gridChildren)
                     {
-                        if (child._ignore) continue;
                         if (x + child._data.Scale.x + child._data.Margins.Horizontal > _data.GlobalContentWidth)
                         {
                             y += maxY;

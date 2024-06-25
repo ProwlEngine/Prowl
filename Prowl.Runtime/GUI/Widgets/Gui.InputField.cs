@@ -219,7 +219,7 @@ namespace Prowl.Runtime.GUI
                         scroll_y = MathD.Max(0.0f, cursor_offset.y - fontsize);
                     else if (cursor_offset.y - size.y >= scroll_y)
                         scroll_y = cursor_offset.y - size.y;
-                    g.SetStorage("VScroll", scroll_y);
+                    g.SetNodeStorage("VScroll", scroll_y);
                 }
             }
             stb.CursorFollow = false;

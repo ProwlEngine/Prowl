@@ -64,7 +64,7 @@ public abstract class SingletonEditorWindow : EditorWindow
             RenderSideView();
         }
 
-        using (gui.Node("ContentPanel").PaddingRight(10).ExpandHeight().Enter())
+        using (gui.Node("ContentPanel").PaddingRight(10).ExpandHeight().Scroll().Enter())
         {
             RenderBody();
         }
