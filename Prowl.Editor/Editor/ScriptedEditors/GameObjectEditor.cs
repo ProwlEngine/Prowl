@@ -63,6 +63,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             gui.Combo("#_LayerID", "#_LayerPopupID", ref layerIndex, TagLayerManager.Instance.layers.ToArray(), Offset.Percentage(1f, -(ItemSize)), 0, ItemSize, ItemSize, invisStyle, FontAwesome6.LayerGroup);
             go.layerIndex = (byte)layerIndex;
 
+            var btnRoundness = (float)EditorStylePrefs.Instance.ButtonRoundness;
+
             if (go.IsPrefab)
             {
                 // Show buttons to Ping Prefab Asset, Revert Prefab, and Apply Prefab
@@ -72,13 +74,13 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     {
                         if (gui.IsNodePressed())
                         {
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, 10, 9);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, btnRoundness, 9);
                             AssetDatabase.Ping(go.AssetID);
                         }
                         else if (gui.IsNodeHovered())
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted * 0.8f, 10, 9);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted * 0.8f, btnRoundness, 9);
                         else
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Blue, 10, 9);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Blue, btnRoundness, 9);
                         gui.Draw2D.DrawText("Select", gui.CurrentNode.LayoutData.InnerRect, Color.white, false);
                     }
 
@@ -96,11 +98,11 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     using (gui.Node("#_ApplyBtn").ExpandHeight().Margin(0, 4).Enter())
                     {
                         if (gui.IsNodePressed())
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, 10, 6);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, btnRoundness, 6);
                         else if (gui.IsNodeHovered())
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted * 0.8f, 10, 6);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted * 0.8f, btnRoundness, 6);
                         else
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Green, 10, 6);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Green, btnRoundness, 6);
                         gui.Draw2D.DrawText("Apply", gui.CurrentNode.LayoutData.InnerRect, Color.white, false);
                     }
                 }
@@ -142,7 +144,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 {
                     using (gui.Node("#_TansformC_").ExpandWidth().Layout(LayoutType.Column).Spacing(5).Padding(10).FitContentHeight(animState).Enter())
                     {
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne * 0.6f, 10, 12);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne * 0.6f, btnRoundness, 12);
 
                         var t = go.Transform;
                         using (ActiveGUI.Node("PosParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
@@ -232,7 +234,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     {
                         using (gui.Node("#_CompC_" + comp.InstanceID).ExpandWidth().FitContentHeight(animStateC).Padding(10).Enter())
                         {
-                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne * 0.6f, 10, 12);
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne * 0.6f, btnRoundness, 12);
 
                             // Handle Editors for this type if we have any
                             if (compEditors.TryGetValue(comp.InstanceID, out var editor))
@@ -283,7 +285,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                 using (gui.Node("AddCompBtn").ExpandWidth().Height(ItemSize).Enter())
                 {
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? EditorStylePrefs.Violet : EditorStylePrefs.Instance.Highlighted, 10);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? EditorStylePrefs.Violet : EditorStylePrefs.Instance.Highlighted, btnRoundness);
                     gui.Draw2D.DrawText("Add Component", gui.CurrentNode.LayoutData.InnerRect, Color.white, false);
 
                     if (gui.IsNodePressed())
@@ -314,9 +316,9 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             float animState = gui.AnimateBool(compOpened, 0.1f, EaseType.Linear);
             var compColor = EditorStylePrefs.RandomPastelColor(cType.GetHashCode());
             if (compOpened || animState > 0)
-                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, compColor, 10, 3);
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, compColor, (float)EditorStylePrefs.Instance.ButtonRoundness, 3);
             else
-                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, compColor, 10);
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, compColor, (float)EditorStylePrefs.Instance.ButtonRoundness);
             return animState;
         }
 
