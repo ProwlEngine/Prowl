@@ -21,6 +21,7 @@ namespace Prowl.Editor
         protected override bool BackgroundFade { get; } = true;
         protected override bool TitleBar { get; } = false;
         protected override bool RoundCorners => false;
+        protected override bool LockSize => true;
         protected override double Padding => 0;
 
         public ProjectsWindow() : base()
@@ -77,7 +78,8 @@ namespace Prowl.Editor
                         DisplayProject(projectFolder.Name);
             }
 
-            using (gui.Node("OpenBtn").TopLeft(455, 452).Scale(162, 60).Enter())
+            //using (gui.Node("OpenBtn").TopLeft(455, 452).Scale(162, 60).Enter())
+            using (gui.Node("OpenBtn").TopLeft(439, 436).Scale(162, 60).Enter())
             {
                 if (!string.IsNullOrEmpty(SelectedProject))
                 {
@@ -88,7 +90,7 @@ namespace Prowl.Editor
                     }
 
                     var col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
-                              gui.IsNodeHovered() ? EditorStylePrefs.Instance.Hovering * 0.8f : EditorStylePrefs.Instance.Hovering;
+                              gui.IsNodeHovered() ? EditorStylePrefs.Instance.Highlighted * 0.8f : EditorStylePrefs.Instance.Highlighted;
 
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, col, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
                     gui.Draw2D.DrawText("Open", gui.CurrentNode.LayoutData.Rect);
@@ -164,18 +166,27 @@ namespace Prowl.Editor
                 path = string.Concat("...", path.AsSpan(path.Length - 48));
             gui.Draw2D.DrawText(UIDrawList.DefaultFont, path, 20, rect.Position + new Vector2(30, 480), Color.white * 0.5f);
 
-            using (gui.Node("CreateBtn").TopLeft(445, 435).Scale(172, 77).Enter())
+            //using (gui.Node("CreateBtn").TopLeft(445, 435).Scale(172, 77).Enter())
+            using (gui.Node("CreateBtn").TopLeft(429, 419).Scale(172, 77).Enter())
             {
-                if (gui.IsNodePressed())
+                if (!string.IsNullOrEmpty(createName))
                 {
-                    Project.CreateNew(createName);
-                    currentTab = 0;
-                }
-                var col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
-                          gui.IsNodeHovered() ? EditorStylePrefs.Instance.Highlighted * 0.8f : EditorStylePrefs.Instance.Hovering;
+                    if (gui.IsNodePressed())
+                    {
+                        Project.CreateNew(createName);
+                        currentTab = 0;
+                    }
+                    var col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
+                              gui.IsNodeHovered() ? EditorStylePrefs.Instance.Highlighted * 0.8f : EditorStylePrefs.Instance.Highlighted;
 
-                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, col, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
-                gui.Draw2D.DrawText("Create", gui.CurrentNode.LayoutData.Rect);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, col, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
+                    gui.Draw2D.DrawText("Create", gui.CurrentNode.LayoutData.Rect);
+                }
+                else
+                {
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, Color.white * 0.4f, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
+                    gui.Draw2D.DrawText("Create", gui.CurrentNode.LayoutData.Rect);
+                }
             }
         }
 
