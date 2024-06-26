@@ -118,6 +118,11 @@ public class SceneViewWindow : EditorWindow
             gridMat.SetKeyword("GRID_XZ", SceneViewPreferences.Instance.GridType == GridType.XZ);
             gridMat.SetKeyword("GRID_XY", SceneViewPreferences.Instance.GridType == GridType.XY);
             gridMat.SetKeyword("GRID_YZ", SceneViewPreferences.Instance.GridType == GridType.YZ);
+
+            gridMat.SetFloat("u_lineWidth", SceneViewPreferences.Instance.LineWidth);
+            gridMat.SetFloat("u_primaryGridSize", SceneViewPreferences.Instance.PrimaryGridSize);
+            gridMat.SetFloat("u_secondaryGridSize", SceneViewPreferences.Instance.SecondaryGridSize);
+
             Graphics.Blit(RenderTarget, gridMat, 0, false);
         }
 
