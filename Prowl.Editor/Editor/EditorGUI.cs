@@ -3,6 +3,7 @@ using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
+using Prowl.Runtime.Utils;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using static Prowl.Runtime.GUI.Gui;
@@ -87,23 +88,67 @@ namespace Prowl.Editor
         public static bool InputDouble(string ID, ref double value, Offset x, Offset y, Size width, WidgetStyle? style = null)
         {
             string textValue = value.ToString();
-            var changed = ActiveGUI.InputField(ID, ref textValue, 255, InputFieldFlags.NumbersOnly, x, y, width, null, style);
-            if (changed && Double.TryParse(textValue, out value)) return true;
+            var changed = ActiveGUI.InputField(ID, ref textValue, 255, InputFieldFlags.None, x, y, width, null, style);
+
+            if (changed)
+            {
+                // Try parse directly
+                if (Double.TryParse(textValue, out value)) return true;
+                // Failed try parsing using an arithmetic parser
+                try
+                {
+                    value = TinyMathParser.Parse(textValue);
+                    return true;
+                }
+                    catch
+                {
+                    return false;
+                }
+            }
+
             return false;
         }
         public static bool InputFloat(string ID, ref float value, Offset x, Offset y, Size width, WidgetStyle? style = null)
         {
             string textValue = value.ToString();
-            var changed = ActiveGUI.InputField(ID, ref textValue, 255, InputFieldFlags.NumbersOnly, x, y, width, null, style);
-            if (changed && float.TryParse(textValue, out value)) return true;
+            var changed = ActiveGUI.InputField(ID, ref textValue, 255, InputFieldFlags.None, x, y, width, null, style);
+            if (changed)
+            {
+                // Try parse directly
+                if (float.TryParse(textValue, out value)) return true;
+                // Failed try parsing using an arithmetic parser
+                try
+                {
+                    value = (float)TinyMathParser.Parse(textValue);
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
             return false;
         }
 
         public static bool InputLong(string ID, ref long value, Offset x, Offset y, Size width, WidgetStyle? style = null)
         {
             string textValue = value.ToString();
-            var changed = ActiveGUI.InputField(ID, ref textValue, 255, InputFieldFlags.NumbersOnly, x, y, width, null, style);
-            if (changed && long.TryParse(textValue, out value)) return true;
+            var changed = ActiveGUI.InputField(ID, ref textValue, 255, InputFieldFlags.None, x, y, width, null, style);
+            if (changed)
+            {
+                // Try parse directly
+                if (long.TryParse(textValue, out value)) return true;
+                // Failed try parsing using an arithmetic parser
+                try
+                {
+                    value = (long)TinyMathParser.Parse(textValue);
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
             return false;
         }
 

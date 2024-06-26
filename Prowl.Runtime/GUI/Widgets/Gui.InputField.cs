@@ -82,8 +82,14 @@ namespace Prowl.Runtime.GUI
                 }
                 else
                 {
-                    //OnProcess(style, interact, ref value, maxLength, flags | InputFieldFlags.OnlyDisplay);
-                    var font = style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont;
+                    if (stb == null || stb.ID == interact.ID)
+                    {
+                        // Were not focused but stb still is set, reset it
+                        stb = null;
+                    }
+
+                        //OnProcess(style, interact, ref value, maxLength, flags | InputFieldFlags.OnlyDisplay);
+                        var font = style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont;
                     var fontsize = style.FontSize;
                     var render_pos = new Vector2(g.CurrentNode.LayoutData.InnerRect.x, g.CurrentNode.LayoutData.InnerRect.y);
                     // Center text vertically
