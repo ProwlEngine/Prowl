@@ -13,26 +13,55 @@ namespace Prowl.Editor.PropertyDrawers
     {
         public Type TargetType { get; private set; } = type;
 
-        private static Dictionary<Type, PropertyDrawer> drawers = [];
+        private static Dictionary<Type, PropertyDrawer> knownDrawers = [];
+
+        private static Dictionary<Type, PropertyDrawer?> cachedDrawers = [];
 
         public static bool DrawProperty(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config)
         {
-            if (drawers.TryGetValue(propertyType, out var drawer))
-                return drawer.PropertyLayout(gui, label, index, propertyType, ref propertyValue, config);
-
-            // No direct drawer found, try to find a drawer for the base type
-            foreach (var kvp in drawers)
-                if (propertyType.IsAssignableTo(kvp.Key))
-                    return kvp.Value.PropertyLayout(gui, label, index, propertyType, ref propertyValue, config);
-
-            if (propertyType.IsInterface || propertyType.IsAbstract)
-            {
-                // TODO
-                return false;
-            }
-
-            // No drawer found, Fallback to Default Drawer
             bool changed = false;
+            if (cachedDrawers.TryGetValue(propertyType, out var cached))
+            {
+                if (cached != null)
+                    return cached.PropertyLayout(gui, label, index, propertyType, ref propertyValue, config);
+
+                FallbackDrawer(gui, label, index, propertyType, ref propertyValue, config, ref changed);
+                return changed;
+            }
+            else
+            {
+                // Interfaces and Abstract classes need a drawer for them that override other drawers
+                if (propertyType.IsInterface || propertyType.IsAbstract)
+                {
+                    // TODO
+                    return false;
+                }
+
+                // Check if we have a drawer for the type
+                if (knownDrawers.TryGetValue(propertyType, out var drawer))
+                {
+                    cachedDrawers[propertyType] = drawer;
+                    return drawer.PropertyLayout(gui, label, index, propertyType, ref propertyValue, config);
+                }
+
+                // No direct drawer found, try to find a drawer for the base type
+                foreach (var kvp in knownDrawers)
+                    if (propertyType.IsAssignableTo(kvp.Key))
+                    {
+                        cachedDrawers[propertyType] = kvp.Value;
+                        return kvp.Value.PropertyLayout(gui, label, index, propertyType, ref propertyValue, config);
+                    }
+
+
+                // No drawer found, Fallback to Default Drawer
+                cachedDrawers[propertyType] = null;
+                FallbackDrawer(gui, label, index, propertyType, ref propertyValue, config, ref changed);
+                return changed;
+            }
+        }
+
+        private static void FallbackDrawer(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config, ref bool changed)
+        {
             var fields = RuntimeUtils.GetSerializableFields(propertyValue);
             if (fields.Length != 0)
             {
@@ -61,13 +90,13 @@ namespace Prowl.Editor.PropertyDrawers
                             changed |= EditorGUI.PropertyGrid(propertyType.Name + " | " + label, ref propertyValue, EditorGUI.TargetFields.Serializable, config);
                 }
             }
-            return changed;
         }
 
         [OnAssemblyUnload]
         public static void ClearDrawers()
         {
-            drawers.Clear();
+            knownDrawers.Clear();
+            cachedDrawers.Clear();
         }
 
         [OnAssemblyLoad]
@@ -87,7 +116,7 @@ namespace Prowl.Editor.PropertyDrawers
                             Debug.LogError($"Failed to create instance of {type.Name}");
                             continue;
                         }
-                        if (!drawers.TryAdd(attribute.TargetType, drawer))
+                        if (!knownDrawers.TryAdd(attribute.TargetType, drawer))
                         {
                             Debug.LogError($"Failed to add PropertyDrawer for {attribute.TargetType.Name}, already exists?");
                             continue;
