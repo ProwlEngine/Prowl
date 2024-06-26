@@ -5,6 +5,7 @@ using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
+using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.Utils;
 using System;
@@ -44,18 +45,18 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 gui.Draw2D.DrawText("This GameObject is not editable", gui.CurrentNode.LayoutData.InnerRect);
 
             bool isEnabled = go.enabled;
-            if (gui.Checkbox("IsEnabledChk", ref isEnabled, 0, 0, out _))
+            if (gui.Checkbox("IsEnabledChk", ref isEnabled, 0, 0, out _, EditorGUI.GetInputStyle()))
                 go.enabled = isEnabled;
             gui.Tooltip("Is Enabled");
 
-            Gui.WidgetStyle style = new(30);
+            Gui.WidgetStyle style = EditorGUI.GetInputStyle();
             style.Roundness = 8f;
             style.BorderThickness = 1f;
             string name = go.Name;
             if (gui.InputField("NameInput", ref name, 32, InputFieldFlags.None, ItemSize, 0, Size.Percentage(1f, -(ItemSize * 3)), ItemSize, style))
                 go.Name = name.Trim();
 
-            var invisStyle = new Gui.WidgetStyle(30) { BGColor = new Color(0, 0, 0, 0), BorderColor = new Color(0, 0, 0, 0) };
+            var invisStyle = EditorGUI.GetInputStyle() with { BGColor = new Color(0, 0, 0, 0), BorderColor = new Color(0, 0, 0, 0) };
             int tagIndex = go.tagIndex;
             gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(ItemSize * 2)), 0, ItemSize, ItemSize, invisStyle, FontAwesome6.Tag);
             go.tagIndex = (byte)tagIndex;
@@ -133,8 +134,12 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         gui.SetNodeStorage(gui.CurrentNode.Parent, "#_Opened_TransformH", opened);
                     }
 
-                    gui.Draw2D.DrawText((opened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, 8));
-                    gui.Draw2D.DrawText("Transform", 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, 7));
+                    var rect = gui.CurrentNode.LayoutData.InnerRect;
+                    var textSizeY = UIDrawList.DefaultFont.CalcTextSize("Transform", 20).y;
+                    var centerY = (rect.height / 2) - (textSizeY / 2);
+                    gui.Draw2D.DrawText((opened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, centerY + 3));
+                    gui.Draw2D.DrawText(FontAwesome6.MapLocation + " Transform", 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(29, centerY + 3), Color.black * 0.8f);
+                    gui.Draw2D.DrawText(FontAwesome6.MapLocation + " Transform", 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, centerY + 2));
 
                     DragnDrop.Drag(go.Transform, typeof(Transform));
                 }
@@ -202,10 +207,16 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                         DragnDrop.Drag((MonoBehaviour)comp, comp!.GetType());
 
-                        gui.Draw2D.DrawText((compOpened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, 8));
-                        gui.Draw2D.DrawText(GetComponentDisplayName(cType), 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, 7));
+                        var rect = gui.CurrentNode.LayoutData.InnerRect;
+                        string cname = GetComponentDisplayName(cType);
+                        var textSizeY = UIDrawList.DefaultFont.CalcTextSize(cname, 20).y;
+                        var centerY = (rect.height / 2) - (textSizeY / 2);
+                        gui.Draw2D.DrawText((compOpened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, centerY + 3));
+                        gui.Draw2D.DrawText(cname, 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(29, centerY + 3), Color.black * 0.8f);
+                        gui.Draw2D.DrawText(cname, 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, centerY + 2));
+
                         isEnabled = comp.Enabled;
-                        if (gui.Checkbox("IsEnabledChk", ref isEnabled, Offset.Percentage(1f, -30), 0, out var chkNode))
+                        if (gui.Checkbox("IsEnabledChk", ref isEnabled, Offset.Percentage(1f, -30), 0, out var chkNode, EditorGUI.GetInputStyle()))
                             comp.Enabled = isEnabled;
                         gui.Tooltip("Is Component Enabled?");
 

@@ -290,7 +290,10 @@ namespace Prowl.Editor
                     gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight, 20, gui.CurrentNode.LayoutData.InnerRect, gui.IsNodeHovered() ? EditorStylePrefs.Instance.LesserText : Color.white);
                 }
 
-                gui.Draw2D.DrawText(UIDrawList.DefaultFont, root.RootName, 20, new Vector2(gui.CurrentNode.LayoutData.InnerRect.x + 40, gui.CurrentNode.LayoutData.InnerRect.y + 7), Color.white);
+                var rect = gui.CurrentNode.LayoutData.InnerRect;
+                var textSizeY = UIDrawList.DefaultFont.CalcTextSize(root.RootName, 20).y;
+                var centerY = rect.y + (rect.height / 2) - (textSizeY / 2);
+                gui.Draw2D.DrawText(UIDrawList.DefaultFont, root.RootName, 20, new Vector2(rect.x + 40, centerY + 3), Color.white);
 
                 _treeCounter++;
             }
@@ -367,10 +370,10 @@ namespace Prowl.Editor
                     if (RenamingEntry == subDirectory.FullName)
                     {
                         var rect = gui.CurrentNode.LayoutData.InnerRect;
-                        var inputRect = new Rect(rect.x + 33, rect.y + 4, rect.width - 40, 30 - 8);
+                        var inputRect = new Rect(rect.x + 33, rect.y, rect.width - 40, EditorStylePrefs.Instance.ItemSize);
                         gui.Draw2D.DrawRectFilled(inputRect, EditorStylePrefs.Instance.WindowBGTwo, 8);
                         var name = Path.GetFileNameWithoutExtension(subDirectory.Name);
-                        bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 30, 0, Size.Percentage(1f), null, null, true);
+                        bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 30, 0, Size.Percentage(1f), EditorStylePrefs.Instance.ItemSize, EditorGUI.GetInputStyle(), true);
                         if (justStartedRename)
                             gui.FocusPreviousInteractable();
                         if (!gui.PreviousInteractableIsFocus())
@@ -386,7 +389,10 @@ namespace Prowl.Editor
                     }
                     else
                     {
-                        gui.Draw2D.DrawText(subDirectory.Name, new Vector2(gui.CurrentNode.LayoutData.InnerRect.x + 40, gui.CurrentNode.LayoutData.InnerRect.y + 7));
+                        var rect = gui.CurrentNode.LayoutData.InnerRect;
+                        var textSizeY = UIDrawList.DefaultFont.CalcTextSize(subDirectory.Name, 20).y;
+                        var centerY = rect.y + (rect.height / 2) - (textSizeY / 2);
+                        gui.Draw2D.DrawText(subDirectory.Name, new Vector2(rect.x + 40, centerY + 3));
                     }
                     _treeCounter++;
                 }
@@ -445,7 +451,9 @@ namespace Prowl.Editor
                     var textRect = gui.CurrentNode.LayoutData.InnerRect;
                     if (subFileNode.SubAssets.Length > 1)
                         textRect.width -= EditorStylePrefs.Instance.ItemSize;
-                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, GetIcon(ext), 20, new Vector2(gui.CurrentNode.LayoutData.InnerRect.x + (EditorStylePrefs.Instance.ItemSize / 2), gui.CurrentNode.LayoutData.InnerRect.y + 7), GetFileColor(ext), 0, textRect);
+                    var textSizeY = UIDrawList.DefaultFont.CalcTextSize(GetIcon(ext), 20).y;
+                    var centerY = gui.CurrentNode.LayoutData.InnerRect.y + (gui.CurrentNode.LayoutData.InnerRect.height / 2) - (textSizeY / 2);
+                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, GetIcon(ext), 20, new Vector2(gui.CurrentNode.LayoutData.InnerRect.x + (EditorStylePrefs.Instance.ItemSize / 2), centerY + 3), GetFileColor(ext), 0, textRect);
 
                     // Display Name
                     if (RenamingEntry == subFile.FullName)
@@ -454,7 +462,7 @@ namespace Prowl.Editor
                         var inputRect = new Rect(rect.x + 33, rect.y + 4, rect.width - 40, 30 - 8);
                         gui.Draw2D.DrawRectFilled(inputRect, EditorStylePrefs.Instance.WindowBGTwo, 8);
                         var name = Path.GetFileNameWithoutExtension(subFile.Name);
-                        bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 30, 0, Size.Percentage(1f), null, null, true);
+                        bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 30, 0, Size.Percentage(1f), null, EditorGUI.GetInputStyle(), true);
                         if (justStartedRename)
                             gui.FocusPreviousInteractable();
                         if (!gui.PreviousInteractableIsFocus())
@@ -472,7 +480,7 @@ namespace Prowl.Editor
                     else
                     {
                         var text = AssetPipelinePreferences.Instance.HideExtensions ? Path.GetFileNameWithoutExtension(subFile.FullName) : Path.GetFileName(subFile.FullName);
-                        gui.Draw2D.DrawText(UIDrawList.DefaultFont, text, 20, new Vector2(gui.CurrentNode.LayoutData.InnerRect.x + 40, gui.CurrentNode.LayoutData.InnerRect.y + 7), Color.white, 0, textRect);
+                        gui.Draw2D.DrawText(UIDrawList.DefaultFont, text, 20, new Vector2(gui.CurrentNode.LayoutData.InnerRect.x + 40, centerY + 3), Color.white, 0, textRect);
                     }
                 }
 

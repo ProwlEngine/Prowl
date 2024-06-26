@@ -19,7 +19,8 @@ namespace Prowl.Editor.PropertyDrawers
             ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 1, 2);
 
             var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
-            pos += new Vector2(0, 8);
+            var centerY = (ActiveGUI.CurrentNode.LayoutData.InnerRect.height / 2) - (20 / 2);
+            pos += new Vector2(0, centerY + 3);
             if (value == null)
             {
                 string text = "(Null) " + targetType.Name;

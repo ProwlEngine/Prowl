@@ -65,7 +65,7 @@ namespace Prowl.Editor
             Vector2 shadowC = new(rect.x, rect.y + rect.height);
             gui.Draw2D.DrawVerticalBlackGradient(shadowB, shadowC, 20, 0.25f);
 
-            gui.InputField("SearchInput", ref _searchText, 0x100, Gui.InputFieldFlags.None, 25, 50, 150);
+            gui.InputField("SearchInput", ref _searchText, 0x100, Gui.InputFieldFlags.None, 25, 50, 150, null, EditorGUI.GetInputStyle());
 
             using (gui.Node("List").Width(565).Height(345).Left(25).Top(80).Layout(LayoutType.Column).Spacing(5).Clip().Scroll().Enter())
             {
@@ -160,7 +160,7 @@ namespace Prowl.Editor
             Vector2 shadowC = new(rect.x, rect.y + rect.height);
             gui.Draw2D.DrawVerticalBlackGradient(shadowB, shadowC, 20, 0.25f);
 
-            gui.InputField("CreateInput", ref createName, 0x100, Gui.InputFieldFlags.None, 30, 450, 340);
+            gui.InputField("CreateInput", ref createName, 0x100, Gui.InputFieldFlags.None, 30, 450, 340, null, EditorGUI.GetInputStyle());
             string path = Project.GetPath(createName).FullName;
             if (path.Length > 48)
                 path = string.Concat("...", path.AsSpan(path.Length - 48));

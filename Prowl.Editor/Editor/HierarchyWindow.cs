@@ -13,7 +13,7 @@ namespace Prowl.Editor
 
     public class HierarchyWindow : EditorWindow
     {
-        const double entryHeight = 30;
+        double entryHeight => (float)EditorStylePrefs.Instance.ItemSize;
         const double entryPadding = 4;
 
         private string _searchText = "";
@@ -263,7 +263,7 @@ namespace Prowl.Editor
                     gui.Draw2D.DrawLine(new Vector2(rect.x + entryHeight + 1, rect.y - 1), new Vector2(rect.x + entryHeight + 1, rect.y + entryHeight - 1), lineColor, 3);
                 }
 
-                using (gui.Node("VisibilityBtn").TopLeft(6).Scale(20).Enter())
+                using (gui.Node("VisibilityBtn").TopLeft(1).Scale(entryHeight).Enter())
                 {
                     if (gui.IsNodePressed())
                         entity.enabled = !entity.enabled;
@@ -304,9 +304,9 @@ namespace Prowl.Editor
                 var name = entity.Name;
                 if (m_RenamingGO == entity)
                 {
-                    var inputRect = new Rect(rect.x + 33, rect.y + 4, maxwidth - (entryHeight * 2.25), 30 - 8);
+                    var inputRect = new Rect(rect.x + 33, rect.y, maxwidth - (entryHeight * 2.25), entryHeight);
                     gui.Draw2D.DrawRectFilled(inputRect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.ButtonRoundness);
-                    gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.None, 30, 0, maxwidth - (entryHeight * 2.25), null, null, true);
+                    gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.None, 30, 0, maxwidth - (entryHeight * 2.25), entryHeight, EditorGUI.GetInputStyle(), true);
                     if (justStartedRename)
                         gui.FocusPreviousInteractable();
                     if (!gui.PreviousInteractableIsFocus())
@@ -318,7 +318,9 @@ namespace Prowl.Editor
                 {
                     var textRect = rect;
                     textRect.width -= entryHeight;
-                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, name, 20, new Vector2(rect.x + 40, rect.y + 7), Color.white, 0, textRect);
+                    var textSizeY = UIDrawList.DefaultFont.CalcTextSize(name, 20).y;
+                    var centerY = rect.y + (rect.height / 2) - (textSizeY / 2);
+                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, name, 20, new Vector2(rect.x + 40, centerY + 3), Color.white, 0, textRect);
                 }
 
                 index++;

@@ -108,11 +108,11 @@ namespace Prowl.Editor
         }
 
 
-        public static WidgetStyle VectorXStyle = new WidgetStyle(30) { TextColor = EditorStylePrefs.Red, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1 };
-        public static WidgetStyle VectorYStyle = new WidgetStyle(30) { TextColor = EditorStylePrefs.Emerald, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1 };
-        public static WidgetStyle VectorZStyle = new WidgetStyle(30) { TextColor = EditorStylePrefs.Blue, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1 };
+        public static WidgetStyle VectorXStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { TextColor = EditorStylePrefs.Red, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
+        public static WidgetStyle VectorYStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { TextColor = EditorStylePrefs.Emerald, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
+        public static WidgetStyle VectorZStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { TextColor = EditorStylePrefs.Blue, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
          
-        public static WidgetStyle InputFieldStyle = new WidgetStyle(30) { TextColor = EditorStylePrefs.Emerald, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1 };
+        public static WidgetStyle InputFieldStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { TextColor = EditorStylePrefs.Emerald, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
 
 
         #region PropertyGrid
@@ -311,6 +311,11 @@ namespace Prowl.Editor
                     }
             }
             return false;
+        }
+
+        internal static WidgetStyle GetInputStyle()
+        {
+            return new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
         }
 
         #endregion

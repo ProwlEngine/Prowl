@@ -90,8 +90,8 @@ namespace Prowl.Runtime.GUI
         {
             var style = inputstyle ?? new(30);
             x.PixelOffset += 5;
-            y.PixelOffset += 5;
-            using ((node = Node(ID)).Left(x).Top(y).Scale(style.ItemSize - 10).Enter())
+            y.PixelOffset += 2;
+            using ((node = Node(ID)).Left(x).Top(y).Scale(style.ItemSize - 4).Enter())
             {
                 Interactable interact = GetInteractable();
 

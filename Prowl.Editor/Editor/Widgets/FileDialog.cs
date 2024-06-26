@@ -138,7 +138,7 @@ namespace Prowl.Editor
                         double pathWidth = gui.CurrentNode.LayoutData.Rect.width - left + 10;
                         using (gui.Node("Path").ExpandHeight().Left(left).Width(pathWidth).Enter())
                         {
-                            var style = new Gui.WidgetStyle(30);
+                            var style = EditorGUI.GetInputStyle();
 
                             style.Roundness = 8f;
                             style.BorderThickness = 1f;

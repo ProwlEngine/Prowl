@@ -381,7 +381,7 @@ namespace Prowl.Editor
                 var inputRect = new Rect(nameRect.x, nameRect.y + 4, nameRect.width, 30 - 8);
                 gui.Draw2D.DrawRectFilled(inputRect, EditorStylePrefs.Instance.WindowBGTwo, 8);
                 string name = Path.GetFileNameWithoutExtension(entry.FullName);
-                bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 0, size + 4, Size.Percentage(1f), null, null, true);
+                bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 0, size + 4, Size.Percentage(1f), null, EditorGUI.GetInputStyle(), true);
                 if (justStartedRename)
                     gui.FocusPreviousInteractable();
                 if (!gui.PreviousInteractableIsFocus())

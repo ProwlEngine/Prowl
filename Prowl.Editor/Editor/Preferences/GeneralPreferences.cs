@@ -54,22 +54,18 @@ namespace Prowl.Editor.Preferences
         public Color DropHighlight  = Orange;
         public Color Warning        = Red;
 
-        public bool UseRandomColorForComponents = false;
-        public Color ComponentColor = new(25, 25, 25);
-        public bool UseRandomColorForAssets = false;
-
         [Text("Sizing:")]
         public double Scale = 1;
-        public double ItemSize = 30;
+        public double ItemSize = 25;
 
         [Text("Spacing:")]
-        public double DockSpacing = 8;
+        public double DockSpacing = 4;
 
         [Text("Rounding:")]
-        public double WindowRoundness = 10;
+        public double WindowRoundness = 4;
         public double TabRoundness = 4;
         public double AssetRoundness = 4;
-        public double ButtonRoundness = 10;
+        public double ButtonRoundness = 4;
 
         // Base Colors 
         public static Color Black => new(0, 0, 0, 255);

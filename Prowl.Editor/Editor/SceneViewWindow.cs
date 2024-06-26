@@ -467,7 +467,7 @@ public class SceneViewWindow : EditorWindow
 
             var gridType = SceneViewPreferences.Instance.GridType;
             int gridTypeIndex = (int)gridType;
-            Gui.WidgetStyle style = new(30);
+            Gui.WidgetStyle style = EditorGUI.GetInputStyle();
             style.BGColor = Color.clear;
             style.BorderColor = Color.clear;
             if (gui.Combo("GridType", "_GridTypePopup", ref gridTypeIndex, Enum.GetNames(typeof(GridType)), 0, 0, buttonSize, buttonSize, style, FontAwesome6.TableCells))
