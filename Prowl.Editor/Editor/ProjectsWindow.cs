@@ -78,8 +78,7 @@ namespace Prowl.Editor
                         DisplayProject(projectFolder.Name);
             }
 
-            //using (gui.Node("OpenBtn").TopLeft(455, 452).Scale(162, 60).Enter())
-            using (gui.Node("OpenBtn").TopLeft(439, 436).Scale(162, 60).Enter())
+            using (gui.Node("OpenBtn").TopLeft(Offset.Percentage(1f, -162), Offset.Percentage(1f, -60)).Scale(162, 60).Enter())
             {
                 if (!string.IsNullOrEmpty(SelectedProject))
                 {
@@ -166,8 +165,7 @@ namespace Prowl.Editor
                 path = string.Concat("...", path.AsSpan(path.Length - 48));
             gui.Draw2D.DrawText(UIDrawList.DefaultFont, path, 20, rect.Position + new Vector2(30, 480), Color.white * 0.5f);
 
-            //using (gui.Node("CreateBtn").TopLeft(445, 435).Scale(172, 77).Enter())
-            using (gui.Node("CreateBtn").TopLeft(429, 419).Scale(172, 77).Enter())
+            using (gui.Node("CreateBtn").TopLeft(Offset.Percentage(1f, -172), Offset.Percentage(1f, -77)).Scale(172, 77).Enter())
             {
                 if (!string.IsNullOrEmpty(createName))
                 {
