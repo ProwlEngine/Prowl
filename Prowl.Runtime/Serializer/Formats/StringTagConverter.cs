@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 
 namespace Prowl.Runtime
 {
     public static class StringTagConverter
     {
+        // Writing:
+
         public static void WriteToFile(SerializedProperty tag, FileInfo file)
         {
             string json = Write(tag);
@@ -228,9 +229,7 @@ namespace Prowl.Runtime
             Serialize(dict[key], writer, indentLevel + 1);
         }
 
-
-
-
+        // Reading:
 
         public enum TextTokenType
         {
@@ -311,7 +310,6 @@ namespace Prowl.Runtime
                         continue;
                 }
 
-                var pos = parser.TokenPosition;
                 var tag = ReadTag(parser);
 
                 items.Add(tag);
@@ -377,109 +375,24 @@ namespace Prowl.Runtime
 
         private static SerializedProperty ReadNumberTag(TextMemoryParser parser)
         {
+            static T ParsePrimitive<T>(TextMemoryParser parser) where T : unmanaged
+                => (T)Convert.ChangeType(new string(parser.Token[..^1]), typeof(T));
+
             return parser.Token[^1] switch {
-                'B' => new SerializedProperty(ParseByteValue(parser)),
-                'N' => new SerializedProperty(ParseSByteValue(parser)),
-                'S' => new SerializedProperty(ParseShortValue(parser)),
-                'I' => new SerializedProperty(ParseIntValue(parser)),
-                'L' => new SerializedProperty(ParseLongValue(parser)),
-                'V' => new SerializedProperty(ParseUShortValue(parser)),
-                'U' => new SerializedProperty(ParseUIntValue(parser)),
-                'C' => new SerializedProperty(ParseULongValue(parser)),
-                'F' => new SerializedProperty(ParseFloatValue(parser)),
-                'D' => new SerializedProperty(ParseDoubleValue(parser)),
-                'M' => new SerializedProperty(ParseDecimalValue(parser)),
-                >= '0' and <= '9' => new SerializedProperty(ParseIntValue(parser)),
+                'B' => new SerializedProperty(ParsePrimitive<byte>(parser)),
+                'N' => new SerializedProperty(ParsePrimitive<sbyte>(parser)),
+                'S' => new SerializedProperty(ParsePrimitive<short>(parser)),
+                'I' => new SerializedProperty(ParsePrimitive<int>(parser)),
+                'L' => new SerializedProperty(ParsePrimitive<long>(parser)),
+                'V' => new SerializedProperty(ParsePrimitive<ushort>(parser)),
+                'U' => new SerializedProperty(ParsePrimitive<uint>(parser)),
+                'C' => new SerializedProperty(ParsePrimitive<ulong>(parser)),
+                'F' => new SerializedProperty(ParsePrimitive<float>(parser)),
+                'D' => new SerializedProperty(ParsePrimitive<double>(parser)),
+                'M' => new SerializedProperty(ParsePrimitive<decimal>(parser)),
+                >= '0' and <= '9' => new SerializedProperty((int)Convert.ChangeType(new string(parser.Token), typeof(int))),
                 _ => throw new InvalidDataException($"Invalid number type indicator found while reading a number \"{parser.Token}\" at position {parser.TokenPosition}")
             };
-        }
-
-        private static byte ParseByteValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'B' && byte.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing byte value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static sbyte ParseSByteValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'N' && sbyte.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing sbyte value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static short ParseShortValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'S' && short.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing short value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static int ParseIntValue(TextMemoryParser parser)
-        {
-            if (int.TryParse(parser.Token, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing int value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static long ParseLongValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'L' && long.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing long value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static ushort ParseUShortValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'V' && ushort.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing ushort value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static uint ParseUIntValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'U' && uint.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing uint value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static ulong ParseULongValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'C' && ulong.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing ulong value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static float ParseFloatValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'F' && float.TryParse(parser.Token[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing float value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static double ParseDoubleValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'D' && double.TryParse(parser.Token[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing double value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static decimal ParseDecimalValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'M' && decimal.TryParse(parser.Token[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing decimal value \"{parser.Token}\" at position {parser.TokenPosition}");
         }
 
         private static string ParseQuotedStringValue(TextMemoryParser parser)
