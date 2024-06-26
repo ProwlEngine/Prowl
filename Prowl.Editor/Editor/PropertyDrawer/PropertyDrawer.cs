@@ -62,11 +62,36 @@ namespace Prowl.Editor.PropertyDrawers
 
         private static void FallbackDrawer(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config, ref bool changed)
         {
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+            if (propertyValue == null)
+            {
+                // Null Drawer
+                using (gui.Node(label + "_Null", index).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
+                {
+                    using (gui.Node("Creator", index).MaxWidth(ItemSize).Height(ItemSize).Layout(LayoutType.Row).Enter())
+                    {
+                        if(gui.IsNodePressed())
+                        {
+                            propertyValue = Activator.CreateInstance(propertyType);
+                            changed = true;
+                        }
+                        else if (gui.IsNodeHovered())
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
+
+                        gui.Draw2D.DrawText(FontAwesome6.Plus, 20, gui.CurrentNode.LayoutData.InnerRect, Color.white);
+                    }
+
+                    using (gui.Node("Label", index).Height(ItemSize).Layout(LayoutType.Row).Enter())
+                    {
+                        gui.Draw2D.DrawText("(Null)", 20, gui.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.Warning);
+                    }
+                }
+                return;
+            }
+
             var fields = RuntimeUtils.GetSerializableFields(propertyValue);
             if (fields.Length != 0)
             {
-                double ItemSize = EditorStylePrefs.Instance.ItemSize;
-
                 using (gui.Node(label + "_Header", index).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Enter())
                 {
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
