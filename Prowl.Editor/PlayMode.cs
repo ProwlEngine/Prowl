@@ -1,3 +1,4 @@
+using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
 
@@ -15,6 +16,13 @@ public static class PlayMode {
         Current = Mode.Playing;
         SceneManager.Clear();
         SceneManager.RestoreScene(); // Resets GameObjects and Components to re-trigger things like Awake() and Start()
+
+        // Focus GameWindow
+        if (GameWindow.LastFocused != null && GameWindow.LastFocused.IsAlive)
+        {
+            if (GeneralPreferences.Instance.AutoFocusGameView)
+                EditorGuiManager.FocusWindow(GameWindow.LastFocused.Target as EditorWindow);
+        }
     }
     
     public static void Pause() {

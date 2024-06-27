@@ -45,6 +45,9 @@ public static class EditorGuiManager
         Windows.Remove(editorWindow);
         Windows.Add(editorWindow);
         FocusedWindow = new WeakReference(editorWindow);
+
+        if (editorWindow.IsDocked)
+            editorWindow.Leaf.WindowNum = editorWindow.Leaf.LeafWindows.IndexOf(editorWindow);
     }
 
     internal static void Remove(EditorWindow editorWindow)

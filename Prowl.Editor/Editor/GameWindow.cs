@@ -32,7 +32,7 @@ public class GameWindow : EditorWindow
     RenderTexture RenderTarget;
     bool previouslyPlaying = false;
 
-    public static bool IsGameWindowFocused;
+    public static WeakReference LastFocused;
 
     public GameWindow() : base()
     {
@@ -40,6 +40,7 @@ public class GameWindow : EditorWindow
         GeneralPreferences.Instance.CurrentWidth = (int)Width;
         GeneralPreferences.Instance.CurrentHeight = (int)Height - HeaderHeight;
         RefreshRenderTexture();
+        LastFocused = new WeakReference(this);
     }
 
     public void RefreshRenderTexture()
@@ -52,21 +53,8 @@ public class GameWindow : EditorWindow
     {
         if (!Project.HasProject) return;
 
-        // TODO: Add Window Focus
-        // if (!previouslyPlaying && Application.isPlaying)
-        // {
-        //     previouslyPlaying = true;
-        //     if (GeneralPreferences.Instance.AutoFocusGameView)
-        //         ImGg.SetWindowFocus();
-        // }
-        // else if (previouslyPlaying && !Application.isPlaying)
-        // {
-        //     previouslyPlaying = false;
-        // }
-
-        // IsFocused |= ImGg.IsWindowFocused();
-
-        IsGameWindowFocused = IsFocused;
+        if(IsFocused)
+            LastFocused = new WeakReference(this);
 
         gui.CurrentNode.Layout(Runtime.GUI.LayoutType.Column).ScaleChildren();
 
