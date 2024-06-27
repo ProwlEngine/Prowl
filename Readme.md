@@ -38,9 +38,12 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
 # <p align="center">✨ Features ✨</p>
 
 -   **General:**
+    - Cross-Platform! Windows, Linux & Mac!
     - Unity-like Editor & Scripting API
     - C# Scripting
     - Gameobject & Component structure
+    - A Powerful Custom UI Library
+      - Same Library for Ingame and Editor UI
     - .NET 8
     - Dear ImGUI Editor, including ImGuizmo, ImPlot, ImNodes
     - Editor with support for Editor Scripts and Custom Editors
@@ -64,7 +67,6 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - Prefabs
     - Build System - Build to Standalone Application
        - Packed Asset files
-    - Node System (A Port of xNode from Unity)
 
 -   **Graphics Rendering:**
     - Modular Graphics Backend
@@ -76,7 +78,6 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
         - Metallic Map
         - Ambient Occclusion Map
         - Emission Map
-    - Node-Based Customizable Render Pipelines
     - Deferred Renderer
     - Point, Spot, and Directional Lights
     - Shadow Mapping + Contact Hardening (Variable Penumbra)
@@ -125,13 +126,13 @@ Getting Prowl up and running is super easy!
 
 ### Engine
 - 🛠️ Cross Platform
-  - ✔️ Windows - Fully functional
-  - ✔️ MacOS - ImGUI asserts cause crashes occasionally
-  - 🛠️ Linux
+  - ✔️ Windows
+  - ✔️ MacOS
+  - ✔️ Linux
   - ❌ Andriod
   - ❌ iOS
   - ❌ Web
-- ❌ UI Engine
+- ✔️ UI Engine
 - ❌ VR Support
 - ❌ Navmesh and AI Agents
 - ❌ Networking Solution
