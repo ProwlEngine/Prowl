@@ -239,7 +239,7 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 [![animations](https://i.gyazo.com/2824b4a16a6d6b6ad9b64912e6020271.gif)](https://gyazo.com/2824b4a16a6d6b6ad9b64912e6020271)
 ![Bokeh Depth of Field](https://i.imgur.com/VYs44qq.png)
 ![Editor](https://github.com/michaelsakharov/Prowl/assets/8621606/bb3c423b-3cc8-45a1-baa7-c9ad31d945c6)
-![image](https://github.com/michaelsakharov/Prowl/assets/8621606/f755ee5d-eba5-4453-9f31-f61768c2554c)
+![Untitled](https://github.com/michaelsakharov/Prowl/assets/8621606/5165f2c4-681f-4cf7-8579-1152c971d142)
 ![Flight Model](https://github.com/michaelsakharov/Prowl/assets/8621606/7683759c-5e0c-4689-acba-c733b3a64b5c)
 ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/43d9f1db-1806-4961-bc40-fd77b196043b)
 ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/6bee582a-903d-4b30-8c0b-50023ccc0c4e)
