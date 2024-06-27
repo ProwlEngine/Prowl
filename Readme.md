@@ -25,7 +25,6 @@
     <li><a href="#acknowledgments">Acknowledgments</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#dependencies">Dependencies</a></li>
-    <li><a href="#screenshots">Screenshots</a></li>
   </ol>
 
 # <p align="center">📝 About The Project 📝</p>
