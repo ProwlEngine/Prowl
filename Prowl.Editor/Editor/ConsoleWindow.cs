@@ -24,11 +24,6 @@ namespace Prowl.Editor
 
         private void OnLog(string message, LogSeverity logSeverity)
         {
-            if (logSeverity == LogSeverity.Normal && !GeneralPreferences.Instance.ShowDebugLogs) return;
-            else if (logSeverity == LogSeverity.Warning && !GeneralPreferences.Instance.ShowDebugWarnings) return;
-            else if (logSeverity == LogSeverity.Error && !GeneralPreferences.Instance.ShowDebugErrors) return;
-            else if (logSeverity == LogSeverity.Success && !GeneralPreferences.Instance.ShowDebugSuccess) return;
-
             _logMessages.Add(new LogMessage(message, logSeverity));
             if (_logMessages.Count > _maxLogs)
                 _logMessages.RemoveAt(0);
