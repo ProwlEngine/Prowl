@@ -407,7 +407,15 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                     if (Gui.ActiveGUI.BeginPopup(item.Name + "Popup", out var node))
                     {
-                        using (node.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
+                        double largestWidth = 0;
+                        foreach (var child in item.Children)
+                        {
+                            double width = UIDrawList.DefaultFont.CalcTextSize(child.Name, 0).x + 30;
+                            if (width > largestWidth)
+                                largestWidth = width;
+                        }
+
+                        using (node.Width(largestWidth).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                         {
                             DrawMenuItems(item, go);
                         }

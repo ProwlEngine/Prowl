@@ -100,7 +100,7 @@ namespace Prowl.Editor
                     value = TinyMathParser.Parse(textValue);
                     return true;
                 }
-                    catch
+                catch
                 {
                     return false;
                 }
