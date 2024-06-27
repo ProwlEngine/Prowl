@@ -1,3 +1,4 @@
+using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
@@ -33,6 +34,7 @@ public class GameWindow : EditorWindow
     bool previouslyPlaying = false;
 
     public static WeakReference LastFocused;
+    public static Vector2 FocusedPosition;
 
     public readonly GameViewInputHandler InputHandler;
 
@@ -151,7 +153,7 @@ public class GameWindow : EditorWindow
             // We got a camera to visualize
             if (GeneralPreferences.Instance.AutoRefreshGameView)
             {
-                if (Application.isPlaying || Time.frameCount % 8 == 0)
+                //if (Application.isPlaying || Time.frameCount % 8 == 0)
                 {
                     var tmp = mainCam.Target;
                     try
@@ -169,6 +171,11 @@ public class GameWindow : EditorWindow
 
             // Letter box the image into the render size
             gui.Draw2D.DrawImage(RenderTarget.InternalTextures[0], innerRect.Position, innerRect.Size, Color.white, true);
+
+            if(IsFocused || LastFocused.Target == this)
+            {
+                FocusedPosition = innerRect.Position;
+            }
         }
 
     }

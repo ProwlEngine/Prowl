@@ -36,7 +36,7 @@ public class GameViewInputHandler : IInputHandler, IDisposable
         {
             _prevMousePos = value;
             _currentMousePos = value;
-            Mice[0].Position = (Vector2)value + new Vector2((float)_window.Rect.Position.x, (float)_window.Rect.Position.y);
+            Mice[0].Position = (Vector2)value + new Vector2((float)GameWindow.FocusedPosition.x, (float)GameWindow.FocusedPosition.y);
         }
     }
     public Vector2 MouseDelta => _currentMousePos - _prevMousePos;
@@ -88,7 +88,7 @@ public class GameViewInputHandler : IInputHandler, IDisposable
 
     private Vector2 InternalMousePosition()
     {
-        return Mice[0].Position - new System.Numerics.Vector2((float)_window.Rect.Position.x, (float)_window.Rect.Position.y);
+        return Mice[0].Position - new System.Numerics.Vector2((float)GameWindow.FocusedPosition.x, (float)GameWindow.FocusedPosition.y);
     }
 
     private bool InternalKeyPressed(Key key, IKeyboard board)

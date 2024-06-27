@@ -33,6 +33,8 @@ public class Camera : MonoBehaviour
 
     public AssetRef<RenderTexture> Target;
 
+    public event Action<int, int> PostRender;
+
     public GBuffer gBuffer { get; private set; }
 
     public enum DebugDraw { Off, Albedo, Normals, Depth, Velocity, ObjectID }
@@ -184,6 +186,10 @@ public class Camera : MonoBehaviour
             Graphics.Blit(Target.Res ?? null, gBuffer.Velocity, DoClear);
         else if (debugDraw == DebugDraw.ObjectID)
             Graphics.Blit(Target.Res ?? null, gBuffer.ObjectIDs, DoClear);
+
+        Target.Res?.Begin();
+        PostRender?.Invoke(width, height);
+        Target.Res?.End();
 
         oldView = Graphics.MatView;
         oldProjection = Graphics.MatProjection;

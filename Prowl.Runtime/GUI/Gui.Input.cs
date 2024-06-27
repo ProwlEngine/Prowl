@@ -99,8 +99,8 @@ namespace Prowl.Runtime.GUI
             }
 
             PointerButton = MouseButton.Unknown;
-            PreviousPointerPos = PointerPos;
-            PointerPos = Vector2.zero;
+            PreviousPointerPos = _pointerPos;
+            _pointerPos = Vector2.zero;
             PointerWheel = 0;
         }
 
@@ -127,7 +127,7 @@ namespace Prowl.Runtime.GUI
             }
             else
             {
-                PointerPos = new Vector2(X, Y);
+                _pointerPos = new Vector2(X, Y);
             }
         }
 
