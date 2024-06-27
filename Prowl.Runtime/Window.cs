@@ -1,4 +1,5 @@
-﻿using Silk.NET.Maths;
+﻿using Silk.NET.Input;
+using Silk.NET.Maths;
 using Silk.NET.Windowing;
 using System;
 
@@ -8,6 +9,7 @@ namespace Prowl.Runtime
     {
 
         public static IWindow InternalWindow { get; internal set; }
+        public static IInputContext InternalInput { get; internal set; }
 
         public static event Action? Load;
         public static event Action<double>? Update;
@@ -47,6 +49,8 @@ namespace Prowl.Runtime
         }
 
         private static bool isFocused = true;
+        private static DefaultInputHandler WindowInputHandler;
+
         public static bool IsFocused {
             get { return isFocused; }
         }
@@ -81,10 +85,13 @@ namespace Prowl.Runtime
 
         public static void OnLoad()
         {
-            Input.Initialize();
+            InternalInput = InternalWindow.CreateInput();
+            WindowInputHandler = new DefaultInputHandler(InternalInput);
             Graphics.Initialize();
             //Audio.Initialize();
 
+            // Push Default Handler
+            Input.PushHandler(WindowInputHandler);
             Load?.Invoke();
         }
 
@@ -112,13 +119,14 @@ namespace Prowl.Runtime
         public static void OnUpdate(double delta)
         {
             Update?.Invoke(delta);
-            Input.LateUpdate();
+            WindowInputHandler.LateUpdate();
         }
 
         public static void OnClose()
         {
             Closing?.Invoke();
-            Input.Dispose();
+            WindowInputHandler.Dispose();
+            Input.PopHandler();
             Graphics.Dispose();
         }
 

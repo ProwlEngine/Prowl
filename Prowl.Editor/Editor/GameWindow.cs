@@ -34,13 +34,22 @@ public class GameWindow : EditorWindow
 
     public static WeakReference LastFocused;
 
+    public readonly GameViewInputHandler InputHandler;
+
     public GameWindow() : base()
     {
         Title = FontAwesome6.Gamepad + " Game";
         GeneralPreferences.Instance.CurrentWidth = (int)Width;
         GeneralPreferences.Instance.CurrentHeight = (int)Height - HeaderHeight;
         RefreshRenderTexture();
+
         LastFocused = new WeakReference(this);
+        InputHandler = new GameViewInputHandler(Window.InternalInput, this);
+    }
+
+    ~GameWindow()
+    {
+        InputHandler.Dispose();
     }
 
     public void RefreshRenderTexture()
@@ -55,6 +64,7 @@ public class GameWindow : EditorWindow
 
         if(IsFocused)
             LastFocused = new WeakReference(this);
+        InputHandler.LateUpdate();
 
         gui.CurrentNode.Layout(Runtime.GUI.LayoutType.Column).ScaleChildren();
 

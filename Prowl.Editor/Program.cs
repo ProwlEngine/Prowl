@@ -98,18 +98,17 @@ public static class Program
 
                 try
                 {
-                    // Only handle input if the game window is focused
-                    Input.Enabled = GameWindow.IsGameWindowFocused || PlayMode.Current == PlayMode.Mode.Playing;
+                    bool hasGameWindow = GameWindow.LastFocused != null && GameWindow.LastFocused.IsAlive;
+                    // Push GameWindow's input handler
+                    if (hasGameWindow) Input.PushHandler((GameWindow.LastFocused.Target as GameWindow).InputHandler);
                     SceneManager.Update();
-                    Input.Enabled = true;
+                    if (hasGameWindow) Input.PopHandler();
                 }
                 catch (Exception e)
                 {
                     Debug.LogError("Scene Update Error: " + e.ToString());
                 }
             }
-
-            GameWindow.IsGameWindowFocused = false;
         };
 
         Application.Render += (delta) =>

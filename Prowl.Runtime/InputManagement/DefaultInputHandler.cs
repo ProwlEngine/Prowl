@@ -4,57 +4,56 @@ using System.Collections.Generic;
 
 namespace Prowl.Runtime;
 
-public static class Input
+public class DefaultInputHandler : IInputHandler, IDisposable
 {
-    public static bool Enabled { get; set; } = true;
-    
-    public static IInputContext Context { get; internal set; }
+    public IInputContext Context { get; internal set; }
 
-    public static IReadOnlyList<IKeyboard> Keyboards => Context.Keyboards;
-    public static IReadOnlyList<IMouse> Mice => Context.Mice;
-    public static IReadOnlyList<IJoystick> Joysticks => Context.Joysticks;
+    public IReadOnlyList<IKeyboard> Keyboards => Context.Keyboards;
+    public IReadOnlyList<IMouse> Mice => Context.Mice;
+    public IReadOnlyList<IJoystick> Joysticks => Context.Joysticks;
 
-    public static string Clipboard {
-        get => Context.Keyboards[0].ClipboardText;
-        set {
-           Context.Keyboards[0].ClipboardText = value;
-        }
-    }
-
-
-    private static Vector2Int _currentMousePos;
-    private static Vector2Int _prevMousePos;
-
-    public static Vector2Int PrevMousePosition => Enabled ? _prevMousePos : Vector2Int.zero;
-    public static Vector2Int MousePosition {
-        get => Enabled ? _currentMousePos : Vector2Int.zero;
-        set {
-            if (Enabled)
-            {
-                _prevMousePos = value;
-                _currentMousePos = value;
-                Mice[0].Position = (Vector2)value;
-            }
-        }
-    }
-    public static Vector2 MouseDelta => Enabled ? (_currentMousePos - _prevMousePos) : Vector2.zero;
-    public static float MouseWheelDelta => Enabled ? Mice[0].ScrollWheels[0].Y : 0f;
-
-    private static Dictionary<Key, bool> wasKeyPressed = new Dictionary<Key, bool>();
-    private static Dictionary<Key, bool> isKeyPressed = new Dictionary<Key, bool>();
-    private static Dictionary<MouseButton, bool> wasMousePressed = new Dictionary<MouseButton, bool>();
-    private static Dictionary<MouseButton, bool> isMousePressed = new Dictionary<MouseButton, bool>();
-
-    public static char? LastPressedChar;
-
-    public static event Action<Key, bool> OnKeyEvent;
-    public static Action<MouseButton, double, double, bool, bool> OnMouseEvent;
-
-    public static bool IsAnyKeyDown => Enabled && isKeyPressed.ContainsValue(true);
-
-    internal static void Initialize()
+    public string Clipboard
     {
-        Context = Window.InternalWindow.CreateInput();
+        get => Context.Keyboards[0].ClipboardText;
+        set
+        {
+            Context.Keyboards[0].ClipboardText = value;
+        }
+    }
+
+
+    private Vector2Int _currentMousePos;
+    private Vector2Int _prevMousePos;
+
+    public Vector2Int PrevMousePosition => _prevMousePos;
+    public Vector2Int MousePosition
+    {
+        get => _currentMousePos;
+        set
+        {
+            _prevMousePos = value;
+            _currentMousePos = value;
+            Mice[0].Position = (Vector2)value;
+        }
+    }
+    public Vector2 MouseDelta => _currentMousePos - _prevMousePos;
+    public float MouseWheelDelta => Mice[0].ScrollWheels[0].Y;
+
+    private Dictionary<Key, bool> wasKeyPressed = new Dictionary<Key, bool>();
+    private Dictionary<Key, bool> isKeyPressed = new Dictionary<Key, bool>();
+    private Dictionary<MouseButton, bool> wasMousePressed = new Dictionary<MouseButton, bool>();
+    private Dictionary<MouseButton, bool> isMousePressed = new Dictionary<MouseButton, bool>();
+
+    public char? LastPressedChar { get; set; }
+
+    public event Action<Key, bool> OnKeyEvent;
+    public event Action<MouseButton, double, double, bool, bool> OnMouseEvent;
+
+    public bool IsAnyKeyDown => isKeyPressed.ContainsValue(true);
+
+    public DefaultInputHandler(IInputContext context)
+    {
+        Context = context;
         _prevMousePos = (Vector2Int)Mice[0].Position.ToDouble();
         _currentMousePos = (Vector2Int)Mice[0].Position.ToDouble();
 
@@ -83,12 +82,7 @@ public static class Input
         UpdateKeyStates();
     }
 
-    internal static void Dispose()
-    {
-        Context.Dispose();
-    }
-
-    internal static void LateUpdate()
+    internal void LateUpdate()
     {
         _prevMousePos = _currentMousePos;
         _currentMousePos = (Vector2Int)Mice[0].Position.ToDouble();
@@ -107,7 +101,7 @@ public static class Input
     }
 
     // Update the state of each key
-    private static void UpdateKeyStates()
+    private void UpdateKeyStates()
     {
         foreach (Key key in Enum.GetValues(typeof(Key)))
         {
@@ -134,7 +128,7 @@ public static class Input
                 wasMousePressed[button] = isMousePressed[button];
                 isMousePressed[button] = false;
                 foreach (var mouse in Mice)
-                    if (mouse.IsButtonPressed((MouseButton)button))
+                    if (mouse.IsButtonPressed(button))
                     {
                         isMousePressed[button] = true;
                         break;
@@ -145,17 +139,19 @@ public static class Input
         }
     }
 
-    public static bool GetKey(Key key) => Enabled && isKeyPressed[key];
+    public bool GetKey(Key key) => isKeyPressed[key];
 
-    public static bool GetKeyDown(Key key) => Enabled && isKeyPressed[key] && !wasKeyPressed[key];
+    public bool GetKeyDown(Key key) => isKeyPressed[key] && !wasKeyPressed[key];
 
-    public static bool GetKeyUp(Key key) => Enabled && !isKeyPressed[key] && wasKeyPressed[key];
+    public bool GetKeyUp(Key key) => !isKeyPressed[key] && wasKeyPressed[key];
 
-    public static bool GetMouseButton(int button) => Enabled && isMousePressed[(MouseButton)button];
+    public bool GetMouseButton(int button) => isMousePressed[(MouseButton)button];
 
-    public static bool GetMouseButtonDown(int button) => Enabled && isMousePressed[(MouseButton)button] && !wasMousePressed[(MouseButton)button];
+    public bool GetMouseButtonDown(int button) => isMousePressed[(MouseButton)button] && !wasMousePressed[(MouseButton)button];
 
-    public static bool GetMouseButtonUp(int button) => Enabled && isMousePressed[(MouseButton)button] && wasMousePressed[(MouseButton)button];
-    
-    public static void SetCursorVisible(bool visible, int miceIndex = 0) => Mice[miceIndex].Cursor.CursorMode = visible ? CursorMode.Normal : CursorMode.Hidden;
+    public bool GetMouseButtonUp(int button) => isMousePressed[(MouseButton)button] && wasMousePressed[(MouseButton)button];
+
+    public void SetCursorVisible(bool visible, int miceIndex = 0) => Mice[miceIndex].Cursor.CursorMode = visible ? CursorMode.Normal : CursorMode.Hidden;
+
+    public void Dispose() => Context.Dispose();
 }
