@@ -30,18 +30,15 @@ namespace Prowl.Editor
                 catch { }
             }
 
-            // values is now a list of all methods with the Menu Paths
-            // We need to sort them into possibly multiple trees
-            Dictionary<string, MenuPath> trees = new();
             foreach (var value in values)
             {
                 var path = value.Item1.Split('/');
                 // Root node
                 MenuPath node = new MenuPath(path[0], null);
-                if (trees.ContainsKey(path[0]))
-                    node = trees[path[0]]; // We already have this root, lets start there instead of a new root
+                if (Menus.ContainsKey(path[0]))
+                    node = Menus[path[0]]; // We already have this root, lets start there instead of a new root
                 else
-                    trees.Add(path[0], node); // This root doesnt exist yet, create it
+                    Menus.Add(path[0], node); // This root doesnt exist yet, create it
                 // Add the rest of the path
                 for (int i = 1; i < path.Length; i++)
                 {
@@ -53,20 +50,6 @@ namespace Prowl.Editor
                         node.Children.Add(child);
                     }
                     node = child;
-                }
-            }
-
-            // Set menus as trees for testing
-            //Menus = trees;
-            // Add trees into Menu without overwriting
-            if (trees.ContainsKey("Assets"))
-            {
-                if (!Menus.ContainsKey("Assets"))
-                    Menus["Assets"] = trees["Assets"];
-                else
-                {
-                    foreach (var child in trees["Assets"].Children)
-                        Menus["Assets"].Children.Add(child);
                 }
             }
         }
