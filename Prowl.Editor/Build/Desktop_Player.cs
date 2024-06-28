@@ -54,7 +54,6 @@ namespace Prowl.Editor.Build
             }
 
             BoundedLog($"Exporting and Packing assets to {BuildDataPath}...");
-#warning TODO: Needs Asset Dependencies to track what assets are used in built scenes rather then doing all assets
             if(assetPacking == AssetPacking.All)
             {
                 AssetDatabase.ExportAllBuildPackages(new DirectoryInfo(BuildDataPath));
