@@ -19,6 +19,8 @@ namespace Prowl.Editor.Build
             [Text("OSX")] osx,
             [Text("OSX x64")] osx_x64,
             [Text("OSX ARM x64")] osx_arm64,
+
+            Universal
         }
         public Target target = Target.win_x64;
 
@@ -119,8 +121,9 @@ namespace Prowl.Editor.Build
             foreach (var file in allFiles)
                 File.Copy(file, file.Replace(playerPath, output.FullName), true);
 
-            // Cleanup Runtimes folder
-            CleanupRuntimes(output);
+            // Strip files we dont need for our target
+            if(target != Target.Universal)
+                CleanupRuntimes(output);
 
             Runtime.Debug.Log("**********************************************************************************************************************");
             Runtime.Debug.Log($"Successfully built project!");
