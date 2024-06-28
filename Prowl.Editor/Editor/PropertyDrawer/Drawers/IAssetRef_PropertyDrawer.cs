@@ -87,9 +87,7 @@ namespace Prowl.Editor.PropertyDrawers
                 }
                 else if (AssetDatabase.TryGetFile(value.AssetID, out var assetPath))
                 {
-                    string name = value.Name;
-                    if(string.IsNullOrWhiteSpace(name))
-                        name = AssetDatabase.ToRelativePath(assetPath);
+                    string name = value.IsAvailable ? value.Name : assetPath.Name;
                     ActiveGUI.Draw2D.DrawText(name, pos, Color.white * (h ? 1f : 0.8f));
                     if (ActiveGUI.IsNodePressed())
                     {

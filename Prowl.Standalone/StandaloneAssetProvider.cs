@@ -28,12 +28,12 @@ public class StandaloneAssetProvider : IAssetProvider
     {
         Guid guid = GetGuidFromPath(relativeAssetPath);
         if (_loaded.ContainsKey(guid))
-            return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID]);
+            return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID - 1]);
 
         foreach (AssetBundle package in packages)
             if (package.TryGetAsset(relativeAssetPath, out var asset)) {
                 _loaded[guid] = asset;
-                return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID]);
+                return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID - 1]);
             }
         throw new FileNotFoundException($"Asset with path {relativeAssetPath} not found.");
     }
@@ -41,12 +41,12 @@ public class StandaloneAssetProvider : IAssetProvider
     public AssetRef<T> LoadAsset<T>(Guid guid, ushort fileID = 0) where T : EngineObject
     {
         if (_loaded.ContainsKey(guid))
-            return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID]);
+            return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID - 1]);
 
         foreach (AssetBundle package in packages)
             if (package.TryGetAsset(guid, out var asset)) {
                 _loaded[guid] = asset;
-                return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID]);
+                return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID - 1]);
             }
         throw new FileNotFoundException($"Asset with GUID {guid} not found.");
     }

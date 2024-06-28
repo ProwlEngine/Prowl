@@ -1,6 +1,7 @@
 using Prowl.Editor.Assets;
 using Prowl.Editor.Docking;
 using Prowl.Editor.Preferences;
+using Prowl.Editor.ProjectSettings;
 using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
@@ -320,7 +321,7 @@ public static class EditorGuiManager
         FileDialog.Open(imFileDialogInfo);
     }
 
-    [MenuItem("File/Build Project")] public static void File_BuildProject() => Project.BuildProject();
+    [MenuItem("File/Build Project")] public static void File_BuildProject() => new BuildWindow();
 
 
     #region Templates

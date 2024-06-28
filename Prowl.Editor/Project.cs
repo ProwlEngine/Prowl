@@ -137,10 +137,10 @@ public static class Project
     /// <summary>
     /// Compiles the game ssembly
     /// </summary>
-    /// <param name="dir">Directory of the .csproj file to compile</param>
+    /// <param name="csprojPath">Directory of the .csproj file to compile</param>
     /// <param name="isRelease">Is Release Build?</param>
     /// <returns>True if Compiling was successfull</returns>
-    public static bool Compile(string dir, bool isRelease = false)
+    public static bool Compile(string csprojPath, DirectoryInfo output, bool isRelease = false)
     {
         if (!HasProject)
         {
@@ -150,178 +150,59 @@ public static class Project
 
         // Reload CSProject Files
         BoundedLog($"Starting Project Compilation...");
-        GenerateCSProjectFiles();
+        GenerateCSProjectFiles(output);
 
         // Compile the Project Assembly using 'dotnet build'
-        BoundedLog($"Compiling external assembly in {dir}...");
-        ProcessStartInfo processInfo = null;
-        if (RuntimeUtils.IsWindows())
+        BoundedLog($"Compiling external assembly in {csprojPath}...");
+        ProcessStartInfo processInfo = new() {
+            WorkingDirectory = Path.GetDirectoryName(csprojPath),
+            CreateNoWindow = true,
+            UseShellExecute = false,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+        };
+
+        // Default -> Windows
+        processInfo.FileName = "cmd.exe";
+        processInfo.Arguments = $"/c dotnet build \"{Path.GetFileName(csprojPath)}\"" + (isRelease ? " --configuration Release" : "");
+
+        if (RuntimeUtils.IsMac() || RuntimeUtils.IsLinux())
         {
-            processInfo = new() {
-                WorkingDirectory = Path.GetDirectoryName(dir),
-                FileName = "cmd.exe",
-                Arguments = $"/c dotnet build \"{Path.GetFileName(dir)}\"" + (isRelease ? " --configuration Release" : ""),
-                CreateNoWindow = true,
-                UseShellExecute = false,
-                RedirectStandardError = true,
-                RedirectStandardOutput = true,
-            };
-        }
-        else if (RuntimeUtils.IsMac())
-        {
-            processInfo = new() {
-                WorkingDirectory = Path.GetDirectoryName(dir),
-                FileName = "/bin/bash",
-                Arguments = $"-c \"dotnet build '{Path.GetFileName(dir)}'\"" + (isRelease ? " --configuration Release" : ""),
-                CreateNoWindow = true,
-                UseShellExecute = false,
-                RedirectStandardError = true,
-                RedirectStandardOutput = true,
-            };
-        }
-        else if (RuntimeUtils.IsLinux())
-        {
-            processInfo = new() {
-                WorkingDirectory = Path.GetDirectoryName(dir),
-                FileName = "/bin/bash",
-                Arguments = $"-c \"dotnet build '{Path.GetFileName(dir)}'\"" + (isRelease ? " --configuration Release" : ""),
-                CreateNoWindow = true,
-                UseShellExecute = false,
-                RedirectStandardError = true,
-                RedirectStandardOutput = true,
-            };
-        }
-        else
-        {
-            Runtime.Debug.LogError("Unsupported OS for compiling external assembly!");
-            return false;
+            processInfo.FileName = "/bin/bash";
+            processInfo.Arguments = $"-c \"dotnet build '{Path.GetFileName(csprojPath)}'\"" + (isRelease ? " --configuration Release" : "");
         }
 
         Process process = Process.Start(processInfo) ?? throw new Exception();
-            process.OutputDataReceived += (sender, dataArgs) => {
-                string? data = dataArgs.Data;
+        process.OutputDataReceived += (sender, dataArgs) => {
+            string? data = dataArgs.Data;
 
-                if (data is null)
-                    return;
+            if (data is null)
+                return;
 
-                if (data.Contains("Warning", StringComparison.OrdinalIgnoreCase))
-                    Runtime.Debug.LogWarning(data);
-                else if (data.Contains("Error", StringComparison.OrdinalIgnoreCase))
-                    Runtime.Debug.LogError(data);
-                else
-                    Runtime.Debug.Log(data);
-            };
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-            process.ErrorDataReceived += (sender, dataArgs) => {
-                if (dataArgs.Data is not null)
-                    Runtime.Debug.LogError(dataArgs.Data);
-            };
+            if (data.Contains("Warning", StringComparison.OrdinalIgnoreCase))
+                Runtime.Debug.LogWarning(data);
+            else if (data.Contains("Error", StringComparison.OrdinalIgnoreCase))
+                Runtime.Debug.LogError(data);
+            else
+                Runtime.Debug.Log(data);
+        };
 
-            process.WaitForExit();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        process.ErrorDataReceived += (sender, dataArgs) => {
+            if (dataArgs.Data is not null)
+                Runtime.Debug.LogError(dataArgs.Data);
+        };
 
-            int exitCode = process.ExitCode;
-            process.Close();
+        process.WaitForExit();
+
+        int exitCode = process.ExitCode;
+        process.Close();
 
         BoundedLog($"Exit Code: '{exitCode}'");
 
         BoundedLog($"{(exitCode == 0 ? "Successfully" : "Failed to")} compile external assembly!");
         return exitCode == 0;
-    }
-
-    public static bool BuildProject()
-    {
-        if (!HasProject)
-        {
-            Runtime.Debug.LogError($"No Project Loaded...");
-            return false;
-        }
-
-        if (BuildProjectSetting.Instance.InitialScene.IsAvailable == false)
-        {
-            Runtime.Debug.LogError($"Initial Scene, is not Available, Initial Scene must always be available!");
-            return false;
-        }
-
-        Runtime.Debug.Log($"Starting Project Build...");
-        BoundedLog($"Creating Directories...");
-
-        string buildPath = Path.Combine(ProjectDirectory, "Builds", "Latest");
-        string BuildDataPath = Path.Combine(ProjectDirectory, "Builds", "Latest", "GameData");
-        // Check if "Latest" folder already exists
-        if (Directory.Exists(buildPath))
-        {
-            // Increment the folder name
-            int count = 1;
-            string newBuildPath;
-            do
-            {
-                newBuildPath = Path.Combine(ProjectDirectory, "Builds", $"Latest_{count}");
-                count++;
-            } while (Directory.Exists(newBuildPath));
-
-            // Move the existing "Latest" folder to the new one
-            Directory.Move(buildPath, newBuildPath);
-        }
-
-        Directory.CreateDirectory(buildPath);
-        Directory.CreateDirectory(BuildDataPath);
-
-
-        BoundedLog($"Compiling project assembly to {buildPath}...");
-        if (!Compile(Assembly_Proj, true))
-        {
-            Runtime.Debug.LogError($"Failed to compile Project assembly!");
-            return false;
-        }
-
-
-        BoundedLog($"Exporting and Packing assets to {BuildDataPath}...");
-#warning TODO: Needs Asset Dependencies to track what assets are used in built scenes rather then doing all assets
-        AssetDatabase.ExportAllBuildPackages(new DirectoryInfo(BuildDataPath));
-
-
-        BoundedLog($"Preparing default scene to...");
-        FileInfo StartingScene = new FileInfo(Path.Combine(BuildDataPath, "level.prowl"));
-        SerializedProperty tag = Serializer.Serialize(BuildProjectSetting.Instance.InitialScene.Res!);
-        BinaryTagConverter.WriteToFile(tag, StartingScene);
-
-
-        BoundedLog($"Preparing projecte settings scene...");
-#warning TODO: Untested, Just slapped togather for now as I have other things to do that are more important
-        // Find all ScriptableSingletons with the specified location
-        foreach (var type in RuntimeUtils.GetTypesWithAttribute<FilePathAttribute>())
-            if (Attribute.GetCustomAttribute(type, typeof(FilePathAttribute)) is FilePathAttribute attribute)
-                if (attribute.FileLocation == FilePathAttribute.Location.Setting)
-                {
-                    // Use Reflection to find the CopyTo method
-                    MethodInfo copyTo = type.GetMethod("CopyTo", BindingFlags.Static | BindingFlags.NonPublic);
-                    if (copyTo is null)
-                    {
-                        Runtime.Debug.LogError($"Failed to find CopyTo method for {type.Name}");
-                        continue;
-                    }
-
-                    // Invoke the CopyTo method
-                    copyTo.Invoke(null, new object[] { BuildDataPath });
-                }
-
-
-        BoundedLog($"Copying standalone player to {buildPath}...");
-        // Get the Standalone.zip file from embedded resources
-        using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.Standalone.zip");
-        using ZipArchive archive = new(stream, ZipArchiveMode.Read);
-        // Extract the Standalone.zip file to the BuildPath
-        archive.ExtractToDirectory(buildPath);
-
-
-        Runtime.Debug.Log("**********************************************************************************************************************");
-        Runtime.Debug.Log($"Successfully built project!");
-
-        // Open the Build folder
-        AssetDatabase.OpenPath(new DirectoryInfo(buildPath));
-
-        return true;
     }
 
     /// <summary>
@@ -335,6 +216,8 @@ public static class Project
 
 
     #region Private Methods
+
+
     private static string GetIncludesFrom(IEnumerable<string> filePaths)
     {
         List<string> includeElements = new();
@@ -343,7 +226,7 @@ public static class Project
         return string.Join("\n", includeElements);
     }
 
-    private static void GenerateCSProjectFiles()
+    private static void GenerateCSProjectFiles(DirectoryInfo output)
     {
         if (!HasProject) throw new Exception("No Project Loaded, Cannot generate CS Project Files!");
 
@@ -369,10 +252,10 @@ public static class Project
                 <ProjectRoot>{ProjectDirectory}</ProjectRoot>
             </PropertyGroup>
             <PropertyGroup Condition="" '$(Configuration)' == 'Debug' "">
-                <OutputPath>$(ProjectRoot)/Temp/bin/Debug/</OutputPath>
+                <OutputPath>{output.FullName}</OutputPath>
             </PropertyGroup>
             <PropertyGroup Condition="" '$(Configuration)' == 'Release' "">
-                <OutputPath>$(ProjectRoot)/Builds/Latest/</OutputPath>
+                <OutputPath>{output.FullName}</OutputPath>
             </PropertyGroup>";
 
         string referencesXML = string.Join("\n", references.Select(assembly => 

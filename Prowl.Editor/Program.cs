@@ -90,8 +90,6 @@ public static class Program
                     EditorGuiManager.SaveSceneAs();
                 else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Key.S, Ctrl = true }))
                     EditorGuiManager.SaveScene();
-                else if (Hotkeys.IsHotkeyDown("BuildProject", new() { Key = Key.B, Ctrl = true }))
-                    Project.BuildProject();
 
                 Application.isPlaying = PlayMode.Current == PlayMode.Mode.Playing;
 
@@ -261,8 +259,8 @@ public static class Program
                     Directory.CreateDirectory(Path.Combine(Project.TempDirectory, "bin"));
 
                     // Compile the Projects
-                    Project.Compile(Project.Assembly_Proj);
-                    Project.Compile(Project.Editor_Assembly_Proj);
+                    Project.Compile(Project.Assembly_Proj, new DirectoryInfo(Path.Combine(Project.TempDirectory, "bin", "Debug")));
+                    Project.Compile(Project.Editor_Assembly_Proj, new DirectoryInfo(Path.Combine(Project.TempDirectory, "bin", "Debug")));
 
                     // Reload the External Assemblies
                     AssemblyManager.LoadExternalAssembly(Project.Editor_Assembly_DLL, true);

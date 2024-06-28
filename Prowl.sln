@@ -6,6 +6,9 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Prowl.Runtime", "Prowl.Runtime\Prowl.Runtime.csproj", "{863FF67B-9C3F-4E5E-9353-AD88CD9F77D2}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Prowl.Editor", "Prowl.Editor\Prowl.Editor.csproj", "{E4AE33B5-5632-4817-8081-2D9469E3471E}"
+	ProjectSection(ProjectDependencies) = postProject
+		{780A7012-0470-4D84-B83D-D79F83DEDA82} = {780A7012-0470-4D84-B83D-D79F83DEDA82}
+	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Prowl.Player", "Prowl.Standalone\Prowl.Player.csproj", "{780A7012-0470-4D84-B83D-D79F83DEDA82}"
 EndProject

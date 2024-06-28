@@ -23,10 +23,11 @@ internal class Program {
             AssemblyManager.LoadExternalAssembly(AssemblyDLL.FullName, true);
             OnAssemblyLoadAttribute.Invoke();
 
-            FileInfo StartingScene = new FileInfo(Path.Combine(Data.FullName, "level.prowl"));
+            FileInfo StartingScene = new FileInfo(Path.Combine(Data.FullName, "scene_0.prowl"));
+            Debug.Log($"Starting Scene: {StartingScene.FullName}");
             if (File.Exists(StartingScene.FullName))
             {
-                SerializedProperty tag = BinaryTagConverter.ReadFromFile(StartingScene);
+                SerializedProperty tag = StringTagConverter.ReadFromFile(StartingScene);
                 Scene scene = Serializer.Deserialize<Scene>(tag);
                 SceneManager.LoadScene(scene);
             }
