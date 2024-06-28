@@ -59,14 +59,16 @@ namespace Prowl.Editor
             // Set menus as trees for testing
             //Menus = trees;
             // Add trees into Menu without overwriting
-            if (!Menus.ContainsKey("Assets"))
-                Menus["Assets"] = trees["Assets"];
-            else
+            if (trees.ContainsKey("Assets"))
             {
-                foreach (var child in trees["Assets"].Children)
-                    Menus["Assets"].Children.Add(child);
+                if (!Menus.ContainsKey("Assets"))
+                    Menus["Assets"] = trees["Assets"];
+                else
+                {
+                    foreach (var child in trees["Assets"].Children)
+                        Menus["Assets"].Children.Add(child);
+                }
             }
-
         }
 
         public static void CreateAsset(Type type)
