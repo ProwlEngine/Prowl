@@ -7,8 +7,15 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
 
-    <ItemGroup>
-        <ProjectReference Include="../Prowl.Runtime/Prowl.Runtime.csproj" />
-    </ItemGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <OutputPath>../Build/Player/Debug/</OutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <OutputPath>../Build/Player/Release/</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Prowl.Runtime/Prowl.Runtime.csproj" />
+  </ItemGroup>
 
 </Project>

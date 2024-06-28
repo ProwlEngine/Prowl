@@ -7,6 +7,13 @@
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <OutputPath>../Build/Runtime/Debug/</OutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <OutputPath>../Build/Runtime/Release/</OutputPath>
+  </PropertyGroup>
+
     <ItemGroup>
       <Content Remove="C:\Users\acer1\.nuget\packages\pictime.sharpfont.dependencies\2.6.0\build\..\bin\msvc12\x64\freetype6.dll" />
     </ItemGroup>
