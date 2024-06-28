@@ -24,8 +24,35 @@ namespace Prowl.Editor.PropertyDrawers
         {
             bool changed = false;
 
-            T list = (T)propertyValue;
 
+            if (propertyValue == null)
+            {
+                // Null Drawer
+                using (gui.Node(label + "_Null", index).ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
+                {
+                    using (gui.Node("Creator", index).MaxWidth(EditorStylePrefs.Instance.ItemSize).Height(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.Row).Enter())
+                    {
+                        if (gui.IsNodePressed())
+                        {
+                            propertyValue = Activator.CreateInstance(propertyType);
+                            changed = true;
+                        }
+                        else if (gui.IsNodeHovered())
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
+
+                        gui.Draw2D.DrawText(FontAwesome6.Plus, 20, gui.CurrentNode.LayoutData.InnerRect, Color.white);
+                    }
+
+                    using (gui.Node("Label", index).Height(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.Row).Enter())
+                    {
+                        gui.Draw2D.DrawText("(Null)", 20, gui.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.Warning);
+                    }
+                }
+                return changed;
+            }
+
+
+            T list = (T)propertyValue;
 
             using (gui.Node(label, index).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Enter())
             {
