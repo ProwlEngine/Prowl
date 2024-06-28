@@ -29,6 +29,8 @@
 
 # <p align="center">📝 About The Project 📝</p>
 Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in .NET 8**, (which surprisingly has **no runtime fees** believe it or not! 😮). It aims to provide a seamless transition for developers familiar with Unity by maintaining a similar API while also following KISS and staying as small and customizable as possible. 
+The goal is a viable open-source Unity alternative, ideally, Unity projects can port over with as little resistance as possible.
+
 
 ### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn) 
 
