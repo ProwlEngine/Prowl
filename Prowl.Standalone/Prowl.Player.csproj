@@ -18,7 +18,7 @@
     <ProjectReference Include="../Prowl.Runtime/Prowl.Runtime.csproj" />
   </ItemGroup>
 
-  <Target Name="MoveToEditorTarget" AfterTargets="CoreCompile">
+  <Target Name="MoveToEditorTarget" AfterTargets="AfterBuild">
     <PropertyGroup>
       <EditorOutputPath>$(ProjectDir)../Build/Editor/$(Configuration)/$(TargetFramework)/Players/Desktop/</EditorOutputPath>
     </PropertyGroup>
