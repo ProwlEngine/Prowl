@@ -8,14 +8,38 @@
     </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-    <OutputPath>../Build/Player/Debug/</OutputPath>
+    <OutputPath>../Build/Players/Debug/Desktop/</OutputPath>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-    <OutputPath>../Build/Player/Release/</OutputPath>
+    <OutputPath>../Build/Players/Release/Desktop/</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="../Prowl.Runtime/Prowl.Runtime.csproj" />
   </ItemGroup>
+
+  <Target Name="MoveToEditorTarget" AfterTargets="CoreCompile">
+    <PropertyGroup>
+      <EditorOutputPath>$(ProjectDir)../Build/Editor/$(Configuration)/$(TargetFramework)/Players/Desktop/</EditorOutputPath>
+    </PropertyGroup>
+
+    <Message Text="Copying files from $(OutputPath) to $(EditorOutputPath)" Importance="high" />
+
+    <ItemGroup>
+      <FilesToCopy Include="$(OutputPath)**\*.*" />
+    </ItemGroup>
+
+    <Copy
+      SourceFiles="@(FilesToCopy)"
+      DestinationFolder="$(EditorOutputPath)%(RecursiveDir)"
+      OverwriteReadOnlyFiles="true"
+      SkipUnchangedFiles="false" />
+
+    <Message Text="Files copied successfully." Importance="high" />
+  </Target>
+
+  <PropertyGroup>
+    <MSBuildGlobalProperties>$(MSBuildGlobalProperties);EnableMSBuildAssemblyLogging=1;MSBuildDebugEngine=1</MSBuildGlobalProperties>
+  </PropertyGroup>
 
 </Project>
