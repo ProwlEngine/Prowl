@@ -47,8 +47,9 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - Gameobject & Component structure
     - A Powerful Custom UI Library
       - Same Library for Ingame and Editor UI
+      - 3D Drawing in UI used for Gizmo's
+      - Immediate Mode with retained properties
     - .NET 8
-    - Dear ImGUI Editor, including ImGuizmo, ImPlot, ImNodes
     - Editor with support for Editor Scripts and Custom Editors
     - Physics ([Bepu Physics 2](https://github.com/bepu/bepuphysics2))
       - Colliders: Box, Sphere, Capsule, Cylinder, Mesh Collider
@@ -58,9 +59,9 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - ScriptableObjects
     - Projects & Project Settings
     - Unity-like Serializer to create In-Memory Graphs
-       - Graph -> Text (System.Text.Json)
+       - Graph -> Custom Text Format
        - Graph -> Binary
-    - Full 64-bit using Doubles
+    - Fully 64-bit using Doubles
     - Large World Coordinates Support
        - Camera Relative Rendering
     - Scene System
@@ -70,6 +71,9 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - Prefabs
     - Build System - Build to Standalone Application
        - Packed Asset files
+       - Less than 15mb builds - currently working on removing 10mb, Almost done!
+       - Only exports used assets
+       - Supports Windows, Mac & Linux
 
 -   **Graphics Rendering:**
     - Modular Graphics Backend
