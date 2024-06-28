@@ -99,6 +99,7 @@ namespace Prowl.Runtime.Utils
                 try
                 {
                     var deserialized = Serializer.Deserialize<T>(StringTagConverter.ReadFromFile(new FileInfo(filePath)))!;
+                    deserialized.OnValidate();
                     if (deserialized != null)
                         return deserialized;
                 }
