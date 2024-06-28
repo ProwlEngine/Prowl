@@ -22,6 +22,15 @@ namespace Prowl.Editor.Build
         }
         public Target target = Target.win_x64;
 
+
+        public enum AssetPacking
+        {
+            [Text("All Assets")] All,
+            [Text("Used Assets")] Used
+        }
+        public AssetPacking assetPacking = AssetPacking.Used;
+
+
         protected override void Build(AssetRef<Scene>[] scenes, DirectoryInfo output)
         {
             output.Create();
@@ -38,7 +47,22 @@ namespace Prowl.Editor.Build
 
             BoundedLog($"Exporting and Packing assets to {BuildDataPath}...");
 #warning TODO: Needs Asset Dependencies to track what assets are used in built scenes rather then doing all assets
-            AssetDatabase.ExportAllBuildPackages(new DirectoryInfo(BuildDataPath));
+            if(assetPacking == AssetPacking.All)
+            {
+                AssetDatabase.ExportAllBuildPackages(new DirectoryInfo(BuildDataPath));
+            }
+            else
+            {
+                HashSet<Guid> assets = new();
+                foreach (var scene in scenes)
+                    AssetDatabase.GetDependenciesDeep(scene.AssetID, ref assets);
+
+                // Include all Shaders in the build for the time being
+                foreach (var shader in AssetDatabase.GetAllAssetsOfType<Shader>())
+                    assets.Add(shader.Item2);
+
+                AssetDatabase.ExportBuildPackages(assets.ToArray(), new DirectoryInfo(BuildDataPath));
+            }
 
 
             BoundedLog($"Packing scenes...");
