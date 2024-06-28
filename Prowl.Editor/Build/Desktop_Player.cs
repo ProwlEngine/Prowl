@@ -22,6 +22,12 @@ namespace Prowl.Editor.Build
         }
         public Target target = Target.win_x64;
 
+        public enum Configuration
+        {
+            Debug,
+            Release
+        }
+        public Configuration configuration = Configuration.Release;
 
         public enum AssetPacking
         {
@@ -39,7 +45,7 @@ namespace Prowl.Editor.Build
 
 
             BoundedLog($"Compiling project assembly to {output.FullName}...");
-            if (!Project.Compile(Project.Assembly_Proj, output, true))
+            if (!Project.Compile(Project.Assembly_Proj, output, configuration == Configuration.Release))
             {
                 Debug.LogError($"Failed to compile Project assembly!");
                 return;
