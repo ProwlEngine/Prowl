@@ -112,6 +112,22 @@ namespace Prowl.Editor.Assets
             return null;
         }
 
+        public static void GetDependenciesDeep(Guid assetID, ref HashSet<Guid> dependencies)
+        {
+            if (assetGuidToMeta.TryGetValue(assetID, out var meta))
+            {
+                var dependsOn = meta.dependencies.ToHashSet();
+                foreach (var dependency in dependsOn)
+                {
+                    if (!dependencies.Contains(dependency))
+                    {
+                        dependencies.Add(dependency);
+                        GetDependenciesDeep(dependency, ref dependencies);
+                    }
+                }
+            }
+        }
+
         public static HashSet<Guid> AllThatDependOn(Guid dependsOn)
         {
             HashSet<Guid> result = new();
@@ -166,7 +182,8 @@ namespace Prowl.Editor.Assets
             }
         }
 
-        public static List<(string, Guid, ushort)> GetAllAssetsOfType(Type type)
+        public static List<(string, Guid, ushort)> GetAllAssetsOfType<T>() where T : EngineObject => GetAllAssetsOfType(typeof(T));
+        public static List<(string name, Guid assetID, ushort fileID)> GetAllAssetsOfType(Type type)
         {
             // Go over all loaded meta files and check the Importers type
             List<(string, Guid, ushort)> result = new();
