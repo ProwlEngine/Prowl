@@ -16,7 +16,7 @@ namespace Prowl.Editor.Build
             [Text("Linux x64")] linux_x64,
             [Text("Linux x86")] linux_x86,
 
-            [Text("OSX x86")] osx,
+            [Text("OSX")] osx,
             [Text("OSX x64")] osx_x64,
             [Text("OSX ARM x64")] osx_arm64,
         }
