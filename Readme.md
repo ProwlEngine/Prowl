@@ -25,22 +25,28 @@
     <li><a href="#acknowledgments">Acknowledgments</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#dependencies">Dependencies</a></li>
-    <li><a href="#screenshots">Screenshots</a></li>
   </ol>
 
 # <p align="center">📝 About The Project 📝</p>
 Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in .NET 8**, (which surprisingly has **no runtime fees** believe it or not! 😮). It aims to provide a seamless transition for developers familiar with Unity by maintaining a similar API while also following KISS and staying as small and customizable as possible. This engine is intended to be customized to your needs, everything is written to be a "Minimal" Production-Ready Implementation. Ideally, there will be plenty of Modules/Packages to expand on functionality for those who don't want (or are unable) to expand the base engine.
 
-### [Join our Discord server!](https://discord.gg/BqnJ9Rn4sn) 🎉
+### [<p align="center">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn) 
 
-![Showcase](https://i.imgur.com/ePlVUPY.png)
+![Screenshot 2024-06-27 172952](https://github.com/michaelsakharov/Prowl/assets/8621606/80df58cc-53ac-4582-b722-1800d6cd4d13) | ![Screenshot 2024-06-27 172106](https://github.com/michaelsakharov/Prowl/assets/8621606/c13e9145-6b35-4ea5-ad66-523a275d0bc9)
+:-:|:-:
+![image](https://github.com/michaelsakharov/Prowl/assets/8621606/91ab57be-b215-40a8-871b-baf1dfc9ea58) | ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/1cc6bb14-7c41-46e9-a581-c79ba51fc45f)
+![image](https://github.com/michaelsakharov/Prowl/assets/8621606/b7fb26e0-568f-4bd7-9282-3e2fd12b38a9) | ![image](https://github.com/michaelsakharov/Prowl/assets/8621606/1b376ae7-8f13-41ea-ba1d-a49f777398ac)
+![UntitledFLightModel](https://github.com/michaelsakharov/Prowl/assets/8621606/58a3c640-6ace-4f2f-8de6-e3bf5bbf9865) | ![Untitled](https://github.com/michaelsakharov/Prowl/assets/8621606/5165f2c4-681f-4cf7-8579-1152c971d142)
 
 # <p align="center">✨ Features ✨</p>
 
 -   **General:**
+    - Cross-Platform! Windows, Linux & Mac!
     - Unity-like Editor & Scripting API
     - C# Scripting
     - Gameobject & Component structure
+    - A Powerful Custom UI Library
+      - Same Library for Ingame and Editor UI
     - .NET 8
     - Dear ImGUI Editor, including ImGuizmo, ImPlot, ImNodes
     - Editor with support for Editor Scripts and Custom Editors
@@ -64,7 +70,6 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - Prefabs
     - Build System - Build to Standalone Application
        - Packed Asset files
-    - Node System (A Port of xNode from Unity)
 
 -   **Graphics Rendering:**
     - Modular Graphics Backend
@@ -76,7 +81,6 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
         - Metallic Map
         - Ambient Occclusion Map
         - Emission Map
-    - Node-Based Customizable Render Pipelines
     - Deferred Renderer
     - Point, Spot, and Directional Lights
     - Shadow Mapping + Contact Hardening (Variable Penumbra)
@@ -101,6 +105,7 @@ Prowl is an open-source, **MIT-licensed** game engine developed in **pure C# in 
     - Supports many major file formats via ImageMagick, Assimp, etc
     - Sub-Assets, Assets stored inside other assets
     - Dependency Tracking
+### [<p align="right">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn) 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 # <p align="center">🚀 Getting Started 🚀</p>
@@ -125,13 +130,13 @@ Getting Prowl up and running is super easy!
 
 ### Engine
 - 🛠️ Cross Platform
-  - ✔️ Windows - Fully functional
-  - ✔️ MacOS - ImGUI asserts cause crashes occasionally
-  - 🛠️ Linux
+  - ✔️ Windows
+  - ✔️ MacOS
+  - ✔️ Linux
   - ❌ Andriod
   - ❌ iOS
   - ❌ Web
-- ❌ UI Engine
+- ✔️ UI Engine
 - ❌ VR Support
 - ❌ Navmesh and AI Agents
 - ❌ Networking Solution
@@ -196,6 +201,7 @@ We're not just asking for contributors; we're asking for partners in this journe
 All contributors will be acknowledged in our [Acknowledgments](#acknowledgments) section.
 
 **Thank you for considering contributing to Prowl. Together, let's build something amazing!**
+### [<p align="right">Join our Discord server! 🎉</p>](https://discord.gg/BqnJ9Rn4sn) 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 # <p align="center">🙏 Acknowledgments 🙏</p>
@@ -229,19 +235,4 @@ Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 - [Assimp](https://github.com/assimp/assimp) via [Assimp.NET](https://bitbucket.org/Starnick/assimpnet)
 - [ImageMagick](http://www.imagemagick.org/) via [Magick.NET](https://github.com/dlemstra/Magick.NET)
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-# <p align="center">📸 Screenshots 📸</p>
-![image](https://github.com/michaelsakharov/Prowl/assets/8621606/1b376ae7-8f13-41ea-ba1d-a49f777398ac)
-
-![image](https://github.com/michaelsakharov/Prowl/assets/8621606/2fdad2ea-f956-42f5-a7c6-4c2ae0df4495)
-[![animations](https://i.gyazo.com/2824b4a16a6d6b6ad9b64912e6020271.gif)](https://gyazo.com/2824b4a16a6d6b6ad9b64912e6020271)
-![Bokeh Depth of Field](https://i.imgur.com/VYs44qq.png)
-![Editor](https://github.com/michaelsakharov/Prowl/assets/8621606/bb3c423b-3cc8-45a1-baa7-c9ad31d945c6)
-![image](https://github.com/michaelsakharov/Prowl/assets/8621606/f755ee5d-eba5-4453-9f31-f61768c2554c)
-![Flight Model](https://github.com/michaelsakharov/Prowl/assets/8621606/7683759c-5e0c-4689-acba-c733b3a64b5c)
-![image](https://github.com/michaelsakharov/Prowl/assets/8621606/43d9f1db-1806-4961-bc40-fd77b196043b)
-![image](https://github.com/michaelsakharov/Prowl/assets/8621606/6bee582a-903d-4b30-8c0b-50023ccc0c4e)
-![image](https://github.com/michaelsakharov/Prowl/assets/8621606/5108bd1f-a822-47c0-855d-c3c4f4fb29b3)
-
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
