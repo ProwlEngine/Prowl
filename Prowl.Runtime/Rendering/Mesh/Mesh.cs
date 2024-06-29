@@ -57,7 +57,6 @@ namespace Prowl.Runtime
                     normals = null;
                     tangents = null;
                     colors = null;
-                    colors32 = null;
                     uv = null;
                     uv2 = null;
                     indices = null;
@@ -75,14 +74,9 @@ namespace Prowl.Runtime
             set => WriteVertexData(ref tangents, value, value.Length);
         }
 
-        public Color[] Colors {
+        public Color32[] Colors {
             get => ReadVertexData(colors ?? []);
             set => WriteVertexData(ref colors, value, value.Length);
-        }
-
-        public Color32[] Colors32 {
-            get => ReadVertexData(colors32 ?? []);
-            set => WriteVertexData(ref colors32, value, value.Length);
         }
 
         public System.Numerics.Vector2[] UV {
@@ -119,7 +113,6 @@ namespace Prowl.Runtime
         public bool HasNormals => (normals?.Length ?? 0) > 0;
         public bool HasTangents => (tangents?.Length ?? 0) > 0;
         public bool HasColors => (colors?.Length ?? 0) > 0;
-        public bool HasColors32 => (colors32?.Length ?? 0) > 0;
         public bool HasUV => (uv?.Length ?? 0) > 0;
         public bool HasUV2 => (uv2?.Length ?? 0) > 0;
 
@@ -132,8 +125,7 @@ namespace Prowl.Runtime
         System.Numerics.Vector3[]? vertices;
         System.Numerics.Vector3[]? normals;
         System.Numerics.Vector3[]? tangents;
-        Color[]? colors;
-        Color32[]? colors32;
+        Color32[]? colors;
         System.Numerics.Vector2[]? uv;
         System.Numerics.Vector2[]? uv2;
         uint[]? indices;
@@ -145,7 +137,8 @@ namespace Prowl.Runtime
 
 
         DeviceBuffer vertexBuffer;
-        DeviceBuffer indexBuffer;        
+        DeviceBuffer indexBuffer; 
+               
         int[] bufferOffsets;
 
         public int UVStart => bufferOffsets[0];
@@ -164,7 +157,6 @@ namespace Prowl.Runtime
             vertices = null;
             normals = null;
             colors = null;
-            colors32 = null;
             uv = null;
             uv2 = null;
             indices = null;
@@ -214,7 +206,7 @@ namespace Prowl.Runtime
                     break;
             }
 
-            bufferOffsets = CalcOffsets();
+            bufferOffsets = GetResourceOffsets();
 
             // Vertex buffer upload
             vertexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)BufferLength, BufferUsage.VertexBuffer));
@@ -232,8 +224,6 @@ namespace Prowl.Runtime
 
             if (HasColors)
                 Graphics.Device.UpdateBuffer(vertexBuffer, (uint)ColorsStart, colors);
-            else if (HasColors32)
-                Graphics.Device.UpdateBuffer(vertexBuffer, (uint)ColorsStart, colors32.Select(x => (Color)x).ToArray());
 
             if (HasTangents)
                 Graphics.Device.UpdateBuffer(vertexBuffer, (uint)TangentsStart, tangents);
@@ -467,7 +457,7 @@ namespace Prowl.Runtime
             target = value;
         }
 
-        internal int[] CalcOffsets()
+        internal int[] GetResourceOffsets()
         {
             int floatSize = sizeof(float);
 
@@ -535,18 +525,6 @@ namespace Prowl.Runtime
                 if (colors != null)
                 {
                     foreach (var color in colors)
-                    {
-                        writer.Write(color.r);
-                        writer.Write(color.g);
-                        writer.Write(color.b);
-                        writer.Write(color.a);
-                    }
-                }
-
-                writer.Write(colors32?.Length ?? 0);
-                if (colors32 != null)
-                {
-                    foreach (var color in colors32)
                     {
                         writer.Write(color.r);
                         writer.Write(color.g);
@@ -676,17 +654,9 @@ namespace Prowl.Runtime
                 var colorCount = reader.ReadInt32();
                 if (colorCount > 0)
                 {
-                    colors = new Color[colorCount];
+                    colors = new Color32[colorCount];
                     for (int i = 0; i < colorCount; i++)
-                        colors[i] = new Color(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
-                }
-
-                var color32Count = reader.ReadInt32();
-                if (color32Count > 0)
-                {
-                    colors32 = new Color32[color32Count];
-                    for (int i = 0; i < color32Count; i++)
-                        colors32[i] = new Color32(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
+                        colors[i] = new Color32(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
                 }
 
                 var uvCount = reader.ReadInt32();

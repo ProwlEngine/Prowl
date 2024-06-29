@@ -30,24 +30,22 @@ namespace Prowl.Runtime
                 MeshResource.UV1 =>         new VertexLayoutDescription(new VertexElementDescription("TEXCOORD1", VertexElementFormat.Float2, VertexElementSemantic.TextureCoordinate)),
                 MeshResource.Normals =>     new VertexLayoutDescription(new VertexElementDescription("NORMAL", VertexElementFormat.Float3, VertexElementSemantic.Normal)),
                 MeshResource.Tangents =>    new VertexLayoutDescription(new VertexElementDescription("TANGENT", VertexElementFormat.Float3, VertexElementSemantic.Normal)),
-                MeshResource.Colors =>      new VertexLayoutDescription(new VertexElementDescription("COLOR", VertexElementFormat.Float4, VertexElementSemantic.Color)),
+                MeshResource.Colors =>      new VertexLayoutDescription(new VertexElementDescription("COLOR", VertexElementFormat.Byte4_Norm, VertexElementSemantic.Color)),
                 MeshResource.BoneIndices => new VertexLayoutDescription(new VertexElementDescription("BONEINDEX", VertexElementFormat.Float4, VertexElementSemantic.Position)),
                 MeshResource.BoneWeights => new VertexLayoutDescription(new VertexElementDescription("BONEWEIGHT", VertexElementFormat.Float4, VertexElementSemantic.Color)),
                 MeshResource.Custom =>      throw new Exception("Custom mesh resource types must be created manually."),
             };
         }
 
-        public static void UploadMeshResources(CommandList commandList, Mesh mesh, ShaderPass pass, KeywordState? keywords = null)
+        public static void UploadMeshResources(CommandList commandList, Mesh mesh, List<MeshResource> vertexInputs)
         {
             mesh.Upload();
 
             commandList.SetIndexBuffer(mesh.IndexBuffer, mesh.IndexFormat);
-            
-            var vertexInputs = pass.GetVariant(keywords).vertexInputs;
 
             for (uint i = 0; i < vertexInputs.Count; i++)
             {
-                MeshResource vertexResource = vertexInputs[(int)i].Item1;
+                MeshResource vertexResource = vertexInputs[(int)i];
 
                 switch (vertexResource)
                 {
