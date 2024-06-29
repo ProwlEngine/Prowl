@@ -17,14 +17,32 @@ public static class Debug
 
     public static event OnLog? OnLog;
 
+    public static void Log(object message)
+    {
+        Log("", message.ToString(), ConsoleColor.White, LogSeverity.Normal);
+    }
+
     public static void Log(string message)
     {
         Log("", message, ConsoleColor.White, LogSeverity.Normal);
     }
 
+    public static void LogWarning(object message)
+    {
+        Log("Warning: ", message.ToString(), ConsoleColor.Yellow, LogSeverity.Warning);
+    }
+
     public static void LogWarning(string message)
     {
         Log("Warning: ", message, ConsoleColor.Yellow, LogSeverity.Warning);
+    }
+
+    public static void LogError(object message, Exception exception = null)
+    {
+        Log("Error: ", message.ToString(), ConsoleColor.Red, LogSeverity.Error);
+
+        if (exception != null)
+            Log("", exception.ToString(), ConsoleColor.Red, LogSeverity.Error);
     }
 
     public static void LogError(string message, Exception exception = null)
@@ -33,6 +51,11 @@ public static class Debug
 
         if (exception != null)
             Log("", exception.ToString(), ConsoleColor.Red, LogSeverity.Error);
+    }
+
+    public static void LogSuccess(object message)
+    {
+        Log("Success: ", message.ToString(), ConsoleColor.Green, LogSeverity.Success);
     }
 
     public static void LogSuccess(string message)

@@ -116,11 +116,7 @@ namespace Prowl.Runtime.GUI.Graphics
             _Path.Clear();
             _ChannelsCurrent = 0;
             _ChannelsCount = 1;
-            //for (int i = 0; i < _Channels.Count; i++)
-            //{
-            //    _Channels[i].CmdBuffer.Clear();
-            //    _Channels[i].IdxBuffer.Clear();
-            //}
+
             _Channels.Clear();
             _primitiveCount = -10000;
 
@@ -133,6 +129,7 @@ namespace Prowl.Runtime.GUI.Graphics
         {
             if(!force && _ClipRectStack.Count > 0)
                 clip_rect = IntersectRects(_ClipRectStack.Peek(), clip_rect);
+
             _ClipRectStack.Add(clip_rect);
             UpdateClipRect(force);
         }
@@ -220,12 +217,16 @@ namespace Prowl.Runtime.GUI.Graphics
             var b = new Vector2(c.x, a.y);
             var d = new Vector2(a.x, c.y);
             uint idx = (uint)_VtxCurrentIdx;
+
             IdxBuffer[_IdxWritePtr + 0] = idx; IdxBuffer[_IdxWritePtr + 1] = (uint)(idx + 1); IdxBuffer[_IdxWritePtr + 2] = (uint)(idx + 2);
             IdxBuffer[_IdxWritePtr + 3] = idx; IdxBuffer[_IdxWritePtr + 4] = (uint)(idx + 2); IdxBuffer[_IdxWritePtr + 5] = (uint)(idx + 3);
+
+
             VtxBuffer[_VtxWritePtr + 0] = new UIVertex() { pos = new(a, _primitiveCount), uv = uv, col = col_upr_left };
             VtxBuffer[_VtxWritePtr + 1] = new UIVertex() { pos = new(b, _primitiveCount), uv = uv, col = col_upr_right };
             VtxBuffer[_VtxWritePtr + 2] = new UIVertex() { pos = new(c, _primitiveCount), uv = uv, col = col_bot_right };
             VtxBuffer[_VtxWritePtr + 3] = new UIVertex() { pos = new(d, _primitiveCount), uv = uv, col = col_bot_left };
+            
             _VtxWritePtr += 4;
             _VtxCurrentIdx += 4;
             _IdxWritePtr += 6;
@@ -235,7 +236,6 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void AddTriangle(Vector2 a, Vector2 b, Vector2 c, Color32 col, float thickness = 1.0f)
         {
-
             PathLineTo(a);
             PathLineTo(b);
             PathLineTo(c);
@@ -244,7 +244,6 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void AddTriangleFilled(Vector2 a, Vector2 b, Vector2 c, Color32 col)
         {
-
             PathLineTo(a);
             PathLineTo(b);
             PathLineTo(c);
@@ -253,7 +252,6 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void AddCircle(Vector2 centre, float radius, Color32 col, int num_segments = 12, float thickness = 1.0f)
         {
-
             float a_max = MathF.PI * 2.0f * (num_segments - 1.0f) / num_segments;
             PathArcTo(centre, radius - 0.5f, 0.0f, a_max, num_segments);
             PathStroke(col, true, thickness);
@@ -261,7 +259,6 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void AddCircleFilled(Vector2 centre, float radius, Color32 col, int num_segments = 12)
         {
-
             float a_max = MathF.PI * 2.0f * ((num_segments - 1.0f) / num_segments);
             PathArcTo(centre, radius, 0.0f, a_max, num_segments);
             PathFill(col);
@@ -278,12 +275,11 @@ namespace Prowl.Runtime.GUI.Graphics
             if (font_size <= 0.0f)
                 return;
 
-
             if (text_end == -1)
                 text_end = text.Length;
+
             if (text_begin == text_end)
                 return;
-
 
             System.Diagnostics.Debug.Assert(font.Texture == GetCurrentTextureId());  // Use high-level ImGui::PushFont() or low-level ImDrawList::PushTextureId() to change font.
 
@@ -558,7 +554,6 @@ namespace Prowl.Runtime.GUI.Graphics
 
                 // Compute normals
                 Vector2[] temp_normals = new Vector2[points_count];
-                //ImVec2* temp_normals = (ImVec2*)alloca(points_count * sizeof(ImVec2));
 
                 for (int i0 = points_count - 1, i1 = 0; i1 < points_count; i0 = i1++)
                 {
@@ -880,7 +875,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public Texture2D GetCurrentTextureId()
         {
-            return _TextureIdStack.Count > 0 ? _TextureIdStack[_TextureIdStack.Count - 1] : DefaultFont.Texture;
+            return _TextureIdStack.Count > 0 ? _TextureIdStack[_TextureIdStack.Count - 1] : null;
         }
 
         public void AddDrawCmd()
@@ -1162,6 +1157,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
                     idxoffset += (int)cmdPtr.ElemCount;
                 }
+
                 // Clear Depth Buffer
                 commandBuffer.ClearRenderTarget(true, false, Color.white, depth: 1.0f);
             }

@@ -141,6 +141,8 @@ namespace Prowl.Runtime
 
             if (!pipelineCache.TryGetValue(pipelineDesc, out PipelineInfo pipelineInfo))
             {
+                Debug.Log("Created pass");
+
                 var description = CreateDescriptionForPass(pipelineDesc);
                 var pipeline = Graphics.Factory.CreateGraphicsPipeline(description);
 

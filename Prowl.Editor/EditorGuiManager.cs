@@ -83,7 +83,7 @@ public static class EditorGuiManager
         RenderingContext context = new();
         context.TargetFramebuffer = Graphics.ScreenFramebuffer;
 
-        CommandBuffer commandBuffer = new("GUI Command Buffer");
+        CommandBuffer commandBuffer = CommandBufferPool.Get("GUI Command Buffer");
 
         commandBuffer.SetRenderTarget(Graphics.ScreenFramebuffer);
         commandBuffer.ClearRenderTarget(true, true, Color.black, depth: 1.0f);
@@ -264,9 +264,11 @@ public static class EditorGuiManager
 
         WindowsToRemove.Clear();
         
+        
         context.Submit(commandBuffer);
-
         context.Execute();
+
+        CommandBufferPool.Release(commandBuffer);
     }
 
     #region MenuBar

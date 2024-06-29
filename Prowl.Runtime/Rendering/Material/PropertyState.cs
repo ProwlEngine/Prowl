@@ -71,7 +71,7 @@ namespace Prowl.Runtime
         public Matrix4x4 GetMatrix(string name) => Matrix4x4.FromFloat(matrices.GetValueOrDefault(name, System.Numerics.Matrix4x4.Identity));
 
         public void SetTexture(string name, Texture value) => textures[name] = value;
-        public Texture GetTexture(string name) => textures.GetValueOrDefault(name, Texture2D.EmptyWhite);
+        public Texture GetTexture(string name) => textures.GetValueOrDefault(name, Texture2D.EmptyWhite) ?? Texture2D.EmptyWhite;
 
         public void Clear()
         {

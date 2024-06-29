@@ -18,10 +18,6 @@ public static class Program
     public static void RegisterReloadOfExternalAssemblies() => IsReloadingExternalAssemblies = true;
 
     private static bool CreatedDefaultWindows = false;
-
-    static double secondCounter;
-    static int temp;
-
     public static int Main(string[] args)
     {
         // set global Culture to invariant
@@ -229,18 +225,6 @@ Fallback ""Fallback/TestShader""
 
         Application.Update += () =>
         {
-            if (secondCounter <= 1) 
-            {
-                secondCounter += Time.deltaTime;
-                temp++;
-            }
-            else 
-            {
-                Console.WriteLine($"FPS: {temp}");
-                secondCounter = 0;
-                temp = 0;
-            }
-
             //EditorGui.SetupDock();
 
             AssetDatabase.InternalUpdate();
@@ -363,8 +347,8 @@ Fallback ""Fallback/TestShader""
                 }
                 catch (Exception e)
                 {
-                    Runtime.Debug.LogError($"Error reloading assemblies: {e.Message}");
-                    Runtime.Debug.LogError(e.StackTrace);
+                    Debug.LogError($"Error reloading assemblies: {e.Message}");
+                    Debug.LogError(e.StackTrace);
                 }
                 finally
                 {
