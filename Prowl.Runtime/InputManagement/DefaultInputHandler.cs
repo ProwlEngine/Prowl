@@ -32,16 +32,16 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     private float _mouseWheelDelta;
     public float MouseWheelDelta => _mouseWheelDelta;
 
-    public bool CursorVisible { get; set; }
-    public bool CursorLocked { get; set; }
+    public bool CursorVisible { get; set; } = true;
+    public bool CursorLocked { get; set; } = false;
 
     public bool Locked { get; private set; }
     public bool Hidden => !Screen.InternalWindow.CursorVisible;
 
-    public IReadOnlyList<char> InputString { get; set; }
+    public virtual IReadOnlyList<char> InputString { get; set; }
 
 
-    public string Clipboard 
+    public virtual string Clipboard 
     {
         get => Sdl2Native.SDL_GetClipboardText();
         set => Sdl2Native.SDL_SetClipboardText(value);
@@ -57,7 +57,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
             _currentMousePos = value;
 
             if (!Locked)
-                Screen.InternalWindow.SetMousePosition(new Vector2(value.x, value.y));
+                SetActualMousePosition(value);
         }
     }
 
@@ -65,7 +65,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     public event Action<Key, bool> OnKeyEvent;
     public event Action<MouseButton, double, double, bool, bool> OnMouseEvent;
 
-    public bool IsAnyKeyDown => newKeyState.Count > 0;
+    public bool IsAnyKeyDown => CanUpdateState() && newKeyState.Count > 0;
 
 
     public DefaultInputHandler()
@@ -79,7 +79,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
             _mouseWheelDelta = mouseWheelEvent.WheelDelta; 
         };
 
-        _prevMousePos = new Vector2Int((int)snapshot.MousePosition.X, (int)snapshot.MousePosition.Y);
+        _prevMousePos = GetActualMousePosition(snapshot);
         _currentMousePos = _prevMousePos;
 
         foreach (Key key in KeyValues)
@@ -97,13 +97,13 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         UpdateKeyStates(snapshot);
     }
 
-    internal void EarlyUpdate()
+    public void EarlyUpdate()
     {
         var snapshot = Screen.LatestInputSnapshot;
 
         InputString = snapshot.KeyCharPresses;
 
-        if (!_receivedDeltaEvent)
+        if (!_receivedDeltaEvent || !CanUpdateState())
             _mouseWheelDelta = 0.0f;
 
         if (_receivedDeltaEvent)
@@ -112,25 +112,36 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         UpdateCursorState(snapshot);
         UpdateKeyStates(snapshot);
 
-        if (_prevMousePos != _currentMousePos)
+        if (CanUpdateState() && _prevMousePos != _currentMousePos)
         {
             OnMouseEvent?.Invoke(MouseButton.Left, MousePosition.x, MousePosition.y, false, true);
         }
     }
 
+    protected virtual Vector2Int GetActualMousePosition(InputSnapshot snapshot) =>
+        new Vector2Int((int)snapshot.MousePosition.X, (int)snapshot.MousePosition.Y);
+
+    protected virtual void SetActualMousePosition(Vector2Int pos) =>
+        Screen.InternalWindow.SetMousePosition(new Vector2(pos.x, pos.y));
+
+    protected virtual bool WantsCursorRelease(Vector2Int mouse) =>
+        GetKey(Key.Escape) || !Screen.InternalWindow.Focused || !Screen.ScreenRect.Contains(mouse);
+
+    protected virtual bool CanUpdateState() => true;
+
     // Update cursor locking and position
     private void UpdateCursorState(InputSnapshot snapshot)
     {
-        Vector2Int mousePosition = new Vector2Int((int)snapshot.MousePosition.X, (int)snapshot.MousePosition.Y);
+        Vector2Int mousePosition = GetActualMousePosition(snapshot);
 
-        if ((GetKey(Key.Escape) || !Screen.InternalWindow.Focused || !Screen.ScreenRect.Contains(mousePosition)) && (Locked || !Screen.InternalWindow.CursorVisible))
+        if (WantsCursorRelease(mousePosition) && (Locked || !Screen.InternalWindow.CursorVisible))
         {
             Screen.InternalWindow.CursorVisible = true;
             Locked = false;
-
-            Screen.InternalWindow.SetMousePosition(new Vector2(_currentMousePos.x, _currentMousePos.y));
+            
+            SetActualMousePosition(_currentMousePos);
         } 
-        else if (GetMouseButton(0))
+        else if (GetMouseButton(0)) // If the user (likely) wants to return to the window, re-apply locking and visibility state.
         {
             Screen.InternalWindow.CursorVisible = CursorVisible;
             Locked = CursorLocked;
@@ -173,7 +184,8 @@ public class DefaultInputHandler : IInputHandler, IDisposable
             newKeyState[key] = state;
             keyState[key] = state;
 
-            OnKeyEvent?.Invoke(key, keyEvent.Down);
+            if (CanUpdateState())
+                OnKeyEvent?.Invoke(key, keyEvent.Down);
         }
 
         foreach (var mouseEvent in snapshot.MouseEvents)
@@ -186,22 +198,20 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
             newButtonState[button] = state;
             buttonState[button] = state;
-
-            OnMouseEvent?.Invoke(button, MousePosition.x, MousePosition.y, mouseEvent.Down, false);
+            
+            if (CanUpdateState())
+                OnMouseEvent?.Invoke(button, MousePosition.x, MousePosition.y, mouseEvent.Down, false);
         }
     }
 
     
-    public bool GetKey(Key key) => keyState[key] == InputState.Pressed;
-    public bool GetKeyDown(Key key) => newKeyState[key] == InputState.Pressed;
-    public bool GetKeyUp(Key key) => newKeyState[key] == InputState.Released;
+    public bool GetKey(Key key) => CanUpdateState() && keyState[key] == InputState.Pressed;
+    public bool GetKeyDown(Key key) => CanUpdateState() && newKeyState[key] == InputState.Pressed;
+    public bool GetKeyUp(Key key) => CanUpdateState() && newKeyState[key] == InputState.Released;
 
-    public bool GetMouseButton(int button) => buttonState[(MouseButton)button] == InputState.Pressed;
-    public bool GetMouseButtonDown(int button) => newButtonState[(MouseButton)button] == InputState.Released;
-    public bool GetMouseButtonUp(int button) => newButtonState[(MouseButton)button] == InputState.Released;
+    public bool GetMouseButton(int button) => CanUpdateState() && buttonState[(MouseButton)button] == InputState.Pressed;
+    public bool GetMouseButtonDown(int button) => CanUpdateState() && newButtonState[(MouseButton)button] == InputState.Released;
+    public bool GetMouseButtonUp(int button) => CanUpdateState() && newButtonState[(MouseButton)button] == InputState.Released;
 
-    public void Dispose()
-    {
-
-    }
+    public void Dispose() { }
 }
