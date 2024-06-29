@@ -6,6 +6,7 @@ using Prowl.Runtime.Rendering;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
 using Silk.NET.Input;
+using System.Text.RegularExpressions;
 
 namespace Prowl.Editor;
 
@@ -32,6 +33,196 @@ public static class Program
             // Start with the project window open
             //new OldProjectsWindow();
             new ProjectsWindow();
+
+            string testShader = @"
+Shader ""Example/NewShaderFormat""
+
+Properties
+{
+	// Material property declarations go here
+	_MainTex(""Albedo Map"", TEXTURE2D)
+	_NormalTex(""Normal Map"", TEXTURE2D)
+	_EmissionTex(""Emissive Map"", TEXTURE2D)
+	_SurfaceTex(""Surface Map x:AO y:Rough z:Metal"", TEXTURE2D)
+	_OcclusionTex(""Occlusion Map"", TEXTURE2D)
+
+	_EmissiveColor(""Emissive Color"", COLOR)
+	_EmissionIntensity(""Emissive Intensity"", FLOAT)
+	_MainColor(""Main Color"", COLOR)
+}
+
+// Global state or options applied to every pass. If a pass doesn't specify a value, it will use the ones defined here
+Global
+{
+    Tags { ""SomeShaderID"" = ""IsSomeShaderType"", ""SomeOtherValue"" = ""SomeOtherType"" }
+
+    // Blend state- can be predefined state...
+    Blend Off
+    
+    // ...or custom values
+    Blend
+    {    
+        Src Color OneMinusSrcAlpha
+        Dest Alpha One
+
+        Mode Alpha SubtractDest
+        
+        Mask None
+    }
+
+    // Stencil state
+    Stencil
+    {
+        Ref 25
+        ReadMask 26
+        WriteMask 27
+
+        Comparison Front Greater
+
+        Pass Front Keep
+        Fail Back Zero
+        ZFail Front Replace
+    }
+
+    // Depth write
+    DepthWrite On
+    
+    // Comparison kind
+    DepthTest LessEqual
+
+    // Rasterizer culling mode
+    Cull Back
+
+    // Global includes added to every program
+    GlobalInclude 
+    {
+        // This value would be able to be used in every <Program> block
+        vec4 aDefaultValue = vec4(0.5, 0.25, 0.75, 1.0);
+    }
+}
+
+
+
+Pass ""DefaultPass"" 
+{
+    Tags { ""SomeValue"" = ""CustomPassType"", ""SomeOtherValue"" = ""SomeOtherType"" }
+
+    Blend SingleOverride
+
+    Stencil
+    {
+        Ref 5
+        ReadMask 10
+        WriteMask 14
+
+        Comparison Back Greater
+        Comparison Front LessEqual
+
+        Pass Front IncrementWrap
+        Pass Back Replace
+
+        ZFail Front Zero
+    }
+
+    DepthWrite Off
+    DepthTest Never
+    Cull Off
+
+    // Program vertex stage example
+    Program Vertex
+    {
+        layout (location = 0) in vec3 vertexPosition;
+		layout (location = 0) out vec4 someColor; 
+		
+		void main()
+		{
+			someColor = aDefaultValue;
+            gl_Position = vertexPosition;
+		}
+    }
+
+    // Program fragment stage example
+	Program Fragment
+    {
+        layout (location = 0) in vec4 someColor; 
+    	layout (location = 0) out vec4 outColor; 
+		
+		void main()
+		{
+			outColor = someColor;
+		}
+	}
+}
+
+Pass ""AnotherPass""
+{
+    Tags { ""SomeValue"" = ""CustomPassType"" }
+
+    Blend
+    {
+        Target 2
+
+        Src Alpha OneMinusSrcAlpha
+        Src Color DstColor
+
+        Dest Alpha One
+        Dest Color OneMinusBlendFactor
+
+        Mode Alpha Max
+        Mode Color SubtractDest
+        
+        Mask RGB
+    }
+
+    DepthWrite On
+    DepthTest LessEqual
+    Cull Back
+
+    // Program vertex stage example
+    Program Vertex
+    {
+        layout (location = 0) in vec3 vertexPosition;
+
+		layout (location = 0) out vec4 someColor; 
+		
+		void main()
+		{
+            #if MY_KEYWORD == 0
+
+            #elif
+
+			someColor = aDefaultValue;
+            gl_Position = vertexPosition;
+		}
+    }
+
+    // Program fragment stage example
+	Program Fragment
+    {
+        layout (location = 0) in vec4 someColor; 
+
+    	layout (location = 0) out vec4 outColor; 
+		
+		void main()
+		{
+			outColor = someColor;
+		}
+	}
+}
+
+// If a pass doesn't compile, the whole shader is invalidated. Use a fallback replacement for the entire shader in that case.
+// While per-pass fallbacks would be nice, there's no guarantee that the pass will always have a name or the correct index 
+Fallback ""Fallback/TestShader""
+";
+
+            // Remove Comments
+            // Remove single-line comments
+            testShader = Regex.Replace(testShader, @"//.*", "");
+
+
+            Prowl.Editor.VeldridShaderParser.VeldridShaderParser parser = new(testShader);
+            var shader = parser.Parse();
+            Console.WriteLine(shader.ToString());
         };
 
         Application.Update += (delta) =>
@@ -117,110 +308,6 @@ public static class Program
 
             Graphics.EndFrame();
 
-            //if (Project.HasProject) {
-            //
-            //    //                var drawlist = new UIDrawList();
-            //    //                drawlist.PushClipRectFullScreen();
-            //    //                drawlist.PushTextureID(UIDrawList._fontAtlas.TexID);
-            //    //
-            //    //                // Test AddLine
-            //    //                drawlist.AddLine(new Vector2(10, 10), new Vector2(100, 100), 0xFF0000FF, 2.0f);
-            //    //
-            //    //                // Test AddRect
-            //    //                drawlist.AddRect(new Vector2(200, 50), new Vector2(350, 150), 0xFF00FF00, 5.0f, 0, 2.0f);
-            //    //
-            //    //                // Test AddRectFilled
-            //    //                drawlist.AddRectFilled(new Vector2(400, 50), new Vector2(550, 150), 0xFFFF0000, 10.0f, 0x0F);
-            //    //
-            //    //                // Test AddRectFilledMultiColor
-            //    //                drawlist.AddRectFilledMultiColor(new Vector2(600, 50), new Vector2(750, 150),
-            //    //                    0xFF0000FF, 0xFF00FF00,
-            //    //                    0xFFFF0000, 0xFF000000);
-            //    //
-            //    //                // Test AddTriangle
-            //    //                drawlist.AddTriangle(new Vector2(50, 200), new Vector2(100, 250), new Vector2(150, 200), 0xFFFF00FF, 2.0f);
-            //    //
-            //    //                // Test AddTriangleFilled
-            //    //                drawlist.AddTriangleFilled(new Vector2(200, 200), new Vector2(250, 250), new Vector2(300, 200), 0xFF00FFFF);
-            //    //
-            //    //                // Test AddCircle
-            //    //                drawlist.AddCircle(new Vector2(400, 225), 50, 0xFFFFFF00, 32, 3.0f);
-            //    //
-            //    //                // Test AddCircleFilled
-            //    //                drawlist.AddCircleFilled(new Vector2(550, 225), 50, 0xFF00FFFF, 32);
-            //    //
-            //    //                // Test AddPolyline
-            //    //                var points = new UIBuffer<Vector2>();
-            //    //                points.Add(new Vector2(50, 300));
-            //    //                points.Add(new Vector2(100, 350));
-            //    //                points.Add(new Vector2(150, 325));
-            //    //                points.Add(new Vector2(200, 350));
-            //    //                points.Add(new Vector2(250, 300));
-            //    //                drawlist.AddPolyline(points, points.Count, 0xFFFF00FF, false, 3.0f, true);
-            //    //
-            //    //                // Test AddConvexPolyFilled
-            //    //                var points2 = new UIBuffer<Vector2>();
-            //    //                points2.Add(new Vector2(350, 300));
-            //    //                points2.Add(new Vector2(400, 350));
-            //    //                points2.Add(new Vector2(450, 325));
-            //    //                points2.Add(new Vector2(475, 275));
-            //    //                points2.Add(new Vector2(425, 250));
-            //    //                drawlist.AddConvexPolyFilled(points2, points2.Count, 0xFF00FF00, true);
-            //    //
-            //    //                // Test AddBezierCurve
-            //    //                drawlist.AddBezierCurve(new Vector2(50, 400), new Vector2(100, 450), new Vector2(150, 350), new Vector2(200, 400), 0xFFFFFFFF, 2.0f, 20);
-            //    //
-            //    //                if (testImage == null) {
-            //    //                    testImage = UIDrawList._fontAtlas.TexID as GraphicsTexture;
-            //    //                    //using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.FileIcon.png"))
-            //    //                    //    testImage = Texture2DLoader.FromStream(stream).Handle;
-            //    //                }
-            //    //
-            //    //                drawlist.AddImage(testImage, new Vector2(350, 350), new Vector2(650, 650));
-            //    //
-            //    //                drawlist.AddText(UIDrawList._fontAtlas.Fonts[0], 20f, new Vector2(1375, 300), 0xFFFFFFFF, @"
-            //    //Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
-            //    //Nam interdum nec ante et condimentum. Aliquam quis viverra 
-            //    //odio. Etiam vel tortor in ante lobortis tristique non in 
-            //    //mauris. Maecenas massa tellus, aliquet vel massa eget, 
-            //    //commodo commodo neque. In at erat ut nisi aliquam 
-            //    //condimentum eu vitae quam. Suspendisse tristique euismod 
-            //    //libero. Cras non massa nibh.
-            //    //
-            //    //Suspendisse id justo nibh. Nam ut diam id nunc ultrices 
-            //    //aliquam cursus at ipsum. Praesent dapibus mauris gravida 
-            //    //massa dapibus, vitae posuere magna finibus. Phasellus 
-            //    //dignissim libero metus, vitae tincidunt massa lacinia eget. 
-            //    //Cras sed viverra tortor. Vivamus iaculis faucibus ex non 
-            //    //suscipit. In fringilla tellus at lorem sollicitudin, ut 
-            //    //placerat nibh mollis. Nullam tortor elit, aliquet ac 
-            //    //efficitur vel, ornare eget nibh. Vivamus condimentum, dui 
-            //    //id vehicula iaculis, velit velit pulvinar nisi, mollis 
-            //    //blandit nibh arcu ut magna. Vivamus condimentum in magna in 
-            //    //aliquam. Donec vitae elementum neque. Nam ac ipsum id orci 
-            //    //finibus fringilla. Nulla non justo a augue congue dictum. 
-            //    //Vestibulum in quam id nibh blandit laoreet.
-            //    //");
-            //    //
-            //    //                drawlist.PopClipRect();
-            //    //                drawlist.PopTextureID();
-            //    //                UIDrawList.Draw(GLDevice.GL, Graphics.Resolution, [drawlist]);
-            //
-            //    if (font == null)
-            //    {
-            //        //testImage = UIDrawList._fontAtlas.TexID as GraphicsTexture;
-            //        using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Prowl.Editor.EmbeddedResources.font.ttf"))
-            //        {
-            //            using (MemoryStream ms = new())
-            //            {
-            //                stream.CopyTo(ms);
-            //                font = Font.CreateFromTTFMemory(ms.ToArray(), 20, 512, 512, [Font.CharacterRange.BasicLatin]);
-            //            }
-            //        }
-            //    }
-            //
-            //    Runtime.GUI.TestGUI.Test(font);
-            //}
         };
 
         Application.Quitting += () =>
