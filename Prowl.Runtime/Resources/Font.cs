@@ -1,13 +1,11 @@
 ﻿using Prowl.Runtime.GUI.Graphics;
-using Prowl.Runtime.Rendering.Primitives;
-using Silk.NET.OpenAL;
 using StbTrueTypeSharp;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Veldrid;
 using static Prowl.Runtime.GUI.Graphics.UIDrawList;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace Prowl.Runtime
 {
@@ -33,10 +31,9 @@ namespace Prowl.Runtime
 
         public void CreateResource()
         {
-            Texture = new Texture2D((uint)Width, (uint)Height, false, Rendering.Primitives.TextureImageFormat.Color4b);
+            Texture = new Texture2D((uint)Width, (uint)Height, 0, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled);
             Memory<Color32> data = new Memory<Color32>(Bitmap);
             Texture.SetData(data);
-            Texture.SetTextureFilters(TextureMin.Linear, TextureMag.Linear);
         }
 
         public static FontBuilder BuildNewFont(int width, int height)
@@ -312,7 +309,7 @@ namespace Prowl.Runtime
             return s;
         }
 
-        public Rect RenderText(double size, Vector2 pos, uint color, Vector4 clipRect, string text, int textBegin, int textEnd, UIDrawList drawList, double wrapWidth = 0.0, bool cpuFineClip = false)
+        public Rect RenderText(double size, Vector2 pos, Color32 color, Vector4 clipRect, string text, int textBegin, int textEnd, UIDrawList drawList, double wrapWidth = 0.0, bool cpuFineClip = false)
         {
             if (textEnd == -1)
                 textEnd = text.Length;
@@ -445,8 +442,14 @@ namespace Prowl.Runtime
                             // We are NOT calling PrimRectUV() here because non-inlined causes too much overhead in a debug build.
                             // Inlined here:
                             {
-                                drawList.IdxBuffer[idxWrite++] = (ushort)vtxCurrentIdx; drawList.IdxBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 1); drawList.IdxBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 2);
-                                drawList.IdxBuffer[idxWrite++] = (ushort)vtxCurrentIdx; drawList.IdxBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 2); drawList.IdxBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 3);
+                                drawList.IdxBuffer[idxWrite++] = (ushort)vtxCurrentIdx; 
+                                drawList.IdxBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 1); 
+                                drawList.IdxBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 2);
+
+                                drawList.IdxBuffer[idxWrite++] = (ushort)vtxCurrentIdx; 
+                                drawList.IdxBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 2); 
+                                drawList.IdxBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 3);
+                                
                                 drawList.VtxBuffer[vtxWrite++] = new UIVertex { pos = new Vector3(x1, y1, drawList._primitiveCount), uv = new Vector2(u1, v1), col = color };
                                 drawList.VtxBuffer[vtxWrite++] = new UIVertex { pos = new Vector3(x2, y1, drawList._primitiveCount), uv = new Vector2(u2, v1), col = color };
                                 drawList.VtxBuffer[vtxWrite++] = new UIVertex { pos = new Vector3(x2, y2, drawList._primitiveCount), uv = new Vector2(u2, v2), col = color };
@@ -479,10 +482,10 @@ namespace Prowl.Runtime
             {
                 for (int i = 0; i < Bitmap.Length; i++)
                 {
-                    writer.Write(Bitmap[i].red);
-                    writer.Write(Bitmap[i].green);
-                    writer.Write(Bitmap[i].blue);
-                    writer.Write(Bitmap[i].alpha);
+                    writer.Write(Bitmap[i].r);
+                    writer.Write(Bitmap[i].g);
+                    writer.Write(Bitmap[i].b);
+                    writer.Write(Bitmap[i].a);
                 }
                 compoundTag.Add("Bitmap", new(memoryStream.ToArray()));
             }
@@ -518,10 +521,10 @@ namespace Prowl.Runtime
                 Bitmap = new Color32[Width * Height];
                 for (int i = 0; i < Bitmap.Length; i++)
                 {
-                    Bitmap[i].red = reader.ReadByte();
-                    Bitmap[i].green = reader.ReadByte();
-                    Bitmap[i].blue = reader.ReadByte();
-                    Bitmap[i].alpha = reader.ReadByte();
+                    Bitmap[i].r = reader.ReadByte();
+                    Bitmap[i].g = reader.ReadByte();
+                    Bitmap[i].b = reader.ReadByte();
+                    Bitmap[i].a = reader.ReadByte();
                 }
             }
 
@@ -529,7 +532,8 @@ namespace Prowl.Runtime
             var glyphsTag = value.Get("Glyphs");
             foreach (var glyphTag in glyphsTag.List)
             {
-                var glyph = new GlyphInfo {
+                var glyph = new GlyphInfo
+                {
                     X = glyphTag["X"].IntValue,
                     Y = glyphTag["Y"].IntValue,
                     Width = glyphTag["Width"].IntValue,
@@ -635,7 +639,8 @@ namespace Prowl.Runtime
 
                     for (uint i = 0; i < cd.Length; ++i)
                     {
-                        var glyphInfo = new GlyphInfo {
+                        var glyphInfo = new GlyphInfo
+                        {
                             X = cd[i].x0,
                             Y = cd[i].y0,
                             Width = cd[i].x1 - cd[i].x0,
@@ -678,14 +683,14 @@ namespace Prowl.Runtime
                 for (var i = 0; i < _bitmap.Length; ++i)
                 {
                     var b = _bitmap[i];
-                    font.Bitmap[i].red = 255;
-                    font.Bitmap[i].green = 255;
-                    font.Bitmap[i].blue = 255;
+                    font.Bitmap[i].r = 255;
+                    font.Bitmap[i].g = 255;
+                    font.Bitmap[i].b = 255;
 
-                    font.Bitmap[i].alpha = b;
+                    font.Bitmap[i].a = b;
                 }
                 // Set the first pixel to white (TexUvWhitePixel)
-                font.Bitmap[0] = new Color32 { red = 255, green = 255, blue = 255, alpha = 255 };
+                font.Bitmap[0] = new Color32 { r = 255, g = 255, b = 255, a = 255 };
 
                 font.CreateResource();
 

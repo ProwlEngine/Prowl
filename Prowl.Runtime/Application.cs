@@ -1,7 +1,6 @@
 ﻿using Prowl.Runtime.Audio;
-using Prowl.Runtime.GUI.Graphics;
-using Prowl.Runtime.Rendering.OpenGL;
 using Prowl.Runtime.SceneManagement;
+using Veldrid;
 using System;
 
 namespace Prowl.Runtime;
@@ -17,9 +16,46 @@ public static class Application
     public static IAssetProvider AssetProvider;
 
     public static event Action Initialize;
-    public static event Action<double> Update;
-    public static event Action<double> Render;
+    public static event Action Update;
+    public static event Action Render;
     public static event Action Quitting;
+
+
+    private static GraphicsBackend[] preferredWindowsBackends = // Covers Windows/UWP
+    [
+        GraphicsBackend.Direct3D11,
+        GraphicsBackend.Vulkan,
+        GraphicsBackend.OpenGL,
+        GraphicsBackend.OpenGLES,
+    ];
+
+    private static GraphicsBackend[] preferredUnixBackends = // Cover Unix-like (Linux, FreeBSD, OpenBSD)
+    [
+        GraphicsBackend.Vulkan,
+        GraphicsBackend.OpenGL,
+        GraphicsBackend.OpenGLES,
+    ];
+
+    private static GraphicsBackend[] preferredMacBackends = // Covers MacOS/Apple 
+    [
+        GraphicsBackend.Metal,
+        GraphicsBackend.OpenGL,
+        GraphicsBackend.OpenGLES,
+    ];
+
+    public static GraphicsBackend GetBackend()
+    {
+        if (RuntimeUtils.IsWindows())
+        {
+            return preferredWindowsBackends[0];
+        }
+        else if (RuntimeUtils.IsMac())
+        {
+            return preferredMacBackends[0];
+        }
+
+        return preferredUnixBackends[0];
+    }
 
     public static void Run(string title, int width, int height, IAssetProvider assetProvider, bool editor)
     {
@@ -28,53 +64,58 @@ public static class Application
 
         Debug.Log("Initializing...");
 
-        Window.InitWindow(title, width, height, Silk.NET.Windowing.WindowState.Normal, true);
+        Screen.Load += AppInitialize;
 
+        Screen.Update += AppUpdate;
 
-        Window.Load += () => {
-            SceneManager.Initialize();
-            AudioSystem.Initialize();
-
-            AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
-
-            AssemblyManager.Initialize();
-
-            if (UIDrawList.DefaultFont == null)
-                UIDrawList.CreateDeviceResources(GLDevice.GL);
-
-            Initialize?.Invoke();
-
-            Debug.LogSuccess("Initialization complete");
-        };
-
-        Window.Update += (delta) => {
-            try
-            {
-                AudioSystem.UpdatePool();
-                Time.Update(delta);
-
-                Update?.Invoke(delta);
-            } catch (Exception e) {
-                Console.WriteLine(e.ToString());
-            }
-        };
-
-        Window.Render += (delta) => {
-            Render?.Invoke(delta);
-        };
-
-        Window.Closing += () => {
-            isRunning = false;
-            Quitting?.Invoke();
-            Physics.Dispose();
-            AudioSystem.Dispose();
-            AssemblyManager.Dispose();
-            Debug.Log("Is terminating...");
-        };
+        Screen.Closing += AppClose;
 
         isRunning = true;
         isPlaying = true; // Base application is not the editor, isplaying is always true
-        Window.Start();
+        
+        Screen.Start($"{title} - {GetBackend()}", new Vector2Int(width, height), new Vector2Int(100, 100), WindowState.Normal);
+    }
+
+    static void AppInitialize()
+    {
+        Graphics.Initialize(true, GetBackend());
+        SceneManager.Initialize();
+        AudioSystem.Initialize();
+        Time.Initialize();
+
+        AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
+
+        AssemblyManager.Initialize();
+        
+        Initialize?.Invoke();
+
+        Debug.LogSuccess("Initialization complete");
+    }
+
+    static void AppUpdate()
+    {
+        try
+        {
+            AudioSystem.UpdatePool();
+            Time.Update();
+
+            Update?.Invoke();
+
+            Render?.Invoke();
+        } catch (Exception e) {
+            Console.WriteLine(e.ToString());
+        }
+    }
+
+    static void AppClose()
+    {
+        isRunning = false;
+        Quitting?.Invoke();
+        Graphics.Dispose();
+        Physics.Dispose();
+        AudioSystem.Dispose();
+        AssemblyManager.Dispose();
+        Debug.Log("Is terminating...");
     }
 
     static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
@@ -84,7 +125,6 @@ public static class Application
 
     public static void Quit()
     {
-        Window.Stop();
+        Screen.Stop();
     }
-    
 }

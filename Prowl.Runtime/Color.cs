@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace Prowl.Runtime
 {
+    [StructLayout(LayoutKind.Sequential)]
     public struct Color
     {
         public float r, g, b, a;

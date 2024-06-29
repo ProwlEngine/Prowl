@@ -19,6 +19,8 @@ public class SpotLight : MonoBehaviour
 
     public override void OnRenderObject()
     {
+        #warning Veldrid change
+        /*
         if (mesh == null)
             mesh = Mesh.CreateSphere(1f, 16, 16);
 
@@ -66,5 +68,6 @@ public class SpotLight : MonoBehaviour
             Gizmos.Color = b;
             Gizmos.DrawSpotlight(Vector3.zero, distance, (1.0f - falloff) * 5f);
         }
+        */
     }
 }

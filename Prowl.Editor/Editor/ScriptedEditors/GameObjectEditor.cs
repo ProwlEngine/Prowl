@@ -8,10 +8,7 @@ using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.Utils;
-using System;
-using System.ComponentModel;
 using System.Reflection;
-using static Assimp.Metadata;
 using static Prowl.Editor.EditorGUI;
 using static Prowl.Runtime.GUI.Gui;
 
@@ -221,7 +218,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         gui.Tooltip("Is Component Enabled?");
 
 
-                        if (gui.IsPointerClick(Silk.NET.Input.MouseButton.Right) && gui.IsNodeHovered())
+                        if (gui.IsPointerClick(MouseButton.Right) && gui.IsNodeHovered())
                         {
                             // Popup holder is our parent, since thats the Tree node
                             gui.OpenPopup("RightClickComp", null);

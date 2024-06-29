@@ -38,9 +38,29 @@ namespace Prowl.Editor.Assets
         /// Opens the specified file with the operating system's default program.
         /// </summary>
         /// <param name="file">The file to open.</param>
-        public static void OpenPath(FileSystemInfo file)
+        public static void OpenPath(FileSystemInfo file, int line = 0, int character = 0)
         {
-            if (OperatingSystem.IsWindows())
+            var prefs = Preferences.EditorPreferences.Instance;
+
+            if (!string.IsNullOrWhiteSpace(prefs.fileEditor))
+            {
+                if (!string.IsNullOrWhiteSpace(prefs.fileEditorArgs))
+                {
+                    string args = prefs.fileEditorArgs;
+
+                    args = args.Replace("${ProjectDirectory}", Project.ProjectDirectory);
+                    args = args.Replace("${File}", file.FullName);
+                    args = args.Replace("${Line}", line.ToString());
+                    args = args.Replace("${Character}", character.ToString());
+
+                    Process.Start(prefs.fileEditor, args);
+                }
+                else
+                {
+                    Process.Start(prefs.fileEditor, file.FullName);
+                }
+            }
+            else if (OperatingSystem.IsWindows())
                 Process.Start("explorer.exe", file.FullName);
             else if (OperatingSystem.IsLinux())
                 Process.Start("xdg-open", file.FullName);

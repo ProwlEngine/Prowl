@@ -1,6 +1,6 @@
 ﻿using ImageMagick;
 using Prowl.Runtime;
-using Prowl.Runtime.Rendering.Primitives;
+using Veldrid;
 
 namespace Prowl.Editor
 {
@@ -20,19 +20,28 @@ namespace Prowl.Editor
 
             image.Flip();
 
-            TextureImageFormat format = TextureImageFormat.UnsignedShort4;
             image.ColorSpace = ColorSpace.sRGB;
             image.ColorType = ColorType.TrueColorAlpha;
 
             var pixels = image.GetPixelsUnsafe().GetAreaPointer(0, 0, image.Width, image.Height);
 
-            Texture2D texture = new Texture2D((uint)image.Width, (uint)image.Height, false, format);
+            PixelFormat format = PixelFormat.R16_G16_B16_A16_UNorm;
+            TextureUsage usage = TextureUsage.Sampled;
+            uint mipLevels = 0;
+
+            if (generateMipmaps)
+            {
+                mipLevels = (uint)MathD.ComputeMipLevels(image.Width, image.Height);
+                usage |= TextureUsage.GenerateMipmaps;
+            }
+
+            Texture2D texture = new Texture2D((uint)image.Width, (uint)image.Height, mipLevels, format, usage);
+
             try
             {
-
                 unsafe
                 {
-                    Graphics.Device.TexSubImage2D(texture.Handle, 0, 0, 0, (uint)image.Width, (uint)image.Height, (void*)pixels);
+                    texture.SetDataPtr((void*)pixels, 0, 0, texture.Width, texture.Height);
                 }
 
                 if (generateMipmaps)

@@ -31,11 +31,11 @@ internal class Program {
             }
         };
 
-        Application.Update += (delta) => {
+        Application.Update += () => {
             SceneManager.Update();
         };
 
-        Application.Render += (delta) => {
+        Application.Render += () => {
             Graphics.StartFrame();
 
             SceneManager.Draw();

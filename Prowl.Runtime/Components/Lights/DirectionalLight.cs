@@ -43,6 +43,8 @@ public class DirectionalLight : MonoBehaviour
 
     public override void OnRenderObject()
     {
+        #warning Veldrid change
+        /*
         lightMat ??= new Material(Shader.Find("Defaults/Directionallight.shader"));
         lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.Transform.forward, Graphics.MatView));
         lightMat.SetColor("LightColor", color);
@@ -81,10 +83,13 @@ public class DirectionalLight : MonoBehaviour
         Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
         Gizmos.Color = Color.yellow;
         Gizmos.DrawDirectionalLight(Vector3.zero);
+        */
     }
 
     public void UpdateShadowmap()
     {
+        #warning Veldrid change
+        /*
         // Populate Shadowmap
         if (castShadows)
         {
@@ -118,6 +123,7 @@ public class DirectionalLight : MonoBehaviour
             shadowMap?.DestroyImmediate();
             shadowMap = null;
         }
+        */
     }
 
 }

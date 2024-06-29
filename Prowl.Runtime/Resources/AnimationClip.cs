@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace Prowl.Runtime
 {
-    public enum WrapMode
+    public enum AnimationWrapMode
     {
         Once,
         Loop,
@@ -18,7 +18,7 @@ namespace Prowl.Runtime
         public double TicksPerSecond;
         public double DurationInTicks;
 
-        public WrapMode Wrap;
+        public AnimationWrapMode Wrap;
 
         public List<AnimBone> Bones { get; private set; } = [];
 
@@ -87,7 +87,7 @@ namespace Prowl.Runtime
             Duration = value.Get("Duration").DoubleValue;
             TicksPerSecond = value.Get("TicksPerSecond").DoubleValue;
             DurationInTicks = value.Get("DurationInTicks").DoubleValue;
-            Wrap = (WrapMode)value.Get("Wrap").IntValue;
+            Wrap = (AnimationWrapMode)value.Get("Wrap").IntValue;
 
             var boneList = value.Get("Bones");
             foreach (var boneProp in boneList.List)

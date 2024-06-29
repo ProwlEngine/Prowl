@@ -87,7 +87,7 @@ namespace Prowl.Editor
             }
 
             // Clicked outside Window
-            if (gui.IsPointerClick(Silk.NET.Input.MouseButton.Left) && !gui.IsPointerHovering())
+            if (gui.IsPointerClick(MouseButton.Left) && !gui.IsPointerHovering())
                 isOpened = false;
         }
     }

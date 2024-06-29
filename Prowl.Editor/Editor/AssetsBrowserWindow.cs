@@ -199,7 +199,7 @@ namespace Prowl.Editor
                 var dropInteract = gui.GetInteractable();
                 //HandleDrop();
 
-                if (gui.IsNodeHovered() && gui.IsPointerClick(Silk.NET.Input.MouseButton.Right))
+                if (gui.IsNodeHovered() && gui.IsPointerClick(MouseButton.Right))
                     gui.OpenPopup("RightClickBodyBrowser");
                 var popupHolder = gui.CurrentNode;
                 if (gui.BeginPopup("RightClickBodyBrowser", out var node))
@@ -254,7 +254,7 @@ namespace Prowl.Editor
             {
                 var interact = gui.GetInteractable();
 
-                if (gui.IsNodeHovered() && gui.IsPointerClick(Silk.NET.Input.MouseButton.Right))
+                if (gui.IsNodeHovered() && gui.IsPointerClick(MouseButton.Right))
                     gui.OpenPopup("RightClickFileBrowser");
                 var popupHolder = gui.CurrentNode;
                 if (gui.BeginPopup("RightClickFileBrowser", out var node))
@@ -268,7 +268,7 @@ namespace Prowl.Editor
                     CurDirectoryNode = old;
                 }
 
-                if (interact.IsHovered() && gui.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                if (interact.IsHovered() && gui.IsPointerDoubleClick(MouseButton.Left))
                 {
                     CurDirectoryNode = entry;
                 }
@@ -439,7 +439,8 @@ namespace Prowl.Editor
                     {
                         using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources." + fileName);
                         _cachedThumbnails[fileName] = Texture2DLoader.FromStream(stream);
-                        _cachedThumbnails[fileName].Res.SetTextureFilters(Runtime.Rendering.Primitives.TextureMin.Linear, Runtime.Rendering.Primitives.TextureMag.Linear);
+
+                        _cachedThumbnails[fileName].Res.Sampler.SetFilter(FilterType.Linear, FilterType.Linear);
                     }
                 }
                 else if (entry is FileInfo file)
@@ -459,7 +460,7 @@ namespace Prowl.Editor
                                 if (tex.IsAvailable)
                                 {
                                     _cachedThumbnails[file.FullName] = tex;
-                                    tex.Res.SetTextureFilters(Runtime.Rendering.Primitives.TextureMin.Linear, Runtime.Rendering.Primitives.TextureMag.Linear);
+                                    tex.Res.Sampler.SetFilter(FilterType.Linear, FilterType.Linear);
                                     return tex.Res!;
                                 }
                             }
@@ -478,7 +479,7 @@ namespace Prowl.Editor
                 using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources." + fileName))
                     _cachedThumbnails[fileName] = Texture2DLoader.FromStream(stream);
 
-                _cachedThumbnails[fileName].Res.SetTextureFilters(Runtime.Rendering.Primitives.TextureMin.Linear, Runtime.Rendering.Primitives.TextureMag.Linear);
+                _cachedThumbnails[fileName].Res.Sampler.SetFilter(FilterType.Linear, FilterType.Linear);
             }
 
             return _cachedThumbnails[fileName].Res;

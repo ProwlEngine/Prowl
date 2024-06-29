@@ -1,9 +1,5 @@
-﻿using Prowl.Runtime.GUI.Graphics;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
+using Prowl.Runtime.GUI.Graphics;
 
 namespace Prowl.Runtime.GUI.Widgets.Gizmo
 {
@@ -67,7 +63,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                 {
                     if (blockPicking) return false;
                     isHovering = true;
-                    if (_gui.IsPointerClick(Silk.NET.Input.MouseButton.Left))
+                    if (_gui.IsPointerClick(MouseButton.Left))
                     {
                         // Rotate Camera
                         // FIXME: Why is forward vector inverted?
@@ -95,7 +91,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                         hovCol.a = 0.25f;
                         _gui.Draw2D.DrawCircleFilled(rect.Center, (float)rect.width / 2, hovCol, 48);
                         
-                        if (_gui.IsPointerClick(Silk.NET.Input.MouseButton.Left))
+                        if (_gui.IsPointerClick(MouseButton.Left))
                         {
                             // Toggle Perspective / Orthographic
                             isOrthographic = !isOrthographic;
@@ -162,7 +158,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                 double dotProduct = Vector3.Dot(faceNormal, -camForward);
                 if (dotProduct > 0.01)
                 {
-                    UIBuffer<Vector2> screenPoints = new UIBuffer<Vector2>();
+                    List<Vector2> screenPoints = new List<Vector2>();
                     for (int j = 0; j < face.Length; j++)
                     {
                         Vector3 vertex = cubeVertices[face[j]];
@@ -175,7 +171,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
 
                     if (screenPoints.Count >= 3)
                     {
-                        _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, faceColors[i].GetUInt());
+                        _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, faceColors[i]);
 
                         // If mouse inside convex poly
                         var mouse = _gui.PointerPos;
@@ -183,8 +179,8 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                         {
                             var hovCol = Color.white;
                             hovCol.a = 0.25f;
-                            _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, ((Color32)hovCol).GetUInt());
-                            //_gui.DrawList.AddPolyline(screenPoints, screenPoints.Count, hovCol.GetUInt(), true, 1, true);
+                            _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, (Color32)hovCol);
+                            //_gui.DrawList.AddPolyline(screenPoints, screenPoints.Count, hovCol, true, 1, true);
                             hovering = true;
                             axis = faceNormal;
                         }

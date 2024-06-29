@@ -161,7 +161,7 @@ Getting Prowl up and running is super easy!
 - ❌ Live Collaborative Tools
 - ❌ Visual Scripting
 - ❌ Material Node Editor
-- ❌ 2D Support
+- ❌ Basic 2D Support
 
 
 See the [open issues](https://github.com/michaelsakharov/prowl/issues) for a full list of proposed features (and known issues).
@@ -225,6 +225,7 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 - [Kuvrot](https://github.com/Kuvrot)
 - [JaggerJo](https://github.com/JaggerJo)
 - [Jihad Khawaja](https://github.com/jihadkhawaja)
+- [Unified](https://github.com/EJTP)
  
 # License 📜
 

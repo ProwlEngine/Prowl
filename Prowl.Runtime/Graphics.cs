@@ -1,207 +1,183 @@
-﻿using Prowl.Runtime.Rendering;
-using Prowl.Runtime.Rendering.OpenGL;
-using Prowl.Runtime.Rendering.Primitives;
-using Silk.NET.Maths;
-using System;
+﻿using System;
+using Veldrid;
+using Veldrid.SPIRV;
+using Veldrid.StartupUtilities;
+using System.Text;
+using System.Collections.Generic;
 
 namespace Prowl.Runtime
-{
+{   
+    using RenderPipelines;
 
     public static class Graphics
     {
         public static GraphicsDevice Device { get; internal set; }
 
-        public static Vector2 Resolution;
-        public static Matrix4x4 MatView;
-        public static Matrix4x4 MatProjection;
-        public static Matrix4x4 MatProjectionInverse;
-        public static Matrix4x4 OldMatView;
-        public static Matrix4x4 OldMatProjection;
+        public static Framebuffer ScreenFramebuffer => Device.SwapchainFramebuffer;
+        public static Vector2Int ScreenResolution => new Vector2(ScreenFramebuffer.Width, ScreenFramebuffer.Height);
 
-        public static Matrix4x4 MatDepthProjection;
-        public static Matrix4x4 MatDepthView;
+        public static ResourceFactory Factory => Device.ResourceFactory;
 
-        public static Vector2 Jitter { get; set; }
-        public static Vector2 PreviousJitter { get; set; }
-        public static bool UseJitter;
+        public static RenderPipeline ActivePipeline { get; private set; }
 
-        private static Material defaultMat;
-        internal static Vector2D<int> FrameBufferSize;
-
-#warning TODO: Move these to a separate class "GraphicsCapabilities" and add more
-        public static int MaxTextureSize { get; internal set; }
-        public static int MaxCubeMapTextureSize { get; internal set; }
-        public static int MaxArrayTextureLayers { get; internal set; }
-        public static int MaxFramebufferColorAttachments { get; internal set; }
-
-        public static void Initialize()
+        public static bool VSync
         {
-            Device = new GLDevice();
-            Device.Initialize(true);
+            get { return Device.SyncToVerticalBlank; }
+            set { Device.SyncToVerticalBlank = value; }
         }
 
-        public static void Viewport(int width, int height)
+        public static void Initialize(bool VSync = true, GraphicsBackend preferredBackend = GraphicsBackend.OpenGL)
         {
-            Device.Viewport(0, 0, (uint)width, (uint)height);
-            Resolution = new Vector2(width, height);
+            GraphicsDeviceOptions deviceOptions = new()
+            {
+                SyncToVerticalBlank = VSync,
+                PreferStandardClipSpaceYDirection = true,
+                PreferDepthRangeZeroToOne = false,
+                ResourceBindingModel = ResourceBindingModel.Default,
+                HasMainSwapchain = true,
+                SwapchainDepthFormat = PixelFormat.R16_UNorm,
+                SwapchainSrgbFormat = false,
+            };
+
+            Device = VeldridStartup.CreateGraphicsDevice(Screen.InternalWindow, deviceOptions, preferredBackend);
+
+            Screen.Resize += (newSize) => Device.ResizeMainWindow((uint)newSize.x, (uint)newSize.y);
         }
 
-        public static void Clear(float r = 0, float g = 0, float b = 0, float a = 1, bool color = true, bool depth = true, bool stencil = true)
+        private static void SetRenderPipeline(RenderPipeline renderPipeline)
         {
-            ClearFlags flags = 0;
-            if (color) flags |= ClearFlags.Color;
-            if (depth) flags |= ClearFlags.Depth;
-            if (stencil) flags |= ClearFlags.Stencil;
-            Device.Clear(r, g, b, a, flags);
+            if (ActivePipeline == renderPipeline)
+                return;
+            
+            ActivePipeline?.ReleaseResources();
+            ActivePipeline = renderPipeline;
+            ActivePipeline?.InitializeResources();
         }
 
-        public static void StartFrame()
+        public static void StartFrame(RenderPipeline renderPipeline = null)
         {
             RenderTexture.UpdatePool();
+            SetRenderPipeline(renderPipeline ?? Quality.GetQualitySettings().RenderPipeline.Res);
+        }
 
-            Clear();
-            Viewport(Window.InternalWindow.FramebufferSize.X, Window.InternalWindow.FramebufferSize.Y);
-            // Set default states
-            Device.SetState(new(), true);
+        public static void Render(Camera[] cameras, Framebuffer targetFramebuffer)
+        {
+            if (ActivePipeline == null)
+                return;
+            
+            RenderingContext context = new()
+            {
+                TargetFramebuffer = targetFramebuffer
+            };
+
+            ActivePipeline.Render(context, cameras);
         }
 
         public static void EndFrame()
-        {
-
+        {   
+            Device.SwapBuffers();
         }
 
-        public static void DrawMeshNow(Mesh mesh, Matrix4x4 transform, Material material, Matrix4x4? oldTransform = null)
+        public static CommandList GetCommandList()
         {
-            if (Camera.Current == null) throw new Exception("DrawMeshNow must be called during a rendering context like OnRenderObject()!");
-            if (Graphics.Device.CurrentProgram == null) throw new Exception("Non Program Assigned, Use Material.SetPass first before calling DrawMeshNow!");
+            CommandList list = Factory.CreateCommandList();
 
-            oldTransform ??= transform;
+            list.Begin();
 
-            if (UseJitter)
+            return list;
+        }
+
+        public static void SubmitCommands(CommandList list, bool waitForCompletion = false)
+        {   
+            list.End();
+
+            if (waitForCompletion)
             {
-                material.SetVector("Jitter", Jitter);
-                material.SetVector("PreviousJitter", PreviousJitter);
+                Fence fence = Factory.CreateFence(false);
+                Device.SubmitCommands(list, fence);
+                Device.WaitForFence(fence);
+                fence.Dispose();
             }
             else
             {
-                material.SetVector("Jitter", Vector2.zero);
-                material.SetVector("PreviousJitter", Vector2.zero);
+                Device.SubmitCommands(list);
             }
-
-            material.SetVector("Resolution", Resolution);
-            material.SetFloat("Time", (float)Time.time);
-            material.SetInt("Frame", (int)Time.frameCount);
-            material.SetVector("Camera_WorldPosition", Camera.Current.GameObject.Transform.position);
-
-            // Upload view and projection matrices(if locations available)
-            material.SetMatrix("matView", MatView);
-
-            material.SetMatrix("matProjection", MatProjection);
-            material.SetMatrix("matProjectionInverse", MatProjectionInverse);
-            // Model transformation matrix is sent to shader
-            material.SetMatrix("matModel", transform);
-
-            Matrix4x4 matMVP = Matrix4x4.Identity;
-            matMVP = Matrix4x4.Multiply(matMVP, transform);
-            matMVP = Matrix4x4.Multiply(matMVP, MatView);
-            matMVP = Matrix4x4.Multiply(matMVP, MatProjection);
-
-            Matrix4x4 oldMatMVP = Matrix4x4.Identity;
-            oldMatMVP = Matrix4x4.Multiply(oldMatMVP, oldTransform.Value);
-            oldMatMVP = Matrix4x4.Multiply(oldMatMVP, OldMatView);
-            oldMatMVP = Matrix4x4.Multiply(oldMatMVP, OldMatProjection);
-
-            // Send combined model-view-projection matrix to shader
-            //material.SetMatrix("mvp", matModelViewProjection);
-            material.SetMatrix("mvp", matMVP);
-            Matrix4x4.Invert(matMVP, out var mvpInverse);
-            material.SetMatrix("mvpInverse", mvpInverse);
-            material.SetMatrix("mvpOld", oldMatMVP);
-
-            // Mesh data can vary between meshes, so we need to let the shaders know which attributes are in use
-            material.SetKeyword("HAS_NORMALS", mesh.HasNormals);
-            material.SetKeyword("HAS_TANGENTS", mesh.HasTangents);
-            material.SetKeyword("HAS_UV", mesh.HasUV);
-            material.SetKeyword("HAS_UV2", mesh.HasUV2);
-            material.SetKeyword("HAS_COLORS", mesh.HasColors || mesh.HasColors32);
-
-            material.SetKeyword("HAS_BONEINDICES", mesh.HasBoneIndices);
-            material.SetKeyword("HAS_BONEWEIGHTS", mesh.HasBoneWeights);
-
-            // All material uniforms have been assigned, its time to properly set them
-            MaterialPropertyBlock.Apply(material.PropertyBlock, Graphics.Device.CurrentProgram);
-
-            DrawMeshNowDirect(mesh);
         }
 
-        public static void DrawMeshNowDirect(Mesh mesh)
+        public static SpecializationConstant[] GetSpecializations()
         {
-            if (Camera.Current == null) throw new Exception("DrawMeshNow must be called during a rendering context like OnRenderObject()!");
-            if (Graphics.Device.CurrentProgram == null) throw new Exception("Non Program Assigned, Use Material.SetPass first before calling DrawMeshNow!");
+            bool glOrGles = Device.BackendType == GraphicsBackend.OpenGL || Device.BackendType == GraphicsBackend.OpenGLES;
 
-            mesh.Upload();
+            List<SpecializationConstant> specializations =
+            [
+                new SpecializationConstant(100, Device.IsClipSpaceYInverted),
+                new SpecializationConstant(101, glOrGles), // TextureCoordinatesInvertedY
+                new SpecializationConstant(102, Device.IsDepthRangeZeroToOne),
+            ];
 
-            unsafe
+            PixelFormat swapchainFormat = ScreenFramebuffer.OutputDescription.ColorAttachments[0].Format;
+            bool swapchainIsSrgb = swapchainFormat == PixelFormat.B8_G8_R8_A8_UNorm_SRgb
+                || swapchainFormat == PixelFormat.R8_G8_B8_A8_UNorm_SRgb;
+
+            specializations.Add(new SpecializationConstant(103, swapchainIsSrgb));
+
+            return specializations.ToArray();
+        }
+
+        public static Veldrid.Shader[] CreateFromSpirv(string vert, string frag)
+        {
+            CrossCompileOptions options = new()
             {
-                Device.BindVertexArray(mesh.VertexArrayObject);
-                Device.DrawIndexed(Topology.Triangles, (uint)mesh.IndexCount, mesh.IndexFormat == IndexFormat.UInt32, null);
-                Device.BindVertexArray(null);
-            }
+                FixClipSpaceZ = (Device.BackendType == GraphicsBackend.OpenGL || Device.BackendType == GraphicsBackend.OpenGLES) && !Device.IsDepthRangeZeroToOne,
+                InvertVertexOutputY = false,
+                Specializations = GetSpecializations()
+            };
+
+            ShaderDescription vertexShaderDesc = new ShaderDescription(ShaderStages.Vertex, Encoding.UTF8.GetBytes(vert), "main");
+            ShaderDescription fragmentShaderDesc = new ShaderDescription(ShaderStages.Fragment, Encoding.UTF8.GetBytes(frag), "main");
+
+            return Factory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc, options);
         }
 
-        /// <summary>
-        /// Draws material with a FullScreen Quad
-        /// </summary>
-        public static void Blit(Material mat, int pass = 0)
+
+        public static void CopyTexture(Texture source, Texture destination, bool waitForCompletion = false)
         {
-            mat.SetPass(pass);
-            DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
+            InternalCopyTexture(source.InternalTexture, destination.InternalTexture, waitForCompletion);
         }
 
-        /// <summary>
-        /// Draws material with a FullScreen Quad onto a RenderTexture
-        /// </summary>
-        public static void Blit(RenderTexture? renderTexture, Material mat, int pass = 0, bool clear = true)
+        public static void CopyTexture(Texture source, Texture destination, uint mipLevel, uint arrayLayer, bool waitForCompletion = false)
         {
-            renderTexture?.Begin();
-            if (clear)
-                Clear(0, 0, 0, 0);
-            mat.SetPass(pass);
-            DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, mat);
-            renderTexture?.End();
-
+            InternalCopyTexture(source.InternalTexture, destination.InternalTexture, mipLevel, arrayLayer, waitForCompletion);
         }
 
-        /// <summary>
-        /// Draws texture into a RenderTexture Additively
-        /// </summary>
-        public static void Blit(RenderTexture? renderTexture, Texture2D texture, bool clear = true)
+        internal static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, bool waitForCompletion = false)
         {
-            defaultMat ??= new Material(Shader.Find("Defaults/Basic.shader"));
-            defaultMat.SetTexture("texture0", texture);
-            defaultMat.SetPass(0);
+            CommandList commandList = GetCommandList();
 
-            renderTexture?.Begin();
-            if (clear) Clear(0, 0, 0, 0);
-            DrawMeshNow(Mesh.GetFullscreenQuad(), Matrix4x4.Identity, defaultMat);
-            renderTexture?.End();
+            commandList.CopyTexture(source, destination);
+            
+            SubmitCommands(commandList, waitForCompletion);
+
+            commandList.Dispose();
+        }
+
+        internal static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, uint mipLevel, uint arrayLayer, bool waitForCompletion = false)
+        {
+            CommandList commandList = GetCommandList();
+
+            commandList.CopyTexture(source, destination, mipLevel, arrayLayer);
+            
+            SubmitCommands(commandList, waitForCompletion);
+
+            commandList.Dispose();
         }
 
         internal static void Dispose()
         {
             Device.Dispose();
-        }
 
-        internal static void BlitDepth(RenderTexture source, RenderTexture? destination)
-        {
-            Device.BindFramebuffer(source.frameBuffer, FBOTarget.Read);
-            if(destination != null)
-                Device.BindFramebuffer(destination?.frameBuffer, FBOTarget.Draw);
-            Device.BlitFramebuffer(0, 0, source.Width, source.Height,
-                                        0, 0, destination?.Width ?? (int)Graphics.Resolution.x, destination?.Height ?? (int)Graphics.Resolution.y,
-                                        ClearFlags.Depth, BlitFilter.Nearest
-                                        );
-            Device.UnbindFramebuffer();
+            PipelineCache.Dispose();
+            ShaderCache.Dispose();
         }
     }
 }

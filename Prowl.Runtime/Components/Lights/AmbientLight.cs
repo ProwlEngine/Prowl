@@ -23,11 +23,14 @@ public class AmbientLight : MonoBehaviour
         lightMat.SetFloat("SkyIntensity", skyIntensity);
         lightMat.SetFloat("GroundIntensity", groundIntensity);
 
+        #warning Veldrid change
+        /*
         lightMat.SetTexture("gAlbedoAO", Camera.Current.gBuffer.AlbedoAO);
         lightMat.SetTexture("gNormalMetallic", Camera.Current.gBuffer.NormalMetallic);
         lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
 
         Graphics.Blit(lightMat);
+        */
     }
 
 }

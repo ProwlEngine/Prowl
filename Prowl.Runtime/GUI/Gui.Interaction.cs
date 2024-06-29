@@ -28,7 +28,7 @@ namespace Prowl.Runtime.GUI
 
         private void EndInteractionFrame()
         {
-            if (!IsPointerDown(Silk.NET.Input.MouseButton.Left))
+            if (!IsPointerDown(MouseButton.Left))
             {
                 ActiveID = 0;
                 DragDrop_Clear();
@@ -242,7 +242,7 @@ namespace Prowl.Runtime.GUI
         {
             if (IsDragDropActive)
             {
-                if (PreviousInteractableIsHovered() && !IsPointerDown(Silk.NET.Input.MouseButton.Left))
+                if (PreviousInteractableIsHovered() && !IsPointerDown(MouseButton.Left))
                 {
                     IsDragDropActive = false;
                     DragDropID = 0;
@@ -296,7 +296,7 @@ namespace Prowl.Runtime.GUI
                 {
                     _gui.HoveredID = _id;
 
-                    if (_gui.ActiveID == 0 && _gui.IsPointerDown(Silk.NET.Input.MouseButton.Left) && !onlyHovered)
+                    if (_gui.ActiveID == 0 && _gui.IsPointerDown(MouseButton.Left) && !onlyHovered)
                     {
                         _gui.ActiveID = _id;
                         _gui.ActiveRect = _rect;
@@ -312,12 +312,12 @@ namespace Prowl.Runtime.GUI
         public bool TakeFocus(bool onrelease = false)
         {
             // Clicking on another Interactable will remove focus
-            //if (_gui.FocusID == _id && _gui.HoveredID != _id && _gui.IsPointerDown(Silk.NET.Input.MouseButton.Left))
+            //if (_gui.FocusID == _id && _gui.HoveredID != _id && _gui.IsPointerDown(Veldrid.MouseButton.Left))
             //    _gui.FocusID = 0;
 
             // If we are hovered and active, we are focused
-            //if (_gui.HoveredID == _id && _gui.ActiveID == _id && !_gui.IsPointerDown(Silk.NET.Input.MouseButton.Left))
-            if (_gui.HoveredID == _id && _gui.ActiveID == _id && _gui.IsPointerClick(Silk.NET.Input.MouseButton.Left, onrelease))
+            //if (_gui.HoveredID == _id && _gui.ActiveID == _id && !_gui.IsPointerDown(Veldrid.MouseButton.Left))
+            if (_gui.HoveredID == _id && _gui.ActiveID == _id && _gui.IsPointerClick(MouseButton.Left))
             {
                 _gui.FocusID = _id;
                 return true;

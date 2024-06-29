@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System.Collections.Generic;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace Prowl.Runtime.Utils
@@ -197,6 +198,31 @@ namespace Prowl.Runtime.Utils
             hash += 32;
 
             hash = MixFinal(hash);
+            return hash;
+        }
+
+        // From https://stackoverflow.com/questions/670063/getting-hash-of-a-list-of-strings-regardless-of-order
+        public static int OrderlessHash<T>(IEnumerable<T> source, IEqualityComparer<T>? comparer = null)
+        {
+            comparer ??= EqualityComparer<T>.Default;
+
+            int hash = 0;
+            int curHash;
+
+            var valueCounts = new Dictionary<T, int>();
+
+            foreach (var element in source)
+            {
+                curHash = comparer.GetHashCode(element);
+
+                if (valueCounts.TryGetValue(element, out int bitOffset))
+                    valueCounts[element] = bitOffset + 1;
+                else
+                    valueCounts.Add(element, bitOffset);
+
+                hash = unchecked(hash + ((curHash << bitOffset) | (curHash >> (32 - bitOffset))) * 37);
+            }
+
             return hash;
         }
 

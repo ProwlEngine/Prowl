@@ -1,5 +1,5 @@
-﻿using Silk.NET.Input;
-using System;
+﻿using System;
+using System.Collections.Generic;
 
 namespace Prowl.Runtime
 {
@@ -7,11 +7,16 @@ namespace Prowl.Runtime
     {
         string Clipboard { get; set; }
         bool IsAnyKeyDown { get; }
-        char? LastPressedChar { get; set; }
+        
+        IReadOnlyList<char> InputString { get; set; }
+
         Vector2 MouseDelta { get; }
         Vector2Int MousePosition { get; set; }
         float MouseWheelDelta { get; }
         Vector2Int PrevMousePosition { get; }
+
+        bool CursorVisible { get; set; }
+        bool CursorLocked { get; set; }
 
         event Action<Key, bool> OnKeyEvent;
         event Action<MouseButton, double, double, bool, bool> OnMouseEvent;
@@ -22,6 +27,5 @@ namespace Prowl.Runtime
         bool GetMouseButton(int button);
         bool GetMouseButtonDown(int button);
         bool GetMouseButtonUp(int button);
-        void SetCursorVisible(bool visible, int miceIndex = 0);
     }
 }

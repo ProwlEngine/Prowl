@@ -2,10 +2,9 @@
 using Prowl.Editor.EditorWindows;
 using Prowl.Editor.Preferences;
 using Prowl.Runtime;
-using Prowl.Runtime.Rendering;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
-using Silk.NET.Input;
+using Veldrid;
 using System.Text.RegularExpressions;
 
 namespace Prowl.Editor;
@@ -19,7 +18,6 @@ public static class Program
     public static void RegisterReloadOfExternalAssemblies() => IsReloadingExternalAssemblies = true;
 
     private static bool CreatedDefaultWindows = false;
-
     public static int Main(string[] args)
     {
         // set global Culture to invariant
@@ -225,7 +223,7 @@ Fallback ""Fallback/TestShader""
             Console.WriteLine(shader.ToString());
         };
 
-        Application.Update += (delta) =>
+        Application.Update += () =>
         {
             //EditorGui.SetupDock();
 
@@ -266,20 +264,18 @@ Fallback ""Fallback/TestShader""
 
                 if (GeneralPreferences.Instance.LockFPS)
                 {
-                    Window.InternalWindow.VSync = false;
-                    Window.InternalWindow.FramesPerSecond = GeneralPreferences.Instance.TargetFPS;
-                    Window.InternalWindow.UpdatesPerSecond = GeneralPreferences.Instance.TargetFPS;
+                    Graphics.VSync = false;
+                    Screen.FramesPerSecond = GeneralPreferences.Instance.TargetFPS;
                 }
                 else
                 {
-                    Window.InternalWindow.FramesPerSecond = 0;
-                    Window.InternalWindow.UpdatesPerSecond = 0;
-                    Window.InternalWindow.VSync = GeneralPreferences.Instance.VSync;
+                    Graphics.VSync = GeneralPreferences.Instance.VSync;
+                    Screen.FramesPerSecond = 0;
                 }
 
-                if (Hotkeys.IsHotkeyDown("SaveSceneAs", new() { Key = Key.S, Ctrl = true, Shift = true }))
+                if (Hotkeys.IsHotkeyDown("SaveSceneAs", new() { Key = Runtime.Key.S, Ctrl = true, Shift = true }))
                     EditorGuiManager.SaveSceneAs();
-                else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Key.S, Ctrl = true }))
+                else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Runtime.Key.S, Ctrl = true }))
                     EditorGuiManager.SaveScene();
 
                 Application.isPlaying = PlayMode.Current == PlayMode.Mode.Playing;
@@ -300,18 +296,18 @@ Fallback ""Fallback/TestShader""
             }
         };
 
-        Application.Render += (delta) =>
+        Application.Render += () =>
         {
             Graphics.StartFrame();
 
             EditorGuiManager.Update();
 
             Graphics.EndFrame();
-
         };
 
         Application.Quitting += () =>
         {
+
         };
 
 
@@ -319,10 +315,6 @@ Fallback ""Fallback/TestShader""
 
         return 0;
     }
-
-
-    public static Font font;
-    private static GraphicsTexture testImage;
 
     public static void CheckReloadingAssemblies()
     {
@@ -355,8 +347,8 @@ Fallback ""Fallback/TestShader""
                 }
                 catch (Exception e)
                 {
-                    Runtime.Debug.LogError($"Error reloading assemblies: {e.Message}");
-                    Runtime.Debug.LogError(e.StackTrace);
+                    Debug.LogError($"Error reloading assemblies: {e.Message}");
+                    Debug.LogError(e.StackTrace);
                 }
                 finally
                 {

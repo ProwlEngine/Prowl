@@ -337,7 +337,7 @@ namespace Prowl.Editor
 
                     DragnDrop.Drag(subDirectory);
 
-                    if (gui.IsNodeHovered() && gui.IsPointerClick(Silk.NET.Input.MouseButton.Right))
+                    if (gui.IsNodeHovered() && gui.IsPointerClick(MouseButton.Right))
                         gui.OpenPopup("TreeRightClickAsset");
                     var popupHolder = gui.CurrentNode;
                     if (gui.BeginPopup("TreeRightClickAsset", out var node))
@@ -555,14 +555,14 @@ namespace Prowl.Editor
             if (interact.TakeFocus(true))
                 SelectHandler.Select(index, entry);
 
-            if (interact.IsHovered() && Gui.ActiveGUI.IsPointerClick(Silk.NET.Input.MouseButton.Right))
+            if (interact.IsHovered() && Gui.ActiveGUI.IsPointerClick(MouseButton.Right))
                 Gui.ActiveGUI.OpenPopup("RightClickFile");
             var popupHolder = Gui.ActiveGUI.CurrentNode;
             if (Gui.ActiveGUI.BeginPopup("RightClickFile", out var node2))
                 using (node2.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Enter())
                     DrawContextMenu(entry, null, fromAssetBrowser, popupHolder);
 
-            if (entryNode.AssetID != Guid.Empty && interact.IsHovered() && Gui.ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+            if (entryNode.AssetID != Guid.Empty && interact.IsHovered() && Gui.ActiveGUI.IsPointerDoubleClick(MouseButton.Left))
             {
                 if (entry.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase))
                     SceneManager.LoadScene(new AssetRef<Runtime.Scene>(entryNode.AssetID));

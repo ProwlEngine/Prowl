@@ -3,7 +3,6 @@ using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.Rendering.OpenGL;
 using System;
 
 namespace Prowl.Editor.ScriptedEditors
@@ -27,12 +26,11 @@ namespace Prowl.Editor.ScriptedEditors
 
         public override void OnInspectorGUI()
         {
+            /*
             double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
             var mat = (Material)target;
             mat ??= new Material();
-
-            var g = Gui.ActiveGUI;
 
             g.CurrentNode.Layout(LayoutType.Column);
             g.CurrentNode.ScaleChildren();
@@ -43,6 +41,11 @@ namespace Prowl.Editor.ScriptedEditors
                 IAssetRef assetref = mat.Shader;
                 changed |= EditorGUI.DrawProperty(0, "Shader", ref assetref);
                 mat.Shader = new(assetref.AssetID, assetref.FileID);
+            }
+
+            using (g.Node("Properties").ExpandWidth().MaxHeight(GuiStyle.ItemHeight).Layout(LayoutType.Row).ScaleChildren().Enter())
+            {
+                EditorGUI.Text("Under construction");
             }
 
             if (mat.Shader.IsAvailable)
@@ -106,7 +109,7 @@ namespace Prowl.Editor.ScriptedEditors
             {
                 onChange?.Invoke();
             }
-
+            */
         }
 
     }

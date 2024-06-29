@@ -1,5 +1,4 @@
 ﻿using Silk.NET.OpenAL;
-using Silk.NET.Vulkan;
 using System;
 
 namespace Prowl.Runtime.Audio.OpenAL

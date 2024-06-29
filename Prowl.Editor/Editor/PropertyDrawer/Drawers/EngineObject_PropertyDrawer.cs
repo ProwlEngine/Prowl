@@ -31,7 +31,7 @@ namespace Prowl.Editor.PropertyDrawers
             else
             {
                 ActiveGUI.Draw2D.DrawText(value.Name, pos, Color.white * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f));
-                if (ActiveGUI.IsNodeHovered() && ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                if (ActiveGUI.IsNodeHovered() && ActiveGUI.IsPointerDoubleClick(MouseButton.Left))
                     GlobalSelectHandler.Select(value);
             }
 
@@ -57,7 +57,7 @@ namespace Prowl.Editor.PropertyDrawers
             {
                 ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, 1, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
-                if (ActiveGUI.IsKeyDown(Silk.NET.Input.Key.Delete))
+                if (ActiveGUI.IsKeyDown(Key.Delete))
                 {
                     targetValue = null;
                     changed = true;

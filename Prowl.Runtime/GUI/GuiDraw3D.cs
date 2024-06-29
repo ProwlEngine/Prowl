@@ -53,7 +53,7 @@ namespace Prowl.Runtime.GUI
 
             bool closed = points.Count > 0 && Vector2.Distance(points[0], points[points.Count - 1]) < 1e-2;
 
-            _gui.Draw2D.DrawList.AddPolyline(points, closed ? points.Count - 1 : points.Count, stroke.Color.GetUInt(), closed, (float)stroke.Thickness);
+            _gui.Draw2D.DrawList.AddPolyline(points, closed ? points.Count - 1 : points.Count, stroke.Color, closed, (float)stroke.Thickness);
         }
 
         public void Circle(double radius, Stroke3D stroke) => Arc(radius, 0.0, 360, stroke);
@@ -64,7 +64,7 @@ namespace Prowl.Runtime.GUI
 
             var points = QuadPoints(radius * 2.0);
             if (points.Count <= 0) return;
-            _gui.Draw2D.DrawList.AddPolyline(points, points.Count, stroke.Color.GetUInt(), true, (float)stroke.Thickness);
+            _gui.Draw2D.DrawList.AddPolyline(points, points.Count, stroke.Color, true, (float)stroke.Thickness);
         }
 
         public void FilledCircle(double radius, Stroke3D stroke)
@@ -74,7 +74,7 @@ namespace Prowl.Runtime.GUI
 
             var points = ArcPoints(radius, 0.0, Math.PI * 2);
             if (points.Count <= 0) return;
-            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count - 1, stroke.Color.GetUInt());
+            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count - 1, stroke.Color);
         }
 
         public void LineSegment(Vector3 from, Vector3 to, Stroke3D stroke)
@@ -93,7 +93,7 @@ namespace Prowl.Runtime.GUI
                     return;
             }
 
-            _gui.Draw2D.DrawList.AddLine(points[0], points[1], stroke.Color.GetUInt(), (float)stroke.Thickness);
+            _gui.Draw2D.DrawList.AddLine(points[0], points[1], stroke.Color, (float)stroke.Thickness);
         }
 
         public void Arrow(Vector3 from, Vector3 to, Stroke3D stroke)
@@ -107,13 +107,13 @@ namespace Prowl.Runtime.GUI
                 Vector2 direction = (arrowEnd - arrowStart).normalized;
                 Vector2 cross = new Vector2(-direction.y, direction.x) * stroke.Thickness / 2.0f;
 
-                UIBuffer<Vector2> points = new UIBuffer<Vector2>();
-                points.reserve(3);
+                List<Vector2> points = new List<Vector2>();
+                points.Reserve(3);
                 points.Add(arrowStart - cross);
                 points.Add(arrowStart + cross);
                 points.Add(arrowEnd);
 
-                _gui.Draw2D.DrawList.AddConvexPolyFilled(points, 3, stroke.Color.GetUInt());
+                _gui.Draw2D.DrawList.AddConvexPolyFilled(points, 3, stroke.Color);
             }
         }
 
@@ -122,13 +122,13 @@ namespace Prowl.Runtime.GUI
             if (!hasViewport) throw new InvalidOperationException("No viewport set.");
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");
 
-            var screenPoints = new UIBuffer<Vector2>();
+            var screenPoints = new List<Vector2>();
             foreach (Vector3 pos in points)
                 if (WorldToScreen(_viewport, _mvp, pos, out Vector2 screenPos))
                     screenPoints.Add(screenPos);
 
             if (screenPoints.Count > 2)
-                _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, stroke.Color.GetUInt());
+                _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, stroke.Color);
         }
 
         public void Polyline(IEnumerable<Vector3> points, Stroke3D stroke)
@@ -136,13 +136,13 @@ namespace Prowl.Runtime.GUI
             if (!hasViewport) throw new InvalidOperationException("No viewport set.");
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");
 
-            var screenPoints = new UIBuffer<Vector2>();
+            var screenPoints = new List<Vector2>();
             foreach (Vector3 pos in points)
                 if (WorldToScreen(_viewport, _mvp, pos, out Vector2 screenPos))
                     screenPoints.Add(screenPos);
 
             if (screenPoints.Count > 1)
-                _gui.Draw2D.DrawList.AddPolyline(screenPoints, screenPoints.Count, stroke.Color.GetUInt(), false, (float)stroke.Thickness);
+                _gui.Draw2D.DrawList.AddPolyline(screenPoints, screenPoints.Count, stroke.Color, false, (float)stroke.Thickness);
         }
 
         public void Sector(double radius, double startAngle, double endAngle, Stroke3D stroke)
@@ -159,8 +159,8 @@ namespace Prowl.Runtime.GUI
             if (stepCount < 2)
                 return;
 
-            var points = new UIBuffer<Vector2>();
-            points.reserve(stepCount + 1);
+            var points = new List<Vector2>();
+            points.Reserve(stepCount + 1);
 
             double stepSize = angleDelta / (stepCount - 1);
 
@@ -195,7 +195,7 @@ namespace Prowl.Runtime.GUI
 
             if (points.Count <= 0) return;
 
-            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count, stroke.Color.GetUInt());
+            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count, stroke.Color);
         }
 
         public void Sphere(double radius, Stroke3D stroke)
@@ -203,8 +203,8 @@ namespace Prowl.Runtime.GUI
             if (!hasViewport) throw new InvalidOperationException("No viewport set.");
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");
 
-            var points = new UIBuffer<Vector2>();
-            points.reserve(64);
+            var points = new List<Vector2>();
+            points.Reserve(64);
 
             for (int i = 0; i < 64; i++)
             {
@@ -218,7 +218,7 @@ namespace Prowl.Runtime.GUI
 
             if (points.Count <= 0) return;
 
-            _gui.Draw2D.DrawList.AddPolyline(points, points.Count, stroke.Color.GetUInt(), true, (float)stroke.Thickness);
+            _gui.Draw2D.DrawList.AddPolyline(points, points.Count, stroke.Color, true, (float)stroke.Thickness);
         }
 
         public void FilledSphere(double radius, Stroke3D stroke)
@@ -226,8 +226,8 @@ namespace Prowl.Runtime.GUI
             if (!hasViewport) throw new InvalidOperationException("No viewport set.");
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");
 
-            var points = new UIBuffer<Vector2>();
-            points.reserve(64);
+            var points = new List<Vector2>();
+            points.Reserve(64);
 
             for (int i = 0; i < 64; i++)
             {
@@ -241,9 +241,8 @@ namespace Prowl.Runtime.GUI
 
             if (points.Count <= 0) return;
 
-            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count, stroke.Color.GetUInt());
+            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count, stroke.Color);
         }
-
 
         // Define the eight corners of the cube
         static readonly Vector3[] cubeCorners = {
@@ -269,8 +268,8 @@ namespace Prowl.Runtime.GUI
             if (!hasViewport) throw new InvalidOperationException("No viewport set.");
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");
 
-            var points = new UIBuffer<Vector2>();
-            points.reserve(8);
+            var points = new List<Vector2>();
+            points.Reserve(8);
 
             double halfSize = size / 2.0;
 
@@ -284,11 +283,11 @@ namespace Prowl.Runtime.GUI
             // Draw the cube edges
             for (int i = 0; i < cubeEdges.Length; i += 2)
             {
-                _gui.Draw2D.DrawList.AddLine(points[cubeEdges[i]], points[cubeEdges[i + 1]], stroke.Color.GetUInt(), (float)stroke.Thickness);
+                _gui.Draw2D.DrawList.AddLine(points[cubeEdges[i]], points[cubeEdges[i + 1]], stroke.Color, (float)stroke.Thickness);
             }
         }
 
-        public void QuadImage(Vector3 size, Texture texture)
+        public void QuadImage(Vector3 size, Texture2D texture)
         {
             if (!hasViewport) throw new InvalidOperationException("No viewport set.");
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");
@@ -312,13 +311,13 @@ namespace Prowl.Runtime.GUI
         }
 
 
-        private UIBuffer<Vector2> ArcPoints(double radius, double startRad, double endRad)
+        private List<Vector2> ArcPoints(double radius, double startRad, double endRad)
         {
             double angle = Math.Clamp(endRad - startRad, -Math.PI * 2, Math.PI * 2);
 
             int stepCount = Steps(angle);
-            var points = new UIBuffer<Vector2>();
-            points.reserve(stepCount);
+            var points = new List<Vector2>();
+            points.Reserve(stepCount);
 
             double stepSize = angle / (stepCount - 1);
 
@@ -337,10 +336,10 @@ namespace Prowl.Runtime.GUI
             return points;
         }
 
-        private UIBuffer<Vector2> QuadPoints(double size)
+        private List<Vector2> QuadPoints(double size)
         {
-            var points = new UIBuffer<Vector2>();
-            points.reserve(4);
+            var points = new List<Vector2>();
+            points.Reserve(4);
 
             double halfSize = size / 2.0;
 

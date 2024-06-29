@@ -4,7 +4,6 @@ using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Widgets.Gizmo;
 using Prowl.Runtime.SceneManagement;
-using Silk.NET.Input;
 
 namespace Prowl.Editor;
 
@@ -52,8 +51,14 @@ public class SceneViewWindow : EditorWindow
 
     public void RefreshRenderTexture(int width, int height)
     {
-        RenderTarget?.Dispose();
-        RenderTarget = new RenderTexture(width, height);
+        RenderTarget?.DestroyImmediate();
+
+        RenderTarget = new RenderTexture(
+            (uint)width, (uint)height, 
+            [ Veldrid.PixelFormat.R8_G8_B8_A8_UNorm ], 
+            Veldrid.PixelFormat.R16_UNorm, 
+            true);
+
         Cam.Target = RenderTarget;
     }
 
@@ -69,6 +74,7 @@ public class SceneViewWindow : EditorWindow
         }
 
         if (!Project.HasProject) return;
+
         gui.CurrentNode.Padding(5);
 
         var renderSize = gui.CurrentNode.LayoutData.Rect.Size;
@@ -82,13 +88,17 @@ public class SceneViewWindow : EditorWindow
         // Manually Render to the RenderTexture
         Cam.NearClip = SceneViewPreferences.Instance.NearClip;
         Cam.FarClip = SceneViewPreferences.Instance.FarClip;
-        Cam.Render((int)renderSize.x, (int)renderSize.y);
-        SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
-        Cam.RenderResolution = SceneViewPreferences.Instance.RenderResolution;
+
+        Graphics.Render([ Cam ], RenderTarget.Framebuffer);
+
+        #warning Veldrid change
+        // SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
+        // 
+        // Cam.RenderResolution = SceneViewPreferences.Instance.RenderResolution;
 
         var imagePos = gui.CurrentNode.LayoutData.Rect.Position;
         var imageSize = gui.CurrentNode.LayoutData.Rect.Size;
-        gui.Draw2D.DrawImage(RenderTarget.InternalTextures[0], imagePos, imageSize, Color.white);
+        gui.Draw2D.DrawImage(RenderTarget.ColorBuffers[0], imagePos, imageSize, Color.white);
 
 #warning TODO: Camera rendering clears Gizmos untill the rendering overhaul, so gizmos will Flicker here
         Camera.Current = Cam;
@@ -113,23 +123,23 @@ public class SceneViewWindow : EditorWindow
 
         if (SceneViewPreferences.Instance.GridType != GridType.None)
         {
+            #warning Veldrid change
+
+            /*
             gridMat ??= new Material(Shader.Find("Defaults/Grid.shader"));
             gridMat.SetTexture("gPositionRoughness", Cam.gBuffer.PositionRoughness);
             gridMat.SetKeyword("GRID_XZ", SceneViewPreferences.Instance.GridType == GridType.XZ);
             gridMat.SetKeyword("GRID_XY", SceneViewPreferences.Instance.GridType == GridType.XY);
             gridMat.SetKeyword("GRID_YZ", SceneViewPreferences.Instance.GridType == GridType.YZ);
 
-            gridMat.SetFloat("u_lineWidth", SceneViewPreferences.Instance.LineWidth);
-            gridMat.SetFloat("u_primaryGridSize", SceneViewPreferences.Instance.PrimaryGridSize);
-            gridMat.SetFloat("u_secondaryGridSize", SceneViewPreferences.Instance.SecondaryGridSize);
-
             Graphics.Blit(RenderTarget, gridMat, 0, false);
+            */
         }
 
         var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Transform.position, Cam.GameObject.Transform.forward, Cam.GameObject.Transform.up);
         var projection = Cam.GetProjectionMatrix((float)renderSize.x, (float)renderSize.y);
 
-        Ray mouseRay = Cam.ScreenPointToRay(gui.PointerPos - imagePos);
+        Ray mouseRay = Cam.ScreenPointToRay(gui.PointerPos - imagePos, new Vector2(RenderTarget.Width, RenderTarget.Height));
 
         bool blockPicking = gui.IsBlockedByInteractable(gui.PointerPos);
         HandleGizmos(selectedGOs, mouseRay, view, projection, blockPicking);
@@ -173,46 +183,39 @@ public class SceneViewWindow : EditorWindow
         gui.SetCursorVisibility(true);
         if (IsFocused && viewportInteractable.IsHovered())
         {
-            if (gui.IsPointerClick(Silk.NET.Input.MouseButton.Left) && !gizmo.IsOver && !viewManipulator.IsOver)
+            if (gui.IsPointerClick(MouseButton.Left) && !gizmo.IsOver && !viewManipulator.IsOver)
             {
-                // If the Scene Camera has no Render Graph, the gBuffer may not be initialized
-                if (Cam.gBuffer != null)
-                {
-                    var instanceID = Cam.gBuffer.GetObjectIDAt(mouseUV);
-                    if (instanceID != 0)
-                    {
-                        // find InstanceID Object
-                        var go = EngineObject.FindObjectByID<GameObject>(instanceID);
-                        if (go != null)
-                        {
-                            if (!go.IsPartOfPrefab || gui.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
-                            {
-                                HierarchyWindow.SelectHandler.Select(new WeakReference(go));
-                                HierarchyWindow.Ping(go);
-                            }
-                            else
-                            {
-                                // Find Prefab go.IsPrefab
-                                var prefab = go.Transform;
-                                while (prefab.parent != null)
-                                {
-                                    prefab = prefab.parent;
-                                    if (prefab.gameObject.IsPrefab)
-                                        break;
-                                }
+                var hit = MeshRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
 
-                                HierarchyWindow.SelectHandler.Select(new WeakReference(prefab.gameObject));
-                                HierarchyWindow.Ping(prefab.gameObject);
-                            }
-                        }
+                // If the Scene Camera has no Render Graph, the gBuffer may not be initialized
+                if (hit.gameObject != null)
+                {
+                    if (!hit.gameObject.IsPartOfPrefab || gui.IsPointerDoubleClick(MouseButton.Left))
+                    {
+                        HierarchyWindow.SelectHandler.Select(new WeakReference(hit.gameObject));
+                        HierarchyWindow.Ping(hit.gameObject);
                     }
                     else
                     {
-                        HierarchyWindow.SelectHandler.Clear();
+                        // Find Prefab go.IsPrefab
+                        var prefab = hit.gameObject.Transform;
+                        while (prefab.parent != null)
+                        {
+                            prefab = prefab.parent;
+                            if (prefab.gameObject.IsPrefab)
+                                break;
+                        }
+
+                        HierarchyWindow.SelectHandler.Select(new WeakReference(prefab.gameObject));
+                        HierarchyWindow.Ping(prefab.gameObject);
                     }
                 }
+                else
+                {
+                    HierarchyWindow.SelectHandler.Clear();
+                }
             }
-            else if (gui.IsPointerDown(Silk.NET.Input.MouseButton.Right))
+            else if (gui.IsPointerDown(MouseButton.Right))
             {
                 gui.SetCursorVisibility(false);
                 Vector3 moveDir = Vector3.zero;
@@ -396,11 +399,12 @@ public class SceneViewWindow : EditorWindow
             GameObject go = (GameObject)EngineObject.Instantiate(original, true);
             if (go != null)
             {
-                var pos = Cam.gBuffer.GetViewPositionAt(mouseUV);
-                if (pos == Vector3.zero)
+                var hit = MeshRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+
+                if (hit.worldPosition == Vector3.zero)
                     go.Transform.position = Cam.GameObject.Transform.position + Cam.GameObject.Transform.forward * 10;
                 else
-                    go.Transform.position = Cam.Transform.TransformPoint(pos);
+                    go.Transform.position = hit.worldPosition;
             }
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
@@ -410,12 +414,14 @@ public class SceneViewWindow : EditorWindow
             var t = go;
             if (t != null)
             {
-                var pos = Cam.gBuffer.GetViewPositionAt(mouseUV);
-                if (pos == Vector3.zero)
+                var hit = MeshRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+
+                if (hit.worldPosition == Vector3.zero)
                     t.Transform.position = Cam.GameObject.Transform.position + Cam.GameObject.Transform.forward * 10;
                 else
-                    go.Transform.position = Cam.Transform.TransformPoint(pos);
+                    go.Transform.position = hit.worldPosition;
             }
+
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
         else if (DragnDrop.Drop<Scene>(out var scene))
@@ -424,21 +430,14 @@ public class SceneViewWindow : EditorWindow
         }
         else if (DragnDrop.Drop<Material>(out var material))
         {
-            if (Cam.gBuffer != null)
+            var hit = MeshRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+
+            if (hit.gameObject != null)
             {
-                var instanceID = Cam.gBuffer.GetObjectIDAt(mouseUV);
-                if (instanceID != 0)
-                {
-                    // find InstanceID Object
-                    var go = EngineObject.FindObjectByID<GameObject>(instanceID);
-                    if (go != null)
-                    {
-                        // Look for a MeshRenderer
-                        var renderer = go.GetComponent<MeshRenderer>();
-                        if (renderer != null)
-                            renderer.Material = material;
-                    }
-                }
+                // Look for a MeshRenderer
+                var renderer = hit.gameObject.GetComponent<MeshRenderer>();
+                if (renderer != null)
+                    renderer.Material = material;
             }
         }
     }

@@ -43,13 +43,14 @@ namespace Prowl.Editor.Assets
 
         internal static void InternalUpdate()
         {
-            if (Window.IsFocused)
+            if (Screen.IsFocused)
             {
                 RefreshTimer += Time.deltaTime;
                 if (!lastFocused || RefreshTimer > 5f)
                     Update();
             }
-            lastFocused = Window.IsFocused;
+            
+            lastFocused = Screen.IsFocused;
         }
 
         /// <summary>
@@ -360,7 +361,7 @@ namespace Prowl.Editor.Assets
             }
             catch (Exception e)
             {
-                Debug.LogError($"Failed to import {ToRelativePath(assetFile)}. Reason: {e.Message}");
+                Debug.LogError($"Failed to import {ToRelativePath(assetFile)}", e);
                 return false; // Import failed
             }
 

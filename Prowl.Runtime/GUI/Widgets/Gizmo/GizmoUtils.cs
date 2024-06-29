@@ -134,9 +134,9 @@ namespace Prowl.Runtime.GUI
             };
 
             double alpha = focused ? 1f : 0.8f;
-            col.red = (byte)(col.red * alpha);
-            col.green = (byte)(col.green * alpha);
-            col.blue = (byte)(col.blue * alpha);
+            col.r = (byte)(col.r * alpha);
+            col.g = (byte)(col.g * alpha);
+            col.b = (byte)(col.b * alpha);
 
             return col;
         }
@@ -541,7 +541,7 @@ namespace Prowl.Runtime.GUI
             );
         }
 
-        internal static bool IsPointInPolygon(Vector2 mouse, UIBuffer<Vector2> screenPoints)
+        internal static bool IsPointInPolygon(Vector2 mouse, List<Vector2> screenPoints)
         {
             int count = screenPoints.Count;
             bool inside = false;

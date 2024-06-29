@@ -43,10 +43,11 @@ public class GameWindow : EditorWindow
         Title = FontAwesome6.Gamepad + " Game";
         GeneralPreferences.Instance.CurrentWidth = (int)Width;
         GeneralPreferences.Instance.CurrentHeight = (int)Height - HeaderHeight;
+
         RefreshRenderTexture();
 
         LastFocused = new WeakReference(this);
-        InputHandler = new GameViewInputHandler(Window.InternalInput, this);
+        InputHandler = new GameViewInputHandler(this);
     }
 
     ~GameWindow()
@@ -57,7 +58,13 @@ public class GameWindow : EditorWindow
     public void RefreshRenderTexture()
     {
         RenderTarget?.Dispose();
-        RenderTarget = new RenderTexture(GeneralPreferences.Instance.CurrentWidth, GeneralPreferences.Instance.CurrentHeight);
+
+        RenderTarget = new RenderTexture(
+            (uint)GeneralPreferences.Instance.CurrentWidth, 
+            (uint)GeneralPreferences.Instance.CurrentHeight, 
+            [ Veldrid.PixelFormat.R8_G8_B8_A8_UNorm ], 
+            Veldrid.PixelFormat.R16_UNorm, 
+            true);
     }
 
     protected override void Draw()
@@ -66,9 +73,9 @@ public class GameWindow : EditorWindow
 
         if(IsFocused)
             LastFocused = new WeakReference(this);
-        InputHandler.LateUpdate();
+        InputHandler.EarlyUpdate();
 
-        gui.CurrentNode.Layout(Runtime.GUI.LayoutType.Column).ScaleChildren();
+        gui.CurrentNode.Layout(LayoutType.Column).ScaleChildren();
 
         using (gui.Node("MenuBar").ExpandWidth().MaxHeight(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.Row).Enter())
         {
@@ -155,29 +162,18 @@ public class GameWindow : EditorWindow
             {
                 //if (Application.isPlaying || Time.frameCount % 8 == 0)
                 {
-                    var tmp = mainCam.Target;
-                    try
-                    {
-                        mainCam.Target = RenderTarget;
-                        mainCam.Render((int)renderSize.x, (int)renderSize.y);
-                    }
-                    finally
-                    {
-                        mainCam.Target = tmp;
-                    }
-                    
+                    Graphics.Render([ mainCam ], RenderTarget.Framebuffer);
                 }
             }
 
             // Letter box the image into the render size
-            gui.Draw2D.DrawImage(RenderTarget.InternalTextures[0], innerRect.Position, innerRect.Size, Color.white, true);
+            gui.Draw2D.DrawImage(RenderTarget.ColorBuffers[0], innerRect.Position, innerRect.Size, Color.white, true);
 
             if(IsFocused || LastFocused.Target == this)
             {
                 FocusedPosition = innerRect.Position;
             }
         }
-
     }
 
     void UpdateResolution(Resolutions resolution)

@@ -5,6 +5,7 @@
         <ImplicitUsings>disable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <NoWarn>8600;8601;8618;8602;8603;8604;8625</NoWarn>
     </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -50,14 +51,18 @@
       <EmbeddedResource Include="EmbeddedResources\fa-regular-400.ttf" />
       <EmbeddedResource Include="EmbeddedResources\fa-solid-900.ttf" />
       <EmbeddedResource Include="EmbeddedResources\font.ttf" />
+      <EmbeddedResource Include="EmbeddedResources\TestShader.shader" />
     </ItemGroup>
     
     <ItemGroup>
       <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
       <PackageReference Include="BepuPhysics" Version="2.5.0-beta.23" />
-      <PackageReference Include="Silk.NET" Version="2.20.0" />
+      <PackageReference Include="Silk.NET.OpenAL" Version="2.21.0" />
       <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.21.1.2" />
       <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
+      <PackageReference Include="Veldrid" Version="4.9.0" />
+      <PackageReference Include="Veldrid.SPIRV" Version="1.0.15" />
+      <PackageReference Include="Veldrid.StartupUtilities" Version="4.9.0" />
     </ItemGroup>
 
 </Project>

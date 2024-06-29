@@ -36,6 +36,9 @@ namespace Prowl.Editor.Preferences
         [Text("UI:")]
         public bool AntiAliasing = true;
 
+        [Text("File Editor:")]
+        public string fileEditor = "";
+        public string fileEditorArgs = "";
     }
 
     [FilePath("EditorStyle.pref", FilePathAttribute.Location.EditorPreference)]

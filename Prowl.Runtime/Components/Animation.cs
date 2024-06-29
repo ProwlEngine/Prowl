@@ -45,11 +45,11 @@ namespace Prowl.Runtime
 
                     if (state.Time >= state.Length)
                     {
-                        if (state.Wrap == WrapMode.Loop)
+                        if (state.Wrap == AnimationWrapMode.Loop)
                             state.Time = 0.0f;
-                        else if (state.Wrap == WrapMode.PingPong)
+                        else if (state.Wrap == AnimationWrapMode.PingPong)
                             state.Speed = -state.Speed;
-                        else if (state.Wrap == WrapMode.ClampForever)
+                        else if (state.Wrap == AnimationWrapMode.ClampForever)
                         {
                             state.Time = state.Length;
                         }
@@ -215,7 +215,7 @@ namespace Prowl.Runtime
         public double MoveWeightSpeed = 1.0;
         public double TargetWeight = 1.0;
 
-        public WrapMode Wrap = WrapMode.Loop;
+        public AnimationWrapMode Wrap = AnimationWrapMode.Loop;
 
         public HashSet<string> MixingTransforms = new HashSet<string>();
 

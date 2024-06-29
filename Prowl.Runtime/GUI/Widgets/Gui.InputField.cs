@@ -1,6 +1,6 @@
 ﻿using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.TextEdit;
-using Silk.NET.Input;
+using Veldrid;
 using System;
 using System.Collections.Generic;
 
@@ -100,7 +100,7 @@ namespace Prowl.Runtime.GUI
                     if (multiline)
                         render_pos.y -= g.CurrentNode.VScroll;
 
-                    uint colb = UIDrawList.ColorConvertFloat4ToU32(style.TextColor);
+                    Color32 colb = style.TextColor;
                     g.Draw2D.DrawList.AddText(font, (float)fontsize, render_pos, colb, value, 0, value.Length, 0.0f, null);
                 }
                 g.Draw2D.PopClip();
@@ -263,7 +263,7 @@ namespace Prowl.Runtime.GUI
 
             if ((Flags & InputFieldFlags.OnlyDisplay) == InputFieldFlags.OnlyDisplay)
             {
-                uint colb = UIDrawList.ColorConvertFloat4ToU32(style.TextColor);
+                Color32 colb = style.TextColor;
                 g.Draw2D.DrawList.AddText(font, (float)fontsize, render_pos - render_scroll, colb, stb.Text, 0, stb.Text.Length, 0.0f, (is_multiline ? null : (Vector4?)clip_rect));
                 return false;
             }
@@ -276,7 +276,7 @@ namespace Prowl.Runtime.GUI
 
                 float bg_offy_up = is_multiline ? 0.0f : -1.0f;    // FIXME: those offsets should be part of the style? they don't play so well with multi-line selection.
                 float bg_offy_dn = is_multiline ? 0.0f : 2.0f;
-                uint bg_color = UIDrawList.ColorConvertFloat4ToU32(style.ActiveColor);
+                Color32 bg_color = style.ActiveColor;
                 Vector2 rect_pos = render_pos + select_start_offset - render_scroll;
                 for (int p = text_selected_begin; p < text_selected_end;)
                 {
@@ -305,7 +305,7 @@ namespace Prowl.Runtime.GUI
             }
 
 
-            uint col = UIDrawList.ColorConvertFloat4ToU32(style.TextColor);
+            Color32 col = style.TextColor;
             g.Draw2D.DrawList.AddText(font, (float)fontsize, render_pos - render_scroll, col, stb.Text, 0, stb.Text.Length, 0.0f, (is_multiline ? null : (Vector4?)clip_rect));
             //g.DrawText(font, fontsize, Text, render_pos - render_scroll, Color.black, 0, stb.CurLenA, 0.0f, (is_multiline ? null : (ImVec4?)clip_rect));
 
@@ -319,7 +319,7 @@ namespace Prowl.Runtime.GUI
             if ((Flags & InputFieldFlags.EnterReturnsTrue) == InputFieldFlags.EnterReturnsTrue)
             {
                 Text = stb.Text;
-                if (g.IsKeyPressed(Silk.NET.Input.Key.Enter))
+                if (g.IsKeyPressed(Key.Enter))
                 {
                     g.FocusID = 0;
                     return true;
@@ -328,7 +328,7 @@ namespace Prowl.Runtime.GUI
             }
             else
             {
-                if (g.IsKeyPressed(Silk.NET.Input.Key.Enter))
+                if (g.IsKeyPressed(Key.Enter))
                     g.FocusID = 0;
 
                 var oldText = Text;
@@ -452,7 +452,7 @@ namespace Prowl.Runtime.GUI
                     stb_key = StbTextEdit.ControlKeys.Down;
                     if (Shift && !NoSelection) stb_key |= StbTextEdit.ControlKeys.Shift;
                     break;
-                case Key.Backspace when IsEditable:
+                case Key.BackSpace when IsEditable:
                     stb_key = StbTextEdit.ControlKeys.BackSpace;
                     if (Shift && !NoSelection) stb_key |= StbTextEdit.ControlKeys.Shift;
                     break;
@@ -504,12 +504,10 @@ namespace Prowl.Runtime.GUI
                 StbTextEdit.Key(stb, stb_key.Value);
             }
 
-            if(Input.LastPressedChar != null)
+            if (Input.InputString.Count > 0)
             {
-                OnTextInput(stb, Input.LastPressedChar.ToString(), MaxLength, Flags);
-                // Consume the key
-                // TODO: We should have a proper API to recieve Input Characters rather then consuming the only source of input so nothing else can see it
-                Input.LastPressedChar = null;
+                for (int i = 0; i < Input.InputString.Count; i++)
+                    OnTextInput(stb, Input.InputString[i].ToString(), MaxLength, Flags);
             }
         }
 
@@ -560,12 +558,12 @@ namespace Prowl.Runtime.GUI
             Pos.x -= 5; // Account for padding in text rendering
             Pos.x += stb.ScrollX;
             Pos.y += g.CurrentNode.VScroll;
-            if (g.IsPointerClick(Silk.NET.Input.MouseButton.Left))
+            if (g.IsPointerClick(MouseButton.Left))
             {
                 StbTextEdit.Click(stb, (float)Pos.x, (float)Pos.y);
                 stb.cursorAnim = 0f;
             }
-            if (g.IsPointerDown(Silk.NET.Input.MouseButton.Left) && g.IsPointerMoving)
+            if (g.IsPointerDown(MouseButton.Left) && g.IsPointerMoving)
             {
                 StbTextEdit.Drag(stb, (float)Pos.x, (float)Pos.y);
                 stb.cursorAnim = 0f;

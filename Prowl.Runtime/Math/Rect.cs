@@ -183,7 +183,7 @@ namespace Prowl.Runtime
         public static bool operator ==(Rect a, Rect b) => a.Min == b.Min && a.Max == b.Max;
         public static bool operator !=(Rect a, Rect b) => a.Min != b.Min || a.Max != b.Max;
 
-        public override bool Equals(object obj) => obj is Rect r && r == this;
+        public override bool Equals(object? obj) => obj is Rect r && r == this;
         public override int GetHashCode() => Min.GetHashCode() ^ Max.GetHashCode();
     }
 }

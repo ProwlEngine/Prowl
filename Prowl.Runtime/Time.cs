@@ -1,5 +1,7 @@
 ﻿namespace Prowl.Runtime;
 
+using Stopwatch = System.Diagnostics.Stopwatch;
+
 public static class Time {
 
     public static double unscaledDeltaTime { get; private set; }
@@ -19,10 +21,20 @@ public static class Time {
     public static float timeScaleF => (float)timeScale;
     public static double timeSmoothFactor { get; set; } = .25f;
 
+    private static Stopwatch stopwatch;
 
 
-    public static void Update(double dt)
+    public static void Initialize()
     {
+        stopwatch = new Stopwatch();
+        stopwatch.Start();
+    }
+
+
+    public static void Update()
+    {
+        double dt = stopwatch.Elapsed.TotalMilliseconds / 1000.0;
+
         frameCount++;
 
         unscaledDeltaTime = dt;
@@ -33,6 +45,8 @@ public static class Time {
 
         smoothUnscaledDeltaTime = smoothUnscaledDeltaTime + (dt - smoothUnscaledDeltaTime) * timeSmoothFactor;
         smoothDeltaTime = smoothUnscaledDeltaTime * dt;
+
+        stopwatch.Restart();
     }
 
 }

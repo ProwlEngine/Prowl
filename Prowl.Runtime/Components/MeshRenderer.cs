@@ -37,12 +37,14 @@ public class MeshRenderer : MonoBehaviour, ISerializable
         {
             material.SetColor("_MainColor", mainColor);
             material.SetInt("ObjectID", GameObject.InstanceID);
-            for (int i = 0; i < material.PassCount; i++)
+            /*for (int i = 0; i < material.PassCount; i++)
             {
 
                 material.SetPass(i);
-                Graphics.DrawMeshNow(Mesh.Res!, mat, material, prevMat);
+                #warning Veldrid change
+                //Graphics.DrawMeshNow(Mesh.Res!, mat, material, prevMat);
             }
+            */
         }
 
         prevMats[camID] = mat;
@@ -57,11 +59,14 @@ public class MeshRenderer : MonoBehaviour, ISerializable
 
             var mvp = Matrix4x4.Identity;
             mvp = Matrix4x4.Multiply(mvp, mat);
+            #warning Veldrid change
+            /*
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthProjection);
             Material.Res!.SetMatrix("mvp", mvp);
             Material.Res!.SetShadowPass(true);
             Graphics.DrawMeshNowDirect(Mesh.Res!);
+            */
         }
     }
 

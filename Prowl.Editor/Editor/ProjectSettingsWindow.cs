@@ -18,6 +18,7 @@ public class ProjectSettingsWindow : SingletonEditorWindow
     {
         RenderSideViewElement(PhysicsSetting.Instance);
         RenderSideViewElement(BuildProjectSetting.Instance);
+        RenderSideViewElement(QualitySettings.Instance);
     }
 }
 

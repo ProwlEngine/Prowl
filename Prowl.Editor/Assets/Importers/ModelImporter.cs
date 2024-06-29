@@ -260,10 +260,10 @@ namespace Prowl.Editor.Assets
                     if (FindTextureFromPath(m.TextureDiffuse.FilePath, parentDir, out var file))
                         LoadTextureIntoMesh("_MainTex", ctx, file, mat);
                     else
-                        mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")));
+                        mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")).Res);
                 }
                 else
-                    mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")));
+                    mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")).Res);
 
                 // Normal Texture
                 if (m.HasTextureNormal)
@@ -272,10 +272,10 @@ namespace Prowl.Editor.Assets
                     if (FindTextureFromPath(m.TextureNormal.FilePath, parentDir, out var file))
                         LoadTextureIntoMesh("_NormalTex", ctx, file, mat);
                     else
-                        mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")));
+                        mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")).Res);
                 }
                 else
-                    mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")));
+                    mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")).Res);
 
                 //AO, Roughness, Metallic Texture
                 if (m.GetMaterialTexture(TextureType.Unknown, 0, out var surface))
@@ -284,10 +284,10 @@ namespace Prowl.Editor.Assets
                     if (FindTextureFromPath(surface.FilePath, parentDir, out var file))
                         LoadTextureIntoMesh("_SurfaceTex", ctx, file, mat);
                     else
-                        mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")));
+                        mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")).Res);
                 }
                 else
-                    mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")));
+                    mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")).Res);
 
                 // Emissive Texture
                 if (m.HasTextureEmissive)
@@ -299,10 +299,10 @@ namespace Prowl.Editor.Assets
                         LoadTextureIntoMesh("_EmissionTex", ctx, file, mat);
                     }
                     else
-                        mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")));
+                        mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")).Res);
                 }
                 else
-                    mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")));
+                    mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")).Res);
 
                 name ??= "StandardMat";
                 mat.Name = name;
@@ -324,7 +324,7 @@ namespace Prowl.Editor.Assets
                 Mesh mesh = new();
                 mesh.Name = m.Name;
                 int vertexCount = m.VertexCount;
-                mesh.IndexFormat = vertexCount >= ushort.MaxValue ? IndexFormat.UInt32 : IndexFormat.UInt16;
+                mesh.IndexFormat = vertexCount >= ushort.MaxValue ? Veldrid.IndexFormat.UInt32 : Veldrid.IndexFormat.UInt16;
 
                 System.Numerics.Vector3[] vertices = new System.Numerics.Vector3[vertexCount];
                 for (var i = 0; i < vertices.Length; i++)
@@ -369,7 +369,7 @@ namespace Prowl.Editor.Assets
 
                 if (m.HasVertexColors(0))
                 {
-                    Color[] colors = new Color[vertexCount];
+                    Color32[] colors = new Color32[vertexCount];
                     for (var i = 0; i < colors.Length; i++)
                         colors[i] = new Color(m.VertexColorChannels[0][i].R, m.VertexColorChannels[0][i].G, m.VertexColorChannels[0][i].B, m.VertexColorChannels[0][i].A);
                     mesh.Colors = colors;
@@ -580,7 +580,7 @@ namespace Prowl.Editor.Assets
             if (AssetDatabase.TryGetGuid(file, out var guid))
             {
                 // We have this texture as an asset, Juse use the asset we dont need to load it
-                mat.SetTexture(name, new AssetRef<Texture2D>(guid));
+                mat.SetTexture(name, new AssetRef<Texture2D>(guid).Res);
             }
             else
             {
