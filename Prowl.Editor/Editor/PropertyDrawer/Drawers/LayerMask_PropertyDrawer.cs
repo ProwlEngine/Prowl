@@ -103,8 +103,6 @@ namespace Prowl.Editor.PropertyDrawers
 
                 g.Draw2D.DrawText(i + ". " + layers[i], g.CurrentNode.LayoutData.Rect);
             }
-
-            return maskValue;
         }
 
         private static void NothingButton(double ItemSize, ref LayerMask maskValue, Gui g, LayoutNode popupHolder)
