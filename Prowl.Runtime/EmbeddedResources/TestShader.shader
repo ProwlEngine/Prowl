@@ -14,10 +14,10 @@ Properties
 	_MainColor("Main Color", COLOR)
 }
 
-// Global state or options applied to every pass unless overridden
+// Global state or options applied to every pass. If a pass doesn't specify a value, it will use the one defined here
 Global
 {
-    Tags { "SomeShaderID" = "IsADeferredShader" }
+    Tags { "SomeShaderID" = "IsSomeShaderType", "SomeOtherValue" = "SomeOtherType" }
 
     // Blend state- can be predefined state...
     Blend <Off/SingleAdditive/SingleAlpha/SingleOverride>
@@ -36,9 +36,9 @@ Global
     // Stencil state
     Stencil
     {
-        Ref 0-255
-        ReadMask 0-255
-        WriteMask 0-255
+        Ref <0-255>
+        ReadMask <0-255>
+        WriteMask <0-255>
 
         Comparison <Back/Front> <Always/Equal/Greater/GreaterEqual/Less/LessEqual/Never/NotEqual>
 
@@ -51,33 +51,80 @@ Global
     DepthWrite <On/Off>
     
     // Comparison kind
-    DepthTest <Always/Equal/Greater/GreaterEqual/Less/LessEqual/Never/NotEqual/Off 
+    DepthTest <Always/Equal/Greater/GreaterEqual/Less/LessEqual/Never/NotEqual/Off>
 
     // Rasterizer culling mode
     Cull <Back/Front/Off>
 
+    // Global includes added to every program
     GlobalInclude 
     {
+        // This value would be able to be used in every <Program> block
         vec4 aDefaultValue = vec4(0.5, 0.25, 0.75, 1.0);
     }
 }
 
-
-
 Pass "DefaultPass" 
 {
-    Tags { "SomeValue" = "CustomPassType" }
+    Tags { "SomeValue" = "CustomPassType", "SomeOtherValue" = "SomeOtherType" }
 
     Blend SingleOverride
+
+    Stencil
+    {
+        Ref 5
+        ReadMask 10
+        WriteMask 14
+
+        Comparison Back Greater
+        Comparison Front LessEqual
+
+        Pass Front IncrementWrap
+        Pass Back Replace
+
+        ZFail Front Zero
+    }
 
     DepthWrite Off
     DepthTest Never
     Cull Off
 
-    // Program block defines actual shader code
-    Program Vertex/Fragment/Geometry/TessControl/TessEvaluation/<etc...>
+    Inputs <Vertex/Fragment/Geometry/TessControl/TessEvaluation/<etc...>
     {
+        VertexInput FLOAT
+        VertexInput VECTOR4
 
+        Set
+        {
+            Uniform "SomeName" VECTOR4
+            Uniform "SomeName2" VECTOR4
+            Uniform "SomeName3" VECTOR4
+            Uniform "SomeName4" MATRIX
+        }
+    }
+
+    // Program block defines actual shader code
+    Program <Vertex/Fragment/Geometry/TessControl/TessEvaluation/<etc...>
+    {
+        HLSLPROGRAM
+
+        struct Inputs
+        {
+            float4 pos : POSITION;
+            half4 color : COLOR;
+            float4 uv : TEXCOORD0;
+        };
+
+        #pragma multi_compile HAS_COLOR
+
+        void VertexFunc(Inputs input)
+        {
+            inputs.pos;
+            inputs.color;
+            inputs.uv;
+        }
+
+        ENDHLSL
     }
 
     // Program vertex stage example
@@ -97,7 +144,6 @@ Pass "DefaultPass"
 	Program Fragment
     {
         layout (location = 0) in vec4 someColor; 
-
     	layout (location = 0) out vec4 outColor; 
 		
 		void main()
@@ -140,6 +186,10 @@ Pass "AnotherPass"
 		
 		void main()
 		{
+            #if MY_KEYWORD == 0
+
+            #elif
+
 			someColor = aDefaultValue;
             gl_Position = vertexPosition;
 		}
@@ -159,6 +209,6 @@ Pass "AnotherPass"
 	}
 }
 
-
-// If a pass doesn't compile, shader is invalidated. Use a fallback replacement for the entire shader in that case.
+// If a pass doesn't compile, the whole shader is invalidated. Use a fallback replacement for the entire shader in that case.
+// While per-pass fallbacks would be nice, there's no guarantee that the pass will always have a name or the correct index 
 Fallback "Fallback/TestShader"
