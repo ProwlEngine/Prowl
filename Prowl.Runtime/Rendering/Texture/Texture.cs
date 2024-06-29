@@ -31,8 +31,11 @@ namespace Prowl.Runtime
         /// <summary>Gets whether this <see cref="Texture"/> can be automatically mipmapped.</summary>
         public bool IsMipmappable => Usage.HasFlag(TextureUsage.GenerateMipmaps);
 
-        /// <summary>The sampler for this <see cref="Veldrid.Texture"/></summary>
+        /// <summary>The sampler for this <see cref="Texture"/></summary>
         public TextureSampler Sampler = TextureSampler.CreateLinear();
+
+        /// <summary>The multisample count of this <see cref="Texture"/></summary>
+        public TextureSampleCount SampleCount => InternalTexture.SampleCount;
 
 
         /// <summary>The internal <see cref="Veldrid.Texture"/> representation.</summary>
@@ -101,7 +104,6 @@ namespace Prowl.Runtime
             description.Depth = Math.Max(1, description.Depth);
             description.ArrayLayers = Math.Max(1, description.ArrayLayers);
             description.MipLevels = Math.Max(1, description.MipLevels);
-            description.SampleCount = TextureSampleCount.Count1;
 
             if (!IsSupportedDescription(description, out _, out Exception exception))
                 throw exception;
@@ -128,6 +130,9 @@ namespace Prowl.Runtime
 
         unsafe protected void InternalSetDataPtr(void* data, Vector3Int rectPos, Vector3Int rectSize, uint layer, uint mipLevel)
         {
+            if (InternalTexture.SampleCount != TextureSampleCount.Count1)
+                throw new Exception("Setting data manually on a multisampled texture is not allowed.");
+
             ValidateRectOperation(rectPos, rectSize, layer, mipLevel);
 
             uint mipWidth = GetMipDimension(InternalTexture.Width, mipLevel);
@@ -195,6 +200,9 @@ namespace Prowl.Runtime
         // If the internal texture is already a staging texture, uses itself.
         private void EnsureStagingTexture()
         {
+            if (InternalTexture.SampleCount != TextureSampleCount.Count1)
+                throw new Exception("Cannot copy data from a multisampled texture. Resolve this multisampled texture to another texture to access texture data.");
+
             if (InternalTexture.Usage.HasFlag(TextureUsage.Staging))
             {
                 stagingTexture = InternalTexture;
@@ -232,31 +240,56 @@ namespace Prowl.Runtime
         private void ValidateRectOperation(Vector3Int rect, Vector3Int size, uint layer, uint mipLevel)
         {
             if (rect.x < 0 || rect.x >= InternalTexture.Width)
-                throw new ArgumentOutOfRangeException("Rect X", rect.x, "Rect X must be in the range [0, " + InternalTexture.Width + "]");
+                throw new ArgumentOutOfRangeException(nameof(rect), rect.x, "Rect X must be in the range [0, " + InternalTexture.Width + "]");
 
             if (rect.y < 0 || rect.y >= InternalTexture.Height)
-                throw new ArgumentOutOfRangeException("Rect Y", rect.y, "Rect Y must be in the range [0, " + InternalTexture.Height + "]");
+                throw new ArgumentOutOfRangeException(nameof(rect), rect.y, "Rect Y must be in the range [0, " + InternalTexture.Height + "]");
 
             if (rect.z < 0 || rect.z >= InternalTexture.Depth)
-                throw new ArgumentOutOfRangeException("Rect Z", rect.z, "Rect Z must be in the range [0, " + InternalTexture.Depth + "]");
+                throw new ArgumentOutOfRangeException(nameof(rect), rect.z, "Rect Z must be in the range [0, " + InternalTexture.Depth + "]");
 
             if (size.x <= 0)
-                throw new ArgumentOutOfRangeException("Rect Width", size.x, "Rect width must be greater than 0");
+                throw new ArgumentOutOfRangeException(nameof(size), size.x, "Rect width must be greater than 0");
 
             if (size.y <= 0)
-                throw new ArgumentOutOfRangeException("Rect Height", size.y, "Rect height must be greater than 0");
+                throw new ArgumentOutOfRangeException(nameof(size), size.y, "Rect height must be greater than 0");
 
             if (size.z <= 0)
-                throw new ArgumentOutOfRangeException("Rect Depth", size.z, "Rect depth must be greater than 0");
+                throw new ArgumentOutOfRangeException(nameof(size), size.z, "Rect depth must be greater than 0");
 
             if (size.x > InternalTexture.Width - rect.x || size.y > InternalTexture.Height - rect.y || size.z > InternalTexture.Depth - rect.z)
                 throw new ArgumentOutOfRangeException("Specified area is outside of the texture's storage");
 
             if (layer >= InternalTexture.ArrayLayers)
-                throw new ArgumentOutOfRangeException("Layer", layer, "Array layer must be in the range [0, " + InternalTexture.ArrayLayers + "]");
+                throw new ArgumentOutOfRangeException(nameof(layer), layer, "Array layer must be in the range [0, " + InternalTexture.ArrayLayers + "]");
 
             if (mipLevel >= InternalTexture.MipLevels)
-                throw new ArgumentOutOfRangeException("Mip level", mipLevel, "Mip level must be in the range [0, " + InternalTexture.MipLevels + "]");
+                throw new ArgumentOutOfRangeException(nameof(mipLevel), mipLevel, "Mip level must be in the range [0, " + InternalTexture.MipLevels + "]");
+        }
+
+        public override bool Equals(object? obj)
+        {
+            if (obj is not Texture texture)
+                return false;
+            
+            return Equals(texture, true);
+        }
+
+        public bool Equals(Texture other, bool compareMS = true)
+        {
+            if (other == null ||
+                other.InternalTexture.Width != InternalTexture.Width ||
+                other.InternalTexture.Height != InternalTexture.Height ||
+                other.InternalTexture.Depth != InternalTexture.Depth ||
+                other.InternalTexture.ArrayLayers != InternalTexture.ArrayLayers ||
+                other.Type != InternalTexture.Type ||
+                other.MipLevels != InternalTexture.MipLevels ||
+                other.Format != InternalTexture.Format ||
+                (compareMS && other.InternalTexture.SampleCount != InternalTexture.SampleCount)
+            )
+                return true;
+            
+            return false;
         }
 
 

@@ -46,7 +46,8 @@ namespace Prowl.Runtime
             uint width, uint height,
             uint mipLevels = 1,
             PixelFormat format = PixelFormat.R8_G8_B8_A8_UNorm,
-            TextureUsage usage = TextureUsage.Sampled
+            TextureUsage usage = TextureUsage.Sampled,
+            TextureSampleCount sampleCount = TextureSampleCount.Count1
         ) : base(new()
             {
                 Width = width,
@@ -55,6 +56,7 @@ namespace Prowl.Runtime
                 Format = format,
                 Usage = usage,
                 Type = TextureType.Texture2D,
+                SampleCount = sampleCount,
             }
         ) { }
 

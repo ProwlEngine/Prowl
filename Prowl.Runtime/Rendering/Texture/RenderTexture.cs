@@ -17,7 +17,14 @@ namespace Prowl.Runtime
         public bool sampled;
         public bool enableRandomWrite;
 
-        public RenderTextureDescription(uint width, uint height, PixelFormat? depthFormat, PixelFormat[] colorFormats, bool sampled, bool randomWrite)
+        public TextureSampleCount sampleCount;
+
+        public RenderTextureDescription(
+            uint width, uint height, 
+            PixelFormat? depthFormat, 
+            PixelFormat[] colorFormats, 
+            bool sampled, bool randomWrite, 
+            TextureSampleCount sampleCount)
         {
             this.width = width;
             this.height = height;
@@ -25,6 +32,7 @@ namespace Prowl.Runtime
             this.colorBufferFormats = colorFormats;
             this.sampled = sampled;
             this.enableRandomWrite = randomWrite;
+            this.sampleCount = sampleCount;
         }
 
         public RenderTextureDescription(RenderTexture texture)
@@ -35,6 +43,7 @@ namespace Prowl.Runtime
             this.colorBufferFormats = texture.ColorBufferFormats;
             this.sampled = texture.Sampled;
             this.enableRandomWrite = texture.RandomWriteEnabled;
+            this.sampleCount = texture.SampleCount;
         }
 
         public override bool Equals([NotNullWhen(true)] object? obj)
@@ -58,6 +67,9 @@ namespace Prowl.Runtime
                 return false;
             
             if (key.enableRandomWrite != enableRandomWrite)
+                return false;
+
+            if (key.sampleCount != sampleCount)
                 return false;
 
             return true;
@@ -102,12 +114,17 @@ namespace Prowl.Runtime
         public bool Sampled { get; private set; }
         public bool RandomWriteEnabled { get; private set; }
 
+        public TextureSampleCount SampleCount { get; private set; }
+
+
         public RenderTexture(RenderTextureDescription description) : this(
             description.width,
             description.height,
             description.colorBufferFormats,
             description.depthBufferFormat,
-            description.enableRandomWrite
+            description.sampled,
+            description.enableRandomWrite,
+            description.sampleCount
         )
         { }
 
@@ -119,8 +136,14 @@ namespace Prowl.Runtime
         /// <param name="colorFormats">The format of the color buffer(s) in the <see cref="RenderTexture"/>. Passing null or empty will omit the creation of a color buffer.</param>
         /// <param name="depthFormat">The format of the depth stencil buffer in the <see cref="RenderTexture"/>. Passing null or empty will omit the creation of the depth stencil buffer.</param>
         /// <param name="enableRandomWrite">Enable random reads/writes to the <see cref="RenderTexture"/> internal buffers. This is useful within compute shaders which draw to the texture.</param>
-        public RenderTexture(uint width, uint height, PixelFormat[] colorFormats = null, PixelFormat? depthFormat = null, bool sampled = false, bool enableRandomWrite = false) : base("RenderTexture")
-        {
+        public RenderTexture(
+            uint width, uint height, 
+            PixelFormat[] colorFormats = null, 
+            PixelFormat? depthFormat = null, 
+            bool sampled = false, 
+            bool enableRandomWrite = false,
+            TextureSampleCount sampleCount = TextureSampleCount.Count1
+        ) : base("RenderTexture") {
             if (colorFormats != null && colorFormats.Length > colorAttachmentLimit)
                 throw new Exception($"Invalid number of color buffers! [0-{colorAttachmentLimit}]");
 
@@ -128,6 +151,7 @@ namespace Prowl.Runtime
             this.Height = height;
             this.Sampled = sampled;
             this.RandomWriteEnabled = enableRandomWrite;
+            this.SampleCount = sampleCount;
 
             if (depthFormat != null)
             {
@@ -143,7 +167,7 @@ namespace Prowl.Runtime
 
                 for (int i = 0; i < ColorBuffers.Length; i++)
                 {
-                    ColorBuffers[i] = new Texture2D(Width, Height, 1, colorFormats[i], colorUsage);
+                    ColorBuffers[i] = new Texture2D(Width, Height, 1, colorFormats[i], colorUsage, sampleCount);
                 }
             }
 
@@ -212,6 +236,32 @@ namespace Prowl.Runtime
             typeof(RenderTexture).GetConstructor(param).Invoke(this, values);
         }
 
+        public bool FormatEquals(RenderTexture other, bool compareMS = true)
+        {
+            if (Width != other.Width || Height != other.Height)
+                return false;
+
+            if (DepthBufferFormat != other.DepthBufferFormat)
+                return false;
+
+            if ((ColorBufferFormats == null) != (other.ColorBufferFormats == null))
+                return false;
+
+            if (!ColorBufferFormats.SequenceEqual(other.ColorBufferFormats))
+                return false;
+            
+            if (Sampled != other.Sampled)
+                return false;
+            
+            if (RandomWriteEnabled != other.RandomWriteEnabled)
+                return false;
+
+            if (compareMS && SampleCount != other.SampleCount)
+                return false;
+
+            return true;
+        }
+
 
         #region Pool
 
@@ -219,9 +269,14 @@ namespace Prowl.Runtime
 
         private const int MaxUnusedFrames = 10;
 
-        public static RenderTexture GetTemporaryRT(uint width, uint height, PixelFormat? depthFormat, PixelFormat[] colorFormats, bool sampled, bool randomWrite)
+        public static RenderTexture GetTemporaryRT(
+            uint width, uint height, 
+            PixelFormat? depthFormat, 
+            PixelFormat[] colorFormats, 
+            bool sampled, bool randomWrite, 
+            TextureSampleCount samples)
         {
-            return GetTemporaryRT(new RenderTextureDescription(width, height, depthFormat, colorFormats, sampled, randomWrite));
+            return GetTemporaryRT(new RenderTextureDescription(width, height, depthFormat, colorFormats, sampled, randomWrite, samples));
         }
 
         public static RenderTexture GetTemporaryRT(RenderTextureDescription description)
