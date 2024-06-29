@@ -8,6 +8,7 @@ using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.SceneManagement;
 using System.Reflection;
+using Prowl.Runtime.RenderPipelines;
 
 namespace Prowl.Editor;
 
@@ -74,13 +75,15 @@ public static class EditorGuiManager
 
         Gui.PointerWheel = Input.MouseWheelDelta;
 
-        Veldrid.CommandList commandList = Graphics.GetCommandList();
+        RenderingContext context = new();
+        context.TargetFramebuffer = Graphics.ScreenFramebuffer;
 
-        commandList.SetFramebuffer(Graphics.ScreenFramebuffer);
-        commandList.ClearColorTarget(0, Veldrid.RgbaFloat.Black);
-        commandList.ClearDepthStencil(1f);
+        CommandBuffer commandBuffer = new("GUI Command Buffer");
 
-        Gui.ProcessFrame(commandList, screenRect, 1f, framebufferAndInputScale, EditorPreferences.Instance.AntiAliasing, (g) => {
+        commandBuffer.SetRenderTarget(Graphics.ScreenFramebuffer);
+        commandBuffer.ClearRenderTarget(true, true, Color.black, depth:1.0f);
+
+        Gui.ProcessFrame(commandBuffer, screenRect, 1f, framebufferAndInputScale, EditorPreferences.Instance.AntiAliasing, (g) => {
 
             // Draw Background
             g.Draw2D.DrawRectFilled(g.ScreenRect, GuiStyle.Background);
@@ -249,9 +252,10 @@ public static class EditorGuiManager
         }
 
         WindowsToRemove.Clear();
+        
+        context.Submit(commandBuffer);
 
-        Graphics.SubmitCommands(commandList);
-        commandList.Dispose();
+        context.Execute();
     }
 
     #region MenuBar

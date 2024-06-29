@@ -41,7 +41,7 @@ namespace Prowl.Runtime.GUI
             Draw3D = new(this);
         }
 
-        public void ProcessFrame(CommandList commandList, Rect screenRect, float uiScale, Vector2 frameBufferScale, bool antiAliasing, Action<Gui> gui)
+        public void ProcessFrame(CommandBuffer commandBuffer, Rect screenRect, float uiScale, Vector2 frameBufferScale, bool antiAliasing, Action<Gui> gui)
         {
             UpdateAnimations(Time.deltaTime);
 
@@ -74,7 +74,7 @@ namespace Prowl.Runtime.GUI
             DoPass(gui, frameBufferScale);
             PopNode();
 
-            Draw2D.EndFrame(commandList, screenRect);
+            Draw2D.EndFrame(commandBuffer, screenRect);
 
             // Look for any nodes whos HashCode does not match the previously computed nodes
             layoutDirty |= _createdNodes.Count != (_computedNodeHashes.Count - 1); // -1 because createdNodes doesn't count the root node but computedNodeHashes does
