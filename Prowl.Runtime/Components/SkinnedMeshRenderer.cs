@@ -70,12 +70,14 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         if (Mesh.IsAvailable && Material.IsAvailable)
         {
             GetBoneMatrices();
+
+            #warning Veldrid change
+            /*
+
             Material.Res!.EnableKeyword("SKINNED");
             Material.Res!.SetMatrices("bindPoses", Mesh.Res.bindPoses);
             Material.Res!.SetMatrices("boneTransforms", boneTransforms);
 
-            #warning Veldrid change
-            /*
             var mvp = Matrix4x4.Identity;
             mvp = Matrix4x4.Multiply(mvp, GameObject.GlobalCamRelative);
             mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
