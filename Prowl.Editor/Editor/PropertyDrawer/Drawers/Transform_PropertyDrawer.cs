@@ -18,18 +18,20 @@ namespace Prowl.Editor.PropertyDrawers
 
             ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 1, 2);
 
+            bool pressed = ActiveGUI.IsNodePressed(); // Lets UI know this node can take focus
+
             var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
             var centerY = (ActiveGUI.CurrentNode.LayoutData.InnerRect.height / 2) - (20 / 2);
             pos += new Vector2(5, centerY + 3);
             if (value == null)
             {
-                string text = "(Null)" + targetType.Name;
+                string text = "(Null) " + targetType.Name;
                 var col = EditorStylePrefs.Red * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f);
                 ActiveGUI.Draw2D.DrawText(text, pos, col);
             }
             else
             {
-                ActiveGUI.Draw2D.DrawText(value.gameObject.Name + "(Transform)", pos, Color.white * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f));
+                ActiveGUI.Draw2D.DrawText(value.gameObject.Name + " (Transform)", pos, Color.white * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f));
                 if (ActiveGUI.IsNodeHovered() && ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
                     GlobalSelectHandler.Select(value);
             }
@@ -46,6 +48,17 @@ namespace Prowl.Editor.PropertyDrawers
             {
                 targetValue = go.Transform;
                 changed = true;
+            }
+
+            if (ActiveGUI.IsNodeActive() || ActiveGUI.IsNodeFocused())
+            {
+                ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, 1, (float)EditorStylePrefs.Instance.ButtonRoundness);
+
+                if (ActiveGUI.IsKeyDown(Silk.NET.Input.Key.Delete))
+                {
+                    targetValue = null;
+                    changed = true;
+                }
             }
 
             return changed;

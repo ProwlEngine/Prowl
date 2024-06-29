@@ -15,6 +15,7 @@ namespace Prowl.Editor.PropertyDrawers
             var value = (EngineObject)targetValue;
 
             bool changed = false;
+            bool pressed = ActiveGUI.IsNodePressed(); // Lets UI know this node can take focus
 
             ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 1, 2);
 
@@ -48,6 +49,17 @@ namespace Prowl.Editor.PropertyDrawers
                 if (component != null)
                 {
                     targetValue = component;
+                    changed = true;
+                }
+            }
+
+            if (ActiveGUI.IsNodeActive() || ActiveGUI.IsNodeFocused())
+            {
+                ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, 1, (float)EditorStylePrefs.Instance.ButtonRoundness);
+
+                if (ActiveGUI.IsKeyDown(Silk.NET.Input.Key.Delete))
+                {
+                    targetValue = null;
                     changed = true;
                 }
             }

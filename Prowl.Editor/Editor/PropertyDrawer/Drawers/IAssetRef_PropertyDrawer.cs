@@ -10,7 +10,6 @@ namespace Prowl.Editor.PropertyDrawers
     [Drawer(typeof(IAssetRef))]
     public class IAssetRef_PropertyDrawer : PropertyDrawer
     {
-        public static ulong Selected;
         public static Guid assignedGUID;
         public static ushort assignedFileID;
         public static ulong guidAssignedToID = 0;
@@ -37,23 +36,20 @@ namespace Prowl.Editor.PropertyDrawers
 
             ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 1, 2);
 
-            bool p = false;
-            bool h = false;
             using (ActiveGUI.Node(ID + "Selector").MaxWidth(ItemSize).ExpandHeight().Enter())
             {
                 var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
                 var centerY = (ActiveGUI.CurrentNode.LayoutData.InnerRect.height / 2) - (20 / 2);
                 pos += new Vector2(5, centerY + 3);
-                ActiveGUI.Draw2D.DrawText(FontAwesome6.MagnifyingGlass, pos, Color.white * (h ? 1f : 0.8f));
                 if (ActiveGUI.IsNodePressed())
                 {
-                    Selected = assetDrawerID;
                     new AssetSelectorWindow(value.InstanceType, (guid, fileid) => { assignedGUID = guid; guidAssignedToID = assetDrawerID; assignedFileID = fileid; });
                 }
                 else if (ActiveGUI.IsNodeHovered())
                 {
                     ActiveGUI.Draw2D.DrawRectFilled(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
                 }
+                ActiveGUI.Draw2D.DrawText(FontAwesome6.MagnifyingGlass, pos, Color.white * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f));
             }
 
             // Thumbnail for Textures
@@ -75,30 +71,25 @@ namespace Prowl.Editor.PropertyDrawers
                 var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
                 var centerY = (ActiveGUI.CurrentNode.LayoutData.InnerRect.height / 2) - (20 / 2);
                 pos += new Vector2(0, centerY + 3);
+                bool pressed = ActiveGUI.IsNodePressed(); // lets UI know this can take focus
                 if (value.IsExplicitNull || value.IsRuntimeResource)
                 {
                     string text = value.IsExplicitNull ? "(Null)" : "(Runtime)" + value.Name;
-                    var col = Color.white * (h ? 1f : 0.8f);
+                    var col = Color.white * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f);
                     if (value.IsExplicitNull)
-                        col = EditorStylePrefs.Red * (h ? 1f : 0.8f);
+                        col = EditorStylePrefs.Red * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f);
                     ActiveGUI.Draw2D.DrawText(text, pos, col);
-                    if (ActiveGUI.IsNodePressed())
-                        Selected = assetDrawerID;
                 }
                 else if (AssetDatabase.TryGetFile(value.AssetID, out var assetPath))
                 {
                     string name = value.IsAvailable ? value.Name : assetPath.Name;
-                    ActiveGUI.Draw2D.DrawText(name, pos, Color.white * (h ? 1f : 0.8f));
-                    if (ActiveGUI.IsNodePressed())
-                    {
-                        Selected = assetDrawerID;
+                    ActiveGUI.Draw2D.DrawText(name, pos, Color.white * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f));
+                    if (pressed)
                         AssetDatabase.Ping(value.AssetID);
-                    }
                 }
 
-                if (h && ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                if (ActiveGUI.IsNodeHovered() && ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
                     GlobalSelectHandler.Select(value);
-
 
                 // Drag and drop support
                 if (DragnDrop.Drop(out var instance, value.InstanceType))
@@ -108,11 +99,16 @@ namespace Prowl.Editor.PropertyDrawers
                     changed = true;
                 }
 
-                if (Selected == assetDrawerID && ActiveGUI.IsKeyDown(Silk.NET.Input.Key.Delete))
+                if (ActiveGUI.IsNodeActive() || ActiveGUI.IsNodeFocused())
                 {
-                    value.AssetID = Guid.Empty;
-                    value.FileID = 0;
-                    changed = true;
+                    ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, 1, (float)EditorStylePrefs.Instance.ButtonRoundness);
+
+                    if (ActiveGUI.IsKeyDown(Silk.NET.Input.Key.Delete))
+                    {
+                        value.AssetID = Guid.Empty;
+                        value.FileID = 0;
+                        changed = true;
+                    }
                 }
             }
 
