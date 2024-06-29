@@ -139,8 +139,12 @@ namespace Prowl.Editor.PropertyDrawers
                                     {
                                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
                                     }
+                                    gui.Draw2D.DrawText(FontAwesome6.Minus, gui.CurrentNode.LayoutData.Rect);
                                 }
-                                gui.Draw2D.DrawText(FontAwesome6.Minus, gui.CurrentNode.LayoutData.Rect);
+                                else
+                                {
+                                    gui.Draw2D.DrawText(FontAwesome6.Minus, gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.LesserText);
+                                }
                             }
 
                             using (gui.Node("MoveDownBtn").Scale(EditorStylePrefs.Instance.ItemSize).Enter())
