@@ -7,6 +7,8 @@ public struct LayerMask
 
     public uint Mask => mask;
 
+    public void Clear() => mask = 0;
+
     public bool HasLayer(byte index) => (mask & (1 << index)) == (1 << index);
     public void SetLayer(byte index) => mask |= 1u << index;
     public void RemoveLayer(byte index) => mask &= ~(1u << index);
