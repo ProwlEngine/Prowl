@@ -94,7 +94,8 @@ namespace Prowl.Editor.PropertyDrawers
             {
                 using (gui.Node(label + "_Header", index).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Enter())
                 {
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
+                    if (!config.HasFlag(EditorGUI.PropertyGridConfig.NoBackground))
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
 
                     gui.TextNode("H_Text", label).ExpandWidth().Height(ItemSize).IgnoreLayout();
 
