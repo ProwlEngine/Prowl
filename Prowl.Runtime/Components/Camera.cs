@@ -26,12 +26,6 @@ public class Camera : MonoBehaviour
 
     public AssetRef<RenderTexture> Target;
 
-    public Matrix4x4 View => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, GameObject.Transform.forward, GameObject.Transform.up);
-
-    Matrix4x4? oldView = null;
-    Matrix4x4? oldProjection = null;
-
-
     public Matrix4x4 GetProjectionMatrix(float width, float height)
     {
         if (projectionType == ProjectionType.Orthographic)

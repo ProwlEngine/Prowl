@@ -87,7 +87,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                         if (blockPicking) return false;
                         // TODO: Switching between perspective and orthographic, Its super janky right now, not really usable
                         isHovering = true;
-                        var hovCol = GuiStyle.Base11;
+                        var hovCol = Color.white;
                         hovCol.a = 0.25f;
                         _gui.Draw2D.DrawCircleFilled(rect.Center, (float)rect.width / 2, hovCol, 48);
                         
@@ -130,12 +130,12 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
 
             Color32[] faceColors =
             [
-                GuiStyle.Blue,   // Front face
-                GuiStyle.Red,    // Right face
-                GuiStyle.Blue, // Back face
-                GuiStyle.Red,  // Left face
-                GuiStyle.Emerald,   // Top face
-                GuiStyle.Emerald // Bottom face
+                new Color32(39, 117, 255, 255),   // Front face
+                new Color32(226, 55, 56, 255),    // Right face
+                new Color32(39, 117, 255, 255), // Back face
+                new Color32(226, 55, 56, 255),  // Left face
+                new Color32(94, 234, 141, 255),   // Top face
+                new Color32(94, 234, 141, 255) // Bottom face
             ];
 
             Vector3[] faceNormals =
@@ -177,7 +177,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                         var mouse = _gui.PointerPos;
                         if (GizmoUtils.IsPointInPolygon(mouse, screenPoints))
                         {
-                            var hovCol = GuiStyle.Base11;
+                            var hovCol = Color.white;
                             hovCol.a = 0.25f;
                             _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, (Color32)hovCol);
                             //_gui.DrawList.AddPolyline(screenPoints, screenPoints.Count, hovCol, true, 1, true);

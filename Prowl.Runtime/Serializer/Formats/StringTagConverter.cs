@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 
 namespace Prowl.Runtime
 {
-    public static class StringTagConverter
+    public static partial class StringTagConverter
     {
+        // Writing:
+
         public static void WriteToFile(SerializedProperty tag, FileInfo file)
         {
             string json = Write(tag);
@@ -30,7 +31,7 @@ namespace Prowl.Runtime
 
         public static SerializedProperty Read(string input)
         {
-            TextMemoryParser parser = new(input.ToCharArray());
+            StringTagTokenizer parser = new(input.ToCharArray());
 
             if (!parser.MoveNext())
                 throw new InvalidDataException("Empty input");
@@ -228,9 +229,7 @@ namespace Prowl.Runtime
             Serialize(dict[key], writer, indentLevel + 1);
         }
 
-
-
-
+        // Reading:
 
         public enum TextTokenType
         {
@@ -245,7 +244,7 @@ namespace Prowl.Runtime
             Value
         }
 
-        private static SerializedProperty ReadTag(TextMemoryParser parser)
+        private static SerializedProperty ReadTag(StringTagTokenizer parser)
         {
             return parser.TokenType switch {
                 TextTokenType.BeginCompound => ReadCompoundTag(parser),
@@ -257,7 +256,7 @@ namespace Prowl.Runtime
             };
         }
 
-        private static SerializedProperty ReadCompoundTag(TextMemoryParser parser)
+        private static SerializedProperty ReadCompoundTag(StringTagTokenizer parser)
         {
             var startPosition = parser.TokenPosition;
 
@@ -271,7 +270,7 @@ namespace Prowl.Runtime
                     case TextTokenType.Separator:
                         continue;
                     case TextTokenType.Value:
-                        var name = parser.Token[0] is '"' or '\'' ? ParseQuotedStringValue(parser) : new string(parser.Token);
+                        var name = parser.Token[0] is '"' or '\'' ? parser.ParseQuotedStringValue() : new string(parser.Token);
 
                         if (!parser.MoveNext())
                             throw new InvalidDataException($"End of input reached while reading a compound property starting at position {startPosition}");
@@ -295,7 +294,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"End of input reached while reading a compound property starting at position {startPosition}");
         }
 
-        private static SerializedProperty ReadListTag(TextMemoryParser parser)
+        private static SerializedProperty ReadListTag(StringTagTokenizer parser)
         {
             var startPosition = parser.TokenPosition;
 
@@ -311,7 +310,6 @@ namespace Prowl.Runtime
                         continue;
                 }
 
-                var pos = parser.TokenPosition;
                 var tag = ReadTag(parser);
 
                 items.Add(tag);
@@ -320,7 +318,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"End of input reached while reading a list property starting at position {startPosition}");
         }
 
-        private static SerializedProperty ReadArrayTag(TextMemoryParser parser)
+        private static SerializedProperty ReadArrayTag(StringTagTokenizer parser)
         {
             return parser.Token[1] switch {
                 'B' => ReadByteArrayTag(parser),
@@ -328,7 +326,7 @@ namespace Prowl.Runtime
             };
         }
 
-        private static SerializedProperty ReadByteArrayTag(TextMemoryParser parser)
+        private static SerializedProperty ReadByteArrayTag(StringTagTokenizer parser)
         {
             var startPosition = parser.TokenPosition;
 
@@ -352,7 +350,7 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"End of input reached while reading a byte array starting at position {startPosition}");
         }
 
-        private static SerializedProperty ReadValueTag(TextMemoryParser parser)
+        private static SerializedProperty ReadValueTag(StringTagTokenizer parser)
         {
             // null
             if (parser.Token.SequenceEqual("NULL")) return new SerializedProperty(PropertyType.Null, null);
@@ -363,7 +361,7 @@ namespace Prowl.Runtime
 
             // string
             if (parser.Token[0] is '"' or '\'')
-                return new SerializedProperty(ParseQuotedStringValue(parser));
+                return new SerializedProperty(parser.ParseQuotedStringValue());
 
             if (char.IsLetter(parser.Token[0]))
                 return new SerializedProperty(new string(parser.Token));
@@ -375,297 +373,84 @@ namespace Prowl.Runtime
             throw new InvalidDataException($"Invalid value \"{parser.Token}\" found while reading a tag at position {parser.TokenPosition}");
         }
 
-        private static SerializedProperty ReadNumberTag(TextMemoryParser parser)
+        private static SerializedProperty ReadNumberTag(StringTagTokenizer parser)
         {
+            static T ParsePrimitive<T>(StringTagTokenizer parser) where T : unmanaged
+                => (T)Convert.ChangeType(new string(parser.Token[..^1]), typeof(T));
+
             return parser.Token[^1] switch {
-                'B' => new SerializedProperty(ParseByteValue(parser)),
-                'N' => new SerializedProperty(ParseSByteValue(parser)),
-                'S' => new SerializedProperty(ParseShortValue(parser)),
-                'I' => new SerializedProperty(ParseIntValue(parser)),
-                'L' => new SerializedProperty(ParseLongValue(parser)),
-                'V' => new SerializedProperty(ParseUShortValue(parser)),
-                'U' => new SerializedProperty(ParseUIntValue(parser)),
-                'C' => new SerializedProperty(ParseULongValue(parser)),
-                'F' => new SerializedProperty(ParseFloatValue(parser)),
-                'D' => new SerializedProperty(ParseDoubleValue(parser)),
-                'M' => new SerializedProperty(ParseDecimalValue(parser)),
-                >= '0' and <= '9' => new SerializedProperty(ParseIntValue(parser)),
+                'B' => new SerializedProperty(ParsePrimitive<byte>(parser)),
+                'N' => new SerializedProperty(ParsePrimitive<sbyte>(parser)),
+                'S' => new SerializedProperty(ParsePrimitive<short>(parser)),
+                'I' => new SerializedProperty(ParsePrimitive<int>(parser)),
+                'L' => new SerializedProperty(ParsePrimitive<long>(parser)),
+                'V' => new SerializedProperty(ParsePrimitive<ushort>(parser)),
+                'U' => new SerializedProperty(ParsePrimitive<uint>(parser)),
+                'C' => new SerializedProperty(ParsePrimitive<ulong>(parser)),
+                'F' => new SerializedProperty(ParsePrimitive<float>(parser)),
+                'D' => new SerializedProperty(ParsePrimitive<double>(parser)),
+                'M' => new SerializedProperty(ParsePrimitive<decimal>(parser)),
+                >= '0' and <= '9' => new SerializedProperty((int)Convert.ChangeType(new string(parser.Token), typeof(int))),
                 _ => throw new InvalidDataException($"Invalid number type indicator found while reading a number \"{parser.Token}\" at position {parser.TokenPosition}")
             };
         }
 
-        private static byte ParseByteValue(TextMemoryParser parser)
+        public class StringTagTokenizer
         {
-            if (parser.Token[^1] == 'B' && byte.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-                return v;
+            private readonly GenericTokenizer<TextTokenType> _tokenizer;
 
-            throw new InvalidDataException($"Error parsing byte value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static sbyte ParseSByteValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'N' && sbyte.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing sbyte value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static short ParseShortValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'S' && short.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing short value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static int ParseIntValue(TextMemoryParser parser)
-        {
-            if (int.TryParse(parser.Token, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing int value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static long ParseLongValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'L' && long.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing long value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static ushort ParseUShortValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'V' && ushort.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing ushort value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static uint ParseUIntValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'U' && uint.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing uint value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static ulong ParseULongValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'C' && ulong.TryParse(parser.Token[..^1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing ulong value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static float ParseFloatValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'F' && float.TryParse(parser.Token[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing float value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static double ParseDoubleValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'D' && double.TryParse(parser.Token[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing double value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static decimal ParseDecimalValue(TextMemoryParser parser)
-        {
-            if (parser.Token[^1] == 'M' && decimal.TryParse(parser.Token[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
-                return v;
-
-            throw new InvalidDataException($"Error parsing decimal value \"{parser.Token}\" at position {parser.TokenPosition}");
-        }
-
-        private static string ParseQuotedStringValue(TextMemoryParser parser)
-        {
-            var token = parser.Token;
-
-            var s = new char[token.Length];
-            var len = 0;
-
-            var quote = parser.Token[0];
-            if (token[^1] != quote)
-                throw new InvalidDataException($"Missing ending quote from string \"{token}\" at position {parser.TokenPosition}");
-
-            var original = token;
-            token = token[1..^1];
-
-            while (!token.IsEmpty)
+            public StringTagTokenizer(ReadOnlyMemory<char> input)
             {
-                if (token[0] == quote)
-                    throw new InvalidDataException($"Unescaped quote character in string \"{original}\" at position {parser.TokenPosition}");
-
-                if (token[0] == '\\')
+                var symbolHandlers = new Dictionary<char, Func<TextTokenType>>
                 {
-                    if (token.Length < 2)
-                        throw new EndOfStreamException();
+                    {'{', () => HandleSingleCharToken(TextTokenType.BeginCompound)},
+                    {'}', () => HandleSingleCharToken(TextTokenType.EndCompound)},
+                    {'[', () => HandleOpenBracket()},
+                    {']', () => HandleSingleCharToken(TextTokenType.EndList)},
+                    {',', () => HandleSingleCharToken(TextTokenType.Separator)},
+                    {':', () => HandleSingleCharToken(TextTokenType.NameValueSeparator)}
+                };
 
-                    switch (token[1])
-                    {
-                        case '\\':
-                            s[len++] = '\\';
-                            break;
-                        case 't':
-                            s[len++] = '\t';
-                            break;
-                        case 'n':
-                            s[len++] = '\n';
-                            break;
-                        case 'r':
-                            s[len++] = '\r';
-                            break;
-                        default:
-                            if (token[1] == quote)
-                                s[len++] = quote;
-                            else
-                                throw new InvalidDataException($"Invalid escape sequence in string \"{original}\" at position {parser.TokenPosition}");
-                            break;
-                    }
-
-                    token = token[2..];
-                    continue;
-                }
-
-                s[len++] = token[0];
-                token = token[1..];
+                _tokenizer = new GenericTokenizer<TextTokenType>(
+                    input,
+                    symbolHandlers,
+                    c => c is '{' or '}' or ',' or ';' or ':' or '[' or ']',
+                    TextTokenType.Value,
+                    TextTokenType.None
+                );
             }
 
-            var result = new string(s[..len]);
-            return result;
+            private TextTokenType HandleSingleCharToken(TextTokenType tokenType)
+            {
+                _tokenizer.TokenMemory = _tokenizer.Input.Slice(_tokenizer.TokenPosition, 1);
+                _tokenizer.InputPosition++;
+                return tokenType;
+            }
+
+            private TextTokenType HandleOpenBracket()
+            {
+                if (_tokenizer.InputPosition + 2 < _tokenizer.Input.Length &&
+                    _tokenizer.Input.Span[_tokenizer.InputPosition + 1] == ';' &&
+                    _tokenizer.Input.Span[_tokenizer.InputPosition + 2] == ']')
+                {
+                    _tokenizer.TokenMemory = _tokenizer.Input.Slice(_tokenizer.TokenPosition, 3);
+                    _tokenizer.InputPosition += 3;
+                    return TextTokenType.BeginArray;
+                }
+
+                return HandleSingleCharToken(TextTokenType.BeginList);
+            }
+
+            public bool MoveNext() => _tokenizer.MoveNext();
+
+            public string ParseQuotedStringValue() => _tokenizer.ParseQuotedStringValue();
+
+            public TextTokenType TokenType => _tokenizer.TokenType;
+            public ReadOnlySpan<char> Token => _tokenizer.Token;
+            public int TokenPosition => _tokenizer.TokenPosition;
+            public int InputPosition => _tokenizer.InputPosition;
         }
 
 
-
-        public class TextMemoryParser
-        {
-            public TextMemoryParser(ReadOnlyMemory<char> input)
-            {
-                Input = input;
-                TokenType = TextTokenType.None;
-                TokenPosition = 0;
-                InputPosition = 0;
-                TokenMemory = ReadOnlyMemory<char>.Empty;
-            }
-
-            public ReadOnlyMemory<char> TokenMemory { get; private set; }
-            public ReadOnlyMemory<char> Input { get; }
-            public TextTokenType TokenType { get; private set; }
-            public ReadOnlySpan<char> Token => TokenMemory.Span;
-            public int TokenPosition { get; private set; }
-            public int InputPosition { get; private set; }
-
-            private static bool IsSymbol(char c) => c is '{' or '}' or ',' or ';' or ':' or '[' or ']';
-
-            public bool MoveNext()
-            {
-                while (InputPosition < Input.Length && char.IsWhiteSpace(Input.Span[InputPosition]))
-                    InputPosition++;
-
-                if (InputPosition >= Input.Length)
-                {
-                    TokenPosition = Input.Length;
-                    TokenType = TextTokenType.None;
-                    TokenMemory = ReadOnlyMemory<char>.Empty;
-                    return false;
-                }
-
-                TokenPosition = InputPosition;
-
-                var firstChar = Input.Span[InputPosition];
-
-                switch (firstChar)
-                {
-                    case '{':
-                        TokenType = TextTokenType.BeginCompound;
-                        TokenMemory = Input.Slice(TokenPosition, 1);
-                        InputPosition++;
-                        return true;
-                    case '}':
-                        TokenType = TextTokenType.EndCompound;
-                        TokenMemory = Input.Slice(TokenPosition, 1);
-                        InputPosition++;
-                        return true;
-                    case '[':
-                        if (InputPosition + 2 < Input.Length && Input.Span[InputPosition + 2] == ';')
-                        {
-                            TokenMemory = Input.Slice(TokenPosition, 3);
-                            TokenType = TextTokenType.BeginArray;
-                            InputPosition += 3;
-                            return true;
-                        }
-
-                        TokenType = TextTokenType.BeginList;
-                        TokenMemory = Input.Slice(TokenPosition, 1);
-                        InputPosition++;
-                        return true;
-                    case ']':
-                        TokenType = TextTokenType.EndList;
-                        TokenMemory = Input.Slice(TokenPosition, 1);
-                        InputPosition++;
-                        return true;
-                    case ',':
-                        TokenType = TextTokenType.Separator;
-                        TokenMemory = Input.Slice(TokenPosition, 1);
-                        InputPosition++;
-                        return true;
-                    case ':':
-                        TokenType = TextTokenType.NameValueSeparator;
-                        TokenMemory = Input.Slice(TokenPosition, 1);
-                        InputPosition++;
-                        return true;
-                    case '"' or '\'':
-                    {
-                        TokenType = TextTokenType.Value;
-                        InputPosition++;
-                        while (InputPosition < Input.Length)
-                        {
-                            if (Input.Span[InputPosition] == firstChar)
-                            {
-                                InputPosition++;
-                                TokenMemory = Input.Slice(TokenPosition, InputPosition - TokenPosition);
-                                return true;
-                            }
-
-                            if (Input.Span[InputPosition] == '\\')
-                            {
-                                if (InputPosition + 1 >= Input.Length)
-                                    throw new InvalidDataException($"Reached end of input while reading an escape sequence in a quoted string starting at position {TokenPosition}.");
-
-                                InputPosition++;
-                            }
-
-                            InputPosition++;
-                        }
-
-                        throw new InvalidDataException($"Reached end of input while reading a quoted string starting at position {TokenPosition}.");
-
-                    }
-                    default:
-                    {
-                        TokenType = TextTokenType.Value;
-                        InputPosition++;
-                        while (InputPosition < Input.Length
-                               && !IsSymbol(Input.Span[InputPosition])
-                               && !char.IsWhiteSpace(Input.Span[InputPosition])
-                               && Input.Span[InputPosition] != '"'
-                               && Input.Span[InputPosition] != '\'')
-                            InputPosition++;
-
-                        TokenMemory = Input.Slice(TokenPosition, InputPosition - TokenPosition);
-                        return true;
-                    }
-                }
-            }
-
-
-
-
-        }
     }
 }

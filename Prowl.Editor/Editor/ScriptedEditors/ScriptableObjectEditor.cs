@@ -1,4 +1,5 @@
 ﻿using Prowl.Editor.Assets;
+using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using static Prowl.Editor.EditorGUI;
 
@@ -32,7 +33,8 @@ namespace Prowl.Editor.ScriptedEditors
             }
             catch
             {
-                gui.Node("DummyForText").ExpandWidth().Height(GuiStyle.ItemHeight * 10);
+                double ItemSize = EditorStylePrefs.Instance.ItemSize;
+                gui.Node("DummyForText").ExpandWidth().Height(ItemSize * 10);
                 gui.Draw2D.DrawText("Failed to Deserialize ScriptableObject, The ScriptableObject file is invalid.", gui.CurrentNode.LayoutData.Rect);
             }
         }

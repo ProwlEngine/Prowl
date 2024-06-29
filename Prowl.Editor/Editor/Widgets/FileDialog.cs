@@ -1,4 +1,5 @@
-﻿using Prowl.Icons;
+﻿using Prowl.Editor.Preferences;
+using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
@@ -70,12 +71,14 @@ namespace Prowl.Editor
         {
             bool complete = false;
 
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
             using (gui.Node("Root").Expand().Layout(LayoutType.Row).ScaleChildren().Padding(10).Enter())
             {
 
                 using (gui.Node("Sidebar").Layout(LayoutType.Column).ExpandHeight().MaxWidth(125).MarginRight(10).Padding(10).Enter())
                 {
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 10);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 10);
 
                     ShortcutOption("Desktop", Environment.GetFolderPath(Environment.SpecialFolder.Desktop));
                     ShortcutOption("Documents", Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
@@ -87,47 +90,47 @@ namespace Prowl.Editor
 
                 using (gui.Node("Window").ExpandHeight().Enter())
                 {
-                    using (gui.Node("Header").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                    using (gui.Node("Header").ExpandWidth().Height(ItemSize).Enter())
                     {
                         double left = 0;
                         using (gui.Node("Title").ExpandHeight().Enter())
                         {
                             var pos = gui.CurrentNode.LayoutData.Rect.MiddleLeft;
                             pos.y -= 8;
-                            gui.Draw2D.DrawText(Dialog.title, 20, pos, GuiStyle.Base10);
+                            gui.Draw2D.DrawText(Dialog.title, 20, pos, EditorStylePrefs.Instance.LesserText);
                             left += UIDrawList.DefaultFont.CalcTextSize(Dialog.title, 0).x;
                         }
 
                         left += 5;
 
-                        using (gui.Node("BackBtn").ExpandHeight().Left(left).Width(GuiStyle.ItemHeight).Enter())
+                        using (gui.Node("BackBtn").ExpandHeight().Left(left).Width(ItemSize).Enter())
                         {
                             var hovered = gui.IsNodeHovered();
                             if(_BackStack.Count > 0)
                                 hovered = !hovered;
                             gui.Draw2D.DrawText(FontAwesome6.ChevronLeft, 20, gui.CurrentNode.LayoutData.InnerRect,
-                                hovered ? GuiStyle.Base11 : GuiStyle.Base4);
+                                hovered ? EditorStylePrefs.Instance.Hovering : EditorStylePrefs.Instance.LesserText);
 
                             if (gui.IsNodePressed() && _BackStack.Count > 0)
                             {
                                 Dialog.directoryPath = _BackStack.Pop();
                                 Dialog.UpdateCache();
                             }
-                            left += GuiStyle.ItemHeight;
+                            left += ItemSize;
                         }
 
-                        using (gui.Node("UpBtn").ExpandHeight().Left(left).Width(GuiStyle.ItemHeight).Enter())
+                        using (gui.Node("UpBtn").ExpandHeight().Left(left).Width(ItemSize).Enter())
                         {
                             var hovered = gui.IsNodeHovered();
                             gui.Draw2D.DrawText(FontAwesome6.ChevronUp, 20, gui.CurrentNode.LayoutData.InnerRect,
-                                hovered ? GuiStyle.Base4 : GuiStyle.Base11);
+                                hovered ? EditorStylePrefs.Instance.Hovering : EditorStylePrefs.Instance.LesserText);
                             if (gui.IsNodePressed())
                             {
                                 _BackStack.Push(Dialog.directoryPath);
                                 Dialog.directoryPath = Dialog.directoryPath.Parent;
                                 Dialog.UpdateCache();
                             }
-                            left += GuiStyle.ItemHeight;
+                            left += ItemSize;
                         }
 
                         left += 5;
@@ -135,11 +138,9 @@ namespace Prowl.Editor
                         double pathWidth = gui.CurrentNode.LayoutData.Rect.width - left + 10;
                         using (gui.Node("Path").ExpandHeight().Left(left).Width(pathWidth).Enter())
                         {
-                            var style = new GuiStyle();
+                            var style = EditorGUI.GetInputStyle();
 
-                            style.WidgetColor = GuiStyle.WindowBackground;
-                            style.Border = GuiStyle.Borders;
-                            style.WidgetRoundness = 8f;
+                            style.Roundness = 8f;
                             style.BorderThickness = 1f;
                             if (gui.InputField("Path", ref _path, 0x100, Gui.InputFieldFlags.EnterReturnsTrue, 0, 0, pathWidth, null, style))
                             {
@@ -155,14 +156,14 @@ namespace Prowl.Editor
 
                     if (Dialog.directoryPath.Exists)
                     {
-                        using (gui.Node("Content").ExpandWidth().Layout(LayoutType.Row).Height(Size.Percentage(1f, -GuiStyle.ItemHeight * 2)).Top(GuiStyle.ItemHeight).PaddingTop(10).Clip().Scroll().Enter())
+                        using (gui.Node("Content").ExpandWidth().Layout(LayoutType.Row).Height(Size.Percentage(1f, -ItemSize * 2)).Top(ItemSize).PaddingTop(10).Clip().Scroll().Enter())
                         {
                             // name = 50%, size = 20%, date = 20%, type = 10%
 
                             using (gui.Node("NameCol").FitContentHeight().Layout(LayoutType.Column).Enter())
                             {
                                 gui.CurrentNode.Width(Size.Percentage(0.5f));
-                                using (gui.Node("sortName").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                                using (gui.Node("sortName").ExpandWidth().Height(ItemSize).Enter())
                                 {
                                     PressedSort(FileDialogSortBy.Name);
                                     DrawSortLabel("Name", FileDialogSortBy.Name);
@@ -179,7 +180,7 @@ namespace Prowl.Editor
                             using (gui.Node("SizeCol").FitContentHeight().Layout(LayoutType.Column).Enter())
                             {
                                 gui.CurrentNode.Width(Size.Percentage(0.2f));
-                                using (gui.Node("sortSize").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                                using (gui.Node("sortSize").ExpandWidth().Height(ItemSize).Enter())
                                 {
                                     PressedSort(FileDialogSortBy.Size);
                                     DrawSortLabel("Size", FileDialogSortBy.Size);
@@ -191,7 +192,7 @@ namespace Prowl.Editor
                             using (gui.Node("DateCol").FitContentHeight().Layout(LayoutType.Column).Enter())
                             {
                                 gui.CurrentNode.Width(Size.Percentage(0.2f));
-                                using (gui.Node("sortDate").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                                using (gui.Node("sortDate").ExpandWidth().Height(ItemSize).Enter())
                                 {
                                     PressedSort(FileDialogSortBy.Date);
                                     DrawSortLabel("Date", FileDialogSortBy.Date);
@@ -204,7 +205,7 @@ namespace Prowl.Editor
                             using (gui.Node("TypeCol").FitContentHeight().Layout(LayoutType.Column).Enter())
                             {
                                 gui.CurrentNode.Width(Size.Percentage(0.1f));
-                                using (gui.Node("typeDate").ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                                using (gui.Node("typeDate").ExpandWidth().Height(ItemSize).Enter())
                                 {
                                     PressedSort(FileDialogSortBy.Type);
                                     DrawSortLabel("Type", FileDialogSortBy.Type);
@@ -215,19 +216,19 @@ namespace Prowl.Editor
                             }
                         }
 
-                        using (gui.Node("Footer").ExpandWidth().Height(GuiStyle.ItemHeight).Top(Offset.Percentage(1f, -GuiStyle.ItemHeight)).Enter())
+                        using (gui.Node("Footer").ExpandWidth().Height(ItemSize).Top(Offset.Percentage(1f, -ItemSize)).Enter())
                         {
                             using (gui.Node("FileName").ExpandHeight().Width(Size.Percentage(1f, -100)).Enter())
                             {
-                                gui.Search("FileName", ref Dialog.fileName, 0, 0, Size.Percentage(1f), GuiStyle.ItemHeight);
+                                gui.Search("FileName", ref Dialog.fileName, 0, 0, Size.Percentage(1f), ItemSize);
                             }
 
                             using (gui.Node("SaveBtn").ExpandHeight().Left(Offset.Percentage(1f, -90)).Width(100).Enter())
                             {
                                 var hovered = gui.IsNodeHovered();
                                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect,
-                                    hovered ? GuiStyle.Base11 : GuiStyle.Base4, 10);
-                                gui.Draw2D.DrawText("Save", 20, gui.CurrentNode.LayoutData.InnerRect, GuiStyle.Base10);
+                                    hovered ? EditorStylePrefs.Instance.Hovering : EditorStylePrefs.Instance.LesserText, (float)EditorStylePrefs.Instance.ButtonRoundness);
+                                gui.Draw2D.DrawText("Save", 20, gui.CurrentNode.LayoutData.InnerRect, Color.white);
                                 if (gui.IsNodePressed())
                                 {
                                     var path = Path.Combine(Dialog.directoryPath.FullName + "/" + Dialog.fileName);
@@ -253,9 +254,11 @@ namespace Prowl.Editor
 
         private void ShortcutOption(string name, string path)
         {
-            using (gui.Node("SideBar_" + name).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
+            using (gui.Node("SideBar_" + name).ExpandWidth().Height(ItemSize).Enter())
             {
-                Color bg = gui.IsNodeHovered() ? GuiStyle.Base8 : GuiStyle.Base11;
+                Color bg = gui.IsNodeHovered() ? EditorStylePrefs.Instance.Hovering : Color.white;
                 gui.Draw2D.DrawText(name, gui.CurrentNode.LayoutData.InnerRect, bg);
 
                 if(gui.IsNodePressed())
@@ -283,11 +286,11 @@ namespace Prowl.Editor
         {
             if(sortBy == sortMode)
             {
-                gui.Draw2D.DrawText(text + " " + (sortDown ? FontAwesome6.ChevronDown : FontAwesome6.ChevronUp), gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base4);
+                gui.Draw2D.DrawText(text + " " + (sortDown ? FontAwesome6.ChevronDown : FontAwesome6.ChevronUp), gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? EditorStylePrefs.Instance.Hovering : EditorStylePrefs.Instance.LesserText);
             }
             else
             {
-                gui.Draw2D.DrawText(text, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base4);
+                gui.Draw2D.DrawText(text, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? EditorStylePrefs.Instance.Hovering : EditorStylePrefs.Instance.LesserText);
             }
         }
 
@@ -297,10 +300,12 @@ namespace Prowl.Editor
 
         private void DrawEntries(bool center, Func<FileSystemInfo, string> name)
         {
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
             int index = 0;
             foreach (var directory in Dialog.currentDirectories)
             {
-                using (gui.Node("name", index++).ExpandWidth().Height(GuiStyle.ItemHeight).Clip().Enter())
+                using (gui.Node("name", index++).ExpandWidth().Height(ItemSize).Clip().Enter())
                 {
                     if (gui.IsNodeHovered())
                     {
@@ -319,9 +324,9 @@ namespace Prowl.Editor
                     }
 
                     if(Dialog.resultPath == directory.FullName)
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
                     else if(hoveringPath == directory.FullName)
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.6f);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering * 0.6f);
 
                     bool hovered = gui.IsNodeHovered() || hoveringPath == directory.FullName || Dialog.resultPath == directory.FullName;
 
@@ -329,17 +334,17 @@ namespace Prowl.Editor
                     {
                         var rect = gui.CurrentNode.LayoutData.Rect.MiddleLeft;
                         rect.y -= 8;
-                        gui.Draw2D.DrawText(name.Invoke(directory), rect, hovered ? GuiStyle.Base11 : GuiStyle.Base8);
+                        gui.Draw2D.DrawText(name.Invoke(directory), rect, hovered ? EditorStylePrefs.Instance.Hovering : Color.white);
                     }
                     else
                     {
-                        gui.Draw2D.DrawText(name.Invoke(directory), gui.CurrentNode.LayoutData.Rect, hovered ? GuiStyle.Base11 : GuiStyle.Base8);
+                        gui.Draw2D.DrawText(name.Invoke(directory), gui.CurrentNode.LayoutData.Rect, hovered ? EditorStylePrefs.Instance.Hovering : Color.white);
                     }
                 }
             }
             foreach (var file in Dialog.currentFiles)
             {
-                using (gui.Node("name", index++).ExpandWidth().Height(GuiStyle.ItemHeight).Clip().Enter())
+                using (gui.Node("name", index++).ExpandWidth().Height(ItemSize).Clip().Enter())
                 {
                     if (gui.IsNodeHovered())
                         hoveringPath = file.FullName;
@@ -348,9 +353,9 @@ namespace Prowl.Editor
                         Dialog.resultPath = file.FullName;
 
                     if (Dialog.resultPath == file.FullName)
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Indigo);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
                     else if (hoveringPath == file.FullName)
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base4 * 0.6f);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering * 0.6f);
 
                     bool hovered = gui.IsNodeHovered() || hoveringPath == file.FullName || Dialog.resultPath == file.FullName;
 
@@ -358,11 +363,11 @@ namespace Prowl.Editor
                     {
                         var rect = gui.CurrentNode.LayoutData.Rect.MiddleLeft;
                         rect.y -= 8;
-                        gui.Draw2D.DrawText(name.Invoke(file), rect, hovered ? GuiStyle.Base11 : GuiStyle.Base8);
+                        gui.Draw2D.DrawText(name.Invoke(file), rect, hovered ? EditorStylePrefs.Instance.Hovering : Color.white);
                     }
                     else
                     {
-                        gui.Draw2D.DrawText(name.Invoke(file), gui.CurrentNode.LayoutData.Rect, hovered ? GuiStyle.Base11 : GuiStyle.Base8);
+                        gui.Draw2D.DrawText(name.Invoke(file), gui.CurrentNode.LayoutData.Rect, hovered ? EditorStylePrefs.Instance.Hovering : Color.white);
                     }
                 }
             }

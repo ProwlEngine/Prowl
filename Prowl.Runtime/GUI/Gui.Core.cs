@@ -8,7 +8,8 @@ namespace Prowl.Runtime.GUI
 {
     public partial class Gui
     {
-        public static Gui ActiveGUI;
+        public static Stack<Gui> ActiveGUIStack = [];
+        public static Gui ActiveGUI => ActiveGUIStack.Count > 0 ? ActiveGUIStack.Peek() : null;
 
         public Rect ScreenRect { get; private set; }
 
@@ -110,7 +111,7 @@ namespace Prowl.Runtime.GUI
         {
             try
             {
-                ActiveGUI = this;
+                ActiveGUIStack.Push(this);
                 StartInputFrame(frameBufferScale * uiScale);
                 StartInteractionFrame();
                 gui?.Invoke(this);
@@ -125,7 +126,7 @@ namespace Prowl.Runtime.GUI
             }
             finally
             {
-                ActiveGUI = null;
+                ActiveGUIStack.Pop();
                 EndInteractionFrame();
                 EndInputFrame();
             }

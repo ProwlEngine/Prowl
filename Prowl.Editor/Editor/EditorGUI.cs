@@ -1,11 +1,9 @@
-﻿using Microsoft.VisualBasic.FileIO;
-using Prowl.Editor.Assets;
+﻿using Prowl.Editor.Preferences;
 using Prowl.Editor.PropertyDrawers;
-using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
+using Prowl.Runtime.Utils;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using static Prowl.Runtime.GUI.Gui;
@@ -14,108 +12,152 @@ namespace Prowl.Editor
 {
     public static class EditorGUI
     {
+
+        static double ItemSize => EditorStylePrefs.Instance.ItemSize;
+
         public static void Separator(float thickness = 1f, [CallerLineNumber] int line = 0)
         {
             var g = ActiveGUI;
-            using (g.Node("Seperator", line).ExpandWidth().Height(GuiStyle.ItemHeight / 2).Enter())
+            using (g.Node("Seperator", line).ExpandWidth().Height(ItemSize / 2).Enter())
             {
                 // Draw Line in middle of rect
                 var start = g.CurrentNode.LayoutData.GlobalContentPosition;
                 start.y += g.CurrentNode.LayoutData.Rect.height / 2;
                 var end = start + new Vector2(g.CurrentNode.LayoutData.Rect.width, 0);
-                g.Draw2D.DrawLine(start, end, GuiStyle.Borders, thickness);
+                g.Draw2D.DrawLine(start, end, EditorStylePrefs.Instance.Borders, thickness);
             }
         }
 
         public static void Text(string text, [CallerLineNumber] int line = 0)
         {
             var g = ActiveGUI;
-            using (g.Node(text, line).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+            using (g.Node(text, line).ExpandWidth().Height(ItemSize).Enter())
             {
-                g.Draw2D.DrawText(text, g.CurrentNode.LayoutData.Rect, GuiStyle.Base11);
+                g.Draw2D.DrawText(text, g.CurrentNode.LayoutData.Rect);
             }
         }
 
         public static bool StyledButton(string label)
         {
             var g = ActiveGUI;
-            using (g.Node(label).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+            using (g.Node(label).ExpandWidth().Height(ItemSize).Enter())
             {
-                g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 10);
+                g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 1, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
-                g.Draw2D.DrawText(label, g.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
-                
                 if (g.IsNodePressed())
                 {
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.ButtonRoundness);
                     return true;
                 }
 
                 if (g.IsNodeHovered())
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Base5 * 0.5f, 10);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
+                g.Draw2D.DrawText(label, g.CurrentNode.LayoutData.Rect);
 
                 return false;
             }
         }
 
-        public static bool StyledButton(string label, double width, double height, bool border = true, Color? textcolor = null, Color? bgcolor = null, float roundness = 10)
+        public static bool StyledButton(string label, double width, double height, bool border = true, Color? textcolor = null, Color? bgcolor = null, float? roundness = null)
         {
+            roundness ??= (float)EditorStylePrefs.Instance.ButtonRoundness;
             var g = ActiveGUI;
             using (g.Node(label).Width(width).Height(height).Enter())
             {
                 if(border)
-                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, roundness);
+                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 1, roundness.Value);
                 if(bgcolor != null)
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, bgcolor.Value, roundness);
-
-                g.Draw2D.DrawText(label, g.CurrentNode.LayoutData.Rect, textcolor ?? GuiStyle.Base11);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, bgcolor.Value, roundness.Value);
                 
                 if (g.IsNodePressed())
                 {
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, roundness);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, roundness.Value);
                     return true;
                 }
 
-                var hovCol = GuiStyle.Base11;
-                hovCol.a = 0.25f;
                 if (g.IsNodeHovered())
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, hovCol, roundness);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, roundness.Value);
 
+                g.Draw2D.DrawText(label, g.CurrentNode.LayoutData.Rect, textcolor ?? Color.white);
 
                 return false;
             }
         }
 
-        public static bool InputDouble(string ID, ref double value, Offset x, Offset y, Size width, GuiStyle? style = null)
+        public static bool InputDouble(string ID, ref double value, Offset x, Offset y, Size width, WidgetStyle? style = null)
         {
             string textValue = value.ToString();
-            var changed = ActiveGUI.InputField(ID, ref textValue, 255, InputFieldFlags.NumbersOnly, x, y, width, null, style);
-            if (changed && Double.TryParse(textValue, out value)) return true;
+            var changed = ActiveGUI.InputField(ID, ref textValue, 255, InputFieldFlags.None, x, y, width, null, style);
+
+            if (changed)
+            {
+                // Try parse directly
+                if (Double.TryParse(textValue, out value)) return true;
+                // Failed try parsing using an arithmetic parser
+                try
+                {
+                    value = TinyMathParser.Parse(textValue);
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
             return false;
         }
-        public static bool InputFloat(string ID, ref float value, Offset x, Offset y, Size width, GuiStyle? style = null)
+        public static bool InputFloat(string ID, ref float value, Offset x, Offset y, Size width, WidgetStyle? style = null)
         {
             string textValue = value.ToString();
-            var changed = ActiveGUI.InputField(ID, ref textValue, 255, InputFieldFlags.NumbersOnly, x, y, width, null, style);
-            if (changed && float.TryParse(textValue, out value)) return true;
+            var changed = ActiveGUI.InputField(ID, ref textValue, 255, InputFieldFlags.None, x, y, width, null, style);
+            if (changed)
+            {
+                // Try parse directly
+                if (float.TryParse(textValue, out value)) return true;
+                // Failed try parsing using an arithmetic parser
+                try
+                {
+                    value = (float)TinyMathParser.Parse(textValue);
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
             return false;
         }
 
-        public static bool InputLong(string ID, ref long value, Offset x, Offset y, Size width, GuiStyle? style = null)
+        public static bool InputLong(string ID, ref long value, Offset x, Offset y, Size width, WidgetStyle? style = null)
         {
             string textValue = value.ToString();
-            var changed = ActiveGUI.InputField(ID, ref textValue, 255, InputFieldFlags.NumbersOnly, x, y, width, null, style);
-            if (changed && long.TryParse(textValue, out value)) return true;
+            var changed = ActiveGUI.InputField(ID, ref textValue, 255, InputFieldFlags.None, x, y, width, null, style);
+            if (changed)
+            {
+                // Try parse directly
+                if (long.TryParse(textValue, out value)) return true;
+                // Failed try parsing using an arithmetic parser
+                try
+                {
+                    value = (long)TinyMathParser.Parse(textValue);
+                    return true;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
             return false;
         }
 
 
-        public static GuiStyle VectorXStyle = new GuiStyle() { TextColor = GuiStyle.Red, WidgetColor = GuiStyle.WindowBackground, Border = GuiStyle.Borders, BorderThickness = 1 };
-        public static GuiStyle VectorYStyle = new GuiStyle() { TextColor = GuiStyle.Emerald, WidgetColor = GuiStyle.WindowBackground, Border = GuiStyle.Borders, BorderThickness = 1 };
-        public static GuiStyle VectorZStyle = new GuiStyle() { TextColor = GuiStyle.Blue, WidgetColor = GuiStyle.WindowBackground, Border = GuiStyle.Borders, BorderThickness = 1 };
+        public static WidgetStyle VectorXStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { TextColor = EditorStylePrefs.Red, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
+        public static WidgetStyle VectorYStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { TextColor = EditorStylePrefs.Emerald, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
+        public static WidgetStyle VectorZStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { TextColor = EditorStylePrefs.Blue, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
          
-        public static GuiStyle InputFieldStyle = new GuiStyle() { TextColor = GuiStyle.Emerald, WidgetColor = GuiStyle.WindowBackground, Border = GuiStyle.Borders, BorderThickness = 1 };
+        public static WidgetStyle InputFieldStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { TextColor = EditorStylePrefs.Emerald, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
 
 
         #region PropertyGrid
@@ -151,21 +193,21 @@ namespace Prowl.Editor
             {
                 // Draw the Background & Borders
                 if (!config.HasFlag(PropertyGridConfig.NoBackground))
-                    ActiveGUI.Draw2D.DrawRectFilled(node.LayoutData.Rect, GuiStyle.FrameBGColor);
+                    ActiveGUI.Draw2D.DrawRectFilled(node.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne);
 
                 if (!config.HasFlag(PropertyGridConfig.NoBorder))
-                    ActiveGUI.Draw2D.DrawRect(node.LayoutData.Rect, GuiStyle.Borders);
+                    ActiveGUI.Draw2D.DrawRect(node.LayoutData.Rect, EditorStylePrefs.Instance.Borders);
 
                 if (!config.HasFlag(PropertyGridConfig.NoHeader))
                 {
-                    node.PaddingTop(GuiStyle.ItemHeight);
+                    node.PaddingTop(ItemSize);
 
                     // Draw the header
-                    var headerRect = new Rect(node.LayoutData.GlobalPosition, new Vector2(node.LayoutData.Rect.width, GuiStyle.ItemHeight));
+                    var headerRect = new Rect(node.LayoutData.GlobalPosition, new Vector2(node.LayoutData.Rect.width, ItemSize));
                     if (!config.HasFlag(PropertyGridConfig.NoBackground))
-                        ActiveGUI.Draw2D.DrawRectFilled(headerRect, GuiStyle.Indigo);
+                        ActiveGUI.Draw2D.DrawRectFilled(headerRect, EditorStylePrefs.Indigo);
 
-                    ActiveGUI.Draw2D.DrawText(UIDrawList.DefaultFont, name, 20, headerRect, GuiStyle.Base11, false);
+                    ActiveGUI.Draw2D.DrawText(name, headerRect, false);
                 }
 
                 changed = DrawProperties(ref target, targetFields, config);
@@ -208,11 +250,11 @@ namespace Prowl.Editor
 
                 HandleEndAttributes(imGuiAttributes);
 
-                HandleAttributeButtons("Btn" + i, target);
-
                 // Update the value
                 field.SetValue(target, fieldValue);
             }
+
+            HandleAttributeButtons("Btn", target);
 
             return changed;
         }
@@ -233,12 +275,12 @@ namespace Prowl.Editor
                 {
                     case GuiAttribType.Space:
                         // Dummy node
-                        ActiveGUI.Node("Space" + id, guiAttribute.GetHashCode()).ExpandWidth().Height(GuiStyle.ItemHeight);
+                        ActiveGUI.Node("Space" + id, guiAttribute.GetHashCode()).ExpandWidth().Height(ItemSize);
                         break;
 
                     case GuiAttribType.Text:
                         var text = guiAttribute as TextAttribute;
-                        ActiveGUI.TextNode("Label" + id, text.text).ExpandWidth().Height(GuiStyle.ItemHeight);
+                        ActiveGUI.TextNode("Label" + id, text.text).ExpandWidth().Height(ItemSize);
                         break;
 
                     case GuiAttribType.ShowIf:
@@ -284,11 +326,13 @@ namespace Prowl.Editor
 
         public static bool HandleAttributeButtons(string id, object target)
         {
+            int count = 0;
             foreach (MethodInfo method in target.GetType().GetMethods())
             {
+                count++;
                 var attribute = method.GetCustomAttribute<GUIButtonAttribute>();
                 if (attribute != null)
-                    using (ActiveGUI.Node("button" + id).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+                    using (ActiveGUI.Node("button" + id, count).ExpandWidth().Height(ItemSize).Enter())
                     {
                         if (ActiveGUI.IsNodePressed())
                         {
@@ -300,18 +344,23 @@ namespace Prowl.Editor
                             {
                                 Debug.LogError("Error During ImGui Button Execution: " + e.Message + "\n" + e.StackTrace);
                             }
-                            ActiveGUI.Draw2D.DrawRectFilled(ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Indigo, 10);
+                            ActiveGUI.Draw2D.DrawRectFilled(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.ButtonRoundness);
                         }
                         else if (ActiveGUI.IsNodeHovered())
-                            ActiveGUI.Draw2D.DrawRectFilled(ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Base5 * 0.5f, 10);
+                            ActiveGUI.Draw2D.DrawRectFilled(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
                         else
-                            ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 10);
+                            ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 1, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
-                        ActiveGUI.Draw2D.DrawText(attribute.buttonText, ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Base8);
+                        ActiveGUI.Draw2D.DrawText(attribute.buttonText, ActiveGUI.CurrentNode.LayoutData.Rect);
                         return true;
                     }
             }
             return false;
+        }
+
+        internal static WidgetStyle GetInputStyle()
+        {
+            return new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
         }
 
         #endregion

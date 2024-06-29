@@ -36,9 +36,9 @@ namespace Prowl.Runtime.Utils
 
     public abstract class ScriptableSingleton<T> where T : ScriptableSingleton<T>, new()
     {
-        private static T? instance;
+        protected static T? _instance;
 
-        public static T Instance => instance ??= LoadOrCreateInstance();
+        public static T Instance => _instance ??= LoadOrCreateInstance();
 
         public virtual void OnValidate() { }
 
@@ -56,25 +56,22 @@ namespace Prowl.Runtime.Utils
                 switch (attribute.FileLocation)
                 {
                     case FilePathAttribute.Location.Data:
-                        if (dataPath == null)
-                            throw new InvalidOperationException("Application.DataPath is null, ensure Application.Run() has been called, and a DataPath has been assigned!");
+                        ArgumentNullException.ThrowIfNull(dataPath);
 
-                        directory = Application.DataPath;
+                        directory = dataPath;
                         break;
                     case FilePathAttribute.Location.Setting:
-                        if (dataPath == null)
-                            throw new InvalidOperationException("Application.DataPath is null, ensure Application.Run() has been called, and a DataPath has been assigned!");
+                        ArgumentNullException.ThrowIfNull(dataPath);
 
-                        directory = Path.Combine(Application.DataPath, "ProjectSettings");
+                        directory = Path.Combine(dataPath, "ProjectSettings");
                         break;
                     case FilePathAttribute.Location.EditorSetting:
-                        if (dataPath == null)
-                            throw new InvalidOperationException("Application.DataPath is null, ensure Application.Run() has been called, and a DataPath has been assigned!");
+                        ArgumentNullException.ThrowIfNull(dataPath);
 
                         // Persistent across sessions for a single project
                         if (Application.isEditor == false)
                             throw new InvalidOperationException("Editor Settings are only available in the editor");
-                        directory = Path.Combine(Application.DataPath, "ProjectSettings", "Editor");
+                        directory = Path.Combine(dataPath, "ProjectSettings", "Editor");
                         break;
                     case FilePathAttribute.Location.EditorPreference:
                         // Persistent across all projects
@@ -99,6 +96,7 @@ namespace Prowl.Runtime.Utils
                 try
                 {
                     var deserialized = Serializer.Deserialize<T>(StringTagConverter.ReadFromFile(new FileInfo(filePath)))!;
+                    deserialized.OnValidate();
                     if (deserialized != null)
                         return deserialized;
                 }

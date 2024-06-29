@@ -1,4 +1,5 @@
 ﻿using Prowl.Editor.Assets;
+using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
@@ -28,19 +29,21 @@ namespace Prowl.Editor
 
         protected override void Draw()
         {
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
             gui.CurrentNode.Layout(LayoutType.Column);
             gui.CurrentNode.ScaleChildren();
             gui.CurrentNode.Padding(0, 10, 10, 10);
 
-            using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(GuiStyle.ItemHeight).Clip().Enter())
+            using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(ItemSize).Clip().Enter())
             {
-                gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f), GuiStyle.ItemHeight);
+                gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f), ItemSize);
             }
 
             using (gui.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column).Enter())
             {
                 double xPos = gui.CurrentNode.LayoutData.InnerRect.x + 3;
-                using (gui.Node("None", -1).Width(Size.Percentage(1f)).Height(GuiStyle.ItemHeight).Enter())
+                using (gui.Node("None", -1).Width(Size.Percentage(1f)).Height(ItemSize).Enter())
                 {
                     var interact = gui.GetInteractable();
                     if (interact.TakeFocus())
@@ -50,9 +53,9 @@ namespace Prowl.Editor
                     }
 
                     if (interact.IsHovered())
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5);
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
 
-                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, "None", 20, new Vector2(xPos, gui.CurrentNode.LayoutData.Rect.y + 7), GuiStyle.Base10);
+                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, "None", 20, new Vector2(xPos, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white);
                 }
 
                 var assets = AssetDatabase.GetAllAssetsOfType(type);
@@ -64,7 +67,7 @@ namespace Prowl.Editor
                         if (string.IsNullOrEmpty(_searchText) || file.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
                         {
                             // just using the index as an id, unique we don't need both string and int id
-                            using (gui.Node("", i++).Width(Size.Percentage(1f)).Height(GuiStyle.ItemHeight).Enter())
+                            using (gui.Node("", i++).Width(Size.Percentage(1f)).Height(ItemSize).Enter())
                             {
                                 var interact = gui.GetInteractable();
                                 if (interact.TakeFocus())
@@ -74,9 +77,9 @@ namespace Prowl.Editor
                                 }
 
                                 if (interact.IsHovered())
-                                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.Base5);
+                                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.AssetRoundness);
 
-                                gui.Draw2D.DrawText(UIDrawList.DefaultFont, AssetDatabase.GetRelativePath(file.FullName) + "." + asset.Item1, 20, new Vector2(xPos, gui.CurrentNode.LayoutData.Rect.y + 7), GuiStyle.Base10);
+                                gui.Draw2D.DrawText(UIDrawList.DefaultFont, AssetDatabase.GetRelativePath(file.FullName) + "." + asset.Item1, 20, new Vector2(xPos, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white);
                             }
                         }
                     }

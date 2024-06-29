@@ -24,5 +24,10 @@ namespace Prowl.Editor.Preferences
         public float NearClip = 0.02f;
         public float FarClip = 10000f;
         public float RenderResolution = 1f;
+
+        [Text("Grid:")]
+        public float LineWidth = 1f;
+        public float PrimaryGridSize = 1f;
+        public float SecondaryGridSize = 5f;
     }
 }

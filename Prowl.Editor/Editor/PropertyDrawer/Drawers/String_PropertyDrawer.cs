@@ -9,7 +9,7 @@ namespace Prowl.Editor.PropertyDrawers
         public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value)
         {
             string val = value as string ?? "";
-            bool changed = ActiveGUI.InputField(ID, ref val, 255, InputFieldFlags.None, 0, 0, Size.Percentage(1f), null, null);
+            bool changed = ActiveGUI.InputField(ID, ref val, 255, InputFieldFlags.None, 0, 0, Size.Percentage(1f), null, EditorGUI.GetInputStyle());
             value = val;
             return changed;
         }

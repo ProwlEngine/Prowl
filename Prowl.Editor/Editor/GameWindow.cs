@@ -1,3 +1,4 @@
+using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
@@ -32,7 +33,10 @@ public class GameWindow : EditorWindow
     RenderTexture RenderTarget;
     bool previouslyPlaying = false;
 
-    public static bool IsGameWindowFocused;
+    public static WeakReference LastFocused;
+    public static Vector2 FocusedPosition;
+
+    public readonly GameViewInputHandler InputHandler;
 
     public GameWindow() : base()
     {
@@ -41,6 +45,14 @@ public class GameWindow : EditorWindow
         GeneralPreferences.Instance.CurrentHeight = (int)Height - HeaderHeight;
 
         RefreshRenderTexture();
+
+        LastFocused = new WeakReference(this);
+        InputHandler = new GameViewInputHandler(Window.InternalInput, this);
+    }
+
+    ~GameWindow()
+    {
+        InputHandler.Dispose();
     }
 
     public void RefreshRenderTexture()
@@ -59,27 +71,15 @@ public class GameWindow : EditorWindow
     {
         if (!Project.HasProject) return;
 
-        // TODO: Add Window Focus
-        // if (!previouslyPlaying && Application.isPlaying)
-        // {
-        //     previouslyPlaying = true;
-        //     if (GeneralPreferences.Instance.AutoFocusGameView)
-        //         ImGg.SetWindowFocus();
-        // }
-        // else if (previouslyPlaying && !Application.isPlaying)
-        // {
-        //     previouslyPlaying = false;
-        // }
-
-        // IsFocused |= ImGg.IsWindowFocused();
-
-        IsGameWindowFocused = IsFocused;
+        if(IsFocused)
+            LastFocused = new WeakReference(this);
+        InputHandler.LateUpdate();
 
         gui.CurrentNode.Layout(Runtime.GUI.LayoutType.Column).ScaleChildren();
 
-        using (gui.Node("MenuBar").ExpandWidth().MaxHeight(GuiStyle.ItemHeight).Layout(LayoutType.Row).Enter())
+        using (gui.Node("MenuBar").ExpandWidth().MaxHeight(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.Row).Enter())
         {
-            gui.TextNode("displayIcon", FontAwesome6.Display).Scale(GuiStyle.ItemHeight);
+            gui.TextNode("displayIcon", FontAwesome6.Display).Scale(EditorStylePrefs.Instance.ItemSize);
 
             bool changed = false;
 
@@ -160,7 +160,7 @@ public class GameWindow : EditorWindow
             // We got a camera to visualize
             if (GeneralPreferences.Instance.AutoRefreshGameView)
             {
-                if (Application.isPlaying || Time.frameCount % 8 == 0)
+                //if (Application.isPlaying || Time.frameCount % 8 == 0)
                 {
                     Graphics.Render([ mainCam ], RenderTarget.Framebuffer);
                 }
@@ -168,6 +168,11 @@ public class GameWindow : EditorWindow
 
             // Letter box the image into the render size
             gui.Draw2D.DrawImage(RenderTarget.ColorBuffers[0], innerRect.Position, innerRect.Size, Color.white, true);
+
+            if(IsFocused || LastFocused.Target == this)
+            {
+                FocusedPosition = innerRect.Position;
+            }
         }
     }
 

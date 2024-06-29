@@ -1,4 +1,5 @@
 ﻿using Prowl.Editor.Assets;
+using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
@@ -9,13 +10,14 @@ namespace Prowl.Editor.PropertyDrawers
     [Drawer(typeof(IAssetRef))]
     public class IAssetRef_PropertyDrawer : PropertyDrawer
     {
-        public static ulong Selected;
         public static Guid assignedGUID;
         public static ushort assignedFileID;
         public static ulong guidAssignedToID = 0;
 
         public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? targetValue)
         {
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
             gui.CurrentNode.Layout(LayoutType.Row).ScaleChildren();
 
             var value = (IAssetRef)targetValue;
@@ -32,32 +34,34 @@ namespace Prowl.Editor.PropertyDrawers
                 changed = true;
             }
 
-            ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 2);
+            ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 1, 2);
 
-            bool p = false;
-            bool h = false;
-            using (ActiveGUI.Node(ID + "Selector").MaxWidth(GuiStyle.ItemHeight).ExpandHeight().Enter())
+            using (ActiveGUI.Node(ID + "Selector").MaxWidth(ItemSize).ExpandHeight().Enter())
             {
                 var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
-                pos += new Vector2(8, 8);
-                ActiveGUI.Draw2D.DrawText(FontAwesome6.MagnifyingGlass, pos, GuiStyle.Base11 * (h ? 1f : 0.8f));
+                var centerY = (ActiveGUI.CurrentNode.LayoutData.InnerRect.height / 2) - (20 / 2);
+                pos += new Vector2(5, centerY + 3);
                 if (ActiveGUI.IsNodePressed())
                 {
-                    Selected = assetDrawerID;
                     new AssetSelectorWindow(value.InstanceType, (guid, fileid) => { assignedGUID = guid; guidAssignedToID = assetDrawerID; assignedFileID = fileid; });
                 }
+                else if (ActiveGUI.IsNodeHovered())
+                {
+                    ActiveGUI.Draw2D.DrawRectFilled(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
+                }
+                ActiveGUI.Draw2D.DrawText(FontAwesome6.MagnifyingGlass, pos, Color.white * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f));
             }
 
             // Thumbnail for Textures
             if (value.InstanceType == typeof(Texture2D) && value.IsAvailable)
             {
-                using (ActiveGUI.Node(ID + "Thumbnail").MaxWidth(GuiStyle.ItemHeight + 5).ExpandHeight().Enter())
+                using (ActiveGUI.Node(ID + "Thumbnail").MaxWidth(ItemSize + 5).ExpandHeight().Enter())
                 {
                     var tex = value.GetInstance();
                     if (tex != null)
                     {
                         var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
-                        ActiveGUI.Draw2D.DrawImage((Texture2D)tex, pos, new Vector2(GuiStyle.ItemHeight), true);
+                        ActiveGUI.Draw2D.DrawImage((Texture2D)tex, pos, new Vector2(ItemSize), true);
                     }
                 }
             }
@@ -65,33 +69,27 @@ namespace Prowl.Editor.PropertyDrawers
             using (ActiveGUI.Node(ID + "Asset").ExpandHeight().Clip().Enter())
             {
                 var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
-                pos += new Vector2(0, 8);
+                var centerY = (ActiveGUI.CurrentNode.LayoutData.InnerRect.height / 2) - (20 / 2);
+                pos += new Vector2(0, centerY + 3);
+                bool pressed = ActiveGUI.IsNodePressed(); // lets UI know this can take focus
                 if (value.IsExplicitNull || value.IsRuntimeResource)
                 {
                     string text = value.IsExplicitNull ? "(Null)" : "(Runtime)" + value.Name;
-                    var col = GuiStyle.Base11 * (h ? 1f : 0.8f);
+                    var col = Color.white * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f);
                     if (value.IsExplicitNull)
-                        col = GuiStyle.Red * (h ? 1f : 0.8f);
+                        col = EditorStylePrefs.Red * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f);
                     ActiveGUI.Draw2D.DrawText(text, pos, col);
-                    if (ActiveGUI.IsNodePressed())
-                        Selected = assetDrawerID;
                 }
                 else if (AssetDatabase.TryGetFile(value.AssetID, out var assetPath))
                 {
-                    string name = value.Name;
-                    if(string.IsNullOrWhiteSpace(name))
-                        name = AssetDatabase.ToRelativePath(assetPath);
-                    ActiveGUI.Draw2D.DrawText(name, pos, GuiStyle.Base11 * (h ? 1f : 0.8f));
-                    if (ActiveGUI.IsNodePressed())
-                    {
-                        Selected = assetDrawerID;
+                    string name = value.IsAvailable ? value.Name : assetPath.Name;
+                    ActiveGUI.Draw2D.DrawText(name, pos, Color.white * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f));
+                    if (pressed)
                         AssetDatabase.Ping(value.AssetID);
-                    }
                 }
 
-                if (h && ActiveGUI.IsPointerDoubleClick(MouseButton.Left))
+                if (ActiveGUI.IsNodeHovered() && ActiveGUI.IsPointerDoubleClick(MouseButton.Left))
                     GlobalSelectHandler.Select(value);
-
 
                 // Drag and drop support
                 if (DragnDrop.Drop(out var instance, value.InstanceType))
@@ -101,11 +99,16 @@ namespace Prowl.Editor.PropertyDrawers
                     changed = true;
                 }
 
-                if (Selected == assetDrawerID && ActiveGUI.IsKeyDown(Key.Delete))
+                if (ActiveGUI.IsNodeActive() || ActiveGUI.IsNodeFocused())
                 {
-                    value.AssetID = Guid.Empty;
-                    value.FileID = 0;
-                    changed = true;
+                    ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, 1, (float)EditorStylePrefs.Instance.ButtonRoundness);
+
+                    if (ActiveGUI.IsKeyDown(Key.Delete))
+                    {
+                        value.AssetID = Guid.Empty;
+                        value.FileID = 0;
+                        changed = true;
+                    }
                 }
             }
 

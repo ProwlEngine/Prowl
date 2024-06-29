@@ -6,7 +6,6 @@ using System.ComponentModel;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
-using System.Text.Json;
 
 namespace Prowl.Runtime; 
 
@@ -132,10 +131,11 @@ public static class AssemblyManager {
         var providerTableWeakTable = (Hashtable)reflectTypeDescriptorType.GetField("s_providerTable", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
         providerTableWeakTable?.Clear();
 
-        var assembly = typeof(JsonSerializerOptions).Assembly;
-        var updateHandlerType = assembly.GetType("System.Text.Json.JsonSerializerOptionsUpdateHandler");
-        var clearCacheMethod = updateHandlerType?.GetMethod("ClearCache", BindingFlags.Static | BindingFlags.Public);
-        clearCacheMethod?.Invoke(null, new object?[] { null });
+        // We no longer use System.Text.Json - 29/06/2024
+        //var assembly = typeof(JsonSerializerOptions).Assembly;
+        //var updateHandlerType = assembly.GetType("System.Text.Json.JsonSerializerOptionsUpdateHandler");
+        //var clearCacheMethod = updateHandlerType?.GetMethod("ClearCache", BindingFlags.Static | BindingFlags.Public);
+        //clearCacheMethod?.Invoke(null, new object?[] { null });
     }
 
     public static void Dispose() {

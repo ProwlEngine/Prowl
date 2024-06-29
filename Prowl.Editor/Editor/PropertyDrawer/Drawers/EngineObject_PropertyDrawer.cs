@@ -1,4 +1,5 @@
-﻿using Prowl.Runtime;
+﻿using Prowl.Editor.Preferences;
+using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using static Prowl.Runtime.GUI.Gui;
 
@@ -14,21 +15,23 @@ namespace Prowl.Editor.PropertyDrawers
             var value = (EngineObject)targetValue;
 
             bool changed = false;
+            bool pressed = ActiveGUI.IsNodePressed(); // Lets UI know this node can take focus
 
-            ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, GuiStyle.Borders, 1, 2);
+            ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 1, 2);
 
             var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
-            pos += new Vector2(0, 8);
+            var centerY = (ActiveGUI.CurrentNode.LayoutData.InnerRect.height / 2) - (20 / 2);
+            pos += new Vector2(5, centerY + 3);
             if (value == null)
             {
                 string text = "(Null) " + targetType.Name;
-                var col = GuiStyle.Red * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f);
+                var col = EditorStylePrefs.Red * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f);
                 ActiveGUI.Draw2D.DrawText(text, pos, col);
             }
             else
             {
-                ActiveGUI.Draw2D.DrawText(value.Name, pos, GuiStyle.Base11 * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f));
-                if (ActiveGUI.IsNodeHovered() && ActiveGUI.IsPointerDoubleClick(MouseButton.Left))
+                ActiveGUI.Draw2D.DrawText(value.Name, pos, Color.white * (ActiveGUI.IsNodeHovered() ? 1f : 0.8f));
+                if (ActiveGUI.IsNodeHovered() && ActiveGUI.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
                     GlobalSelectHandler.Select(value);
             }
 
@@ -46,6 +49,17 @@ namespace Prowl.Editor.PropertyDrawers
                 if (component != null)
                 {
                     targetValue = component;
+                    changed = true;
+                }
+            }
+
+            if (ActiveGUI.IsNodeActive() || ActiveGUI.IsNodeFocused())
+            {
+                ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, 1, (float)EditorStylePrefs.Instance.ButtonRoundness);
+
+                if (ActiveGUI.IsKeyDown(Silk.NET.Input.Key.Delete))
+                {
+                    targetValue = null;
                     changed = true;
                 }
             }

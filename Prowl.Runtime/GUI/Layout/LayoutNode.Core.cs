@@ -301,7 +301,7 @@ namespace Prowl.Runtime.GUI.Layout
             // Draw Scroll bars
             if (_data.IsVScrollVisible)
             {
-                GuiStyle style = new();
+                Gui.WidgetStyle style = new(30);
 
                 LayoutNode n;
                 using ((n = AppendNode("_VScroll")).Width(ScrollBarSize).Height(Size.Percentage(1f)).Left(Offset.Percentage(1f)).IgnoreLayout().Enter())
@@ -320,14 +320,14 @@ namespace Prowl.Runtime.GUI.Layout
 
                     if (interact.TakeFocus() || interact.IsActive())
                     {
-                        Gui.Draw2D.DrawRectFilled(barRect, style.ScrollBarActiveColor, style.ScrollBarRoundness);
+                        Gui.Draw2D.DrawRectFilled(barRect, style.ActiveColor, style.Roundness);
                         {
                             VScroll += Gui.PointerDelta.y / scrollRatio;
                             Gui.layoutDirty = true;
                         }
                     }
-                    else if (interact.IsHovered()) Gui.Draw2D.DrawRectFilled(barRect, style.ScrollBarHoveredColor, (float)style.ScrollBarRoundness);
-                    else Gui.Draw2D.DrawRectFilled(barRect, style.WidgetColor, style.ScrollBarRoundness);
+                    else if (interact.IsHovered()) Gui.Draw2D.DrawRectFilled(barRect, style.HoveredColor, (float)style.Roundness);
+                    else Gui.Draw2D.DrawRectFilled(barRect, style.BGColor * 1.8f, style.Roundness);
 
                     if (Gui.IsPointerHovering(LayoutData.Rect) && Gui.PointerWheel != 0)
                     {
@@ -346,7 +346,7 @@ namespace Prowl.Runtime.GUI.Layout
 
             if (_data.IsHScrollVisible)
             {
-                GuiStyle style = new();
+                Gui.WidgetStyle style = new(30);
 
                 LayoutNode n;
                 using ((n = AppendNode("_HScroll")).Height(ScrollBarSize).Width(Size.Percentage(1f)).Top(Offset.Percentage(1f)).IgnoreLayout().Enter())
@@ -365,14 +365,14 @@ namespace Prowl.Runtime.GUI.Layout
 
                     if (interact.TakeFocus() || interact.IsActive())
                     {
-                        Gui.Draw2D.DrawRectFilled(barRect, style.ScrollBarActiveColor, style.ScrollBarRoundness);
+                        Gui.Draw2D.DrawRectFilled(barRect, style.ActiveColor, style.Roundness);
                         {
                             HScroll += Gui.PointerDelta.x / scrollRatio;
                             Gui.layoutDirty = true;
                         }
                     }
-                    else if (interact.IsHovered()) Gui.Draw2D.DrawRectFilled(barRect, style.ScrollBarHoveredColor, (float)style.ScrollBarRoundness);
-                    else Gui.Draw2D.DrawRectFilled(barRect, style.WidgetColor, style.ScrollBarRoundness);
+                    else if (interact.IsHovered()) Gui.Draw2D.DrawRectFilled(barRect, style.HoveredColor, (float)style.Roundness);
+                    else Gui.Draw2D.DrawRectFilled(barRect, style.BGColor * 1.8f, style.Roundness);
 
                     //if (Gui.IsPointerHovering(LayoutData.Rect) && Gui.PointerWheel != 0)
                     //{

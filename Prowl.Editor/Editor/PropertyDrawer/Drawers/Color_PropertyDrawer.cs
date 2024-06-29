@@ -11,7 +11,7 @@ namespace Prowl.Editor.PropertyDrawers
             gui.CurrentNode.Layout(LayoutType.Row).ScaleChildren();
 
             Color val = (Color)value;
-            var style = new GuiStyle(EditorGUI.InputFieldStyle);
+            var style = EditorGUI.InputFieldStyle;
             style.TextColor = val with { a = 1 };
 
             double r = val.r;

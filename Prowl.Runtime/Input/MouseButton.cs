@@ -14,5 +14,6 @@ public enum MouseButton
     Button7 = Veldrid.MouseButton.Button7,
     Button8 = Veldrid.MouseButton.Button8,
     Button9 = Veldrid.MouseButton.Button9,
-    LastButton = Veldrid.MouseButton.LastButton
+    LastButton = Veldrid.MouseButton.LastButton,
+    Unknown = -1,
 }

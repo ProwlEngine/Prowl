@@ -14,8 +14,8 @@ namespace Prowl.Editor
         public AssetDirectoryCache.DirNode CurDirectoryNode;
         public bool Locked = false;
 
-        double itemHeight => GuiStyle.ItemHeight;
-        double itemPadding => GuiStyle.ItemPadding;
+        double itemHeight => EditorStylePrefs.Instance.ItemSize;
+        double itemPadding => 4;
 
         private string _searchText = "";
         private readonly List<FileInfo> _found = new();
@@ -115,7 +115,7 @@ namespace Prowl.Editor
                 {
                     if (!cantGoUp && gui.IsNodePressed())
                         CurDirectoryNode = CurDirectoryNode.Parent!;
-                    gui.Draw2D.DrawText(FontAwesome6.ArrowUp, 30, gui.CurrentNode.LayoutData.Rect, cantGoUp ? GuiStyle.Base4 : (gui.IsNodeHovered() ? GuiStyle.Base11 * 0.8f : GuiStyle.Base11));
+                    gui.Draw2D.DrawText(FontAwesome6.ArrowUp, 30, gui.CurrentNode.LayoutData.Rect, cantGoUp ? EditorStylePrefs.Instance.LesserText : (gui.IsNodeHovered() ? EditorStylePrefs.Instance.Hovering : Color.white));
                 }
 
                 if (gui.Search("SearchInput", ref _searchText, itemHeight + itemPadding, 0, 200, itemHeight))
@@ -174,10 +174,10 @@ namespace Prowl.Editor
                                 CurDirectoryNode = node;
                         }
 
-                        gui.Draw2D.DrawText(nodes[i], 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base5);
+                        gui.Draw2D.DrawText(nodes[i], 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? Color.white : EditorStylePrefs.Instance.LesserText);
                     }
 
-                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, "/", 20, gui.CurrentNode.LayoutData.GlobalContentPosition + pathPos + new Vector2(textSize, 6), GuiStyle.Base5);
+                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, "/", 20, gui.CurrentNode.LayoutData.GlobalContentPosition + pathPos + new Vector2(textSize, 6), EditorStylePrefs.Instance.LesserText);
                     pathPos.x += textSize + 5;
                 }
 
@@ -186,7 +186,7 @@ namespace Prowl.Editor
                     if (gui.IsNodePressed())
                         Locked = !Locked;
 
-                    gui.Draw2D.DrawText(Locked ? FontAwesome6.Lock : FontAwesome6.LockOpen, 30, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base5);
+                    gui.Draw2D.DrawText(Locked ? FontAwesome6.Lock : FontAwesome6.LockOpen, 30, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? Color.white : EditorStylePrefs.Instance.LesserText);
                 }
             }
         }
@@ -195,7 +195,7 @@ namespace Prowl.Editor
         {
             using (gui.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Grid).Clip().Scroll().Enter())
             {
-                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, GuiStyle.WindowBackground * 0.8f, 4);
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
                 var dropInteract = gui.GetInteractable();
                 //HandleDrop();
 
@@ -314,7 +314,7 @@ namespace Prowl.Editor
                             expanded = !expanded;
                             gui.SetNodeStorage(gui.CurrentNode.Parent.Parent, entry.File.FullName, expanded);
                         }
-                        gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronRight : FontAwesome6.ChevronLeft, 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? GuiStyle.Base11 : GuiStyle.Base5);
+                        gui.Draw2D.DrawText(expanded ? FontAwesome6.ChevronRight : FontAwesome6.ChevronLeft, 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? Color.white : EditorStylePrefs.Instance.LesserText);
                     }
                 }
 
@@ -345,37 +345,24 @@ namespace Prowl.Editor
 
             gui.Tooltip(hasSubAsset ? subAsset.Value.name : entry.FullName);
 
-            var color = GuiStyle.Borders;
+            var color = EditorStylePrefs.Instance.Borders;
             if (entry is FileInfo f)
             {
                 color = AssetsTreeWindow.GetFileColor(f.Extension.ToLower().Trim());
-                gui.Draw2D.DrawRectFilled(rect, color * 0.5f, 4f);
+                gui.Draw2D.DrawRectFilled(rect, color * 0.5f, (float)EditorStylePrefs.Instance.AssetRoundness);
             }
             else
             {
                 if (index++ % 2 == 0)
-                    gui.Draw2D.DrawRectFilled(rect, GuiStyle.Base4 * 0.6f, 4);
+                    gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.LesserText * 0.6f, (float)EditorStylePrefs.Instance.AssetRoundness);
                 else
-                    gui.Draw2D.DrawRectFilled(rect, GuiStyle.Base4 * 0.8f, 4);
+                    gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.LesserText * 0.8f, (float)EditorStylePrefs.Instance.AssetRoundness);
             }
 
-            //var gradientStart = UIDrawList.ColorConvertFloat4ToU32(GuiStyle.WindowBackground);
-            //var gradientEnd = UIDrawList.ColorConvertFloat4ToU32(GuiStyle.Borders);
-            //if (entry is FileInfo f)
-            //{
-            //    gradientEnd = UIDrawList.ColorConvertFloat4ToU32(AssetsTreeWindow.GetFileColor(f.Extension.ToLower().Trim()) * 0.5f);
-            //}
-            //
-            //int vertStartIdx = g.DrawList.VtxBuffer.Count;
-            //g.DrawRectFilled(rect, GuiStyle.Borders, 4f);
-            //int vertEndIdx = g.DrawList.VtxBuffer.Count;
-            //g.DrawList.ShadeVertsLinearColorGradientKeepAlpha(vertStartIdx, vertEndIdx, rect.Min, new Vector2(rect.Min.x, rect.Max.y), gradientStart, gradientEnd);
-
-
             if (AssetsTreeWindow.SelectHandler.IsSelected(entry))
-                gui.Draw2D.DrawRectFilled(rect, GuiStyle.Indigo, 4);
+                gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.AssetRoundness);
             else if (interact.IsHovered())
-                gui.Draw2D.DrawRectFilled(rect, GuiStyle.Base5, 4);
+                gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.AssetRoundness);
 
             // Draw Thumbnail
             var size = entrySize - itemHeight; // Remove height so we can fit Name under thumbnails
@@ -387,15 +374,14 @@ namespace Prowl.Editor
             // Draw Name
             var namePos = rect.Position + new Vector2(0, size + 5);
             var nameRect = new Rect(namePos.x, namePos.y, entrySize, itemHeight);
-            //gui.Draw2D.DrawText(UIDrawList.DefaultFont, text, 20, nameRect, GuiStyle.Base11, false);
 
 
             if (RenamingEntry == entry.FullName)
             {
                 var inputRect = new Rect(nameRect.x, nameRect.y + 4, nameRect.width, 30 - 8);
-                gui.Draw2D.DrawRectFilled(inputRect, GuiStyle.WindowBackground, 8);
+                gui.Draw2D.DrawRectFilled(inputRect, EditorStylePrefs.Instance.WindowBGTwo, 8);
                 string name = Path.GetFileNameWithoutExtension(entry.FullName);
-                bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 0, size + 4, Size.Percentage(1f), null, null, true);
+                bool changed = gui.InputField("RenameInput", ref name, 64, Gui.InputFieldFlags.EnterReturnsTrue, 0, size + 4, Size.Percentage(1f), null, EditorGUI.GetInputStyle(), true);
                 if (justStartedRename)
                     gui.FocusPreviousInteractable();
                 if (!gui.PreviousInteractableIsFocus())
@@ -415,7 +401,7 @@ namespace Prowl.Editor
             else
             {
                 var text = AssetPipelinePreferences.Instance.HideExtensions ? Path.GetFileNameWithoutExtension(entry.FullName) : Path.GetFileName(entry.FullName);
-                gui.Draw2D.DrawText(text, nameRect, GuiStyle.Base11, false, true);
+                gui.Draw2D.DrawText(text, nameRect, false, true);
             }
         }
 
@@ -432,7 +418,7 @@ namespace Prowl.Editor
                 }
                 var pingRect = gui.CurrentNode.LayoutData.Rect;
                 pingRect.Expand(MathF.Sin(_pingTimer) * 6f);
-                gui.Draw2D.DrawRect(pingRect, GuiStyle.Yellow, 2f, 4f);
+                gui.Draw2D.DrawRect(pingRect, EditorStylePrefs.Instance.Ping, 2f, 4f);
             }
         }
 

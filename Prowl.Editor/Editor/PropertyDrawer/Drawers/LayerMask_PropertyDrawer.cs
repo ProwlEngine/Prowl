@@ -1,6 +1,8 @@
-﻿using Prowl.Runtime;
+﻿using Prowl.Editor.Preferences;
+using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
+using Prowl.Runtime.GUI.Layout;
 using System.Text;
 
 namespace Prowl.Editor.PropertyDrawers
@@ -10,21 +12,21 @@ namespace Prowl.Editor.PropertyDrawers
     {
         public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value)
         {
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
             LayerMask maskValue = (LayerMask)value!;
             string[] layers = TagLayerManager.GetLayers();
 
-            GuiStyle style = new();
             var g = Gui.ActiveGUI;
-            using (g.Node(ID).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
+            using (g.Node(ID).ExpandWidth().Height(ItemSize).Enter())
             {
                 Interactable interact = g.GetInteractable();
 
-                var col = g.ActiveID == interact.ID ? style.BtnActiveColor :
-                          g.HoveredID == interact.ID ? style.BtnHoveredColor : style.WidgetColor;
+                var col = g.ActiveID == interact.ID ? EditorStylePrefs.Instance.Highlighted :
+                          g.HoveredID == interact.ID ? EditorStylePrefs.Instance.Hovering : EditorStylePrefs.Instance.WindowBGOne;
 
-                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, style.WidgetRoundness);
-                if (style.BorderThickness > 0)
-                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, style.Border, style.BorderThickness, style.WidgetRoundness);
+                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, (float)EditorStylePrefs.Instance.ButtonRoundness);
+                g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 1f, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
                 StringBuilder sb = new();
                 for (int i = 0; i < layers.Length; i++)
@@ -36,7 +38,7 @@ namespace Prowl.Editor.PropertyDrawers
                     }
                 }
 
-                g.Draw2D.DrawText(style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont, sb.Length <= 0 ? "No Layers." : sb.ToString(), style.FontSize, g.CurrentNode.LayoutData.InnerRect, style.TextColor, false);
+                g.Draw2D.DrawText(sb.Length <= 0 ? "No Layers." : sb.ToString(), g.CurrentNode.LayoutData.InnerRect, false);
 
                 var popupWidth = g.CurrentNode.LayoutData.Rect.width;
                 if (interact.TakeFocus())
@@ -48,7 +50,7 @@ namespace Prowl.Editor.PropertyDrawers
                     int longestText = 0;
                     for (var Index = 0; Index < layers.Length; ++Index)
                     {
-                        var textSize = style.Font.IsAvailable ? style.Font.Res.CalcTextSize(layers[Index], style.FontSize, 0) : UIDrawList.DefaultFont.CalcTextSize(layers[Index], style.FontSize, 0);
+                        var textSize = UIDrawList.DefaultFont.CalcTextSize(layers[Index], 0);
                         if (textSize.x > longestText)
                             longestText = (int)textSize.x;
                     }
@@ -57,30 +59,15 @@ namespace Prowl.Editor.PropertyDrawers
 
                     using (popupNode.Width(popupWidth).FitContentHeight().Layout(LayoutType.Column).Enter())
                     {
+                        NothingButton(ItemSize, ref maskValue, g, popupHolder);
+                        EverythingButton(ItemSize, ref maskValue, g, popupHolder, layers);
+
                         for (int i = 0; i < layers.Length; i++)
                         {
                             if (string.IsNullOrEmpty(layers[i]))
                                 continue;
 
-                            using (g.Node("Item_" + i).ExpandWidth().Height(GuiStyle.ItemHeight).Enter())
-                            {
-                                bool hasLayer = maskValue.HasLayer((byte)i);
-                                if (hasLayer)
-                                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, GuiStyle.Indigo * 0.8f, style.WidgetRoundness);
-
-                                if (g.IsNodePressed())
-                                {
-                                    if(hasLayer)
-                                        maskValue.RemoveLayer((byte)i);
-                                    else
-                                        maskValue.SetLayer((byte)i);
-                                    g.ClosePopup(popupHolder);
-                                }
-                                else if (g.IsNodeHovered())
-                                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, style.BtnHoveredColor, style.WidgetRoundness);
-
-                                g.Draw2D.DrawText(i + ". " + layers[i], g.CurrentNode.LayoutData.Rect, style.TextColor);
-                            }
+                            LayerButton(ItemSize, ref maskValue, layers, g, popupHolder, i);
                         }
                     }
                 }
@@ -92,6 +79,64 @@ namespace Prowl.Editor.PropertyDrawers
                 }
 
                 return false;
+            }
+        }
+
+        private static void LayerButton(double ItemSize, ref LayerMask maskValue, string[] layers, Gui g, LayoutNode popupHolder, int i)
+        {
+            using (g.Node("Item_" + i).ExpandWidth().Height(ItemSize).Enter())
+            {
+                bool hasLayer = maskValue.HasLayer((byte)i);
+                if (hasLayer)
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.ButtonRoundness);
+
+                if (g.IsNodePressed())
+                {
+                    if (hasLayer)
+                        maskValue.RemoveLayer((byte)i);
+                    else
+                        maskValue.SetLayer((byte)i);
+                    g.ClosePopup(popupHolder);
+                }
+                else if (g.IsNodeHovered())
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
+
+                g.Draw2D.DrawText(i + ". " + layers[i], g.CurrentNode.LayoutData.Rect);
+            }
+        }
+
+        private static void NothingButton(double ItemSize, ref LayerMask maskValue, Gui g, LayoutNode popupHolder)
+        {
+            using (g.Node("NothingBtn").ExpandWidth().Height(ItemSize).Enter())
+            {
+                if (g.IsNodePressed())
+                {
+                    maskValue.Clear();
+                    g.ClosePopup(popupHolder);
+                }
+                else if (g.IsNodeHovered())
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
+
+                g.Draw2D.DrawText("Nothing", g.CurrentNode.LayoutData.Rect);
+            }
+        }
+
+        private static void EverythingButton(double ItemSize, ref LayerMask maskValue, Gui g, LayoutNode popupHolder, string[] layers)
+        {
+            using (g.Node("EverythingBtn").ExpandWidth().Height(ItemSize).Enter())
+            {
+                if (g.IsNodePressed())
+                {
+                    maskValue.Clear();
+                    for (int i = 0; i < 32; i++)
+                        maskValue.SetLayer((byte)i);
+
+                    g.ClosePopup(popupHolder);
+                }
+                else if (g.IsNodeHovered())
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
+
+                g.Draw2D.DrawText("Everything", g.CurrentNode.LayoutData.Rect);
             }
         }
     }
