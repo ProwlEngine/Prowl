@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Prowl.Runtime.Utils;
 using Veldrid;
 
 namespace Prowl.Runtime
@@ -36,77 +37,81 @@ namespace Prowl.Runtime
 
         public class Variant
         {
-            public KeywordState keywords;
-            public List<(MeshResource, VertexLayoutDescription)> vertexInputs = new();
+            public KeyGroup<string, string> keywords;
+            public List<MeshResource> vertexInputs = new();
             public List<ShaderResource[]> resourceSets = new();
             public Veldrid.Shader[] compiledPrograms;
         }
 
+        
+        private (ShaderStages, string)[] shaderSource;
+        private Dictionary<string, HashSet<string>> keywords;
+        private PermutationMap<string, string, Variant> variants;
 
-        private Dictionary<KeywordState, Variant> variants = new();
+        public delegate Variant VariantGenerator((ShaderStages, string)[] sources, KeyGroup<string, string> keywords);
 
-
-        public ShaderPass(string name, (string, string)[] tags)
-        {
+        public ShaderPass(
+            string name, 
+            (string, string)[] tags, 
+            (ShaderStages, string)[] shaderSource, 
+            Dictionary<string, HashSet<string>> keywords
+        ) {
             this.name = name;
+            this.shaderSource = shaderSource;
 
-            if (tags == null)
-                return;
+            if (keywords == null || keywords.Count == 0)
+                keywords = new() { { string.Empty, [ string.Empty ] } };
 
-            for (int i = 0; i < tags.Length; i++)
-                this.tags.Add(tags[i].Item1, tags[i].Item2);
-        }
+            this.keywords = keywords;
 
-        public void CreateProgram(Veldrid.Shader[] compiledPrograms, KeywordState? keywordID = null)
-        {
-            keywordID ??= KeywordState.Empty;
-
-            Variant program = new() 
+            if (tags != null)
             {
-                keywords = keywordID.Value,
-                compiledPrograms = compiledPrograms
-            };
-
-            variants.Add(keywordID.Value, program);
+                for (int i = 0; i < tags.Length; i++)
+                    this.tags.Add(tags[i].Item1, tags[i].Item2);
+            }
         }
 
-        public Variant GetVariant(KeywordState? keywordID = null)
+        public void CompilePrograms(VariantGenerator variantGenerator)
         {
-            if (variants.TryGetValue(keywordID ?? KeywordState.Empty, out Variant program))
-                return program;
-            else
-                throw new Exception("Could not find variant for keyword ID");
+            Variant GenerateVariant(KeyGroup<string, string> keywords) =>
+                variantGenerator.Invoke(shaderSource, keywords);
+
+            variants = new(keywords, GenerateVariant);
         }
 
-        public void AddVertexInput(MeshResource resource, KeywordState? keywordID = null)
-        {
-            if (variants.TryGetValue(keywordID ?? KeywordState.Empty, out Variant program))
-                program.vertexInputs.Add((resource, default));
-            else
-                throw new Exception("Could not find variant for keyword ID");
-        }
+        public KeyGroup<string, string> ValidateKeyGroup(KeyGroup<string, string> keyGroup) => 
+            variants.ValidateCombination(keyGroup);
 
-        public void AddCustomVertexInput(VertexLayoutDescription description, KeywordState? keywordID = null)
-        {
-            if (variants.TryGetValue(keywordID ?? KeywordState.Empty, out Variant program))
-                program.vertexInputs.Add((MeshResource.Custom, description));
-            else
-                throw new Exception("Could not find variant for keyword ID");
-        }
+        public Variant GetVariant(KeyGroup<string, string>? keywordID = null) =>
+            variants.GetValue(keywordID ?? KeyGroup<string, string>.Default);
 
-        public void AddResourceSet(ShaderResource[] resources, KeywordState? keywordID = null)
-        {
-            if (variants.TryGetValue(keywordID ?? KeywordState.Empty, out Variant program))
-                program.resourceSets.Add(resources);
-            else
-                throw new Exception("Could not variant for keyword ID");
-        }
+        public bool TryGetVariant(KeyGroup<string, string>? keywordID, out Variant? variant) =>
+            variants.TryGetValue(keywordID ?? KeyGroup<string, string>.Default, out variant);
 
         public void Dispose()
         {
             foreach (Variant program in variants.Values)
                 foreach (Veldrid.Shader shader in program.compiledPrograms)
                     shader.Dispose();
+        }
+
+        public override int GetHashCode()
+        {
+            HashCode hash = new();
+
+            hash.Add(name);
+            hash.Add(blend);
+            hash.Add(depthStencil);
+            hash.Add(cullMode);
+            hash.Add(depthClipEnabled);            
+
+            foreach (var pair in tags)
+            {
+                hash.Add(pair.Key);
+                hash.Add(pair.Value);
+            }
+
+            return hash.ToHashCode();
         }
     }
 }

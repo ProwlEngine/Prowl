@@ -32,10 +32,23 @@ namespace Prowl.Runtime
 
         private static Shader CreateDefault()
         {
-            ShaderPass pass = new ShaderPass("Default Pass", null);
+            ShaderPass pass = new ShaderPass("Default Pass", null, 
+                [ 
+                    (ShaderStages.Vertex, defaultVertex),
+                    (ShaderStages.Fragment, defaultFragment)
+                ],
+                null
+            );
 
-            pass.CreateProgram(Graphics.CreateFromSpirv(defaultVertex, defaultFragment));
-            pass.AddVertexInput(MeshResource.Position);
+            pass.CompilePrograms((source, keywords) => new ShaderPass.Variant()
+            {
+                keywords = keywords,
+                vertexInputs = 
+                [
+                    MeshResource.Position,
+                ],
+                compiledPrograms = Graphics.CreateFromSpirv(source[0].Item2, source[1].Item2)
+            });
 
             return new("Default Shader", pass);
         }
@@ -87,9 +100,9 @@ namespace Prowl.Runtime
             return passes[passIndex];
         }
 
-        public ShaderPass GetPass(string passName)
+        public int GetPassIndex(string passName)
         {   
-            return passes[nameIndexLookup.GetValueOrDefault(passName, -1)];
+            return nameIndexLookup.GetValueOrDefault(passName, -1);
         }
 
         public ShaderPass GetPassWithTag(string tag, string? tagValue)

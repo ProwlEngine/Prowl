@@ -16,9 +16,9 @@ namespace Prowl.Runtime
 
     public interface ShaderResource
     {
-        public void BindResource(CommandList commandList, Material material, List<BindableResource> bindableResources);
-
         public void GetDescription(List<ResourceLayoutElementDescription> elements);
+
+        public void BindResource(CommandList commandList, List<BindableResource> resources, RenderState state);
 
         public string GetResourceName();
     }
@@ -37,20 +37,20 @@ namespace Prowl.Runtime
             this.stages = stages;
         }
 
-        public void BindResource(CommandList commandList, Material material, List<BindableResource> bindableResources)
-        {
-            Texture tex = material.PropertyBlock.GetTexture(textureName) ?? Texture2D.EmptyWhite;
-
-            bindableResources.Add(tex.InternalTexture);
-            bindableResources.Add(tex.Sampler.InternalSampler);
-        }
-
         public void GetDescription(List<ResourceLayoutElementDescription> elements)
         {
             ResourceKind kind = readWrite ? ResourceKind.TextureReadWrite : ResourceKind.TextureReadOnly;
             
             elements.Add(new ResourceLayoutElementDescription(textureName, kind, stages));
             elements.Add(new ResourceLayoutElementDescription(textureName, ResourceKind.Sampler, stages));
+        }
+
+        public void BindResource(CommandList commandList, List<BindableResource> resources, RenderState state)
+        {
+            Texture tex = state.propertyState.GetTexture(textureName);
+
+            resources.Add(tex.InternalTexture);
+            resources.Add(tex.Sampler.InternalSampler);
         }
 
         public string GetResourceName() => textureName;
@@ -76,15 +76,6 @@ namespace Prowl.Runtime
                 sizeInBytes += ResourceSize(resources[i].Item2);
         }
 
-        public void BindResource(CommandList commandList, Material material, List<BindableResource> bindableResources)
-        {
-            DeviceBuffer uniformBuffer = material.GetUniformBuffer(this, sizeInBytes);
-
-            UploadBuffer(commandList, material, uniformBuffer);
-
-            bindableResources.Add(uniformBuffer);
-        }
-
         public string GetResourceName() => name;
 
         public void GetDescription(List<ResourceLayoutElementDescription> elements)
@@ -92,8 +83,29 @@ namespace Prowl.Runtime
             elements.Add(new ResourceLayoutElementDescription(name, ResourceKind.UniformBuffer, stages));
         }
 
+        public void BindResource(CommandList commandList, List<BindableResource> resource, RenderState state)
+        {
+            DeviceBuffer GetUniformBuffer(uint size)
+            {
+                bool hasBuffer = state.uniformBuffers.TryGetValue(this, out DeviceBuffer buffer);
 
-        private void UploadBuffer(CommandList commandList, Material material, DeviceBuffer uniformBuffer)
+                if (!hasBuffer)
+                {
+                    buffer = Graphics.Factory.CreateBuffer(new BufferDescription(size, BufferUsage.UniformBuffer));
+                    state.uniformBuffers[this] = buffer;
+                }
+
+                return buffer;
+            }
+
+            var buffer = GetUniformBuffer(sizeInBytes);
+
+            UploadBuffer(commandList, state.propertyState, buffer);
+
+            resource.Add(buffer);
+        }
+
+        private void UploadBuffer(CommandList commandList, PropertyState properties, DeviceBuffer uniformBuffer)
         {
             uint bufferOffset = 0;
 
@@ -104,31 +116,31 @@ namespace Prowl.Runtime
                 switch (resource.Item2)
                 {
                     case ResourceType.Float: 
-                        float data = material.PropertyBlock.GetFloat(resource.Item1);
+                        float data = properties.GetFloat(resource.Item1);
                         commandList.UpdateBuffer(uniformBuffer, bufferOffset, data); 
                         bufferOffset += sizeof(float);
                     break;
 
                     case ResourceType.Vector2: 
-                        System.Numerics.Vector2 vec2 = material.PropertyBlock.GetVector2(resource.Item1);
+                        System.Numerics.Vector2 vec2 = properties.GetVector2(resource.Item1);
                         commandList.UpdateBuffer(uniformBuffer, bufferOffset, vec2); 
                         bufferOffset += sizeof(float) * 2;
                     break;
 
                     case ResourceType.Vector3: 
-                        System.Numerics.Vector3 vec3 = material.PropertyBlock.GetVector3(resource.Item1);
+                        System.Numerics.Vector3 vec3 = properties.GetVector3(resource.Item1);
                         commandList.UpdateBuffer(uniformBuffer, bufferOffset, vec3); 
                         bufferOffset += sizeof(float) * 3;
                     break;
 
                     case ResourceType.Vector4: 
-                        System.Numerics.Vector4 vec4 = material.PropertyBlock.GetVector4(resource.Item1);
+                        System.Numerics.Vector4 vec4 = properties.GetVector4(resource.Item1);
                         commandList.UpdateBuffer(uniformBuffer, bufferOffset, vec4); 
                         bufferOffset += sizeof(float) * 4;
                     break;
 
                     case ResourceType.Matrix4x4: 
-                        System.Numerics.Matrix4x4 mat4 = material.PropertyBlock.GetMatrix(resource.Item1).ToFloat();
+                        System.Numerics.Matrix4x4 mat4 = properties.GetMatrix(resource.Item1).ToFloat();
                         commandList.UpdateBuffer(uniformBuffer, bufferOffset, mat4); 
                         bufferOffset += sizeof(float) * 4 * 4;
                     break;
