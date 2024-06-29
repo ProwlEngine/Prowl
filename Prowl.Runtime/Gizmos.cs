@@ -101,6 +101,7 @@ void main()
 }
             ";
 
+            /*
             // Pass creation info (Name, tags)
             ShaderPass pass = new ShaderPass("Gizmos", null);
 
@@ -122,6 +123,7 @@ void main()
             var shader = new Shader("Gizmos/GizmoShader", pass);
 
             gizmoMaterial = new Material(shader);
+            */
         }
 
         public static void Render()
