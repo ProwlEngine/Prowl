@@ -2,26 +2,46 @@ using System;
 using System.Collections.Generic;
 using Veldrid;
 using System.Linq;
+using System.Diagnostics.CodeAnalysis;
 
 
 namespace Prowl.Runtime
 {
     public static class PipelineCache    
     {
-        private struct PassPipelineDescription
+        public struct PassPipelineDescription
         {
             public ShaderPass pass;
-            public KeywordState? keywordState;
+            public Utils.KeyGroup<string, string> keywords;
             public OutputDescription? output;
             public PolygonFillMode fillMode;
             public FrontFace frontFace;
             public PrimitiveTopology topology;
             public bool scissorTest;
-            public bool depthClip;
 
             public override readonly int GetHashCode()
             {
-                return HashCode.Combine(pass, keywordState, output, fillMode, frontFace, topology, scissorTest, depthClip);
+                return HashCode.Combine(pass, keywords, output, fillMode, frontFace, topology, scissorTest);
+            }
+
+            public override bool Equals([NotNullWhen(true)] object? obj)
+            {
+                if (obj is not PassPipelineDescription desc)
+                    return false;
+                
+                return Equals(desc);
+            }
+
+            public bool Equals(PassPipelineDescription other)
+            {
+                return 
+                    pass.Equals(other.pass) && 
+                    keywords.Equals(other.keywords) && 
+                    output.Equals(other.output) && 
+                    fillMode.Equals(other.fillMode) && 
+                    frontFace.Equals(other.frontFace) && 
+                    topology.Equals(other.topology) && 
+                    scissorTest.Equals(other.scissorTest);
             }
         }
 
@@ -30,11 +50,18 @@ namespace Prowl.Runtime
         {
             public readonly Pipeline pipeline;
             public readonly GraphicsPipelineDescription description; 
+            public readonly ShaderPass.Variant variant;
 
-            internal PipelineInfo(GraphicsPipelineDescription description, Pipeline pipeline)
+            internal PipelineInfo(GraphicsPipelineDescription description, Pipeline pipeline, ShaderPass.Variant variant)
             {
                 this.pipeline = pipeline;
                 this.description = description;
+                this.variant = variant;
+            }
+
+            public bool Equals(PipelineInfo other)
+            {
+                return description.Equals(other.description);
             }
         }
 
@@ -43,7 +70,7 @@ namespace Prowl.Runtime
 
         private static GraphicsPipelineDescription CreateDescriptionForPass(in PassPipelineDescription passDesc)
         {
-            ShaderPass.Variant keywordProgram = passDesc.pass.GetVariant(passDesc.keywordState);
+            var keywordProgram = passDesc.pass.GetVariant(passDesc.keywords);
 
             ResourceLayout[] resourceLayouts = new ResourceLayout[keywordProgram.resourceSets.Count];
 
@@ -59,17 +86,8 @@ namespace Prowl.Runtime
                 resourceLayouts[i] = Graphics.Factory.CreateResourceLayout(new ResourceLayoutDescription(elements.ToArray()));
             }
 
-            VertexLayoutDescription[] vertexInputs = new VertexLayoutDescription[keywordProgram.vertexInputs.Count];
-
-            for (int i = 0; i < vertexInputs.Length; i++)
-            {   
-                (MeshResource, VertexLayoutDescription) inputs = keywordProgram.vertexInputs[i];
-
-                if (inputs.Item1 == MeshResource.Custom)
-                    vertexInputs[i] = inputs.Item2;
-                else
-                    vertexInputs[i] = MeshUtility.GetLayoutForResource(inputs.Item1);
-            }
+            VertexLayoutDescription[] vertexInputs = 
+                keywordProgram.vertexInputs.Select(MeshUtility.GetLayoutForResource).ToArray();
 
             GraphicsPipelineDescription pipelineDesc = new()
             {
@@ -80,7 +98,7 @@ namespace Prowl.Runtime
                     cullMode: passDesc.pass.cullMode,
                     fillMode: passDesc.fillMode,
                     frontFace: passDesc.frontFace,
-                    depthClipEnabled: passDesc.depthClip,
+                    depthClipEnabled: passDesc.pass.depthClipEnabled,
                     scissorTestEnabled: passDesc.scissorTest
                 ),
 
@@ -101,23 +119,21 @@ namespace Prowl.Runtime
 
         public static PipelineInfo GetPipelineForPass(
             ShaderPass pass, 
-            KeywordState? keywords = null,
+            Utils.KeyGroup<string, string>? keywords = null,
             PolygonFillMode fillMode = PolygonFillMode.Solid,
             FrontFace frontFace = FrontFace.Clockwise,
             PrimitiveTopology topology = PrimitiveTopology.TriangleList,
             bool scissorTest = false,
-            bool depthClip = true,
             OutputDescription? pipelineOutput = null)
         {
             PassPipelineDescription pipelineDesc = new()
             {
                 pass = pass,
-                keywordState = keywords,
+                keywords = keywords,
                 fillMode = fillMode,
                 frontFace = frontFace,
                 topology = topology,
                 scissorTest = scissorTest,
-                depthClip = depthClip,
                 output = pipelineOutput
             };
 
@@ -126,7 +142,7 @@ namespace Prowl.Runtime
                 var description = CreateDescriptionForPass(pipelineDesc);
                 var pipeline = Graphics.Factory.CreateGraphicsPipeline(description);
 
-                pipelineInfo = new PipelineInfo(description, pipeline);
+                pipelineInfo = new PipelineInfo(description, pipeline, pass.GetVariant(keywords));
 
                 pipelineCache.Add(pipelineDesc, pipelineInfo);
             }
