@@ -327,9 +327,9 @@ namespace Prowl.Runtime
             bool wordWrapEnabled = wrapWidth > 0.0;
             int wordWrapEol = -1;
 
-            int vtxWrite = drawList._vertexWritePosition;
-            int idxWrite = drawList._indexWritePosition;
-            uint vtxCurrentIdx = drawList._currentVertexIndex;
+            int vtxWrite = drawList._VtxWritePtr;
+            int idxWrite = drawList._IdxWritePtr;
+            uint vtxCurrentIdx = drawList._VtxCurrentIdx;
 
             int s = textBegin;
             if (!wordWrapEnabled && y + lineHeight < clipRect.y)
@@ -442,18 +442,18 @@ namespace Prowl.Runtime
                             // We are NOT calling PrimRectUV() here because non-inlined causes too much overhead in a debug build.
                             // Inlined here:
                             {
-                                drawList.IndexBuffer[idxWrite++] = (ushort)vtxCurrentIdx; 
-                                drawList.IndexBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 1); 
-                                drawList.IndexBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 2);
+                                drawList.IdxBuffer[idxWrite++] = (ushort)vtxCurrentIdx; 
+                                drawList.IdxBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 1); 
+                                drawList.IdxBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 2);
 
-                                drawList.IndexBuffer[idxWrite++] = (ushort)vtxCurrentIdx; 
-                                drawList.IndexBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 2); 
-                                drawList.IndexBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 3);
+                                drawList.IdxBuffer[idxWrite++] = (ushort)vtxCurrentIdx; 
+                                drawList.IdxBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 2); 
+                                drawList.IdxBuffer[idxWrite++] = (ushort)(vtxCurrentIdx + 3);
                                 
-                                drawList.VertexBuffer[vtxWrite++] = new UIVertex { pos = new Vector3(x1, y1, drawList._primitiveCount), uv = new Vector2(u1, v1), col = color };
-                                drawList.VertexBuffer[vtxWrite++] = new UIVertex { pos = new Vector3(x2, y1, drawList._primitiveCount), uv = new Vector2(u2, v1), col = color };
-                                drawList.VertexBuffer[vtxWrite++] = new UIVertex { pos = new Vector3(x2, y2, drawList._primitiveCount), uv = new Vector2(u2, v2), col = color };
-                                drawList.VertexBuffer[vtxWrite++] = new UIVertex { pos = new Vector3(x1, y2, drawList._primitiveCount), uv = new Vector2(u1, v2), col = color };
+                                drawList.VtxBuffer[vtxWrite++] = new UIVertex { pos = new Vector3(x1, y1, drawList._primitiveCount), uv = new Vector2(u1, v1), col = color };
+                                drawList.VtxBuffer[vtxWrite++] = new UIVertex { pos = new Vector3(x2, y1, drawList._primitiveCount), uv = new Vector2(u2, v1), col = color };
+                                drawList.VtxBuffer[vtxWrite++] = new UIVertex { pos = new Vector3(x2, y2, drawList._primitiveCount), uv = new Vector2(u2, v2), col = color };
+                                drawList.VtxBuffer[vtxWrite++] = new UIVertex { pos = new Vector3(x1, y2, drawList._primitiveCount), uv = new Vector2(u1, v2), col = color };
                                 vtxCurrentIdx += 4;
                             }
                         }
@@ -463,9 +463,9 @@ namespace Prowl.Runtime
                 x += charWidth;
             }
 
-            drawList._vertexWritePosition = vtxWrite;
-            drawList._currentVertexIndex = vtxCurrentIdx;
-            drawList._indexWritePosition = idxWrite;
+            drawList._VtxWritePtr = vtxWrite;
+            drawList._VtxCurrentIdx = vtxCurrentIdx;
+            drawList._IdxWritePtr = idxWrite;
 
             return new Rect(pos.x, pos.y, x, y + lineHeight);
         }

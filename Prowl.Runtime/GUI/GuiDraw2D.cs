@@ -33,8 +33,10 @@ namespace Prowl.Runtime.GUI
             drawListsOrdered.Clear();
             foreach (var index in _drawList.Keys.OrderBy(x => x))
             {
-                _drawList[index].AntiAliasing = antiAliasing;
+                _drawList[index].AntiAliasing(antiAliasing);
                 _drawList[index].Clear();
+                
+                _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture);
 
                 drawListsOrdered.Add(_drawList[index]);
             }
@@ -61,7 +63,7 @@ namespace Prowl.Runtime.GUI
         /// <summary> Peek at the current clip rect </summary>
         public Rect PeekClip()
         {
-            var clip = _drawList[currentZIndex]._clipRectStack.Peek();
+            var clip = _drawList[currentZIndex]._ClipRectStack.Peek();
             return new(clip.x, clip.y, (clip.z - clip.x), (clip.w - clip.y));
         }
 
@@ -70,13 +72,14 @@ namespace Prowl.Runtime.GUI
             if (!_drawList.ContainsKey(index))
             {
                 _drawList[index] = new UIDrawList(_AntiAliasing);
+                _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture);
             }
 
             // Copy over the clip rect from the previous list
             if (keepClipSpace)
             {
                 var previousList = _drawList[currentZIndex];
-                _drawList[index].PushClipRect(previousList._clipRectStack.Peek());
+                _drawList[index].PushClipRect(previousList._ClipRectStack.Peek());
             }
         }
 
@@ -191,13 +194,13 @@ namespace Prowl.Runtime.GUI
 
         public void DrawText(Font font, string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f, Rect? clip = null)
         {
-            _drawList[currentZIndex].PushTexture(font.Texture);
+            _drawList[currentZIndex].PushTextureID(font.Texture);
         
             if (clip != null)
                 _drawList[currentZIndex].AddText(font, (float)fontSize, position, color, text, wrap_width: (float)wrapwidth, cpu_fine_clip_rect: new Vector4(clip.Value.Position, clip.Value.Position + clip.Value.Size));
             else
                 _drawList[currentZIndex].AddText(font, (float)fontSize, position, color, text, wrap_width: (float)wrapwidth);
-            _drawList[currentZIndex].PopTexture();
+            _drawList[currentZIndex].PopTextureID();
         }
     }
 

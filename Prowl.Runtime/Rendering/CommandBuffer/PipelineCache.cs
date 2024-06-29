@@ -126,6 +126,8 @@ namespace Prowl.Runtime
             bool scissorTest = false,
             OutputDescription? pipelineOutput = null)
         {
+            keywords ??= Utils.KeyGroup<string, string>.Default;
+
             PassPipelineDescription pipelineDesc = new()
             {
                 pass = pass,
