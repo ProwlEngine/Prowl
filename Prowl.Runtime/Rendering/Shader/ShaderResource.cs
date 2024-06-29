@@ -49,7 +49,16 @@ namespace Prowl.Runtime
         {
             Texture tex = state.propertyState.GetTexture(textureName);
 
-            resources.Add(tex.InternalTexture);
+            if (tex == null)
+                tex = Texture2D.EmptyWhite;
+            
+            if (tex.IsDestroyed)
+                tex = Texture2D.EmptyWhite;
+
+            if (!tex.InternalTexture.Usage.HasFlag(TextureUsage.Sampled))
+                tex = Texture2D.EmptyWhite;
+
+            resources.Add(tex.TextureView);
             resources.Add(tex.Sampler.InternalSampler);
         }
 

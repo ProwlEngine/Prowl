@@ -9,12 +9,7 @@ namespace Prowl.Runtime
     {
         public Utils.KeyGroup<string, string> LocalKeywords;
         public AssetRef<Shader> Shader;
-        public PropertyState PropertyState;
-
-        // private PipelineCache.PipelineInfo boundPipeline;
-
-        // private ResourceSet[] resources;
-        // private Dictionary<ShaderResource, DeviceBuffer> uniformBuffers = new();
+        public PropertyState Properties;
 
         internal Material() : base("New Material") { }
 
@@ -24,104 +19,24 @@ namespace Prowl.Runtime
                 throw new ArgumentNullException(nameof(shader));
             
             Shader = shader;
-            PropertyState = properties ?? new();
+            Properties = properties ?? new();
             LocalKeywords = keywords ?? Utils.KeyGroup<string, string>.Default;
+
+            Debug.Log("Created material");
         }
-
-        /*
-        public void SetPass(CommandList commandList, int passIndex = 0, PolygonFillMode fill = PolygonFillMode.Solid, PrimitiveTopology topology = PrimitiveTopology.TriangleList, bool scissorTest = false)
-        {
-            activePass = passIndex;
-            ShaderPass pass = Shader.Res.GetPass(passIndex);
-
-            boundPipeline = PipelineCache.GetPipelineForPass(pass, fillMode: fill, topology: topology, scissorTest: scissorTest);
-
-            commandList.SetPipeline(boundPipeline.pipeline);
-        }
-
-        public ShaderPass GetPass() => Shader.Res.GetPass(activePass);
-
-        internal DeviceBuffer GetUniformBuffer(ShaderResource resource, uint size)
-        {
-            bool hasBuffer = uniformBuffers.TryGetValue(resource, out DeviceBuffer buffer);
-
-            if (!hasBuffer || buffer.SizeInBytes != size)
-            {
-                buffer = Graphics.Factory.CreateBuffer(new BufferDescription(size, BufferUsage.UniformBuffer));
-                uniformBuffers[resource] = buffer;
-            }
-
-            return buffer;
-        }
-
-        // Suboptimal solution that recreates every resource set to ensure that textures are properly sent to shader.
-        // When shaders are being compiled by us, we can optimize this so textures go into their own resource set and then we only have to update the uniform buffer.       
-        public void Upload(CommandList commandList)
-        {
-            if (activePass < 0)
-                throw new Exception("Invalid pass state. Please make sure to call SetPass() onn this material before calling Upload()");
-
-            if (resources != null)
-            {
-                foreach (var resource in resources)
-                    resource.Dispose();
-            }
-
-            ShaderPass pass = Shader.Res.GetPass(activePass);
-            
-            ShaderPass.Variant variant = pass.GetVariant(Keywords);
-
-            List<BindableResource> bindableResources = new();
-
-            resources = new ResourceSet[variant.resourceSets.Count];
-
-            for (int set = 0; set < variant.resourceSets.Count; set++)
-            {
-                ShaderResource[] resourceSet = variant.resourceSets[set];
-
-                bindableResources.Clear();
-
-                for (int res = 0; res < resourceSet.Length; res++)
-                    resourceSet[res].BindResource(commandList, this, bindableResources);
-
-                ResourceSetDescription description = new ResourceSetDescription
-                {
-                    Layout = boundPipeline.description.ResourceLayouts[set],
-                    BoundResources = bindableResources.ToArray()
-                };
-
-                resources[set] = Graphics.Factory.CreateResourceSet(description);
-
-                commandList.SetGraphicsResourceSet((uint)set, resources[set]);
-            }
-        } 
-        */
-
 
         public void SetKeyword(string keyword, string value) => LocalKeywords.SetKey(keyword, value);
 
-        public void SetColor(string name, Color value) => PropertyState.SetColor(name, value);
-        public void SetVector(string name, Vector2 value) => PropertyState.SetVector(name, value);
-        public void SetVector(string name, Vector3 value) => PropertyState.SetVector(name, value);
-        public void SetVector(string name, Vector4 value) => PropertyState.SetVector(name, value);
-        public void SetFloat(string name, float value) => PropertyState.SetFloat(name, value);
-        public void SetInt(string name, int value) => PropertyState.SetInt(name, value);
-        public void SetMatrix(string name, Matrix4x4 value) => PropertyState.SetMatrix(name, value);
-        public void SetTexture(string name, Texture value) => PropertyState.SetTexture(name, value);
+        public void SetColor(string name, Color value) => Properties.SetColor(name, value);
+        public void SetVector(string name, Vector2 value) => Properties.SetVector(name, value);
+        public void SetVector(string name, Vector3 value) => Properties.SetVector(name, value);
+        public void SetVector(string name, Vector4 value) => Properties.SetVector(name, value);
+        public void SetFloat(string name, float value) => Properties.SetFloat(name, value);
+        public void SetInt(string name, int value) => Properties.SetInt(name, value);
+        public void SetMatrix(string name, Matrix4x4 value) => Properties.SetMatrix(name, value);
+        public void SetTexture(string name, Texture value) => Properties.SetTexture(name, value);
 
         //public void SetMatrices(string name, System.Numerics.Matrix4x4[] value) { }
-
-        //public override void OnDispose()
-        //{
-        //    if (resources != null)
-        //    {
-        //        foreach (var resource in resources)
-        //            resource.Dispose();
-        //
-        //        foreach (var buffer in uniformBuffers.Values)
-        //            buffer.Dispose();
-        //    }
-        //}
 
         //public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
         //{

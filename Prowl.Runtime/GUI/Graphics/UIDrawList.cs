@@ -96,13 +96,16 @@ namespace Prowl.Runtime.GUI.Graphics
             return CmdBuffer.Count > 1 ? CmdBuffer[CmdBuffer.Count - 2] : null;
         }
 
-        ~UIDrawList()
+        public Vector4 GetCurrentClipRect()
         {
-            Clear();
+            return _ClipRectStack.Count > 0 ? _ClipRectStack[_ClipRectStack.Count - 1] : GNullClipRect;
         }
 
-        // Internal helpers
-        // NB: all primitives needs to be reserved via PrimReserve() beforehand!
+        public Texture2D GetCurrentTextureId()
+        {
+            return _TextureIdStack.Count > 0 ? _TextureIdStack[_TextureIdStack.Count - 1] : DefaultFont.Texture;
+        }
+
         public void Clear()
         {
             CmdBuffer.Clear();
@@ -153,10 +156,6 @@ namespace Prowl.Runtime.GUI.Graphics
         public void PushClipRectFullScreen()
         {
             PushClipRect(GNullClipRect, true);
-
-            // FIXME-OPT: This would be more correct but we're not supposed to access ImGuiState from here?
-            //ImGuiState& g = *GImGui;
-            //PushClipRect(GetVisibleRect());
         }
 
         public void PopClipRect()
@@ -211,6 +210,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void AddRectFilledMultiColor(Vector2 a, Vector2 c, Color32 col_upr_left, Color32 col_upr_right, Color32 col_bot_right, Color32 col_bot_left)
         {
+
             PrimReserve(6, 4);
 
             Vector2 uv = DefaultFont.TexUvWhitePixel;
@@ -270,7 +270,8 @@ namespace Prowl.Runtime.GUI.Graphics
         }
         
         public void AddText(Font font, float font_size, Vector2 pos, Color32 col, string text, int text_begin = 0, int text_end = -1, float wrap_width = 0.0f, Vector4? cpu_fine_clip_rect = null)
-        {
+        {   
+
             ArgumentNullException.ThrowIfNull(font);
             if (font_size <= 0.0f)
                 return;
@@ -321,6 +322,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void AddImage(Texture2D user_texture_id, Vector2 a, Vector2 b, Vector2? _uv0 = null, Vector2? _uv1 = null, Color32? _col = null)
         {
+
             var uv0 = _uv0.HasValue ? _uv0.Value : new Vector2(0, 0);
             var uv1 = _uv1.HasValue ? _uv1.Value : new Vector2(1, 1);
             var col = _col.HasValue ? _col.Value : (Color32)Color.white;
@@ -340,6 +342,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void AddPolyline(List<Vector2> points, int points_count, Color32 col, bool closed, float thickness)
         {
+
             if (points_count < 2)
                 return;
 
@@ -527,6 +530,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void AddConvexPolyFilled(List<Vector2> points, int points_count, Color32 col)
         {
+
             if (points_count < 3)
                 return;
 
@@ -615,14 +619,16 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void AddBezierCurve(Vector2 pos0, Vector2 cp0, Vector2 cp1, Vector2 pos1, Color32 col, float thickness, int num_segments = 0)
         {
-
             PathLineTo(pos0);
             PathBezierCurveTo(cp0, cp1, pos1, num_segments);
             PathStroke(col, false, thickness);
         }
 
         // Stateful path API, add points then finish with PathFill() or PathStroke()
-        public void PathLineTo(Vector2 pos) => _Path.Add(pos);
+        public void PathLineTo(Vector2 pos) 
+        {
+            _Path.Add(pos);
+        }
 
         public void PathLineToMergeDuplicate(Vector2 pos)
         {
@@ -867,17 +873,6 @@ namespace Prowl.Runtime.GUI.Graphics
             _IdxWritePtr = IdxBuffer.Count;
         }
 
-        //// Advanced
-        public Vector4 GetCurrentClipRect()
-        {
-            return _ClipRectStack.Count > 0 ? _ClipRectStack[_ClipRectStack.Count - 1] : GNullClipRect;
-        }
-
-        public Texture2D GetCurrentTextureId()
-        {
-            return _TextureIdStack.Count > 0 ? _TextureIdStack[_TextureIdStack.Count - 1] : null;
-        }
-
         public void AddDrawCmd()
         {
             // This is useful if you need to forcefully create a new draw call (to allow for dependent rendering / blending). Otherwise primitives are merged into the same draw-call as much as possible
@@ -912,8 +907,12 @@ namespace Prowl.Runtime.GUI.Graphics
             }
         }
 
+        internal int _callCounter = 0;
+
         public void PrimReserve(int idx_count, int vtx_count)
         {
+            _callCounter++;
+
             UIDrawCmd draw_cmd = CmdBuffer[CmdBuffer.Count - 1];
             draw_cmd.ElemCount += (uint)idx_count;
             SetCurrentDrawCmd(draw_cmd);

@@ -27,11 +27,13 @@ namespace Prowl.Runtime
 
         public Vector2 TexUvWhitePixel => new(0.5f * (1.0f / Width), 0.5f * (1.0f / Height));
 
-        public Texture2D? Texture { get; private set; }
+        public Texture2D Texture { get; private set; }
 
         public void CreateResource()
         {
             Texture = new Texture2D((uint)Width, (uint)Height, 0, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled);
+            Texture.Name = "Font Texture";
+
             Memory<Color32> data = new Memory<Color32>(Bitmap);
             Texture.SetData(data);
         }

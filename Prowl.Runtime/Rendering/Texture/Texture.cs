@@ -53,6 +53,7 @@ namespace Prowl.Runtime
 
         internal Texture(TextureDescription description) : base("New Texture") 
         { 
+            Debug.Log("Created new texture");
             RecreateInternalTexture(description);
         }
 

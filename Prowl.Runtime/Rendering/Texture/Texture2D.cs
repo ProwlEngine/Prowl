@@ -27,6 +27,8 @@ namespace Prowl.Runtime
         private static Texture2D CreateDefaultTex(uint sizeX, uint sizeY, Color32[] colors)
         {
             Texture2D texture = new Texture2D(sizeX, sizeY, 0, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled);
+            texture.Name = "Default Created Texture";
+
             texture.Sampler.SetFilter(FilterType.Point, FilterType.Point, FilterType.Point);
             texture.SetData(new Memory<Color32>(colors));
             return texture;
