@@ -89,7 +89,7 @@ namespace Prowl.Editor
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
 
                 object builder = builders[selectedBuilder];
-                EditorGUI.PropertyGrid("Builder Settings", ref builder, EditorGUI.TargetFields.Serializable, EditorGUI.PropertyGridConfig.NoBackground);
+                EditorGUI.PropertyGrid("Builder Settings", ref builder, EditorGUI.TargetFields.Serializable | EditorGUI.TargetFields.Properties, EditorGUI.PropertyGridConfig.NoBackground);
             }
 
             using (gui.Node("Butt's").ExpandWidth().Height(75).Enter())

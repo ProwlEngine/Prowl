@@ -272,7 +272,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                             // No Editor, Fallback to default Inspector
                             object compRef = comp;
-                            if (EditorGUI.PropertyGrid("CompPropertyGrid", ref compRef, TargetFields.Serializable, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground))
+                            if (EditorGUI.PropertyGrid("CompPropertyGrid", ref compRef, TargetFields.Serializable | EditorGUI.TargetFields.Properties, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground))
                                 comp.OnValidate();
 
                             // Draw any Buttons - these should be in PropertyGrid probably

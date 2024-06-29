@@ -89,7 +89,7 @@ namespace Prowl.Editor.PropertyDrawers
                 return;
             }
 
-            var fields = RuntimeUtils.GetSerializableFields(propertyValue);
+            var fields = propertyValue.GetSerializableFields();
             if (fields.Length != 0)
             {
                 using (gui.Node(label + "_Header", index).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Enter())
@@ -113,7 +113,7 @@ namespace Prowl.Editor.PropertyDrawers
                     float scaleAnimContent = gui.AnimateBool(enumexpanded, 0.15f, EaseType.Linear);
                     if (enumexpanded || scaleAnimContent > 0)
                         using (gui.Node("PropertyGridHolder").ExpandWidth().FitContentHeight(scaleAnimContent).Enter())
-                            changed |= EditorGUI.PropertyGrid(propertyType.Name + " | " + label, ref propertyValue, EditorGUI.TargetFields.Serializable, config);
+                            changed |= EditorGUI.PropertyGrid(propertyType.Name + " | " + label, ref propertyValue, EditorGUI.TargetFields.Serializable | EditorGUI.TargetFields.Properties, config);
                 }
             }
         }
