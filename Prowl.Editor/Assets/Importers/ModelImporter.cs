@@ -368,7 +368,7 @@ namespace Prowl.Editor.Assets
 
                 if (m.HasVertexColors(0))
                 {
-                    Color[] colors = new Color[vertexCount];
+                    Color32[] colors = new Color32[vertexCount];
                     for (var i = 0; i < colors.Length; i++)
                         colors[i] = new Color(m.VertexColorChannels[0][i].R, m.VertexColorChannels[0][i].G, m.VertexColorChannels[0][i].B, m.VertexColorChannels[0][i].A);
                     mesh.Colors = colors;
