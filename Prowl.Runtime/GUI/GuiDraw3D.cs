@@ -204,7 +204,7 @@ namespace Prowl.Runtime.GUI
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");
 
             var points = new List<Vector2>();
-            points.reserve(64);
+            points.Reserve(64);
 
             for (int i = 0; i < 64; i++)
             {
@@ -218,7 +218,7 @@ namespace Prowl.Runtime.GUI
 
             if (points.Count <= 0) return;
 
-            _gui.Draw2D.DrawList.AddPolyline(points, points.Count, stroke.Color.GetUInt(), true, (float)stroke.Thickness);
+            _gui.Draw2D.DrawList.AddPolyline(points, points.Count, stroke.Color, true, (float)stroke.Thickness);
         }
 
         public void FilledSphere(double radius, Stroke3D stroke)
@@ -227,7 +227,7 @@ namespace Prowl.Runtime.GUI
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");
 
             var points = new List<Vector2>();
-            points.reserve(64);
+            points.Reserve(64);
 
             for (int i = 0; i < 64; i++)
             {
@@ -244,53 +244,6 @@ namespace Prowl.Runtime.GUI
             _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count, stroke.Color);
         }
 
-        public void Sphere(double radius, Stroke3D stroke)
-        {
-            if (!hasViewport) throw new InvalidOperationException("No viewport set.");
-            if (!hasMVP) throw new InvalidOperationException("No MVP set.");
-
-            var points = new List<Vector2>();
-            points.reserve(64);
-
-            for (int i = 0; i < 64; i++)
-            {
-                double angle = MathD.Deg2Rad * 360.0 * i / 64.0;
-                double x = Math.Cos(angle) * radius;
-                double z = Math.Sin(angle) * radius;
-
-                if (WorldToScreen(new Vector3((float)x, 0.0f, (float)z), out Vector2 pos))
-                    points.Add(pos);
-            }
-
-            if (points.Count <= 0) return;
-
-            _gui.Draw2D.DrawList.AddPolyline(points, points.Count, stroke.Color.GetUInt(), true, (float)stroke.Thickness);
-        }
-
-        public void FilledSphere(double radius, Stroke3D stroke)
-        {
-            if (!hasViewport) throw new InvalidOperationException("No viewport set.");
-            if (!hasMVP) throw new InvalidOperationException("No MVP set.");
-
-            var points = new List<Vector2>();
-            points.reserve(64);
-
-            for (int i = 0; i < 64; i++)
-            {
-                double angle = MathD.Deg2Rad * 360.0 * i / 64.0;
-                double x = Math.Cos(angle) * radius;
-                double z = Math.Sin(angle) * radius;
-
-                if (WorldToScreen(new Vector3((float)x, 0.0f, (float)z), out Vector2 pos))
-                    points.Add(pos);
-            }
-
-            if (points.Count <= 0) return;
-
-            _gui.Draw2D.DrawList.AddConvexPolyFilled(points, points.Count, stroke.Color.GetUInt());
-        }
-
-
         // Define the eight corners of the cube
         static readonly Vector3[] cubeCorners = {
                 new Vector3(-0.5, -0.5, -0.5), // Bottom-back-left
@@ -315,8 +268,8 @@ namespace Prowl.Runtime.GUI
             if (!hasViewport) throw new InvalidOperationException("No viewport set.");
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");
 
-            var points = new UIBuffer<Vector2>();
-            points.reserve(8);
+            var points = new List<Vector2>();
+            points.Reserve(8);
 
             double halfSize = size / 2.0;
 
@@ -330,79 +283,11 @@ namespace Prowl.Runtime.GUI
             // Draw the cube edges
             for (int i = 0; i < cubeEdges.Length; i += 2)
             {
-                _gui.Draw2D.DrawList.AddLine(points[cubeEdges[i]], points[cubeEdges[i + 1]], stroke.Color.GetUInt(), (float)stroke.Thickness);
+                _gui.Draw2D.DrawList.AddLine(points[cubeEdges[i]], points[cubeEdges[i + 1]], stroke.Color, (float)stroke.Thickness);
             }
         }
 
-        public void QuadImage(Vector3 size, Texture texture)
-        {
-            if (!hasViewport) throw new InvalidOperationException("No viewport set.");
-            if (!hasMVP) throw new InvalidOperationException("No MVP set.");
-
-            var points = QuadPoints(size.x);
-            if (points.Count <= 0) return;
-
-            var min = points[0];
-            var max = points[0];
-
-            min = Vector2.Min(min, points[1]);
-            max = Vector2.Max(max, points[1]);
-
-            min = Vector2.Min(min, points[2]);
-            max = Vector2.Max(max, points[2]);
-
-            min = Vector2.Min(min, points[3]);
-            max = Vector2.Max(max, points[3]);
-
-            _gui.Draw2D.DrawList.AddImage(texture, min, max);
-        }
-
-
-
-        // Define the eight corners of the cube
-        static readonly Vector3[] cubeCorners = {
-                new Vector3(-0.5, -0.5, -0.5), // Bottom-back-left
-                new Vector3(0.5,  -0.5, -0.5),  // Bottom-back-right
-                new Vector3(0.5,  -0.5, 0.5),   // Bottom-front-right
-                new Vector3(-0.5, -0.5, 0.5),  // Bottom-front-left
-                new Vector3(-0.5, 0.5,  -0.5),  // Top-back-left
-                new Vector3(0.5,  0.5,  -0.5),   // Top-back-right
-                new Vector3(0.5,  0.5,  0.5),    // Top-front-right
-                new Vector3(-0.5, 0.5,  0.5)    // Top-front-left
-            };
-
-        // Define the cube edges
-        int[] cubeEdges = {
-                0, 1, 1, 2, 2, 3, 3, 0, // Bottom face
-                4, 5, 5, 6, 6, 7, 7, 4, // Top face
-                0, 4, 1, 5, 2, 6, 3, 7  // Vertical edges
-            };
-
-        public void Cube(double size, Stroke3D stroke)
-        {
-            if (!hasViewport) throw new InvalidOperationException("No viewport set.");
-            if (!hasMVP) throw new InvalidOperationException("No MVP set.");
-
-            var points = new UIBuffer<Vector2>();
-            points.reserve(8);
-
-            double halfSize = size / 2.0;
-
-            // Convert to screen coordinates and add to the points buffer
-            foreach (var corner in cubeCorners)
-                if (WorldToScreen(corner, out Vector2 pos))
-                    points.Add(pos);
-
-            if (points.Count <= 0) return;
-
-            // Draw the cube edges
-            for (int i = 0; i < cubeEdges.Length; i += 2)
-            {
-                _gui.Draw2D.DrawList.AddLine(points[cubeEdges[i]], points[cubeEdges[i + 1]], stroke.Color.GetUInt(), (float)stroke.Thickness);
-            }
-        }
-
-        public void QuadImage(Vector3 size, Texture texture)
+        public void QuadImage(Vector3 size, Texture2D texture)
         {
             if (!hasViewport) throw new InvalidOperationException("No viewport set.");
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");

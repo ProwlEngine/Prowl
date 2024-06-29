@@ -289,9 +289,9 @@ Fallback ""Fallback/TestShader""
                     Screen.FramesPerSecond = 0;
                 }
 
-                if (Hotkeys.IsHotkeyDown("SaveSceneAs", new() { Key = Key.S, Ctrl = true, Shift = true }))
+                if (Hotkeys.IsHotkeyDown("SaveSceneAs", new() { Key = Runtime.Key.S, Ctrl = true, Shift = true }))
                     EditorGuiManager.SaveSceneAs();
-                else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Key.S, Ctrl = true }))
+                else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Runtime.Key.S, Ctrl = true }))
                     EditorGuiManager.SaveScene();
 
                 Application.isPlaying = PlayMode.Current == PlayMode.Mode.Playing;

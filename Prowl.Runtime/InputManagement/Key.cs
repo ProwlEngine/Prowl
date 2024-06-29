@@ -148,5 +148,5 @@ public enum Key
     Slash = Veldrid.Key.Slash,
     BackSlash = Veldrid.Key.BackSlash,
     NonUSBackSlash = Veldrid.Key.NonUSBackSlash,
-    LastKey = Veldrid.Key.LastKey
+    LastKey = Veldrid.Key.LastKey,
 }

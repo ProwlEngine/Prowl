@@ -26,6 +26,7 @@ namespace Prowl.Editor.ScriptedEditors
 
         public override void OnInspectorGUI()
         {
+            /*
             double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
             var mat = (Material)target;

@@ -9,8 +9,8 @@ namespace Prowl.Runtime
     {
         public static Sdl2Window InternalWindow { get; internal set; }
 
-        // Hacky way to give Input.cs access to the polled input snapshot object.
-        internal static InputSnapshot LatestInputSnapshot { get; private set; } 
+        // Hacky way to give Input access to the polled input snapshot object.
+        public static InputSnapshot LatestInputSnapshot { get; private set; } 
 
 
         public static event Action? Load;
@@ -53,6 +53,8 @@ namespace Prowl.Runtime
             get { return isFocused; }
         }
 
+        public static DefaultInputHandler WindowInputHandler { get; private set; }
+
 
         public static void Start(string name, Vector2Int size, Vector2Int position, WindowState initialState = WindowState.Normal)
         {
@@ -68,7 +70,10 @@ namespace Prowl.Runtime
 
             InternalWindow = VeldridStartup.CreateWindow(ref windowInfo);
 
-            LatestInputSnapshot = InternalWindow.PumpEvents(); 
+            LatestInputSnapshot = InternalWindow.PumpEvents();
+            WindowInputHandler = new DefaultInputHandler();
+            
+            Input.PushHandler(WindowInputHandler);
 
             Load?.Invoke();
 
@@ -85,7 +90,10 @@ namespace Prowl.Runtime
             while (InternalWindow.Exists)
             {
                 Sdl2Events.ProcessEvents();
-                LatestInputSnapshot = InternalWindow.PumpEvents(); 
+
+                LatestInputSnapshot = InternalWindow.PumpEvents();
+
+                WindowInputHandler.EarlyUpdate(); 
                 
                 Update?.Invoke();
             }

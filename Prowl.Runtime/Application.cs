@@ -78,7 +78,6 @@ public static class Application
 
     static void AppInitialize()
     {
-        Input.Initialize();
         Graphics.Initialize(true, GetBackend());
         SceneManager.Initialize();
         AudioSystem.Initialize();
@@ -99,7 +98,6 @@ public static class Application
         {
             AudioSystem.UpdatePool();
             Time.Update();
-            Input.EarlyUpdate();
 
             Update?.Invoke();
 

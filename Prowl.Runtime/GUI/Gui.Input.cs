@@ -4,20 +4,23 @@ namespace Prowl.Runtime.GUI
 {
     public partial class Gui
     {
+        public static readonly Key[] KeyValues = Enum.GetValues<Key>();
+        public static readonly MouseButton[] MouseValues = Enum.GetValues<MouseButton>();
+
         public event Action<Vector2> OnPointerPosSet;
         public event Action<bool> OnCursorVisibilitySet;
         
-        internal bool[] KeyCurState = new bool[Input.KeyValues.Length];
-        internal bool[] KeyPreState = new bool[Input.KeyValues.Length];
+        internal bool[] KeyCurState = new bool[KeyValues.Length];
+        internal bool[] KeyPreState = new bool[KeyValues.Length];
 
-        internal double[] KeyPressedTime = new double[Input.KeyValues.Length];
+        internal double[] KeyPressedTime = new double[KeyValues.Length];
         internal Key KeyCode = Key.Unknown;
 
-        internal bool[] PointerCurState = new bool[Input.MouseValues.Length];
-        internal bool[] PointerPreState = new bool[Input.MouseValues.Length];
+        internal bool[] PointerCurState = new bool[MouseValues.Length];
+        internal bool[] PointerPreState = new bool[MouseValues.Length];
 
-        internal double[] PointerPressedTime = new double[Input.MouseValues.Length];
-        internal Vector2[] PointerClickPos = new Vector2[Input.MouseValues.Length];
+        internal double[] PointerPressedTime = new double[MouseValues.Length];
+        internal Vector2[] PointerClickPos = new Vector2[MouseValues.Length];
         internal MouseButton PointerButton = (MouseButton)(-1);
         public Vector2 PreviousPointerPos = Vector2.zero;
 
@@ -36,8 +39,8 @@ namespace Prowl.Runtime.GUI
         public Vector2 PointerDelta => PointerPos - PreviousPointerPos;
         public bool IsPointerMoving => PointerDelta.sqrMagnitude > 0;
 
-        public double[] PointerLastClickTime = new double[Input.MouseValues.Length];
-        public Vector2[] PointerLastClickPos = new Vector2[Input.MouseValues.Length];
+        public double[] PointerLastClickTime = new double[MouseValues.Length];
+        public Vector2[] PointerLastClickPos = new Vector2[MouseValues.Length];
         public const double MaxDoubleClickTime = 0.25;
 
         private Vector2 frameBufferScale;

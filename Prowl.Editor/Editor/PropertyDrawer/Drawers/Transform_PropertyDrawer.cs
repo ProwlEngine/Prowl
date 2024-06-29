@@ -54,7 +54,7 @@ namespace Prowl.Editor.PropertyDrawers
             {
                 ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, 1, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
-                if (ActiveGUI.IsKeyDown(Silk.NET.Input.Key.Delete))
+                if (ActiveGUI.IsKeyDown(Key.Delete))
                 {
                     targetValue = null;
                     changed = true;

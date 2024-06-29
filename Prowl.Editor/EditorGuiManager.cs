@@ -36,7 +36,7 @@ public static class EditorGuiManager
         Input.OnKeyEvent += Gui.SetKeyState;
         Input.OnMouseEvent += Gui.SetPointerState;
         Gui.OnPointerPosSet += (pos) => { Input.MousePosition = pos; };
-        Gui.OnCursorVisibilitySet += (visible) => { Input.CursorHidden = !visible; };
+        Gui.OnCursorVisibilitySet += (visible) => { Input.CursorVisible = visible; };
     }
 
     public static void FocusWindow(EditorWindow editorWindow)
@@ -86,7 +86,7 @@ public static class EditorGuiManager
         CommandBuffer commandBuffer = new("GUI Command Buffer");
 
         commandBuffer.SetRenderTarget(Graphics.ScreenFramebuffer);
-        commandBuffer.ClearRenderTarget(true, true, Color.black, depth:1.0f);
+        commandBuffer.ClearRenderTarget(true, true, Color.black, depth: 1.0f);
 
         Gui.ProcessFrame(commandBuffer, screenRect, (float)scale, framebufferAndInputScale, EditorPreferences.Instance.AntiAliasing, (g) => {
 

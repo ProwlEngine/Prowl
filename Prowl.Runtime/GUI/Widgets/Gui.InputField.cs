@@ -276,7 +276,7 @@ namespace Prowl.Runtime.GUI
 
                 float bg_offy_up = is_multiline ? 0.0f : -1.0f;    // FIXME: those offsets should be part of the style? they don't play so well with multi-line selection.
                 float bg_offy_dn = is_multiline ? 0.0f : 2.0f;
-                Color32 bg_color = style.TextHighlightColor;
+                Color32 bg_color = style.ActiveColor;
                 Vector2 rect_pos = render_pos + select_start_offset - render_scroll;
                 for (int p = text_selected_begin; p < text_selected_end;)
                 {

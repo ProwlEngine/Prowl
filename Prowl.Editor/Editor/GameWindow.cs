@@ -47,7 +47,7 @@ public class GameWindow : EditorWindow
         RefreshRenderTexture();
 
         LastFocused = new WeakReference(this);
-        InputHandler = new GameViewInputHandler(Window.InternalInput, this);
+        InputHandler = new GameViewInputHandler(this);
     }
 
     ~GameWindow()
@@ -73,9 +73,9 @@ public class GameWindow : EditorWindow
 
         if(IsFocused)
             LastFocused = new WeakReference(this);
-        InputHandler.LateUpdate();
+        InputHandler.EarlyUpdate();
 
-        gui.CurrentNode.Layout(Runtime.GUI.LayoutType.Column).ScaleChildren();
+        gui.CurrentNode.Layout(LayoutType.Column).ScaleChildren();
 
         using (gui.Node("MenuBar").ExpandWidth().MaxHeight(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.Row).Enter())
         {

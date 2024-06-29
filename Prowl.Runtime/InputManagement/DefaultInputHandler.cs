@@ -1,17 +1,13 @@
-﻿using Prowl.Editor;
-using Veldrid;
 using Veldrid.Sdl2;
+using System;
+using System.Collections.Generic;
+using Veldrid;
+using System.Text;
 
 namespace Prowl.Runtime;
 
-// Same Implementation as Runtimes DefaultInputHandler, Except for adjusting mouse values to fit inside the GameView
-// TODO: Make DefaultInputHandler use virtual so we can override it here instead of copying the whole class
-
-public class GameViewInputHandler : IInputHandler, IDisposable
-{
-    private GameWindow _window;
-    public bool HasFocus => GameWindow.LastFocused.Target == _window;
-
+public class DefaultInputHandler : IInputHandler, IDisposable
+{   
     public static readonly Key[] KeyValues = Enum.GetValues<Key>();
     public static readonly MouseButton[] MouseValues = Enum.GetValues<MouseButton>();
 
@@ -72,10 +68,8 @@ public class GameViewInputHandler : IInputHandler, IDisposable
     public bool IsAnyKeyDown => newKeyState.Count > 0;
 
 
-    public GameViewInputHandler(GameWindow window)
+    public DefaultInputHandler()
     {   
-        this._window = window;
-
         var snapshot = Screen.LatestInputSnapshot;
 
         InputString = snapshot.KeyCharPresses;
@@ -128,7 +122,6 @@ public class GameViewInputHandler : IInputHandler, IDisposable
     private void UpdateCursorState(InputSnapshot snapshot)
     {
         Vector2Int mousePosition = new Vector2Int((int)snapshot.MousePosition.X, (int)snapshot.MousePosition.Y);
-        mousePosition -= new Vector2Int((int)GameWindow.FocusedPosition.x, (int)GameWindow.FocusedPosition.y);
 
         if ((GetKey(Key.Escape) || !Screen.InternalWindow.Focused || !Screen.ScreenRect.Contains(mousePosition)) && (Locked || !Screen.InternalWindow.CursorVisible))
         {
