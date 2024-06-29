@@ -7,29 +7,28 @@ namespace Prowl.Runtime
 {
     public sealed class Material : EngineObject
     {
-        public KeywordState Keywords;
+        public Utils.KeyGroup<string, string> LocalKeywords;
         public AssetRef<Shader> Shader;
-        public MaterialPropertyBlock PropertyBlock;
+        public PropertyState PropertyState;
 
+        // private PipelineCache.PipelineInfo boundPipeline;
 
-        private int activePass = -1;
-        private PipelineCache.PipelineInfo boundPipeline;
-
-        private ResourceSet[] resources;
-        private Dictionary<ShaderResource, DeviceBuffer> uniformBuffers = new();
+        // private ResourceSet[] resources;
+        // private Dictionary<ShaderResource, DeviceBuffer> uniformBuffers = new();
 
         internal Material() : base("New Material") { }
 
-        public Material(AssetRef<Shader> shader, MaterialPropertyBlock? properties = null, KeywordState? keywords = null) : base("New Material")
+        public Material(AssetRef<Shader> shader, PropertyState? properties = null, Utils.KeyGroup<string, string>? keywords = null) : base("New Material")
         {
             if (shader.Res == null) 
                 throw new ArgumentNullException(nameof(shader));
             
             Shader = shader;
-            PropertyBlock = properties ?? new();
-            Keywords = keywords ?? KeywordState.Empty;
+            PropertyState = properties ?? new();
+            LocalKeywords = keywords ?? Utils.KeyGroup<string, string>.Default;
         }
 
+        /*
         public void SetPass(CommandList commandList, int passIndex = 0, PolygonFillMode fill = PolygonFillMode.Solid, PrimitiveTopology topology = PrimitiveTopology.TriangleList, bool scissorTest = false)
         {
             activePass = passIndex;
@@ -56,7 +55,7 @@ namespace Prowl.Runtime
         }
 
         // Suboptimal solution that recreates every resource set to ensure that textures are properly sent to shader.
-        // When shaders are being compiled by us, we can optimize this so textures go into their own resource set and then we only have to update the uniform buffer.
+        // When shaders are being compiled by us, we can optimize this so textures go into their own resource set and then we only have to update the uniform buffer.       
         public void Upload(CommandList commandList)
         {
             if (activePass < 0)
@@ -95,35 +94,34 @@ namespace Prowl.Runtime
 
                 commandList.SetGraphicsResourceSet((uint)set, resources[set]);
             }
-        }
+        } 
+        */
 
 
-        public void SetKeyword(string keyword, bool state) => Keywords.SetKeyword(keyword, state);
-        public void EnableKeyword(string keyword) => Keywords.EnableKeyword(keyword);
-        public void DisableKeyword(string keyword) => Keywords.DisableKeyword(keyword);
+        public void SetKeyword(string keyword, string value) => LocalKeywords.SetKey(keyword, value);
 
-        public void SetColor(string name, Color value) => PropertyBlock.SetColor(name, value);
-        public void SetVector(string name, Vector2 value) => PropertyBlock.SetVector(name, value);
-        public void SetVector(string name, Vector3 value) => PropertyBlock.SetVector(name, value);
-        public void SetVector(string name, Vector4 value) => PropertyBlock.SetVector(name, value);
-        public void SetFloat(string name, float value) => PropertyBlock.SetFloat(name, value);
-        public void SetInt(string name, int value) => PropertyBlock.SetInt(name, value);
-        public void SetMatrix(string name, Matrix4x4 value) => PropertyBlock.SetMatrix(name, value);
-        public void SetTexture(string name, Texture value) => PropertyBlock.SetTexture(name, value);
+        public void SetColor(string name, Color value) => PropertyState.SetColor(name, value);
+        public void SetVector(string name, Vector2 value) => PropertyState.SetVector(name, value);
+        public void SetVector(string name, Vector3 value) => PropertyState.SetVector(name, value);
+        public void SetVector(string name, Vector4 value) => PropertyState.SetVector(name, value);
+        public void SetFloat(string name, float value) => PropertyState.SetFloat(name, value);
+        public void SetInt(string name, int value) => PropertyState.SetInt(name, value);
+        public void SetMatrix(string name, Matrix4x4 value) => PropertyState.SetMatrix(name, value);
+        public void SetTexture(string name, Texture value) => PropertyState.SetTexture(name, value);
 
-        public void SetMatrices(string name, System.Numerics.Matrix4x4[] value) { }
+        //public void SetMatrices(string name, System.Numerics.Matrix4x4[] value) { }
 
-        public override void OnDispose()
-        {
-            if (resources != null)
-            {
-                foreach (var resource in resources)
-                    resource.Dispose();
-
-                foreach (var buffer in uniformBuffers.Values)
-                    buffer.Dispose();
-            }
-        }
+        //public override void OnDispose()
+        //{
+        //    if (resources != null)
+        //    {
+        //        foreach (var resource in resources)
+        //            resource.Dispose();
+        //
+        //        foreach (var buffer in uniformBuffers.Values)
+        //            buffer.Dispose();
+        //    }
+        //}
 
         //public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
         //{
