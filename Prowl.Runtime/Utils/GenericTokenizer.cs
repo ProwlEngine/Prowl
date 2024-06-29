@@ -55,6 +55,7 @@ namespace Prowl.Runtime
                     return true;
                 }
 
+                // TODO: Should make this an option to allow for quoted strings or not and to specify the quote characters
                 if (firstChar is '"' or '\'')
                 {
                     return HandleQuotedString(firstChar);

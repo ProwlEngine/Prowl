@@ -20,7 +20,7 @@ namespace Prowl.Editor.PropertyDrawers
 
             var pos = ActiveGUI.CurrentNode.LayoutData.GlobalContentPosition;
             var centerY = (ActiveGUI.CurrentNode.LayoutData.InnerRect.height / 2) - (20 / 2);
-            pos += new Vector2(0, centerY + 3);
+            pos += new Vector2(5, centerY + 3);
             if (value == null)
             {
                 string text = "(Null) " + targetType.Name;
