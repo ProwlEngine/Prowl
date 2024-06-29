@@ -73,6 +73,11 @@ namespace Prowl.Runtime
             ActivePipeline.Render(context, cameras);
         }
 
+        public static void EndFrame()
+        {   
+            Device.SwapBuffers();
+        }
+
         public static CommandList GetCommandList()
         {
             CommandList list = Factory.CreateCommandList();
@@ -81,7 +86,6 @@ namespace Prowl.Runtime
 
             return list;
         }
-
 
         public static void SubmitCommands(CommandList list, bool waitForCompletion = false)
         {   
@@ -99,12 +103,6 @@ namespace Prowl.Runtime
                 Device.SubmitCommands(list);
             }
         }
-
-        public static void EndFrame()
-        {   
-            Device.SwapBuffers();
-        }
-
 
         public static SpecializationConstant[] GetSpecializations()
         {
