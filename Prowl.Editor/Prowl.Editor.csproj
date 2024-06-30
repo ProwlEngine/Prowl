@@ -163,7 +163,7 @@
 
     <ItemGroup>
       <PackageReference Include="AssimpNet" Version="5.0.0-beta1" />
-      <PackageReference Include="Magick.NET-Q16-AnyCPU" Version="13.6.0" />
+      <PackageReference Include="SixLabors.ImageSharp" Version="3.1.4" />
     </ItemGroup>
 
     <ItemGroup>

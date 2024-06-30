@@ -93,7 +93,22 @@ namespace Prowl.Runtime
             return list;
         }
 
-        public static void SubmitCommands(CommandList list, bool waitForCompletion = false)
+        public static void ExecuteCommandBuffer(CommandBuffer commandBuffer, bool waitForCompletion = false)
+        {
+            CommandList list = GetCommandList();
+
+            RenderState state = new RenderState();
+
+            foreach (var command in commandBuffer.Buffer)
+                command.ExecuteCommand(list, ref state);
+
+            ExecuteCommandList(list, waitForCompletion);
+
+            state.Clear();
+            list.Dispose();
+        }
+
+        public static void ExecuteCommandList(CommandList list, bool waitForCompletion = false)
         {   
             list.End();
 
@@ -162,7 +177,7 @@ namespace Prowl.Runtime
 
             commandList.CopyTexture(source, destination);
             
-            SubmitCommands(commandList, waitForCompletion);
+            ExecuteCommandList(commandList, waitForCompletion);
 
             commandList.Dispose();
         }
@@ -173,7 +188,7 @@ namespace Prowl.Runtime
 
             commandList.CopyTexture(source, destination, mipLevel, arrayLayer);
             
-            SubmitCommands(commandList, waitForCompletion);
+            ExecuteCommandList(commandList, waitForCompletion);
 
             commandList.Dispose();
         }

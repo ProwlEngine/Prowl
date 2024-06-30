@@ -79,7 +79,7 @@ namespace Prowl.Runtime
 
             commandList.GenerateMipmaps(InternalTexture);
 
-            Graphics.SubmitCommands(commandList, waitForCompletion);
+            Graphics.ExecuteCommandList(commandList, waitForCompletion);
 
             commandList.Dispose();
 
@@ -148,12 +148,12 @@ namespace Prowl.Runtime
                 Graphics.InternalCopyTexture(stagingTexture, InternalTexture, mipLevel, layer, true);
         }
 
-        unsafe protected void InternalSetData<T>(Memory<T> data, Vector3Int rectPos, Vector3Int rectSize, uint layer, uint mipLevel) where T : unmanaged
+        unsafe protected void InternalSetData<T>(Span<T> data, Vector3Int rectPos, Vector3Int rectSize, uint layer, uint mipLevel) where T : unmanaged
         {
             if (data.Length * sizeof(T) < rectSize.x * rectSize.y * rectSize.z)
                 throw new ArgumentException("Not enough pixel data", nameof(data));
 
-            fixed (void* ptr = data.Span)
+            fixed (void* ptr = data)
                 InternalSetDataPtr(ptr, rectPos, rectSize, layer, mipLevel);
         }
 
@@ -176,7 +176,7 @@ namespace Prowl.Runtime
             Graphics.Device.Unmap(stagingTexture, subresource);
         }
 
-        unsafe protected void InternalCopyData<T>(Memory<T> data, uint arrayLayer, uint mipLevel) where T : unmanaged
+        unsafe protected void InternalCopyData<T>(Span<T> data, uint arrayLayer, uint mipLevel) where T : unmanaged
         {
             EnsureStagingTexture();
 
@@ -190,7 +190,7 @@ namespace Prowl.Runtime
             if (data.Length * sizeof(T) < resource.SizeInBytes)
                 throw new ArgumentException("Insufficient space to store the requested pixel data", nameof(data));
 
-            fixed (void* ptr = data.Span)
+            fixed (void* ptr = data)
                 Buffer.MemoryCopy((void*)resource.Data, ptr, data.Length * sizeof(T), resource.SizeInBytes);
 
             Graphics.Device.Unmap(stagingTexture, subresource);

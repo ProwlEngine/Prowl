@@ -1,5 +1,4 @@
-﻿using ImageMagick;
-using Prowl.Editor.Assets;
+﻿using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
 using Prowl.Editor.Utilities;
 using Prowl.Icons;

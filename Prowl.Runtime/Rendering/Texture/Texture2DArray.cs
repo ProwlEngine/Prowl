@@ -63,22 +63,22 @@ namespace Prowl.Runtime
         /// Sets the data of an area of the <see cref="Texture2DArray"/>.
         /// </summary>
         /// <typeparam name="T">A struct with the same format as this <see cref="Texture2DArray"/>'s pixels.</typeparam>
-        /// <param name="data">A <see cref="Memory{T}"/> containing the new pixel data.</param>
+        /// <param name="data">A <see cref="Span{T}"/> containing the new pixel data.</param>
         /// <param name="rectX">The X coordinate of the first pixel to write.</param>
         /// <param name="rectY">The Y coordinate of the first pixel to write.</param>
         /// <param name="rectWidth">The width of the rectangle of pixels to write.</param>
         /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
         /// <param name="layerIndex">The layer index of the array to write to.</param>
         /// <param name="mipLevel">The mip level to write to.</param>
-        public unsafe void SetData<T>(Memory<T> data, uint rectX, uint rectY, uint rectWidth, uint rectHeight, uint layerIndex, uint mipLevel = 0) where T : unmanaged =>
+        public unsafe void SetData<T>(Span<T> data, uint rectX, uint rectY, uint rectWidth, uint rectHeight, uint layerIndex, uint mipLevel = 0) where T : unmanaged =>
             InternalSetData(data, new Vector3Int((int)rectX, (int)rectY, 0), new Vector3Int((int)rectWidth, (int)rectHeight, 0), layerIndex, mipLevel);
 
         /// <summary>
         /// Sets the data of an entire layer of the <see cref="Texture2DArray"/>.
         /// </summary>
         /// <typeparam name="T">A struct with the same format as this <see cref="Texture2DArray"/>'s pixels.</typeparam>
-        /// <param name="data">A <see cref="ReadOnlySpan{T}"/> containing the new pixel data.</param>
-        public void SetData<T>(Memory<T> data, uint layerIndex, uint mipLevel = 0) where T : unmanaged =>
+        /// <param name="data">A <see cref="Span{T}"/> containing the new pixel data.</param>
+        public void SetData<T>(Span<T> data, uint layerIndex, uint mipLevel = 0) where T : unmanaged =>
             SetData(data, 0, 0, Width, Height, layerIndex, mipLevel);
 
         /// <summary>
@@ -97,7 +97,7 @@ namespace Prowl.Runtime
         /// <param name="data">A <see cref="Span{T}"/> in which to write the pixel data.</param>
         /// <param name="mipLevel">The mip level to copy.</param>
         /// <param name="layer">The array layer to copy.</param>
-        public unsafe void CopyData<T>(Memory<T> data, uint layer, uint mipLevel = 0) where T : unmanaged =>
+        public unsafe void CopyData<T>(Span<T> data, uint layer, uint mipLevel = 0) where T : unmanaged =>
             InternalCopyData(data, layer, mipLevel);
 
         /// <summary>
@@ -137,7 +137,7 @@ namespace Prowl.Runtime
 
             for (uint i = 0; i < Layers; i++)
             {
-                Memory<byte> memory = new byte[GetSingleTextureMemoryUsage()];
+                Span<byte> memory = new byte[GetSingleTextureMemoryUsage()];
                 CopyData(memory, i);
                 dataTag.ListAdd(new(memory.ToArray()));
             }
@@ -166,7 +166,7 @@ namespace Prowl.Runtime
 
             for (uint i = 0; i < layers; i++)
             {
-                Memory<byte> memory = dataTag[(int)i].ByteArrayValue;
+                Span<byte> memory = dataTag[(int)i].ByteArrayValue;
                 SetData(memory, i);
             }
 

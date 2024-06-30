@@ -159,7 +159,7 @@ void main()
         {
             MeshTopology = PrimitiveTopology.LineList,
             Vertices = [ new Vector3(0, 0, 0), new Vector3(0, 0, 1) ],
-            Indices = [ 0, 1 ],
+            Indices32 = [ 0, 1 ],
         };
 
         public void Render(Material mat, Matrix4x4 m)
@@ -201,7 +201,7 @@ void main()
             }
 
             mesh.Vertices = verts;
-            mesh.Indices = indices;
+            mesh.Indices32 = indices;
             mesh.MeshTopology = PrimitiveTopology.LineList;
 
             return mesh;
@@ -252,7 +252,7 @@ void main()
                 new Vector3(-0.5, 0.5, 0.5), 
             ],
 
-            Indices = [
+            Indices32 = [
                 0, 1, 1, 2, 2, 3, 3, 0, // Bottom 
                 4, 5, 5, 6, 6, 7, 7, 4, // Top
                 0, 4, 1, 5, 2, 6, 3, 7 // Connecting segments
@@ -287,7 +287,7 @@ void main()
                 new Vector3(1.0, 0.5, 0.0),
             ],
 
-            Indices = [
+            Indices32 = [
                 0, 1, 2, 3, 4, 5, 6, 7 // Connecting segments
             ],
 

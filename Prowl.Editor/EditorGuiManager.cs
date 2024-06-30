@@ -80,9 +80,6 @@ public static class EditorGuiManager
         Gui.PointerWheel = Input.MouseWheelDelta;
         double scale = EditorStylePrefs.Instance.Scale;
 
-        RenderingContext context = new();
-        context.TargetFramebuffer = Graphics.ScreenFramebuffer;
-
         CommandBuffer commandBuffer = CommandBufferPool.Get("GUI Command Buffer");
 
         commandBuffer.SetRenderTarget(Graphics.ScreenFramebuffer);
@@ -264,9 +261,7 @@ public static class EditorGuiManager
 
         WindowsToRemove.Clear();
         
-        
-        context.Submit(commandBuffer);
-        context.Execute();
+        Graphics.ExecuteCommandBuffer(commandBuffer);
 
         CommandBufferPool.Release(commandBuffer);
     }

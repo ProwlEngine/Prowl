@@ -89,42 +89,57 @@ Pass "DefaultPass"
     DepthTest Never
     Cull Off
 
-    Inputs <Vertex/Fragment/Geometry/TessControl/TessEvaluation/<etc...>
+    Inputs
     {
+        // Input location 0
         VertexInput FLOAT
-        VertexInput VECTOR4
 
+        // Input location 1
+        VertexInput VECTOR4
+        
+        // Set 0
         Set
         {
-            Uniform "SomeName" VECTOR4
-            Uniform "SomeName2" VECTOR4
-            Uniform "SomeName3" VECTOR4
-            Uniform "SomeName4" MATRIX
+            // Binding 0
+            Buffer
+            {
+                SomeName VECTOR4
+                SomeName2 VECTOR4
+                SomeName3 VECTOR4
+                SomeName4 MATRIX
+            }
+
+            // Binding 1/2
+            Texture SomeTextureName
+
+            // Binding 3
+            Buffer
+            {
+                SomeValue VECTOR4
+            }
         }
+
+        // Set 1
+        Set
+        {
+            // Binding 0
+            Buffer
+            {
+                SomeMatrix MATRIX
+            }
+        }
+    }
+    
+    Features
+    {
+        SOME_FEATURE ON OFF
+        SOME_OTHER_FEATURE ON OFF
     }
 
     // Program block defines actual shader code
     Program <Vertex/Fragment/Geometry/TessControl/TessEvaluation/<etc...>
     {
-        HLSLPROGRAM
-
-        struct Inputs
-        {
-            float4 pos : POSITION;
-            half4 color : COLOR;
-            float4 uv : TEXCOORD0;
-        };
-
-        #pragma multi_compile HAS_COLOR
-
-        void VertexFunc(Inputs input)
-        {
-            inputs.pos;
-            inputs.color;
-            inputs.uv;
-        }
-
-        ENDHLSL
+        
     }
 
     // Program vertex stage example
@@ -159,8 +174,6 @@ Pass "AnotherPass"
 
     Blend
     {
-        Target 2
-
         Src Alpha OneMinusSrcAlpha
         Src Color DstColor
 

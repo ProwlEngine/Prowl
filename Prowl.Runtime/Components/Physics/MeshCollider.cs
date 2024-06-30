@@ -60,9 +60,9 @@ namespace Prowl.Runtime
                 Physics.Pool.Take<Triangle>(mesh.Res!.IndexCount / 3, out var triangles);
                 for (int i = 0; i < mesh.Res!.IndexCount / 3; ++i)
                 {
-                    var a = mesh.Res!.Indices[(i * 3) + 1];
-                    var b = mesh.Res!.Indices[(i * 3) + 0];
-                    var c = mesh.Res!.Indices[(i * 3) + 2];
+                    var a = mesh.Res!.Indices32[(i * 3) + 1];
+                    var b = mesh.Res!.Indices32[(i * 3) + 0];
+                    var c = mesh.Res!.Indices32[(i * 3) + 2];
                     triangles[i] = new Triangle(mesh.Res!.Vertices[a], mesh.Res!.Vertices[b], mesh.Res!.Vertices[c]);
                 }
 

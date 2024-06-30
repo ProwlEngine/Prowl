@@ -9,7 +9,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/Prowl.Editor/bin/Debug/net8.0/Prowl.Editor.dll",
+            "program": "${workspaceFolder}/Build/Editor/Debug/net8.0/Prowl.Editor.dll",
             "args": [],
             "cwd": "${workspaceFolder}/Prowl.Editor",
             "console": "internalConsole",
