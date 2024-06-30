@@ -108,7 +108,6 @@ namespace Prowl.Runtime.GUI
                 Vector2 cross = new Vector2(-direction.y, direction.x) * stroke.Thickness / 2.0f;
 
                 List<Vector2> points = new List<Vector2>();
-                points.Reserve(3);
                 points.Add(arrowStart - cross);
                 points.Add(arrowStart + cross);
                 points.Add(arrowEnd);
@@ -160,7 +159,6 @@ namespace Prowl.Runtime.GUI
                 return;
 
             var points = new List<Vector2>();
-            points.Reserve(stepCount + 1);
 
             double stepSize = angleDelta / (stepCount - 1);
 
@@ -204,7 +202,6 @@ namespace Prowl.Runtime.GUI
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");
 
             var points = new List<Vector2>();
-            points.Reserve(64);
 
             for (int i = 0; i < 64; i++)
             {
@@ -227,7 +224,6 @@ namespace Prowl.Runtime.GUI
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");
 
             var points = new List<Vector2>();
-            points.Reserve(64);
 
             for (int i = 0; i < 64; i++)
             {
@@ -269,7 +265,6 @@ namespace Prowl.Runtime.GUI
             if (!hasMVP) throw new InvalidOperationException("No MVP set.");
 
             var points = new List<Vector2>();
-            points.Reserve(8);
 
             double halfSize = size / 2.0;
 
@@ -317,7 +312,6 @@ namespace Prowl.Runtime.GUI
 
             int stepCount = Steps(angle);
             var points = new List<Vector2>();
-            points.Reserve(stepCount);
 
             double stepSize = angle / (stepCount - 1);
 
@@ -339,7 +333,6 @@ namespace Prowl.Runtime.GUI
         private List<Vector2> QuadPoints(double size)
         {
             var points = new List<Vector2>();
-            points.Reserve(4);
 
             double halfSize = size / 2.0;
 
