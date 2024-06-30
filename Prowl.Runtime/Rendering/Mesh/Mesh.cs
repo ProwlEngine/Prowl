@@ -255,8 +255,6 @@ namespace Prowl.Runtime
             {
                 Graphics.Device.UpdateBuffer(indexBuffer, 0, indices);
             }
-
-            //Debug.Log("[Mesh] Uploaded to VRAM");
         }
 
         public void RecalculateBounds()

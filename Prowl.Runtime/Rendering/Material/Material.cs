@@ -21,8 +21,6 @@ namespace Prowl.Runtime
             Shader = shader;
             Properties = properties ?? new();
             LocalKeywords = keywords ?? Utils.KeyGroup<string, string>.Default;
-
-            Debug.Log("Created material");
         }
 
         public void SetKeyword(string keyword, string value) => LocalKeywords.SetKey(keyword, value);
