@@ -15,7 +15,7 @@ namespace Prowl.Runtime
 
     public struct ShaderPassDescription
     {
-        public KeyValuePair<string, string>[] Tags;
+        public Dictionary<string, string> Tags;
         public BlendStateDescription BlendState;
         public DepthStencilStateDescription DepthStencilState;
         public FaceCullMode CullingMode;
@@ -124,7 +124,7 @@ namespace Prowl.Runtime
         {
             return new ShaderPassDescription()
             {
-                Tags = Tags.Select(x => new KeyValuePair<string, string>(x.Key, x.Value)).ToArray(),
+                Tags = new(Tags),
                 BlendState = Blend,
                 DepthStencilState = DepthStencilState,
                 CullingMode = CullMode,

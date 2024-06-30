@@ -24,7 +24,7 @@ namespace Prowl.Editor.ShaderParser
                 sb.AppendLine("{");
                 foreach (var property in Properties)
                 {
-                    sb.AppendLine($"\"{property.Name}\" = \"{property.DisplayName}\" {property.Type}");
+                    sb.AppendLine($"\"{property.Name}\" = \"{property.DisplayName}\" {property.PropertyType}");
                 }
                 sb.AppendLine("}");
             }
@@ -118,13 +118,12 @@ namespace Prowl.Editor.ShaderParser
                     sb.AppendLine("}");
                 }
 
-                sb.AppendLine($"DepthTest {pass.DepthComparison}");
                 sb.AppendLine($"Cull {pass.Cull}");
                 foreach (var program in pass.Programs)
                 {
-                    sb.AppendLine($"Program {program.Type}");
+                    sb.AppendLine($"Program {program.Stage}");
                     sb.AppendLine("{");
-                    sb.AppendLine(program.Content);
+                    sb.AppendLine(program.SourceCode);
                     sb.AppendLine("}");
                 }
                 sb.AppendLine("}");
@@ -157,17 +156,10 @@ namespace Prowl.Editor.ShaderParser
         public Dictionary<string, string> Tags { get; set; } = new Dictionary<string, string>();
         public BlendAttachmentDescription? Blend { get; set; } = null;
         public DepthStencilStateDescription? Stencil { get; set; } = null;
-        public ComparisonKind DepthComparison { get; set; }
         public FaceCullMode Cull { get; set; }
 
         public ParsedInputs Inputs { get; set; }
         public Dictionary<string, HashSet<string>> Keywords { get; set; } = new Dictionary<string, HashSet<string>>();
-        public List<ParsedShaderProgram> Programs { get; set; } = new List<ParsedShaderProgram>();
-    }
-
-    public class ParsedShaderProgram
-    {
-        public ShaderStages Type { get; set; }
-        public string Content { get; set; }
+        public List<Runtime.ShaderSource> Programs { get; set; } = new List<Runtime.ShaderSource>();
     }
 }

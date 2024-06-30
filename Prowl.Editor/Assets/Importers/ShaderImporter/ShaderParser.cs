@@ -48,36 +48,40 @@ namespace Prowl.Editor.ShaderParser
                     case "Shader":
                         _tokenizer.MoveNext(); // Move to string
                         shader.Name = _tokenizer.ParseQuotedStringValue();
-                        break;
+                    break;
+
                     case "Properties":
                         shader.Properties = ParseProperties();
-                        break;
+                    break;
+
                     case "Global":
                         if(shader.Passes.Count > 0)
                             throw new InvalidOperationException("Global state must be defined before passes");
                         shader.Global = ParseGlobal();
-                        break;
+                    break;
+
                     case "Pass":
                         shader.Passes.Add(ParsePass());
-                        break;
+                    break;
+
                     case "Fallback":
                         _tokenizer.MoveNext(); // Move to string
                         shader.Fallback = _tokenizer.ParseQuotedStringValue();
-                        break;
+                    break;
                 }
             }
 
             return shader;
         }
 
-        private List<ParsedShaderProperty> ParseProperties()
+        private List<Runtime.ShaderProperty> ParseProperties()
         {
-            var properties = new List<ParsedShaderProperty>();
+            var properties = new List<Runtime.ShaderProperty>();
             ExpectToken(TokenType.OpenBrace);
 
             while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
             {
-                var property = new ParsedShaderProperty();
+                var property = new Runtime.ShaderProperty();
 
                 property.Name = _tokenizer.Token.ToString();
                 ExpectToken(TokenType.OpenParen);
@@ -85,7 +89,7 @@ namespace Prowl.Editor.ShaderParser
                 property.DisplayName = _tokenizer.ParseQuotedStringValue();
                 ExpectToken(TokenType.Comma);
                 ExpectToken(TokenType.Identifier);
-                property.Type = _tokenizer.Token.ToString();
+                property.PropertyType = Enum.Parse<Runtime.ShaderPropertyType>(_tokenizer.Token.ToString(), true);
                 ExpectToken(TokenType.CloseParen);
 
                 properties.Add(property);
@@ -148,8 +152,10 @@ namespace Prowl.Editor.ShaderParser
                 // Next token should either be a comma or a closing brace
                 // if its a comma theres another tag so continue, if not break
                 _tokenizer.MoveNext();
+                
                 if (_tokenizer.TokenType == TokenType.Comma)
                     continue;
+
                 if (_tokenizer.TokenType == TokenType.CloseBrace)
                     break;
 
@@ -277,49 +283,57 @@ namespace Prowl.Editor.ShaderParser
                     case "DepthWrite":
                         ExpectToken(TokenType.Identifier);
                         stencil.DepthWriteEnabled = ConvertToBoolean(_tokenizer.Token.ToString());
-                        break;
+                    break;
+                    
                     case "DepthTest":
                         ExpectToken(TokenType.Identifier);
                         string kind = _tokenizer.Token.ToString();
                         stencil.DepthTestEnabled = Enum.TryParse<ComparisonKind>(kind, true, out var res);
                         stencil.DepthComparison = res;
-                        break;
+                    break;
+                    
                     case "Ref":
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilReference = byte.Parse(_tokenizer.Token.ToString());
-                        break;
+                    break;
+                    
                     case "ReadMask":
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilReadMask = byte.Parse(_tokenizer.Token.ToString());
-                        break;
+                    break;
+                    
                     case "WriteMask":
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilWriteMask = byte.Parse(_tokenizer.Token.ToString());
-                        break;
+                    break;
+                    
                     case "Comparison":
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilFront.Comparison = Enum.Parse<ComparisonKind>(_tokenizer.Token.ToString(), true);
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilBack.Comparison = Enum.Parse<ComparisonKind>(_tokenizer.Token.ToString(), true);
-                        break;
+                    break;
+                    
                     case "Pass":
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilFront.Pass = Enum.Parse<StencilOperation>(_tokenizer.Token.ToString(), true);
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilBack.Pass = Enum.Parse<StencilOperation>(_tokenizer.Token.ToString(), true);
-                        break;
+                    break;
+                    
                     case "Fail":
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilFront.Fail = Enum.Parse<StencilOperation>(_tokenizer.Token.ToString(), true);
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilBack.Fail = Enum.Parse<StencilOperation>(_tokenizer.Token.ToString(), true);
-                        break;
+                    break;
+
                     case "ZFail":
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilFront.DepthFail = Enum.Parse<StencilOperation>(_tokenizer.Token.ToString(), true);
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilBack.DepthFail = Enum.Parse<StencilOperation>(_tokenizer.Token.ToString(), true);
-                        break;
+                    break;
 
                     default:
                         throw new InvalidOperationException($"Unknown stencil key: {key}");
@@ -377,6 +391,14 @@ namespace Prowl.Editor.ShaderParser
                         pass.Cull = Enum.Parse<FaceCullMode>(_tokenizer.Token.ToString(), true);
                     break;
 
+                    case "Inputs":
+                        pass.Inputs = ParseInputs();
+                    break;
+
+                    case "Features":
+                        pass.Keywords = ParseKeywords();
+                    break;
+
                     case "Program":
                         pass.Programs.Add(ParseProgram());
                     break;
@@ -386,97 +408,27 @@ namespace Prowl.Editor.ShaderParser
             return pass;
         }
 
-        private ParsedInputs ParseBlend()
+        #warning TODO
+        private ParsedInputs ParseInputs()
         {
-            var blend = shader.Global?.Blend ?? BlendAttachmentDescription.AdditiveBlend;
-            blend.BlendEnabled = true;
+            var inputs = new ParsedInputs();
 
-            if (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.OpenBrace)
-            {
-                string preset = _tokenizer.Token.ToString();
+            return inputs;
+        }
+        
+        #warning TODO
+        private Dictionary<string, HashSet<string>> ParseKeywords()
+        {
+            var dict = new Dictionary<string, HashSet<string>>();
 
-                if (preset.Equals("Additive", StringComparison.OrdinalIgnoreCase))
-                    blend = BlendAttachmentDescription.AdditiveBlend;
-                else if (preset.Equals("Alpha", StringComparison.OrdinalIgnoreCase))
-                    blend = BlendAttachmentDescription.AlphaBlend;
-                else if (preset.Equals("Override", StringComparison.OrdinalIgnoreCase))
-                    blend = BlendAttachmentDescription.OverrideBlend;
-                else
-                    throw new InvalidOperationException("Unknown blend preset: " + preset);
-
-                return blend;
-            }
-            
-            while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
-            {
-                var key = _tokenizer.Token.ToString();
-                string target;
-                switch (key)
-                {
-                    case "Src":
-                        ExpectToken(TokenType.Identifier);
-                        target = _tokenizer.Token.ToString();
-                        ExpectToken(TokenType.Identifier);
-                    
-                        if (target.Equals("Color", StringComparison.OrdinalIgnoreCase))
-                            blend.SourceColorFactor = Enum.Parse<BlendFactor>(_tokenizer.Token.ToString(), true);
-                        else
-                            blend.SourceAlphaFactor = Enum.Parse<BlendFactor>(_tokenizer.Token.ToString(), true);
-                    break;
-
-                    case "Dest":
-                        ExpectToken(TokenType.Identifier);
-                        target = _tokenizer.Token.ToString();
-                        ExpectToken(TokenType.Identifier);
-
-                        if (target.Equals("Color", StringComparison.OrdinalIgnoreCase))
-                            blend.DestinationColorFactor = Enum.Parse<BlendFactor>(_tokenizer.Token.ToString(), true);
-                        else
-                            blend.DestinationAlphaFactor = Enum.Parse<BlendFactor>(_tokenizer.Token.ToString(), true);
-                    break;
-
-                    case "Mode":
-                        ExpectToken(TokenType.Identifier);
-                        target = _tokenizer.Token.ToString();
-                        ExpectToken(TokenType.Identifier);
-                        if (target.Equals("Color", StringComparison.OrdinalIgnoreCase))
-                            blend.ColorFunction = Enum.Parse<BlendFunction>(_tokenizer.Token.ToString(), true);
-                        else
-                            blend.AlphaFunction = Enum.Parse<BlendFunction>(_tokenizer.Token.ToString(), true);
-                    break;
-
-                    case "Mask":
-                        ExpectToken(TokenType.Identifier);
-                        var mask = _tokenizer.Token.ToString();
-                        if (mask.Equals("None", StringComparison.OrdinalIgnoreCase)) 
-                        { 
-                            blend.ColorWriteMask = ColorWriteMask.None;
-                        }
-                        else
-                        {
-                            if (mask.Contains('R')) blend.ColorWriteMask = ColorWriteMask.Red;
-                            if (mask.Contains('G')) blend.ColorWriteMask |= ColorWriteMask.Green;
-                            if (mask.Contains('B')) blend.ColorWriteMask |= ColorWriteMask.Blue;
-                            if (mask.Contains('A')) blend.ColorWriteMask |= ColorWriteMask.Alpha;
-
-                            if (blend.ColorWriteMask == 0)
-                                throw new InvalidOperationException("Invalid color write mask: " + mask);
-                        }
-                    break;
-
-                    default:
-                        throw new InvalidOperationException($"Unknown blend key: {key}");
-                }
-            }
-
-            return blend;
+            return dict;
         }
 
-        private ParsedShaderProgram ParseProgram()
+        private Runtime.ShaderSource ParseProgram()
         {
-            var program = new ParsedShaderProgram();
+            var program = new Runtime.ShaderSource();
             ExpectToken(TokenType.Identifier);
-            program.Type = Enum.Parse<ShaderStages>(_tokenizer.Token.ToString(), true);
+            program.Stage = Enum.Parse<ShaderStages>(_tokenizer.Token.ToString(), true);
             ExpectToken(TokenType.OpenBrace);
 
             var content = "";
@@ -494,7 +446,7 @@ namespace Prowl.Editor.ShaderParser
                     content += _tokenizer.Token.ToString() + " ";
             }
 
-            program.Content = content;
+            program.SourceCode = content;
 
             return program;
         }
