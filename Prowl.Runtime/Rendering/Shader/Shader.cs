@@ -7,9 +7,13 @@ namespace Prowl.Runtime
     public enum ShaderPropertyType
     {
         Float,
-        Vector,
+        Vector2,
+        Vector3,
+        Vector4,
+        Color,
         Matrix,
-        Texture
+        Texture2D,
+        Texture3D
     }
 
     public struct ShaderProperty
