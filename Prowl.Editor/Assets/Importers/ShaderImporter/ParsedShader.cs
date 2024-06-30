@@ -6,7 +6,7 @@ namespace Prowl.Editor.ShaderParser
     public class ParsedShader
     {
         public string Name { get; set; }
-        public List<ParsedShaderProperty> Properties { get; set; } = new List<ParsedShaderProperty>();
+        public List<Runtime.ShaderProperty> Properties { get; set; } = new List<Runtime.ShaderProperty>();
 
         public ParsedGlobalState Global { get; set; }
         public List<ParsedPass> Passes { get; set; } = new List<ParsedPass>();
@@ -138,14 +138,8 @@ namespace Prowl.Editor.ShaderParser
 
     public class ParsedInputs
     {
-
-    }
-
-    public class ParsedShaderProperty
-    {
-        public string Name { get; set; }
-        public string DisplayName { get; set; }
-        public string Type { get; set; }
+        public List<Runtime.MeshResource> Inputs;
+        public List<Runtime.ShaderResource[]> Resources;
     }
 
     public class ParsedGlobalState
