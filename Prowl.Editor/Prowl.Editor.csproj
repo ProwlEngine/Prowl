@@ -16,6 +16,12 @@
   </PropertyGroup>
 
     <ItemGroup>
+      <Compile Remove="EmbeddedResources\*.*" />
+      <Compile Remove="EmbeddedResources\DefaultAssets\*.*" />
+    </ItemGroup>
+
+
+    <ItemGroup>
       <None Remove="EmbeddedResources\*.*" />
       <None Remove="EmbeddedResources\DefaultAssets\*.*" />
 
