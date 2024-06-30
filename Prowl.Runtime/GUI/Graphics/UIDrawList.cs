@@ -1236,41 +1236,11 @@ namespace Prowl.Runtime.GUI.Graphics
         }
         ";
 
-            ShaderPass pass = new ShaderPass("UI", null, [ (ShaderStages.Vertex, vertexSource), (ShaderStages.Fragment, fragmentSource) ], null);
+            ShaderPassDescription description = new();
 
-            pass.CompilePrograms((sources, keywords) => new ShaderPass.Variant() 
-            {
-                keywords = keywords,
-                vertexInputs = 
-                [
-                    MeshResource.Position,
-                    MeshResource.UV0,
-                    MeshResource.Colors
-                ],
-
-                resourceSets = 
-                [
-                    // Set 0
-                    [
-                        // Binding 0
-                        new BufferResource("ProjBuffer", ShaderStages.Vertex,
-                            ("ProjMtx", ResourceType.Matrix4x4)
-                        )
-                    ],
-
-                    // Set 1
-                    [
-                        // Binding 0
-                        new TextureResource("SurfaceTexture", false, ShaderStages.Fragment)
-                    ]
-                ],
-
-                compiledPrograms = Runtime.Graphics.CreateFromSpirv(sources[0].Item2, sources[1].Item2)
-            });
-
-            pass.depthStencil.DepthTestEnabled = true;
-            pass.depthStencil.StencilTestEnabled = false;
-            pass.cullMode = FaceCullMode.None;
+            description.DepthStencilState.DepthTestEnabled = true;
+            description.DepthStencilState.StencilTestEnabled = false;
+            description.CullingMode = FaceCullMode.None;
 
             BlendAttachmentDescription blend = new()
             {
@@ -1285,9 +1255,54 @@ namespace Prowl.Runtime.GUI.Graphics
                 DestinationAlphaFactor = BlendFactor.InverseSourceAlpha,
             };
 
-            pass.blend = new BlendStateDescription(RgbaFloat.White, blend);
+            description.BlendState = new BlendStateDescription(RgbaFloat.White, blend);
 
-            shader = new Shader("Runtime/UI", pass);
+            description.ShaderSources = 
+            [
+                new()
+                {
+                    Stage = ShaderStages.Vertex,
+                    SourceCode = vertexSource
+                },
+
+                new()
+                {
+                    Stage = ShaderStages.Fragment,
+                    SourceCode = fragmentSource
+                }
+            ];
+
+            ShaderPass pass = new ShaderPass("UI Pass", description);
+
+            RuntimeVariantCompiler compiler = new();
+
+            compiler.Inputs = 
+            [
+                MeshResource.Position,
+                MeshResource.UV0,
+                MeshResource.Colors
+            ];
+
+            compiler.Resources = 
+            [
+                // Set 0
+                [
+                    // Binding 0
+                    new BufferResource("ProjBuffer", ShaderStages.Vertex,
+                        ("ProjMtx", ResourceType.Matrix4x4)
+                    )
+                ],
+
+                // Set 1
+                [
+                    // Binding 0
+                    new TextureResource("SurfaceTexture", false, ShaderStages.Fragment)
+                ]
+            ];
+
+            pass.CompilePrograms(compiler);
+
+            shader = new Shader("Runtime/UI", [], [ pass ]);
             material = new Material(shader);
 
             RecreateFontDeviceTexture();

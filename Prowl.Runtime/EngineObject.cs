@@ -150,5 +150,27 @@ namespace Prowl.Runtime
 
         public override string ToString() { return Name; }
 
+        protected void SerializeHeader(SerializedProperty compound)
+        {
+            compound.Add("Name", new(Name));
+
+            if (AssetID != Guid.Empty)
+            {
+                compound.Add("AssetID", new SerializedProperty(AssetID.ToString()));
+                if (FileID != 0)
+                    compound.Add("FileID", new SerializedProperty(FileID));
+            }
+        }
+
+        protected void DeserializeHeader(SerializedProperty value)
+        {
+            Name = value.Get("Name")?.StringValue;
+
+            if (value.TryGet("AssetID", out var assetIDTag))
+            {
+                AssetID = Guid.Parse(assetIDTag.StringValue);
+                FileID = value.Get("FileID").UShortValue;
+            }
+        }
     }
 }

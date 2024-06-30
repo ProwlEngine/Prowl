@@ -431,7 +431,7 @@ public static class EditorGuiManager
         FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New Material.mat"));
         AssetDatabase.GenerateUniqueAssetPath(ref file);
 
-        Material mat = new Material(Shader.Find("Defaults/Standard.shader"));
+        Material mat = new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Standard.shader"));
         StringTagConverter.WriteToFile(Serializer.Serialize(mat), file);
         if (fromAssetBrowser)
             AssetsBrowserWindow.StartRename(file.FullName);

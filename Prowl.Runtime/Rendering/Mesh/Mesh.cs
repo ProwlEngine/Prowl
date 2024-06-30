@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using Veldrid;
-using System.Linq;
-using System.Runtime.InteropServices;
 
 namespace Prowl.Runtime
 {  

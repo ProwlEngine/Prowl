@@ -13,7 +13,6 @@ namespace Prowl.Runtime
         Matrix4x4
     }
 
-
     public interface ShaderResource
     {
         public void GetDescription(List<ResourceLayoutElementDescription> elements);
@@ -22,7 +21,6 @@ namespace Prowl.Runtime
 
         public string GetResourceName();
     }
-
 
     public class TextureResource : ShaderResource
     {
@@ -64,7 +62,6 @@ namespace Prowl.Runtime
 
         public string GetResourceName() => textureName;
     }
-
 
     public class BufferResource : ShaderResource
     {

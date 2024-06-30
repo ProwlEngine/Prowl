@@ -130,6 +130,9 @@ namespace Prowl.Runtime
         public override SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
             SerializedProperty compoundTag = SerializedProperty.NewCompound();
+
+            SerializeHeader(compoundTag);
+
             compoundTag.Add("Width", new((int)Width));
             compoundTag.Add("Height", new((int)Height));
             compoundTag.Add("MipLevels", new(MipLevels));
@@ -146,6 +149,8 @@ namespace Prowl.Runtime
 
         public override void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
+            DeserializeHeader(value);
+
             uint width = (uint)value["Width"].IntValue;
             uint height = (uint)value["Height"].IntValue;
             uint mips = (uint)value["MipLevels"].UIntValue;

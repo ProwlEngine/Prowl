@@ -9,7 +9,10 @@ namespace Prowl.Runtime
     {
         public string Name;
 
+        // Holds a list of structs which implement RenderingCommand.ExecuteCommand() to avoid filling it with anonymous lambdas.
+        // TODO: While the struct-based approach is better than lambdas, there is still some overhead when the structs get boxed, which is not ideal. 
         private List<RenderingCommand> buffer = new();
+
         public IEnumerable<RenderingCommand> Buffer => buffer;
 
         public CommandBuffer()
