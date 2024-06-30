@@ -1157,6 +1157,8 @@ namespace Prowl.Runtime.GUI.Graphics
                     idxoffset += (int)cmdPtr.ElemCount;
                 }
 
+                uiMesh.Destroy();
+
                 // Clear Depth Buffer
                 commandBuffer.ClearRenderTarget(true, false, Color.white, depth: 1.0f);
             }
