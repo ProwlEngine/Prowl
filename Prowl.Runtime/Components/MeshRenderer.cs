@@ -29,7 +29,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable
         var material = Material.Res;
         if (material == null)
         {
-            InvalidMat ??= new Material(Shader.Find("Defaults/Invalid.shader"));
+            InvalidMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Invalid.shader"));
             material = InvalidMat;
         }
 
