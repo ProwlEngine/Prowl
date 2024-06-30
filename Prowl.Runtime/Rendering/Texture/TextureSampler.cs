@@ -193,6 +193,9 @@ namespace Prowl.Runtime
         public SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
             SerializedProperty compoundTag = SerializedProperty.NewCompound();
+
+            SerializeHeader(compoundTag);
+
             compoundTag.Add("WrapModeU", new((int)WrapModeU));
             compoundTag.Add("WrapModeV", new((int)WrapModeV));
             compoundTag.Add("WrapModeW", new((int)WrapModeW));
@@ -208,6 +211,8 @@ namespace Prowl.Runtime
 
         public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
+            DeserializeHeader(value);
+
             WrapModeU = (TextureWrapMode)value["WrapModeU"].IntValue;
             WrapModeV = (TextureWrapMode)value["WrapModeV"].IntValue;
             WrapModeW = (TextureWrapMode)value["WrapModeW"].IntValue;
