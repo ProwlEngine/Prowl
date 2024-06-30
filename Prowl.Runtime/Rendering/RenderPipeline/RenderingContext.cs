@@ -24,8 +24,6 @@ namespace Prowl.Runtime.RenderPipelines
 
             RenderState state = new RenderState();
 
-            Debug.Log($"Submitting {internalCommandList.Count} commands");
-
             for (int i = 0; i < internalCommandList.Count; i++)
                 internalCommandList[i].ExecuteCommand(commandList, ref state);
 
