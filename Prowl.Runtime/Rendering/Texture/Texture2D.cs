@@ -153,8 +153,8 @@ namespace Prowl.Runtime
             PixelFormat imageFormat = (PixelFormat)value["ImageFormat"].IntValue;
             TextureUsage usage = (TextureUsage)value["Usage"].IntValue;
 
-            var param = new[] { typeof(uint), typeof(uint), typeof(uint), typeof(PixelFormat), typeof(TextureUsage) };
-            var values = new object[] { width, height, mips, imageFormat, usage };
+            var param = new[] { typeof(uint), typeof(uint), typeof(uint), typeof(PixelFormat), typeof(TextureUsage), typeof(TextureSampleCount) };
+            var values = new object[] { width, height, mips, imageFormat, usage, TextureSampleCount.Count1 };
 
             typeof(Texture2D).GetConstructor(param).Invoke(this, values);
 
