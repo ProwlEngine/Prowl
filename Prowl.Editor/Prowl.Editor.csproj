@@ -16,149 +16,20 @@
   </PropertyGroup>
 
     <ItemGroup>
-      <None Remove="EmbeddedResources\AudioIcon.png" />
-      <None Remove="EmbeddedResources\Checkerboard.png" />
-      <None Remove="EmbeddedResources\CSharpIcon.png" />
-      <None Remove="EmbeddedResources\DefaultAssets\1mcube.fbx" />
-      <None Remove="EmbeddedResources\DefaultAssets\AmbientLight.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\Basic.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\Bloom.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\Capsule.obj" />
-      <None Remove="EmbeddedResources\DefaultAssets\Cube.obj" />
-      <None Remove="EmbeddedResources\DefaultAssets\Cylinder.obj" />
-      <!-- <None Remove="EmbeddedResources\DefaultAssets\DefaultRenderPipeline.scriptobj" /> -->
-      <None Remove="EmbeddedResources\DefaultAssets\default_emission.png" />
-      <None Remove="EmbeddedResources\DefaultAssets\default_gray18.png" />
-      <None Remove="EmbeddedResources\DefaultAssets\default_normal.png" />
-      <None Remove="EmbeddedResources\DefaultAssets\default_surface.png" />
-      <None Remove="EmbeddedResources\DefaultAssets\default_white.png" />
-      <None Remove="EmbeddedResources\DefaultAssets\Depth.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\Directionallight.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\Directionallight.shader.meta" />
-      <None Remove="EmbeddedResources\DefaultAssets\DOF.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\GBuffercombine.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\GBuffercombine.shader.meta" />
-      <None Remove="EmbeddedResources\DefaultAssets\Gizmos.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\grid.png" />
-      <None Remove="EmbeddedResources\DefaultAssets\Grid.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\Invalid.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\noise.png" />
-      <None Remove="EmbeddedResources\DefaultAssets\PBR.glsl" />
-      <None Remove="EmbeddedResources\DefaultAssets\Plane.obj" />
-      <None Remove="EmbeddedResources\DefaultAssets\Pointlight.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\Pointlight.shader.meta" />
-      <None Remove="EmbeddedResources\DefaultAssets\ProcedualSkybox.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\Quad.obj" />
-      <None Remove="EmbeddedResources\DefaultAssets\Random.glsl" />
-      <None Remove="EmbeddedResources\DefaultAssets\Sphere.obj" />
-      <None Remove="EmbeddedResources\DefaultAssets\Spotlight.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\SSR.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\Standard.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\Standard.shader.meta" />
-      <None Remove="EmbeddedResources\DefaultAssets\TAA.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\Tonemapper.shader" />
-      <None Remove="EmbeddedResources\DefaultAssets\Utilities.glsl" />
-      <None Remove="EmbeddedResources\DefaultAssets\VertexAttributes.glsl" />
-      <None Remove="EmbeddedResources\fa-regular-400.ttf" />
-      <None Remove="EmbeddedResources\fa-solid-900.ttf" />
-      <None Remove="EmbeddedResources\FileIcon.png" />
-      <None Remove="EmbeddedResources\FolderEmptyIcon.png" />
-      <None Remove="EmbeddedResources\FolderFilledIcon.png" />
-      <None Remove="EmbeddedResources\font.ttf" />
-      <None Remove="EmbeddedResources\fontawesome-webfont.ttf" />
-      <None Remove="EmbeddedResources\GameObjectIcon.png" />
-      <None Remove="EmbeddedResources\HierarchyIcon.png" />
-      <None Remove="EmbeddedResources\ModelIcon.png" />
-      <None Remove="EmbeddedResources\NewScript.txt" />
-      <None Remove="EmbeddedResources\ShaderIcon.png" />
-      <None Remove="EmbeddedResources\SubFileIcon.png" />
+      <None Remove="EmbeddedResources\*.*" />
+      <None Remove="EmbeddedResources\DefaultAssets\*.*" />
+
       <None Remove="font.ttf" />
     </ItemGroup>
 
     <ItemGroup>
-      <EmbeddedResource Include="EmbeddedResources\AudioIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\Checkerboard.png" />
-      <EmbeddedResource Include="EmbeddedResources\CSharpIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Capsule.obj" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Cube.obj" />
-      <!-- <EmbeddedResource Include="EmbeddedResources\DefaultAssets\DefaultRenderPipeline.scriptobj" /> -->
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Grid.shader">
+      <EmbeddedResource Include="EmbeddedResources\*.*">
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       </EmbeddedResource>
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Quad.obj" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Tonemapper.shader" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Cylinder.obj" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_emission.png" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_gray18.png" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_normal.png" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_surface.png" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\default_white.png" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\AmbientLight.shader">
+
+      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\*.*">
         <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       </EmbeddedResource>
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Bloom.shader">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Random.glsl" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Basic.shader">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\TAA.shader">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\VertexAttributes.glsl" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Utilities.glsl" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\SSR.shader">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\ProcedualSkybox.shader">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\noise.png" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\PBR.glsl" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Plane.obj" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Sphere.obj" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\DOF.shader">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Directionallight.shader">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\GBuffercombine.shader">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\grid.png" />
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Spotlight.shader">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Pointlight.shader">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Depth.shader">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Gizmos.shader">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Invalid.shader">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\Standard.shader">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
-      <EmbeddedResource Include="EmbeddedResources\fa-regular-400.ttf" />
-      <EmbeddedResource Include="EmbeddedResources\fa-solid-900.ttf" />
-      <EmbeddedResource Include="EmbeddedResources\FileIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\FolderFilledIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\FolderEmptyIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\font.ttf" />
-      <EmbeddedResource Include="EmbeddedResources\fontawesome-webfont.ttf" />
-      <EmbeddedResource Include="EmbeddedResources\GameObjectIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\HierarchyIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\ModelIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\NewScript.txt" />
-      <EmbeddedResource Include="EmbeddedResources\ShaderIcon.png" />
-      <EmbeddedResource Include="EmbeddedResources\SubFileIcon.png" />
     </ItemGroup>
 
     <ItemGroup>
