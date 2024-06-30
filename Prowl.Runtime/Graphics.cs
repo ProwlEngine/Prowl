@@ -26,6 +26,9 @@ namespace Prowl.Runtime
             set { Device.SyncToVerticalBlank = value; }
         }
 
+        [System.Runtime.InteropServices.DllImport("Shcore.dll")]
+        internal static extern int SetProcessDpiAwareness(int value);
+
         public static void Initialize(bool VSync = true, GraphicsBackend preferredBackend = GraphicsBackend.OpenGL)
         {
             GraphicsDeviceOptions deviceOptions = new()
@@ -40,6 +43,9 @@ namespace Prowl.Runtime
             };
 
             Device = VeldridStartup.CreateGraphicsDevice(Screen.InternalWindow, deviceOptions, preferredBackend);
+
+            if(RuntimeUtils.IsWindows())
+                SetProcessDpiAwareness(1);
 
             Screen.Resize += (newSize) => Device.ResizeMainWindow((uint)newSize.x, (uint)newSize.y);
         }
