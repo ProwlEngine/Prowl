@@ -4,94 +4,62 @@ using Veldrid;
 
 namespace Prowl.Runtime
 {
+    public enum ShaderPropertyType
+    {
+        Float,
+        Vector,
+        Matrix,
+        Texture
+    }
+
+    public struct ShaderProperty
+    {
+        public string Name;
+        public string DisplayName;
+        public ShaderPropertyType PropertyType; 
+    }
+
     public sealed class Shader : EngineObject, ISerializable
     {
-        const string defaultVertex = @"
-            #version 450
+        private readonly ShaderProperty[] properties;
+        public IEnumerable<ShaderProperty> Properties => properties;
 
-            layout(location = 0) in vec3 Position;
-
-            void main()
-            {
-                gl_Position = vec4(Position.xyz, 1.0);
-            }
-            ";
-
-        const string defaultFragment = @"
-            #version 450
-
-            layout(location = 0) out vec4 Color;
-
-            void main()
-            {
-                Color = vec4(1.0, 1.0, 1.0, 1.0);
-            }
-            ";
-
-        public static readonly Shader Default = CreateDefault();
-
-        private static Shader CreateDefault()
-        {
-            ShaderPass pass = new ShaderPass("Default Pass", null, 
-                [ 
-                    (ShaderStages.Vertex, defaultVertex),
-                    (ShaderStages.Fragment, defaultFragment)
-                ],
-                null
-            );
-
-            pass.CompilePrograms((source, keywords) => new ShaderPass.Variant()
-            {
-                keywords = keywords,
-                vertexInputs = 
-                [
-                    MeshResource.Position,
-                ],
-                compiledPrograms = Graphics.CreateFromSpirv(source[0].Item2, source[1].Item2)
-            });
-
-            return new("Default Shader", pass);
-        }
-
-
-        private List<ShaderPass> passes = new();
-        private Dictionary<string, int> nameIndexLookup = new();
-        private Dictionary<string, List<int>> tagIndexLookup = new(); 
-
+        private readonly ShaderPass[] passes;
+        public IEnumerable<ShaderPass> Passes => passes;
+        
+        private readonly Dictionary<string, int> nameIndexLookup = new();
+        private readonly Dictionary<string, List<int>> tagIndexLookup = new(); 
 
         internal Shader() : base("New Shader") { }
 
-        public Shader(string name, params ShaderPass[] passes) : base(name)
+        public Shader(string name, ShaderProperty[] properties, ShaderPass[] passes) : base(name)
         {
-            foreach (ShaderPass pass in passes)
-                AddPass(pass);
+            this.properties = properties;
+            this.passes = passes;
+
+            for (int i = 0; i < passes.Length; i++)
+                RegisterPass(passes[i], i);
 
             ShaderCache.RegisterShader(this);
         }
 
-        public void AddPass(ShaderPass pass)
+        private void RegisterPass(ShaderPass pass, int index)
         {
-            int passIndex = passes.Count;
-            passes.Add(pass);
-
-            if (!string.IsNullOrWhiteSpace(pass.name))
+            if (!string.IsNullOrWhiteSpace(pass.Name))
             {
-                if (!nameIndexLookup.TryAdd(pass.name, passIndex))
-                    throw new InvalidOperationException($"Pass with name {pass.name} conflicts with existing pass at index {nameIndexLookup[pass.name]}. Ensure no two passes have equal names.");
+                if (!nameIndexLookup.TryAdd(pass.Name, index))
+                    throw new InvalidOperationException($"Pass with name {pass.Name} conflicts with existing pass at index {nameIndexLookup[pass.Name]}. Ensure no two passes have equal names.");
             }
 
-            if (pass.tags.Count != 0)
+            foreach (var key in pass.Tags.Keys)
             {
-                foreach (string key in pass.tags.Keys)
-                {
-                    if (string.IsNullOrWhiteSpace(key))
-                        continue;
+                if (string.IsNullOrWhiteSpace(key))
+                    continue;
 
-                    if (!tagIndexLookup.TryGetValue(key, out _))
-                        tagIndexLookup.Add(key, []);
+                if (!tagIndexLookup.TryGetValue(key, out _))
+                    tagIndexLookup.Add(key, []);
 
-                    tagIndexLookup[key].Add(passIndex);
-                }
+                tagIndexLookup[key].Add(index);
             }
         }
 
@@ -123,7 +91,7 @@ namespace Prowl.Runtime
 
                     if (tagValue != null)
                     {
-                        if (pass.tags[tag] == tagValue)
+                        if (pass.Tags[tag] == tagValue)
                             passes.Add(pass);
                     }
                     else
@@ -142,23 +110,11 @@ namespace Prowl.Runtime
                 pass.Dispose();
         }
 
-        public static AssetRef<Shader> Find(string path)
-        {
-            return Application.AssetProvider.LoadAsset<Shader>(path);
-        }
-
         public SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
             SerializedProperty compoundTag = SerializedProperty.NewCompound();
 
-            compoundTag.Add("Name", new(Name));
-
-            if (AssetID != Guid.Empty)
-            {
-                compoundTag.Add("AssetID", new SerializedProperty(AssetID.ToString()));
-                if (FileID != 0)
-                    compoundTag.Add("FileID", new SerializedProperty(FileID));
-            }
+            SerializeHeader(compoundTag);
 
             /*
             SerializedProperty propertiesTag = SerializedProperty.NewList();
@@ -178,13 +134,7 @@ namespace Prowl.Runtime
 
         public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
-            Name = value.Get("Name")?.StringValue;
-
-            if (value.TryGet("AssetID", out var assetIDTag))
-            {
-                AssetID = Guid.Parse(assetIDTag.StringValue);
-                FileID = value.Get("FileID").UShortValue;
-            }
+            DeserializeHeader(value);
 
             /*
             Properties.Clear();

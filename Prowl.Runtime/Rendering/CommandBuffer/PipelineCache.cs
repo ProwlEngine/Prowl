@@ -50,9 +50,9 @@ namespace Prowl.Runtime
         {
             public readonly Pipeline pipeline;
             public readonly GraphicsPipelineDescription description; 
-            public readonly ShaderPass.Variant variant;
+            public readonly ShaderVariant variant;
 
-            internal PipelineInfo(GraphicsPipelineDescription description, Pipeline pipeline, ShaderPass.Variant variant)
+            internal PipelineInfo(GraphicsPipelineDescription description, Pipeline pipeline, ShaderVariant variant)
             {
                 this.pipeline = pipeline;
                 this.description = description;
@@ -72,11 +72,11 @@ namespace Prowl.Runtime
         {
             var keywordProgram = passDesc.pass.GetVariant(passDesc.keywords);
 
-            ResourceLayout[] resourceLayouts = new ResourceLayout[keywordProgram.resourceSets.Count];
+            ResourceLayout[] resourceLayouts = new ResourceLayout[keywordProgram.ResourceSets.Count];
 
             for (int i = 0; i < resourceLayouts.Length; i++)
             {
-                ShaderResource[] resources = keywordProgram.resourceSets[i];
+                ShaderResource[] resources = keywordProgram.ResourceSets[i];
 
                 List<ResourceLayoutElementDescription> elements = new();                
 
@@ -87,18 +87,18 @@ namespace Prowl.Runtime
             }
 
             VertexLayoutDescription[] vertexInputs = 
-                keywordProgram.vertexInputs.Select(MeshUtility.GetLayoutForResource).ToArray();
+                keywordProgram.VertexInputs.Select(MeshUtility.GetLayoutForResource).ToArray();
 
             GraphicsPipelineDescription pipelineDesc = new()
             {
-                BlendState = passDesc.pass.blend,
-                DepthStencilState = passDesc.pass.depthStencil,
+                BlendState = passDesc.pass.Blend,
+                DepthStencilState = passDesc.pass.DepthStencilState,
 
                 RasterizerState = new RasterizerStateDescription(
-                    cullMode: passDesc.pass.cullMode,
+                    cullMode: passDesc.pass.CullMode,
                     fillMode: passDesc.fillMode,
                     frontFace: passDesc.frontFace,
-                    depthClipEnabled: passDesc.pass.depthClipEnabled,
+                    depthClipEnabled: passDesc.pass.DepthClipEnabled,
                     scissorTestEnabled: passDesc.scissorTest
                 ),
 
@@ -107,7 +107,7 @@ namespace Prowl.Runtime
 
                 ShaderSet = new ShaderSetDescription(
                     vertexLayouts: vertexInputs,
-                    shaders: keywordProgram.compiledPrograms,
+                    shaders: keywordProgram.CompiledPrograms,
                     Graphics.GetSpecializations()
                 ),
 

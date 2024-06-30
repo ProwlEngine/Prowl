@@ -1,9 +1,7 @@
-﻿using System;
-using Veldrid;
-using Veldrid.SPIRV;
+﻿using Veldrid;
 using Veldrid.StartupUtilities;
-using System.Text;
 using System.Collections.Generic;
+
 
 namespace Prowl.Runtime
 {   
@@ -144,22 +142,6 @@ namespace Prowl.Runtime
 
             return specializations.ToArray();
         }
-
-        public static Veldrid.Shader[] CreateFromSpirv(string vert, string frag)
-        {
-            CrossCompileOptions options = new()
-            {
-                FixClipSpaceZ = (Device.BackendType == GraphicsBackend.OpenGL || Device.BackendType == GraphicsBackend.OpenGLES) && !Device.IsDepthRangeZeroToOne,
-                InvertVertexOutputY = false,
-                Specializations = GetSpecializations()
-            };
-
-            ShaderDescription vertexShaderDesc = new ShaderDescription(ShaderStages.Vertex, Encoding.UTF8.GetBytes(vert), "main");
-            ShaderDescription fragmentShaderDesc = new ShaderDescription(ShaderStages.Fragment, Encoding.UTF8.GetBytes(frag), "main");
-
-            return Factory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc, options);
-        }
-
 
         public static void CopyTexture(Texture source, Texture destination, bool waitForCompletion = false)
         {

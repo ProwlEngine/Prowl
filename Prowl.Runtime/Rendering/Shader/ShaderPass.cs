@@ -1,80 +1,112 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using Prowl.Runtime.Utils;
 using Veldrid;
+using System.Linq;
 
 namespace Prowl.Runtime
 {
-    public class ShaderPass 
+    public struct ShaderSource
+    {
+        public ShaderStages Stage;
+        public string SourceCode;
+    }
+
+    public struct ShaderPassDescription
+    {
+        public KeyValuePair<string, string>[] Tags;
+        public BlendStateDescription BlendState;
+        public DepthStencilStateDescription DepthStencilState;
+        public FaceCullMode CullingMode;
+        public bool DepthClipEnabled;
+
+        public ShaderSource[] ShaderSources;
+        public Dictionary<string, HashSet<string>> Keywords;
+
+
+        public ShaderPassDescription()
+        {
+            Tags = [ ];
+
+            Keywords = new() { { string.Empty, [ string.Empty ] } };
+
+            BlendState = BlendStateDescription.SingleOverrideBlend;
+            
+            DepthStencilState = new DepthStencilStateDescription(
+                depthTestEnabled: true,
+                depthWriteEnabled: true,
+                comparisonKind: ComparisonKind.LessEqual
+            );
+
+            CullingMode = FaceCullMode.Back;
+            
+            DepthClipEnabled = true;
+        }
+    }
+
+    public sealed class ShaderPass 
     {
         /// <summary>
         /// The name to identify this <see cref="ShaderPass"/> 
         /// </summary>
-        public string name;
+        public readonly string Name;
 
         /// <summary>
         /// The tags to identify this <see cref="ShaderPass"/> 
         /// </summary>
-        public Dictionary<string, string> tags = new();
+        public readonly ImmutableDictionary<string, string> Tags;
 
         /// <summary>
         /// The blending options to use when rendering this <see cref="ShaderPass"/> 
         /// </summary>
-        public BlendStateDescription blend = BlendStateDescription.SingleOverrideBlend;
+        public readonly BlendStateDescription Blend;
 
         /// <summary>
         /// The depth stencil state to use when rendering this <see cref="ShaderPass"/> 
         /// </summary>
-        public DepthStencilStateDescription depthStencil = new DepthStencilStateDescription(
-            depthTestEnabled: true,
-            depthWriteEnabled: true,
-            comparisonKind: ComparisonKind.LessEqual
-        );
+        public readonly DepthStencilStateDescription DepthStencilState;
 
-        public FaceCullMode cullMode = FaceCullMode.Back;
-        public bool depthClipEnabled = true;
+        public readonly FaceCullMode CullMode = FaceCullMode.Back;
+        public readonly bool DepthClipEnabled = true;
 
-
-        public class Variant
-        {
-            public KeyGroup<string, string> keywords;
-            public List<MeshResource> vertexInputs = new();
-            public List<ShaderResource[]> resourceSets = new();
-            public Veldrid.Shader[] compiledPrograms;
-        }
+        private readonly int Hash;
 
         
-        private (ShaderStages, string)[] shaderSource;
-        private Dictionary<string, HashSet<string>> keywords;
-        private PermutationMap<string, string, Variant> variants;
+        private readonly ShaderSource[] shaderSource;
 
-        public delegate Variant VariantGenerator((ShaderStages, string)[] sources, KeyGroup<string, string> keywords);
+        private readonly Dictionary<string, HashSet<string>> keywords;
+        
+        private PermutationMap<string, string, ShaderVariant> variants;
 
-        public ShaderPass(
-            string name, 
-            (string, string)[] tags, 
-            (ShaderStages, string)[] shaderSource, 
-            Dictionary<string, HashSet<string>> keywords
-        ) {
-            this.name = name;
-            this.shaderSource = shaderSource;
 
-            if (keywords == null || keywords.Count == 0)
-                keywords = new() { { string.Empty, [ string.Empty ] } };
+        public ShaderPass(string name, ShaderPassDescription description) 
+        {
+            this.Name = name;
+            
+            this.shaderSource = description.ShaderSources;
 
-            this.keywords = keywords;
+            this.Blend = description.BlendState;
+            this.DepthStencilState = description.DepthStencilState;
+            this.DepthClipEnabled = description.DepthClipEnabled;
+            this.CullMode = description.CullingMode;
 
-            if (tags != null)
-            {
-                for (int i = 0; i < tags.Length; i++)
-                    this.tags.Add(tags[i].Item1, tags[i].Item2);
-            }
+            this.keywords = new();
+
+            // Copy keywords
+            foreach (var value in description.Keywords)
+                keywords.Add(value.Key, new(value.Value));
+
+            this.Tags = ImmutableDictionary.CreateRange(description.Tags);
+            this.Hash = GenerateHash();
         }
 
-        public void CompilePrograms(VariantGenerator variantGenerator)
+        public void CompilePrograms(IVariantCompiler variantGenerator)
         {
-            Variant GenerateVariant(KeyGroup<string, string> keywords) =>
-                variantGenerator.Invoke(shaderSource, keywords);
+            ShaderVariant GenerateVariant(KeyGroup<string, string> keywords)
+            {
+                return variantGenerator.CompileVariant(shaderSource, keywords);
+            }
 
             variants = new(keywords, GenerateVariant);
         }
@@ -82,36 +114,80 @@ namespace Prowl.Runtime
         public KeyGroup<string, string> ValidateKeyGroup(KeyGroup<string, string> keyGroup) => 
             variants.ValidateCombination(keyGroup);
 
-        public Variant GetVariant(KeyGroup<string, string>? keywordID = null) =>
+        public ShaderVariant GetVariant(KeyGroup<string, string>? keywordID = null) =>
             variants.GetValue(keywordID ?? KeyGroup<string, string>.Default);
 
-        public bool TryGetVariant(KeyGroup<string, string>? keywordID, out Variant? variant) =>
+        public bool TryGetVariant(KeyGroup<string, string>? keywordID, out ShaderVariant? variant) =>
             variants.TryGetValue(keywordID ?? KeyGroup<string, string>.Default, out variant);
 
-        public void Dispose()
+        public ShaderPassDescription GetDescription()
         {
-            foreach (Variant program in variants.Values)
-                foreach (Veldrid.Shader shader in program.compiledPrograms)
-                    shader.Dispose();
+            return new ShaderPassDescription()
+            {
+                Tags = Tags.Select(x => new KeyValuePair<string, string>(x.Key, x.Value)).ToArray(),
+                BlendState = Blend,
+                DepthStencilState = DepthStencilState,
+                CullingMode = CullMode,
+                DepthClipEnabled = DepthClipEnabled,
+                ShaderSources = shaderSource,
+                Keywords = keywords
+            };
         }
 
-        public override int GetHashCode()
+        private int GenerateHash()
         {
             HashCode hash = new();
 
-            hash.Add(name);
-            hash.Add(blend);
-            hash.Add(depthStencil);
-            hash.Add(cullMode);
-            hash.Add(depthClipEnabled);            
+            hash.Add(Name);
+            hash.Add(Blend);
+            hash.Add(DepthStencilState);
+            hash.Add(CullMode);
+            hash.Add(DepthClipEnabled);     
 
-            foreach (var pair in tags)
+            foreach (var source in shaderSource)
+            {
+                hash.Add(source.Stage);
+            }       
+
+            foreach (var pair in Tags)
             {
                 hash.Add(pair.Key);
                 hash.Add(pair.Value);
             }
 
+            foreach (var pair in keywords)
+            {
+                hash.Add(pair.Key);
+
+                foreach (var value in pair.Value)
+                    hash.Add(value);
+            }
+
             return hash.ToHashCode();
+        }
+
+        public override int GetHashCode()
+        {
+            return Hash;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            if (obj is not ShaderPass other)
+                return false;
+
+            return Equals(other);
+        }
+
+        public bool Equals(ShaderPass other)
+        {
+            return Hash == other.Hash;
+        }
+
+        public void Dispose()
+        {
+            foreach (ShaderVariant program in variants.Values)
+                program.Dispose();
         }
     }
 }

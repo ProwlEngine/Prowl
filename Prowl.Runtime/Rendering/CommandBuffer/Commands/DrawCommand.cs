@@ -33,13 +33,13 @@ namespace Prowl.Runtime
 
             List<ResourceSet> resources = new();
 
-            MeshUtility.UploadMeshResources(list, Mesh, pipelineInfo.variant.vertexInputs);
+            MeshUtility.UploadMeshResources(list, Mesh, pipelineInfo.variant.VertexInputs);
 
             List<BindableResource> bindableResources = new();
 
             for (int set = 0; set < pipelineInfo.description.ResourceLayouts.Length; set++)
             {
-                ShaderResource[] resourceSet = pipelineInfo.variant.resourceSets[set];
+                ShaderResource[] resourceSet = pipelineInfo.variant.ResourceSets[set];
 
                 bindableResources.Clear();
 
