@@ -3,15 +3,15 @@ Shader "Example/NewShaderFormat"
 Properties
 {
 	// Material property declarations go here
-	_MainTex("Albedo Map", TEXTURE2D)
-	_NormalTex("Normal Map", TEXTURE2D)
-	_EmissionTex("Emissive Map", TEXTURE2D)
-	_SurfaceTex("Surface Map x:AO y:Rough z:Metal", TEXTURE2D)
-	_OcclusionTex("Occlusion Map", TEXTURE2D)
+	_MainTex("Albedo Map", Texture2D)
+	_NormalTex("Normal Map", Texture2D)
+	_EmissionTex("Emissive Map", Texture2D)
+	_SurfaceTex("Surface Map x:AO y:Rough z:Metal", Texture2D)
+	_OcclusionTex("Occlusion Map", Texture2D)
 
-	_EmissiveColor("Emissive Color", COLOR)
-	_EmissionIntensity("Emissive Intensity", FLOAT)
-	_MainColor("Main Color", COLOR)
+	_EmissiveColor("Emissive Color", Color)
+	_EmissionIntensity("Emissive Intensity", Float)
+	_MainColor("Main Color", Color)
 }
 
 // Global state or options applied to every pass. If a pass doesn't specify a value, it will use the ones defined here
@@ -89,11 +89,14 @@ Pass "DefaultPass"
 
     Inputs
     {
+        VertexInput <Position/UV0/UV1/Color/Normals/Tangents/BoneIndices/BoneWeights>
+
+
         // Input location 0
-        VertexInput FLOAT
+        VertexInput Position
 
         // Input location 1
-        VertexInput VECTOR4
+        VertexInput UV0
         
         // Set 0
         Set
