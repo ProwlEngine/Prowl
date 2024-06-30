@@ -52,7 +52,7 @@ namespace Prowl.Runtime
         internal Texture() : base("New Texture") { }
 
         internal Texture(TextureDescription description) : base("New Texture") 
-        { 
+        {
             RecreateInternalTexture(description);
         }
 

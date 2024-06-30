@@ -36,7 +36,6 @@ namespace Prowl.Runtime.GUI
             {
                 _drawList[index].AntiAliasing(antiAliasing);
                 _drawList[index].Clear();
-                
                 _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture);
 
                 drawListsOrdered.Add(_drawList[index]);
@@ -55,11 +54,12 @@ namespace Prowl.Runtime.GUI
         /// All drawing operations applied after this will be cut off by the clip rect and only draw inside it
         /// </summary>
         /// <param name="overwrite">Overwrite all current clip rects instead of using Intersection</param>
-        public void PushClip(Rect rect, bool overwrite = false)
-            => _drawList[currentZIndex].PushClipRect(new(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height), overwrite);
+        public void PushClip(Rect rect, bool overwrite = false) => 
+            _drawList[currentZIndex].PushClipRect(new(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height), overwrite);
 
         /// <summary> Pop the last clip rect </summary>
-        public void PopClip() => _drawList[currentZIndex].PopClipRect();
+        public void PopClip() => 
+            _drawList[currentZIndex].PopClipRect();
 
         /// <summary> Peek at the current clip rect </summary>
         public Rect PeekClip()
@@ -73,7 +73,6 @@ namespace Prowl.Runtime.GUI
             if (!_drawList.ContainsKey(index))
             {
                 _drawList[index] = new UIDrawList(_AntiAliasing);
-                _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture);
             }
 
             // Copy over the clip rect from the previous list
@@ -81,6 +80,7 @@ namespace Prowl.Runtime.GUI
             {
                 var previousList = _drawList[currentZIndex];
                 _drawList[index].PushClipRect(previousList._ClipRectStack.Peek());
+                _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture);
             }
         }
 

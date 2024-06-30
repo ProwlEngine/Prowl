@@ -36,6 +36,7 @@ namespace Prowl.Editor
             }
 
             Texture2D texture = new Texture2D((uint)image.Width, (uint)image.Height, mipLevels, format, usage);
+            texture.Name = "Loaded From File";
 
             try
             {

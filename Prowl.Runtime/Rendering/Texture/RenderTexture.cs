@@ -157,6 +157,7 @@ namespace Prowl.Runtime
             {
                 TextureUsage depthUsage = sampled ? TextureUsage.Sampled | TextureUsage.DepthStencil : TextureUsage.DepthStencil;
                 DepthBuffer = new Texture2D(Width, Height, 1, depthFormat.Value, depthUsage);
+                DepthBuffer.Name = $"RT Depth Buffer";
             }
 
             ColorBuffers = new Texture2D[colorFormats.Length];
@@ -168,6 +169,7 @@ namespace Prowl.Runtime
                 for (int i = 0; i < ColorBuffers.Length; i++)
                 {
                     ColorBuffers[i] = new Texture2D(Width, Height, 1, colorFormats[i], colorUsage, sampleCount);
+                    ColorBuffers[i].Name = $"RT Color Buffer {i}";
                 }
             }
 

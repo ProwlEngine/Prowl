@@ -28,7 +28,10 @@ namespace Prowl.Runtime
         }
 
         /// <summary>Release a Command Buffer.</summary>
-        public static void Release(CommandBuffer buffer) =>
+        public static void Release(CommandBuffer buffer)
+        {
+            buffer.Clear();
             bufferPool.Release(buffer);
+        }
     }
 }

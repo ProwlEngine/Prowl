@@ -13,7 +13,7 @@ namespace Prowl.Runtime
         {
             state.activeMaterial = Material;
             state.activePass = Pass;
-            state.propertyState.ApplyOverride(Material.PropertyState);
+            state.propertyState.ApplyOverride(Material.Properties);
         }
     }
 }
