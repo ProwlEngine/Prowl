@@ -54,16 +54,13 @@ Global
 {
     Tags { ""SomeShaderID"" = ""IsSomeShaderType"", ""SomeOtherValue"" = ""SomeOtherType"" }
 
-    // Blend state- can be predefined state...
-    Blend Off
-    
     // ...or custom values
     Blend
     {    
-        Src Color OneMinusSrcAlpha
+        Src Color InverseSourceAlpha
         Dest Alpha One
 
-        Mode Alpha SubtractDest
+        Mode Alpha ReverseSubtract
         
         Mask None
     }
@@ -71,6 +68,12 @@ Global
     // Stencil state
     Stencil
     {
+        // Depth write
+        DepthWrite On
+        
+        // Comparison kind
+        DepthTest LessEqual
+
         Ref 25
         ReadMask 26
         WriteMask 27
@@ -81,12 +84,6 @@ Global
         Fail Back Zero
         ZFail Front Replace
     }
-
-    // Depth write
-    DepthWrite On
-    
-    // Comparison kind
-    DepthTest LessEqual
 
     // Rasterizer culling mode
     Cull Back
@@ -105,7 +102,7 @@ Pass ""DefaultPass""
 {
     Tags { ""SomeValue"" = ""CustomPassType"", ""SomeOtherValue"" = ""SomeOtherType"" }
 
-    Blend SingleOverride
+    Blend Override
 
     Stencil
     {
@@ -158,16 +155,14 @@ Pass ""AnotherPass""
 
     Blend
     {
-        Target 2
-
-        Src Alpha OneMinusSrcAlpha
-        Src Color DstColor
+        Src Alpha InverseSourceColor
+        Src Color DestinationColor
 
         Dest Alpha One
-        Dest Color OneMinusBlendFactor
+        Dest Color InverseBlendFactor
 
-        Mode Alpha Max
-        Mode Color SubtractDest
+        Mode Alpha Maximum
+        Mode Color ReverseSubtract
         
         Mask RGB
     }

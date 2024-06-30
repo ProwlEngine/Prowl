@@ -1,4 +1,6 @@
-﻿using System.Text;
+﻿using System.Net.WebSockets;
+using System.Text;
+using Veldrid;
 using static Prowl.Runtime.StringTagConverter;
 
 namespace Prowl.Editor.VeldridShaderParser
@@ -6,6 +8,8 @@ namespace Prowl.Editor.VeldridShaderParser
     public class VeldridShaderParser
     {
         private readonly GenericTokenizer<TokenType> _tokenizer;
+
+        private ParsedShader shader;
 
         public VeldridShaderParser(string input)
         {
@@ -35,9 +39,9 @@ namespace Prowl.Editor.VeldridShaderParser
             return tokenType;
         }
 
-        public Shader Parse()
+        public ParsedShader Parse()
         {
-            var shader = new Shader();
+            shader = new ParsedShader();
 
             while (_tokenizer.MoveNext())
             {
@@ -51,6 +55,8 @@ namespace Prowl.Editor.VeldridShaderParser
                         shader.Properties = ParseProperties();
                         break;
                     case "Global":
+                        if(shader.Passes.Count > 0)
+                            throw new InvalidOperationException("Global state must be defined before passes");
                         shader.Global = ParseGlobal();
                         break;
                     case "Pass":
@@ -66,14 +72,14 @@ namespace Prowl.Editor.VeldridShaderParser
             return shader;
         }
 
-        private List<ShaderProperty> ParseProperties()
+        private List<ParsedShaderProperty> ParseProperties()
         {
-            var properties = new List<ShaderProperty>();
+            var properties = new List<ParsedShaderProperty>();
             ExpectToken(TokenType.OpenBrace);
 
             while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
             {
-                var property = new ShaderProperty();
+                var property = new ParsedShaderProperty();
 
                 property.Name = _tokenizer.Token.ToString();
                 ExpectToken(TokenType.OpenParen);
@@ -90,9 +96,9 @@ namespace Prowl.Editor.VeldridShaderParser
             return properties;
         }
 
-        private GlobalState ParseGlobal()
+        private ParsedGlobalState ParseGlobal()
         {
-            var global = new GlobalState();
+            var global = new ParsedGlobalState();
             ExpectToken(TokenType.OpenBrace);
 
             while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
@@ -105,20 +111,12 @@ namespace Prowl.Editor.VeldridShaderParser
                     case "Blend":
                         global.Blend = ParseBlend();
                         break;
-                    case "Stencil":
+                    case "DepthStencil":
                         global.Stencil = ParseStencil();
-                        break;
-                    case "DepthWrite":
-                        ExpectToken(TokenType.Identifier);
-                        global.DepthWrite = ConvertToBoolean(_tokenizer.Token.ToString());
-                        break;
-                    case "DepthTest":
-                        ExpectToken(TokenType.Identifier);
-                        global.DepthTest = ConvertToBoolean(_tokenizer.Token.ToString());
                         break;
                     case "Cull":
                         ExpectToken(TokenType.Identifier);
-                        global.Cull = ConvertToBoolean(_tokenizer.Token.ToString());
+                        global.Cull = Enum.Parse<FaceCullMode>(_tokenizer.Token.ToString(), true);
                         break;
                     case "GlobalInclude":
                         global.GlobalInclude = ParseGlobalInclude();
@@ -158,45 +156,83 @@ namespace Prowl.Editor.VeldridShaderParser
             return tags;
         }
 
-        private BlendState ParseBlend()
+        private BlendAttachmentDescription ParseBlend()
         {
-            var blend = new BlendState();
+            var blend = shader.Global?.Blend ?? BlendAttachmentDescription.AdditiveBlend;
+            blend.BlendEnabled = true;
+
             if (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.OpenBrace)
             {
-                blend.Preset = _tokenizer.Token.ToString();
+                string preset = _tokenizer.Token.ToString();
+                if (preset.Equals("Additive", StringComparison.OrdinalIgnoreCase))
+                    blend = BlendAttachmentDescription.AdditiveBlend;
+                else if (preset.Equals("Alpha", StringComparison.OrdinalIgnoreCase))
+                    blend = BlendAttachmentDescription.AlphaBlend;
+                else if (preset.Equals("Override", StringComparison.OrdinalIgnoreCase))
+                    blend = BlendAttachmentDescription.OverrideBlend;
+                else
+                    throw new InvalidOperationException("Unknown blend preset: " + preset);
+
+
                 return blend;
             }
             
             while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
             {
                 var key = _tokenizer.Token.ToString();
+                string target;
                 switch (key)
                 {
-                    case "Target":
-                        ExpectToken(TokenType.Identifier);
-                        blend.Target = byte.Parse(_tokenizer.Token.ToString());
-                        break;
                     case "Src":
                         ExpectToken(TokenType.Identifier);
-                        blend.SourceTarget = _tokenizer.Token.ToString();
+                        target = _tokenizer.Token.ToString();
                         ExpectToken(TokenType.Identifier);
-                        blend.SourceMode = _tokenizer.Token.ToString();
+                        if (target.Equals("Color", StringComparison.OrdinalIgnoreCase))
+                            blend.SourceColorFactor = Enum.Parse<BlendFactor>(_tokenizer.Token.ToString(), true);
+                        else
+                            blend.SourceAlphaFactor = Enum.Parse<BlendFactor>(_tokenizer.Token.ToString(), true);
+
                         break;
+
                     case "Dest":
                         ExpectToken(TokenType.Identifier);
-                        blend.DestTarget = _tokenizer.Token.ToString();
+                        target = _tokenizer.Token.ToString();
                         ExpectToken(TokenType.Identifier);
-                        blend.DestMode = _tokenizer.Token.ToString();
+                        if (target.Equals("Color", StringComparison.OrdinalIgnoreCase))
+                            blend.DestinationColorFactor = Enum.Parse<BlendFactor>(_tokenizer.Token.ToString(), true);
+                        else
+                            blend.DestinationAlphaFactor = Enum.Parse<BlendFactor>(_tokenizer.Token.ToString(), true);
+
                         break;
+
                     case "Mode":
                         ExpectToken(TokenType.Identifier);
-                        blend.ModeTarget = _tokenizer.Token.ToString();
+                        target = _tokenizer.Token.ToString();
                         ExpectToken(TokenType.Identifier);
-                        blend.Mode = _tokenizer.Token.ToString();
+                        if (target.Equals("Color", StringComparison.OrdinalIgnoreCase))
+                            blend.ColorFunction = Enum.Parse<BlendFunction>(_tokenizer.Token.ToString(), true);
+                        else
+                            blend.AlphaFunction = Enum.Parse<BlendFunction>(_tokenizer.Token.ToString(), true);
+
                         break;
+
                     case "Mask":
                         ExpectToken(TokenType.Identifier);
-                        blend.Mask = _tokenizer.Token.ToString();
+                        var mask = _tokenizer.Token.ToString();
+                        if (mask.Equals("None", StringComparison.OrdinalIgnoreCase)) 
+                        { 
+                            blend.ColorWriteMask = ColorWriteMask.None;
+                        }
+                        else
+                        {
+                            if (mask.Contains('R')) blend.ColorWriteMask = ColorWriteMask.Red;
+                            if (mask.Contains('G')) blend.ColorWriteMask |= ColorWriteMask.Green;
+                            if (mask.Contains('B')) blend.ColorWriteMask |= ColorWriteMask.Blue;
+                            if (mask.Contains('A')) blend.ColorWriteMask |= ColorWriteMask.Alpha;
+
+                            if (blend.ColorWriteMask == 0)
+                                throw new InvalidOperationException("Invalid color write mask: " + mask);
+                        }
                         break;
 
                     default:
@@ -207,9 +243,28 @@ namespace Prowl.Editor.VeldridShaderParser
             return blend;
         }
 
-        private StencilState ParseStencil()
+        private DepthStencilStateDescription ParseStencil()
         {
-            var stencil = new StencilState();
+            var stencil = shader.Global.Stencil ?? DepthStencilStateDescription.DepthOnlyLessEqual;
+
+            if (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.OpenBrace)
+            {
+                string preset = _tokenizer.Token.ToString();
+                if (preset.Equals("DepthGreaterEqual", StringComparison.OrdinalIgnoreCase))
+                    stencil = DepthStencilStateDescription.DepthOnlyGreaterEqual;
+                else if (preset.Equals("DepthLessEqual", StringComparison.OrdinalIgnoreCase))
+                    stencil = DepthStencilStateDescription.DepthOnlyLessEqual;
+                else if (preset.Equals("DepthGreaterEqualRead", StringComparison.OrdinalIgnoreCase))
+                    stencil = DepthStencilStateDescription.DepthOnlyGreaterEqualRead;
+                else if (preset.Equals("DepthLessEqualRead", StringComparison.OrdinalIgnoreCase))
+                    stencil = DepthStencilStateDescription.DepthOnlyLessEqualRead;
+                else
+                    throw new InvalidOperationException("Unknown blend preset: " + preset);
+
+                return stencil;
+            }
+
+
             ExpectToken(TokenType.OpenBrace);
 
             while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
@@ -217,41 +272,51 @@ namespace Prowl.Editor.VeldridShaderParser
                 var key = _tokenizer.Token.ToString();
                 switch (key)
                 {
+                    case "DepthWrite":
+                        ExpectToken(TokenType.Identifier);
+                        stencil.DepthWriteEnabled = ConvertToBoolean(_tokenizer.Token.ToString());
+                        break;
+                    case "DepthTest":
+                        ExpectToken(TokenType.Identifier);
+                        string kind = _tokenizer.Token.ToString();
+                        stencil.DepthTestEnabled = Enum.TryParse<ComparisonKind>(kind, true, out var res);
+                        stencil.DepthComparison = res;
+                        break;
                     case "Ref":
                         ExpectToken(TokenType.Identifier);
-                        stencil.Ref = byte.Parse(_tokenizer.Token.ToString());
+                        stencil.StencilReference = byte.Parse(_tokenizer.Token.ToString());
                         break;
                     case "ReadMask":
                         ExpectToken(TokenType.Identifier);
-                        stencil.ReadMask = byte.Parse(_tokenizer.Token.ToString());
+                        stencil.StencilReadMask = byte.Parse(_tokenizer.Token.ToString());
                         break;
                     case "WriteMask":
                         ExpectToken(TokenType.Identifier);
-                        stencil.WriteMask = byte.Parse(_tokenizer.Token.ToString());
+                        stencil.StencilWriteMask = byte.Parse(_tokenizer.Token.ToString());
                         break;
                     case "Comparison":
                         ExpectToken(TokenType.Identifier);
-                        stencil.Comparison = _tokenizer.Token.ToString();
+                        stencil.StencilFront.Comparison = Enum.Parse<ComparisonKind>(_tokenizer.Token.ToString(), true);
                         ExpectToken(TokenType.Identifier);
-                        stencil.ComparisonMode = _tokenizer.Token.ToString();
+                        stencil.StencilBack.Comparison = Enum.Parse<ComparisonKind>(_tokenizer.Token.ToString(), true);
                         break;
                     case "Pass":
                         ExpectToken(TokenType.Identifier);
-                        stencil.Pass = _tokenizer.Token.ToString();
+                        stencil.StencilFront.Pass = Enum.Parse<StencilOperation>(_tokenizer.Token.ToString(), true);
                         ExpectToken(TokenType.Identifier);
-                        stencil.PassMode = _tokenizer.Token.ToString();
+                        stencil.StencilBack.Pass = Enum.Parse<StencilOperation>(_tokenizer.Token.ToString(), true);
                         break;
                     case "Fail":
                         ExpectToken(TokenType.Identifier);
-                        stencil.Fail = _tokenizer.Token.ToString();
+                        stencil.StencilFront.Fail = Enum.Parse<StencilOperation>(_tokenizer.Token.ToString(), true);
                         ExpectToken(TokenType.Identifier);
-                        stencil.FailMode = _tokenizer.Token.ToString();
+                        stencil.StencilBack.Fail = Enum.Parse<StencilOperation>(_tokenizer.Token.ToString(), true);
                         break;
                     case "ZFail":
                         ExpectToken(TokenType.Identifier);
-                        stencil.ZFail = _tokenizer.Token.ToString();
+                        stencil.StencilFront.DepthFail = Enum.Parse<StencilOperation>(_tokenizer.Token.ToString(), true);
                         ExpectToken(TokenType.Identifier);
-                        stencil.ZFailMode = _tokenizer.Token.ToString();
+                        stencil.StencilBack.DepthFail = Enum.Parse<StencilOperation>(_tokenizer.Token.ToString(), true);
                         break;
 
                     default:
@@ -280,12 +345,14 @@ namespace Prowl.Editor.VeldridShaderParser
             return content;
         }
 
-        private Pass ParsePass()
+        private ParsedPass ParsePass()
         {
-            var pass = new Pass();
+            var pass = new ParsedPass();
             ExpectToken(TokenType.Identifier);
             pass.Name = _tokenizer.ParseQuotedStringValue();
             ExpectToken(TokenType.OpenBrace);
+
+            pass.Cull = shader.Global.Cull;
 
             while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
             {
@@ -297,20 +364,12 @@ namespace Prowl.Editor.VeldridShaderParser
                     case "Blend":
                         pass.Blend = ParseBlend();
                         break;
-                    case "Stencil":
+                    case "DepthStencil":
                         pass.Stencil = ParseStencil();
-                        break;
-                    case "DepthWrite":
-                        ExpectToken(TokenType.Identifier);
-                        pass.DepthWrite = ConvertToBoolean(_tokenizer.Token.ToString());
-                        break;
-                    case "DepthTest":
-                        ExpectToken(TokenType.Identifier);
-                        pass.DepthTest = ConvertToBoolean(_tokenizer.Token.ToString());
                         break;
                     case "Cull":
                         ExpectToken(TokenType.Identifier);
-                        pass.Cull = ConvertToBoolean(_tokenizer.Token.ToString());
+                        pass.Cull = Enum.Parse<FaceCullMode>(_tokenizer.Token.ToString(), true);
                         break;
                     case "Program":
                         pass.Programs.Add(ParseProgram());
@@ -321,11 +380,11 @@ namespace Prowl.Editor.VeldridShaderParser
             return pass;
         }
 
-        private ShaderProgram ParseProgram()
+        private ParsedShaderProgram ParseProgram()
         {
-            var program = new ShaderProgram();
+            var program = new ParsedShaderProgram();
             ExpectToken(TokenType.Identifier);
-            program.Type = _tokenizer.Token.ToString();
+            program.Type = Enum.Parse<ShaderStages>(_tokenizer.Token.ToString(), true);
             ExpectToken(TokenType.OpenBrace);
 
             var content = "";
@@ -379,12 +438,12 @@ namespace Prowl.Editor.VeldridShaderParser
         Quote,
     }
 
-    public class Shader
+    public class ParsedShader
     {
         public string Name { get; set; }
-        public List<ShaderProperty> Properties { get; set; } = new List<ShaderProperty>();
-        public GlobalState Global { get; set; }
-        public List<Pass> Passes { get; set; } = new List<Pass>();
+        public List<ParsedShaderProperty> Properties { get; set; } = new List<ParsedShaderProperty>();
+        public ParsedGlobalState Global { get; set; }
+        public List<ParsedPass> Passes { get; set; } = new List<ParsedPass>();
         public string Fallback { get; set; }
 
         public override string ToString()
@@ -414,36 +473,34 @@ namespace Prowl.Editor.VeldridShaderParser
                 }
                 sb.AppendLine("}");
 
-                if (Global.Blend != null)
-                {
-                    sb.AppendLine($"Blend {Global.Blend.Preset}");
-                    if (string.IsNullOrEmpty(Global.Blend.Preset))
-                    {
-                        sb.AppendLine("{");
-                        sb.AppendLine($"Src {Global.Blend.SourceTarget} {Global.Blend.SourceMode}");
-                        sb.AppendLine($"Dst {Global.Blend.DestTarget} {Global.Blend.DestMode}");
-                        sb.AppendLine($"Mode {Global.Blend.ModeTarget} {Global.Blend.Mode}");
-                        sb.AppendLine($"Mask {Global.Blend.Mask}");
-                        sb.AppendLine("}");
-                    }
-                }
+                sb.AppendLine($"Blend");
+                sb.AppendLine("{");
+                sb.AppendLine($"Src Color {Global.Blend.Value.SourceColorFactor}");
+                sb.AppendLine($"Src Alpha {Global.Blend.Value.SourceColorFactor}");
+                sb.AppendLine($"Dst Color {Global.Blend.Value.DestinationColorFactor}");
+                sb.AppendLine($"Dst Alpha {Global.Blend.Value.DestinationAlphaFactor}");
+                sb.AppendLine($"Mode Color {Global.Blend.Value.ColorFunction}");
+                sb.AppendLine($"Mode Alpha {Global.Blend.Value.AlphaFunction}");
+                sb.AppendLine($"Mask {Global.Blend.Value.ColorWriteMask}");
+
+                sb.AppendLine("}");
 
                 if (Global.Stencil != null)
                 {
                     sb.AppendLine("Stencil");
                     sb.AppendLine("{");
-                    sb.AppendLine($"Ref {Global.Stencil.Ref}");
-                    sb.AppendLine($"ReadMask {Global.Stencil.ReadMask}");
-                    sb.AppendLine($"WriteMask {Global.Stencil.WriteMask}");
-                    sb.AppendLine($"Comparison {Global.Stencil.Comparison} {Global.Stencil.ComparisonMode}");
-                    sb.AppendLine($"Pass {Global.Stencil.Pass} {Global.Stencil.PassMode}");
-                    sb.AppendLine($"Fail {Global.Stencil.Fail} {Global.Stencil.FailMode}");
-                    sb.AppendLine($"ZFail {Global.Stencil.ZFail} {Global.Stencil.ZFailMode}");
+                    sb.AppendLine($"DepthWrite {Global.Stencil.Value.DepthWriteEnabled}");
+                    sb.AppendLine($"DepthTest {Global.Stencil.Value.DepthTestEnabled}");
+                    sb.AppendLine($"Ref {Global.Stencil.Value.StencilReference}");
+                    sb.AppendLine($"ReadMask {Global.Stencil.Value.StencilReadMask}");
+                    sb.AppendLine($"WriteMask {Global.Stencil.Value.StencilWriteMask}");
+                    sb.AppendLine($"Comparison {Global.Stencil.Value.StencilFront.Comparison} {Global.Stencil.Value.StencilBack.Comparison}");
+                    sb.AppendLine($"Pass {Global.Stencil.Value.StencilFront.Pass} {Global.Stencil.Value.StencilBack.Pass}");
+                    sb.AppendLine($"Fail {Global.Stencil.Value.StencilFront.Fail} {Global.Stencil.Value.StencilBack.Fail}");
+                    sb.AppendLine($"ZFail {Global.Stencil.Value.StencilFront.DepthFail} {Global.Stencil.Value.StencilBack.DepthFail}");
                     sb.AppendLine("}");
                 }
 
-                sb.AppendLine($"DepthWrite {Global.DepthWrite}");
-                sb.AppendLine($"DepthTest {Global.DepthTest}");
                 sb.AppendLine($"Cull {Global.Cull}");
 
                 sb.AppendLine($"GlobalInclude");
@@ -466,36 +523,35 @@ namespace Prowl.Editor.VeldridShaderParser
                 }
                 sb.AppendLine("}");
 
-                if (pass.Blend != null)
-                {
-                    sb.AppendLine($"Blend {pass.Blend.Preset}");
-                    if (string.IsNullOrEmpty(pass.Blend.Preset))
-                    {
-                        sb.AppendLine("{");
-                        sb.AppendLine($"Src {pass.Blend.SourceTarget} {pass.Blend.SourceMode}");
-                        sb.AppendLine($"Dst {pass.Blend.DestTarget} {pass.Blend.DestMode}");
-                        sb.AppendLine($"Mode {pass.Blend.ModeTarget} {pass.Blend.Mode}");
-                        sb.AppendLine($"Mask {pass.Blend.Mask}");
-                        sb.AppendLine("}");
-                    }
-                }
+                sb.AppendLine($"Blend");
+                sb.AppendLine("{");
+                sb.AppendLine($"Src Color {pass.Blend.Value.SourceColorFactor}");
+                sb.AppendLine($"Src Alpha {pass.Blend.Value.SourceColorFactor}");
+                sb.AppendLine($"Dst Color {pass.Blend.Value.DestinationColorFactor}");
+                sb.AppendLine($"Dst Alpha {pass.Blend.Value.DestinationAlphaFactor}");
+                sb.AppendLine($"Mode Color {pass.Blend.Value.ColorFunction}");
+                sb.AppendLine($"Mode Alpha {pass.Blend.Value.AlphaFunction}");
+                sb.AppendLine($"Mask {pass.Blend.Value.ColorWriteMask}");
+                sb.AppendLine("}");
 
                 if(pass.Stencil != null)
                 {
                     sb.AppendLine("Stencil");
                     sb.AppendLine("{");
-                    sb.AppendLine($"Ref {pass.Stencil.Ref}");
-                    sb.AppendLine($"ReadMask {pass.Stencil.ReadMask}");
-                    sb.AppendLine($"WriteMask {pass.Stencil.WriteMask}");
-                    sb.AppendLine($"Comparison {pass.Stencil.Comparison} {pass.Stencil.ComparisonMode}");
-                    sb.AppendLine($"Pass {pass.Stencil.Pass} {pass.Stencil.PassMode}");
-                    sb.AppendLine($"Fail {pass.Stencil.Fail} {pass.Stencil.FailMode}");
-                    sb.AppendLine($"ZFail {pass.Stencil.ZFail} {pass.Stencil.ZFailMode}");
+                    sb.AppendLine("{");
+                    sb.AppendLine($"DepthWrite {pass.Stencil.Value.DepthWriteEnabled}");
+                    sb.AppendLine($"DepthTest {pass.Stencil.Value.DepthTestEnabled}");
+                    sb.AppendLine($"Ref {pass.Stencil.Value.StencilReference}");
+                    sb.AppendLine($"ReadMask {pass.Stencil.Value.StencilReadMask}");
+                    sb.AppendLine($"WriteMask {pass.Stencil.Value.StencilWriteMask}");
+                    sb.AppendLine($"Comparison {pass.Stencil.Value.StencilFront.Comparison} {pass.Stencil.Value.StencilBack.Comparison}");
+                    sb.AppendLine($"Pass {pass.Stencil.Value.StencilFront.Pass} {pass.Stencil.Value.StencilBack.Pass}");
+                    sb.AppendLine($"Fail {pass.Stencil.Value.StencilFront.Fail} {pass.Stencil.Value.StencilBack.Fail}");
+                    sb.AppendLine($"ZFail {pass.Stencil.Value.StencilFront.DepthFail} {pass.Stencil.Value.StencilBack.DepthFail}");
                     sb.AppendLine("}");
                 }
 
-                sb.AppendLine($"DepthWrite {pass.DepthWrite}");
-                sb.AppendLine($"DepthTest {pass.DepthTest}");
+                sb.AppendLine($"DepthTest {pass.DepthComparison}");
                 sb.AppendLine($"Cull {pass.Cull}");
                 foreach (var program in pass.Programs)
                 {
@@ -513,76 +569,36 @@ namespace Prowl.Editor.VeldridShaderParser
         }
     }
 
-    public class ShaderProperty
+    public class ParsedShaderProperty
     {
         public string Name { get; set; }
         public string DisplayName { get; set; }
         public string Type { get; set; }
     }
 
-    public class GlobalState
+    public class ParsedGlobalState
     {
         public Dictionary<string, string> Tags { get; set; } = new Dictionary<string, string>();
-        public BlendState? Blend { get; set; }
-        public StencilState? Stencil { get; set; }
-        public bool DepthWrite { get; set; }
-        public bool DepthTest { get; set; }
-        public bool Cull { get; set; }
-        public string GlobalInclude { get; set; }
+        public BlendAttachmentDescription? Blend { get; set; } = null;
+        public DepthStencilStateDescription? Stencil { get; set; } = null;
+        public FaceCullMode Cull { get; set; } = FaceCullMode.Back;
+        public string GlobalInclude { get; set; } = "";
     }
 
-    public class BlendState
-    {
-        public string Preset { get; set; }
-
-        public byte Target { get; set; }
-
-        public string SourceTarget { get; set; }
-        public string SourceMode { get; set; }
-
-        public string DestTarget { get; set; }
-        public string DestMode { get; set; }
-
-        public string ModeTarget { get; set; }
-        public string Mode { get; set; }
-
-        public string Mask { get; set; }
-    }
-
-    public class StencilState
-    {
-        public byte Ref { get; set; }
-        public byte ReadMask { get; set; }
-        public byte WriteMask { get; set; }
-
-        public string Comparison { get; set; }
-        public string ComparisonMode { get; set; }
-
-        public string Pass { get; set; }
-        public string PassMode { get; set; }
-
-        public string Fail { get; set; }
-        public string FailMode { get; set; }
-
-        public string ZFail { get; set; }
-        public string ZFailMode { get; set; }
-    }
-
-    public class Pass
+    public class ParsedPass
     {
         public string Name { get; set; }
         public Dictionary<string, string> Tags { get; set; } = new Dictionary<string, string>();
-        public BlendState? Blend { get; set; }
-        public StencilState? Stencil { get; set; }
-        public bool DepthWrite { get; set; }
-        public bool DepthTest { get; set; }
-        public bool Cull { get; set; }
-        public List<ShaderProgram> Programs { get; set; } = new List<ShaderProgram>();
+        public BlendAttachmentDescription? Blend { get; set; } = null;
+        public DepthStencilStateDescription? Stencil { get; set; } = null;
+        public ComparisonKind DepthComparison { get; set; }
+        public FaceCullMode Cull { get; set; }
+        public List<ParsedShaderProgram> Programs { get; set; } = new List<ParsedShaderProgram>();
     }
 
-    public class ShaderProgram
+    public class ParsedShaderProgram
     {
-        public string Type { get; set; }
+        public ShaderStages Type { get; set; }
         public string Content { get; set; }
     }
 }

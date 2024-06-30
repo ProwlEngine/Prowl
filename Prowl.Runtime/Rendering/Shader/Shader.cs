@@ -61,7 +61,7 @@ namespace Prowl.Runtime
 
         internal Shader() : base("New Shader") { }
 
-        internal Shader(string name, params ShaderPass[] passes) : base(name)
+        public Shader(string name, params ShaderPass[] passes) : base(name)
         {
             foreach (ShaderPass pass in passes)
                 AddPass(pass);

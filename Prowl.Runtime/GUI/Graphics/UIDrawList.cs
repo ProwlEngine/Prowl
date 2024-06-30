@@ -652,7 +652,6 @@ namespace Prowl.Runtime.GUI.Graphics
         {
             if (radius == 0.0f)
                 _Path.Add(centre);
-            _Path.Reserve(_Path.Count + num_segments + 1);
             for (int i = 0; i <= num_segments; i++)
             {
                 float a = amin + i / (float)num_segments * (amax - amin);
@@ -684,7 +683,6 @@ namespace Prowl.Runtime.GUI.Graphics
             }
             else
             {
-                _Path.Reserve(_Path.Count + amax - amin + 1);
                 for (int a = amin; a <= amax; a++)
                 {
                     Vector2 c = circle_vtx[a % circle_vtx_count];
