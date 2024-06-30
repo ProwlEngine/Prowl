@@ -10,14 +10,6 @@ namespace Prowl.Runtime.GUI.Graphics
             return list[list.Count - 1];
         }
 
-        public static void Reserve<T>(this List<T> list, int new_capacity)
-        {
-            if (new_capacity <= list.Capacity) 
-                return;
-            
-            list.Resize(new_capacity);
-        }
-
         public static void Resize<T>(this List<T> list, int sz)
         {
             int cur = list.Count;
