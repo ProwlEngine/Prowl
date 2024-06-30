@@ -22,10 +22,15 @@ namespace Prowl.Runtime
         public IndexFormat IndexFormat {
             get => indexFormat;
             set {
-                if (isWritable == false) return;
+                if (isWritable == false || indexFormat == value) return;
+                
                 changed = true;
                 indexFormat = value;
-                indices = [];
+
+                if (value == IndexFormat.UInt16)
+                    indices32 = [];
+                else
+                    indices16 = [];
             }
         }
 
@@ -59,7 +64,7 @@ namespace Prowl.Runtime
                     colors = null;
                     uv = null;
                     uv2 = null;
-                    indices = null;
+                    indices32 = null;
                 }
             }
         }
@@ -89,9 +94,14 @@ namespace Prowl.Runtime
             set => WriteVertexData(ref uv2, value, value.Length);
         }
 
-        public uint[] Indices {
-            get => ReadVertexData(indices ?? []);
-            set => WriteVertexData(ref indices, value, value.Length, false);
+        public uint[] Indices32 {
+            get => ReadVertexData(indices32 ?? []);
+            set => WriteVertexData(ref indices32, value, value.Length, false);
+        }
+
+        public ushort[] Indices16 {
+            get => ReadVertexData(indices16 ?? []);
+            set => WriteVertexData(ref indices16, value, value.Length, false);
         }
 
         public System.Numerics.Vector4[] BoneIndices {
@@ -105,7 +115,7 @@ namespace Prowl.Runtime
         }
 
         public int VertexCount => vertices?.Length ?? 0;
-        public int IndexCount => indices?.Length ?? 0;
+        public int IndexCount => indices32?.Length ?? indices16?.Length ?? 0;
 
         public DeviceBuffer VertexBuffer => vertexBuffer;
         public DeviceBuffer IndexBuffer => indexBuffer;
@@ -128,7 +138,10 @@ namespace Prowl.Runtime
         Color32[]? colors;
         System.Numerics.Vector2[]? uv;
         System.Numerics.Vector2[]? uv2;
-        uint[]? indices;
+        
+        uint[]? indices32;
+        ushort[]? indices16;
+        
         System.Numerics.Vector4[]? boneIndices;
         System.Numerics.Vector4[]? boneWeights;
 
@@ -159,7 +172,7 @@ namespace Prowl.Runtime
             colors = null;
             uv = null;
             uv2 = null;
-            indices = null;
+            indices32 = null;
             tangents = null;
             boneIndices = null;
             boneWeights = null;
@@ -181,28 +194,28 @@ namespace Prowl.Runtime
             if (vertices == null || vertices.Length == 0)
                 throw new InvalidOperationException($"Mesh has no vertices");
 
-            if (indices == null || indices.Length == 0)
+            if (indices32 == null || indices32.Length == 0)
                 throw new InvalidOperationException($"Mesh has no indices");
 
             switch (meshTopology)
             {
                 case PrimitiveTopology.TriangleList:
-                    if (indices.Length % 3 != 0)
-                        throw new InvalidOperationException($"Triangle List mesh doesn't have the right amount of indices. Has: {indices.Length}. Should be a multiple of 3");
+                    if (indices32.Length % 3 != 0)
+                        throw new InvalidOperationException($"Triangle List mesh doesn't have the right amount of indices. Has: {indices32.Length}. Should be a multiple of 3");
                     break;
                 case PrimitiveTopology.TriangleStrip:
-                    if (indices.Length < 3)
-                        throw new InvalidOperationException($"Triangle Strip mesh doesn't have the right amount of indices. Has: {indices.Length}. Should have at least 3");
+                    if (indices32.Length < 3)
+                        throw new InvalidOperationException($"Triangle Strip mesh doesn't have the right amount of indices. Has: {indices32.Length}. Should have at least 3");
                     break;
 
                 case PrimitiveTopology.LineList:
-                    if (indices.Length % 2 != 0)
-                        throw new InvalidOperationException($"Line List mesh doesn't have the right amount of indices. Has: {indices.Length}. Should be a multiple of 2");
+                    if (indices32.Length % 2 != 0)
+                        throw new InvalidOperationException($"Line List mesh doesn't have the right amount of indices. Has: {indices32.Length}. Should be a multiple of 2");
                     break;
 
                 case PrimitiveTopology.LineStrip:
-                    if (indices.Length < 2)
-                        throw new InvalidOperationException($"Line Strip mesh doesn't have the right amount of indices. Has: {indices.Length}. Should have at least 2");
+                    if (indices32.Length < 2)
+                        throw new InvalidOperationException($"Line Strip mesh doesn't have the right amount of indices. Has: {indices32.Length}. Should have at least 2");
                     break;
             }
 
@@ -237,23 +250,15 @@ namespace Prowl.Runtime
 
             // Index buffer upload
             uint indexByteSize = (uint)(indexFormat == IndexFormat.UInt16 ? sizeof(ushort) : sizeof(uint));
-            indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)indices.Length * indexByteSize, BufferUsage.IndexBuffer));
+            indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)indices32.Length * indexByteSize, BufferUsage.IndexBuffer));
 
             if (indexFormat == IndexFormat.UInt16)
             {
-                ushort[] data = new ushort[indices.Length];
-                for (var i = 0; i < indices.Length; i++)
-                {
-                    if (indices[i] >= ushort.MaxValue)
-                        throw new InvalidOperationException($"[Mesh] Invalid value {indices[i]} for 16-bit indices");
-                    data[i] = (ushort)indices[i];
-                }
-                
-                Graphics.Device.UpdateBuffer(indexBuffer, 0, data);
+                Graphics.Device.UpdateBuffer(indexBuffer, 0, indices16);
             }
             else if (indexFormat == IndexFormat.UInt32)
             {
-                Graphics.Device.UpdateBuffer(indexBuffer, 0, indices);
+                Graphics.Device.UpdateBuffer(indexBuffer, 0, indices32);
             }
         }
 
@@ -284,15 +289,15 @@ namespace Prowl.Runtime
         public void RecalculateNormals()
         {
             if (vertices == null || vertices.Length < 3) return;
-            if (indices == null || indices.Length < 3) return;
+            if (indices32 == null || indices32.Length < 3) return;
 
             var normals = new System.Numerics.Vector3[vertices.Length];
 
-            for (int i = 0; i < indices.Length; i += 3)
+            for (int i = 0; i < indices32.Length; i += 3)
             {
-                uint ai = indices[i];
-                uint bi = indices[i + 1];
-                uint ci = indices[i + 2];
+                uint ai = indices32[i];
+                uint bi = indices32[i + 1];
+                uint ci = indices32[i + 2];
 
                 System.Numerics.Vector3 n = System.Numerics.Vector3.Normalize(System.Numerics.Vector3.Cross(
                     vertices[bi] - vertices[ai],
@@ -313,16 +318,16 @@ namespace Prowl.Runtime
         public void RecalculateTangents()
         {
             if (vertices == null || vertices.Length < 3) return;
-            if (indices == null || indices.Length < 3) return;
+            if (indices32 == null || indices32.Length < 3) return;
             if (uv == null) return;
 
             var tangents = new System.Numerics.Vector3[vertices.Length];
 
-            for (int i = 0; i < indices.Length; i += 3)
+            for (int i = 0; i < indices32.Length; i += 3)
             {
-                uint ai = indices[i];
-                uint bi = indices[i + 1];
-                uint ci = indices[i + 2];
+                uint ai = indices32[i];
+                uint bi = indices32[i + 1];
+                uint ci = indices32[i + 2];
 
                 System.Numerics.Vector3 edge1 = vertices[bi] - vertices[ai];
                 System.Numerics.Vector3 edge2 = vertices[ci] - vertices[ai];
@@ -370,7 +375,7 @@ namespace Prowl.Runtime
                     new System.Numerics.Vector2(1, 1),
                 ],
 
-                indices = [0, 2, 1, 2, 3, 1]
+                indices32 = [0, 2, 1, 2, 3, 1]
             };
 
             fullScreenQuad = mesh;
@@ -423,7 +428,7 @@ namespace Prowl.Runtime
 
             mesh.vertices = vertices.ToArray();
             mesh.uv = uvs.ToArray();
-            mesh.indices = indices.ToArray();
+            mesh.indices32 = indices.ToArray();
 
             mesh.RecalculateBounds();
             mesh.RecalculateNormals();
@@ -553,10 +558,10 @@ namespace Prowl.Runtime
                     }
                 }
 
-                writer.Write(indices?.Length ?? 0);
-                if (indices != null)
+                writer.Write(indices32?.Length ?? 0);
+                if (indices32 != null)
                 {
-                    foreach (var index in indices)
+                    foreach (var index in indices32)
                         writer.Write(index);
                 }
 
@@ -678,9 +683,9 @@ namespace Prowl.Runtime
                 var indexCount = reader.ReadInt32();
                 if (indexCount > 0)
                 {
-                    indices = new uint[indexCount];
+                    indices32 = new uint[indexCount];
                     for (int i = 0; i < indexCount; i++)
-                        indices[i] = reader.ReadUInt32();
+                        indices32[i] = reader.ReadUInt32();
                 }
 
                 var boneIndexCount = reader.ReadInt32();

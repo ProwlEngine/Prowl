@@ -30,7 +30,7 @@ namespace Prowl.Runtime
             texture.Name = "Default Created Texture";
 
             texture.Sampler.SetFilter(FilterType.Point, FilterType.Point, FilterType.Point);
-            texture.SetData(new Memory<Color32>(colors));
+            texture.SetData(new Span<Color32>(colors));
             return texture;
         }
 
@@ -77,13 +77,13 @@ namespace Prowl.Runtime
         /// Sets the data of an area of the <see cref="Texture2D"/>.
         /// </summary>
         /// <typeparam name="T">A struct with the same format as this <see cref="Texture2D"/>'s pixels.</typeparam>
-        /// <param name="data">A <see cref="Memory{T}"/> containing the new pixel data.</param>
+        /// <param name="data">A <see cref="Span{T}"/> containing the new pixel data.</param>
         /// <param name="rectX">The X coordinate of the first pixel to write.</param>
         /// <param name="rectY">The Y coordinate of the first pixel to write.</param>
         /// <param name="rectWidth">The width of the rectangle of pixels to write.</param>
         /// <param name="rectHeight">The height of the rectangle of pixels to write.</param>
         /// <param name="mipLevel">The mip level to write to.</param>
-        public unsafe void SetData<T>(Memory<T> data, uint rectX, uint rectY, uint rectWidth, uint rectHeight, uint mipLevel = 0) where T : unmanaged =>
+        public unsafe void SetData<T>(Span<T> data, uint rectX, uint rectY, uint rectWidth, uint rectHeight, uint mipLevel = 0) where T : unmanaged =>
             InternalSetData(data, new Vector3Int((int)rectX, (int)rectY, 0), new Vector3Int((int)rectWidth, (int)rectHeight, 1), 0, mipLevel);
 
         /// <summary>
@@ -91,7 +91,7 @@ namespace Prowl.Runtime
         /// </summary>
         /// <typeparam name="T">A struct with the same format as this <see cref="Texture2D"/>'s pixels.</typeparam>
         /// <param name="data">A <see cref="ReadOnlySpan{T}"/> containing the new pixel data.</param>
-        public void SetData<T>(Memory<T> data, uint mipLevel = 0) where T : unmanaged =>
+        public void SetData<T>(Span<T> data, uint mipLevel = 0) where T : unmanaged =>
             SetData(data, 0, 0, Width, Height, mipLevel);
 
         /// <summary>
@@ -108,7 +108,7 @@ namespace Prowl.Runtime
         /// <typeparam name="T">A struct with the same format as this <see cref="Texture2D"/>'s pixels.</typeparam>
         /// <param name="data">A <see cref="Span{T}"/> in which to write the pixel data.</param>
         /// <param name="mipLevel">The mip level to copy.</param>
-        public unsafe void CopyData<T>(Memory<T> data, uint mipLevel = 0) where T : unmanaged =>
+        public unsafe void CopyData<T>(Span<T> data, uint mipLevel = 0) where T : unmanaged =>
             InternalCopyData(data, 0, mipLevel);
 
         /// <summary>
@@ -137,9 +137,9 @@ namespace Prowl.Runtime
             compoundTag.Add("ImageFormat", new((int)Format));
             compoundTag.Add("Usage", new((int)Usage));
 
-            Memory<byte> memory = new byte[GetMemoryUsage()];
-            CopyData(memory);
-            compoundTag.Add("Data", new(memory.ToArray()));
+            Span<byte> Span = new byte[GetMemoryUsage()];
+            CopyData(Span);
+            compoundTag.Add("Data", new(Span.ToArray()));
 
             return compoundTag;
         }
@@ -158,8 +158,8 @@ namespace Prowl.Runtime
 
             typeof(Texture2D).GetConstructor(param).Invoke(this, values);
 
-            Memory<byte> memory = value["Data"].ByteArrayValue;
-            SetData(memory);
+            Span<byte> Span = value["Data"].ByteArrayValue;
+            SetData(Span);
 
             if (isMipMapped)
                 GenerateMipmaps();

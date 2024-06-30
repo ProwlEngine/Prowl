@@ -27,7 +27,7 @@ namespace Prowl.Runtime.RenderPipelines
             for (int i = 0; i < internalCommandList.Count; i++)
                 internalCommandList[i].ExecuteCommand(commandList, ref state);
 
-            Graphics.SubmitCommands(commandList, true);
+            Graphics.ExecuteCommandList(commandList, true);
 
             state.Clear();
             commandList.Dispose();

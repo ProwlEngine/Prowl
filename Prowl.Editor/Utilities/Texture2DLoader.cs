@@ -1,4 +1,7 @@
-﻿using ImageMagick;
+﻿using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats;
+using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.PixelFormats;
 using Prowl.Runtime;
 using Veldrid;
 
@@ -8,24 +11,50 @@ namespace Prowl.Editor
     {
         #region ImageMagick integration
 
+
+        private static Dictionary<Type, PixelFormat> formatLookup = new()
+        {
+            { typeof(A8),               PixelFormat.R8_UNorm                },
+            { typeof(Bgra32),           PixelFormat.B8_G8_R8_A8_UNorm       },
+            { typeof(Byte4),            PixelFormat.R8_G8_B8_A8_UInt        },
+            { typeof(HalfSingle),       PixelFormat.R16_Float               },
+            { typeof(HalfVector2),      PixelFormat.R16_G16_Float           },
+            { typeof(HalfVector4),      PixelFormat.R16_G16_B16_A16_Float   },
+            { typeof(NormalizedByte2),  PixelFormat.R8_G8_SNorm             },
+            { typeof(NormalizedByte4),  PixelFormat.R8_G8_B8_A8_SNorm       },
+            { typeof(NormalizedShort2), PixelFormat.R16_G16_SNorm           },
+            { typeof(NormalizedShort4), PixelFormat.R16_G16_B16_A16_SNorm   },
+            { typeof(Rg32),             PixelFormat.R16_G16_UNorm           },
+            { typeof(Rgba1010102),      PixelFormat.R10_G10_B10_A2_UNorm    },
+            { typeof(Rgba32),           PixelFormat.R8_G8_B8_A8_UNorm       },
+            { typeof(Rgba64),           PixelFormat.R16_G16_B16_A16_UNorm   },
+            { typeof(RgbaVector),       PixelFormat.R32_G32_B32_A32_Float   },
+            { typeof(Short2),           PixelFormat.R16_G16_SInt            },
+            { typeof(Short4),           PixelFormat.R16_G16_B16_A16_SInt    }
+        };
+
+        private static PixelFormat FormatForPixelType<TPixel>() where TPixel : unmanaged, IPixel<TPixel>
+        {
+            if (formatLookup.TryGetValue(typeof(TPixel), out PixelFormat format))
+                return format;
+
+            throw new Exception($"Invalid pixel format: {typeof(TPixel).Name}");
+        }
+
         /// <summary>
         /// Creates a <see cref="Texture2D"/> from an <see cref="Image{Rgba32}"/>.
         /// </summary>
         /// <param name="image">The image to create the <see cref="Texture2D"/> with.</param>
         /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
-        public static Texture2D FromImage(MagickImage image, bool generateMipmaps = false)
+        /// <typeparam name="TPixel">The pixel format to use.</typeparam>
+        public static Texture2D FromImage<TPixel>(Image<TPixel> image, bool generateMipmaps = false) where TPixel : unmanaged, IPixel<TPixel>
         {
             if (image == null)
                 throw new ArgumentNullException(nameof(image));
+            
+            image.Mutate(x => x.Flip(FlipMode.Vertical));
 
-            image.Flip();
-
-            image.ColorSpace = ColorSpace.sRGB;
-            image.ColorType = ColorType.TrueColorAlpha;
-
-            var pixels = image.GetPixelsUnsafe().GetAreaPointer(0, 0, image.Width, image.Height);
-
-            PixelFormat format = PixelFormat.R16_G16_B16_A16_UNorm;
+            PixelFormat format = FormatForPixelType<TPixel>();
             TextureUsage usage = TextureUsage.Sampled;
             uint mipLevels = 0;
 
@@ -40,10 +69,14 @@ namespace Prowl.Editor
 
             try
             {
-                unsafe
+                image.ProcessPixelRows(accessor =>
                 {
-                    texture.SetDataPtr((void*)pixels, 0, 0, texture.Width, texture.Height);
-                }
+                    for (int y = 0; y < accessor.Height; y++)
+                    {
+                        Span<TPixel> pixelRow = accessor.GetRowSpan(y);
+                        texture.SetData(pixelRow, 0, (uint)y, (uint)pixelRow.Length, 1);
+                    }
+                });
 
                 if (generateMipmaps)
                     texture.GenerateMipmaps();
@@ -62,10 +95,33 @@ namespace Prowl.Editor
         /// </summary>
         /// <param name="stream">The stream from which to load an image.</param>
         /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
+        /// <typeparam name="TPixel">The pixel format to use.</typeparam>
+        public static Texture2D FromStream<TPixel>(Stream stream, bool generateMipmaps = false) where TPixel : unmanaged, IPixel<TPixel>
+        {
+            using Image<TPixel> image = Image.Load<TPixel>(stream);
+            return FromImage(image, generateMipmaps);
+        }
+
+        /// <summary>
+        /// Creates a <see cref="Texture2D"/> by loading an image from a file.
+        /// </summary>
+        /// <param name="file">The file containing the image to create the <see cref="Texture2D"/> with.</param>
+        /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
+        /// <typeparam name="TPixel">The pixel format to use.</typeparam>
+        public static Texture2D FromFile<TPixel>(string file, bool generateMipmaps = false) where TPixel : unmanaged, IPixel<TPixel>
+        {
+            using Image<TPixel> image = Image.Load<TPixel>(file);
+            return FromImage(image, generateMipmaps);
+        }
+
+        /// <summary>
+        /// Creates a <see cref="Texture2D"/> from a <see cref="Stream"/>.
+        /// </summary>
+        /// <param name="stream">The stream from which to load an image.</param>
+        /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
         public static Texture2D FromStream(Stream stream, bool generateMipmaps = false)
         {
-            var image = new MagickImage(stream);
-            return FromImage(image, generateMipmaps);
+            return FromStream<Rgba32>(stream, generateMipmaps);
         }
 
         /// <summary>
@@ -75,8 +131,7 @@ namespace Prowl.Editor
         /// <param name="generateMipmaps">Whether to generate mipmaps for the <see cref="Texture2D"/>.</param>
         public static Texture2D FromFile(string file, bool generateMipmaps = false)
         {
-            var image = new MagickImage(file);
-            return FromImage(image, generateMipmaps);
+            return FromFile<Rgba32>(file, generateMipmaps);
         }
 
 

@@ -375,7 +375,7 @@ namespace Prowl.Editor.Assets
                     mesh.Colors = colors;
                 }
 
-                mesh.Indices = m.GetUnsignedIndices();
+                mesh.Indices32 = m.GetUnsignedIndices();
 
                 //if(!m.HasTangentBasis)
                 //    mesh.RecalculateTangents();

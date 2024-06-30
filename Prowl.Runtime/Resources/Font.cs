@@ -34,7 +34,7 @@ namespace Prowl.Runtime
             Texture = new Texture2D((uint)Width, (uint)Height, 0, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled);
             Texture.Name = "Font Texture";
 
-            Memory<Color32> data = new Memory<Color32>(Bitmap);
+            Span<Color32> data = new Span<Color32>(Bitmap);
             Texture.SetData(data);
         }
 

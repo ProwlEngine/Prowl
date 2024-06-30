@@ -1089,6 +1089,7 @@ namespace Prowl.Runtime.GUI.Graphics
         private Mesh GenerateUIMesh()
         {
             Mesh mesh = new();
+            mesh.IndexFormat = IndexFormat.UInt32;
 
             var Vertices = new System.Numerics.Vector3[VtxBuffer.Count];
             var UV = new System.Numerics.Vector2[VtxBuffer.Count];
@@ -1113,7 +1114,7 @@ namespace Prowl.Runtime.GUI.Graphics
             mesh.UV = UV;
             mesh.Colors = Colors;
 
-            mesh.Indices = Indices;
+            mesh.Indices32 = Indices;
 
             return mesh;
         }
