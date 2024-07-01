@@ -17,6 +17,8 @@ namespace Prowl.Editor.PropertyDrawers
 
         private static Dictionary<Type, PropertyDrawer?> cachedDrawers = [];
 
+        private static List<Type> implementationTypes = [];
+
         public static bool DrawProperty(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config)
         {
             bool changed = false;
@@ -33,8 +35,8 @@ namespace Prowl.Editor.PropertyDrawers
                 // Interfaces and Abstract classes need a drawer for them that override other drawers
                 if (propertyType.IsInterface || propertyType.IsAbstract)
                 {
-                    // TODO
-                    return false;
+                    InterfaceDrawer(gui, label, index, propertyType, ref propertyValue, config, ref changed);
+                    return changed;
                 }
 
                 // Check if we have a drawer for the type
@@ -114,6 +116,94 @@ namespace Prowl.Editor.PropertyDrawers
                     if (enumexpanded || scaleAnimContent > 0)
                         using (gui.Node("PropertyGridHolder").ExpandWidth().FitContentHeight(scaleAnimContent).Enter())
                             changed |= EditorGUI.PropertyGrid(propertyType.Name + " | " + label, ref propertyValue, EditorGUI.TargetFields.Serializable | EditorGUI.TargetFields.Properties, config);
+                }
+            }
+        }
+
+        private static void InterfaceDrawer(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config, ref bool changed)
+        {
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
+            using (gui.Node(label + "_Interface", index).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
+            {
+                using (gui.Node("Creator", index).MaxWidth(ItemSize).Height(ItemSize).Layout(LayoutType.Row).Enter())
+                {
+                    if (gui.IsNodePressed())
+                    {
+                        gui.OpenPopup("Create_Interface");
+                        implementationTypes = RuntimeUtils.FindTypesImplementing(propertyType);
+                    }
+                    else if (gui.IsNodeHovered())
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
+
+                    gui.Draw2D.DrawText(FontAwesome6.Plus, 20, gui.CurrentNode.LayoutData.InnerRect, Color.white);
+
+
+                    var popupHolder = gui.CurrentNode;
+                    if (gui.BeginPopup("Create_Interface", out var popupNode))
+                        using (popupNode.Width(200).FitContentHeight().Layout(LayoutType.Column).Padding(5).Enter())
+                        {
+                            foreach (var t in implementationTypes)
+                            {
+                                if (EditorGUI.StyledButton(t.Name))
+                                {
+                                    propertyValue = Activator.CreateInstance(t);
+                                    changed = true;
+                                    gui.ClosePopup(popupHolder);
+                                }
+                            }
+                        }
+
+                }
+
+                using (gui.Node("Value", index).Height(ItemSize).Layout(LayoutType.Row).Enter())
+                {
+                    gui.CurrentNode.Layout(LayoutType.Row).ScaleChildren();
+
+                    gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 1, 2);
+
+                    bool pressed = gui.IsNodePressed(); // Lets UI know this node can take focus
+
+                    var pos = gui.CurrentNode.LayoutData.GlobalContentPosition;
+                    var centerY = (gui.CurrentNode.LayoutData.InnerRect.height / 2) - (20 / 2);
+                    pos += new Vector2(5, centerY + 3);
+                    if (propertyValue == null)
+                    {
+                        string text = "(Null) " + propertyType.Name;
+                        var col = EditorStylePrefs.Red * (gui.IsNodeHovered() ? 1f : 0.8f);
+                        gui.Draw2D.DrawText(text, pos, col);
+                    }
+                    else
+                    {
+                        gui.Draw2D.DrawText(propertyValue.ToString(), pos, Color.white * (gui.IsNodeHovered() ? 1f : 0.8f));
+                        if (gui.IsNodeHovered() && gui.IsPointerDoubleClick(Silk.NET.Input.MouseButton.Left))
+                            GlobalSelectHandler.Select(propertyValue);
+                    }
+
+                    // Drag and drop support
+                    if (DragnDrop.Drop(out object? instance, propertyType))
+                    {
+                        propertyValue = instance;
+                        changed = true;
+                    }
+
+                    // support looking for components on dropped GameObjects
+                    if (DragnDrop.Drop(out GameObject go))
+                    {
+                        propertyValue = go.GetComponent(propertyType);
+                        changed = true;
+                    }
+
+                    if (gui.IsNodeActive() || gui.IsNodeFocused())
+                    {
+                        gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, 1, (float)EditorStylePrefs.Instance.ButtonRoundness);
+
+                        if (gui.IsKeyDown(Silk.NET.Input.Key.Delete))
+                        {
+                            propertyValue = null;
+                            changed = true;
+                        }
+                    }
                 }
             }
         }
