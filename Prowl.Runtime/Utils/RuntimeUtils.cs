@@ -112,6 +112,22 @@ namespace Prowl.Runtime
                         yield return type;
         }
 
+        public static List<Type> FindTypesImplementing(Type propertyType)
+        {
+            List<Type> types = new List<Type>();
+            foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                foreach (Type type in asm.GetTypes())
+                {
+                    if (propertyType.IsAssignableFrom(type) && !type.IsAbstract && !type.IsInterface)
+                    {
+                        types.Add(type);
+                    }
+                }
+            }
+            return types;
+        }
+
         public static string GetUniquePath(string target)
         {
             if (!System.IO.File.Exists(target))
