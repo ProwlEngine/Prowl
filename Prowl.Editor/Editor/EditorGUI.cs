@@ -262,7 +262,8 @@ namespace Prowl.Editor
                 HandleEndAttributes(imGuiAttributes);
 
                 // Update the value
-                field.SetValue(target, fieldValue);
+                if(changed)
+                    field.SetValue(target, fieldValue);
             }
 
             HandleAttributeButtons("Btn", target);
