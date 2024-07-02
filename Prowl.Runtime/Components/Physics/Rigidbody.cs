@@ -4,15 +4,14 @@ using Prowl.Icons;
 using System.Collections.Generic;
 
 
-
 namespace Prowl.Runtime
 {
     /// <summary> A GameObject Component that describes a Dynamic or Static Physical Rigidbody </summary>
     [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Cubes}  Rigidbody")]
     public class Rigidbody : MonoBehaviour
     {
-        [SerializeField]
-        private bool kinematic = false;
+        [SerializeField, HideInInspector]
+        private bool _kinematic = false;
 
         //public enum UpdateMode
         //{
@@ -25,6 +24,26 @@ namespace Prowl.Runtime
         private BodyHandle? bodyHandle;
         private BodyReference body;
         private TypedIndex? compoundShape;
+
+        private BodyInertia _nativeIntertia;
+
+        [ShowInInspector]
+        public bool Kinematic {
+            get => _kinematic;
+            set {
+                if (_kinematic == value)
+                    return;
+
+                _kinematic = value;
+                if (body.Exists)
+                {
+                    body.GetDescription(out var description);
+                    description.LocalInertia = Kinematic ? new BodyInertia() : _nativeIntertia;
+                    body.ApplyDescription(description);
+                    body.Awake = true;
+                }
+            }
+        }
 
         public BodyHandle? BodyHandle {
             get => bodyHandle;
@@ -71,20 +90,20 @@ namespace Prowl.Runtime
 
         public void Build()
         {
-            if (bodyHandle != null)
-                Physics.Sim.Bodies.Remove(bodyHandle.Value);
-            bodyHandle = null;
+            Detach();
 
-            if (colliders.Count == 0) return;
+            if (colliders.Count == 0)
+            {
+                Debug.LogWarning("Rigidbody has no colliders attached");
+                return;
+            }
 
-            var shape = ComputeShape(out BodyInertia compoundInertia, out System.Numerics.Vector3 compoundCenter);
+            var shape = ComputeShape(out _nativeIntertia, out System.Numerics.Vector3 compoundCenter);
             var collidableDescription = new CollidableDescription(shape, 0.1f);
             bodyHandle = Physics.Sim.Bodies.Add(BodyDescription.CreateDynamic(
-                new RigidPose(this.Transform.position, this.Transform.rotation), compoundInertia, collidableDescription,
+                new RigidPose(this.Transform.position, this.Transform.rotation), _kinematic ? new BodyInertia() : _nativeIntertia, collidableDescription,
                 0.01f));
             body = Physics.Sim.Bodies[bodyHandle.Value];
-            if (kinematic)
-                body.BecomeKinematic();
         }
 
         internal TypedIndex ComputeShape(out BodyInertia compoundInertia, out System.Numerics.Vector3 compoundCenter)
@@ -116,11 +135,16 @@ namespace Prowl.Runtime
 
         public override void OnDisable()
         {
+            Detach();
+
+            Physics.UpdateHierarchy(this.GameObject.Transform.root);
+        }
+
+        private void Detach()
+        {
             if (bodyHandle != null)
                 Physics.Sim.Bodies.Remove(bodyHandle.Value);
             bodyHandle = null;
-
-            Physics.UpdateHierarchy(this.GameObject.Transform.root);
         }
 
         private uint lastVersion = 0;
