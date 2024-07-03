@@ -19,6 +19,7 @@ public abstract class MonoBehaviour : EngineObject
 
     private Dictionary<string, Coroutine> _coroutines = new();
     private Dictionary<string, Coroutine> _endOfFrameCoroutines = new();
+    private Dictionary<string, Coroutine> _fixedUpdateCoroutines = new();
 
     public enum RenderingOrder { None, Opaque, Lighting }
     public virtual RenderingOrder RenderOrder => RenderingOrder.None;
@@ -180,6 +181,8 @@ public abstract class MonoBehaviour : EngineObject
 
         if (coroutine.Enumerator.Current is WaitForEndOfFrame)
             _endOfFrameCoroutines.Add(methodName, coroutine);
+        else if (coroutine.Enumerator.Current is WaitForFixedUpdate)
+            _fixedUpdateCoroutines.Add(methodName, coroutine);
         else
             _coroutines.Add(methodName, coroutine);
 
@@ -190,6 +193,7 @@ public abstract class MonoBehaviour : EngineObject
     {
         _coroutines.Clear();
         _endOfFrameCoroutines.Clear();
+        _fixedUpdateCoroutines.Clear();
     }
 
     public void StopCoroutine(string methodName)
@@ -197,6 +201,7 @@ public abstract class MonoBehaviour : EngineObject
         methodName = methodName.Trim();
         _coroutines.Remove(methodName);
         _endOfFrameCoroutines.Remove(methodName);
+        _fixedUpdateCoroutines.Remove(methodName);
     }
 
     public class YieldInstruction
@@ -216,6 +221,10 @@ public abstract class MonoBehaviour : EngineObject
     {
     }
 
+    public class WaitForFixedUpdate : YieldInstruction
+    {
+    }
+
     public sealed class Coroutine : YieldInstruction
     {
         internal bool isDone { get; private set; }
@@ -225,10 +234,8 @@ public abstract class MonoBehaviour : EngineObject
             Enumerator = routine;
         }
 
-        internal bool CanRun
-        {
-            get
-            {
+        internal bool CanRun {
+            get {
                 object current = Enumerator.Current;
 
                 if (current is Coroutine)
@@ -269,6 +276,8 @@ public abstract class MonoBehaviour : EngineObject
             {
                 if (coroutine.Value.Enumerator.Current is WaitForEndOfFrame)
                     _endOfFrameCoroutines.Add(coroutine.Key, coroutine.Value);
+                else if (coroutine.Value.Enumerator.Current is WaitForFixedUpdate)
+                    _fixedUpdateCoroutines.Add(coroutine.Key, coroutine.Value);
                 else
                     _coroutines.Add(coroutine.Key, coroutine.Value);
             }
@@ -287,6 +296,24 @@ public abstract class MonoBehaviour : EngineObject
             {
                 if (coroutine.Value.Enumerator.Current is WaitForEndOfFrame)
                     _endOfFrameCoroutines.Add(coroutine.Key, coroutine.Value);
+                else
+                    _coroutines.Add(coroutine.Key, coroutine.Value);
+            }
+        }
+    }
+
+    internal void UpdateFixedUpdateCoroutines()
+    {
+        _fixedUpdateCoroutines ??= new Dictionary<string, Coroutine>();
+        var tempList = new Dictionary<string, Coroutine>(_fixedUpdateCoroutines);
+        _fixedUpdateCoroutines.Clear();
+        foreach (var coroutine in tempList)
+        {
+            coroutine.Value.Run();
+            if (coroutine.Value.isDone)
+            {
+                if (coroutine.Value.Enumerator.Current is WaitForFixedUpdate)
+                    _fixedUpdateCoroutines.Add(coroutine.Key, coroutine.Value);
                 else
                     _coroutines.Add(coroutine.Key, coroutine.Value);
             }
