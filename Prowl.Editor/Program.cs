@@ -11,6 +11,121 @@ namespace Prowl.Editor;
 
 public static class Program
 {
+    static string testShader = 
+"""
+Shader "UI/UI Shader"
+
+Properties
+{
+
+}
+
+Pass "DefaultPass"
+{
+    // Depth-Stencil state
+    DepthStencil
+    {
+        // Depth write
+        DepthWrite On
+        
+        // Comparison kind
+        DepthTest LessEqual
+    }
+
+    Blend
+    {    
+        Src Color SourceAlpha
+        Src Alpha One
+
+        Dest Color InverseSourceAlpha
+        Dest Alpha InverseSourceAlpha
+
+        Mode Alpha Add
+        Mode Color Add
+    }
+
+    // Rasterizer culling mode
+    Cull None
+
+    Inputs
+    {
+        VertexInput 
+        {
+            Position // Input location 0
+            UV0 // Input location 1
+            Colors
+        }
+        
+        // Set 0
+        Set
+        {
+            // Binding 0
+            Buffer
+            {
+                ProjMtx Matrix4x4
+            }
+        }
+
+        // Set 1
+        Set
+        {
+            // Binding 0-1
+            SampledTexture SurfaceTexture
+        }
+    }
+
+    // Program vertex stage example
+    PROGRAM VERTEX
+        layout (location = 0) in vec3 Position;
+        layout (location = 1) in vec2 UV;
+        layout (location = 2) in vec4 Color;
+        
+        layout(set = 0, binding = 0) uniform ProjBuffer
+        {
+            mat4 ProjMtx;
+        };
+        
+        layout (location = 0) out vec2 Frag_UV;
+        layout (location = 1) out vec4 Frag_Color;
+
+        layout (constant_id = 100) const bool ClipYInverted = true;
+
+        void main()
+        {
+            Frag_UV = UV;
+            Frag_Color = Color;
+
+            gl_Position = ProjMtx * vec4(Position, 1.0);
+
+            if (ClipYInverted)
+            {
+                gl_Position.y = -gl_Position.y;
+            }
+        }
+    ENDPROGRAM
+
+    // Program fragment stage example
+	PROGRAM FRAGMENT
+        layout (location = 0) in vec2 Frag_UV;
+        layout (location = 1) in vec4 Frag_Color;
+
+        layout(set = 1, binding = 0) uniform texture2D SurfaceTexture;
+        layout(set = 1, binding = 1) uniform sampler SurfaceSampler;
+        
+        layout (location = 0) out vec4 Out_Color;
+
+        void main() {
+            vec4 color = texture(sampler2D(SurfaceTexture, SurfaceSampler), Frag_UV);
+        
+            // Gamma Correct
+            color = pow(color, vec4(1.0 / 1.43));
+        
+            Out_Color = Frag_Color * color;
+        }
+	ENDPROGRAM
+}
+""";
+
     public static event Action? OnDrawEditor;
     public static event Action? OnUpdateEditor;
 
@@ -24,6 +139,10 @@ public static class Program
         Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
         Application.Initialize += () =>
         {
+            Runtime.Shader sh = ShaderImporter.CreateShader(testShader);
+
+            Debug.Log(sh.GetStringRepresentation()); 
+        
             // Editor-specific initialization code
             EditorGuiManager.Initialize();
             ImporterAttribute.GenerateLookUp();

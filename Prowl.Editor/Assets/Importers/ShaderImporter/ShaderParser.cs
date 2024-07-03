@@ -1,8 +1,13 @@
-﻿using Veldrid;
+﻿using System.Collections.Immutable;
+using Veldrid;
 using static Prowl.Runtime.StringTagConverter;
 
 namespace Prowl.Editor.ShaderParser
 {
+    using Runtime;
+    using System.Text;
+
+
     public class ShaderParser
     {
         private readonly GenericTokenizer<TokenType> _tokenizer;
@@ -15,6 +20,8 @@ namespace Prowl.Editor.ShaderParser
             {
                 {'{', () => HandleSingleCharToken(TokenType.OpenBrace)},
                 {'}', () => HandleSingleCharToken(TokenType.CloseBrace)},
+                {'[', () => HandleSingleCharToken(TokenType.OpenSquareBrace)},
+                {']', () => HandleSingleCharToken(TokenType.CloseSquareBrace)},
                 {'(', () => HandleSingleCharToken(TokenType.OpenParen)},
                 {')', () => HandleSingleCharToken(TokenType.CloseParen)},
                 {'=', () => HandleSingleCharToken(TokenType.Equals)},
@@ -253,8 +260,9 @@ namespace Prowl.Editor.ShaderParser
 
         private DepthStencilStateDescription ParseStencil()
         {
-            var stencil = shader.Global.Stencil ?? DepthStencilStateDescription.DepthOnlyLessEqual;
+            var stencil = shader.Global?.Stencil ?? DepthStencilStateDescription.DepthOnlyLessEqual;
 
+            // No open brace, use a preset
             if (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.OpenBrace)
             {
                 string preset = _tokenizer.Token.ToString();
@@ -272,9 +280,8 @@ namespace Prowl.Editor.ShaderParser
 
                 return stencil;
             }
-
-            ExpectToken(TokenType.OpenBrace);
-
+            
+            // Open brace was detected, parse depth stencil settings
             while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
             {
                 var key = _tokenizer.Token.ToString();
@@ -293,21 +300,25 @@ namespace Prowl.Editor.ShaderParser
                     break;
                     
                     case "Ref":
+                        stencil.StencilTestEnabled = true;
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilReference = byte.Parse(_tokenizer.Token.ToString());
                     break;
                     
                     case "ReadMask":
+                        stencil.StencilTestEnabled = true;
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilReadMask = byte.Parse(_tokenizer.Token.ToString());
                     break;
                     
-                    case "WriteMask":
+                    case "WriteMask":   
+                        stencil.StencilTestEnabled = true;
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilWriteMask = byte.Parse(_tokenizer.Token.ToString());
                     break;
                     
                     case "Comparison":
+                        stencil.StencilTestEnabled = true;
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilFront.Comparison = Enum.Parse<ComparisonKind>(_tokenizer.Token.ToString(), true);
                         ExpectToken(TokenType.Identifier);
@@ -315,6 +326,7 @@ namespace Prowl.Editor.ShaderParser
                     break;
                     
                     case "Pass":
+                        stencil.StencilTestEnabled = true;
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilFront.Pass = Enum.Parse<StencilOperation>(_tokenizer.Token.ToString(), true);
                         ExpectToken(TokenType.Identifier);
@@ -322,6 +334,7 @@ namespace Prowl.Editor.ShaderParser
                     break;
                     
                     case "Fail":
+                        stencil.StencilTestEnabled = true;
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilFront.Fail = Enum.Parse<StencilOperation>(_tokenizer.Token.ToString(), true);
                         ExpectToken(TokenType.Identifier);
@@ -329,6 +342,7 @@ namespace Prowl.Editor.ShaderParser
                     break;
 
                     case "ZFail":
+                        stencil.StencilTestEnabled = true;
                         ExpectToken(TokenType.Identifier);
                         stencil.StencilFront.DepthFail = Enum.Parse<StencilOperation>(_tokenizer.Token.ToString(), true);
                         ExpectToken(TokenType.Identifier);
@@ -336,7 +350,7 @@ namespace Prowl.Editor.ShaderParser
                     break;
 
                     default:
-                        throw new InvalidOperationException($"Unknown stencil key: {key}");
+                        throw new InvalidOperationException($"Unknown depth stencil key: {key}");
                 }
             }
 
@@ -368,7 +382,7 @@ namespace Prowl.Editor.ShaderParser
             pass.Name = _tokenizer.ParseQuotedStringValue();
             ExpectToken(TokenType.OpenBrace);
 
-            pass.Cull = shader.Global.Cull;
+            pass.Cull = shader.Global?.Cull ?? FaceCullMode.Back;
 
             while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
             {
@@ -399,7 +413,7 @@ namespace Prowl.Editor.ShaderParser
                         pass.Keywords = ParseKeywords();
                     break;
 
-                    case "Program":
+                    case "PROGRAM":
                         pass.Programs.Add(ParseProgram());
                     break;
                 }
@@ -408,45 +422,127 @@ namespace Prowl.Editor.ShaderParser
             return pass;
         }
 
-        #warning TODO
         private ParsedInputs ParseInputs()
         {
+            ExpectToken(TokenType.OpenBrace);
+
             var inputs = new ParsedInputs();
+
+            while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
+            {
+                switch (_tokenizer.Token.ToString())
+                {
+                    case "VertexInput":
+                        inputs.Inputs = ParseVertexInputs();
+                    break;
+
+                    case "Set":
+                        inputs.Resources.Add(ParseSetInputs());
+                    break;
+                }
+            }
 
             return inputs;
         }
-        
-        #warning TODO
-        private Dictionary<string, HashSet<string>> ParseKeywords()
+
+        private MeshResource[] ParseVertexInputs()
         {
-            var dict = new Dictionary<string, HashSet<string>>();
+            ExpectToken(TokenType.OpenBrace);
+
+            List<MeshResource> resources = new();
+
+            while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
+            {
+                resources.Add(Enum.Parse<MeshResource>(_tokenizer.Token, true));
+            }
+
+            return resources.ToArray();
+        }
+
+        private ShaderResource[] ParseSetInputs()
+        {
+            ExpectToken(TokenType.OpenBrace);
+
+            List<ShaderResource> resources = new();
+
+            while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
+            {
+                switch (_tokenizer.Token.ToString())
+                {
+                    case "Buffer":
+                        resources.Add(ParseBufferResource());
+                    break;
+
+                    case "Texture":
+                        ExpectToken(TokenType.Identifier);
+                        resources.Add(new TextureResource(_tokenizer.Token.ToString(), false, ShaderStages.Vertex | ShaderStages.Fragment));
+                    break;
+
+                    case "SampledTexture":
+                        ExpectToken(TokenType.Identifier);
+                        resources.Add(new TextureResource(_tokenizer.Token.ToString(), false, ShaderStages.Vertex | ShaderStages.Fragment));
+                        resources.Add(new SamplerResource(_tokenizer.Token.ToString(), ShaderStages.Vertex | ShaderStages.Fragment));
+                    break;
+                }
+            }
+
+            return resources.ToArray();
+        }
+
+        private BufferResource ParseBufferResource()
+        {
+            ExpectToken(TokenType.OpenBrace);
+
+            List<(string, ResourceType)> resources = new();
+
+            while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
+            {
+                string name = _tokenizer.Token.ToString();
+                ExpectToken(TokenType.Identifier);
+                resources.Add((name, Enum.Parse<ResourceType>(_tokenizer.Token, true)));
+            }
+
+            return new BufferResource("Buffer", ShaderStages.Vertex | ShaderStages.Fragment, resources.ToArray());
+        }
+        
+        private Dictionary<string, ImmutableHashSet<string>> ParseKeywords()
+        {
+            var dict = new Dictionary<string, ImmutableHashSet<string>>();
+
+            ExpectToken(TokenType.OpenBrace);
+
+            while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
+            {
+                string name = _tokenizer.Token.ToString();
+
+                List<string> values = new();
+
+                ExpectToken(TokenType.OpenSquareBrace);
+
+                while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseSquareBrace)
+                    values.Add(_tokenizer.Token.ToString());
+
+                dict.Add(name, ImmutableHashSet.CreateRange(values));
+            }
 
             return dict;
         }
 
-        private Runtime.ShaderSource ParseProgram()
+        private ShaderSource ParseProgram()
         {
-            var program = new Runtime.ShaderSource();
+            var program = new ShaderSource();
             ExpectToken(TokenType.Identifier);
             program.Stage = Enum.Parse<ShaderStages>(_tokenizer.Token.ToString(), true);
-            ExpectToken(TokenType.OpenBrace);
 
-            var content = "";
-            int openBraces = 1;
+            StringBuilder builder = new();
 
-            while (_tokenizer.MoveNext() && openBraces > 0)
+            while (_tokenizer.MoveNext() && _tokenizer.Token.ToString() != "ENDPROGRAM")
             {
-                if (_tokenizer.TokenType == TokenType.OpenBrace)
-                    openBraces++;
-
-                if (_tokenizer.TokenType == TokenType.CloseBrace)
-                    openBraces--;
-
-                if (openBraces > 0)
-                    content += _tokenizer.Token.ToString() + " ";
+                builder.Append(_tokenizer.Token);
+                builder.Append(' ');
             }
 
-            program.SourceCode = content;
+            program.SourceCode = builder.ToString();
 
             return program;
         }
@@ -477,6 +573,8 @@ namespace Prowl.Editor.ShaderParser
     {
         None,
         Identifier,
+        OpenSquareBrace,
+        CloseSquareBrace,
         OpenBrace,
         CloseBrace,
         OpenParen,

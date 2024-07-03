@@ -1,49 +1,65 @@
 ﻿Shader "Default/ProceduralSkybox"
 
-Pass 0
+Pass
 {
-	DepthTest Off
-	DepthWrite Off
-	// DepthMode Less
-	Blend On
-	BlendSrc SrcAlpha
-	BlendDst One
-	BlendMode Add
-	Cull Off
-	// Winding CW
+    Blend
+    {    
+        Src Color SourceAlpha
+        Src Alpha SourceAlpha
 
-	Vertex
-	{
-		in vec3 vertexPosition;
-		in vec2 vertexTexCoord;
+        Dest Color One
+        Dest Alpha One
+
+        Mode Color Add
+        Mode Alpha Add
+    }
+
+    // Stencil state
+    Stencil
+    {
+        // Depth write
+        DepthWrite Off
+        
+        // Comparison kind
+        DepthTest Off
+    }
+
+    // Rasterizer culling mode
+    Cull Off
+
+	PROGRAM VERTEX
+        layout(location = 0) in vec3 vertexPosition;
+		layout(location = 1) in vec2 vertexTexCoord;
 		
-		out vec2 TexCoords;
-        out vec3 vPosition;
+		layout(location = 0) out vec2 TexCoords;
+        layout(location = 1) out vec3 vPosition;
 
-		uniform mat4 mvpInverse;
+        layout(set = 0, binding = 0) uniform MVPBuffer
+        {
+            mat4 mvpInverse;
+        }
 
 		void main() 
 		{
-			gl_Position =vec4(vertexPosition, 1.0);
+			gl_Position = vec4(vertexPosition, 1.0);
             // vertexPosition is in screen space, convert it into world space
             vPosition = (mvpInverse * vec4(vertexPosition, 1.0)).xyz;
 			TexCoords = vertexTexCoord;
 		}
-	}
+	ENDPROGRAM
 
-	Fragment
-	{
+	PROGRAM FRAGMENT
 		layout(location = 0) out vec4 OutputColor;
 		
-        in vec3 vPosition;
-		in vec2 TexCoords;
+        layout(location = 0) in vec2 TexCoords;
+        layout(location = 1) in vec3 vPosition;
 
-		uniform vec2 Resolution;
-		uniform vec3 uSunPos;
-		uniform float fogDensity;
-		
-		uniform sampler2D gColor; // Pos
-		uniform sampler2D gPositionRoughness; // Pos
+        layout(set = 1, binding = 0)
+        {
+            vec2 Resolution;
+            vec3 uSunPos;
+            float fogDensity;
+        }
 
 		#define PI 3.141592
         #define iSteps 16
@@ -235,55 +251,27 @@ Pass 0
 
 		void main()
 		{
-            vec3 gPos = textureLod(gPositionRoughness, TexCoords, 0).rgb;
-			if(gPos != vec3(0, 0, 0))
-            {
-                // Fog
-                vec3 color = atmosphereNoMie(
-                    normalize(vPosition),           // normalized ray direction
-                    vec3(0,6372e3,0),               // ray origin
-                    uSunPos,                        // position of the sun
-                    22.0,                           // intensity of the sun
-                    6371e3,                         // radius of the planet in meters
-                    6471e3,                         // radius of the atmosphere in meters
-                    vec3(5.5e-6, 13.0e-6, 22.4e-6), // Rayleigh scattering coefficient
-                    8e3                            // Rayleigh scale height
-                );
+            // Sky
+            vec3 color = atmosphere(
+                normalize(vPosition),           // normalized ray direction
+                vec3(0,6372e3,0),               // ray origin
+                uSunPos,                        // position of the sun
+                22.0,                           // intensity of the sun
+                6371e3,                         // radius of the planet in meters
+                6471e3,                         // radius of the atmosphere in meters
+                vec3(5.5e-6, 13.0e-6, 22.4e-6), // Rayleigh scattering coefficient
+                21e-6,                          // Mie scattering coefficient
+                8e3,                            // Rayleigh scale height
+                1.2e3,                          // Mie scale height
+                0.758                           // Mie preferred scattering direction
+            );
                 
-                color = 1.0 - exp(-1.0 * color);
-                
-			    float fogDist = fogDensity / 1000.0;
-			    float nearest = length(gPos);
-			    float fogStrength = 1.0 - clamp(exp(-nearest * nearest * fogDist), 0.0, 1.0);
+	        color.rgb += step(0.9985, dot(normalize(vPosition), normalize(uSunPos))); // Sun
 
-			    OutputColor = vec4(mix(texture(gColor, TexCoords).rgb, color, fogStrength), 1.0);
-                return;
-            }
-            else
-            {
-                // Sky
-                vec3 color = atmosphere(
-                    normalize(vPosition),           // normalized ray direction
-                    vec3(0,6372e3,0),               // ray origin
-                    uSunPos,                        // position of the sun
-                    22.0,                           // intensity of the sun
-                    6371e3,                         // radius of the planet in meters
-                    6471e3,                         // radius of the atmosphere in meters
-                    vec3(5.5e-6, 13.0e-6, 22.4e-6), // Rayleigh scattering coefficient
-                    21e-6,                          // Mie scattering coefficient
-                    8e3,                            // Rayleigh scale height
-                    1.2e3,                          // Mie scale height
-                    0.758                           // Mie preferred scattering direction
-                );
-                
-	            color.rgb += step(0.9985, dot(normalize(vPosition), normalize(uSunPos))); // Sun
+            // Apply exposure.
+            color = 1.0 - exp(-1.0 * color);
 
-                // Apply exposure.
-                color = 1.0 - exp(-1.0 * color);
-
-			    OutputColor = vec4(color, 1.0);
-            }
+			OutputColor = vec4(color, 1.0);
 		}
-
-	}
+    ENDPROGRAM
 }

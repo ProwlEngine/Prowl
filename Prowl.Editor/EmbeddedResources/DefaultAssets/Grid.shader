@@ -72,6 +72,7 @@ Pass 0
 		
 		float Grid(vec3 ro, float scale, vec3 rd, float lineWidth, out float d) {
 			ro /= scale;
+			
 			#ifdef GRID_YZ
 			    d = -ro.x / rd.x;
 			    if (d <= 0.0) return 0.0;
@@ -102,6 +103,7 @@ Pass 0
 			
 			// Do not attempt to move this into Grid() It doesnt work, Why? idk compiler black magic
 			bool drawGrid = false;
+
 			#ifdef GRID_YZ
 			if(abs(dot(normalize(vPosition), vec3(1.0, 0.0, 0.0))) > 0.005)
 				drawGrid = true;

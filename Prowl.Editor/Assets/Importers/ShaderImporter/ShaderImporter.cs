@@ -1,4 +1,5 @@
-﻿using Prowl.Runtime;
+﻿using Prowl.Editor.ShaderParser;
+using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 using System.Text.RegularExpressions;
 using Veldrid;
@@ -23,9 +24,14 @@ namespace Prowl.Editor.Assets
 
             string shaderScript = File.ReadAllText(assetPath.FullName);
 
+            ctx.SetMainObject(CreateShader(shaderScript));
+        }
+
+        public static Runtime.Shader CreateShader(string shaderScript)
+        {
             shaderScript = ClearAllComments(shaderScript);
 
-            ShaderParser.ParsedShader parsed = new ShaderParser.ShaderParser(shaderScript).Parse();
+            ParsedShader parsed = new ShaderParser.ShaderParser(shaderScript).Parse();
 
             List<ShaderPass> passes = new List<ShaderPass>();
 
@@ -45,35 +51,45 @@ namespace Prowl.Editor.Assets
 
                 pass.CompilePrograms(new ImporterVariantCompiler()
                 {   
-                    Inputs = parsedPass.Inputs.Inputs.ToArray(),
-                    Resources = parsedPass.Inputs.Resources.ToArray()
+                    Inputs = parsedPass.Inputs.Inputs,
+                    Resources = parsedPass.Inputs.Resources.ToArray(),
+                    Global = parsed.Global
                 });
 
                 passes.Add(pass);
             }
 
-            Runtime.Shader shader = new Runtime.Shader("New Shader", parsed.Properties.ToArray(), passes.ToArray()); 
-
-            ctx.SetMainObject(shader);
+            return new Runtime.Shader("New Shader", parsed.Properties.ToArray(), passes.ToArray()); 
         }
 
         private class ImporterVariantCompiler : IVariantCompiler
         {
             public MeshResource[] Inputs;
             public ShaderResource[][] Resources;
+            public ParsedGlobalState Global;
 
             public ShaderVariant CompileVariant(ShaderSource[] sources, KeyGroup<string, string> keywords)
             {
-                ShaderVariant variant = new ShaderVariant(keywords, CreateVertexFragment(sources[0].SourceCode, sources[1].SourceCode));
+                if (Global != null)
+                    sources[0].SourceCode = sources[0].SourceCode.Insert(0, Global?.GlobalInclude);
 
-                variant.VertexInputs.AddRange(Inputs);
-                variant.ResourceSets.AddRange(Resources);
+                if (Global != null)
+                    sources[1].SourceCode = sources[1].SourceCode.Insert(0, Global?.GlobalInclude);
+
+                ShaderVariant variant = new ShaderVariant(
+                    keywords, 
+                    CreateVertexFragment(sources[0].SourceCode, sources[1].SourceCode),
+                    Inputs.Select(x => Mesh.VertexLayoutForResource(x)).ToArray(),
+                    Resources);
 
                 return variant;
             }
 
             public static Veldrid.Shader[] CreateVertexFragment(string vert, string frag)
             {
+                vert = vert.Insert(0, "#version 450\n");
+                frag = frag.Insert(0, "#version 450\n");
+
                 CrossCompileOptions options = new()
                 {
                     FixClipSpaceZ = (Graphics.Device.BackendType == GraphicsBackend.OpenGL || Graphics.Device.BackendType == GraphicsBackend.OpenGLES) && !Graphics.Device.IsDepthRangeZeroToOne,
@@ -81,8 +97,17 @@ namespace Prowl.Editor.Assets
                     Specializations = Graphics.GetSpecializations()
                 };
 
-                ShaderDescription vertexShaderDesc = new ShaderDescription(ShaderStages.Vertex, UTF8.GetBytes(vert), "main");
-                ShaderDescription fragmentShaderDesc = new ShaderDescription(ShaderStages.Fragment, UTF8.GetBytes(frag), "main");
+                ShaderDescription vertexShaderDesc = new ShaderDescription(
+                    ShaderStages.Vertex, 
+                    UTF8.GetBytes(vert),
+                    "main"
+                );
+                
+                ShaderDescription fragmentShaderDesc = new ShaderDescription(
+                    ShaderStages.Fragment, 
+                    UTF8.GetBytes(frag), 
+                    "main"
+                );
 
                 return Graphics.Factory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc, options);
             }
