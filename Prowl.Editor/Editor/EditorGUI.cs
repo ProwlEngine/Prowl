@@ -257,13 +257,15 @@ namespace Prowl.Editor
                     continue;
 
                 // Draw the property
-                changed |= DrawerAttribute.DrawProperty(ActiveGUI, field.Name, i++, fieldType, ref fieldValue, config);
+                bool propChange = DrawerAttribute.DrawProperty(ActiveGUI, field.Name, i++, fieldType, ref fieldValue, config);
 
                 HandleEndAttributes(imGuiAttributes);
 
                 // Update the value
-                if(changed)
+                if(propChange)
                     field.SetValue(target, fieldValue);
+
+                changed |= propChange;
             }
 
             HandleAttributeButtons("Btn", target);
