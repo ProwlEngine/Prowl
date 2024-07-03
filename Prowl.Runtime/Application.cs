@@ -21,6 +21,8 @@ public static class Application
     public static event Action<double> Render;
     public static event Action Quitting;
 
+    private static TimeData AppTime = new();
+
     public static void Run(string title, int width, int height, IAssetProvider assetProvider, bool editor)
     {
         AssetProvider = assetProvider;
@@ -51,16 +53,21 @@ public static class Application
             try
             {
                 AudioSystem.UpdatePool();
-                Time.Update(delta);
 
+                AppTime.Update(delta);
+                Time.TimeStack.Push(AppTime);
                 Update?.Invoke(delta);
+                Time.TimeStack.Pop();
+
             } catch (Exception e) {
                 Console.WriteLine(e.ToString());
             }
         };
 
         Window.Render += (delta) => {
+            Time.TimeStack.Push(AppTime);
             Render?.Invoke(delta);
+            Time.TimeStack.Pop();
         };
 
         Window.Closing += () => {
