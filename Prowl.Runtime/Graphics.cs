@@ -129,9 +129,10 @@ namespace Prowl.Runtime
 
             List<SpecializationConstant> specializations =
             [
-                new SpecializationConstant(100, Device.IsClipSpaceYInverted),
-                new SpecializationConstant(101, glOrGles), // TextureCoordinatesInvertedY
-                new SpecializationConstant(102, Device.IsDepthRangeZeroToOne),
+                new SpecializationConstant(0, Device.IsClipSpaceYInverted),
+                new SpecializationConstant(1, true),
+                new SpecializationConstant(2, glOrGles),
+                new SpecializationConstant(3, Device.IsDepthRangeZeroToOne),
             ];
 
             PixelFormat swapchainFormat = ScreenFramebuffer.OutputDescription.ColorAttachments[0].Format;

@@ -11,9 +11,12 @@ namespace Prowl.Runtime
 
         readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
         {
-            state.activeMaterial = Material;
-            state.activePass = Pass;
             state.propertyState.ApplyOverride(Material.Properties);
+        
+            Utils.KeyGroup<string, string> keys = Utils.KeyGroup<string, string>.Combine(Material.LocalKeywords, state.keywordState);
+
+            state.pipelineSettings.pass = Material.Shader.Res.GetPass(Pass);
+            state.pipelineSettings.variant = state.pipelineSettings.pass.GetVariant(keys);
         }
     }
 }

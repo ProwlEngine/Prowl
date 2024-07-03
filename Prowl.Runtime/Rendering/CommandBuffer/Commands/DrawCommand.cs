@@ -4,42 +4,39 @@ using Veldrid;
 
 namespace Prowl.Runtime
 {
+    // Basically does SetPipeline, SetDrawData, SetResource, and ManualDraw all at once.
     internal struct DrawCommand : RenderingCommand
     {
-        public Mesh Mesh;
+        public IGeometryDrawData DrawData;
         public int IndexCount;
         public int IndexOffset;
 
 
         readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
-        {
-            Material material = state.activeMaterial;
-            Shader shader = material.Shader.Res;
-            ShaderPass pass = shader.GetPass(state.activePass);
+        {   
+            // Set Pipeline
+            Pipeline pipeline = PipelineCache.GetPipelineForDescription(state.pipelineSettings);
+            PipelineCache.GetDescriptionForPipeline(pipeline, out GraphicsPipelineDescription pipelineDescription);
 
-            PipelineCache.PipelineInfo pipelineInfo = PipelineCache.GetPipelineForPass(
-                pass, 
-                state.keywordState, 
-                state.fillMode, 
-                FrontFace.Clockwise, 
-                Mesh.MeshTopology, 
-                state.scissorTest,  
-                state.activeFramebuffer.OutputDescription);
+            if (state.activePipeline != pipeline)
+                state.activePipeline = pipeline;
 
-            if (state.lastSetPipeline != pipelineInfo.pipeline)
-                list.SetPipeline(pipelineInfo.pipeline);
+            list.SetPipeline(pipeline);
 
-            state.lastSetPipeline = pipelineInfo.pipeline;
-
+            // Set Draw Data
+            DrawData.SetDrawData(list, pipelineDescription.ShaderSet.VertexLayouts);
+            state.activeDrawData = DrawData;
+            
+            // Recreate ALL resource sets
             List<ResourceSet> resources = new();
 
-            MeshUtility.UploadMeshResources(list, Mesh, pipelineInfo.variant.VertexInputs);
+            ShaderVariant variant = state.pipelineSettings.variant;
 
             List<BindableResource> bindableResources = new();
 
-            for (int set = 0; set < pipelineInfo.description.ResourceLayouts.Length; set++)
+            for (int set = 0; set < pipelineDescription.ResourceLayouts.Length; set++)
             {
-                ShaderResource[] resourceSet = pipelineInfo.variant.ResourceSets[set];
+                ShaderResource[] resourceSet = variant.ResourceSets[set];
 
                 bindableResources.Clear();
 
@@ -48,7 +45,7 @@ namespace Prowl.Runtime
 
                 ResourceSetDescription description = new ResourceSetDescription
                 {
-                    Layout = pipelineInfo.description.ResourceLayouts[set],
+                    Layout = pipelineDescription.ResourceLayouts[set],
                     BoundResources = bindableResources.ToArray()
                 };
 
@@ -57,15 +54,16 @@ namespace Prowl.Runtime
                 list.SetGraphicsResourceSet((uint)set, resources[set]);
             }
 
+            state.resourceSets.AddRange(resources);
+
+            // Manual Draw
             list.DrawIndexed(
-                indexCount: (uint)(IndexCount <= 0 ? Mesh.IndexCount : IndexCount),
+                indexCount: (uint)(IndexCount <= 0 ? DrawData.IndexCount : IndexCount),
                 instanceCount: 1,
                 indexStart: (uint)IndexOffset,
                 vertexOffset: 0,
                 instanceStart: 0
             );
-
-            state.resourceSets.AddRange(resources);
         }
     }
 }

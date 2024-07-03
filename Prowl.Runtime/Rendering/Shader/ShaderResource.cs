@@ -40,7 +40,6 @@ namespace Prowl.Runtime
             ResourceKind kind = readWrite ? ResourceKind.TextureReadWrite : ResourceKind.TextureReadOnly;
             
             elements.Add(new ResourceLayoutElementDescription(textureName, kind, stages));
-            elements.Add(new ResourceLayoutElementDescription(textureName, ResourceKind.Sampler, stages));
         }
 
         public void BindResource(CommandList commandList, List<BindableResource> resources, RenderState state)
@@ -57,6 +56,40 @@ namespace Prowl.Runtime
                 tex = Texture2D.EmptyWhite;
 
             resources.Add(tex.TextureView);
+        }
+
+        public string GetResourceName() => textureName;
+    }
+
+    public class SamplerResource : ShaderResource
+    {
+        public readonly string textureName;
+        public readonly ShaderStages stages;
+
+        public SamplerResource(string textureName, ShaderStages stages)
+        {
+            this.textureName = textureName;
+            this.stages = stages;
+        }
+
+        public void GetDescription(List<ResourceLayoutElementDescription> elements)
+        {
+            elements.Add(new ResourceLayoutElementDescription(textureName, ResourceKind.Sampler, stages));
+        }
+
+        public void BindResource(CommandList commandList, List<BindableResource> resources, RenderState state)
+        {
+            Texture tex = state.propertyState.GetTexture(textureName);
+
+            if (tex == null)
+                tex = Texture2D.EmptyWhite;
+            
+            if (tex.IsDestroyed)
+                tex = Texture2D.EmptyWhite;
+
+            if (!tex.InternalTexture.Usage.HasFlag(TextureUsage.Sampled))
+                tex = Texture2D.EmptyWhite;
+
             resources.Add(tex.Sampler.InternalSampler);
         }
 

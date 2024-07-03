@@ -5,7 +5,19 @@ using Veldrid;
 
 namespace Prowl.Runtime
 {  
-    public class Mesh : EngineObject, ISerializable
+    public enum MeshResource
+    {
+        Position = 0,
+        UV0 = 1,
+        UV1 = 2,
+        Normals = 3,
+        Tangents = 4,
+        Colors = 5,
+        BoneIndices = 6,
+        BoneWeights = 7
+    }
+
+    public class Mesh : EngineObject, ISerializable, IGeometryDrawData
     {
         /// <summary> Whether this mesh is readable by the CPU </summary>
         public readonly bool isReadable = true;
@@ -161,6 +173,29 @@ namespace Prowl.Runtime
         public int BoneWeightStart => bufferOffsets[6];
         public int BufferLength => bufferOffsets[7];
 
+        public static readonly VertexLayoutDescription[] MeshResourceDescriptions = [
+            new VertexLayoutDescription(new VertexElementDescription("POSITION", VertexElementFormat.Float3, VertexElementSemantic.Position)),
+            new VertexLayoutDescription(new VertexElementDescription("TEXCOORD0", VertexElementFormat.Float2, VertexElementSemantic.TextureCoordinate)),
+            new VertexLayoutDescription(new VertexElementDescription("TEXCOORD1", VertexElementFormat.Float2, VertexElementSemantic.TextureCoordinate)),
+            new VertexLayoutDescription(new VertexElementDescription("NORMAL", VertexElementFormat.Float3, VertexElementSemantic.Normal)),
+            new VertexLayoutDescription(new VertexElementDescription("TANGENT", VertexElementFormat.Float3, VertexElementSemantic.Normal)),
+            new VertexLayoutDescription(new VertexElementDescription("COLOR", VertexElementFormat.Byte4_Norm, VertexElementSemantic.Color)),
+            new VertexLayoutDescription(new VertexElementDescription("BONEINDEX", VertexElementFormat.Float4, VertexElementSemantic.Position)),
+            new VertexLayoutDescription(new VertexElementDescription("BONEWEIGHT", VertexElementFormat.Float4, VertexElementSemantic.Color)),
+        ];
+
+        public static readonly VertexLayoutDescription PositionDescritpion = MeshResourceDescriptions[0];
+        public static readonly VertexLayoutDescription UV0Description = MeshResourceDescriptions[1];
+        public static readonly VertexLayoutDescription UV1Description = MeshResourceDescriptions[2];
+        public static readonly VertexLayoutDescription NormalsDescription = MeshResourceDescriptions[3];
+        public static readonly VertexLayoutDescription TangentsDescription = MeshResourceDescriptions[4];
+        public static readonly VertexLayoutDescription ColorsDescription = MeshResourceDescriptions[5];
+        public static readonly VertexLayoutDescription BoneIndicesDescription = MeshResourceDescriptions[6];
+        public static readonly VertexLayoutDescription BoneWeightsDescription = MeshResourceDescriptions[7];
+
+        public static VertexLayoutDescription VertexLayoutForResource(MeshResource resource) =>
+            MeshResourceDescriptions[(int)resource];
+
         public Mesh() { }
 
         public void Clear()
@@ -257,6 +292,38 @@ namespace Prowl.Runtime
             else if (indexFormat == IndexFormat.UInt32)
             {
                 Graphics.Device.UpdateBuffer(indexBuffer, 0, indices32);
+            }
+        }
+        
+        public void SetDrawData(CommandList commandList, VertexLayoutDescription[] resources)
+        {
+            Upload();
+
+            commandList.SetIndexBuffer(IndexBuffer, IndexFormat);
+
+            for (uint i = 0; i < resources.Length; i++)
+            {
+                VertexLayoutDescription resource = resources[i];
+
+                if (resource.Elements.Length != 1)
+                    continue;
+
+                if (resource.Equals(PositionDescritpion))
+                    commandList.SetVertexBuffer(i, VertexBuffer, 0);
+                else if (resource.Equals(UV0Description))
+                    commandList.SetVertexBuffer(i, VertexBuffer, (uint)UVStart); 
+                else if (resource.Equals(UV1Description))
+                    commandList.SetVertexBuffer(i, VertexBuffer, (uint)UV2Start);   
+                else if (resource.Equals(NormalsDescription))      
+                    commandList.SetVertexBuffer(i, VertexBuffer, (uint)NormalsStart);   
+                else if (resource.Equals(TangentsDescription))     
+                    commandList.SetVertexBuffer(i, VertexBuffer, (uint)TangentsStart);   
+                else if (resource.Equals(ColorsDescription))       
+                    commandList.SetVertexBuffer(i, VertexBuffer, (uint)ColorsStart);   
+                else if (resource.Equals(BoneIndicesDescription))  
+                    commandList.SetVertexBuffer(i, VertexBuffer, (uint)BoneIndexStart);  
+                else if (resource.Equals(BoneWeightsDescription))  
+                    commandList.SetVertexBuffer(i, VertexBuffer, (uint)BoneWeightStart);
             }
         }
 

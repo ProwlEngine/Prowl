@@ -9,14 +9,14 @@ namespace Prowl.Runtime
         public int Index; 
         public bool SetFull;
         public int X, Y, Width, Height;
-        public bool Disable;
+        public bool SetActive;
 
         readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
         {
-            if (Disable)
-                state.scissorTest = false;
+            if (SetActive)
+                state.pipelineSettings.scissorTest = true;
             else
-                state.scissorTest = true;
+                state.pipelineSettings.scissorTest = false;
 
             if (SetFull)
             {   

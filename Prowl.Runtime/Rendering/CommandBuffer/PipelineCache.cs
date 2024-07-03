@@ -7,76 +7,55 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Prowl.Runtime
 {
+    public struct PassPipelineDescription
+    {
+        public ShaderPass pass;
+        public ShaderVariant variant;
+        public OutputDescription? output;
+        public PolygonFillMode fillMode;
+        public FrontFace frontFace;
+        public PrimitiveTopology topology;
+        public bool scissorTest;
+
+        public override readonly int GetHashCode()
+        {
+            return HashCode.Combine(pass, variant, output, fillMode, frontFace, topology, scissorTest);
+        }
+
+        public override bool Equals([NotNullWhen(true)] object? obj)
+        {
+            if (obj is not PassPipelineDescription desc)
+                return false;
+            
+            return Equals(desc);
+        }
+
+        public bool Equals(PassPipelineDescription other)
+        {
+            return 
+                pass.Equals(other.pass) && 
+                variant.Equals(other.variant) && 
+                output.Equals(other.output) && 
+                fillMode.Equals(other.fillMode) && 
+                frontFace.Equals(other.frontFace) && 
+                topology.Equals(other.topology) && 
+                scissorTest.Equals(other.scissorTest);
+        }
+    }
+
     public static class PipelineCache    
     {
-        public struct PassPipelineDescription
+        private static Dictionary<PassPipelineDescription, Pipeline> pipelineCache = new();
+        private static Dictionary<Pipeline, GraphicsPipelineDescription> pipelineInfo = new();
+
+
+        private static Pipeline CreatePipeline(in PassPipelineDescription passDesc, out GraphicsPipelineDescription description)
         {
-            public ShaderPass pass;
-            public Utils.KeyGroup<string, string> keywords;
-            public OutputDescription? output;
-            public PolygonFillMode fillMode;
-            public FrontFace frontFace;
-            public PrimitiveTopology topology;
-            public bool scissorTest;
-
-            public override readonly int GetHashCode()
-            {
-                return HashCode.Combine(pass, keywords, output, fillMode, frontFace, topology, scissorTest);
-            }
-
-            public override bool Equals([NotNullWhen(true)] object? obj)
-            {
-                if (obj is not PassPipelineDescription desc)
-                    return false;
-                
-                return Equals(desc);
-            }
-
-            public bool Equals(PassPipelineDescription other)
-            {
-                return 
-                    pass.Equals(other.pass) && 
-                    keywords.Equals(other.keywords) && 
-                    output.Equals(other.output) && 
-                    fillMode.Equals(other.fillMode) && 
-                    frontFace.Equals(other.frontFace) && 
-                    topology.Equals(other.topology) && 
-                    scissorTest.Equals(other.scissorTest);
-            }
-        }
-
-        // Bundles a pipeline instance with its description.
-        public readonly struct PipelineInfo
-        {
-            public readonly Pipeline pipeline;
-            public readonly GraphicsPipelineDescription description; 
-            public readonly ShaderVariant variant;
-
-            internal PipelineInfo(GraphicsPipelineDescription description, Pipeline pipeline, ShaderVariant variant)
-            {
-                this.pipeline = pipeline;
-                this.description = description;
-                this.variant = variant;
-            }
-
-            public bool Equals(PipelineInfo other)
-            {
-                return description.Equals(other.description);
-            }
-        }
-
-        private static Dictionary<PassPipelineDescription, PipelineInfo> pipelineCache = new();
-
-
-        private static GraphicsPipelineDescription CreateDescriptionForPass(in PassPipelineDescription passDesc)
-        {
-            var keywordProgram = passDesc.pass.GetVariant(passDesc.keywords);
-
-            ResourceLayout[] resourceLayouts = new ResourceLayout[keywordProgram.ResourceSets.Count];
+            ResourceLayout[] resourceLayouts = new ResourceLayout[passDesc.variant.ResourceSets.Length];
 
             for (int i = 0; i < resourceLayouts.Length; i++)
             {
-                ShaderResource[] resources = keywordProgram.ResourceSets[i];
+                ShaderResource[] resources = passDesc.variant.ResourceSets[i];
 
                 List<ResourceLayoutElementDescription> elements = new();                
 
@@ -86,10 +65,7 @@ namespace Prowl.Runtime
                 resourceLayouts[i] = Graphics.Factory.CreateResourceLayout(new ResourceLayoutDescription(elements.ToArray()));
             }
 
-            VertexLayoutDescription[] vertexInputs = 
-                keywordProgram.VertexInputs.Select(MeshUtility.GetLayoutForResource).ToArray();
-
-            GraphicsPipelineDescription pipelineDesc = new()
+            description = new()
             {
                 BlendState = passDesc.pass.Blend,
                 DepthStencilState = passDesc.pass.DepthStencilState,
@@ -106,18 +82,33 @@ namespace Prowl.Runtime
                 Outputs = passDesc.output ?? Graphics.ScreenFramebuffer.OutputDescription,
 
                 ShaderSet = new ShaderSetDescription(
-                    vertexLayouts: vertexInputs,
-                    shaders: keywordProgram.CompiledPrograms,
+                    vertexLayouts: passDesc.variant.VertexInputs,
+                    shaders: passDesc.variant.CompiledPrograms,
                     Graphics.GetSpecializations()
                 ),
 
                 ResourceLayouts = resourceLayouts,
             };
 
-            return pipelineDesc;
+            return Graphics.Factory.CreateGraphicsPipeline(description);
         }
 
-        public static PipelineInfo GetPipelineForPass(
+        public static Pipeline GetPipelineForDescription(PassPipelineDescription description)
+        {
+            if (!pipelineCache.TryGetValue(description, out Pipeline pipeline))
+            {
+                Debug.Log("Created pass");
+
+                pipeline = CreatePipeline(description, out GraphicsPipelineDescription pipelineDesc);
+
+                pipelineCache.Add(description, pipeline);
+                pipelineInfo.Add(pipeline, pipelineDesc);
+            }
+
+            return pipeline;
+        }
+
+        public static Pipeline GetPipelineForPass(
             ShaderPass pass, 
             Utils.KeyGroup<string, string>? keywords = null,
             PolygonFillMode fillMode = PolygonFillMode.Solid,
@@ -128,10 +119,10 @@ namespace Prowl.Runtime
         {
             keywords ??= Utils.KeyGroup<string, string>.Default;
 
-            PassPipelineDescription pipelineDesc = new()
+            PassPipelineDescription description = new()
             {
                 pass = pass,
-                keywords = keywords,
+                variant = pass.GetVariant(keywords),
                 fillMode = fillMode,
                 frontFace = frontFace,
                 topology = topology,
@@ -139,29 +130,25 @@ namespace Prowl.Runtime
                 output = pipelineOutput
             };
 
-            if (!pipelineCache.TryGetValue(pipelineDesc, out PipelineInfo pipelineInfo))
-            {
-                Debug.Log("Created pass");
-
-                var description = CreateDescriptionForPass(pipelineDesc);
-                var pipeline = Graphics.Factory.CreateGraphicsPipeline(description);
-
-                pipelineInfo = new PipelineInfo(description, pipeline, pass.GetVariant(keywords));
-
-                pipelineCache.Add(pipelineDesc, pipelineInfo);
-            }
-
-            return pipelineInfo;
+            return GetPipelineForDescription(description);
         }
+
+        public static bool GetDescriptionForPipeline(Pipeline pipeline, out GraphicsPipelineDescription description) =>
+            pipelineInfo.TryGetValue(pipeline, out description);
 
         internal static void Dispose()
         {
-            foreach (var info in pipelineCache.Values)
+            foreach (var pipeline in pipelineCache.Values)
             {
-                info.pipeline.Dispose();
+                pipeline.Dispose();
+            }
 
-                foreach (var layout in info.description.ResourceLayouts)
+            foreach (var description in pipelineInfo.Values)
+            {
+                foreach (var layout in description.ResourceLayouts)
+                {
                     layout.Dispose();
+                }
             }
 
             pipelineCache.Clear();

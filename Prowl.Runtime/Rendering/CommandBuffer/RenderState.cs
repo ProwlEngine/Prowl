@@ -12,18 +12,13 @@ namespace Prowl.Runtime
     public class RenderState
     {
         internal Framebuffer activeFramebuffer;
+        internal IGeometryDrawData activeDrawData;
         
         internal PropertyState propertyState;
-
-        internal PolygonFillMode fillMode;
-        internal PrimitiveTopology topology;
-        internal bool scissorTest;
         internal Utils.KeyGroup<string, string> keywordState;
 
-        internal Material activeMaterial;
-        internal int activePass;
-        
-        internal Pipeline lastSetPipeline;
+        internal PassPipelineDescription pipelineSettings;
+        internal Pipeline activePipeline;
 
         internal List<ResourceSet> resourceSets;
         internal Dictionary<ShaderResource, DeviceBuffer> uniformBuffers;
@@ -32,18 +27,21 @@ namespace Prowl.Runtime
         public RenderState()
         {
             activeFramebuffer = null;
+            activeDrawData = null;
                     
             propertyState = new();
 
-            fillMode = PolygonFillMode.Solid;
-            topology = PrimitiveTopology.TriangleList;
-            scissorTest = false;
+            pipelineSettings.pass = null;
+            pipelineSettings.variant = null;
+            pipelineSettings.output = null;
+            pipelineSettings.frontFace = FrontFace.Clockwise;
+            pipelineSettings.fillMode = PolygonFillMode.Solid;
+            pipelineSettings.topology = PrimitiveTopology.TriangleList;
+            pipelineSettings.scissorTest = false;
 
             keywordState = Utils.KeyGroup<string, string>.Default;
-            activeMaterial = null;
-            activePass = -1;
-                    
-            lastSetPipeline = null;
+
+            activePipeline = null;
 
             resourceSets = new();
             uniformBuffers = new();
@@ -59,18 +57,21 @@ namespace Prowl.Runtime
                 buf.Dispose();
 
             activeFramebuffer = null;
+            activeDrawData = null;
 
             propertyState.Clear();
 
-            fillMode = PolygonFillMode.Solid;
-            topology = PrimitiveTopology.TriangleList;  
-            scissorTest = false;
+            pipelineSettings.pass = null;
+            pipelineSettings.variant = null;
+            pipelineSettings.output = null;
+            pipelineSettings.frontFace = FrontFace.Clockwise;
+            pipelineSettings.fillMode = PolygonFillMode.Solid;
+            pipelineSettings.topology = PrimitiveTopology.TriangleList;  
+            pipelineSettings.scissorTest = false;
 
             keywordState = Utils.KeyGroup<string, string>.Default;
-            activeMaterial = null;
-            activePass = -1;
 
-            lastSetPipeline = null;
+            activePipeline = null;
 
             uniformBuffers.Clear();
             resourceSets.Clear();

@@ -22,7 +22,7 @@ namespace Prowl.Runtime
         public bool DepthClipEnabled;
 
         public ShaderSource[] ShaderSources;
-        public Dictionary<string, HashSet<string>> Keywords;
+        public Dictionary<string, ImmutableHashSet<string>> Keywords;
 
 
         public ShaderPassDescription()
@@ -74,9 +74,11 @@ namespace Prowl.Runtime
 
         
         private readonly ShaderSource[] shaderSource;
+        public IEnumerable<ShaderSource> ShaderSource => shaderSource;
 
-        private readonly Dictionary<string, HashSet<string>> keywords;
-        
+        private readonly Dictionary<string, ImmutableHashSet<string>> keywords;
+        public IEnumerable<KeyValuePair<string, ImmutableHashSet<string>>> Keywords => keywords;
+
         private PermutationMap<string, string, ShaderVariant> variants;
 
 
@@ -93,9 +95,16 @@ namespace Prowl.Runtime
 
             this.keywords = new();
 
-            // Copy keywords
-            foreach (var value in description.Keywords)
-                keywords.Add(value.Key, new(value.Value));
+            if (description.Keywords != null && description.Keywords.Count != 0)
+            {
+                // Copy keywords
+                foreach (var value in description.Keywords)
+                    keywords.Add(value.Key, ImmutableHashSet.CreateRange(value.Value));
+            }
+            else
+            {
+                keywords.Add(string.Empty, [ string.Empty ]);
+            }
 
             this.Tags = ImmutableDictionary.CreateRange(description.Tags);
             this.Hash = GenerateHash();
