@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
@@ -112,14 +113,14 @@ namespace Prowl.Runtime.Utils
     {
         public delegate TValue GeneratePermutation(KeyGroup<TKeyType, TKeyValues> key);
 
-        private Dictionary<TKeyType, HashSet<TKeyValues>> _possibleCombinations;
-        private Dictionary<KeyGroup<TKeyType, TKeyValues>, TValue> _permutations;
+        private readonly Dictionary<TKeyType, ImmutableHashSet<TKeyValues>> _possibleCombinations;
+        private readonly Dictionary<KeyGroup<TKeyType, TKeyValues>, TValue> _permutations;
 
 
         /// <summary>
         /// An <see cref="IEnumerable{T}"/> of every value available for a given key.
         /// </summary>
-        public IEnumerable<KeyValuePair<TKeyType, HashSet<TKeyValues>>> PossibleCombinations => _possibleCombinations;
+        public IEnumerable<KeyValuePair<TKeyType, ImmutableHashSet<TKeyValues>>> PossibleCombinations => _possibleCombinations;
 
 
         /// <summary>
@@ -161,6 +162,24 @@ namespace Prowl.Runtime.Utils
         /// <param name="possibleCombinations">The valid combinations a <see cref="KeyGroup{TKeyKey, TKeyValues}"/> can have to index this map.</param>
         /// <exception cref="ArgumentNullException"></exception>
         /// <exception cref="ArgumentOutOfRangeException"></exception>
+        public PermutationMap(Dictionary<TKeyType, ImmutableHashSet<TKeyValues>> possibleCombinations)
+        {
+            if (possibleCombinations == null)
+                throw new ArgumentNullException(nameof(possibleCombinations), "Definitions is null");
+
+            if (possibleCombinations.Count == 0)
+                throw new ArgumentOutOfRangeException(nameof(possibleCombinations), possibleCombinations.Count, "Definitions dictionary is empty");
+
+            _possibleCombinations = new(possibleCombinations);
+            _permutations = new();
+        }
+
+        /// <summary>
+        /// Initializes a new <see cref="PermutationMap{TKeyKey, TKeyValues, TValue}"/>.
+        /// </summary>
+        /// <param name="possibleCombinations">The valid combinations a <see cref="KeyGroup{TKeyKey, TKeyValues}"/> can have to index this map.</param>
+        /// <exception cref="ArgumentNullException"></exception>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
         public PermutationMap(Dictionary<TKeyType, HashSet<TKeyValues>> possibleCombinations)
         {
             if (possibleCombinations == null)
@@ -169,10 +188,12 @@ namespace Prowl.Runtime.Utils
             if (possibleCombinations.Count == 0)
                 throw new ArgumentOutOfRangeException(nameof(possibleCombinations), possibleCombinations.Count, "Definitions dictionary is empty");
 
-            _possibleCombinations = possibleCombinations;
+            _possibleCombinations = new();
             _permutations = new();
-        }
 
+            foreach (var combination in possibleCombinations)
+                _possibleCombinations.Add(combination.Key, ImmutableHashSet.CreateRange(combination.Value));
+        }
 
         /// <summary>
         /// Initializes a new <see cref="PermutationMap{TKeyKey, TKeyValues, TValue}"/> and fills it with all possible permutations.
@@ -181,7 +202,7 @@ namespace Prowl.Runtime.Utils
         /// <param name="generator">The generator to use when initializing the pairs in the map.</param>
         /// <exception cref="ArgumentNullException"></exception>
         /// <exception cref="ArgumentOutOfRangeException"></exception>
-        public PermutationMap(Dictionary<TKeyType, HashSet<TKeyValues>> possibleCombinations, Func<KeyGroup<TKeyType, TKeyValues>, TValue> generator)
+        public PermutationMap(Dictionary<TKeyType, ImmutableHashSet<TKeyValues>> possibleCombinations, Func<KeyGroup<TKeyType, TKeyValues>, TValue> generator)
         {
             if (possibleCombinations == null)
                 throw new ArgumentNullException(nameof(possibleCombinations), "Definitions is null");
@@ -195,9 +216,32 @@ namespace Prowl.Runtime.Utils
             GeneratePermutations(possibleCombinations.ToList(), generator);
         }
 
+        /// <summary>
+        /// Initializes a new <see cref="PermutationMap{TKeyKey, TKeyValues, TValue}"/>.
+        /// </summary>
+        /// <param name="possibleCombinations">The valid combinations a <see cref="KeyGroup{TKeyKey, TKeyValues}"/> can have to index this map.</param>
+        /// <exception cref="ArgumentNullException"></exception>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        public PermutationMap(Dictionary<TKeyType, HashSet<TKeyValues>> possibleCombinations, Func<KeyGroup<TKeyType, TKeyValues>, TValue> generator)
+        {
+            if (possibleCombinations == null)
+                throw new ArgumentNullException(nameof(possibleCombinations), "Definitions is null");
+
+            if (possibleCombinations.Count == 0)
+                throw new ArgumentOutOfRangeException(nameof(possibleCombinations), possibleCombinations.Count, "Definitions dictionary is empty");
+
+            _possibleCombinations = new();
+            _permutations = new();
+
+            foreach (var combination in possibleCombinations)
+                _possibleCombinations.Add(combination.Key, ImmutableHashSet.CreateRange(combination.Value));
+            
+            GeneratePermutations(_possibleCombinations.ToList(), generator);
+        }
+
 
         // Fills the dictionary with every possible permutation for the given definitions, initializing values with the generator function
-        private void GeneratePermutations(List<KeyValuePair<TKeyType, HashSet<TKeyValues>>> combinations, Func<KeyGroup<TKeyType, TKeyValues>, TValue> generator)
+        private void GeneratePermutations(List<KeyValuePair<TKeyType, ImmutableHashSet<TKeyValues>>> combinations, Func<KeyGroup<TKeyType, TKeyValues>, TValue> generator)
         {   
             List<KeyValuePair<TKeyType, TKeyValues>> combination = new(combinations.Count);
 
