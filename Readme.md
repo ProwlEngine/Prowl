@@ -54,8 +54,11 @@ The goal is a viable open-source Unity alternative, ideally, Unity projects can 
     - .NET 8
     - Editor with support for Editor Scripts and Custom Editors
     - Physics ([Bepu Physics 2](https://github.com/bepu/bepuphysics2))
-      - Colliders: Box, Sphere, Capsule, Cylinder, Mesh Collider
-      - Rigidbody-based Character Controller
+      - Colliders: Box, Sphere, Capsule, Cylinder, ~~Mesh Collider~~ - Needs to be re-implemented
+      - Triggers
+      - Raycasts and Sweeps
+      - ~~Rigidbody-based Character Controller~~ - Needs to be re-implemented
+      - A ton of physical constraints (All of bepu's constraints)
     - Unity-like Coroutines
     - Playtest directly in Editor
     - ScriptableObjects
