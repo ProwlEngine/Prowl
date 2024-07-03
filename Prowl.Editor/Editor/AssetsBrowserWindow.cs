@@ -132,11 +132,11 @@ namespace Prowl.Editor
                 //pathPos += g.CurrentNode.LayoutData.GlobalContentPosition;
                 var pathPos = new Vector2(itemHeight + 200 + (itemPadding * 3), 0);
                 string assetPath = Path.GetRelativePath(Project.ProjectDirectory, CurDirectoryNode.Directory.FullName);
-                //g.DrawText(UIDrawList.DefaultFont, assetPath, 20, pathPos, GuiStyle.Base11);
+                //g.DrawText(Font.DefaultFont, assetPath, 20, pathPos, GuiStyle.Base11);
                 string[] nodes = assetPath.Split(Path.DirectorySeparatorChar);
                 double[] nodeSizes = new double[nodes.Length];
                 for (int j = 0; j < nodes.Length; j++)
-                    nodeSizes[j] = UIDrawList.DefaultFont.CalcTextSize(nodes[j], 0).x + 10;
+                    nodeSizes[j] = Font.DefaultFont.CalcTextSize(nodes[j], 0).x + 10;
 
                 // start node, we may need to skip nodes if the total length exceeds the window
                 int i = 0;
@@ -177,7 +177,7 @@ namespace Prowl.Editor
                         gui.Draw2D.DrawText(nodes[i], 20, gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? Color.white : EditorStylePrefs.Instance.LesserText);
                     }
 
-                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, "/", 20, gui.CurrentNode.LayoutData.GlobalContentPosition + pathPos + new Vector2(textSize, 6), EditorStylePrefs.Instance.LesserText);
+                    gui.Draw2D.DrawText(Font.DefaultFont, "/", 20, gui.CurrentNode.LayoutData.GlobalContentPosition + pathPos + new Vector2(textSize, 6), EditorStylePrefs.Instance.LesserText);
                     pathPos.x += textSize + 5;
                 }
 

@@ -116,7 +116,7 @@ namespace Prowl.Editor
                     node.Width(20).Height(20);
 
                     Gui.ActiveGUI.Draw2D.DrawList.PushClipRectFullScreen();
-                    Gui.ActiveGUI.Draw2D.DrawText(UIDrawList.DefaultFont, FontAwesome6.BoxesPacking, 20, node.LayoutData.InnerRect.Position, Color.white);
+                    Gui.ActiveGUI.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.BoxesPacking, 20, node.LayoutData.InnerRect.Position, Color.white);
                     Gui.ActiveGUI.Draw2D.DrawList.PopClipRect();
                 }
                 SetPayload(tag, objs);

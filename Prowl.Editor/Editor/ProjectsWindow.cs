@@ -107,14 +107,14 @@ namespace Prowl.Editor
             using (gui.Node(name).Height(48).Width(Size.Percentage(1f, -17)).Margin(5).Enter())
             {
                 var rect = gui.CurrentNode.LayoutData.Rect;
-                gui.Draw2D.DrawText(UIDrawList.DefaultFont, name, 20, rect.Position + new Vector2(8, 5), Color.white);
+                gui.Draw2D.DrawText(Font.DefaultFont, name, 20, rect.Position + new Vector2(8, 5), Color.white);
                 string path = proj.FullName;
                 // Cut of the path if it's too long
                 if (path.Length > 48)
                     path = string.Concat("...", path.AsSpan(path.Length - 48));
-                gui.Draw2D.DrawText(UIDrawList.DefaultFont, path, 20, rect.Position + new Vector2(8, 22), Color.white * 0.5f);
+                gui.Draw2D.DrawText(Font.DefaultFont, path, 20, rect.Position + new Vector2(8, 22), Color.white * 0.5f);
 
-                gui.Draw2D.DrawText(UIDrawList.DefaultFont, GetFormattedLastModifiedTime(proj.LastWriteTime), 20, rect.Position + new Vector2(rect.width - 125, 14), Color.white * 0.5f);
+                gui.Draw2D.DrawText(Font.DefaultFont, GetFormattedLastModifiedTime(proj.LastWriteTime), 20, rect.Position + new Vector2(rect.width - 125, 14), Color.white * 0.5f);
 
                 var interact = gui.GetInteractable();
                 if (interact.TakeFocus() || SelectedProject == name)
@@ -163,7 +163,7 @@ namespace Prowl.Editor
             string path = Project.GetPath(createName).FullName;
             if (path.Length > 48)
                 path = string.Concat("...", path.AsSpan(path.Length - 48));
-            gui.Draw2D.DrawText(UIDrawList.DefaultFont, path, 20, rect.Position + new Vector2(30, 480), Color.white * 0.5f);
+            gui.Draw2D.DrawText(Font.DefaultFont, path, 20, rect.Position + new Vector2(30, 480), Color.white * 0.5f);
 
             using (gui.Node("CreateBtn").TopLeft(Offset.Percentage(1f, -172), Offset.Percentage(1f, -77)).Scale(172, 77).Enter())
             {
@@ -193,7 +193,7 @@ namespace Prowl.Editor
             using (gui.Node("Name").Height(40).Width(Size.Percentage(1f)).Enter())
             {
                 Rect rect = gui.CurrentNode.LayoutData.Rect;
-                gui.Draw2D.DrawText(UIDrawList.DefaultFont, "Prowl", 40, rect, Color.white);
+                gui.Draw2D.DrawText(Font.DefaultFont, "Prowl", 40, rect, Color.white);
             }
 
             for (int i = 0; i < tabNames.Length; i++)
@@ -214,7 +214,7 @@ namespace Prowl.Editor
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, i == 3 ? (float)EditorStylePrefs.Instance.WindowRoundness : 0, 8);
 
                     Rect rect = gui.CurrentNode.LayoutData.Rect;
-                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, tabNames[i], 20, rect, Color.white);
+                    gui.Draw2D.DrawText(Font.DefaultFont, tabNames[i], 20, rect, Color.white);
                 }
             }
         }

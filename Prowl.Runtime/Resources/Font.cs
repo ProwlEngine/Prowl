@@ -1,10 +1,13 @@
-﻿using Prowl.Runtime.GUI.Graphics;
+﻿using Prowl.Icons;
+using Prowl.Runtime.GUI.Graphics;
 using StbTrueTypeSharp;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using Veldrid;
+
 using static Prowl.Runtime.GUI.Graphics.UIDrawList;
 
 namespace Prowl.Runtime
@@ -18,6 +21,8 @@ namespace Prowl.Runtime
 
     public sealed class Font : EngineObject, ISerializable
     {
+        public static readonly Font DefaultFont = CreateDefaultFont();
+
         public double FontSize = 20.0;
         public double DisplayFontSize = 20.0;
         public Dictionary<uint, GlyphInfo> Glyphs;
@@ -698,6 +703,39 @@ namespace Prowl.Runtime
 
                 return font;
             }
+        }
+
+        private static Font CreateDefaultFont()
+        {
+            var builder = BuildNewFont(2048, 2048);
+            var assembly = Assembly.GetExecutingAssembly();
+
+            using (Stream stream = assembly.GetManifestResourceStream("Prowl.Runtime.EmbeddedResources.font.ttf"))
+            {
+                using (MemoryStream ms = new())
+                {
+                    stream.CopyTo(ms);
+                    builder.Add(ms.ToArray(), 40, [Font.CharacterRange.BasicLatin]);
+                }
+            }
+            using (Stream stream = assembly.GetManifestResourceStream($"Prowl.Runtime.EmbeddedResources.{FontAwesome6.FontIconFileNameFAR}"))
+            {
+                using (MemoryStream ms = new())
+                {
+                    stream.CopyTo(ms);
+                    builder.Add(ms.ToArray(), 40 * 2.0f / 3.0f, [new Font.CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
+                }
+            }
+            using (Stream stream = assembly.GetManifestResourceStream($"Prowl.Runtime.EmbeddedResources.{FontAwesome6.FontIconFileNameFAS}"))
+            {
+                using (MemoryStream ms = new())
+                {
+                    stream.CopyTo(ms);
+                    builder.Add(ms.ToArray(), 40 * 2.0f / 3.0f, [new Font.CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
+                }
+            }
+
+            return builder.End(40, 20);
         }
     }
 }

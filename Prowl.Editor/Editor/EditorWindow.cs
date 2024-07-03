@@ -131,7 +131,7 @@ namespace Prowl.Editor
                                 for (int i = 0; i < Leaf.LeafWindows.Count; i++)
                                 {
                                     var window = Leaf.LeafWindows[i];
-                                    var textSize = UIDrawList.DefaultFont.CalcTextSize(window.Title, 0);
+                                    var textSize = Font.DefaultFont.CalcTextSize(window.Title, 0);
                                     tabWidths[i] = textSize.x + 20;
                                     total += tabWidths[i];
                                 }
@@ -176,7 +176,7 @@ namespace Prowl.Editor
                                             gui.Draw2D.DrawRectFilled(tabRect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.TabRoundness);
                                         }
 
-                                        var textSize = UIDrawList.DefaultFont.CalcTextSize(window.Title, 0);
+                                        var textSize = Font.DefaultFont.CalcTextSize(window.Title, 0);
                                         var pos = gui.CurrentNode.LayoutData.Rect.Position;
                                         pos.x += (tabRect.width - textSize.x) * 0.5f;
                                         pos.y += (tabRect.height - (textSize.y)) * 0.5f;

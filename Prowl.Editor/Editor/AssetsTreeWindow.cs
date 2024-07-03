@@ -109,7 +109,7 @@ namespace Prowl.Editor
 
                             var textRect = gui.CurrentNode.LayoutData.InnerRect;
                             textRect.width -= EditorStylePrefs.Instance.ItemSize;
-                            gui.Draw2D.DrawText(UIDrawList.DefaultFont, file.Name, 20, new Vector2(gui.CurrentNode.LayoutData.InnerRect.x + 40, gui.CurrentNode.LayoutData.InnerRect.y + 7), Color.white, 0, textRect);
+                            gui.Draw2D.DrawText(Font.DefaultFont, file.Name, 20, new Vector2(gui.CurrentNode.LayoutData.InnerRect.x + 40, gui.CurrentNode.LayoutData.InnerRect.y + 7), Color.white, 0, textRect);
 
                             _treeCounter++;
                         }
@@ -291,9 +291,9 @@ namespace Prowl.Editor
                 }
 
                 var rect = gui.CurrentNode.LayoutData.InnerRect;
-                var textSizeY = UIDrawList.DefaultFont.CalcTextSize(root.RootName, 20).y;
+                var textSizeY = Font.DefaultFont.CalcTextSize(root.RootName, 20).y;
                 var centerY = rect.y + (rect.height / 2) - (textSizeY / 2);
-                gui.Draw2D.DrawText(UIDrawList.DefaultFont, root.RootName, 20, new Vector2(rect.x + 40, centerY + 3), Color.white);
+                gui.Draw2D.DrawText(Font.DefaultFont, root.RootName, 20, new Vector2(rect.x + 40, centerY + 3), Color.white);
 
                 _treeCounter++;
             }
@@ -390,7 +390,7 @@ namespace Prowl.Editor
                     else
                     {
                         var rect = gui.CurrentNode.LayoutData.InnerRect;
-                        var textSizeY = UIDrawList.DefaultFont.CalcTextSize(subDirectory.Name, 20).y;
+                        var textSizeY = Font.DefaultFont.CalcTextSize(subDirectory.Name, 20).y;
                         var centerY = rect.y + (rect.height / 2) - (textSizeY / 2);
                         gui.Draw2D.DrawText(subDirectory.Name, new Vector2(rect.x + 40, centerY + 3));
                     }
@@ -451,9 +451,9 @@ namespace Prowl.Editor
                     var textRect = gui.CurrentNode.LayoutData.InnerRect;
                     if (subFileNode.SubAssets.Length > 1)
                         textRect.width -= EditorStylePrefs.Instance.ItemSize;
-                    var textSizeY = UIDrawList.DefaultFont.CalcTextSize(GetIcon(ext), 20).y;
+                    var textSizeY = Font.DefaultFont.CalcTextSize(GetIcon(ext), 20).y;
                     var centerY = gui.CurrentNode.LayoutData.InnerRect.y + (gui.CurrentNode.LayoutData.InnerRect.height / 2) - (textSizeY / 2);
-                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, GetIcon(ext), 20, new Vector2(gui.CurrentNode.LayoutData.InnerRect.x + (EditorStylePrefs.Instance.ItemSize / 2), centerY + 3), GetFileColor(ext), 0, textRect);
+                    gui.Draw2D.DrawText(Font.DefaultFont, GetIcon(ext), 20, new Vector2(gui.CurrentNode.LayoutData.InnerRect.x + (EditorStylePrefs.Instance.ItemSize / 2), centerY + 3), GetFileColor(ext), 0, textRect);
 
                     // Display Name
                     if (RenamingEntry == subFile.FullName)
@@ -480,7 +480,7 @@ namespace Prowl.Editor
                     else
                     {
                         var text = AssetPipelinePreferences.Instance.HideExtensions ? Path.GetFileNameWithoutExtension(subFile.FullName) : Path.GetFileName(subFile.FullName);
-                        gui.Draw2D.DrawText(UIDrawList.DefaultFont, text, 20, new Vector2(gui.CurrentNode.LayoutData.InnerRect.x + 40, centerY + 3), Color.white, 0, textRect);
+                        gui.Draw2D.DrawText(Font.DefaultFont, text, 20, new Vector2(gui.CurrentNode.LayoutData.InnerRect.x + 40, centerY + 3), Color.white, 0, textRect);
                     }
                 }
 
@@ -511,8 +511,8 @@ namespace Prowl.Editor
                             else if (interact.IsHovered())
                                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.AssetRoundness);
 
-                            gui.Draw2D.DrawText(UIDrawList.DefaultFont, GetIconForType(subFileNode.SubAssets[i].type!), 20, new Vector2(gui.CurrentNode.LayoutData.InnerRect.x + (EditorStylePrefs.Instance.ItemSize / 2), gui.CurrentNode.LayoutData.InnerRect.y + 7), GetTypeColor(subFileNode.SubAssets[i].type!));
-                            gui.Draw2D.DrawText(UIDrawList.DefaultFont, subFileNode.SubAssets[i].name, 20, new Vector2(gui.CurrentNode.LayoutData.InnerRect.x + 40, gui.CurrentNode.LayoutData.InnerRect.y + 7), Color.white);
+                            gui.Draw2D.DrawText(Font.DefaultFont, GetIconForType(subFileNode.SubAssets[i].type!), 20, new Vector2(gui.CurrentNode.LayoutData.InnerRect.x + (EditorStylePrefs.Instance.ItemSize / 2), gui.CurrentNode.LayoutData.InnerRect.y + 7), GetTypeColor(subFileNode.SubAssets[i].type!));
+                            gui.Draw2D.DrawText(Font.DefaultFont, subFileNode.SubAssets[i].name, 20, new Vector2(gui.CurrentNode.LayoutData.InnerRect.x + 40, gui.CurrentNode.LayoutData.InnerRect.y + 7), Color.white);
                         }
 
                         _treeCounter++;
@@ -536,7 +536,7 @@ namespace Prowl.Editor
                     using (node.Width(20).Height(20).Enter())
                     {
                         Gui.ActiveGUI.Draw2D.DrawList.PushClipRectFullScreen();
-                        Gui.ActiveGUI.Draw2D.DrawText(UIDrawList.DefaultFont, FontAwesome6.BoxesPacking + "  " + GetIcon(entry.Extension) + "  " + serialized.GetAsset(fileID).Name, 30, node.LayoutData.InnerRect.Position, Color.white);
+                        Gui.ActiveGUI.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.BoxesPacking + "  " + GetIcon(entry.Extension) + "  " + serialized.GetAsset(fileID).Name, 30, node.LayoutData.InnerRect.Position, Color.white);
                         Gui.ActiveGUI.Draw2D.DrawList.PopClipRect();
                     }
                     DragnDrop.SetPayload(serialized.GetAsset(fileID), entry);

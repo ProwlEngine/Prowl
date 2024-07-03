@@ -12,7 +12,7 @@ namespace Prowl.Runtime.GUI
         {
             using (Node("#_Text_" + id).Enter())
             {
-                Draw2D.DrawText(font ?? UIDrawList.DefaultFont, text, 20, CurrentNode.LayoutData.InnerRect, Color.white);
+                Draw2D.DrawText(font ?? Font.DefaultFont, text, 20, CurrentNode.LayoutData.InnerRect, Color.white);
                 return CurrentNode;
             }
         }
@@ -48,7 +48,7 @@ namespace Prowl.Runtime.GUI
                     int longestText = 0;
                     for (var Index = 0; Index < Items.Length; ++Index)
                     {
-                        var textSize = UIDrawList.DefaultFont.CalcTextSize(Items[Index], 0);
+                        var textSize = Font.DefaultFont.CalcTextSize(Items[Index], 0);
                         if (textSize.x > longestText)
                             longestText = (int)textSize.x;
                     }
@@ -125,7 +125,7 @@ namespace Prowl.Runtime.GUI
                 Gui.ActiveGUI.SetZIndex(500000);
 
                 var pos = (topleft ?? PointerPos) + new Vector2(10, 10);
-                var size = UIDrawList.DefaultFont.CalcTextSize(tip, 0, wrapWidth);
+                var size = Font.DefaultFont.CalcTextSize(tip, 0, wrapWidth);
                 var style = new WidgetStyle(30);
                 Draw2D.DrawRectFilled(pos - new Vector2(5), size + new Vector2(10), style.BGColor, 10);
                 Draw2D.DrawRect(pos - new Vector2(5), size + new Vector2(10), style.BorderColor, 2, 10);
@@ -227,7 +227,7 @@ namespace Prowl.Runtime.GUI
                 var pos = g.PreviousNode.LayoutData.InnerRect.Position + new Vector2(8, 3);
                 // Center text vertically
                 pos.y += (g.PreviousNode.LayoutData.InnerRect.height - style.FontSize) / 2;
-                g.Draw2D.DrawText(UIDrawList.DefaultFont, FontAwesome6.MagnifyingGlass + "Search...", style.FontSize, pos, Color.white * 0.6f);
+                g.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.MagnifyingGlass + "Search...", style.FontSize, pos, Color.white * 0.6f);
             }
             return changed;
         }

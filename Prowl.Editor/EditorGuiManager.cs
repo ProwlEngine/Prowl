@@ -102,11 +102,11 @@ public static class EditorGuiManager
                     g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
                     g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.Borders, 2, (float)EditorStylePrefs.Instance.WindowRoundness);
 
-                    MenuItem.DrawMenuRoot("File", true, UIDrawList.DefaultFont.CalcTextSize("File", 0).x + 20);
-                    MenuItem.DrawMenuRoot("Edit", true, UIDrawList.DefaultFont.CalcTextSize("Edit", 0).x + 20);
-                    MenuItem.DrawMenuRoot("Assets", true, UIDrawList.DefaultFont.CalcTextSize("Assets", 0).x + 20);
-                    MenuItem.DrawMenuRoot("Create", true, UIDrawList.DefaultFont.CalcTextSize("Create", 0).x + 20);
-                    MenuItem.DrawMenuRoot("Windows", true, UIDrawList.DefaultFont.CalcTextSize("Windows", 0).x + 20);
+                    MenuItem.DrawMenuRoot("File", true, Font.DefaultFont.CalcTextSize("File", 0).x + 20);
+                    MenuItem.DrawMenuRoot("Edit", true, Font.DefaultFont.CalcTextSize("Edit", 0).x + 20);
+                    MenuItem.DrawMenuRoot("Assets", true, Font.DefaultFont.CalcTextSize("Assets", 0).x + 20);
+                    MenuItem.DrawMenuRoot("Create", true, Font.DefaultFont.CalcTextSize("Create", 0).x + 20);
+                    MenuItem.DrawMenuRoot("Windows", true, Font.DefaultFont.CalcTextSize("Windows", 0).x + 20);
                 }
 
                 using (g.Node("PlayMode").ExpandHeight().FitContentWidth().Layout(LayoutType.Row).Enter())

@@ -316,9 +316,9 @@ namespace Prowl.Editor
                 {
                     var textRect = rect;
                     textRect.width -= entryHeight;
-                    var textSizeY = UIDrawList.DefaultFont.CalcTextSize(name, 20).y;
+                    var textSizeY = Font.DefaultFont.CalcTextSize(name, 20).y;
                     var centerY = rect.y + (rect.height / 2) - (textSizeY / 2);
-                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, name, 20, new Vector2(rect.x + 40, centerY + 3), Color.white, 0, textRect);
+                    gui.Draw2D.DrawText(Font.DefaultFont, name, 20, new Vector2(rect.x + 40, centerY + 3), Color.white, 0, textRect);
                 }
 
                 index++;

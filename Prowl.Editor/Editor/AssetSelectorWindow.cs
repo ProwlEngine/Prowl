@@ -55,7 +55,7 @@ namespace Prowl.Editor
                     if (interact.IsHovered())
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
 
-                    gui.Draw2D.DrawText(UIDrawList.DefaultFont, "None", 20, new Vector2(xPos, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white);
+                    gui.Draw2D.DrawText(Font.DefaultFont, "None", 20, new Vector2(xPos, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white);
                 }
 
                 var assets = AssetDatabase.GetAllAssetsOfType(type);
@@ -79,7 +79,7 @@ namespace Prowl.Editor
                                 if (interact.IsHovered())
                                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.AssetRoundness);
 
-                                gui.Draw2D.DrawText(UIDrawList.DefaultFont, AssetDatabase.GetRelativePath(file.FullName) + "." + asset.Item1, 20, new Vector2(xPos, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white);
+                                gui.Draw2D.DrawText(Font.DefaultFont, AssetDatabase.GetRelativePath(file.FullName) + "." + asset.Item1, 20, new Vector2(xPos, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white);
                             }
                         }
                     }

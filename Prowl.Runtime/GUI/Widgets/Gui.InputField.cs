@@ -49,7 +49,7 @@ namespace Prowl.Runtime.GUI
                 BorderColor = new(49, 52, 66);
                 BorderThickness = 1;
                 Roundness = 5;
-                Font = UIDrawList.DefaultFont;
+                Font = Runtime.Font.DefaultFont;
                 FontSize = 20;
             }
         }
@@ -89,7 +89,7 @@ namespace Prowl.Runtime.GUI
                     }
 
                         //OnProcess(style, interact, ref value, maxLength, flags | InputFieldFlags.OnlyDisplay);
-                        var font = style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont;
+                        var font = style.Font.IsAvailable ? style.Font.Res : Font.DefaultFont;
                     var fontsize = style.FontSize;
                     var render_pos = new Vector2(g.CurrentNode.LayoutData.InnerRect.x, g.CurrentNode.LayoutData.InnerRect.y);
                     // Center text vertically
@@ -107,7 +107,7 @@ namespace Prowl.Runtime.GUI
 
                 if (multiline)
                 {
-                    Vector2 textSize = (style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont).CalcTextSize(value, 0, g.CurrentNode.LayoutData.InnerRect.width);
+                    Vector2 textSize = (style.Font.IsAvailable ? style.Font.Res : Font.DefaultFont).CalcTextSize(value, 0, g.CurrentNode.LayoutData.InnerRect.width);
                     // Dummy node to update ContentRect
                     g.Node(ID).Width(textSize.x).Height(textSize.y).IgnoreLayout();
                     g.CurrentNode.Scroll();
@@ -132,7 +132,7 @@ namespace Prowl.Runtime.GUI
         internal static bool OnProcess(WidgetStyle style, Interactable interact, ref string Text, uint MaxLength, InputFieldFlags Flags)
         {
             var g = Gui.ActiveGUI;
-            var font = style.Font.IsAvailable ? style.Font.Res : UIDrawList.DefaultFont;
+            var font = style.Font.IsAvailable ? style.Font.Res : Font.DefaultFont;
             var fontsize = style.FontSize;
             var render_pos = new Vector2(g.CurrentNode.LayoutData.InnerRect.x, g.CurrentNode.LayoutData.InnerRect.y);
             // Center text vertically

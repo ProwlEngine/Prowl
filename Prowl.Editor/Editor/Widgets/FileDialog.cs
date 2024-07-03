@@ -98,7 +98,7 @@ namespace Prowl.Editor
                             var pos = gui.CurrentNode.LayoutData.Rect.MiddleLeft;
                             pos.y -= 8;
                             gui.Draw2D.DrawText(Dialog.title, 20, pos, EditorStylePrefs.Instance.LesserText);
-                            left += UIDrawList.DefaultFont.CalcTextSize(Dialog.title, 0).x;
+                            left += Font.DefaultFont.CalcTextSize(Dialog.title, 0).x;
                         }
 
                         left += 5;

@@ -36,11 +36,10 @@ namespace Prowl.Runtime.GUI
             {
                 _drawList[index].AntiAliasing(antiAliasing);
                 _drawList[index].Clear();
-                _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture);
+                _drawList[index].PushTextureID(Font.DefaultFont.Texture);
 
                 drawListsOrdered.Add(_drawList[index]);
             }
-
         }
 
         public void EndFrame(CommandBuffer commandBuffer, Rect screenRect)
@@ -80,7 +79,7 @@ namespace Prowl.Runtime.GUI
             {
                 var previousList = _drawList[currentZIndex];
                 _drawList[index].PushClipRect(previousList._ClipRectStack.Peek());
-                _drawList[index].PushTextureID(UIDrawList.DefaultFont.Texture);
+                _drawList[index].PushTextureID(Font.DefaultFont.Texture);
             }
         }
 
@@ -161,15 +160,15 @@ namespace Prowl.Runtime.GUI
 
 
         public void DrawText(string text, Rect rect, Color color, bool dowrap = true, bool doclip = true)
-            => DrawText(UIDrawList.DefaultFont, text, 20, rect, color, dowrap, doclip);
+            => DrawText(Font.DefaultFont, text, 20, rect, color, dowrap, doclip);
         public void DrawText(string text, Rect rect, bool dowrap = true, bool doclip = true)
-            => DrawText(UIDrawList.DefaultFont, text, 20, rect, Color.white, dowrap, doclip);
+            => DrawText(Font.DefaultFont, text, 20, rect, Color.white, dowrap, doclip);
 
         public void DrawText(string text, double fontSize, Rect rect, bool dowrap = true, bool doclip = true)
-            => DrawText(UIDrawList.DefaultFont, text, fontSize, rect, Color.white, dowrap, doclip);
+            => DrawText(Font.DefaultFont, text, fontSize, rect, Color.white, dowrap, doclip);
 
         public void DrawText(string text, double fontSize, Rect rect, Color color, bool dowrap = true, bool doclip = true)
-            => DrawText(UIDrawList.DefaultFont, text, fontSize, rect, color, dowrap, doclip);
+            => DrawText(Font.DefaultFont, text, fontSize, rect, color, dowrap, doclip);
 
         public void DrawText(Font font, string text, double fontSize, Rect rect, Color color, bool dowrap = true, bool doclip = true)
         {
@@ -182,13 +181,13 @@ namespace Prowl.Runtime.GUI
         }
 
         public void DrawText(string text, Vector2 position, double wrapwidth = 0.0f)
-            => DrawText(UIDrawList.DefaultFont, text, 20, position, Color.white, wrapwidth);
+            => DrawText(Font.DefaultFont, text, 20, position, Color.white, wrapwidth);
 
         public void DrawText(string text, Vector2 position, Color color, double wrapwidth = 0.0f)
-            => DrawText(UIDrawList.DefaultFont, text, 20, position, color, wrapwidth);
+            => DrawText(Font.DefaultFont, text, 20, position, color, wrapwidth);
 
         public void DrawText(string text, double fontSize, Vector2 position, double wrapwidth = 0.0f)
-            => DrawText(UIDrawList.DefaultFont, text, fontSize, position, Color.white, wrapwidth);
+            => DrawText(Font.DefaultFont, text, fontSize, position, Color.white, wrapwidth);
 
         public void DrawText(string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f)
             => _drawList[currentZIndex].AddText((float)fontSize, position, color, text, wrap_width: (float)wrapwidth);

@@ -131,7 +131,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     }
 
                     var rect = gui.CurrentNode.LayoutData.InnerRect;
-                    var textSizeY = UIDrawList.DefaultFont.CalcTextSize("Transform", 20).y;
+                    var textSizeY = Font.DefaultFont.CalcTextSize("Transform", 20).y;
                     var centerY = (rect.height / 2) - (textSizeY / 2);
                     gui.Draw2D.DrawText((opened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, centerY + 3));
                     gui.Draw2D.DrawText(FontAwesome6.MapLocation + " Transform", 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(29, centerY + 3), Color.black * 0.8f);
@@ -205,7 +205,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                         var rect = gui.CurrentNode.LayoutData.InnerRect;
                         string cname = GetComponentDisplayName(cType);
-                        var textSizeY = UIDrawList.DefaultFont.CalcTextSize(cname, 20).y;
+                        var textSizeY = Font.DefaultFont.CalcTextSize(cname, 20).y;
                         var centerY = (rect.height / 2) - (textSizeY / 2);
                         gui.Draw2D.DrawText((compOpened ? FontAwesome6.ChevronDown : FontAwesome6.ChevronRight), gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(8, centerY + 3));
                         gui.Draw2D.DrawText(cname, 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(29, centerY + 3), Color.black * 0.8f);
@@ -406,7 +406,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         double largestWidth = 0;
                         foreach (var child in item.Children)
                         {
-                            double width = UIDrawList.DefaultFont.CalcTextSize(child.Name, 0).x + 30;
+                            double width = Font.DefaultFont.CalcTextSize(child.Name, 0).x + 30;
                             if (width > largestWidth)
                                 largestWidth = width;
                         }

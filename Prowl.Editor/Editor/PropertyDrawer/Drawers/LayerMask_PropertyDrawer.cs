@@ -50,7 +50,7 @@ namespace Prowl.Editor.PropertyDrawers
                     int longestText = 0;
                     for (var Index = 0; Index < layers.Length; ++Index)
                     {
-                        var textSize = UIDrawList.DefaultFont.CalcTextSize(layers[Index], 0);
+                        var textSize = Font.DefaultFont.CalcTextSize(layers[Index], 0);
                         if (textSize.x > longestText)
                             longestText = (int)textSize.x;
                     }
