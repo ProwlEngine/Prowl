@@ -221,8 +221,8 @@ namespace Prowl.Editor.Assets
 
                 if (GenerateColliders)
                 {
-                    var mc = go.AddComponent<MeshCollider>();
-                    mc.mesh = uMeshAndMat.Mesh;
+                    //var mc = go.AddComponent<MeshCollider>();
+                    //mc.mesh = uMeshAndMat.Mesh;
                 }
             }
         }

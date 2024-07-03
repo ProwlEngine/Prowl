@@ -1,31 +1,25 @@
 ﻿using BepuPhysics;
 using BepuPhysics.Collidables;
 using Prowl.Icons;
-using System.Collections.Generic;
+using System;
 
-
-namespace Prowl.Runtime
+namespace Prowl.Runtime.Components.NewPhysics
 {
-    /// <summary> A GameObject Component that describes a Dynamic or Static Physical Rigidbody </summary>
     [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Cubes}  Rigidbody")]
-    public class Rigidbody : MonoBehaviour
+    public class Rigidbody : PhysicsBody
     {
-        [SerializeField, HideInInspector]
-        private bool _kinematic = false;
+        [SerializeField, HideInInspector] private bool _kinematic = false;
+        [SerializeField, HideInInspector] private ContinuousDetection _continuous = ContinuousDetection.Discrete;
+        [SerializeField, HideInInspector] private float _sleepThreshold = 0.01f;
+        [SerializeField, HideInInspector] private byte _minimumTimestepCountUnderThreshold = 32;
+        [SerializeField, HideInInspector] private InterpolationMode _interpolationMode = InterpolationMode.None;
 
-        //public enum UpdateMode
-        //{
-        //    None,
-        //    Interpolation,
-        //    Extrapolation
-        //}
-        //public UpdateMode updateMode;
+        /// <summary> Can be null when it isn't part of a simulation yet/anymore </summary>
+        internal BodyReference? BodyReference { get; private set; }
 
-        private BodyHandle? bodyHandle;
-        private BodyReference body;
-        private TypedIndex? compoundShape;
+        internal RigidPose PreviousPose, CurrentPose;
 
-        private BodyInertia _nativeIntertia;
+        private uint _transformVersion = 1;
 
         [ShowInInspector]
         public bool Kinematic {
@@ -35,152 +29,240 @@ namespace Prowl.Runtime
                     return;
 
                 _kinematic = value;
-                if (body.Exists)
+                if (BodyReference is { } bRef)
                 {
-                    body.GetDescription(out var description);
+#warning maybe setting bRef.LocalInertia is enough instead of getting and applying description ... ?
+                    bRef.GetDescription(out var description);
                     description.LocalInertia = Kinematic ? new BodyInertia() : _nativeIntertia;
-                    body.ApplyDescription(description);
-                    body.Awake = true;
+                    bRef.ApplyDescription(description);
                 }
             }
         }
 
-        public BodyHandle? BodyHandle {
-            get => bodyHandle;
+        [ShowInInspector]
+        public float SleepThreshold {
+            get => _sleepThreshold;
+            set {
+                if (_sleepThreshold == value)
+                    return;
+
+                _sleepThreshold = value;
+                if (BodyReference is { } bRef)
+                {
+#warning maybe setting bRef.Activity.SleepThreshold is enough instead of getting and applying description ... ?
+                    bRef.GetDescription(out var description);
+                    description.Activity.SleepThreshold = value;
+                    bRef.ApplyDescription(description);
+                }
+            }
         }
 
-        public Vector3 Position {
-            get => body.Pose.Position;
-            set => body.Pose.Position = value;
+        public byte MinimumTimestepCountUnderThreshold {
+            get => _minimumTimestepCountUnderThreshold;
+            set {
+                if (_minimumTimestepCountUnderThreshold == value)
+                    return;
+
+                _minimumTimestepCountUnderThreshold = value;
+                if (BodyReference is { } bRef)
+                {
+#warning maybe setting bRef.Activity.MinimumTimestepsUnderThreshold is enough instead of getting and applying description ... ?
+                    bRef.GetDescription(out var description);
+                    description.Activity.MinimumTimestepCountUnderThreshold = value;
+                    bRef.ApplyDescription(description);
+                }
+            }
         }
 
-        public Quaternion Rotation {
-            get => body.Pose.Orientation;
-            set => body.Pose.Orientation = value;
+        [ShowInInspector]
+        public InterpolationMode InterpolationMode {
+            get => _interpolationMode;
+            set => _interpolationMode = value;
         }
 
-        public bool IsKinematic {
-            get => body.Kinematic;
+        /// <summary>
+        /// Shortcut to <see cref="ContinuousDetection"/>.<see cref="ContinuousDetection.Mode"/>
+        /// </summary>
+        [ShowInInspector]
+        public ContinuousDetectionMode ContinuousDetectionMode {
+            get => _continuous.Mode;
+            set {
+                if (_continuous.Mode == value)
+                    return;
+
+                _continuous = value switch {
+                    ContinuousDetectionMode.Discrete => ContinuousDetection.Discrete,
+                    ContinuousDetectionMode.Passive => ContinuousDetection.Passive,
+                    ContinuousDetectionMode.Continuous => ContinuousDetection.Continuous(),
+                    _ => throw new ArgumentOutOfRangeException(nameof(value), value, null)
+                };
+            }
         }
 
-        public Vector3 Velocity {
-            get => body.Velocity.Linear;
-            set => body.Velocity.Linear = value;
+        public bool Awake {
+            get => BodyReference?.Awake ?? false;
+            set {
+                if (BodyReference is { } bodyRef)
+                    bodyRef.Awake = value;
+            }
+        }
+
+        public Vector3 LinearVelocity {
+            get => BodyReference?.Velocity.Linear ?? default;
+            set {
+                if (BodyReference is { } bodyRef)
+                    bodyRef.Velocity.Linear = value;
+            }
         }
 
         public Vector3 AngularVelocity {
-            get => body.Velocity.Angular;
-            set => body.Velocity.Angular = value;
-        }
-
-        public void AddForce(Vector3 force) => body.ApplyLinearImpulse(force);
-
-        public void AddTorque(Vector3 torque) => body.ApplyAngularImpulse(torque);
-
-        public void AddForceAtPosition(Vector3 force, Vector3 worldPosition) => body.ApplyImpulse(force, worldPosition - Position);
-
-        public Vector3 GetPointVelocity(Vector3 point) {
-            body.GetVelocityForOffset(point - Position, out var velocity);
-            return velocity;
-        }
-
-        private List<Collider> colliders = [];
-        public void StartBuild() => colliders.Clear();
-        public void AddCollider(Collider collider) => colliders.Add(collider);
-
-        public void Build()
-        {
-            Detach();
-
-            if (colliders.Count == 0)
-            {
-                Debug.LogWarning("Rigidbody has no colliders attached");
-                return;
-            }
-
-            var shape = ComputeShape(out _nativeIntertia, out System.Numerics.Vector3 compoundCenter);
-            var collidableDescription = new CollidableDescription(shape, 0.1f);
-            bodyHandle = Physics.Sim.Bodies.Add(BodyDescription.CreateDynamic(
-                new RigidPose(this.Transform.position, this.Transform.rotation), _kinematic ? new BodyInertia() : _nativeIntertia, collidableDescription,
-                0.01f));
-            body = Physics.Sim.Bodies[bodyHandle.Value];
-        }
-
-        internal TypedIndex ComputeShape(out BodyInertia compoundInertia, out System.Numerics.Vector3 compoundCenter)
-        {
-            // Get all colliders
-            using (var compoundBuilder = new CompoundBuilder(Physics.Pool, Physics.Sim.Shapes, colliders.Count))
-            {
-                foreach (var collider in colliders)
-                {
-                    var target = this.GameObject.Transform;
-                    var localPos = target.InverseTransformPoint(collider.Transform.position) + collider.offset;
-                    var localRot = target.InverseTransformRotation(collider.Transform.rotation);
-                    compoundBuilder.Add(collider.shapeIndex.Value, new RigidPose(localPos, localRot), collider.bodyInertia.Value);
-                }
-                compoundBuilder.BuildDynamicCompound(out var compoundChildren, out compoundInertia, out compoundCenter);
-                compoundBuilder.Reset();
-                compoundShape = Physics.Sim.Shapes.Add(new Compound(compoundChildren));
-                lastVersion = this.GameObject.Transform.version;
-                return compoundShape.Value;
+            get => BodyReference?.Velocity.Angular ?? default;
+            set {
+                if (BodyReference is { } bodyRef)
+                    bodyRef.Velocity.Angular = value;
             }
         }
 
-        #region Prowl Methods
+        public Vector3 Position {
+            get => BodyReference?.Pose.Position ?? default;
+            set {
+                if (BodyReference is { } bodyRef)
+                    bodyRef.Pose.Position = value;
+            }
+        }
+
+        public Quaternion Orientation {
+            get => BodyReference?.Pose.Orientation ?? Quaternion.identity;
+            set {
+                if (BodyReference is { } bodyRef)
+                    bodyRef.Pose.Orientation = value;
+            }
+        }
+
+        public BodyInertia BodyInertia {
+            get => BodyReference?.LocalInertia ?? default;
+            set {
+                if (BodyReference is { } bodyRef)
+                    bodyRef.LocalInertia = value;
+            }
+        }
+
+        [ShowInInspector]
+        public float SpeculativeMargin {
+            get => BodyReference?.Collidable.SpeculativeMargin ?? default;
+            set {
+                if (BodyReference is { } bodyRef)
+                    bodyRef.Collidable.SpeculativeMargin = value;
+            }
+        }
+
+        [ShowInInspector]
+        public ContinuousDetection ContinuousDetection {
+            get => _continuous;
+            set {
+                _continuous = value;
+                if (BodyReference is { } bodyRef)
+                    bodyRef.Collidable.Continuity = _continuous;
+            }
+        }
 
         public override void OnEnable()
         {
-            Physics.UpdateHierarchy(this.GameObject.Transform.root);
+            base.OnEnable();
+            _transformVersion = this.Transform.version;
         }
 
-        public override void OnDisable()
+        public void ApplyImpulse(Vector3 impulse, Vector3 impulseOffset)
         {
-            Detach();
-
-            Physics.UpdateHierarchy(this.GameObject.Transform.root);
+            BodyReference?.ApplyImpulse(impulse, impulseOffset);
         }
 
-        private void Detach()
+        public void ApplyAngularImpulse(Vector3 impulse)
         {
-            if (bodyHandle != null)
-                Physics.Sim.Bodies.Remove(bodyHandle.Value);
-            bodyHandle = null;
+            BodyReference?.ApplyAngularImpulse(impulse);
         }
 
-        private uint lastVersion = 0;
-        public override void Update()
+        public void ApplyLinearImpulse(Vector3 impulse)
         {
-            if (bodyHandle == null) return;
+            BodyReference?.ApplyLinearImpulse(impulse);
+        }
 
-            if (lastVersion != this.GameObject.Transform.version)
+        protected override ref PhysicsMaterial MaterialProperties => ref Physics.CollidableMaterials[BodyReference!.Value];
+        protected internal override RigidPose? Pose => BodyReference?.Pose;
+
+        private BodyInertia _nativeIntertia;
+
+        protected override void AttachInner(RigidPose containerPose, BodyInertia shapeInertia, TypedIndex shapeIndex)
+        {
+            Debug.Assert(Physics.IsReady);
+
+            _nativeIntertia = shapeInertia;
+            if (Kinematic)
+                shapeInertia = new BodyInertia();
+
+            var bDescription = BodyDescription.CreateDynamic(containerPose, shapeInertia, shapeIndex, new(SleepThreshold, MinimumTimestepCountUnderThreshold));
+
+            if (BodyReference is { } bRef)
             {
-                body.Pose.Position = this.GameObject.Transform.position;
-                body.Pose.Orientation = this.GameObject.Transform.rotation;
-                body.Velocity.Linear = Vector3.zero;
-                body.Velocity.Angular = Vector3.zero;
-                body.Awake = true;
-                lastVersion = this.GameObject.Transform.version;
+                bRef.GetDescription(out var previousDesc);
+                bDescription.Velocity = previousDesc.Velocity; //Keep velocity when updating
+                bRef.ApplyDescription(bDescription);
             }
-
-            //if (updateMode == UpdateMode.Interpolation)
-            //{
-            //    this.GameObject.Transform.position = body.Pose.Position;
-            //    this.GameObject.Transform.rotation = body.Pose.Orientation;
-            //}
-            //else if (updateMode == UpdateMode.Extrapolation)
-            //{
-            //    this.GameObject.Transform.position = body.Pose.Position + body.Velocity.Linear * Time.deltaTimeF;
-            //    this.GameObject.Transform.rotation = body.Pose.Orientation.ToDouble() + Quaternion.Euler(body.Velocity.Angular * Time.deltaTimeF);
-            //}
-            //else
+            else
             {
-                this.GameObject.Transform.position = body.Pose.Position;
-                this.GameObject.Transform.rotation = body.Pose.Orientation;
-                lastVersion = this.GameObject.Transform.version;
+                var bHandle = Physics.Sim.Bodies.Add(bDescription);
+                BodyReference = Physics.Sim.Bodies[bHandle];
+                BodyReference.Value.Collidable.Continuity = ContinuousDetection;
+
+                while (Physics.Bodies.Count <= bHandle.Value) // There may be more than one add if soft physics inserted a couple of bodies
+                    Physics.Bodies.Add(null);
+                Physics.Bodies[bHandle.Value] = this;
+
+                Physics.CollidableMaterials.Allocate(bHandle) = new();
             }
         }
 
+        protected override void DetachInner()
+        {
+            Debug.Assert(Physics.IsReady);
+
+            if (BodyReference == null)
+                return;
+
+            Physics.Sim.Bodies.Remove(BodyReference.Value.Handle);
+            Physics.Bodies[BodyReference.Value.Handle.Value] = null;
+
+            BodyReference = null;
+        }
+
+        public void SyncTransform()
+        {
+            if (this.Transform.version != _transformVersion)
+            {
+                Position = this.Transform.position;
+                Orientation = this.Transform.rotation;
+                Awake = true;
+                _transformVersion = this.Transform.version;
+            }
+        }
+
+        protected override void RegisterContactHandler()
+        {
+            if (Physics.IsReady && ContactEventHandler is not null && BodyReference is { } bRef)
+                Physics.ContactEvents.Register(bRef.Handle, ContactEventHandler);
+        }
+
+        protected override void UnregisterContactHandler()
+        {
+            if (Physics.IsReady && BodyReference is { } bRef)
+                Physics.ContactEvents.Unregister(bRef.Handle);
+        }
+
+        protected override bool IsContactHandlerRegistered()
+        {
+            if (Physics.IsReady && BodyReference is { } bRef)
+                return Physics.ContactEvents.IsListener(bRef.Handle);
+            return false;
+        }
     }
-
-    #endregion
 }
