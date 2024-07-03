@@ -403,28 +403,29 @@ public class GameObject : EngineObject, ISerializable
 
     public bool TryGetComponent<T>(out T? component) where T : MonoBehaviour => (component = GetComponent<T>()) != null;
 
-    public IEnumerable<T> GetComponents<T>() where T : MonoBehaviour
+    public IEnumerable<T> GetComponents<T>() where T : MonoBehaviour => GetComponents(typeof(T)).Cast<T>();
+    public IEnumerable<MonoBehaviour> GetComponents(Type type)
     {
-        if (typeof(T) == typeof(MonoBehaviour))
+        if (type == typeof(MonoBehaviour))
         {
             // Special case for Component
             foreach (var comp in _components)
-                yield return (T)comp;
+                yield return comp;
         }
         else
         {
-            if (!_componentCache.TryGetValue(typeof(T), out var components))
+            if (!_componentCache.TryGetValue(type, out var components))
             {
                 foreach (var kvp in _componentCache.ToArray())
-                    if (kvp.Key.GetTypeInfo().IsAssignableTo(typeof(T)))
+                    if (kvp.Key.GetTypeInfo().IsAssignableTo(type))
                         foreach (var comp in kvp.Value.ToArray())
-                            yield return (T)comp;
+                            yield return comp;
             }
             else
             {
                 foreach (var comp in components)
-                    if (comp.GetType().IsAssignableTo(typeof(T)))
-                        yield return (T)comp;
+                    if (comp.GetType().IsAssignableTo(type))
+                        yield return comp;
             }
         }
     }
@@ -455,17 +456,18 @@ public class GameObject : EngineObject, ISerializable
         return null;
     }
 
-    public IEnumerable<T> GetComponentsInParent<T>(bool includeSelf = true, bool includeInactive = false) where T : MonoBehaviour
+    public IEnumerable<T> GetComponentsInParent<T>(bool includeSelf = true, bool includeInactive = false) where T : MonoBehaviour => GetComponentsInParent(typeof(T), includeSelf, includeInactive).Cast<T>();
+    public IEnumerable<MonoBehaviour> GetComponentsInParent(Type type, bool includeSelf = true, bool includeInactive = false)
     {
         // First check the current Object
         if (includeSelf && enabledInHierarchy)
-            foreach (var component in GetComponents<T>())
+            foreach (var component in GetComponents(type))
                 yield return component;
         // Now check all parents
         GameObject parent = this;
         while ((parent = parent.parent) != null) {
             if(parent.enabledInHierarchy || includeInactive)
-                foreach (var component in parent.GetComponents<T>())
+                foreach (var component in parent.GetComponents(type))
                     yield return component;
         }
     }
@@ -496,17 +498,18 @@ public class GameObject : EngineObject, ISerializable
     }
 
 
-    public IEnumerable<T> GetComponentsInChildren<T>(bool includeSelf = true, bool includeInactive = false) where T : MonoBehaviour
+    public IEnumerable<T> GetComponentsInChildren<T>(bool includeSelf = true, bool includeInactive = false) where T : MonoBehaviour => GetComponentsInChildren(typeof(T), includeSelf, includeInactive).Cast<T>();
+    public IEnumerable<MonoBehaviour> GetComponentsInChildren(Type type, bool includeSelf = true, bool includeInactive = false)
     {
         // First check the current Object
         if (includeSelf && enabledInHierarchy)
-            foreach (var component in GetComponents<T>())
+            foreach (var component in GetComponents(type))
                 yield return component;
         // Now check all children
         foreach (var child in children)
         {
             if (enabledInHierarchy || includeInactive)
-                foreach (var component in child.GetComponentsInChildren<T>())
+                foreach (var component in child.GetComponentsInChildren(type, true, includeInactive))
                     yield return component;
         }
     }

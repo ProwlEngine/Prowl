@@ -36,11 +36,9 @@ public abstract class MonoBehaviour : EngineObject
 
     public string Tag => _go.tag;
 
-    public bool Enabled
-    {
+    public bool Enabled {
         get { return _enabled; }
-        set
-        {
+        set {
             if (value != _enabled)
             {
                 _enabled = value;
@@ -67,12 +65,15 @@ public abstract class MonoBehaviour : EngineObject
     public MonoBehaviour? GetComponent(Type type) => GameObject.GetComponent(type);
     public bool TryGetComponent<T>(out T component) where T : MonoBehaviour => (component = GetComponent<T>()) != null;
     public IEnumerable<T> GetComponents<T>() where T : MonoBehaviour => GameObject.GetComponents<T>();
+    public IEnumerable<MonoBehaviour> GetComponents(Type type) => GameObject.GetComponents(type);
     public T? GetComponentInParent<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentInParent<T>(includeSelf);
     public MonoBehaviour? GetComponentInParent(Type componentType, bool includeSelf = true) => GameObject.GetComponentInParent(componentType, includeSelf);
     public IEnumerable<T> GetComponentsInParent<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentsInParent<T>(includeSelf);
+    public IEnumerable<MonoBehaviour> GetComponentsInParent(Type type, bool includeSelf = true) => GameObject.GetComponentsInParent(type, includeSelf);
     public T? GetComponentInChildren<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentInChildren<T>(includeSelf);
     public MonoBehaviour? GetComponentInChildren(Type componentType, bool includeSelf = true) => GameObject.GetComponentInChildren(componentType, includeSelf);
     public IEnumerable<T> GetComponentsInChildren<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentsInChildren<T>(includeSelf);
+    public IEnumerable<MonoBehaviour> GetComponentsInChildren(Type type, bool includeSelf = true) => GameObject.GetComponentsInChildren(type, includeSelf);
     #endregion
 
     internal void AttachToGameObject(GameObject go)
@@ -140,7 +141,7 @@ public abstract class MonoBehaviour : EngineObject
         HasStarted = true;
         Start();
     }
-    
+
     private static Dictionary<Type, bool> CachedExecuteAlways = new();
     internal void Do(Action action)
     {
