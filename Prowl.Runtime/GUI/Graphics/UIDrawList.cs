@@ -5,13 +5,15 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
 using Veldrid;
+using Prowl.Runtime.Utils;
+using System.Linq;
 
 namespace Prowl.Runtime.GUI.Graphics
 {
 
     // This is essentially a port of the ImGui ImDrawList class to C#
 
-    public class UIDrawList
+    public class UIDrawList : IGeometryDrawData
     {
         public class UIDrawChannel
         {
@@ -36,14 +38,16 @@ namespace Prowl.Runtime.GUI.Graphics
         }
 
         internal static Vector4 GNullClipRect = new Vector4(-8192.0f, -8192.0f, +8192.0f, +8192.0f);
-        internal static Shader shader;
-        internal static Material material;
+        internal static ShaderPass UIPass;
+        internal static ShaderVariant UIVariant;
 
         // This is what you have to render
         internal List<UIDrawCmd> CmdBuffer; // Commands. Typically 1 command = 1 gpu draw call.
 
         public List<uint> IdxBuffer; // Index buffer. Each command consume ImDrawCmd::ElemCount of those
         public List<UIVertex> VtxBuffer; // Vertex buffer.
+        public int IndexCount => IdxBuffer.Count;
+        public IndexFormat IndexFormat => IndexFormat.UInt32;
 
         internal uint _VtxCurrentIdx; // [Internal] == VtxBuffer.Size
         internal int _VtxWritePtr; // [Internal] point within VtxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
@@ -103,7 +107,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public Texture2D GetCurrentTextureId()
         {
-            return _TextureIdStack.Count > 0 ? _TextureIdStack[_TextureIdStack.Count - 1] : DefaultFont.Texture;
+            return _TextureIdStack.Count > 0 ? _TextureIdStack[_TextureIdStack.Count - 1] : Font.DefaultFont.Texture;
         }
 
         public void Clear()
@@ -213,14 +217,13 @@ namespace Prowl.Runtime.GUI.Graphics
 
             PrimReserve(6, 4);
 
-            Vector2 uv = DefaultFont.TexUvWhitePixel;
+            Vector2 uv = Font.DefaultFont.TexUvWhitePixel;
             var b = new Vector2(c.x, a.y);
             var d = new Vector2(a.x, c.y);
             uint idx = (uint)_VtxCurrentIdx;
 
             IdxBuffer[_IdxWritePtr + 0] = idx; IdxBuffer[_IdxWritePtr + 1] = (uint)(idx + 1); IdxBuffer[_IdxWritePtr + 2] = (uint)(idx + 2);
             IdxBuffer[_IdxWritePtr + 3] = idx; IdxBuffer[_IdxWritePtr + 4] = (uint)(idx + 2); IdxBuffer[_IdxWritePtr + 5] = (uint)(idx + 3);
-
 
             VtxBuffer[_VtxWritePtr + 0] = new UIVertex() { pos = new(a, _primitiveCount), uv = uv, col = col_upr_left };
             VtxBuffer[_VtxWritePtr + 1] = new UIVertex() { pos = new(b, _primitiveCount), uv = uv, col = col_upr_right };
@@ -266,12 +269,11 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void AddText(float font_size, Vector2 pos, Color32 col, string text, int text_begin = 0, int text_end = -1, float wrap_width = 0.0f)
         {
-            AddText(DefaultFont, font_size, pos, col, text, text_begin, text_end, wrap_width);
+            AddText(Font.DefaultFont, font_size, pos, col, text, text_begin, text_end, wrap_width);
         }
         
         public void AddText(Font font, float font_size, Vector2 pos, Color32 col, string text, int text_begin = 0, int text_end = -1, float wrap_width = 0.0f, Vector4? cpu_fine_clip_rect = null)
         {   
-
             ArgumentNullException.ThrowIfNull(font);
             if (font_size <= 0.0f)
                 return;
@@ -322,11 +324,9 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void AddImage(Texture2D user_texture_id, Vector2 a, Vector2 b, Vector2? _uv0 = null, Vector2? _uv1 = null, Color32? _col = null)
         {
-
             var uv0 = _uv0.HasValue ? _uv0.Value : new Vector2(0, 0);
             var uv1 = _uv1.HasValue ? _uv1.Value : new Vector2(1, 1);
             var col = _col.HasValue ? _col.Value : (Color32)Color.white;
-
 
             // FIXME-OPT: This is wasting draw calls.
             bool push_texture_id = _TextureIdStack.Count == 0 || user_texture_id != GetCurrentTextureId();
@@ -335,6 +335,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
             PrimReserve(6, 4);
             PrimRectUV(a, b, uv0, uv1, col);
+
             //PrimRect(a, b, col);
             if (push_texture_id)
                 PopTextureID();
@@ -342,12 +343,11 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void AddPolyline(List<Vector2> points, int points_count, Color32 col, bool closed, float thickness)
         {
-
             if (points_count < 2)
                 return;
 
             //Vector2 uv = ImGui.Instance.FontTexUvWhitePixel;
-            Vector2 uv = DefaultFont.TexUvWhitePixel;
+            Vector2 uv = Font.DefaultFont.TexUvWhitePixel;
 
             int count = points_count;
             if (!closed)
@@ -535,7 +535,7 @@ namespace Prowl.Runtime.GUI.Graphics
                 return;
 
             //Vector2 uv = ImGui.Instance.FontTexUvWhitePixel;
-            Vector2 uv = DefaultFont.TexUvWhitePixel;
+            Vector2 uv = Font.DefaultFont.TexUvWhitePixel;
 
             if (_AntiAliasing)
             {
@@ -930,7 +930,7 @@ namespace Prowl.Runtime.GUI.Graphics
             var b = new Vector2(c.x, a.y);
             var d = new Vector2(a.x, c.y);
             //var uv = new Vector2(-1, -1);
-            Vector2 uv = DefaultFont.TexUvWhitePixel;
+            Vector2 uv = Font.DefaultFont.TexUvWhitePixel;
             //Vector2 b(c.x, a.y), d(a.x, c.y), uv(GImGui->FontTexUvWhitePixel);
             uint idx = (uint)_VtxCurrentIdx;
             IdxBuffer[_IdxWritePtr + 0] = idx; IdxBuffer[_IdxWritePtr + 1] = (uint)(idx + 1); IdxBuffer[_IdxWritePtr + 2] = (uint)(idx + 2);
@@ -1083,38 +1083,23 @@ namespace Prowl.Runtime.GUI.Graphics
         {
             return value < min ? min : value > max ? max : value;
         }
+  
+        private static DeviceBuffer DeviceIdxBuffer;
+        private static DeviceBuffer DeviceVtxBuffer;   
 
-        private Mesh GenerateUIMesh()
+        private uint vertexOffset;
+        private uint indexOffset;
+
+        public void SetDrawData(CommandList commandList, VertexLayoutDescription[] vertexLayout)
         {
-            Mesh mesh = new();
-            mesh.IndexFormat = IndexFormat.UInt32;
+            const uint uintSize = sizeof(uint);
+            const uint vertSize = (sizeof(float) * 5) + 4;
 
-            var Vertices = new System.Numerics.Vector3[VtxBuffer.Count];
-            var UV = new System.Numerics.Vector2[VtxBuffer.Count];
-            var Colors = new Color32[VtxBuffer.Count];
-            var Indices = new uint[IdxBuffer.Count];
-            
-            for (int i = 0; i < VtxBuffer.Count; i++)
-            {
-                var vtx = VtxBuffer[i];
+            commandList.UpdateBuffer(DeviceIdxBuffer, indexOffset * uintSize, CollectionsMarshal.AsSpan(IdxBuffer));
+            commandList.UpdateBuffer(DeviceVtxBuffer, vertexOffset * vertSize, CollectionsMarshal.AsSpan(VtxBuffer));
 
-                Vertices[i] = vtx.pos;
-                UV[i] = vtx.uv;
-                Colors[i] = vtx.col;
-            }
-
-            for (int i = 0; i < IdxBuffer.Count; i++)
-            {
-                Indices[i] = IdxBuffer[i];
-            }
-
-            mesh.Vertices = Vertices;
-            mesh.UV = UV;
-            mesh.Colors = Colors;
-
-            mesh.Indices32 = Indices;
-
-            return mesh;
+            commandList.SetIndexBuffer(DeviceIdxBuffer, IndexFormat.UInt32, indexOffset * uintSize);
+            commandList.SetVertexBuffer(0, DeviceVtxBuffer, vertexOffset * vertSize);
         }
 
         public static void Draw(CommandBuffer commandBuffer, Vector2 DisplaySize, UIDrawList[] lists)
@@ -1124,9 +1109,39 @@ namespace Prowl.Runtime.GUI.Graphics
             if (framebufferWidth <= 0 || framebufferHeight <= 0)
                 return;
 
-            SetupRenderState(commandBuffer, DisplaySize, framebufferWidth, framebufferHeight);
+            SetupRenderState(commandBuffer, DisplaySize);
 
-            // Render command lists
+            const uint vertSize = (sizeof(float) * 5) + 4;
+
+            uint vertexBufferSize = (uint)(lists.Sum(x => x.VtxBuffer.Count) * vertSize);
+            if (DeviceVtxBuffer == null || vertexBufferSize > DeviceVtxBuffer.SizeInBytes)
+            {
+                DeviceVtxBuffer?.Dispose();
+                DeviceVtxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription((uint)(vertexBufferSize * 1.5f), BufferUsage.VertexBuffer | BufferUsage.Dynamic));
+                DeviceVtxBuffer.Name = $"Draw List Vertex Buffer";
+            }
+
+            uint indexBufferSize = (uint)(lists.Sum(x => x.IdxBuffer.Count) * sizeof(uint));
+            if (DeviceIdxBuffer == null || indexBufferSize > DeviceIdxBuffer.SizeInBytes)
+            {
+                DeviceIdxBuffer?.Dispose();
+                DeviceIdxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription((uint)(indexBufferSize * 1.5f), BufferUsage.IndexBuffer | BufferUsage.Dynamic));
+                DeviceIdxBuffer.Name = $"Draw List Index Buffer";
+            }
+
+            uint vertexOffsetInVertices = 0;
+            uint indexOffsetInElements = 0;
+            for (int i = 0; i < lists.Length; i++)
+            {
+                var cmdListPtr = lists[i];
+
+                cmdListPtr.vertexOffset = vertexOffsetInVertices;
+                cmdListPtr.indexOffset = indexOffsetInElements;
+
+                vertexOffsetInVertices += (uint)cmdListPtr.VtxBuffer.Count;
+                indexOffsetInElements += (uint)cmdListPtr.IdxBuffer.Count;
+            }
+
             for (int n = 0; n < lists.Length; n++)
             {
                 var cmdListPtr = lists[n];
@@ -1134,7 +1149,7 @@ namespace Prowl.Runtime.GUI.Graphics
                 if (cmdListPtr.VtxBuffer.Count == 0)
                     continue;
 
-                Mesh uiMesh = cmdListPtr.GenerateUIMesh();
+                commandBuffer.SetDrawData(cmdListPtr, null);
 
                 var idxoffset = 0;
                 for (int cmd_i = 0; cmd_i < cmdListPtr.CmdBuffer.Count; cmd_i++)
@@ -1147,23 +1162,21 @@ namespace Prowl.Runtime.GUI.Graphics
                     {
                         // Apply scissor/clipping rectangle
                         commandBuffer.SetScissorRects((int)clipRect.x, (int)clipRect.y, (int)(clipRect.z - clipRect.x), (int)(clipRect.w - clipRect.y));
+                        commandBuffer.SetTexture("MainTexture", cmdPtr.TextureId);
 
-                        commandBuffer.SetTexture("SurfaceTexture", cmdPtr.TextureId);
-
-                        commandBuffer.DrawMesh(uiMesh, (int)cmdPtr.ElemCount, idxoffset);
+                        commandBuffer.UploadResourceSet(1);
+                        commandBuffer.ManualDraw((uint)cmdPtr.ElemCount, (uint)idxoffset, 1, 0, 0);
                     }
 
                     idxoffset += (int)cmdPtr.ElemCount;
                 }
-
-                uiMesh.Destroy();
 
                 // Clear Depth Buffer
                 commandBuffer.ClearRenderTarget(true, false, Color.white, depth: 1.0f);
             }
         }
 
-        private static void SetupRenderState(CommandBuffer commandBuffer, Vector2 DisplaySize, int framebufferWidth, int framebufferHeight)
+        private static void SetupRenderState(CommandBuffer commandBuffer, Vector2 DisplaySize)
         {
             float L = 0.0f;
             float R = 0.0f + (float)DisplaySize.x;
@@ -1175,171 +1188,140 @@ namespace Prowl.Runtime.GUI.Graphics
 
             Matrix4x4 orthoProjection = Matrix4x4.CreateOrthographicOffCenter(L, R, B, T, near, far);
 
-            commandBuffer.SetMaterial(material, 0);
-            commandBuffer.SetMatrix("ProjMtx", orthoProjection);
+            commandBuffer.SetFullScissorRect(0);
+            commandBuffer.SetPipeline(UIPass, UIVariant);
+
+            commandBuffer.SetMatrix("ProjectionMatrix", orthoProjection);
+            commandBuffer.SetTexture("MainSampler", Font.DefaultFont.Texture);
+
+            commandBuffer.UploadResourceSet(0);
         }
 
         public static void CreateDeviceResources()
         {
-            if (DefaultFont != null && material != null && shader != null)
+            if (UIPass != null && UIVariant != null)
                 return;
-
-            const string vertexSource = @"
-        #version 450
-
-        layout (location = 0) in vec3 Position;
-        layout (location = 1) in vec2 UV;
-        layout (location = 2) in vec4 Color;
-        
-        layout(set = 0, binding = 0) uniform ProjBuffer
-        {
-            mat4 ProjMtx;
-        };
-        
-        layout (location = 0) out vec2 Frag_UV;
-        layout (location = 1) out vec4 Frag_Color;
-
-        layout (constant_id = 100) const bool ClipYInverted = true;
-
-        void main()
-        {
-            Frag_UV = UV;
-            Frag_Color = Color;
-
-            gl_Position = ProjMtx * vec4(Position, 1.0);
-
-            if (ClipYInverted)
-            {
-                gl_Position.y = -gl_Position.y;
-            }
-        }
-        ";
-
-            const string fragmentSource = @"
-        #version 450
-        
-        layout (location = 0) in vec2 Frag_UV;
-        layout (location = 1) in vec4 Frag_Color;
-
-        layout(set = 1, binding = 0) uniform texture2D SurfaceTexture;
-        layout(set = 1, binding = 1) uniform sampler SurfaceSampler;
-        
-        layout (location = 0) out vec4 Out_Color;
-
-        void main() {
-            vec4 color = texture(sampler2D(SurfaceTexture, SurfaceSampler), Frag_UV);
-        
-            // Gamma Correct
-            color = pow(color, vec4(1.0 / 1.43));
-        
-            Out_Color = Frag_Color * color;
-        }
-        ";
 
             ShaderPassDescription description = new();
 
-            description.DepthStencilState.DepthTestEnabled = true;
-            description.DepthStencilState.StencilTestEnabled = false;
+            description.DepthStencilState = new DepthStencilStateDescription(false, false, ComparisonKind.Always);
             description.CullingMode = FaceCullMode.None;
-
-            BlendAttachmentDescription blend = new()
-            {
-                BlendEnabled = true,
-                AlphaFunction = BlendFunction.Add,
-                ColorFunction = BlendFunction.Add,
-
-                SourceColorFactor = BlendFactor.SourceAlpha,
-                SourceAlphaFactor = BlendFactor.One,
-
-                DestinationColorFactor = BlendFactor.InverseSourceAlpha,
-                DestinationAlphaFactor = BlendFactor.InverseSourceAlpha,
-            };
-
-            description.BlendState = new BlendStateDescription(RgbaFloat.White, blend);
+            description.BlendState = BlendStateDescription.SingleAlphaBlend;
 
             description.ShaderSources = 
             [
                 new()
                 {
                     Stage = ShaderStages.Vertex,
-                    SourceCode = vertexSource
+                    SourceCode = "gui-vertex"
                 },
 
                 new()
                 {
                     Stage = ShaderStages.Fragment,
-                    SourceCode = fragmentSource
+                    SourceCode = "gui-frag"
                 }
             ];
 
             ShaderPass pass = new ShaderPass("UI Pass", description);
 
-            RuntimeVariantCompiler compiler = new();
-
-            compiler.Inputs = 
-            [
-                MeshResource.Position,
-                MeshResource.UV0,
-                MeshResource.Colors
-            ];
-
-            compiler.Resources = 
-            [
-                // Set 0
-                [
-                    // Binding 0
-                    new BufferResource("ProjBuffer", ShaderStages.Vertex,
-                        ("ProjMtx", ResourceType.Matrix4x4)
-                    )
+            pass.CompilePrograms(new EmbeddedVariantCompiler() {
+                Inputs = [ 
+                    new VertexLayoutDescription(
+                        new VertexElementDescription("Position", VertexElementFormat.Float3, VertexElementSemantic.Position),
+                        new VertexElementDescription("UV", VertexElementFormat.Float2, VertexElementSemantic.TextureCoordinate),
+                        new VertexElementDescription("Color", VertexElementFormat.Byte4_Norm, VertexElementSemantic.Color)
+                    ) 
                 ],
 
-                // Set 1
-                [
-                    // Binding 0
-                    new TextureResource("SurfaceTexture", false, ShaderStages.Fragment)
+                Resources = [
+                    [
+                        new BufferResource("ProjectionMatrixBuffer", ShaderStages.Vertex, ("ProjectionMatrix", ResourceType.Matrix4x4)),
+                        new SamplerResource("MainSampler", ShaderStages.Fragment),
+                    ],
+
+                    [
+                        new TextureResource("MainTexture", false, ShaderStages.Fragment)
+                    ]
                 ]
-            ];
+            });
 
-            pass.CompilePrograms(compiler);
-
-            shader = new Shader("Runtime/UI", [], [ pass ]);
-            material = new Material(shader);
-
-            RecreateFontDeviceTexture();
+            UIPass = pass;
+            UIVariant = pass.GetVariant(KeyGroup<string, string>.Default);
         }
 
-        public static Font DefaultFont { get; private set; }
-
-        private static void RecreateFontDeviceTexture()
+        private class EmbeddedVariantCompiler : IVariantCompiler
         {
-            if (DefaultFont == null)
+            public VertexLayoutDescription[] Inputs;
+            public ShaderResource[][] Resources;
+
+            public ShaderVariant CompileVariant(ShaderSource[] sources, KeyGroup<string, string> keywords)
             {
-                var builder = Font.BuildNewFont(2048, 2048);
-                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Prowl.Runtime.EmbeddedResources.font.ttf"))
+                byte[] vertexShaderBytes = LoadEmbeddedShaderCode(sources[0].SourceCode);
+                byte[] fragmentShaderBytes = LoadEmbeddedShaderCode(sources[1].SourceCode);
+
+                Veldrid.Shader vertex = Runtime.Graphics.Factory.CreateShader(new ShaderDescription(
+                    ShaderStages.Vertex, 
+                    vertexShaderBytes, 
+                    Runtime.Graphics.Device.BackendType == GraphicsBackend.Vulkan ? "main" : "VS"
+                ));
+
+                vertex.Name = "Gui Vertex Shader";
+
+                Veldrid.Shader fragment = Runtime.Graphics.Factory.CreateShader(new ShaderDescription(
+                    ShaderStages.Fragment, 
+                    fragmentShaderBytes, 
+                    Runtime.Graphics.Device.BackendType == GraphicsBackend.Vulkan ? "main" : "FS"
+                ));
+
+                fragment.Name = "Gui Fragment Shader";
+
+                return new(keywords, [ vertex, fragment ], Inputs, Resources);
+            }
+        }
+
+        private static byte[] LoadEmbeddedShaderCode(string name)
+        {
+            switch (Runtime.Graphics.Factory.BackendType)
+            {
+                case GraphicsBackend.Direct3D11:
                 {
-                    using (MemoryStream ms = new())
-                    {
-                        stream.CopyTo(ms);
-                        builder.Add(ms.ToArray(), 40, [Font.CharacterRange.BasicLatin]);
-                    }
+                    string resourceName = name + ".hlsl.bytes";
+                    return GetEmbeddedResourceBytes(resourceName);
                 }
-                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Runtime.EmbeddedResources.{FontAwesome6.FontIconFileNameFAR}"))
+                case GraphicsBackend.OpenGL:
                 {
-                    using (MemoryStream ms = new())
-                    {
-                        stream.CopyTo(ms);
-                        builder.Add(ms.ToArray(), 40 * 2.0f / 3.0f, [new Font.CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
-                    }
+                    string resourceName = name + ".glsl";
+                    return GetEmbeddedResourceBytes(resourceName);
                 }
-                using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Runtime.EmbeddedResources.{FontAwesome6.FontIconFileNameFAS}"))
+                case GraphicsBackend.OpenGLES:
                 {
-                    using (MemoryStream ms = new())
-                    {
-                        stream.CopyTo(ms);
-                        builder.Add(ms.ToArray(), 40 * 2.0f / 3.0f, [new Font.CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
-                    }
+                    string resourceName = name + ".glsles";
+                    return GetEmbeddedResourceBytes(resourceName);
                 }
-                DefaultFont = builder.End(40, 20);
+                case GraphicsBackend.Vulkan:
+                {
+                    string resourceName = name + ".spv";
+                    return GetEmbeddedResourceBytes(resourceName);
+                }
+                case GraphicsBackend.Metal:
+                {
+                    string resourceName = name + ".metallib";
+                    return GetEmbeddedResourceBytes(resourceName);
+                }
+                default:
+                    throw new NotImplementedException();
+            }
+        }
+
+        private static byte[] GetEmbeddedResourceBytes(string resourceName)
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            using (Stream s = assembly.GetManifestResourceStream(resourceName))
+            {
+                byte[] ret = new byte[s.Length];
+                s.Read(ret, 0, (int)s.Length);
+                return ret;
             }
         }
     }
