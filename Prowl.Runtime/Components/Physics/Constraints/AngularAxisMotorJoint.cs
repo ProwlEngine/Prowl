@@ -30,6 +30,6 @@ public class AngularAxisMotorJoint : Joint
     public override void DrawGizmosSelected()
     {
         base.DrawGizmosSelected();
-        Gizmos.DrawLine(this.Transform.position, this.Transform.position + LocalRotationAxis.normalized);
+        //Gizmos.DrawLine(this.Transform.position, this.Transform.position + LocalRotationAxis.normalized);
     }
 }

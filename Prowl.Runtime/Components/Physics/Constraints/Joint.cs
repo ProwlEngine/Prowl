@@ -46,6 +46,7 @@ public abstract class Joint : MonoBehaviour
     public override void DrawGizmosSelected()
     {
         base.DrawGizmosSelected();
-        if (Rigidbody != null && ConnectedBody != null) Gizmos.DrawLine(Rigidbody!.Transform.position, ConnectedBody.Transform.position);
+        //if (Rigidbody != null && ConnectedBody != null) 
+        //    Gizmos.DrawLine(Rigidbody!.Transform.position, ConnectedBody.Transform.position);
     }
 }

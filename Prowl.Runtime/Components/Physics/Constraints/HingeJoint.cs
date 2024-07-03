@@ -37,7 +37,7 @@ public class HingeJoint : Joint
     public override void DrawGizmosSelected()
     {
         base.DrawGizmosSelected();
-        Gizmos.DrawSphere(this.Transform.TransformPoint(JointPosition), 0.05f);
-        Gizmos.DrawLine(this.Transform.TransformPoint(JointPosition), this.Transform.TransformPoint(JointPosition + HingeAxis));
+        //Gizmos.DrawSphere(this.Transform.TransformPoint(JointPosition), 0.05f);
+        //Gizmos.DrawLine(this.Transform.TransformPoint(JointPosition), this.Transform.TransformPoint(JointPosition + HingeAxis));
     }
 }

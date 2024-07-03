@@ -19,9 +19,9 @@ namespace Prowl.Runtime
 
         public override void DrawGizmosSelected()
         {
-            Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
-            Gizmos.Color = Color.yellow;
-            Gizmos.DrawCube(Vector3.zero, size * 1.001f);
+            //Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
+            //Gizmos.Color = Color.yellow;
+            //Gizmos.DrawCube(Vector3.zero, size * 1.001f);
         }
     }
 

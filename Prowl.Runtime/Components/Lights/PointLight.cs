@@ -54,9 +54,9 @@ public class PointLight : MonoBehaviour
             //Camera.Current.Start3D();
         }
 
-        Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
-        Gizmos.Color = Color.yellow;
-        Gizmos.DrawSphere(Vector3.zero, radius);
+        //Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
+        //Gizmos.Color = Color.yellow;
+        //Gizmos.DrawSphere(Vector3.zero, radius);
         */
     }
 }

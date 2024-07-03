@@ -51,15 +51,15 @@ public class DistanceServoJoint : Joint
     {
         if (this.Rigidbody != null && this.ConnectedBody != null)
         {
-            Gizmos.DrawLine(Rigidbody.Transform.TransformPoint(JointOffsetPosition), ConnectedBody.Transform.TransformPoint(ConnectedBodyJointOffsetPosition));
+            //Gizmos.DrawLine(Rigidbody.Transform.TransformPoint(JointOffsetPosition), ConnectedBody.Transform.TransformPoint(ConnectedBodyJointOffsetPosition));
         }
         if (this.Rigidbody != null)
         {
-            Gizmos.DrawSphere(Rigidbody.Transform.TransformPoint(JointOffsetPosition), 0.05f);
+            //Gizmos.DrawSphere(Rigidbody.Transform.TransformPoint(JointOffsetPosition), 0.05f);
         }
         if (this.ConnectedBody != null)
         {
-            Gizmos.DrawSphere(ConnectedBody.Transform.TransformPoint(ConnectedBodyJointOffsetPosition), 0.05f);
+            //Gizmos.DrawSphere(ConnectedBody.Transform.TransformPoint(ConnectedBodyJointOffsetPosition), 0.05f);
         }
     }
 }

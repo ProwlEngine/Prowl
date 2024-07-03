@@ -21,8 +21,8 @@ public class CapsuleCollider : Collider
 
     public override void DrawGizmosSelected()
     {
-        Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
-        Gizmos.Color = Color.yellow;
-        Gizmos.DrawCapsule(Vector3.zero, radius + 0.01f, height + 0.01f);
+        //Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
+        //Gizmos.Color = Color.yellow;
+        //Gizmos.DrawCapsule(Vector3.zero, radius + 0.01f, height + 0.01f);
     }
 }

@@ -80,9 +80,9 @@ public class DirectionalLight : MonoBehaviour
 
         Graphics.Blit(lightMat);
 
-        Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
-        Gizmos.Color = Color.yellow;
-        Gizmos.DrawDirectionalLight(Vector3.zero);
+        //Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
+        //Gizmos.Color = Color.yellow;
+        //Gizmos.DrawDirectionalLight(Vector3.zero);
         */
     }
 

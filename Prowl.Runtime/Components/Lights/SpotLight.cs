@@ -59,14 +59,14 @@ public class SpotLight : MonoBehaviour
             //Camera.Current.Start3D();
 
 
-            Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
-            Gizmos.Color = Color.yellow;
-            Gizmos.DrawSpotlight(Vector3.zero, distance, (1.0f - angle) * 5f);
+            //Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
+            //Gizmos.Color = Color.yellow;
+            //Gizmos.DrawSpotlight(Vector3.zero, distance, (1.0f - angle) * 5f);
             var b = Color.blue;
             b.a = 0.4f;
-            Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
-            Gizmos.Color = b;
-            Gizmos.DrawSpotlight(Vector3.zero, distance, (1.0f - falloff) * 5f);
+            //Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
+            //Gizmos.Color = b;
+            //Gizmos.DrawSpotlight(Vector3.zero, distance, (1.0f - falloff) * 5f);
         }
         */
     }

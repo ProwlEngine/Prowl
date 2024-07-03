@@ -42,11 +42,11 @@ public class LinearAxisLimitJoint : Joint
     {
         base.DrawGizmosSelected();
         var localAxisNormalized = LocalAxis.normalized;
-        Gizmos.DrawSphere(this.Transform.TransformPoint(JointPosition), 0.05f);
+        //Gizmos.DrawSphere(this.Transform.TransformPoint(JointPosition), 0.05f);
         var minPos = this.Transform.TransformPoint(JointPosition * (localAxisNormalized * MinimumOffset));
         var maxPos = this.Transform.TransformPoint(JointPosition * (localAxisNormalized * MaximumOffset));
-        Gizmos.DrawSphere(minPos, 0.05f);
-        Gizmos.DrawSphere(maxPos, 0.05f);
-        Gizmos.DrawLine(minPos, maxPos);
+        //Gizmos.DrawSphere(minPos, 0.05f);
+        //Gizmos.DrawSphere(maxPos, 0.05f);
+        //Gizmos.DrawLine(minPos, maxPos);
     }
 }
