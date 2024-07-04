@@ -3,7 +3,7 @@ using BepuPhysics.Collidables;
 using Prowl.Icons;
 using System;
 
-namespace Prowl.Runtime.Components.NewPhysics
+namespace Prowl.Runtime
 {
     [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Cubes}  Staticbody")]
     public class Staticbody : PhysicsBody

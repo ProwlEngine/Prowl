@@ -3,7 +3,7 @@ using BepuPhysics.Collidables;
 using Prowl.Icons;
 using System;
 
-namespace Prowl.Runtime.Components.NewPhysics
+namespace Prowl.Runtime
 {
     [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Cubes}  Rigidbody")]
     public class Rigidbody : PhysicsBody
@@ -22,7 +22,7 @@ namespace Prowl.Runtime.Components.NewPhysics
         private uint _transformVersion = 1;
 
         [ShowInInspector]
-        public bool Kinematic {
+        public virtual bool Kinematic {
             get => _kinematic;
             set {
                 if (_kinematic == value)
@@ -31,15 +31,11 @@ namespace Prowl.Runtime.Components.NewPhysics
                 _kinematic = value;
                 if (BodyReference is { } bRef)
                 {
-#warning maybe setting bRef.LocalInertia is enough instead of getting and applying description ... ?
-                    bRef.GetDescription(out var description);
-                    description.LocalInertia = Kinematic ? new BodyInertia() : _nativeIntertia;
-                    bRef.ApplyDescription(description);
+                    bRef.LocalInertia = Kinematic ? new BodyInertia() : _nativeIntertia;
                 }
             }
         }
 
-        [ShowInInspector]
         public float SleepThreshold {
             get => _sleepThreshold;
             set {
@@ -49,10 +45,7 @@ namespace Prowl.Runtime.Components.NewPhysics
                 _sleepThreshold = value;
                 if (BodyReference is { } bRef)
                 {
-#warning maybe setting bRef.Activity.SleepThreshold is enough instead of getting and applying description ... ?
-                    bRef.GetDescription(out var description);
-                    description.Activity.SleepThreshold = value;
-                    bRef.ApplyDescription(description);
+                    bRef.Activity.SleepThreshold = value;
                 }
             }
         }
@@ -66,10 +59,7 @@ namespace Prowl.Runtime.Components.NewPhysics
                 _minimumTimestepCountUnderThreshold = value;
                 if (BodyReference is { } bRef)
                 {
-#warning maybe setting bRef.Activity.MinimumTimestepsUnderThreshold is enough instead of getting and applying description ... ?
-                    bRef.GetDescription(out var description);
-                    description.Activity.MinimumTimestepCountUnderThreshold = value;
-                    bRef.ApplyDescription(description);
+                    bRef.Activity.MinimumTimestepsUnderThreshold = value;
                 }
             }
         }
@@ -166,6 +156,8 @@ namespace Prowl.Runtime.Components.NewPhysics
             }
         }
 
+        public float Mass => _mass;
+
         public override void OnEnable()
         {
             base.OnEnable();
@@ -191,12 +183,14 @@ namespace Prowl.Runtime.Components.NewPhysics
         protected internal override RigidPose? Pose => BodyReference?.Pose;
 
         private BodyInertia _nativeIntertia;
+        private float _mass;
 
         protected override void AttachInner(RigidPose containerPose, BodyInertia shapeInertia, TypedIndex shapeIndex)
         {
             Debug.Assert(Physics.IsReady);
 
             _nativeIntertia = shapeInertia;
+            _mass = 1f / shapeInertia.InverseMass;
             if (Kinematic)
                 shapeInertia = new BodyInertia();
 
@@ -220,7 +214,11 @@ namespace Prowl.Runtime.Components.NewPhysics
 
                 Physics.CollidableMaterials.Allocate(bHandle) = new();
             }
+
+            RigidbodyAttached();
         }
+
+        protected virtual void RigidbodyAttached() { }
 
         protected override void DetachInner()
         {
@@ -232,8 +230,13 @@ namespace Prowl.Runtime.Components.NewPhysics
             Physics.Sim.Bodies.Remove(BodyReference.Value.Handle);
             Physics.Bodies[BodyReference.Value.Handle.Value] = null;
 
+            RigidbodyDetached();
+
             BodyReference = null;
+
         }
+
+        protected virtual void RigidbodyDetached() { }
 
         public void SyncTransform()
         {
@@ -241,6 +244,8 @@ namespace Prowl.Runtime.Components.NewPhysics
             {
                 Position = this.Transform.position;
                 Orientation = this.Transform.rotation;
+                LinearVelocity = Vector3.zero;
+                AngularVelocity = Vector3.zero;
                 Awake = true;
                 _transformVersion = this.Transform.version;
             }

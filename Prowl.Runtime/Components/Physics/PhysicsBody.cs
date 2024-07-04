@@ -1,13 +1,13 @@
 ﻿using BepuPhysics;
 using BepuPhysics.Collidables;
 using BepuUtilities.Memory;
-using Prowl.Runtime.Components.NewPhysics.Colliders;
-using Prowl.Runtime.Components.NewPhysics.Contacts;
+using Prowl.Runtime;
+using Prowl.Runtime.Contacts;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Prowl.Runtime.Components.NewPhysics
+namespace Prowl.Runtime
 {
     public abstract class PhysicsBody : MonoBehaviour
     {
@@ -67,7 +67,6 @@ namespace Prowl.Runtime.Components.NewPhysics
             }
         }
 
-        [ShowInInspector]
         public float MaximumRecoveryVelocity {
             get => _maximumRecoveryVelocity;
             set {

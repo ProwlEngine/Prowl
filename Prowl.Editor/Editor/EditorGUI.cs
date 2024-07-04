@@ -237,7 +237,7 @@ namespace Prowl.Editor
                 members.AddRange(target.GetType().GetFields(BindingFlags.NonPublic | BindingFlags.Instance));
 
             if (all || targetFields.HasFlag(TargetFields.Properties))
-                members.AddRange(target.GetType().GetProperties().Where(prop => prop.CanRead && prop.CanWrite && prop.GetCustomAttribute<ShowInInspectorAttribute>() != null));
+                members.AddRange(target.GetType().GetProperties().Where(prop => prop.CanRead && prop.CanWrite && prop.GetCustomAttribute<ShowInInspectorAttribute>(false) != null));
 
             // Draw the fields & properties
             bool changed = false;
