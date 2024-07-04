@@ -20,6 +20,7 @@ namespace Prowl.Runtime
                 else if (value == null)
                     throw new ArgumentNullException("value");
                 Tags[tagName] = value;
+                value.Parent = this;
             }
         }
 
