@@ -99,7 +99,7 @@ namespace Prowl.Editor.PropertyDrawers
                     if (!config.HasFlag(EditorGUI.PropertyGridConfig.NoBackground))
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
 
-                    gui.TextNode("H_Text", label).ExpandWidth().Height(ItemSize).IgnoreLayout();
+                    gui.TextNode("H_Text", RuntimeUtils.Prettify(label)).ExpandWidth().Height(ItemSize).IgnoreLayout();
 
                     bool enumexpanded = gui.GetNodeStorage<bool>("enumexpanded", false);
                     using (gui.Node("EnumExpandBtn").TopLeft(5, 0).Scale(ItemSize).Enter())

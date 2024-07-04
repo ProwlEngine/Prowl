@@ -209,7 +209,7 @@ namespace Prowl.Editor
                     if (!config.HasFlag(PropertyGridConfig.NoBackground))
                         ActiveGUI.Draw2D.DrawRectFilled(headerRect, EditorStylePrefs.Indigo);
 
-                    ActiveGUI.Draw2D.DrawText(name, headerRect, false);
+                    ActiveGUI.Draw2D.DrawText(RuntimeUtils.Prettify(name), headerRect, false);
                 }
 
                 changed = DrawProperties(ref target, targetFields, config);

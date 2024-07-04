@@ -62,7 +62,7 @@ namespace Prowl.Editor.PropertyDrawers
                 if(drawerID == selectedDrawer)
                     selectedElement = MathD.Clamp(selectedElement, -1, GetCount(list));
 
-                gui.TextNode("H_Text", label).ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize).IgnoreLayout();
+                gui.TextNode("H_Text", RuntimeUtils.Prettify(label)).ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize).IgnoreLayout();
 
                 bool enumexpanded = gui.GetNodeStorage<bool>("enumexpanded", false);
                 using (gui.Node("EnumExpandBtn").TopLeft(5, 0).Scale(EditorStylePrefs.Instance.ItemSize).Enter())
