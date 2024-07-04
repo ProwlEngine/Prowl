@@ -59,5 +59,12 @@
       <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.21.1.2" />
       <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
     </ItemGroup>
+    
+    <ItemGroup>
+      <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Core\DotRecast.Core.csproj" />
+      <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Detour\DotRecast.Detour.csproj" />
+      <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Recast.Toolset\DotRecast.Recast.Toolset.csproj" />
+      <ProjectReference Include="..\External\Prowl.DotRecast\src\DotRecast.Recast\DotRecast.Recast.csproj" />
+    </ItemGroup>
 
 </Project>
