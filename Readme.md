@@ -57,8 +57,9 @@ The goal is a viable open-source Unity alternative, ideally, Unity projects can 
       - Colliders: Box, Sphere, Capsule, Cylinder, ~~Mesh Collider~~ - Needs to be re-implemented
       - Triggers
       - Raycasts and Sweeps
-      - ~~Rigidbody-based Character Controller~~ - Needs to be re-implemented
-      - A ton of physical constraints (All of bepu's constraints)
+      - Non-Kinematic Character Controller (Just a fancy rigidbody)
+        - Supports Moving Platforms
+      - A ton of physical constraints (All of Bepu's constraints)
     - Unity-like Coroutines
     - Playtest directly in Editor
     - ScriptableObjects
