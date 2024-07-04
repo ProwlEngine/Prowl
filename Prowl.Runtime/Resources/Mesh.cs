@@ -421,6 +421,71 @@ namespace Prowl.Runtime
             return mesh;
         }
 
+        public static Mesh CreateCube(Vector3 size)
+        {
+            Mesh mesh = new Mesh();
+            float x = (float)size.x / 2f;
+            float y = (float)size.y / 2f;
+            float z = (float)size.z / 2f;
+
+            System.Numerics.Vector3[] vertices =
+            {
+                // Front face
+                new(-x, -y, z), new(x, -y, z), new(x, y, z), new(-x, y, z),
+                
+                // Back face
+                new(-x, -y, -z), new(x, -y, -z), new(x, y, -z), new(-x, y, -z),
+                
+                // Left face
+                new(-x, -y, -z), new(-x, y, -z), new(-x, y, z), new(-x, -y, z),
+                
+                // Right face
+                new(x, -y, z), new(x, y, z), new(x, y, -z), new(x, -y, -z),
+                
+                // Top face
+                new(-x, y, z), new(x, y, z), new(x, y, -z), new(-x, y, -z),
+                
+                // Bottom face
+                new(-x, -y, -z), new(x, -y, -z), new(x, -y, z), new(-x, -y, z)
+            };
+
+            System.Numerics.Vector2[] uvs =
+            {
+                // Front face
+                new(0, 0), new(1, 0), new(1, 1), new(0, 1),
+                // Back face
+                new(1, 0), new(0, 0), new(0, 1), new(1, 1),
+                // Left face
+                new(0, 0), new(1, 0), new(1, 1), new(0, 1),
+                // Right face
+                new(1, 0), new(1, 1), new(0, 1), new(0, 0),
+                // Top face
+                new(0, 1), new(1, 1), new(1, 0), new(0, 0),
+                // Bottom face
+                new(0, 0), new(1, 0), new(1, 1), new(0, 1)
+            };
+
+            uint[] indices =
+            {
+                0, 1, 2, 0, 2, 3,       // Front face
+                4, 6, 5, 4, 7, 6,       // Back face
+                8, 9, 10, 8, 10, 11,    // Left face
+                12, 14, 13, 12, 15, 14, // Right face
+                16, 17, 18, 16, 18, 19, // Top face
+                20, 22, 21, 20, 23, 22  // Bottom face
+            };
+
+            mesh.vertices = vertices;
+            mesh.uv = uvs;
+            mesh.indices = indices;
+
+            mesh.RecalculateBounds();
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+
+            return mesh;
+        }
+
         private void DeleteGPUBuffers()
         {
             vertexArrayObject?.Dispose();
