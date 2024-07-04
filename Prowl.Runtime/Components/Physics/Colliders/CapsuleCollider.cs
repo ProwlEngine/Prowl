@@ -33,8 +33,21 @@ public sealed class CapsuleCollider : Collider
         }
     }
 
+    public float WorldRadius
+    {
+        get {
+            var scale = this.Transform.lossyScale;
+            return _length * (float)MathD.Max(scale.x, scale.z);
+        }
+    }
+
+    public float WorldLength
+    {
+        get => _length * (float)this.Transform.lossyScale.y;
+    }
+
     internal override void AddToCompoundBuilder(BufferPool pool, ref CompoundBuilder builder, NRigidPose localPose)
     {
-        builder.Add(new Capsule(Radius, Length), localPose, Mass);
+        builder.Add(new Capsule(WorldRadius, WorldLength), localPose, Mass);
     }
 }

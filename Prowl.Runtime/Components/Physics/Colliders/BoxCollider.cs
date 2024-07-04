@@ -21,8 +21,15 @@ public sealed class BoxCollider : Collider
         }
     }
 
+    public Vector3 WorldSize {
+        get {
+            return _size * this.Transform.lossyScale;
+        }
+    }
+
     internal override void AddToCompoundBuilder(BufferPool pool, ref CompoundBuilder builder, RigidPose localPose)
     {
-        builder.Add(new Box((float)Size.x, (float)Size.y, (float)Size.z), localPose, Mass);
+        var size = WorldSize;
+        builder.Add(new Box((float)size.x, (float)size.y, (float)size.z), localPose, Mass);
     }
 }
