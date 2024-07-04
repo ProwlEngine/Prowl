@@ -403,3 +403,4 @@ FodyWeavers.xsd
 
 # Rider IDE
 .idea/
+/External
