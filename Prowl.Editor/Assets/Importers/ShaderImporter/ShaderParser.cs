@@ -81,14 +81,14 @@ namespace Prowl.Editor.ShaderParser
             return shader;
         }
 
-        private List<Runtime.ShaderProperty> ParseProperties()
+        private List<ShaderProperty> ParseProperties()
         {
-            var properties = new List<Runtime.ShaderProperty>();
+            var properties = new List<ShaderProperty>();
             ExpectToken(TokenType.OpenBrace);
 
             while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
             {
-                var property = new Runtime.ShaderProperty();
+                var property = new ShaderProperty();
 
                 property.Name = _tokenizer.Token.ToString();
                 ExpectToken(TokenType.OpenParen);
@@ -96,7 +96,7 @@ namespace Prowl.Editor.ShaderParser
                 property.DisplayName = _tokenizer.ParseQuotedStringValue();
                 ExpectToken(TokenType.Comma);
                 ExpectToken(TokenType.Identifier);
-                property.PropertyType = Enum.Parse<Runtime.ShaderPropertyType>(_tokenizer.Token.ToString(), true);
+                property.PropertyType = Enum.Parse<ShaderPropertyType>(_tokenizer.Token.ToString(), true);
                 ExpectToken(TokenType.CloseParen);
 
                 properties.Add(property);
