@@ -36,7 +36,7 @@ namespace Prowl.Runtime.GUI
             {
                 _drawList[index].AntiAliasing(antiAliasing);
                 _drawList[index].Clear();
-                _drawList[index].PushTextureID(Font.DefaultFont.Texture);
+                _drawList[index].PushTexture(Font.DefaultFont.Texture);
 
                 drawListsOrdered.Add(_drawList[index]);
             }
@@ -63,7 +63,7 @@ namespace Prowl.Runtime.GUI
         /// <summary> Peek at the current clip rect </summary>
         public Rect PeekClip()
         {
-            var clip = _drawList[currentZIndex]._ClipRectStack.Peek();
+            var clip = _drawList[currentZIndex].ClipRectStack.Peek();
             return new(clip.x, clip.y, (clip.z - clip.x), (clip.w - clip.y));
         }
 
@@ -78,8 +78,8 @@ namespace Prowl.Runtime.GUI
             if (keepClipSpace)
             {
                 var previousList = _drawList[currentZIndex];
-                _drawList[index].PushClipRect(previousList._ClipRectStack.Peek());
-                _drawList[index].PushTextureID(Font.DefaultFont.Texture);
+                _drawList[index].PushClipRect(previousList.ClipRectStack.Peek());
+                _drawList[index].PushTexture(Font.DefaultFont.Texture);
             }
         }
 
@@ -194,13 +194,13 @@ namespace Prowl.Runtime.GUI
 
         public void DrawText(Font font, string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f, Rect? clip = null)
         {
-            _drawList[currentZIndex].PushTextureID(font.Texture);
+            _drawList[currentZIndex].PushTexture(font.Texture);
         
             if (clip != null)
                 _drawList[currentZIndex].AddText(font, (float)fontSize, position, color, text, wrap_width: (float)wrapwidth, cpu_fine_clip_rect: new Vector4(clip.Value.Position, clip.Value.Position + clip.Value.Size));
             else
                 _drawList[currentZIndex].AddText(font, (float)fontSize, position, color, text, wrap_width: (float)wrapwidth);
-            _drawList[currentZIndex].PopTextureID();
+            _drawList[currentZIndex].PopTexture();
         }
 
         internal void DrawRect(Rect rect, object border, object borderThickness, object widgetRoundness)

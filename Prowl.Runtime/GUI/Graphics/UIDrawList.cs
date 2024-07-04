@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using Veldrid;
 using Prowl.Runtime.Utils;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace Prowl.Runtime.GUI.Graphics
 {
@@ -17,24 +18,31 @@ namespace Prowl.Runtime.GUI.Graphics
     {
         public class UIDrawChannel
         {
-            public List<UIDrawCmd> CmdBuffer { get; private set; } = new();
-            public List<uint> IdxBuffer { get; private set; } = new();
+            public List<UIDrawCmd> CommandList { get; private set; } = new();
+            public List<uint> IndexBuffer { get; private set; } = new();
         };
 
         // A single vertex (20 bytes by default, override layout with IMGUI_OVERRIDE_DRAWVERT_STRUCT_LAYOUT)
         [StructLayout(LayoutKind.Sequential, Pack = 1)]
         public struct UIVertex
         {
-            public System.Numerics.Vector3 pos;
-            public System.Numerics.Vector2 uv;
-            public Color32 col;
+            public System.Numerics.Vector3 Position;
+            public System.Numerics.Vector2 UV;
+            public Color32 Color;
+
+            public UIVertex(Vector3 pos, Vector2 uv, Color32 color)
+            {
+                this.Position = pos;
+                this.UV = uv;
+                this.Color = color;
+            }
         }
 
         public struct UIDrawCmd
         {
             public uint ElemCount; // Number of indices (multiple of 3) to be rendered as triangles. Vertices are stored in the callee ImDrawList's vtx_buffer[] array, indices in idx_buffer[].
             public Vector4 ClipRect; // Clipping rectangle (x1, y1, x2, y2)
-            public Texture2D TextureId; // User-provided texture ID. Set by user in ImfontAtlas::SetTexID() for fonts or passed to Image*() functions. Ignore if never using images or multiple fonts atlas.
+            public Texture2D Texture; // User-provided texture ID. Set by user in ImfontAtlas::SetTexID() for fonts or passed to Image*() functions. Ignore if never using images or multiple fonts atlas.
         }
 
         internal static Vector4 GNullClipRect = new Vector4(-8192.0f, -8192.0f, +8192.0f, +8192.0f);
@@ -42,23 +50,23 @@ namespace Prowl.Runtime.GUI.Graphics
         internal static ShaderVariant UIVariant;
 
         // This is what you have to render
-        internal List<UIDrawCmd> CmdBuffer; // Commands. Typically 1 command = 1 gpu draw call.
+        internal List<UIDrawCmd> CommandList; // Commands. Typically 1 command = 1 gpu draw call.
 
-        public List<uint> IdxBuffer; // Index buffer. Each command consume ImDrawCmd::ElemCount of those
-        public List<UIVertex> VtxBuffer; // Vertex buffer.
-        public int IndexCount => IdxBuffer.Count;
+        public List<uint> Indices; // Index buffer. Each command consume ImDrawCmd::ElemCount of those
+        public List<UIVertex> Vertices; // Vertex buffer.
+        public int IndexCount => Indices.Count;
         public IndexFormat IndexFormat => IndexFormat.UInt32;
 
-        internal uint _VtxCurrentIdx; // [Internal] == VtxBuffer.Size
-        internal int _VtxWritePtr; // [Internal] point within VtxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
-        internal int _IdxWritePtr; // [Internal] point within IdxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
-        internal List<Vector4> _ClipRectStack; // [Internal]
-        internal List<Texture2D> _TextureIdStack; // [Internal]
-        internal List<Vector2> _Path; // [Internal] current path building
-        internal int _ChannelsCurrent; // [Internal] current channel number (0)
-        internal int _ChannelsCount; // [Internal] number of active channels (1+)
-        internal List<UIDrawChannel> _Channels; // [Internal] draw channels for columns API (not resized down so _ChannelsCount may be smaller than _Channels.Size)
-        internal int _primitiveCount = -10000;
+        internal uint CurrentVertexIndex; // [Internal] == VtxBuffer.Size
+        internal int VertexWritePos; // [Internal] point within VtxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
+        internal int IndexWritePos; // [Internal] point within IdxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
+        internal List<Vector4> ClipRectStack; // [Internal]
+        internal List<Texture2D> TextureStack; // [Internal]
+        internal List<Vector2> BuildingPath; // [Internal] current path building
+        internal int CurrentChannel; // [Internal] current channel number (0)
+        internal int ActiveChannels; // [Internal] number of active channels (1+)
+        internal List<UIDrawChannel> Channels; // [Internal] draw channels for columns API (not resized down so _ChannelsCount may be smaller than _Channels.Size)
+        internal int PrimitiveCount = -10000;
 
         private bool _AntiAliasing;
 
@@ -66,14 +74,14 @@ namespace Prowl.Runtime.GUI.Graphics
         {
             CreateDeviceResources();
 
-            CmdBuffer = new();
-            IdxBuffer = new();
-            VtxBuffer = new();
-            _ClipRectStack = new();
-            _TextureIdStack = new();
-            _Path = new();
-            _Channels = new();
-            _primitiveCount = -10000;
+            CommandList = new();
+            Indices = new();
+            Vertices = new();
+            ClipRectStack = new();
+            TextureStack = new();
+            BuildingPath = new();
+            Channels = new();
+            PrimitiveCount = -10000;
             _AntiAliasing = antiAliasing;
 
             Clear();
@@ -86,46 +94,50 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public UIDrawCmd? GetCurrentDrawCmd()
         {
-            return CmdBuffer.Count > 0 ? CmdBuffer[CmdBuffer.Count - 1] : null;
+            return CommandList.Count > 0 ? CommandList[^1] : null;
         }
 
         public void SetCurrentDrawCmd(UIDrawCmd cmd)
         {
-            System.Diagnostics.Debug.Assert(CmdBuffer.Count > 0);
-            CmdBuffer[CmdBuffer.Count - 1] = cmd;
+            System.Diagnostics.Debug.Assert(CommandList.Count > 0);
+            CommandList[^1] = cmd;
         }
 
         public UIDrawCmd? GetPreviousDrawCmd()
         {
-            return CmdBuffer.Count > 1 ? CmdBuffer[CmdBuffer.Count - 2] : null;
+            return CommandList.Count > 1 ? CommandList[^2] : null;
         }
 
         public Vector4 GetCurrentClipRect()
         {
-            return _ClipRectStack.Count > 0 ? _ClipRectStack[_ClipRectStack.Count - 1] : GNullClipRect;
+            return ClipRectStack.Count > 0 ? ClipRectStack[^1] : GNullClipRect;
         }
 
-        public Texture2D GetCurrentTextureId()
+        public Texture2D GetCurrentTexture()
         {
-            return _TextureIdStack.Count > 0 ? _TextureIdStack[_TextureIdStack.Count - 1] : Font.DefaultFont.Texture;
+            return TextureStack.Count > 0 ? TextureStack[^1] : Font.DefaultFont.Texture;
         }
 
         public void Clear()
         {
-            CmdBuffer.Clear();
-            IdxBuffer.Clear();
-            VtxBuffer.Clear();
-            _VtxCurrentIdx = 0;
-            _VtxWritePtr = -1;
-            _IdxWritePtr = -1;
-            _ClipRectStack.Clear();
-            _TextureIdStack.Clear();
-            _Path.Clear();
-            _ChannelsCurrent = 0;
-            _ChannelsCount = 1;
+            CommandList.Clear();
+            Indices.Clear();
+            Vertices.Clear();
 
-            _Channels.Clear();
-            _primitiveCount = -10000;
+            ClipRectStack.Clear();
+            TextureStack.Clear();
+            BuildingPath.Clear();
+
+            Channels.Clear();
+
+            CurrentVertexIndex = 0;
+            VertexWritePos = -1;
+            IndexWritePos = -1;
+
+            CurrentChannel = 0;
+            ActiveChannels = 1;
+
+            PrimitiveCount = -10000;
 
             // Add Initial Draw Command
             AddDrawCmd();
@@ -134,10 +146,10 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void PushClipRect(Vector4 clip_rect, bool force = false)  // Scissoring. Note that the values are (x1,y1,x2,y2) and NOT (x1,y1,w,h). This is passed down to your render function but not used for CPU-side clipping. Prefer using higher-level ImGui::PushClipRect() to affect logic (hit-testing and widget culling)
         {
-            if(!force && _ClipRectStack.Count > 0)
-                clip_rect = IntersectRects(_ClipRectStack.Peek(), clip_rect);
+            if(!force && ClipRectStack.Count > 0)
+                clip_rect = IntersectRects(ClipRectStack.Peek(), clip_rect);
 
-            _ClipRectStack.Add(clip_rect);
+            ClipRectStack.Add(clip_rect);
             UpdateClipRect(force);
         }
 
@@ -164,21 +176,21 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void PopClipRect()
         {
-            System.Diagnostics.Debug.Assert(_ClipRectStack.Count > 0);
-            _ClipRectStack.Pop();
+            System.Diagnostics.Debug.Assert(ClipRectStack.Count > 0);
+            ClipRectStack.Pop();
             UpdateClipRect();
         }
 
-        public void PushTextureID(Texture2D texture_id)
+        public void PushTexture(Texture2D texture_id)
         {
-            _TextureIdStack.Add(texture_id);
+            TextureStack.Add(texture_id);
             UpdateTextureID();
         }
 
-        public void PopTextureID()
+        public void PopTexture()
         {
-            System.Diagnostics.Debug.Assert(_TextureIdStack.Count > 0);
-            _TextureIdStack.Pop();
+            System.Diagnostics.Debug.Assert(TextureStack.Count > 0);
+            TextureStack.Pop();
             UpdateTextureID();
         }
 
@@ -214,27 +226,18 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void AddRectFilledMultiColor(Vector2 a, Vector2 c, Color32 col_upr_left, Color32 col_upr_right, Color32 col_bot_right, Color32 col_bot_left)
         {
-
             PrimReserve(6, 4);
 
             Vector2 uv = Font.DefaultFont.TexUvWhitePixel;
             var b = new Vector2(c.x, a.y);
             var d = new Vector2(a.x, c.y);
-            uint idx = (uint)_VtxCurrentIdx;
-
-            IdxBuffer[_IdxWritePtr + 0] = idx; IdxBuffer[_IdxWritePtr + 1] = (uint)(idx + 1); IdxBuffer[_IdxWritePtr + 2] = (uint)(idx + 2);
-            IdxBuffer[_IdxWritePtr + 3] = idx; IdxBuffer[_IdxWritePtr + 4] = (uint)(idx + 2); IdxBuffer[_IdxWritePtr + 5] = (uint)(idx + 3);
-
-            VtxBuffer[_VtxWritePtr + 0] = new UIVertex() { pos = new(a, _primitiveCount), uv = uv, col = col_upr_left };
-            VtxBuffer[_VtxWritePtr + 1] = new UIVertex() { pos = new(b, _primitiveCount), uv = uv, col = col_upr_right };
-            VtxBuffer[_VtxWritePtr + 2] = new UIVertex() { pos = new(c, _primitiveCount), uv = uv, col = col_bot_right };
-            VtxBuffer[_VtxWritePtr + 3] = new UIVertex() { pos = new(d, _primitiveCount), uv = uv, col = col_bot_left };
             
-            _VtxWritePtr += 4;
-            _VtxCurrentIdx += 4;
-            _IdxWritePtr += 6;
-
-            _primitiveCount++;
+            AddVerts(
+                new UIVertex(new(a, PrimitiveCount), uv, col_upr_left),
+                new UIVertex(new(b, PrimitiveCount), uv, col_upr_right),
+                new UIVertex(new(c, PrimitiveCount), uv, col_bot_right),
+                new UIVertex(new(d, PrimitiveCount), uv, col_bot_left)
+            );
         }
 
         public void AddTriangle(Vector2 a, Vector2 b, Vector2 c, Color32 col, float thickness = 1.0f)
@@ -284,17 +287,17 @@ namespace Prowl.Runtime.GUI.Graphics
             if (text_begin == text_end)
                 return;
 
-            System.Diagnostics.Debug.Assert(font.Texture == GetCurrentTextureId());  // Use high-level ImGui::PushFont() or low-level ImDrawList::PushTextureId() to change font.
+            System.Diagnostics.Debug.Assert(font.Texture == GetCurrentTexture());  // Use high-level ImGui::PushFont() or low-level ImDrawList::PushTextureId() to change font.
 
             // reserve vertices for worse case (over-reserving is useful and easily amortized)
             int char_count = text_end - text_begin;
             int vtx_count_max = char_count * 4;
             int idx_count_max = char_count * 6;
-            int vtx_begin = VtxBuffer.Count;
-            int idx_begin = IdxBuffer.Count;
+            int vtx_begin = Vertices.Count;
+            int idx_begin = Indices.Count;
             PrimReserve(idx_count_max, vtx_count_max);
 
-            Vector4 clip_rect = _ClipRectStack[_ClipRectStack.Count - 1];
+            Vector4 clip_rect = ClipRectStack[ClipRectStack.Count - 1];
             if (cpu_fine_clip_rect.HasValue)
             {
                 var cfcr = cpu_fine_clip_rect.Value;
@@ -307,38 +310,39 @@ namespace Prowl.Runtime.GUI.Graphics
 
             // give back unused vertices
             // FIXME-OPT: clean this up
-            VtxBuffer.Resize(_VtxWritePtr);
-            IdxBuffer.Resize(_IdxWritePtr);
-            int vtx_unused = vtx_count_max - (VtxBuffer.Count - vtx_begin);
-            int idx_unused = idx_count_max - (IdxBuffer.Count - idx_begin);
-            var curr_cmd = CmdBuffer[CmdBuffer.Count - 1];
+            Vertices.Resize(VertexWritePos);
+            Indices.Resize(IndexWritePos);
+            int vtx_unused = vtx_count_max - (Vertices.Count - vtx_begin);
+            int idx_unused = idx_count_max - (Indices.Count - idx_begin);
+            var curr_cmd = CommandList[CommandList.Count - 1];
             curr_cmd.ElemCount -= (uint)idx_unused;
-            CmdBuffer[CmdBuffer.Count - 1] = curr_cmd;
+            CommandList[CommandList.Count - 1] = curr_cmd;
 
             //_VtxWritePtr -= vtx_unused; //this doesn't seem right, vtx/idx are already pointing to the unused spot
             //_IdxWritePtr -= idx_unused;
-            _VtxCurrentIdx = (uint)VtxBuffer.Count;
+            CurrentVertexIndex = (uint)Vertices.Count;
 
             //AddRect(rect.Min, rect.Max, 0xff0000ff);
         }
 
         public void AddImage(Texture2D user_texture_id, Vector2 a, Vector2 b, Vector2? _uv0 = null, Vector2? _uv1 = null, Color32? _col = null)
         {
-            var uv0 = _uv0.HasValue ? _uv0.Value : new Vector2(0, 0);
-            var uv1 = _uv1.HasValue ? _uv1.Value : new Vector2(1, 1);
-            var col = _col.HasValue ? _col.Value : (Color32)Color.white;
+            var uv0 = _uv0 ?? new Vector2(0, 0);
+            var uv1 = _uv1 ?? new Vector2(1, 1);
+            var col = _col ?? (Color32)Color.white;
 
             // FIXME-OPT: This is wasting draw calls.
-            bool push_texture_id = _TextureIdStack.Count == 0 || user_texture_id != GetCurrentTextureId();
+            bool push_texture_id = TextureStack.Count == 0 || user_texture_id != GetCurrentTexture();
+            
             if (push_texture_id)
-                PushTextureID(user_texture_id);
+                PushTexture(user_texture_id);
 
             PrimReserve(6, 4);
             PrimRectUV(a, b, uv0, uv1, col);
 
             //PrimRect(a, b, col);
             if (push_texture_id)
-                PopTextureID();
+                PopTexture();
         }
 
         public void AddPolyline(List<Vector2> points, int points_count, Color32 col, bool closed, float thickness)
@@ -346,7 +350,6 @@ namespace Prowl.Runtime.GUI.Graphics
             if (points_count < 2)
                 return;
 
-            //Vector2 uv = ImGui.Instance.FontTexUvWhitePixel;
             Vector2 uv = Font.DefaultFont.TexUvWhitePixel;
 
             int count = points_count;
@@ -380,6 +383,7 @@ namespace Prowl.Runtime.GUI.Graphics
                     temp_normals[i1].x = diff.y;
                     temp_normals[i1].y = -diff.x;
                 }
+
                 if (!closed)
                     temp_normals[points_count - 1] = temp_normals[points_count - 2];
 
@@ -394,11 +398,11 @@ namespace Prowl.Runtime.GUI.Graphics
                     }
 
                     // FIXME-OPT: Merge the different loops, possibly remove the temporary buffer.
-                    uint idx1 = _VtxCurrentIdx;
+                    uint idx1 = CurrentVertexIndex;
                     for (int i1 = 0; i1 < count; i1++)
                     {
                         int i2 = i1 + 1 == points_count ? 0 : i1 + 1;
-                        uint idx2 = i1 + 1 == points_count ? _VtxCurrentIdx : idx1 + 3;
+                        uint idx2 = i1 + 1 == points_count ? CurrentVertexIndex : idx1 + 3;
 
                         // Average normals
                         Vector2 dm = (temp_normals[i1] + temp_normals[i2]) * 0.5f;
@@ -415,10 +419,10 @@ namespace Prowl.Runtime.GUI.Graphics
 
                         // Add indexes
 
-                        IdxBuffer[_IdxWritePtr++] = (uint)(idx2 + 0); IdxBuffer[_IdxWritePtr++] = (uint)(idx1 + 0); IdxBuffer[_IdxWritePtr++] = (uint)(idx1 + 2);
-                        IdxBuffer[_IdxWritePtr++] = (uint)(idx1 + 2); IdxBuffer[_IdxWritePtr++] = (uint)(idx2 + 2); IdxBuffer[_IdxWritePtr++] = (uint)(idx2 + 0);
-                        IdxBuffer[_IdxWritePtr++] = (uint)(idx2 + 1); IdxBuffer[_IdxWritePtr++] = (uint)(idx1 + 1); IdxBuffer[_IdxWritePtr++] = (uint)(idx1 + 0);
-                        IdxBuffer[_IdxWritePtr++] = (uint)(idx1 + 0); IdxBuffer[_IdxWritePtr++] = (uint)(idx2 + 0); IdxBuffer[_IdxWritePtr++] = (uint)(idx2 + 1);
+                        Indices[IndexWritePos++] = (uint)(idx2 + 0); Indices[IndexWritePos++] = (uint)(idx1 + 0); Indices[IndexWritePos++] = (uint)(idx1 + 2);
+                        Indices[IndexWritePos++] = (uint)(idx1 + 2); Indices[IndexWritePos++] = (uint)(idx2 + 2); Indices[IndexWritePos++] = (uint)(idx2 + 0);
+                        Indices[IndexWritePos++] = (uint)(idx2 + 1); Indices[IndexWritePos++] = (uint)(idx1 + 1); Indices[IndexWritePos++] = (uint)(idx1 + 0);
+                        Indices[IndexWritePos++] = (uint)(idx1 + 0); Indices[IndexWritePos++] = (uint)(idx2 + 0); Indices[IndexWritePos++] = (uint)(idx2 + 1);
                         //_IdxWritePtr += 12;
 
                         idx1 = idx2;
@@ -427,9 +431,9 @@ namespace Prowl.Runtime.GUI.Graphics
                     // Add vertexes
                     for (int i = 0; i < points_count; i++)
                     {
-                        VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new(points[i], _primitiveCount), uv = uv, col = col };
-                        VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new(temp_points[i * 2 + 0], _primitiveCount), uv = uv, col = col_trans };
-                        VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new(temp_points[i * 2 + 1], _primitiveCount), uv = uv, col = col_trans };
+                        Vertices[VertexWritePos++] = new UIVertex(new(points[i], PrimitiveCount), uv, col);
+                        Vertices[VertexWritePos++] = new UIVertex(new(temp_points[i * 2 + 0], PrimitiveCount), uv, col_trans);
+                        Vertices[VertexWritePos++] = new UIVertex(new(temp_points[i * 2 + 1], PrimitiveCount), uv, col_trans);
                     }
                 }
                 else
@@ -441,6 +445,7 @@ namespace Prowl.Runtime.GUI.Graphics
                         temp_points[1] = points[0] + temp_normals[0] * half_inner_thickness;
                         temp_points[2] = points[0] - temp_normals[0] * half_inner_thickness;
                         temp_points[3] = points[0] - temp_normals[0] * (half_inner_thickness + AA_SIZE);
+
                         temp_points[(points_count - 1) * 4 + 0] = points[points_count - 1] + temp_normals[points_count - 1] * (half_inner_thickness + AA_SIZE);
                         temp_points[(points_count - 1) * 4 + 1] = points[points_count - 1] + temp_normals[points_count - 1] * half_inner_thickness;
                         temp_points[(points_count - 1) * 4 + 2] = points[points_count - 1] - temp_normals[points_count - 1] * half_inner_thickness;
@@ -448,11 +453,11 @@ namespace Prowl.Runtime.GUI.Graphics
                     }
 
                     // FIXME-OPT: Merge the different loops, possibly remove the temporary buffer.
-                    uint idx1 = _VtxCurrentIdx;
+                    uint idx1 = CurrentVertexIndex;
                     for (int i1 = 0; i1 < count; i1++)
                     {
                         int i2 = i1 + 1 == points_count ? 0 : i1 + 1;
-                        uint idx2 = i1 + 1 == points_count ? _VtxCurrentIdx : idx1 + 4;
+                        uint idx2 = i1 + 1 == points_count ? CurrentVertexIndex : idx1 + 4;
 
                         // Average normals
                         Vector2 dm = (temp_normals[i1] + temp_normals[i2]) * 0.5f;
@@ -471,12 +476,12 @@ namespace Prowl.Runtime.GUI.Graphics
                         temp_points[i2 * 4 + 3] = points[i2] - dm_out;
 
                         // Add indexes
-                        IdxBuffer[_IdxWritePtr++] = (uint)(idx2 + 1); IdxBuffer[_IdxWritePtr++] = (uint)(idx1 + 1); IdxBuffer[_IdxWritePtr++] = (uint)(idx1 + 2);
-                        IdxBuffer[_IdxWritePtr++] = (uint)(idx1 + 2); IdxBuffer[_IdxWritePtr++] = (uint)(idx2 + 2); IdxBuffer[_IdxWritePtr++] = (uint)(idx2 + 1);
-                        IdxBuffer[_IdxWritePtr++] = (uint)(idx2 + 1); IdxBuffer[_IdxWritePtr++] = (uint)(idx1 + 1); IdxBuffer[_IdxWritePtr++] = (uint)(idx1 + 0);
-                        IdxBuffer[_IdxWritePtr++] = (uint)(idx1 + 0); IdxBuffer[_IdxWritePtr++] = (uint)(idx2 + 0); IdxBuffer[_IdxWritePtr++] = (uint)(idx2 + 1);
-                        IdxBuffer[_IdxWritePtr++] = (uint)(idx2 + 2); IdxBuffer[_IdxWritePtr++] = (uint)(idx1 + 2); IdxBuffer[_IdxWritePtr++] = (uint)(idx1 + 3);
-                        IdxBuffer[_IdxWritePtr++] = (uint)(idx1 + 3); IdxBuffer[_IdxWritePtr++] = (uint)(idx2 + 3); IdxBuffer[_IdxWritePtr++] = (uint)(idx2 + 2);
+                        Indices[IndexWritePos++] = (idx2 + 1); Indices[IndexWritePos++] = (idx1 + 1); Indices[IndexWritePos++] = (idx1 + 2);
+                        Indices[IndexWritePos++] = (idx1 + 2); Indices[IndexWritePos++] = (idx2 + 2); Indices[IndexWritePos++] = (idx2 + 1);
+                        Indices[IndexWritePos++] = (idx2 + 1); Indices[IndexWritePos++] = (idx1 + 1); Indices[IndexWritePos++] = (idx1 + 0);
+                        Indices[IndexWritePos++] = (idx1 + 0); Indices[IndexWritePos++] = (idx2 + 0); Indices[IndexWritePos++] = (idx2 + 1);
+                        Indices[IndexWritePos++] = (idx2 + 2); Indices[IndexWritePos++] = (idx1 + 2); Indices[IndexWritePos++] = (idx1 + 3);
+                        Indices[IndexWritePos++] = (idx1 + 3); Indices[IndexWritePos++] = (idx2 + 3); Indices[IndexWritePos++] = (idx2 + 2);
                         //_IdxWritePtr += 18;
 
                         idx1 = idx2;
@@ -485,14 +490,14 @@ namespace Prowl.Runtime.GUI.Graphics
                     // Add vertexes
                     for (int i = 0; i < points_count; i++)
                     {
-                        VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new(temp_points[i * 4 + 0], _primitiveCount), uv = uv, col = col_trans };
-                        VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new(temp_points[i * 4 + 1], _primitiveCount), uv = uv, col = col };
-                        VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new(temp_points[i * 4 + 2], _primitiveCount), uv = uv, col = col };
-                        VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new(temp_points[i * 4 + 3], _primitiveCount), uv = uv, col = col_trans };
+                        Vertices[VertexWritePos++] = new UIVertex(new(temp_points[i * 4 + 0], PrimitiveCount), uv, col_trans);
+                        Vertices[VertexWritePos++] = new UIVertex(new(temp_points[i * 4 + 1], PrimitiveCount), uv, col);
+                        Vertices[VertexWritePos++] = new UIVertex(new(temp_points[i * 4 + 2], PrimitiveCount), uv, col);
+                        Vertices[VertexWritePos++] = new UIVertex(new(temp_points[i * 4 + 3], PrimitiveCount), uv, col_trans);
                         //_VtxWritePtr += 4;
                     }
                 }
-                _VtxCurrentIdx += (uint)vtx_count;
+                CurrentVertexIndex += (uint)vtx_count;
             }
             else
             {
@@ -513,19 +518,20 @@ namespace Prowl.Runtime.GUI.Graphics
 
                     double dx = diff.x * (thickness * 0.5f);
                     double dy = diff.y * (thickness * 0.5f);
-                    VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new Vector3(p1.x + dy, p1.y - dx, _primitiveCount), uv = uv, col = col };
-                    VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new Vector3(p2.x + dy, p2.y - dx, _primitiveCount), uv = uv, col = col };
-                    VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new Vector3(p2.x - dy, p2.y + dx, _primitiveCount), uv = uv, col = col };
-                    VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new Vector3(p1.x - dy, p1.y + dx, _primitiveCount), uv = uv, col = col };
+
+                    Vertices[VertexWritePos++] = new UIVertex(new Vector3(p1.x + dy, p1.y - dx, PrimitiveCount), uv, col);
+                    Vertices[VertexWritePos++] = new UIVertex(new Vector3(p2.x + dy, p2.y - dx, PrimitiveCount), uv, col);
+                    Vertices[VertexWritePos++] = new UIVertex(new Vector3(p2.x - dy, p2.y + dx, PrimitiveCount), uv, col);
+                    Vertices[VertexWritePos++] = new UIVertex(new Vector3(p1.x - dy, p1.y + dx, PrimitiveCount), uv, col);
                     //_VtxWritePtr += 4;
 
-                    IdxBuffer[_IdxWritePtr++] = (uint)_VtxCurrentIdx; IdxBuffer[_IdxWritePtr++] = (uint)(_VtxCurrentIdx + 1); IdxBuffer[_IdxWritePtr++] = (uint)(_VtxCurrentIdx + 2);
-                    IdxBuffer[_IdxWritePtr++] = (uint)_VtxCurrentIdx; IdxBuffer[_IdxWritePtr++] = (uint)(_VtxCurrentIdx + 2); IdxBuffer[_IdxWritePtr++] = (uint)(_VtxCurrentIdx + 3);
+                    Indices[IndexWritePos++] = (uint)CurrentVertexIndex; Indices[IndexWritePos++] = (uint)(CurrentVertexIndex + 1); Indices[IndexWritePos++] = (uint)(CurrentVertexIndex + 2);
+                    Indices[IndexWritePos++] = (uint)CurrentVertexIndex; Indices[IndexWritePos++] = (uint)(CurrentVertexIndex + 2); Indices[IndexWritePos++] = (uint)(CurrentVertexIndex + 3);
                     //_IdxWritePtr += 6;
-                    _VtxCurrentIdx += 4;
+                    CurrentVertexIndex += 4;
                 }
             }
-            _primitiveCount++;
+            PrimitiveCount++;
         }
 
         public void AddConvexPolyFilled(List<Vector2> points, int points_count, Color32 col)
@@ -547,13 +553,13 @@ namespace Prowl.Runtime.GUI.Graphics
                 PrimReserve(idx_count, vtx_count);
 
                 // Add indexes for fill
-                uint vtx_inner_idx = _VtxCurrentIdx;
-                uint vtx_outer_idx = _VtxCurrentIdx + 1;
+                uint vtx_inner_idx = CurrentVertexIndex;
+                uint vtx_outer_idx = CurrentVertexIndex + 1;
                 for (int i = 2; i < points_count; i++)
                 {
-                    IdxBuffer[_IdxWritePtr++] = (uint)vtx_inner_idx;
-                    IdxBuffer[_IdxWritePtr++] = (uint)(vtx_inner_idx + (i - 1 << 1));
-                    IdxBuffer[_IdxWritePtr++] = (uint)(vtx_inner_idx + (i << 1));
+                    Indices[IndexWritePos++] = (uint)vtx_inner_idx;
+                    Indices[IndexWritePos++] = (uint)(vtx_inner_idx + (i - 1 << 1));
+                    Indices[IndexWritePos++] = (uint)(vtx_inner_idx + (i << 1));
                 }
 
                 // Compute normals
@@ -589,15 +595,15 @@ namespace Prowl.Runtime.GUI.Graphics
                     dm *= AA_SIZE * 0.5f;
 
                     // Add vertices
-                    VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new(points[i1] - dm, _primitiveCount), uv = uv, col = col };
-                    VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new(points[i1] + dm, _primitiveCount), uv = uv, col = col_trans};
+                    Vertices[VertexWritePos++] = new UIVertex() { Position = new(points[i1] - dm, PrimitiveCount), UV = uv, Color = col };
+                    Vertices[VertexWritePos++] = new UIVertex() { Position = new(points[i1] + dm, PrimitiveCount), UV = uv, Color = col_trans};
 
                     // Add indexes for fringes
 
-                    IdxBuffer[_IdxWritePtr++] = (uint)(vtx_inner_idx + (i1 << 1)); IdxBuffer[_IdxWritePtr++] = (uint)(vtx_inner_idx + (i0 << 1)); IdxBuffer[_IdxWritePtr++] = (uint)(vtx_outer_idx + (i0 << 1));
-                    IdxBuffer[_IdxWritePtr++] = (uint)(vtx_outer_idx + (i0 << 1)); IdxBuffer[_IdxWritePtr++] = (uint)(vtx_outer_idx + (i1 << 1)); IdxBuffer[_IdxWritePtr++] = (uint)(vtx_inner_idx + (i1 << 1));
+                    Indices[IndexWritePos++] = (uint)(vtx_inner_idx + (i1 << 1)); Indices[IndexWritePos++] = (uint)(vtx_inner_idx + (i0 << 1)); Indices[IndexWritePos++] = (uint)(vtx_outer_idx + (i0 << 1));
+                    Indices[IndexWritePos++] = (uint)(vtx_outer_idx + (i0 << 1)); Indices[IndexWritePos++] = (uint)(vtx_outer_idx + (i1 << 1)); Indices[IndexWritePos++] = (uint)(vtx_inner_idx + (i1 << 1));
                 }
-                _VtxCurrentIdx += (uint)vtx_count;
+                CurrentVertexIndex += (uint)vtx_count;
             }
             else
             {
@@ -605,16 +611,16 @@ namespace Prowl.Runtime.GUI.Graphics
                 int vtx_count = points_count;
                 PrimReserve(idx_count, vtx_count);
                 for (int i = 0; i < vtx_count; i++)
-                    VtxBuffer[_VtxWritePtr++] = new UIVertex() { pos = new(points[i], _primitiveCount), uv = uv, col = col };
+                    Vertices[VertexWritePos++] = new UIVertex() { Position = new(points[i], PrimitiveCount), UV = uv, Color = col };
 
                 for (uint i = 2u; i < points_count; i++)
                 {
-                    IdxBuffer[_IdxWritePtr++] = (uint)_VtxCurrentIdx; IdxBuffer[_IdxWritePtr++] = (uint)(_VtxCurrentIdx + i - 1u); IdxBuffer[_IdxWritePtr++] = (uint)(_VtxCurrentIdx + i);
+                    Indices[IndexWritePos++] = (uint)CurrentVertexIndex; Indices[IndexWritePos++] = (uint)(CurrentVertexIndex + i - 1u); Indices[IndexWritePos++] = (uint)(CurrentVertexIndex + i);
                 }
-                _VtxCurrentIdx += (uint)vtx_count;
+                CurrentVertexIndex += (uint)vtx_count;
             }
 
-            _primitiveCount++;
+            PrimitiveCount++;
         }
 
         public void AddBezierCurve(Vector2 pos0, Vector2 cp0, Vector2 cp1, Vector2 pos1, Color32 col, float thickness, int num_segments = 0)
@@ -627,35 +633,35 @@ namespace Prowl.Runtime.GUI.Graphics
         // Stateful path API, add points then finish with PathFill() or PathStroke()
         public void PathLineTo(Vector2 pos) 
         {
-            _Path.Add(pos);
+            BuildingPath.Add(pos);
         }
 
         public void PathLineToMergeDuplicate(Vector2 pos)
         {
-            if (_Path.Count == 0 || _Path[_Path.Count - 1].x != pos.x || _Path[_Path.Count - 1].y != pos.y)
-                _Path.Add(pos);
+            if (BuildingPath.Count == 0 || BuildingPath[BuildingPath.Count - 1].x != pos.x || BuildingPath[BuildingPath.Count - 1].y != pos.y)
+                BuildingPath.Add(pos);
         }
 
         public void PathFill(Color32 col)
         {
-            AddConvexPolyFilled(_Path, _Path.Count, col);
-            _Path.Clear();
+            AddConvexPolyFilled(BuildingPath, BuildingPath.Count, col);
+            BuildingPath.Clear();
         }
 
         public void PathStroke(Color32 col, bool closed, float thickness = 1.0f)
         {
-            AddPolyline(_Path, _Path.Count, col, closed, thickness);
-            _Path.Clear();
+            AddPolyline(BuildingPath, BuildingPath.Count, col, closed, thickness);
+            BuildingPath.Clear();
         }
 
         public void PathArcTo(Vector2 centre, float radius, float amin, float amax, int num_segments = 10)
         {
             if (radius == 0.0f)
-                _Path.Add(centre);
+                BuildingPath.Add(centre);
             for (int i = 0; i <= num_segments; i++)
             {
                 float a = amin + i / (float)num_segments * (amax - amin);
-                _Path.Add(new Vector2(centre.x + MathD.Cos(a) * radius, centre.y + MathD.Sin(a) * radius));
+                BuildingPath.Add(new Vector2(centre.x + MathD.Cos(a) * radius, centre.y + MathD.Sin(a) * radius));
             }
         }
 
@@ -679,26 +685,26 @@ namespace Prowl.Runtime.GUI.Graphics
             if (amin > amax) return;
             if (radius == 0.0f)
             {
-                _Path.Add(centre);
+                BuildingPath.Add(centre);
             }
             else
             {
                 for (int a = amin; a <= amax; a++)
                 {
                     Vector2 c = circle_vtx[a % circle_vtx_count];
-                    _Path.Add(new Vector2(centre.x + c.x * radius, centre.y + c.y * radius));
+                    BuildingPath.Add(new Vector2(centre.x + c.x * radius, centre.y + c.y * radius));
                 }
             }
         }
 
         public void PathBezierCurveTo(Vector2 p2, Vector2 p3, Vector2 p4, int num_segments = 0)
         {
-            Vector2 p1 = _Path[_Path.Count - 1];
+            Vector2 p1 = BuildingPath[BuildingPath.Count - 1];
             if (num_segments == 0)
             {
                 // Auto-tessellated
                 const float tess_tol = 1.25f;
-                PathBezierToCasteljau(_Path, (float)p1.x, (float)p1.y, (float)p2.x, (float)p2.y, (float)p3.x, (float)p3.y, (float)p4.x, (float)p4.y, tess_tol, 0);
+                PathBezierToCasteljau(BuildingPath, (float)p1.x, (float)p1.y, (float)p2.x, (float)p2.y, (float)p3.x, (float)p3.y, (float)p4.x, (float)p4.y, tess_tol, 0);
             }
             else
             {
@@ -711,7 +717,7 @@ namespace Prowl.Runtime.GUI.Graphics
                     float w2 = 3 * u * u * t;
                     float w3 = 3 * u * t * t;
                     float w4 = t * t * t;
-                    _Path.Add(new Vector2(w1 * p1.x + w2 * p2.x + w3 * p3.x + w4 * p4.x, w1 * p1.y + w2 * p2.y + w3 * p3.y + w4 * p4.y));
+                    BuildingPath.Add(new Vector2(w1 * p1.x + w2 * p2.x + w3 * p3.x + w4 * p4.x, w1 * p1.y + w2 * p2.y + w3 * p3.y + w4 * p4.y));
                 }
             }
         }
@@ -774,11 +780,11 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void ChannelsSplit(int channels_count)
         {
-            System.Diagnostics.Debug.Assert(_ChannelsCurrent == 0 && _ChannelsCount == 1);
-            int old_channels_count = _Channels.Count;
+            System.Diagnostics.Debug.Assert(CurrentChannel == 0 && ActiveChannels == 1);
+            int old_channels_count = Channels.Count;
             if (old_channels_count < channels_count)
-                _Channels.Resize(channels_count);
-            _ChannelsCount = channels_count;
+                Channels.Resize(channels_count);
+            ActiveChannels = channels_count;
 
             // _Channels[] (24 bytes each) hold storage that we'll swap with this->_CmdBuffer/_IdxBuffer
             // The content of _Channels[0] at this point doesn't matter. We clear it to make state tidy in a debugger but we don't strictly need to.
@@ -789,19 +795,19 @@ namespace Prowl.Runtime.GUI.Graphics
                 if (i >= old_channels_count)
                 {
                     //IM_PLACEMENT_NEW(&_Channels[i]) ImDrawChannel();
-                    _Channels[i] = new UIDrawChannel();
+                    Channels[i] = new UIDrawChannel();
                 }
                 else
                 {
-                    _Channels[i].CmdBuffer.Clear();
-                    _Channels[i].IdxBuffer.Clear();
+                    Channels[i].CommandList.Clear();
+                    Channels[i].IndexBuffer.Clear();
                 }
-                if (_Channels[i].CmdBuffer.Count == 0)
+                if (Channels[i].CommandList.Count == 0)
                 {
                     UIDrawCmd draw_cmd = new UIDrawCmd();
-                    draw_cmd.ClipRect = _ClipRectStack[_ClipRectStack.Count - 1];
-                    draw_cmd.TextureId = GetCurrentTextureId();
-                    _Channels[i].CmdBuffer.Add(draw_cmd);
+                    draw_cmd.ClipRect = ClipRectStack[ClipRectStack.Count - 1];
+                    draw_cmd.Texture = GetCurrentTexture();
+                    Channels[i].CommandList.Add(draw_cmd);
                 }
             }
         }
@@ -809,66 +815,67 @@ namespace Prowl.Runtime.GUI.Graphics
         public void ChannelsMerge()
         {
             // Note that we never use or rely on channels.Size because it is merely a buffer that we never shrink back to 0 to keep all sub-buffers ready for use.
-            if (_ChannelsCount <= 1)
+            if (ActiveChannels <= 1)
                 return;
 
             ChannelsSetCurrent(0);
 
             var curr_cmd = GetCurrentDrawCmd();
             if (curr_cmd.HasValue && curr_cmd.Value.ElemCount == 0)
-                CmdBuffer.Pop();
+                CommandList.Pop();
 
             int new_cmd_buffer_count = 0, new_idx_buffer_count = 0;
-            for (int i = 1; i < _ChannelsCount; i++)
+            for (int i = 1; i < ActiveChannels; i++)
             {
-                UIDrawChannel ch = _Channels[i];
+                UIDrawChannel ch = Channels[i];
 
-                if (ch.CmdBuffer.Count > 0 && ch.CmdBuffer[ch.CmdBuffer.Count - 1].ElemCount == 0)
-                    ch.CmdBuffer.Pop();
-                new_cmd_buffer_count += ch.CmdBuffer.Count;
-                new_idx_buffer_count += ch.IdxBuffer.Count;
+                if (ch.CommandList.Count > 0 && ch.CommandList[ch.CommandList.Count - 1].ElemCount == 0)
+                    ch.CommandList.Pop();
+                new_cmd_buffer_count += ch.CommandList.Count;
+                new_idx_buffer_count += ch.IndexBuffer.Count;
             }
-            CmdBuffer.Resize(CmdBuffer.Count + new_cmd_buffer_count);
-            IdxBuffer.Resize(IdxBuffer.Count + new_idx_buffer_count);
 
-            int cmd_write = CmdBuffer.Count - new_cmd_buffer_count;
-            _IdxWritePtr = IdxBuffer.Count - new_idx_buffer_count;
-            for (int i = 1; i < _ChannelsCount; i++)
+            CommandList.Resize(CommandList.Count + new_cmd_buffer_count);
+            Indices.Resize(Indices.Count + new_idx_buffer_count);
+
+            int cmd_write = CommandList.Count - new_cmd_buffer_count;
+            IndexWritePos = Indices.Count - new_idx_buffer_count;
+            for (int i = 1; i < ActiveChannels; i++)
             {
                 int sz;
-                UIDrawChannel ch = _Channels[i];
-                if ((sz = ch.CmdBuffer.Count) > 0)
+                UIDrawChannel ch = Channels[i];
+                if ((sz = ch.CommandList.Count) > 0)
                 {
                     for (var k = cmd_write; k < sz; k++)
-                        CmdBuffer[cmd_write + k] = ch.CmdBuffer[k];
-                    //memcpy(cmd_write, ch.CmdBuffer.Data, sz * sizeof(ImDrawCmd));
+                        CommandList[cmd_write + k] = ch.CommandList[k];
+
                     cmd_write += sz;
                 }
-                if ((sz = ch.IdxBuffer.Count) > 0)
+                if ((sz = ch.IndexBuffer.Count) > 0)
                 {
                     for (var k = cmd_write; k < sz; k++)
-                        IdxBuffer[_IdxWritePtr + k] = ch.IdxBuffer[k];
-                    //memcpy(_IdxWritePtr, ch.IdxBuffer.Data, sz * sizeof(uint));
-                    _IdxWritePtr += sz;
+                        Indices[IndexWritePos + k] = ch.IndexBuffer[k];
+
+                    IndexWritePos += sz;
                 }
             }
 
             AddDrawCmd();
-            _ChannelsCount = 1;
+            ActiveChannels = 1;
         }
 
         public void ChannelsSetCurrent(int idx)
         {
-            System.Diagnostics.Debug.Assert(idx < _ChannelsCount);
-            if (_ChannelsCurrent == idx)
+            System.Diagnostics.Debug.Assert(idx < ActiveChannels);
+            if (CurrentChannel == idx)
                 return;
 
-            _ChannelsCurrent = idx;
+            CurrentChannel = idx;
 
-            CmdBuffer = _Channels[_ChannelsCurrent].CmdBuffer;
-            IdxBuffer = _Channels[_ChannelsCurrent].IdxBuffer;
+            CommandList = Channels[CurrentChannel].CommandList;
+            Indices = Channels[CurrentChannel].IndexBuffer;
 
-            _IdxWritePtr = IdxBuffer.Count;
+            IndexWritePos = Indices.Count;
         }
 
         public void AddDrawCmd()
@@ -876,10 +883,10 @@ namespace Prowl.Runtime.GUI.Graphics
             // This is useful if you need to forcefully create a new draw call (to allow for dependent rendering / blending). Otherwise primitives are merged into the same draw-call as much as possible
             UIDrawCmd draw_cmd = new UIDrawCmd();
             draw_cmd.ClipRect = GetCurrentClipRect();
-            draw_cmd.TextureId = GetCurrentTextureId();
+            draw_cmd.Texture = GetCurrentTexture();
 
             System.Diagnostics.Debug.Assert(draw_cmd.ClipRect.x <= draw_cmd.ClipRect.z && draw_cmd.ClipRect.y <= draw_cmd.ClipRect.w);
-            CmdBuffer.Add(draw_cmd);
+            CommandList.Add(draw_cmd);
         }
 
         public void UpdateClipRect(bool force = false)
@@ -895,8 +902,8 @@ namespace Prowl.Runtime.GUI.Graphics
 
             // Try to merge with previous command if it matches, else use current command
             UIDrawCmd? prev_cmd = GetPreviousDrawCmd();
-            if (prev_cmd.HasValue && prev_cmd.Value.ClipRect == curr_clip_rect && prev_cmd.Value.TextureId == GetCurrentTextureId())
-                CmdBuffer.Pop();
+            if (prev_cmd.HasValue && prev_cmd.Value.ClipRect == curr_clip_rect && prev_cmd.Value.Texture == GetCurrentTexture())
+                CommandList.Pop();
             else
             {
                 var value = curr_cmd.Value;
@@ -905,23 +912,38 @@ namespace Prowl.Runtime.GUI.Graphics
             }
         }
 
-        internal int _callCounter = 0;
-
         public void PrimReserve(int idx_count, int vtx_count)
         {
-            _callCounter++;
-
-            UIDrawCmd draw_cmd = CmdBuffer[CmdBuffer.Count - 1];
+            UIDrawCmd draw_cmd = CommandList[CommandList.Count - 1];
             draw_cmd.ElemCount += (uint)idx_count;
             SetCurrentDrawCmd(draw_cmd);
 
-            int vtx_buffer_size = VtxBuffer.Count;
-            VtxBuffer.Resize(vtx_buffer_size + vtx_count);
-            _VtxWritePtr = vtx_buffer_size;
+            int vtx_buffer_size = Vertices.Count;
+            Vertices.Resize(vtx_buffer_size + vtx_count);
+            VertexWritePos = vtx_buffer_size;
 
-            int idx_buffer_size = IdxBuffer.Count;
-            IdxBuffer.Resize(idx_buffer_size + idx_count);
-            _IdxWritePtr = idx_buffer_size;
+            int idx_buffer_size = Indices.Count;
+            Indices.Resize(idx_buffer_size + idx_count);
+            IndexWritePos = idx_buffer_size;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void AddVerts(UIVertex a, UIVertex b, UIVertex c, UIVertex d)
+        {
+            uint idx = (uint)CurrentVertexIndex;
+            Indices[IndexWritePos + 0] = idx; Indices[IndexWritePos + 1] = (uint)(idx + 1); Indices[IndexWritePos + 2] = (uint)(idx + 2);
+            Indices[IndexWritePos + 3] = idx; Indices[IndexWritePos + 4] = (uint)(idx + 2); Indices[IndexWritePos + 5] = (uint)(idx + 3);
+
+            Vertices[VertexWritePos + 0] = a;
+            Vertices[VertexWritePos + 1] = b;
+            Vertices[VertexWritePos + 2] = c;
+            Vertices[VertexWritePos + 3] = d;
+
+            VertexWritePos += 4;
+            CurrentVertexIndex += 4;
+            IndexWritePos += 6;
+
+            PrimitiveCount++;
         }
 
         // Axis aligned rectangle (composed of two triangles)
@@ -929,21 +951,15 @@ namespace Prowl.Runtime.GUI.Graphics
         {
             var b = new Vector2(c.x, a.y);
             var d = new Vector2(a.x, c.y);
-            //var uv = new Vector2(-1, -1);
-            Vector2 uv = Font.DefaultFont.TexUvWhitePixel;
-            //Vector2 b(c.x, a.y), d(a.x, c.y), uv(GImGui->FontTexUvWhitePixel);
-            uint idx = (uint)_VtxCurrentIdx;
-            IdxBuffer[_IdxWritePtr + 0] = idx; IdxBuffer[_IdxWritePtr + 1] = (uint)(idx + 1); IdxBuffer[_IdxWritePtr + 2] = (uint)(idx + 2);
-            IdxBuffer[_IdxWritePtr + 3] = idx; IdxBuffer[_IdxWritePtr + 4] = (uint)(idx + 2); IdxBuffer[_IdxWritePtr + 5] = (uint)(idx + 3);
-            VtxBuffer[_VtxWritePtr + 0] = new UIVertex() { pos = new(a, _primitiveCount), uv = uv, col = col };
-            VtxBuffer[_VtxWritePtr + 1] = new UIVertex() { pos = new(b, _primitiveCount), uv = uv, col = col };
-            VtxBuffer[_VtxWritePtr + 2] = new UIVertex() { pos = new(c, _primitiveCount), uv = uv, col = col };
-            VtxBuffer[_VtxWritePtr + 3] = new UIVertex() { pos = new(d, _primitiveCount), uv = uv, col = col };
-            _VtxWritePtr += 4;
-            _VtxCurrentIdx += 4;
-            _IdxWritePtr += 6;
 
-            _primitiveCount++;
+            Vector2 uv = Font.DefaultFont.TexUvWhitePixel;
+
+            AddVerts(
+                new UIVertex(new(a, PrimitiveCount), uv, col), 
+                new UIVertex(new(b, PrimitiveCount), uv, col), 
+                new UIVertex(new(c, PrimitiveCount), uv, col), 
+                new UIVertex(new(d, PrimitiveCount), uv, col)
+            );
         }
 
         public void PrimRectUV(Vector2 a, Vector2 c, Vector2 uv_a, Vector2 uv_c, Color32 col)
@@ -953,44 +969,30 @@ namespace Prowl.Runtime.GUI.Graphics
             var uv_b = new Vector2(uv_c.x, uv_a.y);
             var uv_d = new Vector2(uv_a.x, uv_c.y);
 
-            uint idx = (uint)_VtxCurrentIdx;
-            IdxBuffer[_IdxWritePtr + 0] = idx; IdxBuffer[_IdxWritePtr + 1] = (uint)(idx + 1); IdxBuffer[_IdxWritePtr + 2] = (uint)(idx + 2);
-            IdxBuffer[_IdxWritePtr + 3] = idx; IdxBuffer[_IdxWritePtr + 4] = (uint)(idx + 2); IdxBuffer[_IdxWritePtr + 5] = (uint)(idx + 3);
-            VtxBuffer[_VtxWritePtr + 0] = new UIVertex() { pos = new(a, _primitiveCount), uv = uv_a, col = col };
-            VtxBuffer[_VtxWritePtr + 1] = new UIVertex() { pos = new(b, _primitiveCount), uv = uv_b, col = col };
-            VtxBuffer[_VtxWritePtr + 2] = new UIVertex() { pos = new(c, _primitiveCount), uv = uv_c, col = col };
-            VtxBuffer[_VtxWritePtr + 3] = new UIVertex() { pos = new(d, _primitiveCount), uv = uv_d, col = col };
-
-            _VtxWritePtr += 4;
-            _VtxCurrentIdx += 4;
-            _IdxWritePtr += 6;
-
-            _primitiveCount++;
+            AddVerts(
+                new UIVertex(new(a, PrimitiveCount), uv_a, col),
+                new UIVertex(new(b, PrimitiveCount), uv_b, col),
+                new UIVertex(new(c, PrimitiveCount), uv_c, col),
+                new UIVertex(new(d, PrimitiveCount), uv_d, col)
+            );
         }
 
         public void PrimQuadUV(Vector2 a, Vector2 b, Vector2 c, Vector2 d, Vector2 uv_a, Vector2 uv_b, Vector2 uv_c, Vector2 uv_d, Color32 col)
         {
-            uint idx = (uint)_VtxCurrentIdx;
-            IdxBuffer[_IdxWritePtr + 0] = idx; IdxBuffer[_IdxWritePtr + 1] = (uint)(idx + 1); IdxBuffer[_IdxWritePtr + 2] = (uint)(idx + 2);
-            IdxBuffer[_IdxWritePtr + 3] = idx; IdxBuffer[_IdxWritePtr + 4] = (uint)(idx + 2); IdxBuffer[_IdxWritePtr + 5] = (uint)(idx + 3);
-            VtxBuffer[_VtxWritePtr + 0] = new UIVertex() { pos = new(a, _primitiveCount), uv = uv_a, col = col };
-            VtxBuffer[_VtxWritePtr + 1] = new UIVertex() { pos = new(b, _primitiveCount), uv = uv_b, col = col };
-            VtxBuffer[_VtxWritePtr + 2] = new UIVertex() { pos = new(c, _primitiveCount), uv = uv_c, col = col };
-            VtxBuffer[_VtxWritePtr + 3] = new UIVertex() { pos = new(d, _primitiveCount), uv = uv_d, col = col };
-
-            _VtxWritePtr += 4;
-            _VtxCurrentIdx += 4;
-            _IdxWritePtr += 6;
-
-            _primitiveCount++;
+            AddVerts(
+                new UIVertex(new(a, PrimitiveCount), uv_a, col),
+                new UIVertex(new(b, PrimitiveCount), uv_b, col),
+                new UIVertex(new(c, PrimitiveCount), uv_c, col),
+                new UIVertex(new(d, PrimitiveCount), uv_d, col)
+            );
         }
 
         public void UpdateTextureID()
         {
             // If current command is used with different settings we need to add a new command
-            Texture2D curr_texture_id = GetCurrentTextureId();
+            Texture2D curr_texture_id = GetCurrentTexture();
             UIDrawCmd? curr_cmd = GetCurrentDrawCmd();
-            if (!curr_cmd.HasValue || curr_cmd.Value.ElemCount != 0 && curr_cmd.Value.TextureId != curr_texture_id)
+            if (!curr_cmd.HasValue || curr_cmd.Value.ElemCount != 0 && curr_cmd.Value.Texture != curr_texture_id)
             {
                 AddDrawCmd();
                 return;
@@ -998,74 +1000,70 @@ namespace Prowl.Runtime.GUI.Graphics
 
             // Try to merge with previous command if it matches, else use current command
             UIDrawCmd? prev_cmd = GetPreviousDrawCmd();
-            if (prev_cmd.HasValue && prev_cmd.Value.TextureId == curr_texture_id && prev_cmd.Value.ClipRect == GetCurrentClipRect())
-                CmdBuffer.Pop();
+            if (prev_cmd.HasValue && prev_cmd.Value.Texture == curr_texture_id && prev_cmd.Value.ClipRect == GetCurrentClipRect())
+            {
+                CommandList.Pop();
+            }
             else
             {
                 var value = curr_cmd.Value;
-                value.TextureId = curr_texture_id;
+                value.Texture = curr_texture_id;
                 SetCurrentDrawCmd(value);
             }
         }
 
         public void ShadeVertsLinearColorGradient(int vertStartIdx, int vertEndIdx, Vector2 gradientP0, Vector2 gradientP1, Color32 col0, Color32 col1)
         {
-            var p0 = new System.Numerics.Vector3(gradientP0, _primitiveCount);
-            var p1 = new System.Numerics.Vector3(gradientP1, _primitiveCount);
+            var p0 = new System.Numerics.Vector3(gradientP0, PrimitiveCount);
+            var p1 = new System.Numerics.Vector3(gradientP1, PrimitiveCount);
             var gradientExtent = p1 - p0;
             float gradientInvLength2 = 1.0f / ImLengthSqr(gradientExtent);
 
-            unsafe
+            int colDeltaR = col1.r - col0.r;
+            int colDeltaG = col1.g - col0.g;
+            int colDeltaB = col1.b - col0.b;
+            int colDeltaA = col1.a - col0.a;
+
+            for (int idx = vertStartIdx; idx < vertEndIdx; idx++)
             {
-                int colDeltaR = col1.r - col0.r;
-                int colDeltaG = col1.g - col0.g;
-                int colDeltaB = col1.b - col0.b;
-                int colDeltaA = col1.a - col0.a;
+                var vert = Vertices[idx];
+                float d = ImDot(vert.Position - p0, gradientExtent);
+                float t = ImClamp(d * gradientInvLength2, 0.0f, 1.0f);
 
-                for (int idx = vertStartIdx; idx < vertEndIdx; idx++)
-                {
-                    var vert = VtxBuffer[idx];
-                    float d = ImDot(vert.pos - p0, gradientExtent);
-                    float t = ImClamp(d * gradientInvLength2, 0.0f, 1.0f);
+                byte r = (byte)(col0.r + colDeltaR * t);
+                byte g = (byte)(col0.g + colDeltaG * t);
+                byte b = (byte)(col0.b + colDeltaB * t);
+                byte a = (byte)(col0.a + colDeltaA * t);
 
-                    byte r = (byte)(col0.r + colDeltaR * t);
-                    byte g = (byte)(col0.g + colDeltaG * t);
-                    byte b = (byte)(col0.b + colDeltaB * t);
-                    byte a = (byte)(col0.a + colDeltaA * t);
-
-                    vert.col = new Color32(r, g, b, a);
-                    VtxBuffer[idx] = vert;
-                }
+                vert.Color = new Color32(r, g, b, a);
+                Vertices[idx] = vert;
             }
         }
 
         public void ShadeVertsLinearColorGradientKeepAlpha(int vertStartIdx, int vertEndIdx, Vector2 gradientP0, Vector2 gradientP1, Color32 col0, Color32 col1)
         {
-            var p0 = new System.Numerics.Vector3(gradientP0, _primitiveCount);
-            var p1 = new System.Numerics.Vector3(gradientP1, _primitiveCount);
+            var p0 = new System.Numerics.Vector3(gradientP0, PrimitiveCount);
+            var p1 = new System.Numerics.Vector3(gradientP1, PrimitiveCount);
             var gradientExtent = p1 - p0;
             float gradientInvLength2 = 1.0f / ImLengthSqr(gradientExtent);
 
-            unsafe
+            int colDeltaR = col1.r - col0.r;
+            int colDeltaG = col1.g - col0.g;
+            int colDeltaB = col1.b - col0.b;
+
+            for (int idx = vertStartIdx; idx < vertEndIdx; idx++)
             {
-                int colDeltaR = col1.r - col0.r;
-                int colDeltaG = col1.g - col0.g;
-                int colDeltaB = col1.b - col0.b;
+                var vert = Vertices[idx];
+                float d = ImDot(vert.Position - p0, gradientExtent);
+                float t = ImClamp(d * gradientInvLength2, 0.0f, 1.0f);
 
-                for (int idx = vertStartIdx; idx < vertEndIdx; idx++)
-                {
-                    var vert = VtxBuffer[idx];
-                    float d = ImDot(vert.pos - p0, gradientExtent);
-                    float t = ImClamp(d * gradientInvLength2, 0.0f, 1.0f);
+                byte r = (byte)(col0.r + colDeltaR * t);
+                byte g = (byte)(col0.g + colDeltaG * t);
+                byte b = (byte)(col0.b + colDeltaB * t);
+                byte a = vert.Color.a; // Keep the original alpha value
 
-                    byte r = (byte)(col0.r + colDeltaR * t);
-                    byte g = (byte)(col0.g + colDeltaG * t);
-                    byte b = (byte)(col0.b + colDeltaB * t);
-                    byte a = vert.col.a; // Keep the original alpha value
-
-                    vert.col = new Color32(r, g, b, a);
-                    VtxBuffer[idx] = vert;
-                }
+                vert.Color = new Color32(r, g, b, a);
+                Vertices[idx] = vert;
             }
         }
 
@@ -1095,8 +1093,8 @@ namespace Prowl.Runtime.GUI.Graphics
             const uint uintSize = sizeof(uint);
             const uint vertSize = (sizeof(float) * 5) + 4;
 
-            commandList.UpdateBuffer(DeviceIdxBuffer, indexOffset * uintSize, CollectionsMarshal.AsSpan(IdxBuffer));
-            commandList.UpdateBuffer(DeviceVtxBuffer, vertexOffset * vertSize, CollectionsMarshal.AsSpan(VtxBuffer));
+            commandList.UpdateBuffer(DeviceIdxBuffer, indexOffset * uintSize, CollectionsMarshal.AsSpan(Indices));
+            commandList.UpdateBuffer(DeviceVtxBuffer, vertexOffset * vertSize, CollectionsMarshal.AsSpan(Vertices));
 
             commandList.SetIndexBuffer(DeviceIdxBuffer, IndexFormat.UInt32, indexOffset * uintSize);
             commandList.SetVertexBuffer(0, DeviceVtxBuffer, vertexOffset * vertSize);
@@ -1111,50 +1109,51 @@ namespace Prowl.Runtime.GUI.Graphics
 
             SetupRenderState(commandBuffer, DisplaySize);
 
-            const uint vertSize = (sizeof(float) * 5) + 4;
-
-            uint vertexBufferSize = (uint)(lists.Sum(x => x.VtxBuffer.Count) * vertSize);
-            if (DeviceVtxBuffer == null || vertexBufferSize > DeviceVtxBuffer.SizeInBytes)
-            {
-                DeviceVtxBuffer?.Dispose();
-                DeviceVtxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription((uint)(vertexBufferSize * 1.5f), BufferUsage.VertexBuffer | BufferUsage.Dynamic));
-                DeviceVtxBuffer.Name = $"Draw List Vertex Buffer";
-            }
-
-            uint indexBufferSize = (uint)(lists.Sum(x => x.IdxBuffer.Count) * sizeof(uint));
-            if (DeviceIdxBuffer == null || indexBufferSize > DeviceIdxBuffer.SizeInBytes)
-            {
-                DeviceIdxBuffer?.Dispose();
-                DeviceIdxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription((uint)(indexBufferSize * 1.5f), BufferUsage.IndexBuffer | BufferUsage.Dynamic));
-                DeviceIdxBuffer.Name = $"Draw List Index Buffer";
-            }
-
-            uint vertexOffsetInVertices = 0;
-            uint indexOffsetInElements = 0;
+            uint vertexCount = 0;
+            uint indexCount = 0;
             for (int i = 0; i < lists.Length; i++)
             {
                 var cmdListPtr = lists[i];
 
-                cmdListPtr.vertexOffset = vertexOffsetInVertices;
-                cmdListPtr.indexOffset = indexOffsetInElements;
+                cmdListPtr.vertexOffset = vertexCount;
+                cmdListPtr.indexOffset = indexCount;
 
-                vertexOffsetInVertices += (uint)cmdListPtr.VtxBuffer.Count;
-                indexOffsetInElements += (uint)cmdListPtr.IdxBuffer.Count;
+                vertexCount += (uint)cmdListPtr.Vertices.Count;
+                indexCount += (uint)cmdListPtr.Indices.Count;
+            }
+
+            // Reserve buffers
+            {
+                uint vertexBufferSize = (uint)(vertexCount * (sizeof(float) * 5) + 4);
+                if (DeviceVtxBuffer == null || vertexBufferSize > DeviceVtxBuffer.SizeInBytes)
+                {
+                    DeviceVtxBuffer?.Dispose();
+                    DeviceVtxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription((uint)(vertexBufferSize * 1.5f), BufferUsage.VertexBuffer | BufferUsage.Dynamic));
+                    DeviceVtxBuffer.Name = $"Draw List Vertex Buffer";
+                }
+
+                uint indexBufferSize = (uint)(indexCount * sizeof(uint));
+                if (DeviceIdxBuffer == null || indexBufferSize > DeviceIdxBuffer.SizeInBytes)
+                {
+                    DeviceIdxBuffer?.Dispose();
+                    DeviceIdxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription((uint)(indexBufferSize * 1.5f), BufferUsage.IndexBuffer | BufferUsage.Dynamic));
+                    DeviceIdxBuffer.Name = $"Draw List Index Buffer";
+                }
             }
 
             for (int n = 0; n < lists.Length; n++)
             {
                 var cmdListPtr = lists[n];
 
-                if (cmdListPtr.VtxBuffer.Count == 0)
+                if (cmdListPtr.Vertices.Count == 0)
                     continue;
 
                 commandBuffer.SetDrawData(cmdListPtr, null);
 
                 var idxoffset = 0;
-                for (int cmd_i = 0; cmd_i < cmdListPtr.CmdBuffer.Count; cmd_i++)
+                for (int cmd_i = 0; cmd_i < cmdListPtr.CommandList.Count; cmd_i++)
                 {
-                    var cmdPtr = cmdListPtr.CmdBuffer[cmd_i];
+                    var cmdPtr = cmdListPtr.CommandList[cmd_i];
 
                     Vector4 clipRect = cmdPtr.ClipRect;
 
@@ -1162,7 +1161,7 @@ namespace Prowl.Runtime.GUI.Graphics
                     {
                         // Apply scissor/clipping rectangle
                         commandBuffer.SetScissorRects((int)clipRect.x, (int)clipRect.y, (int)(clipRect.z - clipRect.x), (int)(clipRect.w - clipRect.y));
-                        commandBuffer.SetTexture("MainTexture", cmdPtr.TextureId);
+                        commandBuffer.SetTexture("MainTexture", cmdPtr.Texture);
 
                         commandBuffer.UploadResourceSet(1);
                         commandBuffer.ManualDraw((uint)cmdPtr.ElemCount, (uint)idxoffset, 1, 0, 0);
@@ -1202,26 +1201,27 @@ namespace Prowl.Runtime.GUI.Graphics
             if (UIPass != null && UIVariant != null)
                 return;
 
-            ShaderPassDescription description = new();
+            ShaderPassDescription description = new()
+            {
+                DepthStencilState = new DepthStencilStateDescription(false, false, ComparisonKind.Always),
+                CullingMode = FaceCullMode.None,
+                BlendState = BlendStateDescription.SingleAlphaBlend,
 
-            description.DepthStencilState = new DepthStencilStateDescription(false, false, ComparisonKind.Always);
-            description.CullingMode = FaceCullMode.None;
-            description.BlendState = BlendStateDescription.SingleAlphaBlend;
-
-            description.ShaderSources = 
-            [
-                new()
-                {
-                    Stage = ShaderStages.Vertex,
-                    SourceCode = "gui-vertex"
-                },
-
-                new()
-                {
-                    Stage = ShaderStages.Fragment,
-                    SourceCode = "gui-frag"
-                }
-            ];
+                ShaderSources =
+                [
+                    new()
+                    {
+                        Stage = ShaderStages.Vertex,
+                        SourceCode = "gui-vertex"
+                    },
+    
+                    new()
+                    {
+                        Stage = ShaderStages.Fragment,
+                        SourceCode = "gui-frag"
+                    }
+                ]
+            };
 
             ShaderPass pass = new ShaderPass("UI Pass", description);
 
