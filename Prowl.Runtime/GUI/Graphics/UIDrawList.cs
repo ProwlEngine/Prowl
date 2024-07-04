@@ -8,6 +8,7 @@ using Veldrid;
 using Prowl.Runtime.Utils;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Collections.Immutable;
 
 namespace Prowl.Runtime.GUI.Graphics
 {
@@ -1083,21 +1084,27 @@ namespace Prowl.Runtime.GUI.Graphics
         }
   
         private static DeviceBuffer DeviceIdxBuffer;
-        private static DeviceBuffer DeviceVtxBuffer;   
+        private static DeviceBuffer DeviceVtxBuffer;  
 
-        private uint vertexOffset;
-        private uint indexOffset;
+        public static void DisposeBuffers()
+        {
+            DeviceIdxBuffer?.Dispose();
+            DeviceVtxBuffer?.Dispose();
+        } 
+
+        const uint uintSize = sizeof(uint);
+        const uint vertSize = (sizeof(float) * 5) + 4;
 
         public void SetDrawData(CommandList commandList, VertexLayoutDescription[] vertexLayout)
         {
-            const uint uintSize = sizeof(uint);
-            const uint vertSize = (sizeof(float) * 5) + 4;
+            Span<UIVertex> verticesSpan = CollectionsMarshal.AsSpan(Vertices);
+            Span<uint> indicesSpan = CollectionsMarshal.AsSpan(Indices);
 
-            commandList.UpdateBuffer(DeviceIdxBuffer, indexOffset * uintSize, CollectionsMarshal.AsSpan(Indices));
-            commandList.UpdateBuffer(DeviceVtxBuffer, vertexOffset * vertSize, CollectionsMarshal.AsSpan(Vertices));
+            commandList.UpdateBuffer(DeviceIdxBuffer, 0, verticesSpan);
+            commandList.UpdateBuffer(DeviceVtxBuffer, 0, indicesSpan);
 
-            commandList.SetIndexBuffer(DeviceIdxBuffer, IndexFormat.UInt32, indexOffset * uintSize);
-            commandList.SetVertexBuffer(0, DeviceVtxBuffer, vertexOffset * vertSize);
+            commandList.SetIndexBuffer(DeviceIdxBuffer, IndexFormat.UInt32);
+            commandList.SetVertexBuffer(0, DeviceVtxBuffer);
         }
 
         public static void Draw(CommandBuffer commandBuffer, Vector2 DisplaySize, UIDrawList[] lists)
@@ -1109,36 +1116,30 @@ namespace Prowl.Runtime.GUI.Graphics
 
             SetupRenderState(commandBuffer, DisplaySize);
 
-            uint vertexCount = 0;
-            uint indexCount = 0;
+            uint maxVertexCount = 0;
+            uint maxIndexCount = 0;
             for (int i = 0; i < lists.Length; i++)
             {
                 var cmdListPtr = lists[i];
 
-                cmdListPtr.vertexOffset = vertexCount;
-                cmdListPtr.indexOffset = indexCount;
-
-                vertexCount += (uint)cmdListPtr.Vertices.Count;
-                indexCount += (uint)cmdListPtr.Indices.Count;
+                maxVertexCount = Math.Max(maxVertexCount, (uint)cmdListPtr.Vertices.Count);
+                maxIndexCount = Math.Max(maxIndexCount, (uint)cmdListPtr.Indices.Count);
             }
 
-            // Reserve buffers
+            uint vertexBufferSize = (uint)(maxVertexCount * vertSize);
+            if (DeviceVtxBuffer == null || vertexBufferSize > DeviceVtxBuffer.SizeInBytes)
             {
-                uint vertexBufferSize = (uint)(vertexCount * (sizeof(float) * 5) + 4);
-                if (DeviceVtxBuffer == null || vertexBufferSize > DeviceVtxBuffer.SizeInBytes)
-                {
-                    DeviceVtxBuffer?.Dispose();
-                    DeviceVtxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription((uint)(vertexBufferSize * 1.5f), BufferUsage.VertexBuffer | BufferUsage.Dynamic));
-                    DeviceVtxBuffer.Name = $"Draw List Vertex Buffer";
-                }
+                DeviceVtxBuffer?.Dispose();
+                DeviceVtxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription(Math.Max(vertexBufferSize, 10000), BufferUsage.VertexBuffer | BufferUsage.Dynamic));
+                DeviceVtxBuffer.Name = $"Draw List Vertex Buffer";
+            }
 
-                uint indexBufferSize = (uint)(indexCount * sizeof(uint));
-                if (DeviceIdxBuffer == null || indexBufferSize > DeviceIdxBuffer.SizeInBytes)
-                {
-                    DeviceIdxBuffer?.Dispose();
-                    DeviceIdxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription((uint)(indexBufferSize * 1.5f), BufferUsage.IndexBuffer | BufferUsage.Dynamic));
-                    DeviceIdxBuffer.Name = $"Draw List Index Buffer";
-                }
+            uint indexBufferSize = (uint)(maxIndexCount * uintSize);
+            if (DeviceIdxBuffer == null || indexBufferSize > DeviceIdxBuffer.SizeInBytes)
+            {
+                DeviceIdxBuffer?.Dispose();
+                DeviceIdxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription(Math.Max(indexBufferSize, 10000), BufferUsage.IndexBuffer | BufferUsage.Dynamic));
+                DeviceIdxBuffer.Name = $"Draw List Index Buffer";
             }
 
             for (int n = 0; n < lists.Length; n++)
@@ -1206,26 +1207,24 @@ namespace Prowl.Runtime.GUI.Graphics
                 DepthStencilState = new DepthStencilStateDescription(false, false, ComparisonKind.Always),
                 CullingMode = FaceCullMode.None,
                 BlendState = BlendStateDescription.SingleAlphaBlend,
-
-                ShaderSources =
-                [
-                    new()
-                    {
-                        Stage = ShaderStages.Vertex,
-                        SourceCode = "gui-vertex"
-                    },
-    
-                    new()
-                    {
-                        Stage = ShaderStages.Fragment,
-                        SourceCode = "gui-frag"
-                    }
-                ]
             };
 
-            ShaderPass pass = new ShaderPass("UI Pass", description);
+            ShaderSource[] sources = 
+            [
+                new()
+                {
+                    Stage = ShaderStages.Vertex,
+                    SourceCode = "gui-vertex"
+                },
 
-            pass.CompilePrograms(new EmbeddedVariantCompiler() {
+                new()
+                {
+                    Stage = ShaderStages.Fragment,
+                    SourceCode = "gui-frag"
+                }
+            ];
+
+            var compiler = new EmbeddedVariantCompiler() {
                 Inputs = [ 
                     new VertexLayoutDescription(
                         new VertexElementDescription("Position", VertexElementFormat.Float3, VertexElementSemantic.Position),
@@ -1244,10 +1243,12 @@ namespace Prowl.Runtime.GUI.Graphics
                         new TextureResource("MainTexture", false, ShaderStages.Fragment)
                     ]
                 ]
-            });
+            };
+
+            ShaderPass pass = new ShaderPass("UI Pass", sources, description, compiler);
 
             UIPass = pass;
-            UIVariant = pass.GetVariant(KeyGroup<string, string>.Default);
+            UIVariant = pass.GetVariant(KeywordState.Default);
         }
 
         private class EmbeddedVariantCompiler : IVariantCompiler
@@ -1255,28 +1256,24 @@ namespace Prowl.Runtime.GUI.Graphics
             public VertexLayoutDescription[] Inputs;
             public ShaderResource[][] Resources;
 
-            public ShaderVariant CompileVariant(ShaderSource[] sources, KeyGroup<string, string> keywords)
+            public ShaderVariant CompileVariant(ShaderSource[] sources, KeywordState keywords)
             {
                 byte[] vertexShaderBytes = LoadEmbeddedShaderCode(sources[0].SourceCode);
                 byte[] fragmentShaderBytes = LoadEmbeddedShaderCode(sources[1].SourceCode);
 
-                Veldrid.Shader vertex = Runtime.Graphics.Factory.CreateShader(new ShaderDescription(
+                var vertex = new ShaderDescription(
                     ShaderStages.Vertex, 
                     vertexShaderBytes, 
                     Runtime.Graphics.Device.BackendType == GraphicsBackend.Vulkan ? "main" : "VS"
-                ));
+                );
 
-                vertex.Name = "Gui Vertex Shader";
-
-                Veldrid.Shader fragment = Runtime.Graphics.Factory.CreateShader(new ShaderDescription(
+                var fragment = new ShaderDescription(
                     ShaderStages.Fragment, 
                     fragmentShaderBytes, 
                     Runtime.Graphics.Device.BackendType == GraphicsBackend.Vulkan ? "main" : "FS"
-                ));
+                );
 
-                fragment.Name = "Gui Fragment Shader";
-
-                return new(keywords, [ vertex, fragment ], Inputs, Resources);
+                return new(keywords, [ (Runtime.Graphics.Device.BackendType, [ vertex, fragment ]) ], Inputs, Resources);
             }
         }
 

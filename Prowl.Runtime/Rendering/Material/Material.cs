@@ -4,20 +4,20 @@ namespace Prowl.Runtime
 {
     public sealed class Material : EngineObject
     {
-        public Utils.KeyGroup<string, string> LocalKeywords;
+        public KeywordState LocalKeywords;
         public AssetRef<Shader> Shader;
         public PropertyState Properties;
 
         internal Material() : base("New Material") { }
 
-        public Material(AssetRef<Shader> shader, PropertyState? properties = null, Utils.KeyGroup<string, string>? keywords = null) : base("New Material")
+        public Material(AssetRef<Shader> shader, PropertyState? properties = null, KeywordState? keywords = null) : base("New Material")
         {
             if (shader.Res == null) 
                 throw new ArgumentNullException(nameof(shader));
             
             Shader = shader;
             Properties = properties ?? new();
-            LocalKeywords = keywords ?? Utils.KeyGroup<string, string>.Default;
+            LocalKeywords = keywords ?? KeywordState.Default;
         }
 
         public void SetKeyword(string keyword, string value) => LocalKeywords.SetKey(keyword, value);

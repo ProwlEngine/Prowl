@@ -20,6 +20,9 @@ namespace Prowl.Runtime.RenderPipelines
 
         public void Execute()
         {
+            if (internalCommandList.Count == 0)
+                return;
+
             CommandList commandList = Graphics.GetCommandList();
 
             RenderState state = new RenderState();

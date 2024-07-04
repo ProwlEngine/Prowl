@@ -4,6 +4,8 @@ using Prowl.Runtime.Utils;
 using System.Text.RegularExpressions;
 using Veldrid;
 using Veldrid.SPIRV;
+using System.Reflection;
+
 
 using static System.Text.Encoding;
 
@@ -40,21 +42,20 @@ namespace Prowl.Editor.Assets
                 ShaderPassDescription passDesc = new();
 
                 passDesc.Tags = parsedPass.Tags;
-                passDesc.ShaderSources = parsedPass.Programs.ToArray();
-                passDesc.BlendState = new BlendStateDescription(RgbaFloat.White, parsedPass.Blend.Value);
+                passDesc.BlendState = new BlendStateDescription(RgbaFloat.White, parsedPass.Blend ?? BlendAttachmentDescription.OverrideBlend);
                 passDesc.CullingMode = parsedPass.Cull;
                 passDesc.DepthClipEnabled = true;
                 passDesc.Keywords = parsedPass.Keywords;
-                passDesc.DepthStencilState = parsedPass.Stencil.Value;
+                passDesc.DepthStencilState = parsedPass.Stencil ?? DepthStencilStateDescription.DepthOnlyLessEqual;
 
-                ShaderPass pass = new ShaderPass(parsedPass.Name, passDesc);
-
-                pass.CompilePrograms(new ImporterVariantCompiler()
+                var compiler = new ImporterVariantCompiler()
                 {   
-                    Inputs = parsedPass.Inputs.Inputs,
-                    Resources = parsedPass.Inputs.Resources.ToArray(),
+                    Inputs = parsedPass.Inputs?.Inputs ?? [],
+                    Resources = parsedPass.Inputs?.Resources.ToArray() ?? [ [ ] ],
                     Global = parsed.Global
-                });
+                };
+
+                ShaderPass pass = new ShaderPass(parsedPass.Name, parsedPass.Programs.ToArray(), passDesc, compiler);
 
                 passes.Add(pass);
             }
@@ -68,7 +69,7 @@ namespace Prowl.Editor.Assets
             public ShaderResource[][] Resources;
             public ParsedGlobalState Global;
 
-            public ShaderVariant CompileVariant(ShaderSource[] sources, KeyGroup<string, string> keywords)
+            public ShaderVariant CompileVariant(ShaderSource[] sources, KeywordState keywords)
             {
                 if (Global != null)
                     sources[0].SourceCode = sources[0].SourceCode.Insert(0, Global?.GlobalInclude);
@@ -76,16 +77,19 @@ namespace Prowl.Editor.Assets
                 if (Global != null)
                     sources[1].SourceCode = sources[1].SourceCode.Insert(0, Global?.GlobalInclude);
 
+                ShaderDescription[] shaderDescriptions = CreateVertexFragment(sources[0].SourceCode, sources[1].SourceCode);
+
                 ShaderVariant variant = new ShaderVariant(
                     keywords, 
-                    CreateVertexFragment(sources[0].SourceCode, sources[1].SourceCode),
-                    Inputs.Select(x => Mesh.VertexLayoutForResource(x)).ToArray(),
-                    Resources);
+                    [ (Graphics.Device.BackendType, shaderDescriptions) ],
+                    Inputs.Select(Mesh.VertexLayoutForResource).ToArray(),
+                    Resources
+                );
 
                 return variant;
             }
 
-            public static Veldrid.Shader[] CreateVertexFragment(string vert, string frag)
+            public static ShaderDescription[] CreateVertexFragment(string vert, string frag)
             {
                 vert = vert.Insert(0, "#version 450\n");
                 frag = frag.Insert(0, "#version 450\n");
@@ -109,7 +113,7 @@ namespace Prowl.Editor.Assets
                     "main"
                 );
 
-                return Graphics.Factory.CreateFromSpirv(vertexShaderDesc, fragmentShaderDesc, options);
+                return SPIRVCompiler.CreateFromSpirv(vertexShaderDesc, vert, fragmentShaderDesc, frag, options);
             }
         }
 

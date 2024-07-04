@@ -77,6 +77,14 @@ namespace Prowl.Runtime
             ActivePipeline.Render(context, cameras);
         }
 
+        public static void Render(Camera[] cameras, RenderingContext context)
+        {
+            if (ActivePipeline == null)
+                return;
+
+            ActivePipeline.Render(context, cameras);
+        }
+
         public static void EndFrame()
         {   
             Device.SwapBuffers();
@@ -181,7 +189,7 @@ namespace Prowl.Runtime
             Device.Dispose();
 
             PipelineCache.Dispose();
-            ShaderCache.Dispose();
+            GUI.Graphics.UIDrawList.DisposeBuffers();
         }
     }
 }

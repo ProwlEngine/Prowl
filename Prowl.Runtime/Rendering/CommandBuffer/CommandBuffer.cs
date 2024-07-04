@@ -267,6 +267,24 @@ namespace Prowl.Runtime
             });
         }
 
+        public void SetVector(string name, Vector3 value)
+        {
+            buffer.Add(new SetPropertyCommand()
+            {
+                Name = name,
+                Value = new(value.x, value.y, value.z, 0)
+            });
+        }
+
+        public void SetVector(string name, Vector2 value)
+        {
+            buffer.Add(new SetPropertyCommand()
+            {
+                Name = name,
+                Value = new(value.x, value.y, 0, 0)
+            });
+        }
+
         public void SetColor(string name, Color color)
         {
             buffer.Add(new SetPropertyCommand()

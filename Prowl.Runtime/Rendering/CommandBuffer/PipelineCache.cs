@@ -46,8 +46,27 @@ namespace Prowl.Runtime
     public static class PipelineCache    
     {
         private static Dictionary<PassPipelineDescription, Pipeline> pipelineCache = new();
+        private static Dictionary<ShaderDescription, Veldrid.Shader> shaderCache = new();
         private static Dictionary<Pipeline, GraphicsPipelineDescription> pipelineInfo = new();
 
+
+        private static Veldrid.Shader[] CreateShaders(ShaderDescription[] sources)
+        {
+            Veldrid.Shader[] shaders = new Veldrid.Shader[sources.Length];
+
+            for (int i = 0; i < shaders.Length; i++)
+            {
+                if (!shaderCache.TryGetValue(sources[i], out Veldrid.Shader value))
+                {
+                    value = Graphics.Factory.CreateShader(sources[i]);
+                    shaderCache.Add(sources[i], value);
+                }
+                
+                shaders[i] = value;
+            }
+
+            return shaders;
+        }
 
         private static Pipeline CreatePipeline(in PassPipelineDescription passDesc, out GraphicsPipelineDescription description)
         {
@@ -83,7 +102,7 @@ namespace Prowl.Runtime
 
                 ShaderSet = new ShaderSetDescription(
                     vertexLayouts: passDesc.variant.VertexInputs,
-                    shaders: passDesc.variant.CompiledPrograms,
+                    shaders: CreateShaders(passDesc.variant.GetProgramsForBackend()),
                     Graphics.GetSpecializations()
                 ),
 
@@ -110,14 +129,14 @@ namespace Prowl.Runtime
 
         public static Pipeline GetPipelineForPass(
             ShaderPass pass, 
-            Utils.KeyGroup<string, string>? keywords = null,
+            KeywordState? keywords = null,
             PolygonFillMode fillMode = PolygonFillMode.Solid,
             FrontFace frontFace = FrontFace.Clockwise,
             PrimitiveTopology topology = PrimitiveTopology.TriangleList,
             bool scissorTest = false,
             OutputDescription? pipelineOutput = null)
         {
-            keywords ??= Utils.KeyGroup<string, string>.Default;
+            keywords ??= KeywordState.Default;
 
             PassPipelineDescription description = new()
             {
@@ -139,9 +158,7 @@ namespace Prowl.Runtime
         internal static void Dispose()
         {
             foreach (var pipeline in pipelineCache.Values)
-            {
                 pipeline.Dispose();
-            }
 
             foreach (var description in pipelineInfo.Values)
             {
@@ -151,7 +168,12 @@ namespace Prowl.Runtime
                 }
             }
 
+            foreach (var shader in shaderCache.Values)
+                shader.Dispose();
+
             pipelineCache.Clear();
+            pipelineInfo.Clear();
+            shaderCache.Clear();
         }
     }
 }

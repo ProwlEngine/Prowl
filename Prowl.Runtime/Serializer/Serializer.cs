@@ -337,7 +337,7 @@ namespace Prowl.Runtime
         }
 
         public static object DeserializeInto(SerializedProperty tag, object into) => DeserializeInto(tag, into, new SerializationContext());
-        private static object DeserializeInto(SerializedProperty tag, object into, SerializationContext ctx)
+        public static object DeserializeInto(SerializedProperty tag, object into, SerializationContext ctx)
         {
             if (into is ISerializable serializable)
             {

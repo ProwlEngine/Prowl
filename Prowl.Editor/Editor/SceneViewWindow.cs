@@ -3,6 +3,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Widgets.Gizmo;
+using Prowl.Runtime.RenderPipelines;
 using Prowl.Runtime.SceneManagement;
 
 namespace Prowl.Editor;
@@ -58,8 +59,11 @@ public class SceneViewWindow : EditorWindow
             [ Veldrid.PixelFormat.R8_G8_B8_A8_UNorm ], 
             Veldrid.PixelFormat.R16_UNorm, 
             true);
+    }
 
-        Cam.Target = RenderTarget;
+    private void DrawScene()
+    {
+
     }
 
     protected override void Draw()
@@ -73,7 +77,8 @@ public class SceneViewWindow : EditorWindow
             fpsTimer = 0;
         }
 
-        if (!Project.HasProject) return;
+        if (!Project.HasProject)
+            return;
 
         gui.CurrentNode.Padding(5);
 
@@ -83,13 +88,21 @@ public class SceneViewWindow : EditorWindow
         if (RenderTarget == null || (int)renderSize.x != RenderTarget.Width || (int)renderSize.y != RenderTarget.Height)
             RefreshRenderTexture((int)renderSize.x, (int)renderSize.y);
 
+        var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Transform.position, Cam.GameObject.Transform.forward, Cam.GameObject.Transform.up);
+        var projection = Cam.GetProjectionMatrix((float)renderSize.x, (float)renderSize.y);
+
         WindowCenter = gui.CurrentNode.LayoutData.Rect.Center;
 
         // Manually Render to the RenderTexture
         Cam.NearClip = SceneViewPreferences.Instance.NearClip;
         Cam.FarClip = SceneViewPreferences.Instance.FarClip;
 
-        Graphics.Render([ Cam ], RenderTarget.Framebuffer);
+        //RenderingContext context = new()
+        //{
+        //    TargetFramebuffer = RenderTarget.Framebuffer
+        //};
+
+        //Graphics.Render([ Cam ], context);
 
         #warning Veldrid change
         // SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
@@ -103,6 +116,7 @@ public class SceneViewWindow : EditorWindow
 #warning TODO: Camera rendering clears Gizmos untill the rendering overhaul, so gizmos will Flicker here
         Camera.Current = Cam;
         foreach (var activeGO in SceneManager.AllGameObjects)
+        {
             if (activeGO.enabledInHierarchy)
             {
                 if (activeGO.hideFlags.HasFlag(HideFlags.NoGizmos)) continue;
@@ -114,30 +128,42 @@ public class SceneViewWindow : EditorWindow
                         component.DrawGizmosSelected();
                 }
             }
-
-        var selectedWeaks = HierarchyWindow.SelectHandler.Selected;
-        var selectedGOs = new List<GameObject>();
-        foreach (var weak in selectedWeaks)
-            if (weak.Target is GameObject go)
-                selectedGOs.Add(go);
+        }
 
         if (SceneViewPreferences.Instance.GridType != GridType.None)
         {
             #warning Veldrid change
 
             /*
-            gridMat ??= new Material(Shader.Find("Defaults/Grid.shader"));
-            gridMat.SetTexture("gPositionRoughness", Cam.gBuffer.PositionRoughness);
-            gridMat.SetKeyword("GRID_XZ", SceneViewPreferences.Instance.GridType == GridType.XZ);
-            gridMat.SetKeyword("GRID_XY", SceneViewPreferences.Instance.GridType == GridType.XY);
-            gridMat.SetKeyword("GRID_YZ", SceneViewPreferences.Instance.GridType == GridType.YZ);
+            CommandBuffer buffer = CommandBufferPool.Get("Scene View Buffer");
 
-            Graphics.Blit(RenderTarget, gridMat, 0, false);
+            gridMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Grid.shader"));
+
+            Matrix4x4.Invert(view * projection, out Matrix4x4 result);
+
+            buffer.SetMatrix("MvpInverse", result);
+            buffer.SetVector("ScreenResolution", new Vector2(RenderTarget.Width, RenderTarget.Height));
+            buffer.SetVector("CameraPosition", Cam.Transform.position);
+            buffer.SetVector("LineWidth", Cam.Transform.position);
+            buffer.SetVector("PrimaryGridSize", Cam.Transform.position);
+            buffer.SetVector("SecondaryGridSize", Cam.Transform.position);
+
+            buffer.SetMaterial(gridMat);
+            buffer.DrawSingle(Mesh.GetFullscreenQuad());
+            
+            context.Submit(buffer);
+
+            CommandBufferPool.Release(buffer);
             */
         }
 
-        var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Transform.position, Cam.GameObject.Transform.forward, Cam.GameObject.Transform.up);
-        var projection = Cam.GetProjectionMatrix((float)renderSize.x, (float)renderSize.y);
+        //context.Execute();
+
+        var selectedWeaks = HierarchyWindow.SelectHandler.Selected;
+        var selectedGOs = new List<GameObject>();
+        foreach (var weak in selectedWeaks)
+            if (weak.Target is GameObject go)
+                selectedGOs.Add(go);
 
         Ray mouseRay = Cam.ScreenPointToRay(gui.PointerPos - imagePos, new Vector2(RenderTarget.Width, RenderTarget.Height));
 
@@ -171,7 +197,6 @@ public class SceneViewWindow : EditorWindow
             }
             Cam.projectionType = isOrtho ? Camera.ProjectionType.Orthographic : Camera.ProjectionType.Perspective;
         }
-
 
         mouseUV = (gui.PointerPos - imagePos) / imageSize;
         // Flip Y

@@ -378,9 +378,14 @@ namespace Prowl.Editor.ShaderParser
         private ParsedPass ParsePass()
         {
             var pass = new ParsedPass();
-            ExpectToken(TokenType.Identifier);
-            pass.Name = _tokenizer.ParseQuotedStringValue();
-            ExpectToken(TokenType.OpenBrace);
+
+            if (_tokenizer.MoveNext() && _tokenizer.TokenType == TokenType.Identifier)
+            {
+                pass.Name = _tokenizer.ParseQuotedStringValue();
+                ExpectToken(TokenType.OpenBrace);
+            }
+            else if (_tokenizer.TokenType != TokenType.OpenBrace)
+                throw new InvalidOperationException($"Expected {TokenType.OpenBrace}, but got {_tokenizer.TokenType}");
 
             pass.Cull = shader.Global?.Cull ?? FaceCullMode.Back;
 
@@ -505,9 +510,9 @@ namespace Prowl.Editor.ShaderParser
             return new BufferResource("Buffer", ShaderStages.Vertex | ShaderStages.Fragment, resources.ToArray());
         }
         
-        private Dictionary<string, ImmutableHashSet<string>> ParseKeywords()
+        private Dictionary<string, HashSet<string>> ParseKeywords()
         {
-            var dict = new Dictionary<string, ImmutableHashSet<string>>();
+            var dict = new Dictionary<string, HashSet<string>>();
 
             ExpectToken(TokenType.OpenBrace);
 
@@ -515,14 +520,14 @@ namespace Prowl.Editor.ShaderParser
             {
                 string name = _tokenizer.Token.ToString();
 
-                List<string> values = new();
+                HashSet<string> values = new();
 
                 ExpectToken(TokenType.OpenSquareBrace);
 
                 while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseSquareBrace)
                     values.Add(_tokenizer.Token.ToString());
 
-                dict.Add(name, ImmutableHashSet.CreateRange(values));
+                dict.Add(name, values);
             }
 
             return dict;
@@ -534,15 +539,13 @@ namespace Prowl.Editor.ShaderParser
             ExpectToken(TokenType.Identifier);
             program.Stage = Enum.Parse<ShaderStages>(_tokenizer.Token.ToString(), true);
 
-            StringBuilder builder = new();
+            int startPos = _tokenizer.InputPosition;
+            int endPos = startPos;
 
             while (_tokenizer.MoveNext() && _tokenizer.Token.ToString() != "ENDPROGRAM")
-            {
-                builder.Append(_tokenizer.Token);
-                builder.Append(' ');
-            }
+                endPos = _tokenizer.InputPosition;
 
-            program.SourceCode = builder.ToString();
+            program.SourceCode = _tokenizer.Input.Slice(startPos, endPos - startPos).ToString();
 
             return program;
         }

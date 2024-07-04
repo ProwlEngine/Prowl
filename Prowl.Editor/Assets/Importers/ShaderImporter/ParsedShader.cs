@@ -38,8 +38,8 @@ namespace Prowl.Editor.ShaderParser
         public DepthStencilStateDescription? Stencil { get; set; } = null;
         public FaceCullMode Cull { get; set; }
 
-        public ParsedInputs Inputs { get; set; }
-        public Dictionary<string, ImmutableHashSet<string>> Keywords { get; set; } = new Dictionary<string, ImmutableHashSet<string>>();
+        public ParsedInputs? Inputs { get; set; } = null;
+        public Dictionary<string, HashSet<string>> Keywords { get; set; } = new Dictionary<string, HashSet<string>>();
         public List<Runtime.ShaderSource> Programs { get; set; } = new List<Runtime.ShaderSource>();
     }
 }

@@ -24,16 +24,21 @@ namespace Prowl.Runtime
         public ShaderPropertyType PropertyType; 
     }
 
-    public sealed class Shader : EngineObject, ISerializable
+    public sealed class Shader : EngineObject, ISerializationCallbackReceiver
     {
-        private readonly ShaderProperty[] properties;
+        [SerializeField, HideInInspector]
+        private ShaderProperty[] properties;
         public IEnumerable<ShaderProperty> Properties => properties;
 
-        private readonly ShaderPass[] passes;
+
+        [SerializeField, HideInInspector]
+        private ShaderPass[] passes;
         public IEnumerable<ShaderPass> Passes => passes;
         
+
         private readonly Dictionary<string, int> nameIndexLookup = new();
         private readonly Dictionary<string, List<int>> tagIndexLookup = new(); 
+
 
         internal Shader() : base("New Shader") { }
 
@@ -42,10 +47,7 @@ namespace Prowl.Runtime
             this.properties = properties;
             this.passes = passes;
 
-            for (int i = 0; i < passes.Length; i++)
-                RegisterPass(passes[i], i);
-
-            ShaderCache.RegisterShader(this);
+            OnAfterDeserialize();
         }
 
         private void RegisterPass(ShaderPass pass, int index)
@@ -56,15 +58,15 @@ namespace Prowl.Runtime
                     throw new InvalidOperationException($"Pass with name {pass.Name} conflicts with existing pass at index {nameIndexLookup[pass.Name]}. Ensure no two passes have equal names.");
             }
 
-            foreach (var key in pass.Tags.Keys)
+            foreach (var pair in pass.Tags)
             {
-                if (string.IsNullOrWhiteSpace(key))
+                if (string.IsNullOrWhiteSpace(pair.Key))
                     continue;
 
-                if (!tagIndexLookup.TryGetValue(key, out _))
-                    tagIndexLookup.Add(key, []);
+                if (!tagIndexLookup.TryGetValue(pair.Key, out _))
+                    tagIndexLookup.Add(pair.Key, []);
 
-                tagIndexLookup[key].Add(index);
+                tagIndexLookup[pair.Key].Add(index);
             }
         }
 
@@ -78,13 +80,13 @@ namespace Prowl.Runtime
             return nameIndexLookup.GetValueOrDefault(passName, -1);
         }
 
-        public ShaderPass GetPassWithTag(string tag, string? tagValue)
+        public ShaderPass GetPassWithTag(string tag, string? tagValue = null)
         {   
             List<ShaderPass> passes = GetPassesWithTag(tag, tagValue);
             return passes.Count > 0 ? passes[0] : null;
         }
 
-        public List<ShaderPass> GetPassesWithTag(string tag, string? tagValue)
+        public List<ShaderPass> GetPassesWithTag(string tag, string? tagValue = null)
         {   
             List<ShaderPass> passes = [];
 
@@ -94,85 +96,21 @@ namespace Prowl.Runtime
                 {
                     ShaderPass pass = passes[index];
 
-                    if (tagValue != null)
-                    {
-                        if (pass.Tags[tag] == tagValue)
-                            passes.Add(pass);
-                    }
-                    else
-                    {
+                    if (pass.HasTag(tag, tagValue))
                         passes.Add(pass);
-                    }
                 }
             }
 
             return passes;
         }
+        
+        public void OnBeforeSerialize() { }
 
-        public override void OnDispose()
+        public void OnAfterDeserialize()
         {
-            foreach (ShaderPass pass in passes)
-                pass.Dispose();
+            for (int i = 0; i < passes.Length; i++)
+                RegisterPass(passes[i], i);
         }
-
-        public SerializedProperty Serialize(Serializer.SerializationContext ctx)
-        {
-            SerializedProperty compoundTag = SerializedProperty.NewCompound();
-
-            SerializeHeader(compoundTag);
-
-            /*
-            SerializedProperty propertiesTag = SerializedProperty.NewList();
-            foreach (var property in Properties)
-            {
-                SerializedProperty propertyTag = SerializedProperty.NewCompound();
-                propertyTag.Add("Name", new(property.Name));
-                propertyTag.Add("DisplayName", new(property.DisplayName));
-                propertyTag.Add("Type", new((byte)property.Type));
-                propertiesTag.ListAdd(propertyTag);
-            }
-            compoundTag.Add("Properties", propertiesTag);
-            */
-
-            return compoundTag;
-        }
-
-        public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
-        {
-            DeserializeHeader(value);
-
-            /*
-            Properties.Clear();
-            var propertiesTag = value.Get("Properties");
-            foreach (var propertyTag in propertiesTag.List)
-            {
-                Property property = new Property();
-                property.Name = propertyTag.Get("Name").StringValue;
-                property.DisplayName = propertyTag.Get("DisplayName").StringValue;
-                property.Type = (Property.PropertyType)propertyTag.Get("Type").ByteValue;
-                Properties.Add(property);
-            }
-            Passes.Clear();
-            var passesTag = value.Get("Passes");
-            foreach (var passTag in passesTag.List)
-            {
-                ShaderPass pass = new ShaderPass();
-                pass.State = Serializer.Deserialize<RasterizerState>(passTag.Get("State"), ctx);
-                pass.Vertex = passTag.Get("Vertex").StringValue;
-                pass.Fragment = passTag.Get("Fragment").StringValue;
-                Passes.Add(pass);
-            }
-            if (value.TryGet("ShadowPass", out var shadowPassTag))
-            {
-                ShaderShadowPass shadowPass = new ShaderShadowPass();
-                shadowPass.State = Serializer.Deserialize<RasterizerState>(shadowPassTag.Get("State"), ctx);
-                shadowPass.Vertex = shadowPassTag.Get("Vertex").StringValue;
-                shadowPass.Fragment = shadowPassTag.Get("Fragment").StringValue;
-                ShadowPass = shadowPass;
-            }
-            */
-        }
-
 
         public string GetStringRepresentation()
         {
@@ -250,11 +188,37 @@ namespace Prowl.Runtime
 
                 builder.Append("\t}\n");
 
-                foreach (var src in pass.ShaderSource)
+                builder.Append("\tInputs\n\t{\n");
+
+                builder.Append("\t\tVertexInputs\n\t\t{\n");
+                foreach(var input in pass.GetVariant(KeywordState.Default).VertexInputs)
                 {
-                    builder.Append($"\n\tPROGRAM {src.Stage.ToString().ToUpper()}\n");
-                    builder.Append($"\t\t{src.SourceCode}\n");
-                    builder.Append("\tENDPROGRAM\n");
+                    builder.Append($"\t\t\t{input.Elements[0].Name}\n");
+                }
+                builder.Append("\t\t{\n\n");
+
+                foreach(var set in pass.GetVariant(KeywordState.Default).ResourceSets)
+                {
+                    builder.Append("\t\tSet\n\t\t{\n");
+
+                    foreach (var res in set)
+                    {
+                        if (res is BufferResource bufRes)
+                        {
+                            builder.Append("\t\t\tBuffer\n\t\t\t{\n");
+
+                            foreach (var elem in bufRes.resources)
+                            {
+                                builder.Append($"\t\t\t\t{elem.Item1} {elem.Item2}\n");
+                            }
+
+                            builder.Append("\t\t\t}\n");
+                        }
+                        else
+                            builder.Append($"\t\t\t{res.GetType().Name} {res.GetResourceName()}\n");
+                    }
+
+                    builder.Append("\t\t}\n\n");
                 }
 
                 builder.Append("}\n\n");

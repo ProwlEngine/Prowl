@@ -4,7 +4,7 @@ using Veldrid;
 
 namespace Prowl.Runtime
 {
-    public enum ResourceType
+    public enum ResourceType : byte
     {
         Float,
         Vector2,
@@ -13,95 +13,14 @@ namespace Prowl.Runtime
         Matrix4x4
     }
 
-    public interface ShaderResource
-    {
-        public void GetDescription(List<ResourceLayoutElementDescription> elements);
-
-        public void BindResource(CommandList commandList, List<BindableResource> resources, RenderState state);
-
-        public string GetResourceName();
-    }
-
-    public class TextureResource : ShaderResource
-    {
-        public readonly string textureName;
-        public readonly bool readWrite;
-        public readonly ShaderStages stages;
-
-        public TextureResource(string textureName, bool readWrite, ShaderStages stages)
-        {
-            this.textureName = textureName;
-            this.readWrite = readWrite;
-            this.stages = stages;
-        }
-
-        public void GetDescription(List<ResourceLayoutElementDescription> elements)
-        {
-            ResourceKind kind = readWrite ? ResourceKind.TextureReadWrite : ResourceKind.TextureReadOnly;
-            
-            elements.Add(new ResourceLayoutElementDescription(textureName, kind, stages));
-        }
-
-        public void BindResource(CommandList commandList, List<BindableResource> resources, RenderState state)
-        {
-            Texture tex = state.propertyState.GetTexture(textureName);
-
-            if (tex == null)
-                tex = Texture2D.EmptyWhite;
-            
-            if (tex.IsDestroyed)
-                tex = Texture2D.EmptyWhite;
-
-            if (!tex.InternalTexture.Usage.HasFlag(TextureUsage.Sampled))
-                tex = Texture2D.EmptyWhite;
-
-            resources.Add(tex.TextureView);
-        }
-
-        public string GetResourceName() => textureName;
-    }
-
-    public class SamplerResource : ShaderResource
-    {
-        public readonly string textureName;
-        public readonly ShaderStages stages;
-
-        public SamplerResource(string textureName, ShaderStages stages)
-        {
-            this.textureName = textureName;
-            this.stages = stages;
-        }
-
-        public void GetDescription(List<ResourceLayoutElementDescription> elements)
-        {
-            elements.Add(new ResourceLayoutElementDescription(textureName, ResourceKind.Sampler, stages));
-        }
-
-        public void BindResource(CommandList commandList, List<BindableResource> resources, RenderState state)
-        {
-            Texture tex = state.propertyState.GetTexture(textureName);
-
-            if (tex == null)
-                tex = Texture2D.EmptyWhite;
-            
-            if (tex.IsDestroyed)
-                tex = Texture2D.EmptyWhite;
-
-            if (!tex.InternalTexture.Usage.HasFlag(TextureUsage.Sampled))
-                tex = Texture2D.EmptyWhite;
-
-            resources.Add(tex.Sampler.InternalSampler);
-        }
-
-        public string GetResourceName() => textureName;
-    }
-
     public class BufferResource : ShaderResource
     {
-        public readonly string name;
-        public readonly (string, ResourceType)[] resources;
-        public readonly ShaderStages stages;
-        public readonly uint sizeInBytes;
+        public string name { get; private set; }
+        public (string, ResourceType)[] resources { get; private set; } = [];
+        public ShaderStages stages { get; private set; }
+        public uint sizeInBytes { get; private set; }
+
+        private BufferResource() { }
 
         public BufferResource(string name, ShaderStages stages, params (string, ResourceType)[] resources)
         {
@@ -115,14 +34,14 @@ namespace Prowl.Runtime
                 sizeInBytes += ResourceSize(resources[i].Item2);
         }
 
-        public string GetResourceName() => name;
+        public override string GetResourceName() => name;
 
-        public void GetDescription(List<ResourceLayoutElementDescription> elements)
+        public override void GetDescription(List<ResourceLayoutElementDescription> elements)
         {
             elements.Add(new ResourceLayoutElementDescription(name, ResourceKind.UniformBuffer, stages));
         }
 
-        public void BindResource(CommandList commandList, List<BindableResource> resource, RenderState state)
+        public override void BindResource(CommandList commandList, List<BindableResource> resource, RenderState state)
         {
             DeviceBuffer GetUniformBuffer(uint size)
             {
@@ -200,5 +119,49 @@ namespace Prowl.Runtime
                 _ => 0,
             };
         }
+
+        public override SerializedProperty Serialize(Serializer.SerializationContext ctx)
+        {
+            SerializedProperty serializedBuffer = SerializedProperty.NewCompound();
+
+            serializedBuffer.Add("Name", new(name));
+            serializedBuffer.Add("Stages", new((byte)stages));
+
+            SerializedProperty serializedResources = SerializedProperty.NewList();
+
+            foreach (var resource in resources)
+            {
+                SerializedProperty serializedResource = SerializedProperty.NewCompound();
+
+                serializedResource.Add("Name", new(resource.Item1));
+                serializedResource.Add("Type", new((byte)resource.Item2));
+
+                serializedResources.ListAdd(serializedResource);
+            }
+
+            serializedBuffer.Add("Resources", serializedResources);
+
+            return serializedBuffer;
+        }
+
+        public override void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
+        {
+            this.name = value.Get("Name").StringValue;
+            this.stages = (ShaderStages)value.Get("Stages").ByteValue;
+
+            SerializedProperty resourceProp = value.Get("Resources");
+
+            this.resources = new (string, ResourceType)[resourceProp.Count];
+
+            sizeInBytes = 0;
+            for (int i = 0; i < resources.Length; i++)
+            {
+                this.resources[i].Item1 = resourceProp[i].Get("Name").StringValue;
+                this.resources[i].Item2 = (ResourceType)resourceProp[i].Get("Type").ByteValue;
+
+                sizeInBytes += ResourceSize(resources[i].Item2);
+            }
+        }
+
     }
 }

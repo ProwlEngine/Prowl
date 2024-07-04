@@ -13,7 +13,7 @@ namespace Prowl.Runtime
         {
             state.propertyState.ApplyOverride(Material.Properties);
         
-            Utils.KeyGroup<string, string> keys = Utils.KeyGroup<string, string>.Combine(Material.LocalKeywords, state.keywordState);
+            KeywordState keys = KeywordState.Combine(Material.LocalKeywords, state.keywordState);
 
             state.pipelineSettings.pass = Material.Shader.Res.GetPass(Pass);
             state.pipelineSettings.variant = state.pipelineSettings.pass.GetVariant(keys);

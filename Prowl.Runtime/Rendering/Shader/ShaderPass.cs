@@ -21,8 +21,7 @@ namespace Prowl.Runtime
         public FaceCullMode CullingMode;
         public bool DepthClipEnabled;
 
-        public ShaderSource[] ShaderSources;
-        public Dictionary<string, ImmutableHashSet<string>> Keywords;
+        public Dictionary<string, HashSet<string>> Keywords;
 
 
         public ShaderPassDescription()
@@ -45,158 +44,214 @@ namespace Prowl.Runtime
         }
     }
 
-    public sealed class ShaderPass 
+    public sealed class ShaderPass : ISerializable
     {
+        [SerializeField, HideInInspector]
+        private string name;
+
+
+        [SerializeField, HideInInspector]
+        private Dictionary<string, string> tags;
+
+
+        [SerializeField, HideInInspector]
+        private BlendStateDescription blend;
+
+
+        [SerializeField, HideInInspector]
+        private DepthStencilStateDescription depthStencilState;
+
+
+        [SerializeField, HideInInspector]
+        private FaceCullMode cullMode = FaceCullMode.Back;
+
+
+        [SerializeField, HideInInspector]
+        private bool depthClipEnabled = true;
+
+
+        [NonSerialized]
+        private Dictionary<string, HashSet<string>> keywords;
+
+        [NonSerialized]
+        private Dictionary<KeywordState, ShaderVariant> variants;
+
+
+
         /// <summary>
         /// The name to identify this <see cref="ShaderPass"/> 
         /// </summary>
-        public readonly string Name;
+        public string Name => name;
 
         /// <summary>
         /// The tags to identify this <see cref="ShaderPass"/> 
         /// </summary>
-        public readonly ImmutableDictionary<string, string> Tags;
+        public IEnumerable<KeyValuePair<string, string>> Tags => tags;
 
         /// <summary>
         /// The blending options to use when rendering this <see cref="ShaderPass"/> 
         /// </summary>
-        public readonly BlendStateDescription Blend;
+        public BlendStateDescription Blend => blend;
 
         /// <summary>
         /// The depth stencil state to use when rendering this <see cref="ShaderPass"/> 
         /// </summary>
-        public readonly DepthStencilStateDescription DepthStencilState;
+        public DepthStencilStateDescription DepthStencilState => depthStencilState;
 
-        public readonly FaceCullMode CullMode = FaceCullMode.Back;
-        public readonly bool DepthClipEnabled = true;
-
-        private readonly int Hash;
-
-        
-        private readonly ShaderSource[] shaderSource;
-        public IEnumerable<ShaderSource> ShaderSource => shaderSource;
-
-        private readonly Dictionary<string, ImmutableHashSet<string>> keywords;
-        public IEnumerable<KeyValuePair<string, ImmutableHashSet<string>>> Keywords => keywords;
-
-        private PermutationMap<string, string, ShaderVariant> variants;
+        public FaceCullMode CullMode => cullMode;
+        public bool DepthClipEnabled => depthClipEnabled;
 
 
-        public ShaderPass(string name, ShaderPassDescription description) 
+        public IEnumerable<KeyValuePair<string, HashSet<string>>> Keywords => keywords;
+        public IEnumerable<KeyValuePair<KeywordState, ShaderVariant>> Variants => variants;
+
+
+        private ShaderPass() { }
+
+        public ShaderPass(string name, ShaderSource[] sources, ShaderPassDescription description, IVariantCompiler compiler) 
         {
-            this.Name = name;
-            
-            this.shaderSource = description.ShaderSources;
+            this.name = name;
+            this.tags = new(description.Tags);     
+            this.blend = description.BlendState;
+            this.depthStencilState = description.DepthStencilState;
+            this.cullMode = description.CullingMode;
+            this.depthClipEnabled = description.DepthClipEnabled;       
 
-            this.Blend = description.BlendState;
-            this.DepthStencilState = description.DepthStencilState;
-            this.DepthClipEnabled = description.DepthClipEnabled;
-            this.CullMode = description.CullingMode;
-
-            this.keywords = new();
-
-            if (description.Keywords != null && description.Keywords.Count != 0)
-            {
-                // Copy keywords
-                foreach (var value in description.Keywords)
-                    keywords.Add(value.Key, ImmutableHashSet.CreateRange(value.Value));
-            }
-            else
-            {
-                keywords.Add(string.Empty, [ string.Empty ]);
-            }
-
-            this.Tags = ImmutableDictionary.CreateRange(description.Tags);
-            this.Hash = GenerateHash();
+            this.keywords = new(description.Keywords);
+            GenerateVariants(compiler, sources);
         }
 
-        public void CompilePrograms(IVariantCompiler variantGenerator)
-        {
-            ShaderVariant GenerateVariant(KeyGroup<string, string> keywords)
-            {
-                return variantGenerator.CompileVariant(shaderSource, keywords);
-            }
+        public ShaderVariant GetVariant(KeywordState? keywordID = null) =>
+            variants[ValidateKeyword(keywordID ?? KeywordState.Default)];
 
-            variants = new(keywords, GenerateVariant);
+        public bool TryGetVariant(KeywordState? keywordID, out ShaderVariant? variant) =>
+            variants.TryGetValue(keywordID ?? KeywordState.Default, out variant);
+
+        public bool HasTag(string tag, string? tagValue = null)
+        {   
+            if (tags.TryGetValue(tag, out string value))
+                return tagValue == null || value == tagValue;
+
+            return false;
         }
 
-        public KeyGroup<string, string> ValidateKeyGroup(KeyGroup<string, string> keyGroup) => 
-            variants.ValidateCombination(keyGroup);
+        // Fills the dictionary with every possible permutation for the given definitions, initializing values with the generator function
+        private void GenerateVariants(IVariantCompiler compiler, ShaderSource[] sources)
+        {   
+            this.variants = new();
 
-        public ShaderVariant GetVariant(KeyGroup<string, string>? keywordID = null) =>
-            variants.GetValue(keywordID ?? KeyGroup<string, string>.Default);
+            List<KeyValuePair<string, HashSet<string>>> combinations = keywords.ToList();
+            List<KeyValuePair<string, string>> combination = new(combinations.Count);
 
-        public bool TryGetVariant(KeyGroup<string, string>? keywordID, out ShaderVariant? variant) =>
-            variants.TryGetValue(keywordID ?? KeyGroup<string, string>.Default, out variant);
-
-        public ShaderPassDescription GetDescription()
-        {
-            return new ShaderPassDescription()
+            void GenerateRecursive(int depth)
             {
-                Tags = new(Tags),
-                BlendState = Blend,
-                DepthStencilState = DepthStencilState,
-                CullingMode = CullMode,
-                DepthClipEnabled = DepthClipEnabled,
-                ShaderSources = shaderSource,
-                Keywords = keywords
-            };
-        }
+                if (depth == combinations.Count) // Reached the end for this permutation, add a result.
+                {
+                    KeywordState key = new(combination);
+                    variants.Add(key, compiler.CompileVariant(sources, key));
+ 
+                    return;
+                }
 
-        private int GenerateHash()
-        {
-            HashCode hash = new();
-
-            hash.Add(Name);
-            hash.Add(Blend);
-            hash.Add(DepthStencilState);
-            hash.Add(CullMode);
-            hash.Add(DepthClipEnabled);     
-
-            foreach (var source in shaderSource)
-            {
-                hash.Add(source.Stage);
-            }       
-
-            foreach (var pair in Tags)
-            {
-                hash.Add(pair.Key);
-                hash.Add(pair.Value);
+                var pair = combinations[depth];
+                foreach (var value in pair.Value) // Go down a level for every value
+                {
+                    combination.Add(new(pair.Key, value));
+                    GenerateRecursive(depth + 1);
+                    combination.RemoveAt(combination.Count - 1); // Go up once we're done
+                }
             }
 
-            foreach (var pair in keywords)
-            {
-                hash.Add(pair.Key);
+            GenerateRecursive(0);
+        }
 
-                foreach (var value in pair.Value)
-                    hash.Add(value);
+        public KeywordState ValidateKeyword(KeywordState key)
+        {
+            KeywordState combinedKey = new();
+
+            foreach (var definition in keywords)
+            {
+                string defaultValue = definition.Value.First();
+                string value = key.GetKey(definition.Key, defaultValue);
+                value = definition.Value.Contains(value) ? value : defaultValue;
+
+                combinedKey.SetKey(definition.Key, value);
             }
 
-            return hash.ToHashCode();
+            return combinedKey;
         }
 
-        public override int GetHashCode()
+        public SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
-            return Hash;
+            var property = Serializer.Serialize(this, ctx);
+
+            SerializedProperty serializedKeywords = SerializedProperty.NewList();
+
+            foreach (var keyword in keywords)
+            {
+                SerializedProperty serializedKeyword = SerializedProperty.NewCompound();
+
+                serializedKeyword.Add("Name", new(keyword.Key));
+
+                SerializedProperty serializedValues = SerializedProperty.NewList();
+
+                foreach (var value in keyword.Value)
+                    serializedValues.ListAdd(new(value));
+
+                serializedKeyword.Add("Values", serializedValues);
+
+                serializedKeywords.ListAdd(serializedKeyword);
+            }
+
+            property.Add("Keywords", serializedKeywords);
+
+            SerializedProperty serializedVariants = SerializedProperty.NewList();
+
+            foreach (var variant in variants)
+            {
+                SerializedProperty serializedVariant = Serializer.Serialize(variant.Value, ctx);
+                serializedVariants.ListAdd(serializedVariant);
+            }
+
+            property.Add("Variants", serializedVariants);
+
+            return property;
         }
 
-        public override bool Equals(object? obj)
+        public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
-            if (obj is not ShaderPass other)
-                return false;
+            Serializer.DeserializeInto(value, this, ctx);
 
-            return Equals(other);
+            keywords = new();
+            variants = new();
+
+            SerializedProperty serializedKeywords = value.Get("Keywords");
+
+            for (int i = 0; i < serializedKeywords.Count; i++)
+            {
+                SerializedProperty serializedKeyword = serializedKeywords[i];
+
+                HashSet<string> values = new();
+
+                SerializedProperty serializedValues = serializedKeyword.Get("Values");
+
+                for (int j = 0; j < serializedValues.Count; j++)
+                    values.Add(serializedValues[j].StringValue);
+
+                keywords.Add(serializedKeyword.Get("Name").StringValue, values);
+            }
+
+            SerializedProperty serializedVariants = value.Get("Variants");
+
+            for (int i = 0; i < serializedVariants.Count; i++)
+            {
+                SerializedProperty serializedVariant = serializedVariants[i];
+
+                ShaderVariant variant = Serializer.Deserialize<ShaderVariant>(serializedVariant);
+                
+                variants.Add(variant.VariantKeywords, variant);
+            }
         }
 
-        public bool Equals(ShaderPass other)
-        {
-            return Hash == other.Hash;
-        }
-
-        public void Dispose()
-        {
-            foreach (ShaderVariant program in variants.Values)
-                program.Dispose();
-        }
     }
 }

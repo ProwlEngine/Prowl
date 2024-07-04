@@ -15,7 +15,7 @@ namespace Prowl.Runtime
         internal IGeometryDrawData activeDrawData;
         
         internal PropertyState propertyState;
-        internal Utils.KeyGroup<string, string> keywordState;
+        internal KeywordState keywordState;
 
         internal PassPipelineDescription pipelineSettings;
         internal Pipeline activePipeline;
@@ -39,7 +39,7 @@ namespace Prowl.Runtime
             pipelineSettings.topology = PrimitiveTopology.TriangleList;
             pipelineSettings.scissorTest = false;
 
-            keywordState = Utils.KeyGroup<string, string>.Default;
+            keywordState = KeywordState.Default;
 
             activePipeline = null;
 
@@ -69,7 +69,7 @@ namespace Prowl.Runtime
             pipelineSettings.topology = PrimitiveTopology.TriangleList;  
             pipelineSettings.scissorTest = false;
 
-            keywordState = Utils.KeyGroup<string, string>.Default;
+            keywordState = KeywordState.Default;
 
             activePipeline = null;
 
