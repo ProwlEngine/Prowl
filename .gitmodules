@@ -1,3 +1,4 @@
-[submodule "CppNet"]
-	path = CppNet
-	url = https://github.com/michaelsakharov/CppNet
+
+[submodule "Prowl.Veldrid"]
+	path = Prowl.Veldrid
+	url = https://github.com/ProwlEngine/Prowl.Veldrid

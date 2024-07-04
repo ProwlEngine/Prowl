@@ -1130,7 +1130,7 @@ namespace Prowl.Runtime.GUI.Graphics
             if (DeviceVtxBuffer == null || vertexBufferSize > DeviceVtxBuffer.SizeInBytes)
             {
                 DeviceVtxBuffer?.Dispose();
-                DeviceVtxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription(Math.Max(vertexBufferSize, 10000), BufferUsage.VertexBuffer | BufferUsage.Dynamic));
+                DeviceVtxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription((uint)(vertexBufferSize * 1.5f), BufferUsage.VertexBuffer | BufferUsage.Dynamic));
                 DeviceVtxBuffer.Name = $"Draw List Vertex Buffer";
             }
 
@@ -1138,7 +1138,7 @@ namespace Prowl.Runtime.GUI.Graphics
             if (DeviceIdxBuffer == null || indexBufferSize > DeviceIdxBuffer.SizeInBytes)
             {
                 DeviceIdxBuffer?.Dispose();
-                DeviceIdxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription(Math.Max(indexBufferSize, 10000), BufferUsage.IndexBuffer | BufferUsage.Dynamic));
+                DeviceIdxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription((uint)(indexBufferSize * 1.5f), BufferUsage.IndexBuffer | BufferUsage.Dynamic));
                 DeviceIdxBuffer.Name = $"Draw List Index Buffer";
             }
 
