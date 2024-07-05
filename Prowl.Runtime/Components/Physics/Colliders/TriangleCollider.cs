@@ -8,9 +8,9 @@ namespace Prowl.Runtime;
 [AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.ChevronUp}  Triangle Collider")]
 public sealed class TriangleCollider : Collider
 {
-    [SerializeField, HideInInspector] private Vector3 _a = new(1, 1, 1);
-    [SerializeField, HideInInspector] private Vector3 _b = new(1, 1, 1);
-    [SerializeField, HideInInspector] private Vector3 _c = new(1, 1, 1);
+    [SerializeField, HideInInspector] private Vector3 _a = new Vector3(-0.5f, 0, 0);
+    [SerializeField, HideInInspector] private Vector3 _b = new Vector3(0.5f, 0, 0);
+    [SerializeField, HideInInspector] private Vector3 _c = new Vector3(0, 1, 0);
 
     [ShowInInspector]
     public Vector3 A
@@ -47,6 +47,9 @@ public sealed class TriangleCollider : Collider
 
     internal override void AddToCompoundBuilder(BufferPool pool, ref CompoundBuilder builder, NRigidPose localPose)
     {
-        builder.Add(new Triangle(A, B, C), localPose, Mass);
+        var localA = A * this.Transform.lossyScale;
+        var localB = B * this.Transform.lossyScale;
+        var localC = C * this.Transform.lossyScale;
+        builder.Add(new Triangle(localA, localB, localC), localPose, Mass);
     }
 }
