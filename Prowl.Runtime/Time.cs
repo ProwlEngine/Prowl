@@ -1,6 +1,7 @@
-﻿namespace Prowl.Runtime;
-
+﻿using System.Collections.Generic;
 using Stopwatch = System.Diagnostics.Stopwatch;
+
+namespace Prowl.Runtime;
 
 public class TimeData
 {
@@ -10,20 +11,16 @@ public class TimeData
     public double time;
     public double smoothUnscaledDeltaTime;
     public double smoothDeltaTime;
-    public long frameCount;
-
-    public double timeScale = 1f;
-    public double timeSmoothFactor = .25f;
 
     private Stopwatch stopwatch;
 
     public TimeData() { }
 
-    public static long frameCount { get; private set; }
+    public long frameCount;
 
-    public static double timeScale { get; set; } = 1f;
-    public static float timeScaleF => (float)timeScale;
-    public static double timeSmoothFactor { get; set; } = .25f;
+    public double timeScale = 1f;
+    public float timeScaleF => (float)timeScale;
+    public double timeSmoothFactor = .25f;
 
     public void Update()
     {

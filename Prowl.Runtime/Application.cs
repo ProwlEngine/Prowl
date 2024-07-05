@@ -22,43 +22,6 @@ public static class Application
 
     private static TimeData AppTime = new();
 
-
-    private static GraphicsBackend[] preferredWindowsBackends = // Covers Windows/UWP
-    [
-        GraphicsBackend.Vulkan,
-        GraphicsBackend.OpenGL,
-        GraphicsBackend.Direct3D11,
-        GraphicsBackend.OpenGLES,
-    ];
-
-    private static GraphicsBackend[] preferredUnixBackends = // Cover Unix-like (Linux, FreeBSD, OpenBSD)
-    [
-        GraphicsBackend.OpenGL,
-        GraphicsBackend.Vulkan,
-        GraphicsBackend.OpenGLES,
-    ];
-
-    private static GraphicsBackend[] preferredMacBackends = // Covers MacOS/Apple 
-    [
-        GraphicsBackend.Metal,
-        GraphicsBackend.OpenGL,
-        GraphicsBackend.OpenGLES,
-    ];
-
-    public static GraphicsBackend GetBackend()
-    {
-        if (RuntimeUtils.IsWindows())
-        {
-            return preferredWindowsBackends[0];
-        }
-        else if (RuntimeUtils.IsMac())
-        {
-            return preferredMacBackends[0];
-        }
-
-        return preferredUnixBackends[0];
-    }
-
     private static GraphicsBackend[] preferredWindowsBackends = // Covers Windows/UWP
     [
         GraphicsBackend.Vulkan,
@@ -119,7 +82,6 @@ public static class Application
         Graphics.Initialize(true, GetBackend());
         SceneManager.Initialize();
         AudioSystem.Initialize();
-        Time.Initialize();
 
         AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
 
@@ -135,8 +97,6 @@ public static class Application
         try
         {
             AudioSystem.UpdatePool();
-
-            Update?.Invoke();
 
             AppTime.Update();
 

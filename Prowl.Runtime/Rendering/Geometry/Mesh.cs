@@ -440,7 +440,8 @@ namespace Prowl.Runtime
                     new System.Numerics.Vector2(1, 1),
                 ],
 
-                indices32 = [0, 2, 1, 2, 3, 1]
+                indices16 = [0, 2, 1, 2, 3, 1],
+                IndexFormat = IndexFormat.UInt16
             };
 
             fullScreenQuad = mesh;
@@ -453,7 +454,7 @@ namespace Prowl.Runtime
 
             List<System.Numerics.Vector3> vertices = new List<System.Numerics.Vector3>();
             List<System.Numerics.Vector2> uvs = new List<System.Numerics.Vector2>();
-            List<uint> indices = new List<uint>();
+            List<ushort> indices = new List<ushort>();
 
             for (int i = 0; i <= rings; i++)
             {
@@ -478,22 +479,23 @@ namespace Prowl.Runtime
             {
                 for (int j = 0; j < slices; j++)
                 {
-                    uint a = (uint)(i * (slices + 1) + j);
-                    uint b = (uint)(a + slices + 1);
+                    ushort a = (ushort)(i * (slices + 1) + j);
+                    ushort b = (ushort)(a + slices + 1);
 
                     indices.Add(a);
                     indices.Add(b);
-                    indices.Add(a + 1);
+                    indices.Add((ushort)(a + 1));
 
                     indices.Add(b);
-                    indices.Add(b + 1);
-                    indices.Add(a + 1);
+                    indices.Add((ushort)(b + 1));
+                    indices.Add((ushort)(a + 1));
                 }
             }
 
             mesh.vertices = vertices.ToArray();
             mesh.uv = uvs.ToArray();
-            mesh.indices32 = indices.ToArray();
+            mesh.IndexFormat = IndexFormat.UInt16;
+            mesh.indices16 = indices.ToArray();
 
             mesh.RecalculateBounds();
             mesh.RecalculateNormals();
@@ -546,7 +548,7 @@ namespace Prowl.Runtime
                 new(0, 0), new(1, 0), new(1, 1), new(0, 1)
             };
 
-            uint[] indices =
+            ushort[] indices =
             {
                 0, 1, 2, 0, 2, 3,       // Front face
                 4, 6, 5, 4, 7, 6,       // Back face
@@ -558,7 +560,8 @@ namespace Prowl.Runtime
 
             mesh.vertices = vertices;
             mesh.uv = uvs;
-            mesh.indices = indices;
+            mesh.IndexFormat = IndexFormat.UInt16;
+            mesh.indices16 = indices;
 
             mesh.RecalculateBounds();
             mesh.RecalculateNormals();
@@ -574,7 +577,7 @@ namespace Prowl.Runtime
 
             List<System.Numerics.Vector3> vertices = new List<System.Numerics.Vector3>();
             List<System.Numerics.Vector2> uvs = new List<System.Numerics.Vector2>();
-            List<uint> indices = new List<uint>();
+            List<ushort> indices = new List<ushort>();
 
             float halfLength = length / 2.0f;
 
@@ -617,13 +620,13 @@ namespace Prowl.Runtime
                     bottom2 = 1;
                 }
 
-                indices.Add((uint)top1);
-                indices.Add((uint)bottom1);
-                indices.Add((uint)top2);
+                indices.Add((ushort)top1);
+                indices.Add((ushort)bottom1);
+                indices.Add((ushort)top2);
 
-                indices.Add((uint)bottom1);
-                indices.Add((uint)bottom2);
-                indices.Add((uint)top2);
+                indices.Add((ushort)bottom1);
+                indices.Add((ushort)bottom2);
+                indices.Add((ushort)top2);
             }
 
             // Create the indices for the top and bottom circles
@@ -635,19 +638,20 @@ namespace Prowl.Runtime
                 int bottom2 = (i == sliceCount - 1) ? 1 : bottom1 + 2;
 
                 // Top circle
-                indices.Add((uint)top1);
-                indices.Add((uint)top2);
-                indices.Add((uint)topCenterIndex);
+                indices.Add((ushort)top1);
+                indices.Add((ushort)top2);
+                indices.Add((ushort)topCenterIndex);
 
                 // Bottom circle
-                indices.Add((uint)bottom2);
-                indices.Add((uint)bottom1);
-                indices.Add((uint)bottomCenterIndex);
+                indices.Add((ushort)bottom2);
+                indices.Add((ushort)bottom1);
+                indices.Add((ushort)bottomCenterIndex);
             }
 
             mesh.vertices = vertices.ToArray();
             mesh.uv = uvs.ToArray();
-            mesh.indices = indices.ToArray();
+            mesh.IndexFormat = IndexFormat.UInt16;
+            mesh.indices16 = indices.ToArray();
 
             mesh.RecalculateBounds();
             mesh.RecalculateNormals();
@@ -660,7 +664,7 @@ namespace Prowl.Runtime
         {
             Mesh mesh = new Mesh();
             mesh.vertices = new System.Numerics.Vector3[] { a, b, c };
-            mesh.indices = new uint[] { 0, 1, 2 };
+            mesh.indices32 = new uint[] { 0, 1, 2 };
             mesh.RecalculateBounds();
             mesh.RecalculateNormals();
             mesh.RecalculateTangents();

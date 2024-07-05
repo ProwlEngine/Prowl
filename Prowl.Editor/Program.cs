@@ -264,7 +264,7 @@ Pass
                     // Push GameWindow's input handler
                     if (hasGameWindow) Input.PushHandler((GameWindow.LastFocused.Target as GameWindow).InputHandler);
 
-                    PlayMode.GameTime.Update(delta);
+                    PlayMode.GameTime.Update();
                     Time.TimeStack.Push(PlayMode.GameTime);
                     SceneManager.Update();
                     Time.TimeStack.Pop();

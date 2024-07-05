@@ -76,7 +76,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
         Screen.InternalWindow.MouseWheel += (mouseWheelEvent) => { 
             _receivedDeltaEvent = true;
-            _mouseWheelDelta = mouseWheelEvent.WheelDelta.X; 
+            _mouseWheelDelta = mouseWheelEvent.WheelDelta.Y; 
         };
 
         _prevMousePos = GetActualMousePosition(snapshot);

@@ -2,3 +2,6 @@
 [submodule "External/Prowl.DotRecast"]
 	path = External/Prowl.DotRecast
 	url = https://github.com/ProwlEngine/Prowl.DotRecast
+[submodule "External/Prowl.Veldrid"]
+	path = External/Prowl.Veldrid
+	url = https://github.com/ProwlEngine/Prowl.Veldrid

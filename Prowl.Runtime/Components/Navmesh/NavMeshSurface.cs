@@ -89,9 +89,11 @@ namespace Prowl.Runtime
 
             if (debug_bounds != default)
             {
+                /*
                 Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
                 Gizmos.Color = Color.blue;
                 Gizmos.DrawCube(debug_bounds.center, debug_bounds.size);
+                */
             }
 
             if (debug_polygons != null)
@@ -100,12 +102,14 @@ namespace Prowl.Runtime
                 {
                     for (int j = 0; j < debug_polygons[i].Length; j++)
                     {
+                        /*
                         Gizmos.Color = Color.blue * 0.5f;
                         for (int k = 0; k < debug_polygons[i][j].Length; k++)
                         {
                             Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
                             Gizmos.DrawPolygon([debug_polygons[i][j][k], debug_polygons[i][j][(k + 1) % debug_polygons[i][j].Length]]);
                         }
+                        */
                     }
                 }
             }
@@ -121,13 +125,13 @@ namespace Prowl.Runtime
                 {
                     var shape = input.shapeData[i];
                     verts.EnsureCapacity(verts.Count + shape.Vertices.Length);
-                    indices.EnsureCapacity(indices.Count + shape.Indices.Length);
+                    indices.EnsureCapacity(indices.Count + shape.Indices16.Length);
 
-                    for (int j = 0; j < shape.Indices.Length; j += 3)
+                    for (int j = 0; j < shape.Indices16.Length; j += 3)
                     {
-                        indices.Add(verts.Count + (int)shape.Indices[j + 0]);
-                        indices.Add(verts.Count + (int)shape.Indices[j + 1]);
-                        indices.Add(verts.Count + (int)shape.Indices[j + 2]);
+                        indices.Add(verts.Count + (int)shape.Indices16[j + 0]);
+                        indices.Add(verts.Count + (int)shape.Indices16[j + 1]);
+                        indices.Add(verts.Count + (int)shape.Indices16[j + 2]);
                     }
 
                     var transform = input.transformsOut[i];

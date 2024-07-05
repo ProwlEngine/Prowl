@@ -45,13 +45,8 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj">
-            <!--<ExcludeAssets>compile</ExcludeAssets>-->
-        </ProjectReference>
-
-        <ProjectReference Include="..\Prowl.Veldrid\src\Veldrid\Veldrid.csproj">
-            <!--<ExcludeAssets>compile</ExcludeAssets>-->
-        </ProjectReference>
+        <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj" />
+        <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid\Veldrid.csproj" />
     </ItemGroup>
     
 </Project>
