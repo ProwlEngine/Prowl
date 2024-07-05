@@ -136,7 +136,10 @@ public static class SceneManager
     public static void PhysicsUpdate()
     {
         PreFixedUpdate?.Invoke();
-        ForeachComponent((x) => x.Do(x.FixedUpdate));
+        ForeachComponent((x) => {
+            x.Do(x.UpdateFixedUpdateCoroutines);
+            x.Do(x.FixedUpdate);
+        });
         PostFixedUpdate?.Invoke();
     }
 

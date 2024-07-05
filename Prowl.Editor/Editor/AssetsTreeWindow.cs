@@ -219,7 +219,11 @@ namespace Prowl.Editor
         {
             EditorGuiManager.Directory = directory;
             EditorGuiManager.fromAssetBrowser = fromAssetBrowser;
-            return MenuItem.DrawMenuRoot("Create");
+            var assetsPath = MenuItem.GetMenuPath("Assets");
+            foreach(var child in assetsPath.Children)
+                if(child.Path.Equals("Create", StringComparison.OrdinalIgnoreCase))
+                    return MenuItem.DrawMenu(child, false, 1);
+            return false;
         }
 
         private static void DrawProjectContextMenu(ref bool closePopup)

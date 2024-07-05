@@ -54,8 +54,12 @@ The goal is a viable open-source Unity alternative, ideally, Unity projects can 
     - .NET 8
     - Editor with support for Editor Scripts and Custom Editors
     - Physics ([Bepu Physics 2](https://github.com/bepu/bepuphysics2))
-      - Colliders: Box, Sphere, Capsule, Cylinder, Mesh Collider
-      - Rigidbody-based Character Controller
+      - Colliders: Box, Sphere, Capsule, Cylinder, ~~Mesh Collider~~ - Needs to be re-implemented
+      - Triggers
+      - Raycasts and Sweeps
+      - Non-Kinematic Character Controller (Just a fancy rigidbody)
+        - Supports Moving Platforms
+      - A ton of physical constraints (All of Bepu's constraints)
     - Unity-like Coroutines
     - Playtest directly in Editor
     - ScriptableObjects
@@ -144,7 +148,7 @@ Getting Prowl up and running is super easy!
   - ❌ Web
 - ✔️ UI Engine
 - ❌ VR Support
-- ❌ Navmesh and AI Agents
+- 🛠️ Navmesh and AI Agents - Navmesh is done, working on Agents now
 - ❌ Networking Solution
 
 ### Rendering

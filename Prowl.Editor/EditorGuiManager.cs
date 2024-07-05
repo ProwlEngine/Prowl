@@ -346,11 +346,11 @@ public static class EditorGuiManager
         return t.Transform.position + t.Transform.forward * 10;
     }
 
-    [MenuItem("Create/3D/Cube")] public static void Create_3D_Cube() => CreateDefaultModel("Cube", typeof(BoxCollider));
-    [MenuItem("Create/3D/Sphere")] public static void Create_3D_Sphere() => CreateDefaultModel("Sphere", typeof(SphereCollider));
-    [MenuItem("Create/3D/Cylinder")] public static void Create_3D_Cylinder() => CreateDefaultModel("Cylinder", typeof(CylinderCollider));
-    [MenuItem("Create/3D/Capsule")] public static void Create_3D_Capsule() => CreateDefaultModel("Capsule", typeof(CapsuleCollider));
-    [MenuItem("Create/3D/Plane")] public static void Create_3D_Plane() => CreateDefaultModel("Plane", typeof(MeshCollider));
+    [MenuItem("Create/3D/Cube")] public static void Create_3D_Cube() => CreateDefaultModel("Cube", null);
+    [MenuItem("Create/3D/Sphere")] public static void Create_3D_Sphere() => CreateDefaultModel("Sphere", null);
+    [MenuItem("Create/3D/Cylinder")] public static void Create_3D_Cylinder() => CreateDefaultModel("Cylinder", null);
+    [MenuItem("Create/3D/Capsule")] public static void Create_3D_Capsule() => CreateDefaultModel("Capsule", null);
+    [MenuItem("Create/3D/Plane")] public static void Create_3D_Plane() => CreateDefaultModel("Plane", null);
     [MenuItem("Create/3D/Quad")] public static void Create_3D_Quad() => CreateDefaultModel("Quad", null);
 
     private static void CreateDefaultModel(string name, Type? component)

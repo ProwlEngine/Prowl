@@ -502,6 +502,171 @@ namespace Prowl.Runtime
             return mesh;
         }
 
+        public static Mesh CreateCube(Vector3 size)
+        {
+            Mesh mesh = new Mesh();
+            float x = (float)size.x / 2f;
+            float y = (float)size.y / 2f;
+            float z = (float)size.z / 2f;
+
+            System.Numerics.Vector3[] vertices =
+            {
+                // Front face
+                new(-x, -y, z), new(x, -y, z), new(x, y, z), new(-x, y, z),
+                
+                // Back face
+                new(-x, -y, -z), new(x, -y, -z), new(x, y, -z), new(-x, y, -z),
+                
+                // Left face
+                new(-x, -y, -z), new(-x, y, -z), new(-x, y, z), new(-x, -y, z),
+                
+                // Right face
+                new(x, -y, z), new(x, y, z), new(x, y, -z), new(x, -y, -z),
+                
+                // Top face
+                new(-x, y, z), new(x, y, z), new(x, y, -z), new(-x, y, -z),
+                
+                // Bottom face
+                new(-x, -y, -z), new(x, -y, -z), new(x, -y, z), new(-x, -y, z)
+            };
+
+            System.Numerics.Vector2[] uvs =
+            {
+                // Front face
+                new(0, 0), new(1, 0), new(1, 1), new(0, 1),
+                // Back face
+                new(1, 0), new(0, 0), new(0, 1), new(1, 1),
+                // Left face
+                new(0, 0), new(1, 0), new(1, 1), new(0, 1),
+                // Right face
+                new(1, 0), new(1, 1), new(0, 1), new(0, 0),
+                // Top face
+                new(0, 1), new(1, 1), new(1, 0), new(0, 0),
+                // Bottom face
+                new(0, 0), new(1, 0), new(1, 1), new(0, 1)
+            };
+
+            uint[] indices =
+            {
+                0, 1, 2, 0, 2, 3,       // Front face
+                4, 6, 5, 4, 7, 6,       // Back face
+                8, 9, 10, 8, 10, 11,    // Left face
+                12, 14, 13, 12, 15, 14, // Right face
+                16, 17, 18, 16, 18, 19, // Top face
+                20, 22, 21, 20, 23, 22  // Bottom face
+            };
+
+            mesh.vertices = vertices;
+            mesh.uv = uvs;
+            mesh.indices = indices;
+
+            mesh.RecalculateBounds();
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+
+            return mesh;
+        }
+
+        public static Mesh CreateCylinder(float radius, float length, int sliceCount)
+        {
+#warning TODO: Test, This hasent been tested like at all just assumed it will work
+            Mesh mesh = new Mesh();
+
+            List<System.Numerics.Vector3> vertices = new List<System.Numerics.Vector3>();
+            List<System.Numerics.Vector2> uvs = new List<System.Numerics.Vector2>();
+            List<uint> indices = new List<uint>();
+
+            float halfLength = length / 2.0f;
+
+            // Create the vertices and UVs for the top and bottom circles
+            for (int i = 0; i <= sliceCount; i++)
+            {
+                float angle = 2 * MathF.PI * i / sliceCount;
+                float x = radius * MathF.Cos(angle);
+                float z = radius * MathF.Sin(angle);
+
+                // Top circle
+                vertices.Add(new System.Numerics.Vector3(x, halfLength, z));
+                uvs.Add(new System.Numerics.Vector2((float)i / sliceCount, 1));
+
+                // Bottom circle
+                vertices.Add(new System.Numerics.Vector3(x, -halfLength, z));
+                uvs.Add(new System.Numerics.Vector2((float)i / sliceCount, 0));
+            }
+
+            // Add the center vertices for the top and bottom circles
+            vertices.Add(new System.Numerics.Vector3(0, halfLength, 0));
+            uvs.Add(new System.Numerics.Vector2(0.5f, 1));
+            vertices.Add(new System.Numerics.Vector3(0, -halfLength, 0));
+            uvs.Add(new System.Numerics.Vector2(0.5f, 0));
+
+            int topCenterIndex = vertices.Count - 2;
+            int bottomCenterIndex = vertices.Count - 1;
+
+            // Create the indices for the sides of the cylinder
+            for (int i = 0; i < sliceCount; i++)
+            {
+                int top1 = i * 2;
+                int top2 = top1 + 2;
+                int bottom1 = top1 + 1;
+                int bottom2 = top2 + 1;
+
+                if (i == sliceCount - 1)
+                {
+                    top2 = 0;
+                    bottom2 = 1;
+                }
+
+                indices.Add((uint)top1);
+                indices.Add((uint)bottom1);
+                indices.Add((uint)top2);
+
+                indices.Add((uint)bottom1);
+                indices.Add((uint)bottom2);
+                indices.Add((uint)top2);
+            }
+
+            // Create the indices for the top and bottom circles
+            for (int i = 0; i < sliceCount; i++)
+            {
+                int top1 = i * 2;
+                int top2 = (i == sliceCount - 1) ? 0 : top1 + 2;
+                int bottom1 = top1 + 1;
+                int bottom2 = (i == sliceCount - 1) ? 1 : bottom1 + 2;
+
+                // Top circle
+                indices.Add((uint)top1);
+                indices.Add((uint)top2);
+                indices.Add((uint)topCenterIndex);
+
+                // Bottom circle
+                indices.Add((uint)bottom2);
+                indices.Add((uint)bottom1);
+                indices.Add((uint)bottomCenterIndex);
+            }
+
+            mesh.vertices = vertices.ToArray();
+            mesh.uv = uvs.ToArray();
+            mesh.indices = indices.ToArray();
+
+            mesh.RecalculateBounds();
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+
+            return mesh;
+        }
+
+        public static Mesh CreateTriangle(Vector3 a, Vector3 b, Vector3 c)
+        {
+            Mesh mesh = new Mesh();
+            mesh.vertices = new System.Numerics.Vector3[] { a, b, c };
+            mesh.indices = new uint[] { 0, 1, 2 };
+            mesh.RecalculateBounds();
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+            return mesh;
+        }
+
         private void DeleteGPUBuffers()
         {
             vertexBuffer?.Dispose();

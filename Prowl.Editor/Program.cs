@@ -1,5 +1,4 @@
 ﻿using Prowl.Editor.Assets;
-using Prowl.Editor.EditorWindows;
 using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
@@ -198,7 +197,6 @@ Pass
             ImporterAttribute.GenerateLookUp();
 
             // Start with the project window open
-            //new OldProjectsWindow();
             new ProjectsWindow();
         };
 
@@ -265,7 +263,12 @@ Pass
                     bool hasGameWindow = GameWindow.LastFocused != null && GameWindow.LastFocused.IsAlive;
                     // Push GameWindow's input handler
                     if (hasGameWindow) Input.PushHandler((GameWindow.LastFocused.Target as GameWindow).InputHandler);
+
+                    PlayMode.GameTime.Update(delta);
+                    Time.TimeStack.Push(PlayMode.GameTime);
                     SceneManager.Update();
+                    Time.TimeStack.Pop();
+
                     if (hasGameWindow) Input.PopHandler();
                 }
                 catch (Exception e)

@@ -52,6 +52,7 @@ namespace Prowl.Editor
         protected override bool TitleBar => false;
         
         string _path = "";
+        bool pastFirstFrame = false;
 
         public FileDialog(FileDialogContext dialogInfo) : base()
         {
@@ -244,12 +245,14 @@ namespace Prowl.Editor
             }
 
             // Clicked outside Window
-            if (gui.IsPointerClick(MouseButton.Left) && !gui.IsPointerHovering())
+            if (pastFirstFrame && gui.IsPointerClick(MouseButton.Left) && !gui.IsPointerHovering())
             {
                 Debug.Log("clicked outside of window");
                 isOpened = false;
                 Dialog.OnCancel?.Invoke();
             }
+
+            pastFirstFrame = true;
         }
 
         private void ShortcutOption(string name, string path)

@@ -9,6 +9,9 @@ public static class PlayMode {
 
     public static Mode Current { get; private set; }
 
+
+    public static TimeData GameTime = new();
+
     public static void Start() {
 
         SceneManager.StoreScene();
@@ -16,6 +19,8 @@ public static class PlayMode {
         Current = Mode.Playing;
         SceneManager.Clear();
         SceneManager.RestoreScene(); // Resets GameObjects and Components to re-trigger things like Awake() and Start()
+
+        GameTime = new();
 
         // Focus GameWindow
         if (GameWindow.LastFocused != null && GameWindow.LastFocused.IsAlive)

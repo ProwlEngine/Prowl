@@ -209,7 +209,7 @@ namespace Prowl.Editor
                     if (!config.HasFlag(PropertyGridConfig.NoBackground))
                         ActiveGUI.Draw2D.DrawRectFilled(headerRect, EditorStylePrefs.Indigo);
 
-                    ActiveGUI.Draw2D.DrawText(name, headerRect, false);
+                    ActiveGUI.Draw2D.DrawText(RuntimeUtils.Prettify(name), headerRect, false);
                 }
 
                 changed = DrawProperties(ref target, targetFields, config);
@@ -237,7 +237,7 @@ namespace Prowl.Editor
                 members.AddRange(target.GetType().GetFields(BindingFlags.NonPublic | BindingFlags.Instance));
 
             if (all || targetFields.HasFlag(TargetFields.Properties))
-                members.AddRange(target.GetType().GetProperties().Where(prop => prop.CanRead && prop.CanWrite && prop.GetCustomAttribute<ShowInInspectorAttribute>() != null));
+                members.AddRange(target.GetType().GetProperties().Where(prop => prop.CanRead && prop.CanWrite && prop.GetCustomAttribute<ShowInInspectorAttribute>(false) != null));
 
             // Draw the fields & properties
             bool changed = false;
@@ -257,15 +257,18 @@ namespace Prowl.Editor
                     continue;
 
                 // Draw the property
-                changed |= DrawerAttribute.DrawProperty(ActiveGUI, field.Name, i++, fieldType, ref fieldValue, config);
+                bool propChange = DrawerAttribute.DrawProperty(ActiveGUI, field.Name, i++, fieldType, ref fieldValue, config);
 
                 HandleEndAttributes(imGuiAttributes);
 
                 // Update the value
-                field.SetValue(target, fieldValue);
+                if(propChange)
+                    field.SetValue(target, fieldValue);
+
+                changed |= propChange;
             }
 
-            HandleAttributeButtons("Btn", target);
+            changed |= HandleAttributeButtons("Btn", target);
 
             return changed;
         }
@@ -356,6 +359,7 @@ namespace Prowl.Editor
                                 Debug.LogError("Error During ImGui Button Execution: " + e.Message + "\n" + e.StackTrace);
                             }
                             ActiveGUI.Draw2D.DrawRectFilled(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.ButtonRoundness);
+                            return true;
                         }
                         else if (ActiveGUI.IsNodeHovered())
                             ActiveGUI.Draw2D.DrawRectFilled(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
@@ -363,7 +367,6 @@ namespace Prowl.Editor
                             ActiveGUI.Draw2D.DrawRect(ActiveGUI.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 1, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
                         ActiveGUI.Draw2D.DrawText(attribute.buttonText, ActiveGUI.CurrentNode.LayoutData.Rect);
-                        return true;
                     }
             }
             return false;

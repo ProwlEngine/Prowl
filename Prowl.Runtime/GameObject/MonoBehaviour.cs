@@ -19,6 +19,7 @@ public abstract class MonoBehaviour : EngineObject
 
     private Dictionary<string, Coroutine> _coroutines = new();
     private Dictionary<string, Coroutine> _endOfFrameCoroutines = new();
+    private Dictionary<string, Coroutine> _fixedUpdateCoroutines = new();
 
     public enum RenderingOrder { None, Opaque, Lighting }
     public virtual RenderingOrder RenderOrder => RenderingOrder.None;
@@ -35,11 +36,9 @@ public abstract class MonoBehaviour : EngineObject
 
     public string Tag => _go.tag;
 
-    public bool Enabled
-    {
+    public bool Enabled {
         get { return _enabled; }
-        set
-        {
+        set {
             if (value != _enabled)
             {
                 _enabled = value;
@@ -66,12 +65,15 @@ public abstract class MonoBehaviour : EngineObject
     public MonoBehaviour? GetComponent(Type type) => GameObject.GetComponent(type);
     public bool TryGetComponent<T>(out T component) where T : MonoBehaviour => (component = GetComponent<T>()) != null;
     public IEnumerable<T> GetComponents<T>() where T : MonoBehaviour => GameObject.GetComponents<T>();
+    public IEnumerable<MonoBehaviour> GetComponents(Type type) => GameObject.GetComponents(type);
     public T? GetComponentInParent<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentInParent<T>(includeSelf);
     public MonoBehaviour? GetComponentInParent(Type componentType, bool includeSelf = true) => GameObject.GetComponentInParent(componentType, includeSelf);
     public IEnumerable<T> GetComponentsInParent<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentsInParent<T>(includeSelf);
+    public IEnumerable<MonoBehaviour> GetComponentsInParent(Type type, bool includeSelf = true) => GameObject.GetComponentsInParent(type, includeSelf);
     public T? GetComponentInChildren<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentInChildren<T>(includeSelf);
     public MonoBehaviour? GetComponentInChildren(Type componentType, bool includeSelf = true) => GameObject.GetComponentInChildren(componentType, includeSelf);
     public IEnumerable<T> GetComponentsInChildren<T>(bool includeSelf = true) where T : MonoBehaviour => GameObject.GetComponentsInChildren<T>(includeSelf);
+    public IEnumerable<MonoBehaviour> GetComponentsInChildren(Type type, bool includeSelf = true) => GameObject.GetComponentsInChildren(type, includeSelf);
     #endregion
 
     internal void AttachToGameObject(GameObject go)
@@ -139,7 +141,7 @@ public abstract class MonoBehaviour : EngineObject
         HasStarted = true;
         Start();
     }
-    
+
     private static Dictionary<Type, bool> CachedExecuteAlways = new();
     internal void Do(Action action)
     {
@@ -180,6 +182,8 @@ public abstract class MonoBehaviour : EngineObject
 
         if (coroutine.Enumerator.Current is WaitForEndOfFrame)
             _endOfFrameCoroutines.Add(methodName, coroutine);
+        else if (coroutine.Enumerator.Current is WaitForFixedUpdate)
+            _fixedUpdateCoroutines.Add(methodName, coroutine);
         else
             _coroutines.Add(methodName, coroutine);
 
@@ -190,6 +194,7 @@ public abstract class MonoBehaviour : EngineObject
     {
         _coroutines.Clear();
         _endOfFrameCoroutines.Clear();
+        _fixedUpdateCoroutines.Clear();
     }
 
     public void StopCoroutine(string methodName)
@@ -197,6 +202,7 @@ public abstract class MonoBehaviour : EngineObject
         methodName = methodName.Trim();
         _coroutines.Remove(methodName);
         _endOfFrameCoroutines.Remove(methodName);
+        _fixedUpdateCoroutines.Remove(methodName);
     }
 
     public class YieldInstruction
@@ -216,6 +222,10 @@ public abstract class MonoBehaviour : EngineObject
     {
     }
 
+    public class WaitForFixedUpdate : YieldInstruction
+    {
+    }
+
     public sealed class Coroutine : YieldInstruction
     {
         internal bool isDone { get; private set; }
@@ -225,10 +235,8 @@ public abstract class MonoBehaviour : EngineObject
             Enumerator = routine;
         }
 
-        internal bool CanRun
-        {
-            get
-            {
+        internal bool CanRun {
+            get {
                 object current = Enumerator.Current;
 
                 if (current is Coroutine)
@@ -269,6 +277,8 @@ public abstract class MonoBehaviour : EngineObject
             {
                 if (coroutine.Value.Enumerator.Current is WaitForEndOfFrame)
                     _endOfFrameCoroutines.Add(coroutine.Key, coroutine.Value);
+                else if (coroutine.Value.Enumerator.Current is WaitForFixedUpdate)
+                    _fixedUpdateCoroutines.Add(coroutine.Key, coroutine.Value);
                 else
                     _coroutines.Add(coroutine.Key, coroutine.Value);
             }
@@ -287,6 +297,24 @@ public abstract class MonoBehaviour : EngineObject
             {
                 if (coroutine.Value.Enumerator.Current is WaitForEndOfFrame)
                     _endOfFrameCoroutines.Add(coroutine.Key, coroutine.Value);
+                else
+                    _coroutines.Add(coroutine.Key, coroutine.Value);
+            }
+        }
+    }
+
+    internal void UpdateFixedUpdateCoroutines()
+    {
+        _fixedUpdateCoroutines ??= new Dictionary<string, Coroutine>();
+        var tempList = new Dictionary<string, Coroutine>(_fixedUpdateCoroutines);
+        _fixedUpdateCoroutines.Clear();
+        foreach (var coroutine in tempList)
+        {
+            coroutine.Value.Run();
+            if (coroutine.Value.isDone)
+            {
+                if (coroutine.Value.Enumerator.Current is WaitForFixedUpdate)
+                    _fixedUpdateCoroutines.Add(coroutine.Key, coroutine.Value);
                 else
                     _coroutines.Add(coroutine.Key, coroutine.Value);
             }

@@ -151,22 +151,22 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         using (ActiveGUI.Node("PosParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
                             var tpos = t.localPosition;
-                            EditorGUI.DrawProperty(0, "Position", ref tpos);
-                            t.localPosition = tpos;
+                            if (EditorGUI.DrawProperty(0, "Position", ref tpos))
+                                t.localPosition = tpos;
                         }
 
                         using (ActiveGUI.Node("RotParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
                             var tpos = t.localEulerAngles;
-                            EditorGUI.DrawProperty(1, "Rotation", ref tpos);
-                            t.localEulerAngles = tpos;
+                            if (EditorGUI.DrawProperty(1, "Rotation", ref tpos))
+                                t.localEulerAngles = tpos;
                         }
 
                         using (ActiveGUI.Node("ScaleParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
                             var tpos = t.localScale;
-                            EditorGUI.DrawProperty(2, "Scale", ref tpos);
-                            t.localScale = tpos;
+                            if (EditorGUI.DrawProperty(2, "Scale", ref tpos))
+                                t.localScale = tpos;
                         }
                     }
                 }

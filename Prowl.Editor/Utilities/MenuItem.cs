@@ -101,6 +101,14 @@ namespace Prowl.Editor
             Menus = trees;
         }
 
+        public static MenuPath? GetMenuPath(string root)
+        {
+            if (Menus == null) return null;
+            if (root == null) return null;
+            if (!Menus.ContainsKey(root)) return null;
+            return Menus[root];
+        }
+
         public static bool DrawMenuRoot(string root, bool simpleRoot = false, Size? rootSize = null)
         {
             if (Menus == null) return false;
@@ -116,7 +124,7 @@ namespace Prowl.Editor
             return changed;
         }
 
-        static bool DrawMenu(MenuPath menu, bool simpleRoot, int depth, Size? rootSize = null)
+        public static bool DrawMenu(MenuPath menu, bool simpleRoot, int depth, Size? rootSize = null)
         {
             if (menu == null) return false;
             if (menu.Children.Count == 0)

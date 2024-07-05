@@ -1,58 +1,59 @@
 ﻿using BepuPhysics;
-using BepuPhysics.Collidables;
+using Prowl.Icons;
 using System;
 
 namespace Prowl.Runtime;
 
 [RequireComponent(typeof(CapsuleCollider))]
-public sealed class CharacterController : MonoBehaviour
+[AddComponentMenu($"{FontAwesome6.HillRockslide}  Physics/{FontAwesome6.Person}  Character Controller")]
+public sealed class CharacterController : Rigidbody
 {
     public float speed = 4f;
     public float jumpVelocity = 6f;
     public float maxSlope = (MathF.PI * 0.25f).ToDeg();
+    public float maxVerticalForce = 100;
+    public float maxHoriztonalForce = 20;
+    public float supportDepth = -0.05f;
+    public float supportContinuationDepth = -0.1f;
 
-    public BodyHandle BodyHandle { get; private set; }
-
+    [ShowInInspector]
     public Vector2 TargetVelocity { get; set; } = Vector2.zero;
     public bool IsGrounded { get; private set; } = false;
     
-    public override void OnEnable()
-    {
-        CapsuleCollider collider = GetComponent<CapsuleCollider>()!;
-        if (collider.shape == null)
-            collider.CreateShape();
+    public override bool Kinematic {
+        get => false;
+        set => Debug.LogWarning("CharacterController cannot be kinematic");
+    }
 
-        BodyHandle = Physics.Sim.Bodies.Add(
-            BodyDescription.CreateDynamic(this.Transform.position.ToFloat(), new BodyInertia { InverseMass = 1f / collider.mass },
-            new(collider.shapeIndex!.Value, 0.1f, float.MaxValue, ContinuousDetection.Passive), collider.radius * 0.02f));
-        ref var character = ref Physics.Characters.AllocateCharacter(BodyHandle);
+    protected override void RigidbodyAttached()
+    {
+        ref var character = ref Physics.Characters.AllocateCharacter(base.BodyReference.Value.Handle);
         character.LocalUp = new Vector3(0, 1, 0);
         character.JumpVelocity = jumpVelocity;
-        character.MaximumVerticalForce = 100;
-        character.MaximumHorizontalForce = 20;
-        character.MinimumSupportDepth = collider.radius * -0.01f;
-        character.MinimumSupportContinuationDepth = -0.1f;
+        character.MaximumVerticalForce = maxVerticalForce;
+        character.MaximumHorizontalForce = maxHoriztonalForce;
+        character.MinimumSupportDepth = supportDepth;
+        character.MinimumSupportContinuationDepth = supportContinuationDepth;
         character.CosMaximumSlope = MathF.Cos(maxSlope.ToRad());
 
         character.TargetVelocity = TargetVelocity;
+
+        base.BodyReference.Value.SetLocalInertia(new BodyInertia { InverseMass = 1f / base.Mass });
     }
 
-    public override void OnDisable()
+    protected override void RigidbodyDetached()
     {
-        Physics.Sim.Shapes.Remove(new BodyReference(BodyHandle, Physics.Sim.Bodies).Collidable.Shape);
-        Physics.Sim.Bodies.Remove(BodyHandle);
-        Physics.Characters.RemoveCharacterByBodyHandle(BodyHandle);
+        Physics.Characters.RemoveCharacterByBodyHandle(base.BodyReference.Value.Handle);
     }
 
     public override void Update()
     {
-        ref var character = ref Physics.Characters.GetCharacterByBodyHandle(BodyHandle);
-        var characterBody = new BodyReference(BodyHandle, Physics.Sim.Bodies);
+        ref var character = ref Physics.Characters.GetCharacterByBodyHandle(base.BodyReference.Value.Handle);
 
         character.CosMaximumSlope = MathF.Cos(maxSlope.ToRad());
         character.JumpVelocity = jumpVelocity;
 
-        if (!characterBody.Awake &&
+        if (!base.BodyReference.Value.Awake &&
             ((character.TryJump && character.Supported) ||
             TargetVelocity.ToFloat() != character.TargetVelocity ||
             (TargetVelocity != Vector2.zero && character.ViewDirection != this.Transform.forward.ToFloat())))
@@ -63,27 +64,10 @@ public sealed class CharacterController : MonoBehaviour
         character.ViewDirection = this.Transform.forward;
         character.TargetVelocity = TargetVelocity;
         IsGrounded = character.Supported;
+
+        if (!base.Kinematic)
+            base.BodyReference.Value.LocalInertia = new BodyInertia { InverseMass = 1f / base.Mass };
     }
 
-    private uint lastVersion = 0;
-    public override void LateUpdate()
-    {
-        var body = new BodyReference(BodyHandle, Physics.Sim.Bodies);
-
-        if (lastVersion != this.GameObject.Transform.version)
-        {
-            body.Pose.Position = this.GameObject.Transform.position;
-            body.Pose.Orientation = this.GameObject.Transform.rotation;
-            body.Velocity.Linear = Vector3.zero;
-            body.Velocity.Angular = Vector3.zero;
-            body.Awake = true;
-            lastVersion = this.GameObject.Transform.version;
-        }
-
-        this.GameObject.Transform.position = body.Pose.Position;
-        this.GameObject.Transform.rotation = body.Pose.Orientation;
-        lastVersion = this.GameObject.Transform.version;
-    }
-
-    public void TryJump() => Physics.Characters.GetCharacterByBodyHandle(BodyHandle).TryJump = true;
+    public void TryJump() => Physics.Characters.GetCharacterByBodyHandle(base.BodyReference.Value.Handle).TryJump = true;
 }
