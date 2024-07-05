@@ -49,6 +49,8 @@ namespace Prowl.Runtime
         private DtNavMeshQuery _query;
 
 
+        private DtCrowd crowd;
+        private List<NavMeshAgent> agents;
 
         #region Debug
 
@@ -65,6 +67,17 @@ namespace Prowl.Runtime
         public override void Awake()
         {
             if (navMesh == null) return;
+
+            agents = new();
+            DtCrowdConfig config = new DtCrowdConfig(0.6f);
+            crowd = new DtCrowd(config, navMesh);
+            DtObstacleAvoidanceParams option = new DtObstacleAvoidanceParams();
+            option.velBias = 0.5f;
+            option.adaptiveDivs = 5;
+            option.adaptiveRings = 2;
+            option.adaptiveDepth = 1;
+            crowd.SetObstacleAvoidanceParams(0, option);
+
             ready = true;
         }
 
@@ -326,6 +339,64 @@ namespace Prowl.Runtime
 
             CacheDebugData();
         }
+
+        public void RegisterAgent(NavMeshAgent agent)
+        {
+            ArgumentNullException.ThrowIfNull(agent);
+            if (!ready) throw new InvalidOperationException("Cannot register NavMeshAgent to a NavMeshSurface that has no NavMesh or hasn't been initialized!");
+
+            agent.InternalAgent = crowd.AddAgent(ToRC(agent.Transform.position), agent.GetAgentParams());
+            agents.Add(agent);
+        }
+
+        public void UnregisterAgent(NavMeshAgent agent)
+        {
+            ArgumentNullException.ThrowIfNull(agent);
+            if (!ready) throw new InvalidOperationException("Cannot unregister NavMeshAgent to a NavMeshSurface that has no NavMesh or hasn't been initialized!");
+
+            crowd.RemoveAgent(agent.InternalAgent);
+            agent.InternalAgent = null;
+            agents.Remove(agent);
+        }
+
+        public void MoveAllToTarget(RcVec3f pos, bool adjust)
+        {
+            if (!ready) throw new InvalidOperationException("Cannot set move target on a NavMeshSurface that has no NavMesh or hasn't been initialized!");
+
+            foreach (var ag in agents)
+                MoveToTarget(ag, pos, adjust);
+        }
+
+        public void MoveToTarget(NavMeshAgent agent, RcVec3f pos, bool adjust)
+        {
+            ArgumentNullException.ThrowIfNull(agent);
+            ArgumentNullException.ThrowIfNull(agent.InternalAgent);
+            if (!ready) throw new InvalidOperationException("Cannot set move target on a NavMeshSurface that has no NavMesh or hasn't been initialized!");
+
+            RcVec3f ext = crowd.GetQueryExtents();
+            IDtQueryFilter filter = crowd.GetFilter(0);
+            if (adjust)
+            {
+                RcVec3f vel = CalcVel(agent.InternalAgent!.npos, pos, agent.InternalAgent!.option.maxSpeed);
+                crowd.RequestMoveVelocity(agent.InternalAgent!, vel);
+            }
+            else
+            {
+                Query!.FindNearestPoly(pos, ext, filter, out var nearestRef, out var nearestPt, out var _);
+                crowd.RequestMoveTarget(agent.InternalAgent!, nearestRef, nearestPt);
+            }
+        }
+
+        public RcVec3f CalcVel(RcVec3f pos, RcVec3f tgt, float speed)
+        {
+            RcVec3f vel = RcVec3f.Subtract(tgt, pos);
+            vel.Y = 0.0f;
+            vel = RcVec3f.Normalize(vel);
+            vel = vel * speed;
+            return vel;
+        }
+
+
         #endregion
 
         class SceneMeshData
