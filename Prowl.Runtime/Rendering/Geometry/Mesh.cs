@@ -205,6 +205,7 @@ namespace Prowl.Runtime
             colors = null;
             uv = null;
             uv2 = null;
+            indices16 = null;
             indices32 = null;
             tangents = null;
             boneIndices = null;
@@ -227,28 +228,36 @@ namespace Prowl.Runtime
             if (vertices == null || vertices.Length == 0)
                 throw new InvalidOperationException($"Mesh has no vertices");
 
-            if (indices32 == null || indices32.Length == 0)
+            if (indexFormat == IndexFormat.UInt16)
+            {
+                if (indices16 == null || indices16.Length == 0)
+                    throw new InvalidOperationException($"Mesh has no indices");
+            }
+            else if (indices32 == null || indices32.Length == 0)
+            {
                 throw new InvalidOperationException($"Mesh has no indices");
+            }
 
+            int indexLength = indexFormat == IndexFormat.UInt16 ? indices16.Length : indices32.Length;
             switch (meshTopology)
             {
                 case PrimitiveTopology.TriangleList:
-                    if (indices32.Length % 3 != 0)
-                        throw new InvalidOperationException($"Triangle List mesh doesn't have the right amount of indices. Has: {indices32.Length}. Should be a multiple of 3");
+                    if (indexLength % 3 != 0)
+                        throw new InvalidOperationException($"Triangle List mesh doesn't have the right amount of indices. Has: {indexLength}. Should be a multiple of 3");
                     break;
                 case PrimitiveTopology.TriangleStrip:
-                    if (indices32.Length < 3)
-                        throw new InvalidOperationException($"Triangle Strip mesh doesn't have the right amount of indices. Has: {indices32.Length}. Should have at least 3");
+                    if (indexLength < 3)
+                        throw new InvalidOperationException($"Triangle Strip mesh doesn't have the right amount of indices. Has: {indexLength}. Should have at least 3");
                     break;
 
                 case PrimitiveTopology.LineList:
-                    if (indices32.Length % 2 != 0)
-                        throw new InvalidOperationException($"Line List mesh doesn't have the right amount of indices. Has: {indices32.Length}. Should be a multiple of 2");
+                    if (indexLength % 2 != 0)
+                        throw new InvalidOperationException($"Line List mesh doesn't have the right amount of indices. Has: {indexLength}. Should be a multiple of 2");
                     break;
 
                 case PrimitiveTopology.LineStrip:
-                    if (indices32.Length < 2)
-                        throw new InvalidOperationException($"Line Strip mesh doesn't have the right amount of indices. Has: {indices32.Length}. Should have at least 2");
+                    if (indexLength < 2)
+                        throw new InvalidOperationException($"Line Strip mesh doesn't have the right amount of indices. Has: {indexLength}. Should have at least 2");
                     break;
             }
 
@@ -280,17 +289,14 @@ namespace Prowl.Runtime
             if (HasBoneWeights)
                 Graphics.Device.UpdateBuffer(vertexBuffer, (uint)BoneWeightStart, boneWeights);
 
-
-            // Index buffer upload
-            uint indexByteSize = (uint)(indexFormat == IndexFormat.UInt16 ? sizeof(ushort) : sizeof(uint));
-            indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)indices32.Length * indexByteSize, BufferUsage.IndexBuffer));
-
             if (indexFormat == IndexFormat.UInt16)
             {
+                indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)indices16.Length * sizeof(ushort), BufferUsage.IndexBuffer));
                 Graphics.Device.UpdateBuffer(indexBuffer, 0, indices16);
             }
             else if (indexFormat == IndexFormat.UInt32)
             {
+                indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)indices32.Length * sizeof(uint), BufferUsage.IndexBuffer));
                 Graphics.Device.UpdateBuffer(indexBuffer, 0, indices32);
             }
         }
@@ -424,25 +430,24 @@ namespace Prowl.Runtime
         public static Mesh GetFullscreenQuad()
         {
             if (fullScreenQuad != null) return fullScreenQuad;
-            Mesh mesh = new Mesh
-            {
-                vertices = [
-                    new System.Numerics.Vector3(-1, -1, 0),
-                    new System.Numerics.Vector3(1, -1, 0),
-                    new System.Numerics.Vector3(-1, 1, 0),
-                    new System.Numerics.Vector3(1, 1, 0),
-                ],
+            Mesh mesh = new Mesh();
+            
+            mesh.Vertices = [
+                new System.Numerics.Vector3(-1, -1, 0),
+                new System.Numerics.Vector3(1, -1, 0),
+                new System.Numerics.Vector3(-1, 1, 0),
+                new System.Numerics.Vector3(1, 1, 0),
+            ];
 
-                uv = [
-                    new System.Numerics.Vector2(0, 0),
-                    new System.Numerics.Vector2(1, 0),
-                    new System.Numerics.Vector2(0, 1),
-                    new System.Numerics.Vector2(1, 1),
-                ],
+            mesh.UV = [
+                new System.Numerics.Vector2(0, 0),
+                new System.Numerics.Vector2(1, 0),
+                new System.Numerics.Vector2(0, 1),
+                new System.Numerics.Vector2(1, 1),
+            ];
 
-                indices16 = [0, 2, 1, 2, 3, 1],
-                IndexFormat = IndexFormat.UInt16
-            };
+            mesh.IndexFormat = IndexFormat.UInt16;
+            mesh.Indices16 = [0, 2, 1, 2, 3, 1];
 
             fullScreenQuad = mesh;
             return mesh;
@@ -492,10 +497,10 @@ namespace Prowl.Runtime
                 }
             }
 
-            mesh.vertices = vertices.ToArray();
-            mesh.uv = uvs.ToArray();
+            mesh.Vertices = vertices.ToArray();
+            mesh.UV = uvs.ToArray();
             mesh.IndexFormat = IndexFormat.UInt16;
-            mesh.indices16 = indices.ToArray();
+            mesh.Indices16 = indices.ToArray();
 
             mesh.RecalculateBounds();
             mesh.RecalculateNormals();
@@ -558,10 +563,10 @@ namespace Prowl.Runtime
                 20, 22, 21, 20, 23, 22  // Bottom face
             };
 
-            mesh.vertices = vertices;
-            mesh.uv = uvs;
+            mesh.Vertices = vertices;
+            mesh.UV = uvs;
             mesh.IndexFormat = IndexFormat.UInt16;
-            mesh.indices16 = indices;
+            mesh.Indices16 = indices;
 
             mesh.RecalculateBounds();
             mesh.RecalculateNormals();
@@ -648,10 +653,10 @@ namespace Prowl.Runtime
                 indices.Add((ushort)bottomCenterIndex);
             }
 
-            mesh.vertices = vertices.ToArray();
-            mesh.uv = uvs.ToArray();
+            mesh.Vertices = vertices.ToArray();
+            mesh.UV = uvs.ToArray();
             mesh.IndexFormat = IndexFormat.UInt16;
-            mesh.indices16 = indices.ToArray();
+            mesh.Indices16 = indices.ToArray();
 
             mesh.RecalculateBounds();
             mesh.RecalculateNormals();
@@ -663,8 +668,9 @@ namespace Prowl.Runtime
         public static Mesh CreateTriangle(Vector3 a, Vector3 b, Vector3 c)
         {
             Mesh mesh = new Mesh();
-            mesh.vertices = new System.Numerics.Vector3[] { a, b, c };
-            mesh.indices32 = new uint[] { 0, 1, 2 };
+            mesh.Vertices = [a, b, c];
+            mesh.IndexFormat = IndexFormat.UInt16;
+            mesh.Indices16 = [ 0, 1, 2 ];
             mesh.RecalculateBounds();
             mesh.RecalculateNormals();
             mesh.RecalculateTangents();

@@ -4,13 +4,15 @@ Properties
 {
 }
 
-Pass 0
+Pass
 {
-	BlendSrc SrcAlpha
-	BlendDst One
-
-	Vertex
+	Blend
 	{
+		Src Alpha SourceAlpha
+		Dest Alpha One
+	}
+
+	PROGRAM VERTEX
 		in vec3 vertexPosition;
 		in vec2 vertexTexCoord;
 		
@@ -21,10 +23,9 @@ Pass 0
 			gl_Position =vec4(vertexPosition, 1.0);
 			TexCoords = vertexTexCoord;
 		}
-	}
+	ENDPROGRAM
 
-	Fragment
-	{
+	PROGRAM FRAGMENT
 		in vec2 TexCoords;
 		uniform sampler2D texture0;
 		
@@ -34,5 +35,5 @@ Pass 0
 		{
 		    finalColor = vec4(texture(texture0, TexCoords).xyz, 1.0);
 		}
-	}
+	ENDPROGRAM
 }

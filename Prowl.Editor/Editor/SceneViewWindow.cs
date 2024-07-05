@@ -1,4 +1,5 @@
-﻿using Prowl.Editor.Preferences;
+﻿using Prowl.Editor.Assets;
+using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
@@ -15,6 +16,7 @@ public class SceneViewWindow : EditorWindow
 
     Camera Cam;
     Material gridMat;
+    Mesh gridMesh;
     RenderTexture RenderTarget;
     Vector2 WindowCenter;
     Vector2 mouseUV;
@@ -61,11 +63,6 @@ public class SceneViewWindow : EditorWindow
             true);
     }
 
-    private void DrawScene()
-    {
-
-    }
-
     protected override void Draw()
     {
         frames++;
@@ -97,12 +94,12 @@ public class SceneViewWindow : EditorWindow
         Cam.NearClip = SceneViewPreferences.Instance.NearClip;
         Cam.FarClip = SceneViewPreferences.Instance.FarClip;
 
-        //RenderingContext context = new()
-        //{
-        //    TargetFramebuffer = RenderTarget.Framebuffer
-        //};
+        RenderingContext context = new()
+        {
+            TargetFramebuffer = RenderTarget.Framebuffer
+        };
 
-        //Graphics.Render([ Cam ], context);
+        Graphics.Render([ Cam ], context);
 
         #warning Veldrid change
         // SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
@@ -134,10 +131,13 @@ public class SceneViewWindow : EditorWindow
         {
             #warning Veldrid change
 
-            /*
             CommandBuffer buffer = CommandBufferPool.Get("Scene View Buffer");
 
+            gridMesh ??= Mesh.GetFullscreenQuad();
             gridMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Grid.shader"));
+
+            if (gridMesh.IndexCount == 0)
+                throw new Exception("NO");
 
             Matrix4x4.Invert(view * projection, out Matrix4x4 result);
 
@@ -149,15 +149,14 @@ public class SceneViewWindow : EditorWindow
             buffer.SetVector("SecondaryGridSize", Cam.Transform.position);
 
             buffer.SetMaterial(gridMat);
-            buffer.DrawSingle(Mesh.GetFullscreenQuad());
+            buffer.DrawSingle(gridMesh);
             
             context.Submit(buffer);
 
             CommandBufferPool.Release(buffer);
-            */
         }
 
-        //context.Execute();
+        context.Execute();
 
         var selectedWeaks = HierarchyWindow.SelectHandler.Selected;
         var selectedGOs = new List<GameObject>();

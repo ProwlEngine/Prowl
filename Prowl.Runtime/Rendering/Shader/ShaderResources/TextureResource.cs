@@ -6,9 +6,18 @@ namespace Prowl.Runtime
 {
     public class TextureResource : ShaderResource
     {
-        public string textureName { get; private set; }
-        public bool readWrite { get; private set; }
-        public ShaderStages stages { get; private set; }
+        [SerializeField, HideInInspector]
+        private string textureName;
+        public string TextureName => textureName;
+
+        [SerializeField, HideInInspector]
+        private bool readWrite;
+        public bool ReadWrite => readWrite;
+
+        [SerializeField, HideInInspector]
+        private ShaderStages stages;
+        public ShaderStages Stages => stages;
+
 
         private TextureResource() { }
 
@@ -43,30 +52,17 @@ namespace Prowl.Runtime
         }
 
         public override string GetResourceName() => textureName;
-
-        public override SerializedProperty Serialize(Serializer.SerializationContext ctx)
-        {
-            SerializedProperty serializedTexture = SerializedProperty.NewCompound();
-
-            serializedTexture.Add("TextureName", new(textureName));
-            serializedTexture.Add("ReadWrite", new(readWrite));
-            serializedTexture.Add("Stages", new((byte)stages));
-
-            return serializedTexture;
-        }
-
-        public override void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
-        {
-            textureName = value.Get("TextureName").StringValue;
-            readWrite = value.Get("ReadWrite").BoolValue;
-            stages = (ShaderStages)value.Get("Stages").ByteValue;
-        }
     }
 
     public class SamplerResource : ShaderResource
     {
-        public string textureName { get; private set; }
-        public ShaderStages stages { get; private set; }
+        [SerializeField, HideInInspector]
+        private string textureName;
+        public string TextureName => textureName;
+
+        [SerializeField, HideInInspector]
+        private ShaderStages stages;
+        public ShaderStages Stages => stages;
 
         private SamplerResource() { }
 
@@ -98,21 +94,5 @@ namespace Prowl.Runtime
         }
 
         public override string GetResourceName() => textureName;
-
-        public override SerializedProperty Serialize(Serializer.SerializationContext ctx)
-        {
-            SerializedProperty serializedTexture = SerializedProperty.NewCompound();
-
-            serializedTexture.Add("TextureName", new(textureName));
-            serializedTexture.Add("Stages", new((byte)stages));
-
-            return serializedTexture;
-        }
-
-        public override void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
-        {
-            textureName = value.Get("TextureName").StringValue;
-            stages = (ShaderStages)value.Get("Stages").ByteValue;
-        }
     }
 }

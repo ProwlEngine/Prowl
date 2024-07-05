@@ -60,7 +60,7 @@ namespace Prowl.Editor.Assets
                 passes.Add(pass);
             }
 
-            return new Runtime.Shader("New Shader", parsed.Properties.ToArray(), passes.ToArray()); 
+            return new Runtime.Shader(parsed.Name, parsed.Properties.ToArray(), passes.ToArray()); 
         }
 
         private class ImporterVariantCompiler : IVariantCompiler

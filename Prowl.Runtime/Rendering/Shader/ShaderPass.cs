@@ -44,7 +44,7 @@ namespace Prowl.Runtime
         }
     }
 
-    public sealed class ShaderPass : ISerializable
+    public sealed class ShaderPass : ISerializationCallbackReceiver
     {
         [SerializeField, HideInInspector]
         private string name;
@@ -73,8 +73,21 @@ namespace Prowl.Runtime
         [NonSerialized]
         private Dictionary<string, HashSet<string>> keywords;
 
+        [SerializeField, HideInInspector]
+        private string[] serializedKeywordKeys;
+
+        [SerializeField, HideInInspector]
+        private string[][] serializedKeywordValues;
+
+
         [NonSerialized]
         private Dictionary<KeywordState, ShaderVariant> variants;
+
+        [SerializeField, HideInInspector]
+        private KeywordState[] serializedVariantKeys;
+        
+        [SerializeField, HideInInspector]
+        private ShaderVariant[] serializedVariants;
 
 
 
@@ -181,77 +194,26 @@ namespace Prowl.Runtime
             return combinedKey;
         }
 
-        public SerializedProperty Serialize(Serializer.SerializationContext ctx)
+        public void OnBeforeSerialize()
         {
-            var property = Serializer.Serialize(this, ctx);
+            serializedKeywordKeys = keywords.Keys.ToArray();
+            serializedKeywordValues = keywords.Values.Select(x => x.ToArray()).ToArray();
 
-            SerializedProperty serializedKeywords = SerializedProperty.NewList();
-
-            foreach (var keyword in keywords)
-            {
-                SerializedProperty serializedKeyword = SerializedProperty.NewCompound();
-
-                serializedKeyword.Add("Name", new(keyword.Key));
-
-                SerializedProperty serializedValues = SerializedProperty.NewList();
-
-                foreach (var value in keyword.Value)
-                    serializedValues.ListAdd(new(value));
-
-                serializedKeyword.Add("Values", serializedValues);
-
-                serializedKeywords.ListAdd(serializedKeyword);
-            }
-
-            property.Add("Keywords", serializedKeywords);
-
-            SerializedProperty serializedVariants = SerializedProperty.NewList();
-
-            foreach (var variant in variants)
-            {
-                SerializedProperty serializedVariant = Serializer.Serialize(variant.Value, ctx);
-                serializedVariants.ListAdd(serializedVariant);
-            }
-
-            property.Add("Variants", serializedVariants);
-
-            return property;
+            serializedVariantKeys = variants.Keys.ToArray();
+            serializedVariants = variants.Values.ToArray();
         }
 
-        public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
+        public void OnAfterDeserialize()
         {
-            Serializer.DeserializeInto(value, this, ctx);
-
             keywords = new();
+
+            for (int i = 0; i < serializedKeywordKeys.Length; i++)
+                keywords.Add(serializedKeywordKeys[i], new(serializedKeywordValues[i]));
+
             variants = new();
 
-            SerializedProperty serializedKeywords = value.Get("Keywords");
-
-            for (int i = 0; i < serializedKeywords.Count; i++)
-            {
-                SerializedProperty serializedKeyword = serializedKeywords[i];
-
-                HashSet<string> values = new();
-
-                SerializedProperty serializedValues = serializedKeyword.Get("Values");
-
-                for (int j = 0; j < serializedValues.Count; j++)
-                    values.Add(serializedValues[j].StringValue);
-
-                keywords.Add(serializedKeyword.Get("Name").StringValue, values);
-            }
-
-            SerializedProperty serializedVariants = value.Get("Variants");
-
-            for (int i = 0; i < serializedVariants.Count; i++)
-            {
-                SerializedProperty serializedVariant = serializedVariants[i];
-
-                ShaderVariant variant = Serializer.Deserialize<ShaderVariant>(serializedVariant);
-                
-                variants.Add(variant.VariantKeywords, variant);
-            }
+            for (int i = 0; i < serializedVariantKeys.Length; i++)
+                variants.Add(serializedVariantKeys[i], serializedVariants[i]);
         }
-
     }
 }

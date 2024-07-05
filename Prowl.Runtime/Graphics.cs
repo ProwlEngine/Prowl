@@ -1,11 +1,13 @@
 ﻿using Veldrid;
 using Veldrid.StartupUtilities;
 using System.Collections.Generic;
+using System.Threading;
 
 
 namespace Prowl.Runtime
 {   
     using RenderPipelines;
+    using System.Threading.Tasks;
 
     public static class Graphics
     {
@@ -99,7 +101,7 @@ namespace Prowl.Runtime
             return list;
         }
 
-        public static void ExecuteCommandBuffer(CommandBuffer commandBuffer, bool waitForCompletion = false)
+        public static void ExecuteCommandBuffer(CommandBuffer commandBuffer)
         {
             CommandList list = GetCommandList();
 
@@ -108,7 +110,7 @@ namespace Prowl.Runtime
             foreach (var command in commandBuffer.Buffer)
                 command.ExecuteCommand(list, ref state);
 
-            ExecuteCommandList(list, waitForCompletion);
+            ExecuteCommandList(list, true);
 
             state.Clear();
             list.Dispose();

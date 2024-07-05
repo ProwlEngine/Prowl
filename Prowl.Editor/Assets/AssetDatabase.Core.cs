@@ -502,7 +502,7 @@ namespace Prowl.Editor.Assets
             }
             catch (Exception e)
             {
-                Debug.LogError($"Failed to load serialized asset {serializedAssetPath.FullName}! Reason: {e.Message}");
+                Debug.LogError($"Failed to load serialized asset {serializedAssetPath.FullName}!", e);
                 return null; // Failed file might be in use?
             }
         }

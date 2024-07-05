@@ -2,15 +2,21 @@
 
 Pass 0
 {
-	DepthTest Off
-	DepthWrite Off
-	// DepthMode Less
-	Blend On
-	BlendSrc SrcAlpha
-	BlendDst One
-	BlendMode Add
-	Cull Off
-	// Winding CW
+
+	DepthStencil
+	{
+		DepthTest Off
+		DepthWrite Off
+	}
+
+	Blend
+	{
+		Src Alpha SourceAlpha
+		Dest Alpha One
+		Mode Alpha Add
+	}
+
+	Cull None
 
 	Vertex
 	{

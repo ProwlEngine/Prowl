@@ -1,19 +1,23 @@
 ﻿Shader "Default/Bloom"
 
-Pass 0
+Pass
 {
-	DepthTest Off
-	DepthWrite Off
-	// DepthMode Less
-	Blend On
-	BlendSrc SrcAlpha
-	BlendDst OneMinusSrcAlpha
-	BlendMode Add
-	Cull Off
-	// Winding CW
-
-	Vertex
+	DepthStencil 
 	{
+		DepthTest Off
+		DepthWrite Off
+	}
+
+	Blend
+	{
+		Src Alpha SourceAlpha
+		Dest Alpha OneMinusSrcAlpha
+		Mode Alpha Add
+	}
+
+	Cull None
+
+	PROGRAM VERTEX
 		in vec3 vertexPosition;
 		in vec2 vertexTexCoord;
 		
@@ -24,10 +28,9 @@ Pass 0
 			gl_Position =vec4(vertexPosition, 1.0);
 			TexCoords = vertexTexCoord;
 		}
-	}
+	ENDPROGRAM
 
-	Fragment
-	{
+	PROGRAM FRAGMENT
 		layout(location = 0) out vec4 OutputColor;
 		
 		in vec2 TexCoords;
@@ -57,6 +60,5 @@ Pass 0
 
 			OutputColor = vec4(color, u_Alpha);
 		}
-
-	}
+	ENDPROGRAM
 }

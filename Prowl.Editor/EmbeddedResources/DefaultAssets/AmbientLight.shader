@@ -1,43 +1,54 @@
 ﻿Shader "Default/AmbientLight"
 
-Pass 0
+Pass
 {
-	DepthTest Off
-	DepthWrite Off
-	// DepthMode Less
-	Blend On
-	BlendSrc SrcAlpha
-	BlendDst One
-	BlendMode Add
-	Cull Off
-	// Winding CW
-
-	Vertex
+	DepthStencil
 	{
-		in vec3 vertexPosition;
-		in vec2 vertexTexCoord;
+		DepthTest Off
+		DepthWrite Off
+	}
+
+	Blend
+	{
+		Src Alpha SourceAlpha
+		Src Color SourceAlpha
+
+		Dest Alpha One
+		Dest Color One
+
+		Mode Alpha Add
+		Mode Color Add
+	}
+	
+	Cull None
+
+	PROGRAM VERTEX
+		layout(location = 0) in vec3 vertexPosition;
+		layout(location = 1) in vec2 vertexTexCoord;
 		
-		out vec2 TexCoords;
+		layout(location = 0) out vec2 TexCoords;
 
 		void main() 
 		{
-			gl_Position =vec4(vertexPosition, 1.0);
+			gl_Position = vec4(vertexPosition, 1.0);
 			TexCoords = vertexTexCoord;
 		}
-	}
+	ENDPROGRAM
 
-	Fragment
-	{
+	PROGRAM FRAGMENT
 		layout(location = 0) out vec4 gBuffer_lighting;
 		
-		uniform mat4 matView;
-		
-		in vec2 TexCoords;
-		
-		uniform vec4 SkyColor;
-		uniform vec4 GroundColor;
-		uniform float SkyIntensity;
-		uniform float GroundIntensity;
+		layout(location = 0) in vec2 TexCoords;
+
+		layout(set = 0, binding = 0) uniform Properties
+		{
+			uniform mat4 matView;
+
+			uniform vec4 SkyColor;
+			uniform vec4 GroundColor;
+			uniform float SkyIntensity;
+			uniform float GroundIntensity;
+		};
 		
 		uniform sampler2D gAlbedoAO; // Albedo & Roughness
 		uniform sampler2D gNormalMetallic; // Normal & Metalness
@@ -66,6 +77,5 @@ Pass 0
 
 			gBuffer_lighting = vec4(gAlbedo * ambientColor, 1.0);
 		}
-
-	}
+	ENDPROGRAM
 }

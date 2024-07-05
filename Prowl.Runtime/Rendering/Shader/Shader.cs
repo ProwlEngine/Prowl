@@ -22,6 +22,7 @@ namespace Prowl.Runtime
         public string Name;
         public string DisplayName;
         public ShaderPropertyType PropertyType; 
+        public string DefaultProperty;
     }
 
     public sealed class Shader : EngineObject, ISerializationCallbackReceiver
@@ -195,7 +196,7 @@ namespace Prowl.Runtime
                 {
                     builder.Append($"\t\t\t{input.Elements[0].Name}\n");
                 }
-                builder.Append("\t\t{\n\n");
+                builder.Append("\t\t}\n\n");
 
                 foreach(var set in pass.GetVariant(KeywordState.Default).ResourceSets)
                 {
@@ -207,9 +208,9 @@ namespace Prowl.Runtime
                         {
                             builder.Append("\t\t\tBuffer\n\t\t\t{\n");
 
-                            foreach (var elem in bufRes.resources)
+                            foreach (var elem in bufRes.Resources)
                             {
-                                builder.Append($"\t\t\t\t{elem.Item1} {elem.Item2}\n");
+                                builder.Append($"\t\t\t\t{elem.Name} {elem.Type}\n");
                             }
 
                             builder.Append("\t\t\t}\n");
@@ -220,6 +221,8 @@ namespace Prowl.Runtime
 
                     builder.Append("\t\t}\n\n");
                 }
+
+                builder.Append("\t}\n");
 
                 builder.Append("}\n\n");
             }

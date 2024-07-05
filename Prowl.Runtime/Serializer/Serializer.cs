@@ -135,7 +135,7 @@ namespace Prowl.Runtime
             else if (p is bool bo) return new(PropertyType.Bool, bo);
             else if (p is DateTime date) return new(PropertyType.Long, date.ToBinary());
             else if (p is Guid g) return new(PropertyType.String, g.ToString());
-            else if (p.GetType().IsEnum) return new(PropertyType.Int, (int)p); // Serialize as integers
+            else if (p.GetType().IsEnum) return new(PropertyType.Int, Convert.ToInt32((Enum)p)); // Serialize as integers
             else throw new NotSupportedException("The type '" + p.GetType() + "' is not a supported primitive.");
         }
 
@@ -249,7 +249,7 @@ namespace Prowl.Runtime
                 if (targetType.IsEnum)
                     if (value.TagType == PropertyType.Int)
                         return Enum.ToObject(targetType, value.IntValue);
-
+                
                 if (targetType == typeof(DateTime))
                     if (value.TagType == PropertyType.Long)
                         return DateTime.FromBinary(value.LongValue);
@@ -257,8 +257,15 @@ namespace Prowl.Runtime
                 if (targetType == typeof(Guid))
                     if (value.TagType == PropertyType.String)
                         return Guid.Parse(value.StringValue);
-                
-                return Convert.ChangeType(value.Value, targetType);
+
+                try
+                {
+                    return Convert.ChangeType(value.Value, targetType);
+                }
+                catch
+                {
+                    throw new Exception($"Failed to deserialize primitive '{targetType}' with value: {value.Value}");
+                }
             }
 
             if (value.TagType == PropertyType.List)
@@ -368,7 +375,16 @@ namespace Prowl.Runtime
                     if (node == null) // Continue onto the next field
                         continue;
 
-                    object? data = Deserialize(node, field.FieldType, ctx);
+                    object? data = null;
+
+                    try
+                    {
+                        data = Deserialize(node, field.FieldType, ctx);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogError("Failed to deserialize field", ex);
+                    }
 
                     // Some manual casting for edge cases
                     if (data is byte @byte)

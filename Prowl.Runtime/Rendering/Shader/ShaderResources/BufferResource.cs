@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Veldrid;
+using System.Linq;
 
 namespace Prowl.Runtime
 {
@@ -13,25 +14,56 @@ namespace Prowl.Runtime
         Matrix4x4
     }
 
-    public class BufferResource : ShaderResource
+    public struct BufferProperty
     {
-        public string name { get; private set; }
-        public (string, ResourceType)[] resources { get; private set; } = [];
-        public ShaderStages stages { get; private set; }
-        public uint sizeInBytes { get; private set; }
+        [SerializeField, HideInInspector]
+        public string Name;
+
+        [SerializeField, HideInInspector]
+        public ResourceType Type;
+    }
+
+    public class BufferResource : ShaderResource, ISerializationCallbackReceiver
+    {
+        [SerializeField, HideInInspector]
+        private string name;
+        public string Name => name;
+
+        [SerializeField, HideInInspector]
+        private BufferProperty[] resources = [];
+        public IEnumerable<BufferProperty> Resources => resources;
+
+        [SerializeField, HideInInspector]
+        private ShaderStages stages;
+        public ShaderStages Stages => stages;
+
+        private uint sizeInBytes;
+        public uint SizeInBytes => sizeInBytes;
 
         private BufferResource() { }
 
-        public BufferResource(string name, ShaderStages stages, params (string, ResourceType)[] resources)
+        public BufferResource(string name, ShaderStages stages, params BufferProperty[] resources)
         {
             this.name = name;
             this.resources = resources;
             this.stages = stages;
+            ComputeSize();
+        }
 
+        public BufferResource(string name, ShaderStages stages, params (string, ResourceType)[] resources)
+        {
+            this.name = name;
+            this.resources = resources.Select(x => new BufferProperty() { Name = x.Item1, Type = x.Item2 }).ToArray();
+            this.stages = stages;
+            ComputeSize();
+        }
+
+        private void ComputeSize()
+        {
             sizeInBytes = 0;
 
             for (int i = 0; i < resources.Length; i++)
-                sizeInBytes += ResourceSize(resources[i].Item2);
+                sizeInBytes += ResourceSize(resources[i].Type);
         }
 
         public override string GetResourceName() => name;
@@ -45,11 +77,9 @@ namespace Prowl.Runtime
         {
             DeviceBuffer GetUniformBuffer(uint size)
             {
-                bool hasBuffer = state.uniformBuffers.TryGetValue(this, out DeviceBuffer buffer);
-
-                if (!hasBuffer)
+                if (!state.uniformBuffers.TryGetValue(this, out DeviceBuffer buffer))
                 {
-                    buffer = Graphics.Factory.CreateBuffer(new BufferDescription(size, BufferUsage.UniformBuffer));
+                    buffer = Graphics.Factory.CreateBuffer(new BufferDescription(size, BufferUsage.UniformBuffer | BufferUsage.DynamicWrite));
                     state.uniformBuffers[this] = buffer;
                 }
 
@@ -69,36 +99,36 @@ namespace Prowl.Runtime
 
             for (int i = 0; i < resources.Length; i++)
             {
-                (string, ResourceType) resource = resources[i];
+                BufferProperty property = resources[i];
 
-                switch (resource.Item2)
+                switch (property.Type)
                 {
                     case ResourceType.Float: 
-                        float data = properties.GetFloat(resource.Item1);
+                        float data = properties.GetFloat(property.Name);
                         commandList.UpdateBuffer(uniformBuffer, bufferOffset, data); 
                         bufferOffset += sizeof(float);
                     break;
 
                     case ResourceType.Vector2: 
-                        System.Numerics.Vector2 vec2 = properties.GetVector2(resource.Item1);
+                        System.Numerics.Vector2 vec2 = properties.GetVector2(property.Name);
                         commandList.UpdateBuffer(uniformBuffer, bufferOffset, vec2); 
                         bufferOffset += sizeof(float) * 2;
                     break;
 
                     case ResourceType.Vector3: 
-                        System.Numerics.Vector3 vec3 = properties.GetVector3(resource.Item1);
+                        System.Numerics.Vector3 vec3 = properties.GetVector3(property.Name);
                         commandList.UpdateBuffer(uniformBuffer, bufferOffset, vec3); 
                         bufferOffset += sizeof(float) * 3;
                     break;
 
                     case ResourceType.Vector4: 
-                        System.Numerics.Vector4 vec4 = properties.GetVector4(resource.Item1);
+                        System.Numerics.Vector4 vec4 = properties.GetVector4(property.Name);
                         commandList.UpdateBuffer(uniformBuffer, bufferOffset, vec4); 
                         bufferOffset += sizeof(float) * 4;
                     break;
 
                     case ResourceType.Matrix4x4: 
-                        System.Numerics.Matrix4x4 mat4 = properties.GetMatrix(resource.Item1).ToFloat();
+                        System.Numerics.Matrix4x4 mat4 = properties.GetMatrix(property.Name).ToFloat();
                         commandList.UpdateBuffer(uniformBuffer, bufferOffset, mat4); 
                         bufferOffset += sizeof(float) * 4 * 4;
                     break;
@@ -120,48 +150,32 @@ namespace Prowl.Runtime
             };
         }
 
-        public override SerializedProperty Serialize(Serializer.SerializationContext ctx)
+        public override int GetHashCode()
         {
-            SerializedProperty serializedBuffer = SerializedProperty.NewCompound();
-
-            serializedBuffer.Add("Name", new(name));
-            serializedBuffer.Add("Stages", new((byte)stages));
-
-            SerializedProperty serializedResources = SerializedProperty.NewList();
-
-            foreach (var resource in resources)
-            {
-                SerializedProperty serializedResource = SerializedProperty.NewCompound();
-
-                serializedResource.Add("Name", new(resource.Item1));
-                serializedResource.Add("Type", new((byte)resource.Item2));
-
-                serializedResources.ListAdd(serializedResource);
-            }
-
-            serializedBuffer.Add("Resources", serializedResources);
-
-            return serializedBuffer;
+            return HashCode.Combine(name, stages, sizeInBytes);
         }
 
-        public override void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
+        public override bool Equals(object? obj)
         {
-            this.name = value.Get("Name").StringValue;
-            this.stages = (ShaderStages)value.Get("Stages").ByteValue;
-
-            SerializedProperty resourceProp = value.Get("Resources");
-
-            this.resources = new (string, ResourceType)[resourceProp.Count];
-
-            sizeInBytes = 0;
-            for (int i = 0; i < resources.Length; i++)
-            {
-                this.resources[i].Item1 = resourceProp[i].Get("Name").StringValue;
-                this.resources[i].Item2 = (ResourceType)resourceProp[i].Get("Type").ByteValue;
-
-                sizeInBytes += ResourceSize(resources[i].Item2);
-            }
+            if (obj is not BufferResource other)
+                return false;
+            return Equals(other);
         }
 
+        public bool Equals(BufferResource other)
+        {
+            return 
+                name.Equals(other.name) &&
+                stages.Equals(other.stages) &&
+                sizeInBytes.Equals(other.sizeInBytes) &&
+                resources.SequenceEqual(other.resources);
+        }
+
+        public void OnBeforeSerialize() { }
+
+        public void OnAfterDeserialize()
+        {
+            ComputeSize();
+        }
     }
 }

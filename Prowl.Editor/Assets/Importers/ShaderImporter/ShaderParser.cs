@@ -5,8 +5,6 @@ using static Prowl.Runtime.StringTagConverter;
 namespace Prowl.Editor.ShaderParser
 {
     using Runtime;
-    using System.Text;
-
 
     public class ShaderParser
     {
@@ -89,6 +87,7 @@ namespace Prowl.Editor.ShaderParser
             while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
             {
                 var property = new ShaderProperty();
+                property.DefaultProperty = "";
 
                 property.Name = _tokenizer.Token.ToString();
                 ExpectToken(TokenType.OpenParen);
@@ -98,7 +97,7 @@ namespace Prowl.Editor.ShaderParser
                 ExpectToken(TokenType.Identifier);
                 property.PropertyType = Enum.Parse<ShaderPropertyType>(_tokenizer.Token.ToString(), true);
                 ExpectToken(TokenType.CloseParen);
-
+                
                 properties.Add(property);
             }
 
