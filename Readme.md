@@ -80,6 +80,7 @@ The goal is a viable open-source Unity alternative, ideally, Unity projects can 
        - Less than 15mb builds - currently working on removing 10mb, Almost done!
        - Only exports used assets
        - Supports Windows, Mac & Linux
+    - Navmesh and AI Agents (Recast & Detour)
 
 -   **Graphics Rendering:**
     - Modular Graphics Backend
@@ -148,7 +149,7 @@ Getting Prowl up and running is super easy!
   - ❌ Web
 - ✔️ UI Engine
 - ❌ VR Support
-- 🛠️ Navmesh and AI Agents - Navmesh is done, working on Agents now
+- ✔️ Navmesh and AI Agents
 - ❌ Networking Solution
 
 ### Rendering
