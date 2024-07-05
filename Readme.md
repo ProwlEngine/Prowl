@@ -148,7 +148,7 @@ Getting Prowl up and running is super easy!
   - ❌ Web
 - ✔️ UI Engine
 - ❌ VR Support
-- 🛠️ Navmesh and AI Agents - Navmesh is done, working on Agents now
+- ✔️ Navmesh and AI Agents - Navmesh is done, working on Agents now
 - ❌ Networking Solution
 
 ### Rendering
