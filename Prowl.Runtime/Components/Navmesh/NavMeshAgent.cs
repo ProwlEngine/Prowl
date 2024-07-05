@@ -1,4 +1,7 @@
-﻿using DotRecast.Detour.Crowd;
+﻿using DotRecast.Core.Numerics;
+using DotRecast.Detour;
+using DotRecast.Detour.Crowd;
+using System.Collections.Generic;
 
 namespace Prowl.Runtime;
 
@@ -51,10 +54,49 @@ public class NavMeshAgent : MonoBehaviour
 
     public void Refresh()
     {
-        if (InternalAgent != null)
-            surface?.UnregisterAgent(this);
+        if (InternalAgent == null) return;
+
+        // Save Agent State
+        DtCrowdAgentState state = InternalAgent.state;
+        bool partial = InternalAgent.partial;
+        DtPathCorridor corridor = InternalAgent.corridor;
+        DtLocalBoundary boundary = InternalAgent.boundary;
+        RcVec3f npos = InternalAgent.npos;
+        RcVec3f dvel = InternalAgent.dvel;
+        RcVec3f nvel = InternalAgent.nvel;
+        RcVec3f vel = InternalAgent.vel;
+        DtStraightPath[] corners = InternalAgent.corners;
+        int ncorners = InternalAgent.ncorners;
+        DtMoveRequestState targetState = InternalAgent.targetState;
+        long targetRef = InternalAgent.targetRef;
+        RcVec3f targetPos = InternalAgent.targetPos;
+        DtPathQueryResult targetPathQueryResult = InternalAgent.targetPathQueryResult;
+        bool targetReplan = InternalAgent.targetReplan;
+        float targetReplanTime = InternalAgent.targetReplanTime;
+        float targetReplanWaitTime = InternalAgent.targetReplanWaitTime;
+
+        surface?.UnregisterAgent(this);
         if (surface?.IsReady ?? false)
             surface?.RegisterAgent(this);
+
+        // Restore Agent State
+        InternalAgent.state = state;
+        InternalAgent.partial = partial;
+        InternalAgent.corridor = corridor;
+        InternalAgent.boundary = boundary;
+        InternalAgent.npos = npos;
+        InternalAgent.dvel = dvel;
+        InternalAgent.nvel = nvel;
+        InternalAgent.vel = vel;
+        InternalAgent.corners = corners;
+        InternalAgent.ncorners = ncorners;
+        InternalAgent.targetState = targetState;
+        InternalAgent.targetRef = targetRef;
+        InternalAgent.targetPos = targetPos;
+        InternalAgent.targetPathQueryResult = targetPathQueryResult;
+        InternalAgent.targetReplan = targetReplan;
+        InternalAgent.targetReplanTime = targetReplanTime;
+        InternalAgent.targetReplanWaitTime = targetReplanWaitTime;
     }
 
     public override void OnDisable()
