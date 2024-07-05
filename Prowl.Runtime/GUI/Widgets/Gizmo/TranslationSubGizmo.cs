@@ -344,7 +344,7 @@ namespace Prowl.Runtime.GUI
                 if (_gizmo.mode.HasFlag(TransformGizmoMode.TranslateView))
                 {
                     // then we only show if ctrl is pressed
-                    if (!_gizmo._gui.IsKeyDown(Key.ShiftLeft))
+                    if (!_gizmo._gui.IsKeyDown(Key.LeftShift))
                     {
                         t = double.NaN;
                         return false;
@@ -425,7 +425,7 @@ namespace Prowl.Runtime.GUI
                 if (_gizmo.mode.HasFlag(TransformGizmoMode.TranslateView))
                 {
                     // then we only show if ctrl is pressed
-                    if (!_gizmo._gui.IsKeyDown(Key.ShiftLeft))
+                    if (!_gizmo._gui.IsKeyDown(Key.LeftShift))
                         return;
                 }
             }
@@ -494,7 +494,7 @@ namespace Prowl.Runtime.GUI
                 if (_gizmo.mode.HasFlag(TransformGizmoMode.ScaleUniform))
                 {
                     // then we only show if ctrl is notpressed
-                    if (_gizmo._gui.IsKeyDown(Key.ShiftLeft))
+                    if (_gizmo._gui.IsKeyDown(Key.LeftShift))
                     {
                         t = double.NaN;
                         return false;
@@ -576,7 +576,7 @@ namespace Prowl.Runtime.GUI
                 if (_gizmo.mode.HasFlag(TransformGizmoMode.ScaleUniform))
                 {
                     // then we only show if ctrl is notpressed
-                    if (_gizmo._gui.IsKeyDown(Key.ShiftLeft))
+                    if (_gizmo._gui.IsKeyDown(Key.LeftShift))
                         return;
                 }
             }

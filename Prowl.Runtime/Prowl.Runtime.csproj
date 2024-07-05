@@ -2,30 +2,33 @@
 
     <PropertyGroup>
         <TargetFramework>net8.0</TargetFramework>
+		<TargetType>library</TargetType>
+
         <ImplicitUsings>disable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <NoWarn>8600;8601;8618;8602;8603;8604;8625</NoWarn>
     </PropertyGroup>
 
-  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-    <OutputPath>../Build/Runtime/Debug/</OutputPath>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-    <OutputPath>../Build/Runtime/Release/</OutputPath>
-  </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\Prowl.Veldrid\src\Veldrid\Veldrid.csproj"/>
+        <ProjectReference Include="..\Prowl.Veldrid\src\Veldrid.SDL2\Veldrid.SDL2.csproj"/>
+        <ProjectReference Include="..\Prowl.Veldrid\src\Veldrid.StartupUtilities\Veldrid.StartupUtilities.csproj"/>
+    </ItemGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+        <OutputPath>../Build/Runtime/Debug/</OutputPath>
+    </PropertyGroup>
+    <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+        <OutputPath>../Build/Runtime/Release/</OutputPath>
+    </PropertyGroup>
 
     <ItemGroup>
-      <Content Remove="C:\Users\acer1\.nuget\packages\pictime.sharpfont.dependencies\2.6.0\build\..\bin\msvc12\x64\freetype6.dll" />
+        <Content Remove="C:\Users\acer1\.nuget\packages\pictime.sharpfont.dependencies\2.6.0\build\..\bin\msvc12\x64\freetype6.dll" />
     </ItemGroup>
 
     <ItemGroup>
-      <None Remove="EmbeddedResources\*.*" />
-      <None Remove="EmbeddedResources\GUI\GLSL\*.*" />
-      <None Remove="EmbeddedResources\GUI\GLSLES\*.*" />
-      <None Remove="EmbeddedResources\GUI\HLSL\*.*" />
-      <None Remove="EmbeddedResources\GUI\SPIR-V\*.*" />
-      <None Remove="EmbeddedResources\GUI\Metal\*.*" />
+        <None Remove="EmbeddedResources\**\*.*" />
     </ItemGroup>
 
     <ItemGroup>
@@ -48,13 +51,11 @@
     </ItemGroup>
     
     <ItemGroup>
-      <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
-      <PackageReference Include="BepuPhysics" Version="2.5.0-beta.23" />
-      <PackageReference Include="Silk.NET.OpenAL" Version="2.21.0" />
-      <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.21.1.2" />
-      <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
-      <PackageReference Include="Veldrid" Version="4.9.0" />
-      <PackageReference Include="Veldrid.StartupUtilities" Version="4.9.0" />
+        <!-- <PackageReference Include="Jitter2" Version="2.2.0" /> -->
+        <PackageReference Include="BepuPhysics" Version="2.5.0-beta.23" />
+        <PackageReference Include="Silk.NET.OpenAL" Version="2.21.0" />
+        <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.21.1.2" />
+        <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
     </ItemGroup>
 
 </Project>

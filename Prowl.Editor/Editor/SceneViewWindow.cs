@@ -254,7 +254,7 @@ public class SceneViewWindow : EditorWindow
                 if (moveDir != Vector3.zero)
                 {
                     moveDir = Vector3.Normalize(moveDir);
-                    if (gui.IsKeyDown(Key.ShiftLeft))
+                    if (gui.IsKeyDown(Key.LeftShift))
                         moveDir *= 2.0f;
                     Cam.GameObject.Transform.position += moveDir * (Time.deltaTimeF * 10f) * moveSpeed;
 
@@ -364,7 +364,7 @@ public class SceneViewWindow : EditorWindow
     {
         gizmo.UpdateCamera(gui.CurrentNode.LayoutData.Rect, view, projection, Cam.GameObject.Transform.up, Cam.GameObject.Transform.forward, Cam.GameObject.Transform.right);
 
-        gizmo.Snapping = Input.GetKey(Key.ControlLeft);
+        gizmo.Snapping = Input.GetKey(Key.LeftControl);
         gizmo.SnapDistance = SceneViewPreferences.Instance.SnapDistance;
         gizmo.SnapAngle = SceneViewPreferences.Instance.SnapAngle;
         

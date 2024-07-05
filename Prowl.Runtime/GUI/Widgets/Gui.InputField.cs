@@ -319,7 +319,7 @@ namespace Prowl.Runtime.GUI
             if ((Flags & InputFieldFlags.EnterReturnsTrue) == InputFieldFlags.EnterReturnsTrue)
             {
                 Text = stb.Text;
-                if (g.IsKeyPressed(Key.Enter))
+                if (g.IsKeyPressed(Key.Return))
                 {
                     g.FocusID = 0;
                     return true;
@@ -328,7 +328,7 @@ namespace Prowl.Runtime.GUI
             }
             else
             {
-                if (g.IsKeyPressed(Key.Enter))
+                if (g.IsKeyPressed(Key.Return))
                     g.FocusID = 0;
 
                 var oldText = Text;
@@ -352,9 +352,9 @@ namespace Prowl.Runtime.GUI
             }
 
             StbTextEdit.ControlKeys? stb_key = null;
-            var Ctrl = g.IsKeyDown(Key.ControlLeft);
-            var Shift = g.IsKeyDown(Key.ShiftLeft);
-            var Alt = g.IsKeyDown(Key.AltLeft);
+            var Ctrl = g.IsKeyDown(Key.LeftControl);
+            var Shift = g.IsKeyDown(Key.LeftShift);
+            var Alt = g.IsKeyDown(Key.LeftAlt);
             bool NoSelection = (Flags & InputFieldFlags.NoSelection) == InputFieldFlags.NoSelection;
             bool IsEditable = !((Flags & InputFieldFlags.Readonly) == InputFieldFlags.Readonly);
             bool Multiline = (Flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline;
@@ -452,7 +452,7 @@ namespace Prowl.Runtime.GUI
                     stb_key = StbTextEdit.ControlKeys.Down;
                     if (Shift && !NoSelection) stb_key |= StbTextEdit.ControlKeys.Shift;
                     break;
-                case Key.BackSpace when IsEditable:
+                case Key.Backspace when IsEditable:
                     stb_key = StbTextEdit.ControlKeys.BackSpace;
                     if (Shift && !NoSelection) stb_key |= StbTextEdit.ControlKeys.Shift;
                     break;
@@ -493,7 +493,7 @@ namespace Prowl.Runtime.GUI
                         stb_key = StbTextEdit.ControlKeys.LineEnd;
                     break;
                 case Key.KeypadEnter when IsEditable && Multiline:
-                case Key.Enter when IsEditable && Multiline:
+                case Key.Return when IsEditable && Multiline:
                     OnTextInput(stb, "\n", MaxLength, Flags);
                     break;
             }

@@ -28,7 +28,7 @@ namespace Prowl.Runtime
 
                 if (ColorAttachment < 0)
                 {
-                    for (uint i = 0; i < state.activeFramebuffer.ColorTargets.Count; i++)
+                    for (uint i = 0; i < state.activeFramebuffer.ColorTargets.Length; i++)
                     {
                         list.ClearColorTarget(i, bgColor);
                     }

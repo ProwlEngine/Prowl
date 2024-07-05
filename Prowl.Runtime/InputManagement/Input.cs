@@ -60,7 +60,7 @@ public class Input
     public static bool GetKey(Key key) => Current.GetKey(key);
     public static bool GetKeyDown(Key key) => Current.GetKeyDown(key);
     public static bool GetKeyUp(Key key) => Current.GetKeyUp(key);
-    public static bool GetMouseButton(int button) => Current.GetMouseButton(button);
-    public static bool GetMouseButtonDown(int button) => Current.GetMouseButtonDown(button);
-    public static bool GetMouseButtonUp(int button) => Current.GetMouseButtonUp(button);
+    public static bool GetMouseButton(MouseButton button) => Current.GetMouseButton(button);
+    public static bool GetMouseButtonDown(MouseButton button) => Current.GetMouseButtonDown(button);
+    public static bool GetMouseButtonUp(MouseButton button) => Current.GetMouseButtonUp(button);
 }

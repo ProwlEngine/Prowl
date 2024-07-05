@@ -72,11 +72,11 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     {   
         var snapshot = Screen.LatestInputSnapshot;
 
-        InputString = snapshot.KeyCharPresses;
+        InputString = [ ];
 
         Screen.InternalWindow.MouseWheel += (mouseWheelEvent) => { 
             _receivedDeltaEvent = true;
-            _mouseWheelDelta = mouseWheelEvent.WheelDelta; 
+            _mouseWheelDelta = mouseWheelEvent.WheelDelta.X; 
         };
 
         _prevMousePos = GetActualMousePosition(snapshot);
@@ -100,8 +100,6 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     public void EarlyUpdate()
     {
         var snapshot = Screen.LatestInputSnapshot;
-
-        InputString = snapshot.KeyCharPresses;
 
         if (!_receivedDeltaEvent || !CanUpdateState())
             _mouseWheelDelta = 0.0f;
@@ -141,7 +139,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
             
             SetActualMousePosition(_currentMousePos);
         } 
-        else if (GetMouseButton(0)) // If the user (likely) wants to return to the window, re-apply locking and visibility state.
+        else if (GetMouseButton(MouseButton.Left)) // If the user (likely) wants to return to the window, re-apply locking and visibility state.
         {
             Screen.InternalWindow.CursorVisible = CursorVisible;
             Locked = CursorLocked;
@@ -173,10 +171,28 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         foreach (var pair in newButtonState)
             newButtonState[pair.Key] = InputState.Unset;
 
+        List<char> inputString = new();
+
+        // TODO : Current SDL fork exposes useful options we should implement for KeyEvents, such as modifiers, virtual keys, repeats, timestamps, and more.
         foreach (var keyEvent in snapshot.KeyEvents)
         {
-            Key key = (Key)keyEvent.Key;
+            Key key = (Key)keyEvent.Physical;
             InputState state = keyEvent.Down ? InputState.Pressed : InputState.Released;
+
+            if (keyEvent.Down)
+            {
+                string keyStr = key.ToString();
+
+                if (keyStr.Length == 1)
+                {
+                    if (keyEvent.Modifiers.HasFlag(ModifierKeys.LeftShift) || keyEvent.Modifiers.HasFlag(ModifierKeys.RightShift))
+                        keyStr = keyStr.ToUpper();
+                    else
+                        keyStr = keyStr.ToLower();
+
+                    inputString.Add(keyStr[0]);
+                }
+            }
 
             if (keyState[key] == state)
                 continue;
@@ -187,6 +203,8 @@ public class DefaultInputHandler : IInputHandler, IDisposable
             if (CanUpdateState())
                 OnKeyEvent?.Invoke(key, keyEvent.Down);
         }
+
+        InputString = inputString;
 
         foreach (var mouseEvent in snapshot.MouseEvents)
         {
@@ -209,9 +227,9 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     public bool GetKeyDown(Key key) => CanUpdateState() && newKeyState[key] == InputState.Pressed;
     public bool GetKeyUp(Key key) => CanUpdateState() && newKeyState[key] == InputState.Released;
 
-    public bool GetMouseButton(int button) => CanUpdateState() && buttonState[(MouseButton)button] == InputState.Pressed;
-    public bool GetMouseButtonDown(int button) => CanUpdateState() && newButtonState[(MouseButton)button] == InputState.Released;
-    public bool GetMouseButtonUp(int button) => CanUpdateState() && newButtonState[(MouseButton)button] == InputState.Released;
+    public bool GetMouseButton(MouseButton button) => CanUpdateState() && buttonState[button] == InputState.Pressed;
+    public bool GetMouseButtonDown(MouseButton button) => CanUpdateState() && newButtonState[button] == InputState.Released;
+    public bool GetMouseButtonUp(MouseButton button) => CanUpdateState() && newButtonState[button] == InputState.Released;
 
     public void Dispose() { }
 }

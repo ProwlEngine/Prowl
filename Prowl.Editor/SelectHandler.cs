@@ -108,7 +108,7 @@ public class SelectHandler<T> where T : class
         Select(obj);
         if (prevLastIndex != index && index != -1 && lastSelectedIndex != -1)
         {
-            if (prevLastIndex != -1 && Input.GetKey(Key.ShiftLeft))
+            if (prevLastIndex != -1 && Input.GetKey(Key.LeftShift))
             {
                 // Bulk Select
                 for (int i = Math.Min(prevLastIndex, index); i <= Math.Max(prevLastIndex, index); i++)
@@ -139,7 +139,7 @@ public class SelectHandler<T> where T : class
     public void Select(T obj)
     {
         selectedThisFrame = true;
-        if (Input.GetKey(Key.ControlLeft)) {
+        if (Input.GetKey(Key.LeftControl)) {
             // Additive
             if (IsSelected(obj)) {
                 for (int i = 0; i < selected.Count; i++) {

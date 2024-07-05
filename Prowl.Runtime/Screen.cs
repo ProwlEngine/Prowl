@@ -77,7 +77,7 @@ namespace Prowl.Runtime
 
             Load?.Invoke();
 
-            InternalWindow.DragDrop += (dragDropEvent) => { FileDrop?.Invoke([dragDropEvent.File]); };
+            InternalWindow.DropFile += (dragDropEvent) => { FileDrop?.Invoke([System.Text.Encoding.UTF8.GetString(dragDropEvent.FileNameUtf8)]); };
 
             InternalWindow.Resized += () => Resize?.Invoke(Size);
 

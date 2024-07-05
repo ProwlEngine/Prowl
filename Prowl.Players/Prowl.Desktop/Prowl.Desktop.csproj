@@ -19,23 +19,23 @@
       <EditorOutputPath>$(ProjectDir)../../Build/Editor/$(Configuration)/$(TargetFramework)/Players/Desktop/</EditorOutputPath>
     </PropertyGroup>
 
-    <Message Text="Copying files from $(OutputPath) to $(EditorOutputPath)" Importance="high" />
+  	  	<Message Text="Copying files from $(OutputPath) to $(EditorOutputPath)" Importance="high" />
 
-    <ItemGroup>
-      <FilesToCopy Include="$(OutputPath)**\*.*" />
-    </ItemGroup>
+  	  	<ItemGroup>
+  	  	  	<FilesToCopy Include="$(OutputPath)**\*.*" />
+  	  	</ItemGroup>
 
-    <Copy SourceFiles="@(FilesToCopy)" DestinationFolder="$(EditorOutputPath)%(RecursiveDir)" OverwriteReadOnlyFiles="true" SkipUnchangedFiles="false" />
+  	  	<Copy SourceFiles="@(FilesToCopy)" DestinationFolder="$(EditorOutputPath)%(RecursiveDir)" OverwriteReadOnlyFiles="true" SkipUnchangedFiles="false" />
 
-    <Message Text="Files copied successfully." Importance="high" />
-  </Target>
+  	  	<Message Text="Files copied successfully." Importance="high" />
+  	</Target>
 
-  <PropertyGroup>
-    <MSBuildGlobalProperties>$(MSBuildGlobalProperties);EnableMSBuildAssemblyLogging=1;MSBuildDebugEngine=1</MSBuildGlobalProperties>
-  </PropertyGroup>
+  	<PropertyGroup>
+  	  	<MSBuildGlobalProperties>$(MSBuildGlobalProperties);EnableMSBuildAssemblyLogging=1;MSBuildDebugEngine=1</MSBuildGlobalProperties>
+  	</PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\Prowl.Runtime\Prowl.Runtime.csproj" />
-  </ItemGroup>
+  	<ItemGroup>
+  	  	<ProjectReference Include="..\..\Prowl.Runtime\Prowl.Runtime.csproj" />
+  	</ItemGroup>
 
 </Project>

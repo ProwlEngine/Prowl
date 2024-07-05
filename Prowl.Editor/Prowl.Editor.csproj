@@ -16,38 +16,41 @@
   </PropertyGroup>
 
     <ItemGroup>
-      <Compile Remove="EmbeddedResources\*.*" />
-      <Compile Remove="EmbeddedResources\DefaultAssets\*.*" />
+        <Compile Remove="EmbeddedResources\*.*" />
+        <Compile Remove="EmbeddedResources\DefaultAssets\*.*" />
     </ItemGroup>
 
 
     <ItemGroup>
-      <None Remove="EmbeddedResources\*.*" />
-      <None Remove="EmbeddedResources\DefaultAssets\*.*" />
+        <None Remove="EmbeddedResources\*.*" />
+        <None Remove="EmbeddedResources\DefaultAssets\*.*" />
 
-      <None Remove="font.ttf" />
+        <None Remove="font.ttf" />
     </ItemGroup>
 
     <ItemGroup>
-      <EmbeddedResource Include="EmbeddedResources\*.*">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
+        <EmbeddedResource Include="EmbeddedResources\*.*">
+            <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+        </EmbeddedResource>
 
-      <EmbeddedResource Include="EmbeddedResources\DefaultAssets\*.*">
-        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-      </EmbeddedResource>
+        <EmbeddedResource Include="EmbeddedResources\DefaultAssets\*.*">
+            <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+        </EmbeddedResource>
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="AssimpNet" Version="5.0.0-beta1" />
-      <PackageReference Include="SixLabors.ImageSharp" Version="3.1.4" />
-      <PackageReference Include="Veldrid.SPIRV" Version="1.0.15" />
+        <PackageReference Include="AssimpNet" Version="5.0.0-beta1" />
+        <PackageReference Include="SixLabors.ImageSharp" Version="3.1.4" />
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj">
-<!--          <ExcludeAssets>compile</ExcludeAssets>-->
-      </ProjectReference>
+        <ProjectReference Include="..\Prowl.Runtime\Prowl.Runtime.csproj">
+            <!--<ExcludeAssets>compile</ExcludeAssets>-->
+        </ProjectReference>
+
+        <ProjectReference Include="..\Prowl.Veldrid\modules\veldrid-spirv\src\Veldrid.SPIRV\Veldrid.SPIRV.csproj">
+            <!--<ExcludeAssets>compile</ExcludeAssets>-->
+        </ProjectReference>
     </ItemGroup>
     
 </Project>

@@ -24,8 +24,8 @@ namespace Prowl.Runtime
         bool GetKey(Key key);
         bool GetKeyDown(Key key);
         bool GetKeyUp(Key key);
-        bool GetMouseButton(int button);
-        bool GetMouseButtonDown(int button);
-        bool GetMouseButtonUp(int button);
+        bool GetMouseButton(MouseButton button);
+        bool GetMouseButtonDown(MouseButton button);
+        bool GetMouseButtonUp(MouseButton button);
     }
 }
