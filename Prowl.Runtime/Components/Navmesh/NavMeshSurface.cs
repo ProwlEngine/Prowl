@@ -258,6 +258,19 @@ namespace Prowl.Runtime
                 {
                     mesh = Mesh.CreateCube(box.Size);
                 }
+                else if(collider is CylinderCollider cylinder)
+                {
+                    mesh = Mesh.CreateCylinder(cylinder.Radius, cylinder.Length, 8);
+                }
+                else if(collider is CapsuleCollider capsule)
+                {
+#warning TODO: We need to implement a capsule mesh generator - cylinder sorta works for now
+                    mesh = Mesh.CreateCylinder(capsule.Radius, capsule.Length, 8);
+                }
+                else if(collider is TriangleCollider triangle)
+                {
+                    mesh = Mesh.CreateTriangle(triangle.A, triangle.B, triangle.C);
+                }
 
                 if (mesh != null)
                 {
