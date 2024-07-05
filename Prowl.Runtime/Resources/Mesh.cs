@@ -575,6 +575,17 @@ namespace Prowl.Runtime
             return mesh;
         }
 
+        public static Mesh CreateTriangle(Vector3 a, Vector3 b, Vector3 c)
+        {
+            Mesh mesh = new Mesh();
+            mesh.vertices = new System.Numerics.Vector3[] { a, b, c };
+            mesh.indices = new uint[] { 0, 1, 2 };
+            mesh.RecalculateBounds();
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+            return mesh;
+        }
+
         private void DeleteGPUBuffers()
         {
             vertexArrayObject?.Dispose();
