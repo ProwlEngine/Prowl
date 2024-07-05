@@ -8,6 +8,15 @@ namespace Prowl.Runtime
     {
         public DtNavMesh DetourNavMesh;
 
+        private DtNavMeshQuery _query;
+        public DtNavMeshQuery? Query {
+            get {
+                if (DetourNavMesh == null) return null;
+                _query ??= new DtNavMeshQuery(DetourNavMesh);
+                return _query;
+            }
+        }
+
         public int GetMaxTiles() => DetourNavMesh.GetMaxTiles();
 
         public DtMeshTile GetTile(int i) => DetourNavMesh.GetTile(i);
