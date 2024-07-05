@@ -221,6 +221,16 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Contributors 🌟
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+
+<!-- ALL-CONTRIBUTORS-LIST:END 
+
 - [Michael (Wulferis)](https://twitter.com/Wulferis)
 - [Abdiel Lopez (PaperPrototype)](https://github.com/PaperPrototype)
 - [Josh Davis](https://github.com/10xJosh)
