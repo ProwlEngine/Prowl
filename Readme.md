@@ -229,6 +229,7 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 - [Kuvrot](https://github.com/Kuvrot)
 - [JaggerJo](https://github.com/JaggerJo)
 - [Jihad Khawaja](https://github.com/jihadkhawaja)
+- [Jasper Honkasalo](https://github.com/japsuu)
  
 # License 📜
 
