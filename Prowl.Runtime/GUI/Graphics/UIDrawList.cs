@@ -1083,13 +1083,26 @@ namespace Prowl.Runtime.GUI.Graphics
             return value < min ? min : value > max ? max : value;
         }
   
-        private static DeviceBuffer DeviceIdxBuffer;
-        private static DeviceBuffer DeviceVtxBuffer;  
+        private static DeviceBuffer IndexBuffer;
+        private static DeviceBuffer VertexBuffer;  
+
+        private static DeviceBuffer EnsureBuffer(DeviceBuffer buffer, uint size, uint scale, BufferUsage usage)
+        {
+            size *= scale;
+
+            if (buffer == null || size > buffer.SizeInBytes)
+            {
+                buffer?.Dispose();
+                buffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription(Math.Max(size, 10000), usage | BufferUsage.DynamicWrite));
+            }
+
+            return buffer;
+        }
 
         public static void DisposeBuffers()
         {
-            DeviceIdxBuffer?.Dispose();
-            DeviceVtxBuffer?.Dispose();
+            IndexBuffer?.Dispose();
+            VertexBuffer?.Dispose();
         } 
 
         const uint uintSize = sizeof(uint);
@@ -1100,11 +1113,11 @@ namespace Prowl.Runtime.GUI.Graphics
             Span<UIVertex> verticesSpan = CollectionsMarshal.AsSpan(Vertices);
             Span<uint> indicesSpan = CollectionsMarshal.AsSpan(Indices);
 
-            commandList.UpdateBuffer(DeviceIdxBuffer, 0, verticesSpan);
-            commandList.UpdateBuffer(DeviceVtxBuffer, 0, indicesSpan);
+            commandList.UpdateBuffer(VertexBuffer, 0, verticesSpan);
+            commandList.UpdateBuffer(IndexBuffer, 0, indicesSpan);
 
-            commandList.SetIndexBuffer(DeviceIdxBuffer, IndexFormat.UInt32);
-            commandList.SetVertexBuffer(0, DeviceVtxBuffer);
+            commandList.SetIndexBuffer(IndexBuffer, IndexFormat.UInt32);
+            commandList.SetVertexBuffer(0, VertexBuffer);
         }
 
         public static void Draw(CommandBuffer commandBuffer, Vector2 DisplaySize, UIDrawList[] lists)
@@ -1126,21 +1139,11 @@ namespace Prowl.Runtime.GUI.Graphics
                 maxIndexCount = Math.Max(maxIndexCount, (uint)cmdListPtr.Indices.Count);
             }
 
-            uint vertexBufferSize = (uint)(maxVertexCount * vertSize);
-            if (DeviceVtxBuffer == null || vertexBufferSize > DeviceVtxBuffer.SizeInBytes)
-            {
-                DeviceVtxBuffer?.Dispose();
-                DeviceVtxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription((uint)(vertexBufferSize * 1.5f), BufferUsage.VertexBuffer | BufferUsage.DynamicWrite));
-                DeviceVtxBuffer.Name = $"Draw List Vertex Buffer";
-            }
-
-            uint indexBufferSize = (uint)(maxIndexCount * uintSize);
-            if (DeviceIdxBuffer == null || indexBufferSize > DeviceIdxBuffer.SizeInBytes)
-            {
-                DeviceIdxBuffer?.Dispose();
-                DeviceIdxBuffer = Runtime.Graphics.Factory.CreateBuffer(new BufferDescription((uint)(indexBufferSize * 1.5f), BufferUsage.IndexBuffer | BufferUsage.DynamicWrite));
-                DeviceIdxBuffer.Name = $"Draw List Index Buffer";
-            }
+            VertexBuffer = EnsureBuffer(VertexBuffer, maxVertexCount, vertSize, BufferUsage.VertexBuffer);
+            VertexBuffer.Name = $"Draw List Vertex Buffer";
+            
+            IndexBuffer = EnsureBuffer(IndexBuffer, maxIndexCount, uintSize, BufferUsage.IndexBuffer);
+            IndexBuffer.Name = $"Draw List Index Buffer";
 
             for (int n = 0; n < lists.Length; n++)
             {

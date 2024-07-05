@@ -41,6 +41,7 @@
     <ItemGroup>
         <PackageReference Include="AssimpNet" Version="5.0.0-beta1" />
         <PackageReference Include="SixLabors.ImageSharp" Version="3.1.4" />
+        <PackageReference Include="Veldrid.SPIRV" Version="1.0.15" />
     </ItemGroup>
 
     <ItemGroup>
@@ -48,7 +49,7 @@
             <!--<ExcludeAssets>compile</ExcludeAssets>-->
         </ProjectReference>
 
-        <ProjectReference Include="..\Prowl.Veldrid\modules\veldrid-spirv\src\Veldrid.SPIRV\Veldrid.SPIRV.csproj">
+        <ProjectReference Include="..\Prowl.Veldrid\src\Veldrid\Veldrid.csproj">
             <!--<ExcludeAssets>compile</ExcludeAssets>-->
         </ProjectReference>
     </ItemGroup>
