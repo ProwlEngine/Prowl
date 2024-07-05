@@ -150,7 +150,7 @@ Getting Prowl up and running is super easy!
 - ✔️ UI Engine
 - ❌ VR Support
 - ✔️ Navmesh and AI Agents
-- ❌ Networking Solution
+- 🛠️ Networking Solution
 
 ### Rendering
 - ❌ SSAO, Screen-Space Decals, etc.
@@ -161,10 +161,9 @@ Getting Prowl up and running is super easy!
 - ❌ Terrain Engine
 
 ### Editor
-- ❌ Package Manager (Packages partially implemented)
+- 🛠️ Package Manager (Packages partially implemented)
 - ❌ Animation Tools
-- ❌ Live Collaborative Tools
-- ❌ Visual Scripting
+- 🛠️ Visual Scripting
 - ❌ Material Node Editor
 - ❌ 2D Support
 
