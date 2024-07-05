@@ -19,7 +19,7 @@ namespace Prowl.Editor.ScriptedEditors
                 ScriptableObject scriptObject = Serializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile((target as MetaFile).AssetPath));
 
                 object t = scriptObject;
-                changed |= PropertyGrid("CompPropertyGrid", ref t, TargetFields.Serializable, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground);
+                changed |= PropertyGrid("CompPropertyGrid", ref t, TargetFields.Serializable | EditorGUI.TargetFields.Properties, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground);
 
                 // Draw any Buttons
                 //changed |= EditorGui.HandleAttributeButtons(scriptObject);

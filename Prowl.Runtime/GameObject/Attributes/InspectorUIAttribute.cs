@@ -52,4 +52,7 @@ namespace Prowl.Runtime
 
     [AttributeUsage(T.Field, AllowMultiple = false)]
     public class HideInInspectorAttribute : Attribute { }
+
+    [AttributeUsage(T.Property, AllowMultiple = false)]
+    public class ShowInInspectorAttribute : Attribute { }
 }

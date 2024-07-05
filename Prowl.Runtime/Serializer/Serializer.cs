@@ -201,7 +201,7 @@ namespace Prowl.Runtime
             else
             {
                 // Auto Serialization
-                foreach (var field in RuntimeUtils.GetSerializableFields(value))
+                foreach (var field in value.GetSerializableFields())
                 {
                     string name = field.Name;
 
@@ -346,7 +346,7 @@ namespace Prowl.Runtime
             }
             else
             {
-                foreach (var field in RuntimeUtils.GetSerializableFields(into))
+                foreach (var field in into.GetSerializableFields())
                 {
                     string name = field.Name;
 

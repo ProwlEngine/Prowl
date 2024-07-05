@@ -161,12 +161,14 @@ namespace Prowl.Editor
 
 
         #region PropertyGrid
+        [Flags]
         public enum TargetFields
         {
-            Serializable,
-            Public,
-            Private,
-            All
+            Serializable = 0,
+            Properties = 1,
+            Public = 2,
+            Private = 4,
+            All = 8
         }
 
         [Flags]
@@ -221,19 +223,28 @@ namespace Prowl.Editor
         private static bool DrawProperties(ref object target, TargetFields targetFields, PropertyGridConfig config = PropertyGridConfig.None)
         {
             // Get the target fields
-            var fields = targetFields switch {
-                TargetFields.Serializable => RuntimeUtils.GetSerializableFields(target),
-                TargetFields.Public => target.GetType().GetFields(),
-                TargetFields.Private => target.GetType().GetFields(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance),
-                _ => target.GetType().GetFields(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)
-            };
+            List<MemberInfo> members = [];
 
-            // Draw the properties
+            bool all = targetFields.HasFlag(TargetFields.All);
+
+            if (all || targetFields.HasFlag(TargetFields.Serializable))
+                members.AddRange(target.GetSerializableFields());
+
+            if (all || targetFields.HasFlag(TargetFields.Public))
+                members.AddRange(target.GetType().GetFields(BindingFlags.Public | BindingFlags.Instance));
+
+            if (all || targetFields.HasFlag(TargetFields.Private))
+                members.AddRange(target.GetType().GetFields(BindingFlags.NonPublic | BindingFlags.Instance));
+
+            if (all || targetFields.HasFlag(TargetFields.Properties))
+                members.AddRange(target.GetType().GetProperties().Where(prop => prop.CanRead && prop.CanWrite && prop.GetCustomAttribute<ShowInInspectorAttribute>() != null));
+
+            // Draw the fields & properties
             bool changed = false;
             int i = 0;
-            foreach (var field in fields)
+            foreach (var field in members.Distinct())
             {
-                var fieldType = field.FieldType;
+                var fieldType = field is FieldInfo ? (field as FieldInfo)!.FieldType : (field as PropertyInfo)!.PropertyType;
                 var fieldValue = field.GetValue(target);
 
                 // if has HideInInspector ignore

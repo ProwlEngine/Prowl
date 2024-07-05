@@ -37,7 +37,7 @@ namespace Prowl.Runtime
             }
         }
 
-        public static FieldInfo[] GetSerializableFields(object target)
+        public static FieldInfo[] GetSerializableFields(this object target)
         {
             FieldInfo[] fields = GetAllFields(target.GetType()).ToArray();
             // Only allow Publics or ones with SerializeField

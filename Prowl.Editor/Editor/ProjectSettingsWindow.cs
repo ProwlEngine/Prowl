@@ -106,7 +106,7 @@ public abstract class SingletonEditorWindow : EditorWindow
         object setting = currentSingleton;
 
         string name = currentType.Name.Replace("Preferences", "");
-        if (PropertyGrid(name, ref setting, TargetFields.Serializable, PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground))
+        if (PropertyGrid(name, ref setting, TargetFields.Serializable | EditorGUI.TargetFields.Properties, PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground))
         {
             // Use reflection to find a method "protected void Save()" and OnValidate
             MethodInfo? validateMethod = setting.GetType().GetMethod("OnValidate", BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly);
