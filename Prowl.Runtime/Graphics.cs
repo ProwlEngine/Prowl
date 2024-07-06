@@ -188,10 +188,10 @@ namespace Prowl.Runtime
 
         internal static void Dispose()
         {
-            Device.Dispose();
-
             PipelineCache.Dispose();
             GUI.Graphics.UIDrawList.DisposeBuffers();
+        
+            Device.Dispose();
         }
     }
 }
