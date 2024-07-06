@@ -149,7 +149,7 @@ public static class SceneManager
         
         Cameras.RemoveAll(x => !x.EnabledInHierarchy);
 
-        Cameras.Sort((a, b) => a.RenderOrder.CompareTo(b.DrawOrder));
+        Cameras.Sort((a, b) => a.DrawOrder.CompareTo(b.DrawOrder));
 
         Graphics.Render(Cameras.ToArray(), Graphics.ScreenFramebuffer);
     }
