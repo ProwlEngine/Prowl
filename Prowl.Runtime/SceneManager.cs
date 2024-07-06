@@ -147,8 +147,6 @@ public static class SceneManager
     {
         var Cameras = AllGameObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).ToList();
 
-        Cameras.RemoveAll(x => !x.EnabledInHierarchy);
-
         Cameras.Sort((a, b) => a.DrawOrder.CompareTo(b.DrawOrder));
 
         Graphics.Render(Cameras.ToArray(), Graphics.ScreenFramebuffer);
