@@ -8,7 +8,7 @@ namespace Prowl.Runtime
     {
         public uint Slot;
 
-        readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
             PipelineCache.GetDescriptionForPipeline(state.activePipeline, out GraphicsPipelineDescription pipelineDescription);
 
@@ -36,7 +36,7 @@ namespace Prowl.Runtime
 
             list.SetGraphicsResourceSet(Slot, resource);
 
-            state.resourceSets.Add(resource);
+            state.RegisterSetForDisposal(resource);
         }
     }
 }

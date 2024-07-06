@@ -9,7 +9,7 @@ namespace Prowl.Runtime
         public string Name;
         public string Value;
 
-        readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
             state.keywordState.SetKey(Name, Value);
         }

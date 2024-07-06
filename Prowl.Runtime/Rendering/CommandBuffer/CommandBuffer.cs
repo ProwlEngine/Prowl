@@ -150,7 +150,7 @@ namespace Prowl.Runtime
 
         public void SetViewport(int viewport, int x, int y, int width, int height, int z, int depth)
         {
-            buffer.Add(new ViewportCommand() { 
+            buffer.Add(new SetViewportCommand() { 
                 SetFull = false, 
                 Index = viewport, 
                 X = x, Y = y, Z = z, 
@@ -160,7 +160,7 @@ namespace Prowl.Runtime
 
         public void SetViewports(int x, int y, int width, int height, int z, int depth)
         {
-            buffer.Add(new ViewportCommand() { 
+            buffer.Add(new SetViewportCommand() { 
                 SetFull = false, 
                 Index = -1, 
                 X = x, Y = y, Z = z, 
@@ -170,7 +170,7 @@ namespace Prowl.Runtime
 
         public void SetFullViewport(int index = 0)
         {
-            buffer.Add(new ViewportCommand() { 
+            buffer.Add(new SetViewportCommand() { 
                 SetFull = true, 
                 Index = index 
             });
@@ -178,7 +178,7 @@ namespace Prowl.Runtime
 
         public void SetFullViewports()
         {
-            buffer.Add(new ViewportCommand() { 
+            buffer.Add(new SetViewportCommand() { 
                 SetFull = true, 
                 Index = -1 
             });

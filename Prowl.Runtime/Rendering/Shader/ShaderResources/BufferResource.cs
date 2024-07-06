@@ -75,18 +75,7 @@ namespace Prowl.Runtime
 
         public override void BindResource(CommandList commandList, List<BindableResource> resource, RenderState state)
         {
-            DeviceBuffer GetUniformBuffer(uint size)
-            {
-                if (!state.uniformBuffers.TryGetValue(this, out DeviceBuffer buffer))
-                {
-                    buffer = Graphics.Factory.CreateBuffer(new BufferDescription(size, BufferUsage.UniformBuffer | BufferUsage.DynamicWrite));
-                    state.uniformBuffers[this] = buffer;
-                }
-
-                return buffer;
-            }
-
-            var buffer = GetUniformBuffer(sizeInBytes);
+            var buffer = state.GetBufferForResource(this, sizeInBytes);
 
             UploadBuffer(commandList, state.propertyState, buffer);
 

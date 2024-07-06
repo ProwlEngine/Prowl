@@ -9,7 +9,7 @@ namespace Prowl.Runtime
         public IGeometryDrawData DrawData;
         public VertexLayoutDescription[] Resources;
 
-        readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
             DrawData.SetDrawData(list, Resources);
             state.activeDrawData = DrawData;

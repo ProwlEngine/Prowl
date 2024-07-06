@@ -111,6 +111,8 @@ namespace Prowl.Runtime
         {
             for (int i = 0; i < passes.Length; i++)
                 RegisterPass(passes[i], i);
+
+            Debug.Log(GetStringRepresentation());
         }
 
         public string GetStringRepresentation()

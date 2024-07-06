@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Veldrid;
 
 namespace Prowl.Runtime
@@ -9,7 +10,7 @@ namespace Prowl.Runtime
         public Material Material;
         public int Pass;
 
-        readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
             state.propertyState.ApplyOverride(Material.Properties);
         

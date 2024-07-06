@@ -108,11 +108,11 @@ namespace Prowl.Runtime
             RenderState state = new RenderState();
 
             foreach (var command in commandBuffer.Buffer)
-                command.ExecuteCommand(list, ref state);
+                command.ExecuteCommand(list, state);
 
             ExecuteCommandList(list, true);
 
-            state.Clear();
+            state.Dispose();
             list.Dispose();
         }
 

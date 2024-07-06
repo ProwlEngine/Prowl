@@ -9,7 +9,7 @@ namespace Prowl.Runtime
         public string Name;
         public Vector4 Value;
 
-        readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
             state.propertyState.SetVector(Name, Value);
         }
@@ -20,7 +20,7 @@ namespace Prowl.Runtime
         public string Name;
         public Texture TextureValue;
 
-        readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
             state.propertyState.SetTexture(Name, TextureValue);
         }
@@ -31,7 +31,7 @@ namespace Prowl.Runtime
         public string Name;
         public Matrix4x4 MatrixValue;
 
-        readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
             state.propertyState.SetMatrix(Name, MatrixValue);
         }

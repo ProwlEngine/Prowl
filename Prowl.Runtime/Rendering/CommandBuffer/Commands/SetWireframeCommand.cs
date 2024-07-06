@@ -8,7 +8,7 @@ namespace Prowl.Runtime
     {
         public bool Wireframe;
 
-        readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
             state.pipelineSettings.fillMode = Wireframe ? PolygonFillMode.Wireframe : PolygonFillMode.Solid;
         }

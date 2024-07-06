@@ -6,6 +6,6 @@ namespace Prowl.Runtime
 {
     public interface RenderingCommand   
     {
-        internal void ExecuteCommand(CommandList list, ref RenderState state);
+        internal void ExecuteCommand(CommandList list, RenderState state);
     }
 }

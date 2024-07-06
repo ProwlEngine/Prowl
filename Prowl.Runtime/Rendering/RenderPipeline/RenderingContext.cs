@@ -27,13 +27,25 @@ namespace Prowl.Runtime.RenderPipelines
 
             RenderState state = new RenderState();
 
+            state.SetFramebuffer(TargetFramebuffer);
+            commandList.SetFramebuffer(TargetFramebuffer);
+
             for (int i = 0; i < internalCommandList.Count; i++)
-                internalCommandList[i].ExecuteCommand(commandList, ref state);
+            {
+                try 
+                {
+                    internalCommandList[i].ExecuteCommand(commandList, state);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"Failed to execute command: {internalCommandList[i]}", ex);
+                }
+            }
 
             Graphics.ExecuteCommandList(commandList, true);
 
-            state.Clear();
             commandList.Dispose();
+            state.Dispose();
         }
     }
 }

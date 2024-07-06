@@ -12,16 +12,17 @@ namespace Prowl.Runtime
         public int IndexOffset;
 
 
-        readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {   
             // Set Pipeline
             Pipeline pipeline = PipelineCache.GetPipelineForDescription(state.pipelineSettings);
             PipelineCache.GetDescriptionForPipeline(pipeline, out GraphicsPipelineDescription pipelineDescription);
 
             if (state.activePipeline != pipeline)
+            {
                 state.activePipeline = pipeline;
-
-            list.SetPipeline(pipeline);
+                list.SetPipeline(pipeline);
+            }
 
             // Set Draw Data
             DrawData.SetDrawData(list, pipelineDescription.ShaderSet.VertexLayouts);
@@ -54,7 +55,7 @@ namespace Prowl.Runtime
                 list.SetGraphicsResourceSet((uint)set, resources[set]);
             }
 
-            state.resourceSets.AddRange(resources);
+            state.RegisterSetsForDisposal(resources);
 
             // Manual Draw
             list.DrawIndexed(

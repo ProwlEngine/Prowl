@@ -13,7 +13,7 @@ namespace Prowl.Runtime
         public uint InstanceStart;
 
 
-        readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {   
             list.DrawIndexed(
                 indexCount: IndexCount,

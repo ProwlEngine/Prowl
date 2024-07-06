@@ -99,11 +99,10 @@ public class SceneViewWindow : EditorWindow
             TargetFramebuffer = RenderTarget.Framebuffer
         };
 
-        Graphics.Render([ Cam ], context);
+        // Graphics.Render([ Cam ], context);
 
-        #warning Veldrid change
-        // SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
-        // 
+        SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
+        
         // Cam.RenderResolution = SceneViewPreferences.Instance.RenderResolution;
 
         var imagePos = gui.CurrentNode.LayoutData.Rect.Position;
@@ -127,34 +126,46 @@ public class SceneViewWindow : EditorWindow
             }
         }
 
+        CommandBuffer buffer = CommandBufferPool.Get("Scene View Buffer");
+
+        buffer.ClearRenderTarget(true, true, new Color(0.0f, 0.25f, 0.0f, 1.0f), depth: 1);
+
         if (SceneViewPreferences.Instance.GridType != GridType.None)
         {
-            #warning Veldrid change
-
-            CommandBuffer buffer = CommandBufferPool.Get("Scene View Buffer");
-
             gridMesh ??= Mesh.GetFullscreenQuad();
             gridMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Grid.shader"));
 
-            if (gridMesh.IndexCount == 0)
-                throw new Exception("NO");
+            Matrix4x4.Invert(projection * view * Matrix4x4.Identity, out Matrix4x4 result);
 
-            Matrix4x4.Invert(view * projection, out Matrix4x4 result);
+            buffer.ClearRenderTarget(true, true, new Color(0.0f, 0.0f, 0.25f, 1.0f), depth: 1);
+
+            var pass = gridMat.Shader.Res.GetPass(0);
+            var variant = pass.GetVariant(KeywordState.Default);
+
+            buffer.SetPipeline(pass, variant);
 
             buffer.SetMatrix("MvpInverse", result);
             buffer.SetVector("ScreenResolution", new Vector2(RenderTarget.Width, RenderTarget.Height));
             buffer.SetVector("CameraPosition", Cam.Transform.position);
-            buffer.SetVector("LineWidth", Cam.Transform.position);
-            buffer.SetVector("PrimaryGridSize", Cam.Transform.position);
-            buffer.SetVector("SecondaryGridSize", Cam.Transform.position);
+            buffer.SetFloat("LineWidth", SceneViewPreferences.Instance.LineWidth);
+            buffer.SetFloat("PrimaryGridSize", SceneViewPreferences.Instance.PrimaryGridSize);
+            buffer.SetFloat("SecondaryGridSize", SceneViewPreferences.Instance.SecondaryGridSize);
 
-            buffer.SetMaterial(gridMat);
-            buffer.DrawSingle(gridMesh);
-            
-            context.Submit(buffer);
+            buffer.SetColor("BackColor", Color.red);
 
-            CommandBufferPool.Release(buffer);
+            buffer.UploadResourceSet(0);
+            buffer.UploadResourceSet(1);
+
+            buffer.SetDrawData(gridMesh, variant.VertexInputs);
+
+            buffer.ManualDraw((uint)gridMesh.IndexCount, 0, 1, 0, 0);
+
+            //buffer.DrawSingle(gridMesh);
         }
+
+        context.Submit(buffer);
+
+        CommandBufferPool.Release(buffer);
 
         context.Execute();
 

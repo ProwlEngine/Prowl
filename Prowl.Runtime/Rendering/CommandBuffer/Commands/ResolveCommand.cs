@@ -14,7 +14,7 @@ namespace Prowl.Runtime
         public RenderTexture RTSource;
         public RenderTexture RTDestination;
 
-        readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
             if (RTResolve)
             {   

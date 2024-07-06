@@ -4,14 +4,14 @@ using Veldrid;
 
 namespace Prowl.Runtime
 {
-    internal struct ViewportCommand : RenderingCommand
+    internal struct SetViewportCommand : RenderingCommand
     {
         public int Index; 
         public bool SetFull;
         public int X, Y, Z;
         public int Width, Height, Depth;
 
-        readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
             if (SetFull)
             {   
@@ -27,7 +27,7 @@ namespace Prowl.Runtime
 
             if (Index < 0)
             {
-                for (uint i = 0; i < state.activeFramebuffer.ColorTargets.Length; i++)
+                for (uint i = 0; i < state.ActiveFramebuffer.ColorTargets.Length; i++)
                     list.SetViewport(i, viewport);
             }
             else

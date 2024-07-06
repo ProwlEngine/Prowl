@@ -1,6 +1,6 @@
 ﻿Shader "Default/Grid"
 
-Pass
+Pass "Grid"
 {
 	Blend
     {    
@@ -25,7 +25,7 @@ Pass
     }
 
     // Rasterizer culling mode
-    Cull None
+    Cull Back
 
 	Inputs
 	{
@@ -56,6 +56,7 @@ Pass
 				LineWidth Float
 				PrimaryGridSize Float
 				SecondaryGridSize Float
+				BackColor Vector4
             }
         }
 	}
@@ -75,17 +76,18 @@ Pass
 		void main() 
 		{
 			gl_Position = vec4(vertexPosition, 1.0);
+
             // vertexPosition is in screen space, convert it into world space
             Position = (MvpInverse * vec4(vertexPosition, 1.0)).xyz;
 			TexCoords = vertexTexCoord;
 		}
 	ENDPROGRAM
 
-	PROGRAM FRAGMENT
-		layout(location = 0) out vec4 OutputColor;
-		
+	PROGRAM FRAGMENT	
         layout(location = 0) in vec3 Position;
 		layout(location = 1) in vec2 TexCoords;
+
+		layout(location = 0) out vec4 OutputColor;
 
 		layout(set = 1, binding = 0) uniform ResourceBuffer
 		{
@@ -95,6 +97,8 @@ Pass
 			float LineWidth; 
 			float PrimaryGridSize; 
 			float SecondaryGridSize; 
+
+			vec4 BackColor;
 		};
 		
 		// https://bgolus.medium.com/the-best-darn-grid-shader-yet-727f9278b9d8
@@ -156,6 +160,8 @@ Pass
 				OutputColor += vec4(1.0, 1.0, 1.0, bg * 0.5);
 				//OutputColor *= mix(1.0, 0.0, min(1.0, d / 10000.0));
             }
+
+			OutputColor = BackColor;
 		}
 	ENDPROGRAM
 }

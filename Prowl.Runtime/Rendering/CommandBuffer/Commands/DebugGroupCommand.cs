@@ -9,7 +9,7 @@ namespace Prowl.Runtime
         public string Name;
         public bool Pop;
 
-        readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
             if (Pop)
                 list.PopDebugGroup();

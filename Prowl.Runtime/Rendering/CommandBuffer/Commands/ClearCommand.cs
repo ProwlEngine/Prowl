@@ -13,7 +13,7 @@ namespace Prowl.Runtime
         public float Depth;
         public byte Stencil;
 
-        readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
             if (ClearDepthStencil)
                 list.ClearDepthStencil(Depth, Stencil);
@@ -28,7 +28,7 @@ namespace Prowl.Runtime
 
                 if (ColorAttachment < 0)
                 {
-                    for (uint i = 0; i < state.activeFramebuffer.ColorTargets.Length; i++)
+                    for (uint i = 0; i < state.ActiveFramebuffer.ColorTargets.Length; i++)
                     {
                         list.ClearColorTarget(i, bgColor);
                     }

@@ -66,10 +66,8 @@ namespace Prowl.Editor.Assets
             };
         }
 
-        public static ShaderDescription[] CreateFromSpirv(ShaderDescription vertDesc, string vertSrc, ShaderDescription fragDesc, string fragSrc, CrossCompileOptions options)
+        public static ShaderDescription[] CreateFromSpirv(ShaderDescription vertDesc, string vertSrc, ShaderDescription fragDesc, string fragSrc, CrossCompileOptions options, GraphicsBackend backendType)
         {
-            GraphicsBackend backendType = Graphics.Device.BackendType;
-
             if (backendType == GraphicsBackend.Vulkan)
             {
                 vertDesc.ShaderBytes = EnsureSpirv(vertDesc, vertSrc);

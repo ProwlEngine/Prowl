@@ -11,7 +11,7 @@ namespace Prowl.Runtime
         public int X, Y, Width, Height;
         public bool SetActive;
 
-        readonly void RenderingCommand.ExecuteCommand(CommandList list, ref RenderState state)
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
             if (SetActive)
                 state.pipelineSettings.scissorTest = true;
@@ -30,7 +30,7 @@ namespace Prowl.Runtime
 
             if (Index < 0)
             {
-                for (uint i = 0; i < state.activeFramebuffer.ColorTargets.Length; i++)
+                for (uint i = 0; i < state.ActiveFramebuffer.ColorTargets.Length; i++)
                     list.SetScissorRect(i, (uint)X, (uint)Y, (uint)Width, (uint)Height);
             }
             else

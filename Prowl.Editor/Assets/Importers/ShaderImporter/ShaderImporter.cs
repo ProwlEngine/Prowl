@@ -77,11 +77,18 @@ namespace Prowl.Editor.Assets
                 if (Global != null)
                     sources[1].SourceCode = sources[1].SourceCode.Insert(0, Global?.GlobalInclude);
 
-                ShaderDescription[] shaderDescriptions = CreateVertexFragment(sources[0].SourceCode, sources[1].SourceCode);
-
+                (GraphicsBackend, ShaderDescription[])[] shaders = 
+                [
+                    (GraphicsBackend.Vulkan, CreateVertexFragment(sources[0].SourceCode, sources[1].SourceCode, GraphicsBackend.Vulkan)),
+                    (GraphicsBackend.OpenGL, CreateVertexFragment(sources[0].SourceCode, sources[1].SourceCode, GraphicsBackend.OpenGL)),
+                    (GraphicsBackend.OpenGLES, CreateVertexFragment(sources[0].SourceCode, sources[1].SourceCode, GraphicsBackend.OpenGLES)),
+                    (GraphicsBackend.Metal, CreateVertexFragment(sources[0].SourceCode, sources[1].SourceCode, GraphicsBackend.Metal)),
+                    (GraphicsBackend.Direct3D11, CreateVertexFragment(sources[0].SourceCode, sources[1].SourceCode, GraphicsBackend.Direct3D11)),
+                ];
+                
                 ShaderVariant variant = new ShaderVariant(
                     keywords, 
-                    [ (Graphics.Device.BackendType, shaderDescriptions) ],
+                    shaders,
                     Inputs.Select(Mesh.VertexLayoutForResource).ToArray(),
                     Resources
                 );
@@ -89,14 +96,14 @@ namespace Prowl.Editor.Assets
                 return variant;
             }
 
-            public static ShaderDescription[] CreateVertexFragment(string vert, string frag)
+            public static ShaderDescription[] CreateVertexFragment(string vert, string frag, GraphicsBackend backend)
             {
                 vert = vert.Insert(0, "#version 450\n");
                 frag = frag.Insert(0, "#version 450\n");
 
                 CrossCompileOptions options = new()
                 {
-                    FixClipSpaceZ = (Graphics.Device.BackendType == GraphicsBackend.OpenGL || Graphics.Device.BackendType == GraphicsBackend.OpenGLES) && !Graphics.Device.IsDepthRangeZeroToOne,
+                    FixClipSpaceZ = (backend == GraphicsBackend.OpenGL || backend == GraphicsBackend.OpenGLES) && !Graphics.Device.IsDepthRangeZeroToOne,
                     InvertVertexOutputY = false,
                     Specializations = Graphics.GetSpecializations()
                 };
@@ -113,7 +120,7 @@ namespace Prowl.Editor.Assets
                     "main"
                 );
 
-                return SPIRVCompiler.CreateFromSpirv(vertexShaderDesc, vert, fragmentShaderDesc, frag, options);
+                return SPIRVCompiler.CreateFromSpirv(vertexShaderDesc, vert, fragmentShaderDesc, frag, options, backend);
             }
         }
 
