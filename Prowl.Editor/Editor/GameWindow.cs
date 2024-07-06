@@ -4,6 +4,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
+using Prowl.Runtime.SceneManagement;
 using static Prowl.Editor.EditorGUI;
 
 namespace Prowl.Editor;
@@ -32,6 +33,7 @@ public class GameWindow : EditorWindow
 
     RenderTexture RenderTarget;
     bool previouslyPlaying = false;
+    bool hasFrame = false;
 
     public static WeakReference LastFocused;
     public static Vector2 FocusedPosition;
@@ -65,6 +67,8 @@ public class GameWindow : EditorWindow
             [ Veldrid.PixelFormat.R8_G8_B8_A8_UNorm ], 
             Veldrid.PixelFormat.D16_UNorm, 
             true);
+
+        hasFrame = false;
     }
 
     protected override void Draw()
@@ -129,26 +133,11 @@ public class GameWindow : EditorWindow
 
             gui.Draw2D.DrawRectFilled(innerRect, Color.black);
 
-            var renderSize = innerRect.Size;
-            renderSize.x = MathD.Max(renderSize.x, 1);
-            renderSize.y = MathD.Max(renderSize.y, 1);
-
-            // Find Camera to render
-            var allCameras = EngineObject.FindObjectsOfType<Camera>();
-            // Remove disabled ones
-            allCameras = allCameras.Where(c => c.EnabledInHierarchy && !c.GameObject.Name.Equals("Editor-Camera", StringComparison.OrdinalIgnoreCase)).ToArray();
-            // Find MainCamera
-            var mainCam = allCameras.FirstOrDefault(c => c.GameObject.CompareTag("Main Camera") && c.Target.IsExplicitNull, allCameras.Length > 0 ? allCameras[0] : null);
-
-            if (mainCam == null)
-            {
-                gui.Draw2D.DrawRect(innerRect, Color.red, 2);
-                gui.Draw2D.DrawText(Font.DefaultFont, "No Camera found", 40f, innerRect, Color.red);
-                return;
-            }
-
             if (GeneralPreferences.Instance.Resolution == Resolutions.fit)
             {
+                var renderSize = innerRect.Size;
+                renderSize.x = MathD.Max(renderSize.x, 1);
+                renderSize.y = MathD.Max(renderSize.y, 1);
                 if (renderSize.x != RenderTarget.Width || renderSize.y != RenderTarget.Height)
                 {
                     GeneralPreferences.Instance.CurrentWidth = (int)renderSize.x;
@@ -157,14 +146,15 @@ public class GameWindow : EditorWindow
                 }
             }
 
-            // We got a camera to visualize
-            if (GeneralPreferences.Instance.AutoRefreshGameView)
-            {
-                //if (Application.isPlaying || Time.frameCount % 8 == 0)
+            if (GeneralPreferences.Instance.AutoRefreshGameView || !hasFrame)
+                if (!SceneManager.Draw(RenderTarget.Framebuffer))
                 {
-                    Graphics.Render([ mainCam ], RenderTarget.Framebuffer);
+                    gui.Draw2D.DrawRect(innerRect, Color.red, 2);
+                    gui.Draw2D.DrawText(Font.DefaultFont, "No Camera found", 40f, innerRect, Color.red);
+                    return;
                 }
-            }
+
+            hasFrame = true;
 
             // Letter box the image into the render size
             gui.Draw2D.DrawImage(RenderTarget.ColorBuffers[0], innerRect.Position, innerRect.Size, Color.white, true);

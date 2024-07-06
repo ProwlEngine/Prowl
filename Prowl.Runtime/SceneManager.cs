@@ -143,13 +143,17 @@ public static class SceneManager
         PostFixedUpdate?.Invoke();
     }
 
-    public static void Draw()
+    public static bool Draw(Veldrid.Framebuffer? frameBuffer = null)
     {
         var Cameras = AllGameObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).ToList();
 
         Cameras.Sort((a, b) => a.DrawOrder.CompareTo(b.DrawOrder));
 
-        Graphics.Render(Cameras.ToArray(), Graphics.ScreenFramebuffer);
+        if (Cameras.Count == 0)
+            return false;
+
+        Graphics.Render(Cameras.ToArray(), frameBuffer ?? Graphics.ScreenFramebuffer);
+        return true;
     }
 
     public static void LoadScene(Scene scene)
