@@ -80,6 +80,7 @@ The goal is a viable open-source Unity alternative, ideally, Unity projects can 
        - Less than 15mb builds - currently working on removing 10mb, Almost done!
        - Only exports used assets
        - Supports Windows, Mac & Linux
+    - Navmesh and AI Agents (Recast & Detour)
 
 -   **Graphics Rendering:**
     - Modular Graphics Backend
@@ -148,8 +149,8 @@ Getting Prowl up and running is super easy!
   - ❌ Web
 - ✔️ UI Engine
 - ❌ VR Support
-- 🛠️ Navmesh and AI Agents - Navmesh is done, working on Agents now
-- ❌ Networking Solution
+- ✔️ Navmesh and AI Agents
+- 🛠️ Networking Solution
 
 ### Rendering
 - ❌ SSAO, Screen-Space Decals, etc.
@@ -160,12 +161,11 @@ Getting Prowl up and running is super easy!
 - ❌ Terrain Engine
 
 ### Editor
-- ❌ Package Manager (Packages partially implemented)
+- 🛠️ Package Manager (Packages partially implemented)
 - ❌ Animation Tools
-- ❌ Live Collaborative Tools
-- ❌ Visual Scripting
+- 🛠️ Visual Scripting
 - ❌ Material Node Editor
-- ❌ Basic 2D Support
+- ❌ 2D Support
 
 
 See the [open issues](https://github.com/michaelsakharov/prowl/issues) for a full list of proposed features (and known issues).
@@ -221,6 +221,7 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Contributors 🌟
+
 - [Michael (Wulferis)](https://twitter.com/Wulferis)
 - [Abdiel Lopez (PaperPrototype)](https://github.com/PaperPrototype)
 - [Josh Davis](https://github.com/10xJosh)
@@ -229,7 +230,7 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 - [Kuvrot](https://github.com/Kuvrot)
 - [JaggerJo](https://github.com/JaggerJo)
 - [Jihad Khawaja](https://github.com/jihadkhawaja)
-- [Unified](https://github.com/EJTP)
+- [Jasper Honkasalo](https://github.com/japsuu)
  
 # License 📜
 

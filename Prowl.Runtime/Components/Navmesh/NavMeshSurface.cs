@@ -1,4 +1,7 @@
-﻿using DotRecast.Detour;
+﻿using DotRecast.Core;
+using DotRecast.Core.Numerics;
+using DotRecast.Detour;
+using DotRecast.Detour.Crowd;
 using DotRecast.Recast;
 using DotRecast.Recast.Toolset;
 using DotRecast.Recast.Toolset.Builder;
@@ -13,109 +16,90 @@ namespace Prowl.Runtime
 {
     public class NavMeshSurface : MonoBehaviour
     {
+        #region Public - Inspector
+
+        public bool useStaticGeometry = true;
+        public LayerMask GeometryLayers;
+
+        [ShowIf("useStaticGeometry")]
         public List<Staticbody> staticGeometry = new();
+
+        [ShowIf("useStaticGeometry", true)]
+        public List<MeshRenderer> meshGeometry = new();
 
         public BuildSettings navSettings = new();
 
-        [HideInInspector] public NavMesh navMesh;
+        public DtNavMeshQuery? Query {
+            get {
+                if (navMesh == null) return null;
+                _query ??= new DtNavMeshQuery(navMesh);
+                return _query;
+            }
+        }
+
+        public bool IsReady => ready;
+
+        #endregion
+
+        #region Private
+
+        private bool ready = false;
+
+        [HideInInspector] public DtNavMesh navMesh;
+        private DtNavMeshQuery _query;
+
+
+        private DtCrowd crowd;
+        private List<NavMeshAgent> agents;
+
+        #region Debug
 
         private bool triedDebugData = false;
         private Bounds debug_bounds;
         private Vector3[][][] debug_polygons;
 
-        [GUIButton("Rebuild")]
-        public void RebuildNavMesh()
-        {
-            var colliderData = new SceneColliderData();
-            foreach (var sBody in staticGeometry)
-            {
-                foreach (var collider in sBody.GameObject.GetComponentsInChildren<Collider>())
-                    colliderData.Append(collider);
-            }
+        private float timer = 0;
 
-            navMesh = new() { DetourNavMesh = CreateNavMesh(navSettings.ToRC(), colliderData) };
+        #endregion
 
-            CacheDebugData();
-        }
+        #endregion
 
-        private void CacheDebugData()
-        {
-            navMesh.ComputeBounds(out var min, out var max);
-            debug_bounds = new Bounds() { min = min, max = max };
-
-            debug_polygons = new Vector3[navMesh.GetTileCount()][][];
-            for (int i = 0; i < navMesh.GetTileCount(); i++)
-            {
-                var tile = navMesh.GetTile(i);
-                float[] allverts = tile.data.verts;
-                debug_polygons[i] = new Vector3[tile.data.polys.Length][];
-                for (int j = 0; j < tile.data.polys.Length; j++)
-                {
-                    var poly = tile.data.polys[j];
-                    var verts = poly.verts;
-
-                    debug_polygons[i][j] = new Vector3[poly.vertCount];
-                    for (int k = 0; k < poly.vertCount; k++)
-                    {
-                        var v0 = allverts[verts[k] * 3 + 0];
-                        var v1 = allverts[verts[k] * 3 + 1];
-                        var v2 = allverts[verts[k] * 3 + 2];
-                        debug_polygons[i][j][k] = new Vector3(v0, v1, v2);
-                    }
-                }
-            }
-        }
-
-        [GUIButton("Add All Staticbodies")]
-        public void AddAllSceneStatics()
-        {
-            staticGeometry.Clear();
-            foreach (var sBody in EngineObject.FindObjectsOfType<Staticbody>())
-            {
-                if (SceneManagement.SceneManager.Has(sBody.GameObject))
-                    staticGeometry.Add(sBody);
-            }
-        }
-
-        public override void DrawGizmosSelected()
+        public override void Awake()
         {
             if (navMesh == null) return;
 
-            if (!triedDebugData)
-            {
-                CacheDebugData();
-                triedDebugData = true;
-            }
+            agents = new();
+            DtCrowdConfig config = new DtCrowdConfig(0.6f);
+            crowd = new DtCrowd(config, navMesh);
+            DtObstacleAvoidanceParams option = new DtObstacleAvoidanceParams();
+            option.velBias = 0.5f;
+            option.adaptiveDivs = 5;
+            option.adaptiveRings = 2;
+            option.adaptiveDepth = 1;
+            crowd.SetObstacleAvoidanceParams(0, option);
 
-            if (debug_bounds != default)
-            {
-                /*
-                Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
-                Gizmos.Color = Color.blue;
-                Gizmos.DrawCube(debug_bounds.center, debug_bounds.size);
-                */
-            }
-
-            if (debug_polygons != null)
-            {
-                for (int i = 0; i < debug_polygons.Length; i++)
-                {
-                    for (int j = 0; j < debug_polygons[i].Length; j++)
-                    {
-                        /*
-                        Gizmos.Color = Color.blue * 0.5f;
-                        for (int k = 0; k < debug_polygons[i][j].Length; k++)
-                        {
-                            Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
-                            Gizmos.DrawPolygon([debug_polygons[i][j][k], debug_polygons[i][j][(k + 1) % debug_polygons[i][j].Length]]);
-                        }
-                        */
-                    }
-                }
-            }
+            ready = true;
         }
 
-        private DtNavMesh CreateNavMesh(RcNavMeshBuildSettings _navSettings, SceneColliderData input)
+        public override void Update()
+        {
+            if (!ready) return;
+
+            crowd.Update(Time.deltaTimeF, null);
+
+            //timer += Time.deltaTimeF;
+            //if (timer > 5f)
+            //{
+            //    timer = 0;
+            //    RcRand f = new RcRand(Time.frameCount);
+            //    IDtQueryFilter filter = new DtQueryDefaultFilter();
+            //
+            //    var status = Query.FindRandomPoint(filter, f, out var randomRef, out var randomPt);
+            //    MoveAllToTarget(randomPt, false);
+            //}
+        }
+        
+        private DtNavMesh CreateNavMesh(RcNavMeshBuildSettings _navSettings, SceneMeshData input)
         {
             try
             {
@@ -178,7 +162,7 @@ namespace Prowl.Runtime
                     buildMeshDetail: true);
 
                 List<DtMeshData> dtMeshes = new();
-                foreach (RcBuilderResult result in new RcBuilder().BuildTiles(geom, cfg, false, true, 4, Task.Factory))
+                foreach (RcBuilderResult result in new RcBuilder().BuildTiles(geom, cfg, false, true, Environment.ProcessorCount - 1, Task.Factory))
                 {
                     DtNavMeshCreateParams navMeshCreateParams = DemoNavMeshBuilder.GetNavMeshCreateParams(geom, _navSettings.cellSize, _navSettings.cellHeight, _navSettings.agentHeight, _navSettings.agentRadius, _navSettings.agentMaxClimb, result);
                     navMeshCreateParams.tileX = result.TileX;
@@ -232,15 +216,190 @@ namespace Prowl.Runtime
             return Math.Min(DtUtils.Ilog2(DtUtils.NextPow2(num * num2)), 14);
         }
 
-        private static int[] GetTiles(DemoInputGeomProvider geom, float cellSize, int tileSize)
+        #region Debug
+
+        [GUIButton("Add All Geometry")]
+        private void AddAllSceneStatics()
         {
-            RcRecast.CalcGridSize(geom.GetMeshBoundsMin(), geom.GetMeshBoundsMax(), cellSize, out var sizeX, out var sizeZ);
-            int num = (sizeX + tileSize - 1) / tileSize;
-            int num2 = (sizeZ + tileSize - 1) / tileSize;
-            return [num, num2];
+            if (useStaticGeometry)
+            {
+                staticGeometry.Clear();
+                foreach (var sBody in EngineObject.FindObjectsOfType<Staticbody>())
+                {
+                    if (SceneManagement.SceneManager.Has(sBody.GameObject))
+                        staticGeometry.Add(sBody);
+                }
+            }
+            else
+            {
+                meshGeometry.Clear();
+                foreach (var mRend in EngineObject.FindObjectsOfType<MeshRenderer>())
+                {
+                    if (SceneManagement.SceneManager.Has(mRend.GameObject))
+                        meshGeometry.Add(mRend);
+                }
+            }
         }
 
-        class SceneColliderData
+
+        private void CacheDebugData()
+        {
+            navMesh.ComputeBounds(out var min, out var max);
+            debug_bounds = new Bounds() { min = ToV(min), max = ToV(max) };
+
+            debug_polygons = new Vector3[navMesh.GetTileCount()][][];
+            for (int i = 0; i < navMesh.GetTileCount(); i++)
+            {
+                var tile = navMesh.GetTile(i);
+                float[] allverts = tile.data.verts;
+                debug_polygons[i] = new Vector3[tile.data.polys.Length][];
+                for (int j = 0; j < tile.data.polys.Length; j++)
+                {
+                    var poly = tile.data.polys[j];
+                    var verts = poly.verts;
+
+                    debug_polygons[i][j] = new Vector3[poly.vertCount];
+                    for (int k = 0; k < poly.vertCount; k++)
+                    {
+                        var v0 = allverts[verts[k] * 3 + 0];
+                        var v1 = allverts[verts[k] * 3 + 1];
+                        var v2 = allverts[verts[k] * 3 + 2];
+                        debug_polygons[i][j][k] = new Vector3(v0, v1, v2);
+                    }
+                }
+            }
+        }
+
+        public override void DrawGizmosSelected()
+        {
+            if (navMesh == null) return;
+
+            if (!triedDebugData)
+            {
+                CacheDebugData();
+                triedDebugData = true;
+            }
+
+            if (debug_bounds != default)
+            {
+                Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
+                Gizmos.Color = Color.blue;
+                Gizmos.DrawCube(debug_bounds.center, debug_bounds.size);
+            }
+
+            if (debug_polygons != null)
+            {
+                for (int i = 0; i < debug_polygons.Length; i++)
+                {
+                    for (int j = 0; j < debug_polygons[i].Length; j++)
+                    {
+                        for (int k = 0; k < debug_polygons[i][j].Length; k++)
+                        {
+                            Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
+                            Gizmos.DrawPolygon([debug_polygons[i][j][k], debug_polygons[i][j][(k + 1) % debug_polygons[i][j].Length]]);
+                        }
+                    }
+                }
+            }
+        }
+
+        #endregion
+
+        private RcVec3f ToRC(Vector3 v) => new((float)v.x, (float)v.y, (float)v.z);
+        private Vector3 ToV(RcVec3f rc) => new(rc.X, rc.Y, rc.Z);
+
+        #region Public API
+
+        [GUIButton("Rebuild")]
+        public void RebuildNavMesh()
+        {
+            var colliderData = new SceneMeshData();
+            if (useStaticGeometry)
+            {
+                foreach (var sBody in staticGeometry)
+                {
+                    if (sBody.EnabledInHierarchy && GeometryLayers.HasLayer(sBody.GameObject.layerIndex))
+                        foreach (var collider in sBody.GameObject.GetComponentsInChildren<Collider>())
+                            colliderData.Append(collider);
+                }
+            }
+            else
+            {
+                foreach (var mRend in meshGeometry)
+                {
+                    if (mRend.EnabledInHierarchy && mRend.Mesh.IsAvailable && GeometryLayers.HasLayer(mRend.GameObject.layerIndex))
+                    {
+                        colliderData.shapeData.Add(mRend.Mesh.Res!);
+                        colliderData.transformsOut.Add(mRend.Transform);
+                    }
+                }
+            }
+
+            navMesh =  CreateNavMesh(navSettings.ToRC(), colliderData);
+
+            CacheDebugData();
+        }
+
+        public void RegisterAgent(NavMeshAgent agent)
+        {
+            ArgumentNullException.ThrowIfNull(agent);
+            if (!ready) throw new InvalidOperationException("Cannot register NavMeshAgent to a NavMeshSurface that has no NavMesh or hasn't been initialized!");
+
+            agent.InternalAgent = crowd.AddAgent(ToRC(agent.Transform.position), agent.GetAgentParams());
+            agents.Add(agent);
+        }
+
+        public void UnregisterAgent(NavMeshAgent agent)
+        {
+            ArgumentNullException.ThrowIfNull(agent);
+            if (!ready) throw new InvalidOperationException("Cannot unregister NavMeshAgent to a NavMeshSurface that has no NavMesh or hasn't been initialized!");
+
+            crowd.RemoveAgent(agent.InternalAgent);
+            agent.InternalAgent = null;
+            agents.Remove(agent);
+        }
+
+        public void MoveAllToTarget(RcVec3f pos, bool adjust)
+        {
+            if (!ready) throw new InvalidOperationException("Cannot set move target on a NavMeshSurface that has no NavMesh or hasn't been initialized!");
+
+            foreach (var ag in agents)
+                MoveToTarget(ag, pos, adjust);
+        }
+
+        public void MoveToTarget(NavMeshAgent agent, RcVec3f pos, bool adjust)
+        {
+            ArgumentNullException.ThrowIfNull(agent);
+            ArgumentNullException.ThrowIfNull(agent.InternalAgent);
+            if (!ready) throw new InvalidOperationException("Cannot set move target on a NavMeshSurface that has no NavMesh or hasn't been initialized!");
+
+            RcVec3f ext = crowd.GetQueryExtents();
+            IDtQueryFilter filter = crowd.GetFilter(0);
+            if (adjust)
+            {
+                RcVec3f vel = CalcVel(agent.InternalAgent!.npos, pos, agent.InternalAgent!.option.maxSpeed);
+                crowd.RequestMoveVelocity(agent.InternalAgent!, vel);
+            }
+            else
+            {
+                Query!.FindNearestPoly(pos, ext, filter, out var nearestRef, out var nearestPt, out var _);
+                crowd.RequestMoveTarget(agent.InternalAgent!, nearestRef, nearestPt);
+            }
+        }
+
+        public RcVec3f CalcVel(RcVec3f pos, RcVec3f tgt, float speed)
+        {
+            RcVec3f vel = RcVec3f.Subtract(tgt, pos);
+            vel.Y = 0.0f;
+            vel = RcVec3f.Normalize(vel);
+            vel = vel * speed;
+            return vel;
+        }
+
+
+        #endregion
+
+        class SceneMeshData
         {
             public class MeshData
             {
@@ -289,8 +448,8 @@ namespace Prowl.Runtime
             public float cellSize = 0.3f;
             public float cellHeight = 0.2f;
 
-            public float agentHeight = 2f;
-            public float agentRadius = 0.6f;
+            public float agentHeight = 1f;
+            public float agentRadius = 0.5f;
             public float agentMaxClimb = 0.9f;
             public float agentMaxSlope = 45f;
             public float agentMaxAcceleration = 8f;
@@ -311,8 +470,8 @@ namespace Prowl.Runtime
                 cellSize = 0.3f;
                 cellHeight = 0.2f;
 
-                agentHeight = 2f;
-                agentRadius = 0.6f;
+                agentHeight = 1f;
+                agentRadius = 0.5f;
                 agentMaxClimb = 0.9f;
                 agentMaxSlope = 45f;
                 agentMaxAcceleration = 8f;
