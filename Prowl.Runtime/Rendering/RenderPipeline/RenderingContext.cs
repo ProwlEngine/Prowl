@@ -13,12 +13,12 @@ namespace Prowl.Runtime.RenderPipelines
         private List<RenderingCommand> internalCommandList = new();
 
 
-        public void Submit(CommandBuffer buffer)
+        public void ExecuteCommandBuffer(CommandBuffer buffer)
         {
             internalCommandList.AddRange(buffer.Buffer);
         }        
 
-        public void Execute()
+        public void Submit()
         {
             if (internalCommandList.Count == 0)
                 return;

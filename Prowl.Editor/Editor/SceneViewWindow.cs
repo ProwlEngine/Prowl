@@ -163,11 +163,11 @@ public class SceneViewWindow : EditorWindow
             //buffer.DrawSingle(gridMesh);
         }
 
-        context.Submit(buffer);
+        context.ExecuteCommandBuffer(buffer);
 
         CommandBufferPool.Release(buffer);
 
-        context.Execute();
+        context.Submit();
 
         var selectedWeaks = HierarchyWindow.SelectHandler.Selected;
         var selectedGOs = new List<GameObject>();

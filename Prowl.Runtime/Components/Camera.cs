@@ -1,7 +1,4 @@
-﻿﻿using Prowl.Icons;
-using Prowl.Runtime.SceneManagement;
-using System;
-using System.Collections.Generic;
+﻿using Prowl.Icons;
 
 namespace Prowl.Runtime;
 
