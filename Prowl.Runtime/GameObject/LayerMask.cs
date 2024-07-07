@@ -1,7 +1,12 @@
-﻿namespace Prowl.Runtime;
+﻿using System.Data;
+
+namespace Prowl.Runtime;
 
 public struct LayerMask
 {
+    public readonly static LayerMask Everything = new() { mask = uint.MaxValue };
+    public readonly static LayerMask Nothing = new() { mask = 0 };
+
     [SerializeField]
     private uint mask;
 
