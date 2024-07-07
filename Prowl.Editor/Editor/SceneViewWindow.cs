@@ -152,8 +152,6 @@ public class SceneViewWindow : EditorWindow
             buffer.SetFloat("PrimaryGridSize", SceneViewPreferences.Instance.PrimaryGridSize);
             buffer.SetFloat("SecondaryGridSize", SceneViewPreferences.Instance.SecondaryGridSize);
 
-            buffer.SetKeyword("CLIP_SPACE_Y_INVERTED", Graphics.Device.IsClipSpaceYInverted ? "1" : "0");
-
             buffer.SetMaterial(gridMat, 0);
             buffer.DrawSingle(gridMesh);
         }

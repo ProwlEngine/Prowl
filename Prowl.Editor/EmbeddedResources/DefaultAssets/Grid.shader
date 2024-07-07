@@ -65,11 +65,6 @@ Pass "Grid"
         }
 	}
 
-	Features
-	{
-		CLIP_SPACE_Y_INVERTED [ 0 1 ]
-	}
-
 	PROGRAM VERTEX
 		layout(location = 0) in vec3 vertexPosition;
 		layout(location = 1) in vec2 vertexTexCoord;
@@ -85,11 +80,6 @@ Pass "Grid"
 		void main() 
 		{
 			gl_Position = vec4(vertexPosition, 1.0);
-
-			if (CLIP_SPACE_Y_INVERTED == 1)
-			{
-				gl_Position.y *= -1.0;
-			}
 
             // vertexPosition is in screen space, convert it into world space
             Position = (MvpInverse * vec4(vertexPosition.xy, 1.0, 1.0)).xyz;
@@ -182,11 +172,8 @@ Pass "Grid"
 			float sg = Grid(CameraPosition, PrimaryGridSize, normalize(Position), 0.02, d);
 			float bg = Grid(CameraPosition, SecondaryGridSize, normalize(Position), 0.02, bd);
 		
-			if (abs(dot(normalize(Position), vec3(0.0, 1.0, 0.0))) > 0.005)
-			{ 
-				OutputColor = vec4(GridColor.xyz, sg);
-				OutputColor += vec4(GridColor.xyz, bg * 0.5);
-            }
+			OutputColor = vec4(GridColor.xyz, sg);
+			OutputColor += vec4(GridColor.xyz, bg * 0.5);
 		}
 	ENDPROGRAM
 }

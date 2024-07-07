@@ -32,8 +32,8 @@ public static class Application
 
     private static GraphicsBackend[] preferredUnixBackends = // Cover Unix-like (Linux, FreeBSD, OpenBSD)
     [
-        GraphicsBackend.OpenGL,
         GraphicsBackend.Vulkan,
+        GraphicsBackend.OpenGL,
         GraphicsBackend.OpenGLES,
     ];
 
