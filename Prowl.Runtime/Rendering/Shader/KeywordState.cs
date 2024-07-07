@@ -9,9 +9,17 @@ namespace Prowl.Runtime
     /// <summary>
     /// A collection of set keywords.
     /// </summary>
-    public class KeywordState
+    public class KeywordState : ISerializationCallbackReceiver, IEquatable<KeywordState>
     {
-        public static KeywordState Default = new();
+        public static KeywordState Empty = new();
+
+        public static KeywordState Default = new(
+            [ 
+                new("UV_STARTS_AT_TOP", Graphics.Device.IsUvOriginTopLeft ? "1" : "0"), 
+                new("DEPTH_ZERO_TO_ONE", Graphics.Device.IsDepthRangeZeroToOne ? "1" : "0"), 
+                new("CLIP_SPACE_Y_INVERTED", Graphics.Device.IsClipSpaceYInverted ? "1" : "0") 
+            ] 
+        );
 
         private struct KeyValuePairComparer : IEqualityComparer<KeyValuePair<string, string>>
         {
@@ -22,10 +30,15 @@ namespace Prowl.Runtime
                 HashCode.Combine(obj.Key.GetHashCode(), obj.Value.GetHashCode());
         }
 
-        [SerializeField, HideInInspector]
         private Dictionary<string, string> _keyValuePairs;
+
+        [SerializeField, HideInInspector]
+        private string[] keys;
+
+        [SerializeField, HideInInspector]
+        private string[] values;
         
-        private bool _hashInvalid;
+        private bool _hasValidHash;
         private int _hash;
 
         public IEnumerable<string> Keys => _keyValuePairs.Keys;
@@ -35,13 +48,14 @@ namespace Prowl.Runtime
 
         public KeywordState()
         {
+            _hasValidHash = false;
             _keyValuePairs = new();
         }
 
         public KeywordState(KeywordState other)
         {
             this._hash = other._hash;
-            this._hashInvalid = other._hashInvalid;
+            this._hasValidHash = other._hasValidHash;
             this._keyValuePairs = new(other._keyValuePairs);
         }
 
@@ -58,13 +72,13 @@ namespace Prowl.Runtime
         public KeywordState(IEnumerable<KeyValuePair<string, string>> values)
         {
             _keyValuePairs = new(values);
-            _hashInvalid = true;
+            _hasValidHash = false;
         }
 
         public void SetKey(string key, string value)
         {
             _keyValuePairs[key] = value;
-            _hashInvalid = true;
+            _hasValidHash = false;
         }
 
         public string GetKey(string key, string valueDefault = default)
@@ -82,17 +96,34 @@ namespace Prowl.Runtime
             return Equals(other);
         }
 
-        public bool Equals(KeywordState other) => GetHashCode() == other.GetHashCode();
+        public bool Equals(KeywordState? other) => other != null && GetHashCode() == other.GetHashCode();
 
         public override int GetHashCode()
         {
-            if (_hashInvalid)
+            if (!_hasValidHash)
             {
                 _hash = Utils.ProwlHash.OrderlessHash(_keyValuePairs, new KeyValuePairComparer());
-                _hashInvalid = false;
+                _hasValidHash = true;
             }
 
             return _hash;
+        }
+
+        public void OnBeforeSerialize()
+        {
+            keys = _keyValuePairs.Keys.ToArray();
+            values = _keyValuePairs.Values.ToArray();
+        }
+
+        public void OnAfterDeserialize()
+        {
+            _keyValuePairs = new();
+
+            for (int i = 0; i < keys.Length; i++)
+                _keyValuePairs.Add(keys[i], values[i]);
+
+            _hasValidHash = false;
+            GetHashCode();
         }
     }
 }

@@ -1,12 +1,12 @@
 ﻿using Veldrid;
 using Veldrid.StartupUtilities;
-using System.Collections.Generic;
-using System.Threading;
+using System.Runtime.InteropServices;
 
 
 namespace Prowl.Runtime
 {   
     using RenderPipelines;
+    using System;
     using System.Threading.Tasks;
 
     public static class Graphics
@@ -26,7 +26,7 @@ namespace Prowl.Runtime
             set { Device.SyncToVerticalBlank = value; }
         }
 
-        [System.Runtime.InteropServices.DllImport("Shcore.dll")]
+        [DllImport("Shcore.dll")]
         internal static extern int SetProcessDpiAwareness(int value);
 
         public static void Initialize(bool VSync = true, GraphicsBackend preferredBackend = GraphicsBackend.OpenGL)
@@ -34,18 +34,21 @@ namespace Prowl.Runtime
             GraphicsDeviceOptions deviceOptions = new()
             {
                 SyncToVerticalBlank = VSync,
-                PreferStandardClipSpaceYDirection = true,
-                PreferDepthRangeZeroToOne = false,
                 ResourceBindingModel = ResourceBindingModel.Default,
                 HasMainSwapchain = true,
-                SwapchainDepthFormat = PixelFormat.R16_UNorm,
+                SwapchainDepthFormat = PixelFormat.D16_UNorm,
                 SwapchainSrgbFormat = false,
             };
 
             Device = VeldridStartup.CreateGraphicsDevice(Screen.InternalWindow, deviceOptions, preferredBackend);
 
-            if(RuntimeUtils.IsWindows())
-                SetProcessDpiAwareness(1);
+            if (RuntimeUtils.IsWindows())
+            {
+                Exception? exception = Marshal.GetExceptionForHR(SetProcessDpiAwareness(1));
+
+                if (exception != null)
+                    Debug.LogError("Failed to set DPI awareness", exception);
+            }
 
             Screen.Resize += (newSize) => Device.ResizeMainWindow((uint)newSize.x, (uint)newSize.y);
         }
@@ -71,10 +74,7 @@ namespace Prowl.Runtime
             if (ActivePipeline == null)
                 return;
             
-            RenderingContext context = new()
-            {
-                TargetFramebuffer = targetFramebuffer
-            };
+            RenderingContext context = new(targetFramebuffer);
 
             ActivePipeline.Render(context, cameras);
         }
@@ -110,10 +110,24 @@ namespace Prowl.Runtime
             foreach (var command in commandBuffer.Buffer)
                 command.ExecuteCommand(list, state);
 
-            ExecuteCommandList(list, true);
+            try 
+            {
+                ExecuteCommandList(list, true);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("Failed to execute command list", ex);
+            }
+            finally
+            {
+                state.Dispose();
+                list.Dispose();   
+            }
+        }
 
-            state.Dispose();
-            list.Dispose();
+        public static Task AsyncExecuteCommandBuffer(CommandBuffer commandBuffer)
+        {
+            return new Task(() => ExecuteCommandBuffer(commandBuffer));
         }
 
         public static void ExecuteCommandList(CommandList list, bool waitForCompletion = false)
@@ -126,32 +140,35 @@ namespace Prowl.Runtime
                 Device.SubmitCommands(list, fence);
                 Device.WaitForFence(fence);
                 fence.Dispose();
+
+                return;
             }
-            else
-            {
-                Device.SubmitCommands(list);
-            }
+
+            Device.SubmitCommands(list);
+        }
+
+        public static Task AsyncExecuteCommandList(CommandList list)
+        {
+            return new Task(() => ExecuteCommandList(list, true));
         }
 
         public static SpecializationConstant[] GetSpecializations()
         {
             bool glOrGles = Device.BackendType == GraphicsBackend.OpenGL || Device.BackendType == GraphicsBackend.OpenGLES;
 
-            List<SpecializationConstant> specializations =
-            [
-                new SpecializationConstant(0, Device.IsClipSpaceYInverted),
-                new SpecializationConstant(1, true),
-                new SpecializationConstant(2, glOrGles),
-                new SpecializationConstant(3, Device.IsDepthRangeZeroToOne),
-            ];
-
             PixelFormat swapchainFormat = ScreenFramebuffer.OutputDescription.ColorAttachments[0].Format;
             bool swapchainIsSrgb = swapchainFormat == PixelFormat.B8_G8_R8_A8_UNorm_SRgb
                 || swapchainFormat == PixelFormat.R8_G8_B8_A8_UNorm_SRgb;
 
-            specializations.Add(new SpecializationConstant(103, swapchainIsSrgb));
+            SpecializationConstant[] specializations =
+            [
+                new SpecializationConstant(0, Device.IsClipSpaceYInverted),
+                new SpecializationConstant(1, !swapchainIsSrgb),
+                new SpecializationConstant(2, glOrGles),
+                new SpecializationConstant(3, Device.IsDepthRangeZeroToOne),
+            ];
 
-            return specializations.ToArray();
+            return specializations;
         }
 
         public static void CopyTexture(Texture source, Texture destination, bool waitForCompletion = false)

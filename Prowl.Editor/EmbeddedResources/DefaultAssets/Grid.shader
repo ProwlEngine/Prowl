@@ -25,7 +25,7 @@ Pass "Grid"
     }
 
     // Rasterizer culling mode
-    Cull Back
+    Cull None
 
 	Inputs
 	{
@@ -39,7 +39,7 @@ Pass "Grid"
         Set
         {
             // Binding 0
-            Buffer
+            Buffer MVPBuffer
             {
                 MvpInverse Matrix4x4
             }
@@ -49,16 +49,25 @@ Pass "Grid"
         Set
         {
             // Binding 0
-            Buffer
+            Buffer ResourceBuffer
             {
-                ScreenResolution Vector2
 				CameraPosition Vector3
+				GridColor Vector4
+
+				PlaneNormal Vector3
+				PlaneRight Vector3
+				PlaneUp Vector3
+
 				LineWidth Float
 				PrimaryGridSize Float
 				SecondaryGridSize Float
-				BackColor Vector4
             }
         }
+	}
+
+	Features
+	{
+		CLIP_SPACE_Y_INVERTED [ 0 1 ]
 	}
 
 	PROGRAM VERTEX
@@ -68,7 +77,7 @@ Pass "Grid"
         layout(location = 0) out vec3 Position;
 		layout(location = 1) out vec2 TexCoords;
 		
-		layout(set = 0, binding = 0) uniform MVPBuffer
+		layout(set = 0, binding = 0, std140) uniform MVPBuffer
 		{
 			mat4 MvpInverse;
 		};
@@ -77,8 +86,13 @@ Pass "Grid"
 		{
 			gl_Position = vec4(vertexPosition, 1.0);
 
+			if (CLIP_SPACE_Y_INVERTED == 1)
+			{
+				gl_Position.y *= -1.0;
+			}
+
             // vertexPosition is in screen space, convert it into world space
-            Position = (MvpInverse * vec4(vertexPosition, 1.0)).xyz;
+            Position = (MvpInverse * vec4(vertexPosition.xy, 1.0, 1.0)).xyz;
 			TexCoords = vertexTexCoord;
 		}
 	ENDPROGRAM
@@ -89,16 +103,18 @@ Pass "Grid"
 
 		layout(location = 0) out vec4 OutputColor;
 
-		layout(set = 1, binding = 0) uniform ResourceBuffer
+		layout(set = 1, binding = 0, std140) uniform ResourceBuffer
 		{
-			vec2 ScreenResolution;
 			vec3 CameraPosition;
+			vec4 GridColor;
 
-			float LineWidth; 
-			float PrimaryGridSize; 
+			vec3 PlaneNormal;
+			vec3 PlaneRight;
+			vec3 PlaneUp;
+
+			float PrimaryGridSize;
+			float LineWidth;
 			float SecondaryGridSize; 
-
-			vec4 BackColor;
 		};
 		
 		// https://bgolus.medium.com/the-best-darn-grid-shader-yet-727f9278b9d8
@@ -139,29 +155,38 @@ Pass "Grid"
 		float Grid(vec3 ro, float scale, vec3 rd, float lineWidth, out float d) 
 		{
 			ro /= scale;
+
+			float ndotd = dot(-PlaneNormal, rd);
+
+			if (ndotd == 0.0)
+			    return 0.0; 
+
+			d = dot(PlaneNormal, ro) / ndotd;
+
+			if (d <= 0.0)
+			    return 0.0; 
+
+			vec3 hit = ro + rd * d;
+
+			float u = dot(hit, PlaneRight);
+			float v = dot(hit, PlaneUp);
 			
-			d = -ro.x / rd.x;
-			if (d <= 0.0) return 0.0;
-			vec2 p = (ro.zy + rd.zy * d);
-			
-			return pristineGrid(p, vec2(lineWidth * LineWidth));
+			return pristineGrid(vec2(u, v), vec2(lineWidth * LineWidth));
 		}
 
 		void main()
 		{
 			float d = 0.0;
 			float bd = 0.0;
+
 			float sg = Grid(CameraPosition, PrimaryGridSize, normalize(Position), 0.02, d);
 			float bg = Grid(CameraPosition, SecondaryGridSize, normalize(Position), 0.02, bd);
 		
-			if (abs(dot(normalize(Position), vec3(1.0, 0.0, 0.0))) > 0.005)
+			if (abs(dot(normalize(Position), vec3(0.0, 1.0, 0.0))) > 0.005)
 			{ 
-				OutputColor = vec4(1.0, 1.0, 1.0, sg);
-				OutputColor += vec4(1.0, 1.0, 1.0, bg * 0.5);
-				//OutputColor *= mix(1.0, 0.0, min(1.0, d / 10000.0));
+				OutputColor = vec4(GridColor.xyz, sg);
+				OutputColor += vec4(GridColor.xyz, bg * 0.5);
             }
-
-			OutputColor = BackColor;
 		}
 	ENDPROGRAM
 }

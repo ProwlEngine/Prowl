@@ -18,9 +18,10 @@ namespace Prowl.Runtime
             PipelineCache.GetDescriptionForPipeline(pipeline, out _);
 
             if (state.activePipeline != pipeline)
+            {
                 state.activePipeline = pipeline;
-
-            list.SetPipeline(pipeline);
+                list.SetPipeline(pipeline);
+            }
         }
     }
 }

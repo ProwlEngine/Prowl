@@ -111,8 +111,6 @@ namespace Prowl.Runtime
         {
             for (int i = 0; i < passes.Length; i++)
                 RegisterPass(passes[i], i);
-
-            Debug.Log(GetStringRepresentation());
         }
 
         public string GetStringRepresentation()
@@ -194,13 +192,13 @@ namespace Prowl.Runtime
                 builder.Append("\tInputs\n\t{\n");
 
                 builder.Append("\t\tVertexInputs\n\t\t{\n");
-                foreach(var input in pass.GetVariant(KeywordState.Default).VertexInputs)
+                foreach(var input in pass.GetVariant(KeywordState.Empty).VertexInputs)
                 {
                     builder.Append($"\t\t\t{input.Elements[0].Name}\n");
                 }
                 builder.Append("\t\t}\n\n");
 
-                foreach(var set in pass.GetVariant(KeywordState.Default).ResourceSets)
+                foreach(var set in pass.GetVariant(KeywordState.Empty).ResourceSets)
                 {
                     builder.Append("\t\tSet\n\t\t{\n");
 

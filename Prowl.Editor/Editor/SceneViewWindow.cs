@@ -94,22 +94,17 @@ public class SceneViewWindow : EditorWindow
         Cam.NearClip = SceneViewPreferences.Instance.NearClip;
         Cam.FarClip = SceneViewPreferences.Instance.FarClip;
 
-        RenderingContext context = new()
-        {
-            TargetFramebuffer = RenderTarget.Framebuffer
-        };
-
-        // Graphics.Render([ Cam ], context);
-
         SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
+
+        RenderingContext context = new RenderingContext(RenderTarget.Framebuffer);
         
-        // Cam.RenderResolution = SceneViewPreferences.Instance.RenderResolution;
+        Graphics.Render([ Cam ], context);
 
         var imagePos = gui.CurrentNode.LayoutData.Rect.Position;
         var imageSize = gui.CurrentNode.LayoutData.Rect.Size;
         gui.Draw2D.DrawImage(RenderTarget.ColorBuffers[0], imagePos, imageSize, Color.white);
 
-#warning TODO: Camera rendering clears Gizmos untill the rendering overhaul, so gizmos will Flicker here
+        // TODO: Camera rendering clears Gizmos untill the rendering overhaul, so gizmos will Flicker here
         Camera.Current = Cam;
         foreach (var activeGO in SceneManager.AllGameObjects)
         {
@@ -135,32 +130,32 @@ public class SceneViewWindow : EditorWindow
             gridMesh ??= Mesh.GetFullscreenQuad();
             gridMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Grid.shader"));
 
-            Matrix4x4.Invert(projection * view * Matrix4x4.Identity, out Matrix4x4 result);
-
             buffer.ClearRenderTarget(true, true, new Color(0.0f, 0.0f, 0.25f, 1.0f), depth: 1);
 
-            var pass = gridMat.Shader.Res.GetPass(0);
-            var variant = pass.GetVariant(KeywordState.Default);
+            (Vector3, Vector3) planeInfo = SceneViewPreferences.Instance.GridType switch  
+            {
+                GridType.XZ => (Vector3.up, Vector3.right),
+                GridType.XY => (Vector3.forward, Vector3.up),
+                GridType.YZ => (Vector3.right, Vector3.forward),
+            };
 
-            buffer.SetPipeline(pass, variant);
+            Matrix4x4.Invert(view * projection, out Matrix4x4 invertedMVP);
 
-            buffer.SetMatrix("MvpInverse", result);
-            buffer.SetVector("ScreenResolution", new Vector2(RenderTarget.Width, RenderTarget.Height));
+            buffer.SetMatrix("MvpInverse", invertedMVP);
+
             buffer.SetVector("CameraPosition", Cam.Transform.position);
+            buffer.SetVector("PlaneNormal", planeInfo.Item1);
+            buffer.SetVector("PlaneRight", planeInfo.Item2);
+            buffer.SetVector("PlaneUp", Vector3.Cross(planeInfo.Item1, planeInfo.Item2));
+            buffer.SetColor("GridColor", SceneViewPreferences.Instance.GridColor);
             buffer.SetFloat("LineWidth", SceneViewPreferences.Instance.LineWidth);
             buffer.SetFloat("PrimaryGridSize", SceneViewPreferences.Instance.PrimaryGridSize);
             buffer.SetFloat("SecondaryGridSize", SceneViewPreferences.Instance.SecondaryGridSize);
 
-            buffer.SetColor("BackColor", Color.red);
+            buffer.SetKeyword("CLIP_SPACE_Y_INVERTED", Graphics.Device.IsClipSpaceYInverted ? "1" : "0");
 
-            buffer.UploadResourceSet(0);
-            buffer.UploadResourceSet(1);
-
-            buffer.SetDrawData(gridMesh, variant.VertexInputs);
-
-            buffer.ManualDraw((uint)gridMesh.IndexCount, 0, 1, 0, 0);
-
-            //buffer.DrawSingle(gridMesh);
+            buffer.SetMaterial(gridMat, 0);
+            buffer.DrawSingle(gridMesh);
         }
 
         context.ExecuteCommandBuffer(buffer);

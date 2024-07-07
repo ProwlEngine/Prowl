@@ -8,6 +8,7 @@ using System.Reflection;
 
 
 using static System.Text.Encoding;
+using System.Text;
 
 namespace Prowl.Editor.Assets
 {
@@ -71,19 +72,43 @@ namespace Prowl.Editor.Assets
 
             public ShaderVariant CompileVariant(ShaderSource[] sources, KeywordState keywords)
             {
-                if (Global != null)
-                    sources[0].SourceCode = sources[0].SourceCode.Insert(0, Global?.GlobalInclude);
+                if (sources.Length != 2 || sources[0].Stage != ShaderStages.Vertex || sources[1].Stage != ShaderStages.Fragment)
+                    throw new Exception("Shader compiler does not currently support shader stages other than Vertex or Fragment");
+
+                Debug.Log("Compiling for keywords: " + keywords.ToString());
+
+                StringBuilder vertexSource = new(sources[0].SourceCode);
+                StringBuilder fragmentSource = new(sources[1].SourceCode);
 
                 if (Global != null)
-                    sources[1].SourceCode = sources[1].SourceCode.Insert(0, Global?.GlobalInclude);
+                {
+                    vertexSource.Insert(0, Global.GlobalInclude);
+                    fragmentSource.Insert(0, Global.GlobalInclude);
+                }
+
+                foreach (var keyword in keywords.KeyValuePairs)
+                {
+                    string define = $"#define {keyword.Key} {keyword.Value}\n";
+                    vertexSource.Insert(0, define);
+                    fragmentSource.Insert(0, define);
+                }
+
+                vertexSource.Insert(0, "#version 450\n\n");
+                fragmentSource.Insert(0, "#version 450\n\n");
+
+                string vertString = vertexSource.ToString();
+                string fragString = fragmentSource.ToString();
+
+                Debug.Log(vertString);
+                Debug.Log(fragString);
 
                 (GraphicsBackend, ShaderDescription[])[] shaders = 
                 [
-                    (GraphicsBackend.Vulkan, CreateVertexFragment(sources[0].SourceCode, sources[1].SourceCode, GraphicsBackend.Vulkan)),
-                    (GraphicsBackend.OpenGL, CreateVertexFragment(sources[0].SourceCode, sources[1].SourceCode, GraphicsBackend.OpenGL)),
-                    (GraphicsBackend.OpenGLES, CreateVertexFragment(sources[0].SourceCode, sources[1].SourceCode, GraphicsBackend.OpenGLES)),
-                    (GraphicsBackend.Metal, CreateVertexFragment(sources[0].SourceCode, sources[1].SourceCode, GraphicsBackend.Metal)),
-                    (GraphicsBackend.Direct3D11, CreateVertexFragment(sources[0].SourceCode, sources[1].SourceCode, GraphicsBackend.Direct3D11)),
+                    (GraphicsBackend.Vulkan, CreateVertexFragment(vertString, fragString, GraphicsBackend.Vulkan)),
+                    (GraphicsBackend.OpenGL, CreateVertexFragment(vertString, fragString, GraphicsBackend.OpenGL)),
+                    (GraphicsBackend.OpenGLES, CreateVertexFragment(vertString, fragString, GraphicsBackend.OpenGLES)),
+                    (GraphicsBackend.Metal, CreateVertexFragment(vertString, fragString, GraphicsBackend.Metal)),
+                    (GraphicsBackend.Direct3D11, CreateVertexFragment(vertString, fragString, GraphicsBackend.Direct3D11)),
                 ];
                 
                 ShaderVariant variant = new ShaderVariant(
@@ -98,9 +123,6 @@ namespace Prowl.Editor.Assets
 
             public static ShaderDescription[] CreateVertexFragment(string vert, string frag, GraphicsBackend backend)
             {
-                vert = vert.Insert(0, "#version 450\n");
-                frag = frag.Insert(0, "#version 450\n");
-
                 CrossCompileOptions options = new()
                 {
                     FixClipSpaceZ = (backend == GraphicsBackend.OpenGL || backend == GraphicsBackend.OpenGLES) && !Graphics.Device.IsDepthRangeZeroToOne,

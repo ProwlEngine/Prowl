@@ -1152,7 +1152,7 @@ namespace Prowl.Runtime.GUI.Graphics
                 if (cmdListPtr.Vertices.Count == 0)
                     continue;
 
-                commandBuffer.SetDrawData(cmdListPtr, null);
+                commandBuffer.SetDrawData(cmdListPtr);
 
                 var idxoffset = 0;
                 for (int cmd_i = 0; cmd_i < cmdListPtr.CommandList.Count; cmd_i++)
@@ -1191,7 +1191,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
             Matrix4x4 orthoProjection = Matrix4x4.CreateOrthographicOffCenter(L, R, B, T, near, far);
 
-            commandBuffer.SetFullScissorRect(0);
+            commandBuffer.SetScissor(true);
             commandBuffer.SetPipeline(UIPass, UIVariant);
 
             commandBuffer.SetMatrix("ProjectionMatrix", orthoProjection);

@@ -135,10 +135,10 @@ namespace Prowl.Runtime
         }
 
         public ShaderVariant GetVariant(KeywordState? keywordID = null) =>
-            variants[ValidateKeyword(keywordID ?? KeywordState.Default)];
+            variants[ValidateKeyword(keywordID ?? KeywordState.Empty)];
 
         public bool TryGetVariant(KeywordState? keywordID, out ShaderVariant? variant) =>
-            variants.TryGetValue(keywordID ?? KeywordState.Default, out variant);
+            variants.TryGetValue(keywordID ?? KeywordState.Empty, out variant);
 
         public bool HasTag(string tag, string? tagValue = null)
         {   

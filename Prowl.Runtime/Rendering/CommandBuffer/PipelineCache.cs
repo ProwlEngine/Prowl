@@ -136,7 +136,7 @@ namespace Prowl.Runtime
             bool scissorTest = false,
             OutputDescription? pipelineOutput = null)
         {
-            keywords ??= KeywordState.Default;
+            keywords ??= KeywordState.Empty;
 
             PassPipelineDescription description = new()
             {

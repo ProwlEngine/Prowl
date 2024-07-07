@@ -66,14 +66,11 @@ namespace Prowl.Runtime
             throw new NotImplementedException();
         }
 
-        public void DrawSingle(IGeometryDrawData drawData, int indexCount = -1, int indexOffset = -1)
+        public void DrawSingle(IGeometryDrawData drawData, int indexCount = -1, uint indexOffset = 0)
         {
-            buffer.Add(new DrawCommand()
-            {
-                DrawData = drawData,
-                IndexCount = indexCount,
-                IndexOffset = indexOffset
-            });
+            SetDrawData(drawData);
+            UploadResourceSets();
+            ManualDraw((uint)(indexCount <= 0 ? drawData.IndexCount : indexCount), indexOffset, 1, 0, 0);
         }
 
         public void DrawMeshIndirect()
@@ -81,11 +78,10 @@ namespace Prowl.Runtime
             throw new NotImplementedException();
         }
 
-        public void SetDrawData(IGeometryDrawData drawData, VertexLayoutDescription[] resources)
+        public void SetDrawData(IGeometryDrawData drawData)
         {
             buffer.Add(new SetDrawDataCommand() {
                 DrawData = drawData,
-                Resources = resources
             });
         }
 
@@ -110,9 +106,14 @@ namespace Prowl.Runtime
 
         public void UploadResourceSet(uint slot)
         {
-            buffer.Add(new UploadResourceCommand() {
+            buffer.Add(new SetResourceCommand() {
                 Slot = slot
             });
+        }
+
+        public void UploadResourceSets()
+        {
+            buffer.Add(new SetResourcesCommand());
         }
 
         public void PushDebugGroup(string name)
@@ -187,7 +188,6 @@ namespace Prowl.Runtime
         public void SetScissorRect(int index, int x, int y, int width, int height)
         {
             buffer.Add(new ScissorCommand() { 
-                SetActive = true,
                 SetFull = false, 
                 Index = index,
                 X = x, Y = y,
@@ -198,7 +198,6 @@ namespace Prowl.Runtime
         public void SetScissorRects(int x, int y, int width, int height)
         {
             buffer.Add(new ScissorCommand() { 
-                SetActive = true,
                 SetFull = false, 
                 Index = -1,
                 X = x, Y = y,
@@ -208,8 +207,7 @@ namespace Prowl.Runtime
 
         public void SetFullScissorRect(int index)
         {
-            buffer.Add(new ScissorCommand() { 
-                SetActive = true,
+            buffer.Add(new ScissorCommand() {
                 SetFull = true, 
                 Index = index 
             });
@@ -218,9 +216,15 @@ namespace Prowl.Runtime
         public void SetFullScissorRects()
         {
             buffer.Add(new ScissorCommand() { 
-                SetActive = true,
                 SetFull = true, 
                 Index = -1 
+            });
+        }
+
+        public void SetScissor(bool active)
+        {
+            buffer.Add(new ScissorCommand() {
+                SetActive = active
             });
         }
 

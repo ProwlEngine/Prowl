@@ -130,7 +130,7 @@ namespace Prowl.Editor.ShaderParser
                         global.Cull = Enum.Parse<FaceCullMode>(_tokenizer.Token.ToString(), true);
                     break;
                     
-                    case "GlobalInclude":
+                    case "GLOBALINCLUDE":
                         global.GlobalInclude = ParseGlobalInclude();
                     break;
                 }
@@ -358,20 +358,13 @@ namespace Prowl.Editor.ShaderParser
 
         private string ParseGlobalInclude()
         {
-            ExpectToken(TokenType.OpenBrace);
-            var content = "";
-            int openBraces = 1;
-            while (_tokenizer.MoveNext() && openBraces > 0)
-            {
-                if (_tokenizer.TokenType == TokenType.OpenBrace)
-                    openBraces++;
-                if (_tokenizer.TokenType == TokenType.CloseBrace)
-                    openBraces--;
+            int startPos = _tokenizer.InputPosition;
+            int endPos = startPos;
 
-                if (openBraces > 0)
-                    content += _tokenizer.Token.ToString() + " ";
-            }
-            return content;
+            while (_tokenizer.MoveNext() && _tokenizer.Token.ToString() != "ENDGLOBAL")
+                endPos = _tokenizer.InputPosition;
+
+            return _tokenizer.Input.Slice(startPos, endPos - startPos).ToString();
         }
 
         private ParsedPass ParsePass()
@@ -495,18 +488,21 @@ namespace Prowl.Editor.ShaderParser
 
         private BufferResource ParseBufferResource()
         {
+            ExpectToken(TokenType.Identifier);
+            string bufferName = _tokenizer.Token.ToString();
+
             ExpectToken(TokenType.OpenBrace);
 
             List<(string, ResourceType)> resources = new();
 
             while (_tokenizer.MoveNext() && _tokenizer.TokenType != TokenType.CloseBrace)
             {
-                string name = _tokenizer.Token.ToString();
+                string propertyName = _tokenizer.Token.ToString();
                 ExpectToken(TokenType.Identifier);
-                resources.Add((name, Enum.Parse<ResourceType>(_tokenizer.Token, true)));
+                resources.Add((propertyName, Enum.Parse<ResourceType>(_tokenizer.Token, true)));
             }
 
-            return new BufferResource("Buffer", ShaderStages.Vertex | ShaderStages.Fragment, resources.ToArray());
+            return new BufferResource(bufferName, ShaderStages.Vertex | ShaderStages.Fragment, resources.ToArray());
         }
         
         private Dictionary<string, HashSet<string>> ParseKeywords()

@@ -18,6 +18,17 @@ namespace Prowl.Runtime
 
             state.pipelineSettings.pass = Material.Shader.Res.GetPass(Pass);
             state.pipelineSettings.variant = state.pipelineSettings.pass.GetVariant(keys);
+
+            Debug.Log($"Got variant with keywords: {state.pipelineSettings.variant.VariantKeywords}");
+
+            Pipeline pipeline = PipelineCache.GetPipelineForDescription(state.pipelineSettings);
+            PipelineCache.GetDescriptionForPipeline(pipeline, out _);
+
+            if (state.activePipeline != pipeline)
+            {
+                state.activePipeline = pipeline;
+                list.SetPipeline(pipeline);
+            }
         }
     }
 }

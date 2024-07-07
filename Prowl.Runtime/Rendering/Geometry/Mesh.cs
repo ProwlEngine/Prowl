@@ -125,7 +125,7 @@ namespace Prowl.Runtime
         }
 
         public int VertexCount => vertices?.Length ?? 0;
-        public int IndexCount => indices32?.Length ?? indices16?.Length ?? 0;
+        public int IndexCount => IndexFormat == IndexFormat.UInt16 ? indices16.Length : indices32.Length;
 
         public DeviceBuffer VertexBuffer => vertexBuffer;
         public DeviceBuffer IndexBuffer => indexBuffer;

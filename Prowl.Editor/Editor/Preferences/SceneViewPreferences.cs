@@ -29,5 +29,6 @@ namespace Prowl.Editor.Preferences
         public float LineWidth = 1f;
         public float PrimaryGridSize = 1f;
         public float SecondaryGridSize = 5f;
+        public Color GridColor = Color.white;
     }
 }
