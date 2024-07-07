@@ -1,14 +1,16 @@
-﻿using Veldrid;
+﻿using System.Collections.Generic;
+using Veldrid;
 using Veldrid.StartupUtilities;
 using System.Runtime.InteropServices;
+using System;
+using System.Threading.Tasks;
+using Prowl.Runtime.RenderPipelines;
+using Prowl.Runtime.RenderPipelines;
+
 
 
 namespace Prowl.Runtime
-{   
-    using RenderPipelines;
-    using System;
-    using System.Threading.Tasks;
-
+{
     public static class Graphics
     {
         public static GraphicsDevice Device { get; internal set; }
@@ -19,6 +21,8 @@ namespace Prowl.Runtime
         public static ResourceFactory Factory => Device.ResourceFactory;
 
         public static RenderPipeline ActivePipeline { get; private set; }
+
+        public readonly static List<Renderable> Renderables = new();
 
         public static bool VSync
         {
@@ -63,8 +67,14 @@ namespace Prowl.Runtime
             ActivePipeline?.InitializeResources();
         }
 
+        public static void DrawRenderable(Renderable renderable)
+        {
+            Renderables.Add(renderable);
+        }
+
         public static void StartFrame(RenderPipeline renderPipeline = null)
         {
+            Renderables.Clear();
             RenderTexture.UpdatePool();
             SetRenderPipeline(renderPipeline ?? Quality.GetQualitySettings().RenderPipeline.Res);
         }

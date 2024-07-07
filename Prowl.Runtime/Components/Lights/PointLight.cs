@@ -18,7 +18,7 @@ public class PointLight : MonoBehaviour
     Mesh mesh;
     int lastCamID = -1;
 
-    public override void OnRenderObject()
+    public override void Update()
     {
         #warning Veldrid change
         /*

@@ -2,7 +2,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Reflection;
 
 namespace Prowl.Runtime;
@@ -117,10 +116,6 @@ public abstract class MonoBehaviour : EngineObject
     public virtual void FixedUpdate() { }
     public virtual void Update() { }
     public virtual void LateUpdate() { }
-    public virtual void OnPreRender() { }
-    public virtual void OnRenderObject() { }
-    public virtual void OnPostRender() { }
-    public virtual void OnRenderObjectDepth() { }
     public virtual void DrawGizmos() { }
     public virtual void DrawGizmosSelected() { }
     public virtual void OnLevelWasLoaded() { }

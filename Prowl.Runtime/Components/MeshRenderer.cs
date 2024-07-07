@@ -1,5 +1,5 @@
 ﻿using Prowl.Icons;
-using System.Collections.Generic;
+using Prowl.Runtime.RenderPipelines;
 using Material = Prowl.Runtime.Material;
 using Mesh = Prowl.Runtime.Mesh;
 
@@ -14,60 +14,18 @@ public class MeshRenderer : MonoBehaviour, ISerializable
     public AssetRef<Material> Material;
     public Color mainColor = Color.white;
 
-    private Dictionary<int, Matrix4x4> prevMats = new();
-
-    private static Material? InvalidMat;
-
-    public override void OnRenderObject()
+    public override void Update()
     {
-        Matrix4x4 mat = GameObject.GlobalCamRelative;
+        if (!Mesh.IsAvailable) return;
+        if (!Material.IsAvailable) return;
 
-        int camID = Camera.Current.InstanceID;
-        if (!prevMats.ContainsKey(camID)) prevMats[camID] = mat;
-        var prevMat = prevMats[camID];
+        PropertyState properties = new();
+        properties.SetInt("_InstanceID", this.InstanceID);
+        properties.SetColor("_MainColor", mainColor);
 
-        var material = Material.Res;
-        if (material == null)
-        {
-            InvalidMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Invalid.shader"));
-            material = InvalidMat;
-        }
+        MeshRenderable renderable = new MeshRenderable(Mesh.Res!, Material.Res!, Mesh.Res!.bounds, this.Transform.localToWorldMatrix, this.GameObject.layerIndex);
 
-        if (Mesh.IsAvailable && material != null)
-        {
-            material.SetColor("_MainColor", mainColor);
-            material.SetInt("ObjectID", GameObject.InstanceID);
-            /*for (int i = 0; i < material.PassCount; i++)
-            {
-
-                material.SetPass(i);
-                #warning Veldrid change
-                //Graphics.DrawMeshNow(Mesh.Res!, mat, material, prevMat);
-            }
-            */
-        }
-
-        prevMats[camID] = mat;
-    }
-
-    public override void OnRenderObjectDepth()
-    {
-        if (Mesh.IsAvailable && Material.IsAvailable)
-        {
-
-            Matrix4x4 mat = GameObject.GlobalCamRelative;
-
-            var mvp = Matrix4x4.Identity;
-            mvp = Matrix4x4.Multiply(mvp, mat);
-            #warning Veldrid change
-            /*
-            mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
-            mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthProjection);
-            Material.Res!.SetMatrix("mvp", mvp);
-            Material.Res!.SetShadowPass(true);
-            Graphics.DrawMeshNowDirect(Mesh.Res!);
-            */
-        }
+        Graphics.DrawRenderable(renderable);
     }
 
     public SerializedProperty Serialize(Serializer.SerializationContext ctx)

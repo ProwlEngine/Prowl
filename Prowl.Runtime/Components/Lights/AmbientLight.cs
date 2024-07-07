@@ -14,7 +14,7 @@ public class AmbientLight : MonoBehaviour
 
     Material? lightMat;
 
-    public override void OnRenderObject()
+    public override void Update()
     {
         lightMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/AmbientLight.shader"));
 

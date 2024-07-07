@@ -36,12 +36,12 @@ public class DirectionalLight : MonoBehaviour
     RenderTexture? shadowMap;
     Matrix4x4 depthMVP;
 
-    public override void OnPreRender()
-    {
-        UpdateShadowmap();
-    }
+    //public override void OnPreRender()
+    //{
+    //    UpdateShadowmap();
+    //}
 
-    public override void OnRenderObject()
+    public override void Update()
     {
         #warning Veldrid change
         /*

@@ -37,7 +37,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
 
     private Dictionary<int, Matrix4x4> prevMats = new();
 
-    public override void OnRenderObject()
+    public override void Update()
     {
         #warning Veldrid change
         /*
@@ -63,32 +63,6 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
 
         prevMats[camID] = mat;
         */
-    }
-
-    public override void OnRenderObjectDepth()
-    {
-        if (Mesh.IsAvailable && Material.IsAvailable)
-        {
-            GetBoneMatrices();
-
-            #warning Veldrid change
-            /*
-
-            Material.Res!.EnableKeyword("SKINNED");
-            Material.Res!.SetMatrices("bindPoses", Mesh.Res.bindPoses);
-            Material.Res!.SetMatrices("boneTransforms", boneTransforms);
-
-            var mvp = Matrix4x4.Identity;
-            mvp = Matrix4x4.Multiply(mvp, GameObject.GlobalCamRelative);
-            mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthView);
-            mvp = Matrix4x4.Multiply(mvp, Graphics.MatDepthProjection);
-            Material.Res!.SetMatrix("mvp", mvp);
-            Material.Res!.SetShadowPass(true);
-            Graphics.DrawMeshNowDirect(Mesh.Res!);
-
-            Material.Res!.DisableKeyword("SKINNED");
-            */
-        }
     }
 
     public SerializedProperty Serialize(Serializer.SerializationContext ctx)

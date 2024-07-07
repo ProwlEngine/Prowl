@@ -41,7 +41,6 @@ public class SceneViewWindow : EditorWindow
         CamObject.hideFlags = HideFlags.HideAndDontSave | HideFlags.NoGizmos;
         CamObject.Transform.position = new Vector3(0, 5, -10);
         Cam = CamObject.AddComponent<Camera>();
-        Cam.ShowGizmos = true;
         LastFocusedCamera = Cam;
 
         TransformGizmoMode mode = TransformGizmoMode.TranslateX | TransformGizmoMode.TranslateY | TransformGizmoMode.TranslateZ | TransformGizmoMode.TranslateXY | TransformGizmoMode.TranslateXZ | TransformGizmoMode.TranslateYZ | TransformGizmoMode.TranslateView;
@@ -105,7 +104,6 @@ public class SceneViewWindow : EditorWindow
         gui.Draw2D.DrawImage(RenderTarget.ColorBuffers[0], imagePos, imageSize, Color.white);
 
         // TODO: Camera rendering clears Gizmos untill the rendering overhaul, so gizmos will Flicker here
-        Camera.Current = Cam;
         foreach (var activeGO in SceneManager.AllGameObjects)
         {
             if (activeGO.enabledInHierarchy)
@@ -172,8 +170,6 @@ public class SceneViewWindow : EditorWindow
 
         bool blockPicking = gui.IsBlockedByInteractable(gui.PointerPos);
         HandleGizmos(selectedGOs, mouseRay, view, projection, blockPicking);
-
-        Camera.Current = null;
 
         Rect rect = gui.CurrentNode.LayoutData.Rect;
         rect.width = 100;

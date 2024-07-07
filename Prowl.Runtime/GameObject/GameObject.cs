@@ -102,16 +102,6 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
-
-    /// <summary>Returns a matrix relative/local to the currently rendering camera, Will throw an error if used outside rendering method</summary>
-    public Matrix4x4 GlobalCamRelative {
-        get {
-            Matrix4x4 t = this.Transform.localToWorldMatrix;
-            t.Translation -= Camera.Current.GameObject.Transform.position;
-            return t;
-        }
-    }
-
     public bool IsChildOrSameTransform(GameObject transform, GameObject inParent)
     {
         GameObject child = transform;
