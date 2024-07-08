@@ -58,7 +58,7 @@ public class SceneViewWindow : EditorWindow
         RenderTarget = new RenderTexture(
             (uint)width, (uint)height, 
             [ Veldrid.PixelFormat.R8_G8_B8_A8_UNorm ], 
-            Veldrid.PixelFormat.D16_UNorm, 
+            Veldrid.PixelFormat.D32_Float, 
             true);
     }
 

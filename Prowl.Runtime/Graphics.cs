@@ -40,7 +40,7 @@ namespace Prowl.Runtime
                 SyncToVerticalBlank = VSync,
                 ResourceBindingModel = ResourceBindingModel.Default,
                 HasMainSwapchain = true,
-                SwapchainDepthFormat = PixelFormat.D16_UNorm,
+                SwapchainDepthFormat = PixelFormat.D32_Float,
                 SwapchainSrgbFormat = false,
             };
 
