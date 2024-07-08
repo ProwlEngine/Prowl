@@ -148,7 +148,11 @@ namespace Prowl.Runtime
                         commandList.UpdateBuffer(uniformBuffer, bufferOffset, vec2); 
                     break;
 
-                    case ResourceType.Vector3: // vec3's and vec4's are treated functionally equivalent by the backend
+                    case ResourceType.Vector3: 
+                        System.Numerics.Vector3 vec3 = properties.GetVector3(property.Name); 
+                        commandList.UpdateBuffer(uniformBuffer, bufferOffset, vec3); 
+                    break;
+
                     case ResourceType.Vector4: 
                         System.Numerics.Vector4 vec4 = properties.GetVector4(property.Name); 
                         commandList.UpdateBuffer(uniformBuffer, bufferOffset, vec4); 

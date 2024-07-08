@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace Prowl.Runtime
 {
@@ -173,4 +174,10 @@ namespace Prowl.Runtime
             }
         }
     }
+
+    public static class EngineObjectExtensions
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool Null(this EngineObject obj) => obj == null || obj.IsDestroyed;
+    } 
 }

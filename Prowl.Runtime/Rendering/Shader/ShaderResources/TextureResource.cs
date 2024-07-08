@@ -39,10 +39,7 @@ namespace Prowl.Runtime
         {
             Texture tex = state.propertyState.GetTexture(textureName).Res;
 
-            if (tex == null)
-                tex = Texture2D.EmptyWhite;
-            
-            if (tex.IsDestroyed)
+            if (tex.Null())
                 tex = Texture2D.EmptyWhite;
 
             if (!tex.InternalTexture.Usage.HasFlag(TextureUsage.Sampled))
@@ -81,10 +78,7 @@ namespace Prowl.Runtime
         {
             Texture tex = state.propertyState.GetTexture(textureName).Res;
 
-            if (tex == null)
-                tex = Texture2D.EmptyWhite;
-            
-            if (tex.IsDestroyed)
+            if (tex.Null())
                 tex = Texture2D.EmptyWhite;
 
             if (!tex.InternalTexture.Usage.HasFlag(TextureUsage.Sampled))
