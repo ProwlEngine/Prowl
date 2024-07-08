@@ -151,6 +151,7 @@ namespace Prowl.Runtime
             M4 = row4;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public System.Numerics.Matrix4x4 ToFloat()
         {
             System.Numerics.Matrix4x4 result;
@@ -176,6 +177,7 @@ namespace Prowl.Runtime
             return result;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Matrix4x4 FromFloat(System.Numerics.Matrix4x4 floatMatrix)
         {
             Matrix4x4 result;
