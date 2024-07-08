@@ -12,7 +12,7 @@ using System.Text;
 
 namespace Prowl.Editor.Assets
 {
-    [Importer("ShaderIcon.png", typeof(Prowl.Runtime.Shader), ".shader")]
+    [Importer("ShaderIcon.png", typeof(Runtime.Shader), ".shader")]
     public class ShaderImporter : ScriptedImporter
     {
         public static readonly string[] Supported = { ".shader" };
@@ -27,7 +27,22 @@ namespace Prowl.Editor.Assets
 
             string shaderScript = File.ReadAllText(assetPath.FullName);
 
-            ctx.SetMainObject(CreateShader(shaderScript));
+            Runtime.Shader? shader = null;
+
+            try 
+            {
+                shader = CreateShader(shaderScript);
+            }
+            catch (Exception ex)
+            {
+                if (assetPath.Name == "InternalErrorShader.shader")
+                    Debug.LogError("InternalErrorShader failed to compile. Non-compiling shaders loaded through script will cause cascading exceptions.", ex);
+
+                Debug.LogError("Failed to compiled shader", ex);
+                shader = Application.AssetProvider.LoadAsset<Runtime.Shader>("Defaults/InternalErrorShader.shader").Res;
+            }
+            
+            ctx.SetMainObject(shader);
         }
 
         public static Runtime.Shader CreateShader(string shaderScript)
