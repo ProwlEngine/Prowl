@@ -29,7 +29,7 @@ namespace Prowl.Runtime
         public void SetFloat(string name, float value) => Properties.SetFloat(name, value);
         public void SetInt(string name, int value) => Properties.SetInt(name, value);
         public void SetMatrix(string name, Matrix4x4 value) => Properties.SetMatrix(name, value);
-        public void SetTexture(string name, Texture value) => Properties.SetTexture(name, value);
+        public void SetTexture(string name, AssetRef<Texture> value) => Properties.SetTexture(name, value);
 
         //public void SetMatrices(string name, System.Numerics.Matrix4x4[] value) { }
 

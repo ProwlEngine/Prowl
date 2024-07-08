@@ -37,7 +37,7 @@ namespace Prowl.Runtime
 
         public override void BindResource(CommandList commandList, List<BindableResource> resources, RenderState state)
         {
-            Texture tex = state.propertyState.GetTexture(textureName);
+            Texture tex = state.propertyState.GetTexture(textureName).Res;
 
             if (tex == null)
                 tex = Texture2D.EmptyWhite;
@@ -79,7 +79,7 @@ namespace Prowl.Runtime
 
         public override void BindResource(CommandList commandList, List<BindableResource> resources, RenderState state)
         {
-            Texture tex = state.propertyState.GetTexture(textureName);
+            Texture tex = state.propertyState.GetTexture(textureName).Res;
 
             if (tex == null)
                 tex = Texture2D.EmptyWhite;

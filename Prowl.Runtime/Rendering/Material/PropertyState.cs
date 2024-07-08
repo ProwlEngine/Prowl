@@ -7,9 +7,9 @@ namespace Prowl.Runtime
 {
     public class PropertyState
     {
-        private Dictionary<string, System.Numerics.Vector4> values; 
-        private Dictionary<string, System.Numerics.Matrix4x4> matrices;
-        private Dictionary<string, Texture> textures;
+        [SerializeField] private Dictionary<string, System.Numerics.Vector4> values;
+        [SerializeField] private Dictionary<string, System.Numerics.Matrix4x4> matrices;
+        [SerializeField] private Dictionary<string, AssetRef<Texture>> textures;
 
         public PropertyState() 
         { 
@@ -75,8 +75,8 @@ namespace Prowl.Runtime
         public void SetMatrix(string name, Matrix4x4 value) => matrices[name] = value.ToFloat();
         public Matrix4x4 GetMatrix(string name) => Matrix4x4.FromFloat(matrices.GetValueOrDefault(name, System.Numerics.Matrix4x4.Identity));
 
-        public void SetTexture(string name, Texture value) => textures[name] = value;
-        public Texture GetTexture(string name) => textures.GetValueOrDefault(name, Texture2D.EmptyWhite);
+        public void SetTexture(string name, AssetRef<Texture> value) => textures[name] = value;
+        public AssetRef<Texture> GetTexture(string name) => textures.GetValueOrDefault(name, Texture2D.EmptyWhite);
 
         public void Clear()
         {
