@@ -26,6 +26,8 @@ Pass "TestShader"
                 Mat_MVP Matrix4x4
 				Time Float
             }
+
+			SampledTexture _MainTex
         }
 	}
 
@@ -55,12 +57,14 @@ Pass "TestShader"
 
 	PROGRAM FRAGMENT	
 		layout(location = 0) in vec2 TexCoords;
-
 		layout(location = 0) out vec4 OutputColor;
+
+		layout(set = 0, binding = 1) uniform texture2D _MainTex;
+		layout(set = 0, binding = 2) uniform sampler _MainTexSampler;
 
 		void main()
 		{
-			OutputColor = vec4(1.0, 1.0, 1.0, 1.0);
+			OutputColor =  texture(sampler2D(_MainTex, _MainTexSampler), TexCoords);
 		}
 	ENDPROGRAM
 }
