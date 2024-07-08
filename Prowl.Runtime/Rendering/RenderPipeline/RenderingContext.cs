@@ -135,6 +135,8 @@ namespace Prowl.Runtime.RenderPipelines
             cmd.SetMatrix("Mat_V", Mat_V);
             cmd.SetMatrix("Mat_P", Mat_P);
             cmd.SetFloat("Time", (float)Time.time);
+            ExecuteCommandBuffer(cmd);
+            cmd.Clear();
 
             //var VP = defaultUniforms.Mat_V * defaultUniforms.Mat_P;
             foreach (var pair in sorted)
@@ -146,9 +148,11 @@ namespace Prowl.Runtime.RenderPipelines
 
                     //cmd.SetMatrix("Mat_MVP", renderable.Matrix * VP);
                     cmd.SetMatrix("Mat_MVP", renderable.Matrix * Mat_V * Mat_P);
+                    ExecuteCommandBuffer(cmd);
 
                     renderable.Draw(this, settings);
                 }
+
         }
 
         class BackToFrontComparer : IComparer<double>
