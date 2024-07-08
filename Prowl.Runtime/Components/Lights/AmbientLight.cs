@@ -16,6 +16,8 @@ public class AmbientLight : MonoBehaviour
 
     public override void Update()
     {
+        #warning Veldrid change
+        /*
         lightMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/AmbientLight.shader"));
 
         lightMat.SetColor("SkyColor", skyColor);
@@ -23,8 +25,6 @@ public class AmbientLight : MonoBehaviour
         lightMat.SetFloat("SkyIntensity", skyIntensity);
         lightMat.SetFloat("GroundIntensity", groundIntensity);
 
-        #warning Veldrid change
-        /*
         lightMat.SetTexture("gAlbedoAO", Camera.Current.gBuffer.AlbedoAO);
         lightMat.SetTexture("gNormalMetallic", Camera.Current.gBuffer.NormalMetallic);
         lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
