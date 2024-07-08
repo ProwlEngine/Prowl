@@ -173,26 +173,22 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
         List<char> inputString = new();
 
+        Span<char> chars = stackalloc char[4];
+
+        foreach (var rune in snapshot.InputEvents)
+        {
+            if (!Rune.IsControl(rune))
+            {
+                rune.EncodeToUtf16(chars);
+                inputString.Add(chars[0]);
+            }
+        }
+
         // TODO : Current SDL fork exposes useful options we should implement for KeyEvents, such as modifiers, virtual keys, repeats, timestamps, and more.
         foreach (var keyEvent in snapshot.KeyEvents)
         {
             Key key = (Key)keyEvent.Physical;
             InputState state = keyEvent.Down ? InputState.Pressed : InputState.Released;
-
-            if (keyEvent.Down)
-            {
-                string keyStr = key.ToString();
-
-                if (keyStr.Length == 1)
-                {
-                    if (keyEvent.Modifiers.HasFlag(ModifierKeys.LeftShift) || keyEvent.Modifiers.HasFlag(ModifierKeys.RightShift))
-                        keyStr = keyStr.ToUpper();
-                    else
-                        keyStr = keyStr.ToLower();
-
-                    inputString.Add(keyStr[0]);
-                }
-            }
 
             if (keyState[key] == state)
                 continue;
