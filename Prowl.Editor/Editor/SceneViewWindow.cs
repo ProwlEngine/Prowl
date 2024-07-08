@@ -119,10 +119,10 @@ public class SceneViewWindow : EditorWindow
             }
         }
 
-        CommandBuffer buffer = CommandBufferPool.Get("Scene View Buffer");
         
         if (SceneViewPreferences.Instance.GridType != GridType.None)
         {
+            CommandBuffer buffer = CommandBufferPool.Get("Scene View Buffer");
             gridMesh ??= Mesh.GetFullscreenQuad();
             gridMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Grid.shader"));
         
@@ -148,13 +148,13 @@ public class SceneViewWindow : EditorWindow
         
             buffer.SetMaterial(gridMat, 0);
             buffer.DrawSingle(gridMesh);
+
+            context.ExecuteCommandBuffer(buffer);
+
+            CommandBufferPool.Release(buffer);
+
+            context.Submit();
         }
-        
-        context.ExecuteCommandBuffer(buffer);
-
-        CommandBufferPool.Release(buffer);
-
-        context.Submit();
 
         var selectedWeaks = HierarchyWindow.SelectHandler.Selected;
         var selectedGOs = new List<GameObject>();
