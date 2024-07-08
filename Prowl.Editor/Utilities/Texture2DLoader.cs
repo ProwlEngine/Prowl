@@ -110,6 +110,16 @@ namespace Prowl.Editor
         /// <typeparam name="TPixel">The pixel format to use.</typeparam>
         public static Texture2D FromFile<TPixel>(string file, bool generateMipmaps = false) where TPixel : unmanaged, IPixel<TPixel>
         {
+            if(Path.GetExtension(file).Equals(".dds", StringComparison.OrdinalIgnoreCase))
+            {
+                var texture = SixLabors.ImageSharp.Textures.Texture.Load(file, out var format);
+                if (texture is SixLabors.ImageSharp.Textures.TextureFormats.FlatTexture flat)
+                {
+                    var i = flat.MipMaps[0].GetImage();
+                    using Image<TPixel> casted = i.CloneAs<TPixel>();
+                    return FromImage(casted, generateMipmaps);
+                }
+            }
             using Image<TPixel> image = Image.Load<TPixel>(file);
             return FromImage(image, generateMipmaps);
         }
