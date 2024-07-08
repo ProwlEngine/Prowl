@@ -36,4 +36,14 @@ namespace Prowl.Runtime
             state.propertyState.SetMatrix(Name, MatrixValue);
         }
     }
+
+    internal struct SetPropertyStateCommand : RenderingCommand
+    {
+        public PropertyState StateValue;
+
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
+        {
+            state.propertyState.ApplyOverride(StateValue);
+        }
+    }
 }

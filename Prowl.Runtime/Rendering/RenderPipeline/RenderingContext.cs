@@ -1,37 +1,25 @@
 using System;
-using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Veldrid;
-using Prowl.Runtime.RenderPipelines;
 
 namespace Prowl.Runtime.RenderPipelines
 {
-    public struct DefaultUniforms
-    {
-        public Matrix4x4 Mat_MVP;
-        public Matrix4x4 Mat_V;
-        public Matrix4x4 Mat_P;
-
-        public Matrix4x4 Mat_ObjectToWorld;
-        public Matrix4x4 Mat_WorldToObject;
-
-        public float Time;
-    }
-
     public class RenderingContext
     {
         public readonly Framebuffer TargetFramebuffer;
         public Camera Camera => currentCamera;
-        public DefaultUniforms DefaultUniforms => defaultUniforms;
         public List<Renderable> Renderables;
 
 
         private List<RenderingCommand> internalCommandList = new();
         private Camera currentCamera;
-        private DefaultUniforms defaultUniforms;
+        public Matrix4x4 Mat_V;
+        public Matrix4x4 Mat_P;
 
-        public RenderingContext(Framebuffer target)
+        public RenderingContext(List<Renderable> renderables, Framebuffer target)
         {
+            Renderables = renderables;
             TargetFramebuffer = target;
         }
 
@@ -104,14 +92,8 @@ namespace Prowl.Runtime.RenderPipelines
                 target = cam.Target.Res!.Framebuffer;
             }
 
-            var p = cam.GetProjectionMatrix(width, height);
-            defaultUniforms = new DefaultUniforms
-            {
-                Mat_MVP = cam.View * p,
-                Mat_V = cam.View,
-                Mat_P = p,
-                Time = (float)Time.time
-            };
+            Mat_V = cam.View;
+            Mat_P = cam.GetProjectionMatrix(width, height);
 
             return target;
         }
@@ -120,7 +102,7 @@ namespace Prowl.Runtime.RenderPipelines
         {
             List<Renderable> result = new();
             foreach (var renderable in Renderables)
-                if (camFrustrum.Intersects(renderable.WorldBounds))
+                //if (camFrustrum.Intersects(renderable.WorldBounds))
                     result.Add(renderable);
             return result;
         }
@@ -148,10 +130,23 @@ namespace Prowl.Runtime.RenderPipelines
                 sorted[distance].Add(renderable);
             }
 
+            // Apply Built-in Uniforms
+            CommandBuffer cmd = new();
+            cmd.SetMatrix("Mat_V", Mat_V);
+            cmd.SetMatrix("Mat_P", Mat_P);
+            cmd.SetFloat("Time", (float)Time.time);
+
+            //var VP = defaultUniforms.Mat_V * defaultUniforms.Mat_P;
             foreach (var pair in sorted)
                 foreach (var renderable in pair.Value)
                 {
-#warning TODO: Default Uniforms can be bound here to all renderable.Materials
+                    cmd.SetMatrix("Mat_ObjectToWorld", renderable.Matrix);
+                    Matrix4x4.Invert(renderable.Matrix, out Matrix4x4 inv);
+                    cmd.SetMatrix("Mat_WorldToObject", inv);
+
+                    //cmd.SetMatrix("Mat_MVP", renderable.Matrix * VP);
+                    cmd.SetMatrix("Mat_MVP", renderable.Matrix * Mat_V * Mat_P);
+
                     renderable.Draw(this, settings);
                 }
         }

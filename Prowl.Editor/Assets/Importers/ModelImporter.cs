@@ -231,7 +231,7 @@ namespace Prowl.Editor.Assets
         {
             foreach (var m in scene.Materials)
             {
-                Material mat = new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Standard.shader"));
+                Material mat = new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/TestShader.shader"));
                 string? name = m.HasName ? m.Name : null;
 
                 // Albedo
@@ -324,7 +324,8 @@ namespace Prowl.Editor.Assets
                 Mesh mesh = new();
                 mesh.Name = m.Name;
                 int vertexCount = m.VertexCount;
-                mesh.IndexFormat = vertexCount >= ushort.MaxValue ? Veldrid.IndexFormat.UInt32 : Veldrid.IndexFormat.UInt16;
+                //mesh.IndexFormat = vertexCount >= ushort.MaxValue ? Veldrid.IndexFormat.UInt32 : Veldrid.IndexFormat.UInt16;
+                mesh.IndexFormat = Veldrid.IndexFormat.UInt32;
 
                 System.Numerics.Vector3[] vertices = new System.Numerics.Vector3[vertexCount];
                 for (var i = 0; i < vertices.Length; i++)
@@ -375,7 +376,10 @@ namespace Prowl.Editor.Assets
                     mesh.Colors = colors;
                 }
 
-                mesh.Indices32 = m.GetUnsignedIndices();
+                //if(mesh.IndexFormat == Veldrid.IndexFormat.UInt16)
+                //    mesh.Indices16 = m.GetShortIndices().Cast<ushort>().ToArray();
+                //else
+                    mesh.Indices32 = m.GetUnsignedIndices();
 
                 //if(!m.HasTangentBasis)
                 //    mesh.RecalculateTangents();

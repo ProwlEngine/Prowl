@@ -5,6 +5,7 @@ using Mesh = Prowl.Runtime.Mesh;
 
 namespace Prowl.Runtime;
 
+[ExecuteAlways]
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Shapes}  Mesh Renderer")]
 public class MeshRenderer : MonoBehaviour, ISerializable
 {
@@ -23,7 +24,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable
         properties.SetInt("_InstanceID", this.InstanceID);
         properties.SetColor("_MainColor", mainColor);
 
-        MeshRenderable renderable = new MeshRenderable(Mesh.Res!, Material.Res!, Mesh.Res!.bounds, this.Transform.localToWorldMatrix, this.GameObject.layerIndex);
+        MeshRenderable renderable = new MeshRenderable(Mesh.Res!, Material.Res!, Mesh.Res!.bounds, this.Transform.localToWorldMatrix, this.GameObject.layerIndex, properties);
 
         Graphics.DrawRenderable(renderable);
     }

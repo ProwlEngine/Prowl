@@ -305,7 +305,15 @@ namespace Prowl.Runtime
                 Name = name,
                 MatrixValue = matrix
             });
-        }   
+        }
+
+        public void ApplyPropertyState(PropertyState properties)
+        {
+            buffer.Add(new SetPropertyStateCommand()
+            {
+                StateValue = properties
+            });
+        }
 
         public void Clear()
         {

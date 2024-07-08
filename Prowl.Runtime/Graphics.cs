@@ -74,7 +74,6 @@ namespace Prowl.Runtime
 
         public static void StartFrame(RenderPipeline renderPipeline = null)
         {
-            Renderables.Clear();
             RenderTexture.UpdatePool();
             SetRenderPipeline(renderPipeline ?? Quality.GetQualitySettings().RenderPipeline.Res);
         }
@@ -84,7 +83,7 @@ namespace Prowl.Runtime
             if (ActivePipeline == null)
                 return;
             
-            RenderingContext context = new(targetFramebuffer);
+            RenderingContext context = new(Renderables, targetFramebuffer);
 
             ActivePipeline.Render(context, cameras);
         }
@@ -100,6 +99,7 @@ namespace Prowl.Runtime
         public static void EndFrame()
         {   
             Device.SwapBuffers();
+            Renderables.Clear();
         }
 
         public static CommandList GetCommandList()

@@ -1,5 +1,4 @@
-﻿using Prowl.Runtime.RenderPipelines;
-using Veldrid;
+﻿using Veldrid;
 
 namespace Prowl.Runtime.RenderPipelines;
 

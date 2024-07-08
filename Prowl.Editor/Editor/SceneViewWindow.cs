@@ -95,7 +95,7 @@ public class SceneViewWindow : EditorWindow
 
         SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
 
-        RenderingContext context = new RenderingContext(RenderTarget.Framebuffer);
+        RenderingContext context = new RenderingContext(Graphics.Renderables, RenderTarget.Framebuffer);
         
         Graphics.Render([ Cam ], context);
 
@@ -120,27 +120,23 @@ public class SceneViewWindow : EditorWindow
         }
 
         CommandBuffer buffer = CommandBufferPool.Get("Scene View Buffer");
-
-        buffer.ClearRenderTarget(true, true, new Color(0.0f, 0.25f, 0.0f, 1.0f), depth: 1);
-
+        
         if (SceneViewPreferences.Instance.GridType != GridType.None)
         {
             gridMesh ??= Mesh.GetFullscreenQuad();
             gridMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Grid.shader"));
-
-            buffer.ClearRenderTarget(true, true, new Color(0.0f, 0.0f, 0.25f, 1.0f), depth: 1);
-
+        
             (Vector3, Vector3) planeInfo = SceneViewPreferences.Instance.GridType switch  
             {
                 GridType.XZ => (Vector3.up, Vector3.right),
                 GridType.XY => (Vector3.forward, Vector3.up),
                 GridType.YZ => (Vector3.right, Vector3.forward),
             };
-
+        
             Matrix4x4.Invert(view * projection, out Matrix4x4 invertedMVP);
-
+        
             buffer.SetMatrix("MvpInverse", invertedMVP);
-
+        
             buffer.SetVector("CameraPosition", Cam.Transform.position);
             buffer.SetVector("PlaneNormal", planeInfo.Item1);
             buffer.SetVector("PlaneRight", planeInfo.Item2);
@@ -149,11 +145,11 @@ public class SceneViewWindow : EditorWindow
             buffer.SetFloat("LineWidth", SceneViewPreferences.Instance.LineWidth);
             buffer.SetFloat("PrimaryGridSize", SceneViewPreferences.Instance.PrimaryGridSize);
             buffer.SetFloat("SecondaryGridSize", SceneViewPreferences.Instance.SecondaryGridSize);
-
+        
             buffer.SetMaterial(gridMat, 0);
             buffer.DrawSingle(gridMesh);
         }
-
+        
         context.ExecuteCommandBuffer(buffer);
 
         CommandBufferPool.Release(buffer);

@@ -28,6 +28,8 @@ namespace Prowl.Runtime.RenderPipelines
                 if (cam.DoClear)
                     camBuffer.ClearRenderTarget(true, true, cam.ClearColor);
 
+                context.ExecuteCommandBuffer(camBuffer);
+
                 // Get the culling parameters from the current Camera
                 var camFrustrum = cam.GetFrustrum(width, height);
                 
@@ -40,8 +42,6 @@ namespace Prowl.Runtime.RenderPipelines
                 context.DrawRenderers(cullingResults, settings, cam.LayerMask);
 
 #warning TODO: Skybox
-
-                context.ExecuteCommandBuffer(camBuffer);
             }
 
             // Instruct the graphics API to perform all scheduled commands

@@ -22,7 +22,9 @@ public sealed class MeshRenderable : Renderable
         if (Material != null && Material.Shader.IsAvailable)
         {
             CommandBuffer cmd = new("Mesh Renderable");
-            Material.Properties.ApplyOverride(Properties);
+
+            cmd.ApplyPropertyState(Properties);
+
             for (int i = 0; i < Material.Shader.Res.Passes.Count(); i++)
             {
                 cmd.SetMaterial(Material, i);
