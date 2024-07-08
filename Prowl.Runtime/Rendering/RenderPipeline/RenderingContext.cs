@@ -149,6 +149,7 @@ namespace Prowl.Runtime.RenderPipelines
                     //cmd.SetMatrix("Mat_MVP", renderable.Matrix * VP);
                     cmd.SetMatrix("Mat_MVP", renderable.Matrix * Mat_V * Mat_P);
                     ExecuteCommandBuffer(cmd);
+                    cmd.Clear();
 
                     renderable.Draw(this, settings);
                 }
