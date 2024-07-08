@@ -1,14 +1,11 @@
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using Veldrid;
 
 namespace Prowl.Runtime
 {
     public class PropertyState
     {
-        [SerializeField] private Dictionary<string, System.Numerics.Vector4> values;
-        [SerializeField] private Dictionary<string, System.Numerics.Matrix4x4> matrices;
+        [SerializeField] private Dictionary<string, Vector4> values;
+        [SerializeField] private Dictionary<string, Matrix4x4> matrices;
         [SerializeField] private Dictionary<string, AssetRef<Texture>> textures;
 
         public PropertyState() 
@@ -72,8 +69,8 @@ namespace Prowl.Runtime
             return (int)value.x;
         }
 
-        public void SetMatrix(string name, Matrix4x4 value) => matrices[name] = value.ToFloat();
-        public Matrix4x4 GetMatrix(string name) => Matrix4x4.FromFloat(matrices.GetValueOrDefault(name, System.Numerics.Matrix4x4.Identity));
+        public void SetMatrix(string name, Matrix4x4 value) => matrices[name] = value;
+        public Matrix4x4 GetMatrix(string name) => matrices.GetValueOrDefault(name, Matrix4x4.Identity);
 
         public void SetTexture(string name, AssetRef<Texture> value) => textures[name] = value;
         public AssetRef<Texture> GetTexture(string name) => textures.GetValueOrDefault(name, Texture2D.EmptyWhite);
