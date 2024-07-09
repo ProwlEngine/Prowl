@@ -173,7 +173,7 @@ namespace Prowl.Runtime
                 }
             }
 
-            FramebufferDescription description = new FramebufferDescription(DepthBuffer.InternalTexture, ColorBuffers.Select(x => x.InternalTexture).ToArray());
+            FramebufferDescription description = new FramebufferDescription(DepthBuffer?.InternalTexture, ColorBuffers.Select(x => x.InternalTexture).ToArray());
 
             this.Framebuffer = Graphics.Factory.CreateFramebuffer(description);
         }
