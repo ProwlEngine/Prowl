@@ -23,8 +23,8 @@ namespace Prowl.Runtime
             uint width, uint height, 
             PixelFormat? depthFormat, 
             PixelFormat[] colorFormats, 
-            bool sampled, bool randomWrite, 
-            TextureSampleCount sampleCount)
+            bool sampled = true, bool randomWrite = false, 
+            TextureSampleCount sampleCount = Veldrid.TextureSampleCount.Count1)
         {
             this.width = width;
             this.height = height;
@@ -280,8 +280,8 @@ namespace Prowl.Runtime
             uint width, uint height, 
             PixelFormat? depthFormat, 
             PixelFormat[] colorFormats, 
-            bool sampled, bool randomWrite, 
-            TextureSampleCount samples)
+            bool sampled = true, bool randomWrite = false, 
+            TextureSampleCount samples = TextureSampleCount.Count1)
         {
             return GetTemporaryRT(new RenderTextureDescription(width, height, depthFormat, colorFormats, sampled, randomWrite, samples));
         }
