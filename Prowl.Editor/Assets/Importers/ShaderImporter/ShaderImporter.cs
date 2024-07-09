@@ -114,6 +114,9 @@ namespace Prowl.Editor.Assets
                 string vertString = vertexSource.ToString();
                 string fragString = fragmentSource.ToString();
 
+                vertString = _preprocessorIncludeRegex.Replace(vertString, ImportReplacer);
+                fragString = _preprocessorIncludeRegex.Replace(fragString, ImportReplacer);
+
                 Debug.Log(vertString);
                 Debug.Log(fragString);
 
