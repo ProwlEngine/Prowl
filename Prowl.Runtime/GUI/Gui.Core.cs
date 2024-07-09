@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using Veldrid;
 
 namespace Prowl.Runtime.GUI
 {

@@ -9,8 +9,6 @@ namespace Prowl.Runtime;
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Shapes}  Mesh Renderer")]
 public class MeshRenderer : MonoBehaviour, ISerializable
 {
-    public override RenderingOrder RenderOrder => RenderingOrder.Opaque;
-
     public AssetRef<Mesh> Mesh;
     public AssetRef<Material> Material;
     public Color mainColor = Color.white;

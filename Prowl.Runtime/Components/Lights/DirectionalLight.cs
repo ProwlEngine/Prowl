@@ -7,8 +7,6 @@ namespace Prowl.Runtime;
 [ExecuteAlways]
 public class DirectionalLight : MonoBehaviour
 {
-    public override RenderingOrder RenderOrder => RenderingOrder.Lighting;
-
     public enum Resolution : int
     {
         _512 = 512,

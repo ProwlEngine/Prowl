@@ -8,8 +8,6 @@ namespace Prowl.Runtime;
 [ExecuteAlways, AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Shapes}  Skinned Mesh Renderer")]
 public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
 {
-    public override RenderingOrder RenderOrder => RenderingOrder.Opaque;
-
     public AssetRef<Mesh> Mesh;
     public AssetRef<Material> Material;
 

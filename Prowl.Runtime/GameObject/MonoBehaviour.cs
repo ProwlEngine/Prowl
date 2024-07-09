@@ -20,9 +20,6 @@ public abstract class MonoBehaviour : EngineObject
     private Dictionary<string, Coroutine> _endOfFrameCoroutines = new();
     private Dictionary<string, Coroutine> _fixedUpdateCoroutines = new();
 
-    public enum RenderingOrder { None, Opaque, Lighting }
-    public virtual RenderingOrder RenderOrder => RenderingOrder.None;
-
 
     private GameObject _go;
 

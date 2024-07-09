@@ -8,8 +8,6 @@ namespace Prowl.Runtime;
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Point Light")]
 public class PointLight : MonoBehaviour
 {
-    public override RenderingOrder RenderOrder => RenderingOrder.Lighting;
-
     public Color color = Color.white;
     public float radius = 4.0f;
     public float intensity = 1.0f;

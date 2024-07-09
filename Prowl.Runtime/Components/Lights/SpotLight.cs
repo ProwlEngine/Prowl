@@ -5,8 +5,6 @@ namespace Prowl.Runtime;
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Spot Light")]
 public class SpotLight : MonoBehaviour
 {
-    public override RenderingOrder RenderOrder => RenderingOrder.Lighting;
-
     public Color color = Color.white;
     public float distance = 4.0f;
     public float angle = 0.97f;
