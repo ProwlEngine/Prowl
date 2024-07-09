@@ -81,24 +81,24 @@ namespace Prowl.Runtime
             return nameIndexLookup.GetValueOrDefault(passName, -1);
         }
 
-        public ShaderPass GetPassWithTag(string tag, string? tagValue = null)
+        public int? GetPassWithTag(string tag, string? tagValue = null)
         {   
-            List<ShaderPass> passes = GetPassesWithTag(tag, tagValue);
+            List<int> passes = GetPassesWithTag(tag, tagValue);
             return passes.Count > 0 ? passes[0] : null;
         }
 
-        public List<ShaderPass> GetPassesWithTag(string tag, string? tagValue = null)
+        public List<int> GetPassesWithTag(string tag, string? tagValue = null)
         {   
-            List<ShaderPass> passes = [];
+            List<int> passes = [];
 
             if (tagIndexLookup.TryGetValue(tag, out List<int> passesWithTag))
             {
                 foreach (int index in passesWithTag)
                 {
-                    ShaderPass pass = passes[index];
+                    ShaderPass pass = this.passes[index];
 
                     if (pass.HasTag(tag, tagValue))
-                        passes.Add(pass);
+                        passes.Add(index);
                 }
             }
 
