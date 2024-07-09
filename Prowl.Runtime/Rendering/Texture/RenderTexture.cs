@@ -98,7 +98,7 @@ namespace Prowl.Runtime
     public sealed class RenderTexture : EngineObject, ISerializable
     {
         // Since Veldrid does not provide any methods to check how many color attachments a framebuffer supports, we can cap it ourselves to a reasonable value.
-        private int colorAttachmentLimit = 3;
+        private int colorAttachmentLimit = 8;
 
         public Framebuffer Framebuffer { get; private set; }
 
