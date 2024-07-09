@@ -19,10 +19,10 @@ public class MeshRenderer : MonoBehaviour, ISerializable
         if (!Material.IsAvailable) return;
 
         PropertyState properties = new();
-        properties.SetInt("_InstanceID", this.InstanceID);
+        properties.SetInt("_ObjectID", this.InstanceID);
         properties.SetColor("_MainColor", mainColor);
 
-        MeshRenderable renderable = new MeshRenderable(Mesh.Res!, Material.Res!, Mesh.Res!.bounds, this.Transform.localToWorldMatrix, this.GameObject.layerIndex, properties);
+        MeshRenderable renderable = new MeshRenderable(Mesh.Res!, Material.Res!, this.Transform.localToWorldMatrix, this.GameObject.layerIndex, Mesh.Res!.bounds, properties);
 
         Graphics.DrawRenderable(renderable);
     }

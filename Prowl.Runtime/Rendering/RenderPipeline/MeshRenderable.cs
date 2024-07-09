@@ -7,30 +7,25 @@ public sealed class MeshRenderable : Renderable
 {
     public readonly Mesh mesh;
 
-    public MeshRenderable(Mesh mesh, Material material, Bounds Bounds, Matrix4x4 matrix, byte layer, PropertyState? properties = null) : base(material, Bounds, matrix, layer, properties)
+    public MeshRenderable(Mesh mesh, Material material, Matrix4x4 matrix, byte layer, Bounds? bounds = null, PropertyState? properties = null) : base(material, matrix, layer, bounds, properties)
     {
         this.mesh = mesh;
     }
 
     public override int IndexCount => mesh.IndexCount;
     public override IndexFormat IndexFormat => mesh.IndexFormat;
-
+    
     public override void SetDrawData(CommandList commandList, VertexLayoutDescription[] resources) => mesh.SetDrawData(commandList, resources);
 
-    public override void Draw(RenderingContext context, DrawSettings settings)
+    public override void Draw(int pass, RenderingContext context)
     {
-        if (Material != null && Material.Shader.IsAvailable)
-        {
-            CommandBuffer cmd = new("Mesh Renderable");
+        CommandBuffer cmd = CommandBufferPool.Get("Mesh Renderable");
 
-            cmd.ApplyPropertyState(Properties);
+        cmd.SetMaterial(Material, pass);
+        cmd.DrawSingle(this);
 
-            for (int i = 0; i < Material.Shader.Res.Passes.Count(); i++)
-            {
-                cmd.SetMaterial(Material, i);
-                cmd.DrawSingle(this);
-            }
-            context.ExecuteCommandBuffer(cmd);
-        }
+        context.ExecuteCommandBuffer(cmd);
+
+        CommandBufferPool.Release(cmd);
     }
 }

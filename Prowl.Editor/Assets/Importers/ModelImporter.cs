@@ -258,12 +258,12 @@ namespace Prowl.Editor.Assets
                 {
                     name ??= "Mat_" + Path.GetFileNameWithoutExtension(m.TextureDiffuse.FilePath);
                     if (FindTextureFromPath(m.TextureDiffuse.FilePath, parentDir, out var file))
-                        LoadTextureIntoMesh("_MainTex", ctx, file, mat);
+                        LoadTextureIntoMesh("_AlbedoTex", ctx, file, mat);
                     else
-                        mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")).Res);
+                        mat.SetTexture("_AlbedoTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")).Res);
                 }
                 else
-                    mat.SetTexture("_MainTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")).Res);
+                    mat.SetTexture("_AlbedoTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")).Res);
 
                 // Normal Texture
                 if (m.HasTextureNormal)
@@ -296,10 +296,10 @@ namespace Prowl.Editor.Assets
                     if (FindTextureFromPath(m.TextureEmissive.FilePath, parentDir, out var file))
                     {
                         mat.SetFloat("_EmissionIntensity", 1f);
-                        LoadTextureIntoMesh("_EmissionTex", ctx, file, mat);
+                        LoadTextureIntoMesh("_EmissiveTex", ctx, file, mat);
                     }
                     else
-                        mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")).Res);
+                        mat.SetTexture("_EmissiveTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")).Res);
                 }
                 else
                     mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")).Res);

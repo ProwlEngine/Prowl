@@ -1,4 +1,5 @@
 ﻿using Prowl.Icons;
+using Prowl.Runtime.RenderPipelines;
 using Prowl.Runtime.SceneManagement;
 
 namespace Prowl.Runtime;
@@ -17,8 +18,17 @@ public class DirectionalLight : MonoBehaviour
 
     public Resolution shadowResolution = Resolution._1024;
 
+    public class AmbientLighting
+    {
+        public Color Sky = Color.white;
+        public float SkyIntensity = 0.4f;
+        public Color Color = Color.white;
+        public float Intensity = 0.1f;
+    }
+
     public Color color = Color.white;
     public float intensity = 8f;
+    public AmbientLighting ambientLighting = new AmbientLighting();
     public float qualitySamples = 16;
     public float blockerSamples = 16;
     public float shadowDistance = 50f;
@@ -41,16 +51,27 @@ public class DirectionalLight : MonoBehaviour
 
     public override void Update()
     {
-        #warning Veldrid change
-        /*
-        lightMat ??= new Material(Shader.Find("Defaults/Directionallight.shader"));
-        lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.Transform.forward, Graphics.MatView));
-        lightMat.SetColor("LightColor", color);
-        lightMat.SetFloat("LightIntensity", intensity);
+        lightMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/DirectionalLight.shader"));
 
-        lightMat.SetTexture("gAlbedoAO", Camera.Current.gBuffer.AlbedoAO);
-        lightMat.SetTexture("gNormalMetallic", Camera.Current.gBuffer.NormalMetallic);
-        lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
+        PropertyState properties = new();
+
+        properties.SetVector("_LightDirection", GameObject.Transform.forward);// Vector3.TransformNormal(GameObject.Transform.forward, Graphics.MatView));
+        properties.SetColor("_LightColor", color);
+        properties.SetFloat("_LightIntensity", intensity);
+
+        ambientLighting ??= new AmbientLighting();
+        properties.SetColor("_AmbientSkyLightColor", ambientLighting.Sky);
+        properties.SetFloat("_AmbientSkyLightIntensity", ambientLighting.SkyIntensity);
+        properties.SetColor("_AmbientLightColor", ambientLighting.Color);
+        properties.SetFloat("_AmbientLightIntensity", ambientLighting.Intensity);
+
+        var fsMesh = Mesh.GetFullscreenQuad();
+        MeshRenderable renderable = new MeshRenderable(fsMesh, lightMat, Matrix4x4.Identity, this.GameObject.layerIndex, null, properties);
+
+        Graphics.DrawRenderable(renderable);
+
+#warning Veldrid change
+        /*
 
         if (castShadows)
         {

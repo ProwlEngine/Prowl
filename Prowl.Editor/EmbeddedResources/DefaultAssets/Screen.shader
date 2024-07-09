@@ -18,6 +18,8 @@ Pass "Screen"
         {
 			SampledTexture _AlbedoTex
 			SampledTexture _LightTex
+			SampledTexture Camera_Surface
+			SampledTexture Camera_Normal
         }
 	}
 
@@ -59,6 +61,7 @@ Pass "Screen"
 			lightingColor *= (1.0 - ao);
 			
 			vec3 color = baseColor + (lightingColor);
+
 			OutputColor = vec4(color, 1.0);
 		}
 	ENDPROGRAM

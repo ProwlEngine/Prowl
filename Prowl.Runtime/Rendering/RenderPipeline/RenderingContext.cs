@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Veldrid;
 
@@ -102,34 +103,15 @@ namespace Prowl.Runtime.RenderPipelines
         {
             List<Renderable> result = new();
             foreach (var renderable in Renderables)
-                //if (camFrustrum.Intersects(renderable.WorldBounds))
+                if (renderable.WorldBounds != null)// && camFrustrum.Intersects(renderable.WorldBounds))
+                    result.Add(renderable);
+                else
                     result.Add(renderable);
             return result;
         }
 
-        public void DrawRenderers(List<Renderable> cullingResults, DrawSettings settings, LayerMask layerMask)
+        public void DrawRenderers(SortedList<double, List<Renderable>> sorted, DrawSettings settings, LayerMask layerMask)
         {
-            SortedList<double, List<Renderable>> sorted;
-
-            if (settings.SortingMode == SortMode.FrontToBack)
-                sorted = new SortedList<double, List<Renderable>>();
-            else
-                sorted = new SortedList<double, List<Renderable>>(new BackToFrontComparer());
-
-            var camPos = currentCamera.Transform.position;
-            foreach (var renderable in cullingResults)
-            {
-                if (!layerMask.HasLayer(renderable.Layer))
-                    continue;
-
-                double distance = Vector3.Distance(camPos, renderable.WorldBounds.center);
-
-                if (!sorted.ContainsKey(distance))
-                    sorted[distance] = new List<Renderable>();
-
-                sorted[distance].Add(renderable);
-            }
-
             // Apply Built-in Uniforms
             CommandBuffer cmd = new();
             cmd.SetMatrix("Mat_V", Mat_V);
@@ -142,18 +124,60 @@ namespace Prowl.Runtime.RenderPipelines
             foreach (var pair in sorted)
                 foreach (var renderable in pair.Value)
                 {
-                    cmd.SetMatrix("Mat_ObjectToWorld", renderable.Matrix);
-                    Matrix4x4.Invert(renderable.Matrix, out Matrix4x4 inv);
-                    cmd.SetMatrix("Mat_WorldToObject", inv);
+                    if (!layerMask.HasLayer(renderable.Layer))
+                        continue;
 
-                    //cmd.SetMatrix("Mat_MVP", renderable.Matrix * VP);
-                    cmd.SetMatrix("Mat_MVP", renderable.Matrix * Mat_V * Mat_P);
-                    ExecuteCommandBuffer(cmd);
-                    cmd.Clear();
+                    if (renderable.Material == null || !renderable.Material.Shader.IsAvailable)
+                        continue;
 
-                    renderable.Draw(this, settings);
+                    // Check for valid material passes
+                    var passes = renderable.Material.Shader.Res.GetPassesWithTag("RenderOrder", settings.RenderOrder);
+
+                    if (passes.Count > 0)
+                    {
+                        cmd.SetMatrix("Mat_ObjectToWorld", renderable.Matrix);
+                        Matrix4x4.Invert(renderable.Matrix, out Matrix4x4 inv);
+                        cmd.SetMatrix("Mat_WorldToObject", inv);
+
+                        //cmd.SetMatrix("Mat_MVP", renderable.Matrix * VP);
+                        cmd.SetMatrix("Mat_MVP", renderable.Matrix * Mat_V * Mat_P);
+                        ExecuteCommandBuffer(cmd);
+                        cmd.Clear();
+
+                        // Push Properties
+                        internalCommandList.Add(new SetPropertyStateCommand() { StateValue = renderable.Properties });
+
+                        // Draw each pass
+                        foreach (var pass in passes)
+                            renderable.Draw(pass, this);
+                    }
                 }
 
+        }
+
+        public SortedList<double, List<Renderable>> SortRenderables(List<Renderable> cullingResults, SortMode sortingMode)
+        {
+            SortedList<double, List<Renderable>> sorted;
+
+            if (sortingMode == SortMode.FrontToBack)
+                sorted = new SortedList<double, List<Renderable>>();
+            else
+                sorted = new SortedList<double, List<Renderable>>(new BackToFrontComparer());
+
+            var camPos = currentCamera.Transform.position;
+            foreach (var renderable in cullingResults)
+            {
+                double distance = 0;
+                if (renderable.WorldBounds.HasValue)
+                    distance = Vector3.Distance(camPos, renderable.WorldBounds.Value.center);
+
+                if (!sorted.ContainsKey(distance))
+                    sorted[distance] = new List<Renderable>();
+
+                sorted[distance].Add(renderable);
+            }
+
+            return sorted;
         }
 
         class BackToFrontComparer : IComparer<double>

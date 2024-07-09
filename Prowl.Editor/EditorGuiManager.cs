@@ -366,14 +366,6 @@ public static class EditorGuiManager
         }
     }
 
-    [MenuItem("Create/Light/Ambient Light")]
-    public static void Create_Light_AmbientLight()
-    {
-        var go = new GameObject("Ambient Light");
-        go.AddComponent<AmbientLight>();
-        HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
-    }
-
     [MenuItem("Create/Light/Directional Light")]
     public static void Create_Light_DirectionalLight()
     {

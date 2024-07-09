@@ -3,7 +3,20 @@
 Pass "DirectionalLight"
 {
     Tags { "RenderOrder" = "Lighting" }
-
+	
+	DepthStencil
+	{
+		DepthTest Off
+		DepthWrite Off
+	}
+	
+    Blend
+    {    
+		Src Alpha SourceAlpha
+		Dest Alpha One
+		Mode Alpha Add
+    }
+	
     // Rasterizer culling mode
     Cull None
 
@@ -23,6 +36,10 @@ Pass "DirectionalLight"
 				_LightDirection Vector3
 				_LightColor Vector3
 				_LightIntensity Float
+				_AmbientSkyLightColor Vector3
+				_AmbientSkyLightIntensity Float
+				_AmbientLightColor Vector3
+				_AmbientLightIntensity Float
 			}
 
             Buffer DefaultUniforms
@@ -67,6 +84,11 @@ Pass "DirectionalLight"
 			vec3 _LightDirection;
 			vec3 _LightColor;
 			float _LightIntensity;
+
+			vec3 _AmbientSkyLightColor;
+			float _AmbientSkyLightIntensity;
+			vec3 _AmbientLightColor;
+			float _AmbientLightIntensity;
 		};
 		
 		layout(set = 0, binding = 1, std140) uniform DefaultUniforms
@@ -105,8 +127,8 @@ Pass "DirectionalLight"
 			vec3 gAlbedo = texture(sampler2D(Camera_Albedo, Camera_AlbedoSampler), TexCoords).rgb;
 			vec3 gNormal = texture(sampler2D(Camera_Normal, Camera_NormalSampler), TexCoords).xyz;
 			vec3 gSurface = texture(sampler2D(Camera_Surface, Camera_SurfaceSampler), TexCoords).rgb; // AO, Roughness and Metallic
-			float gMetallic = gSurface.g;
-			float gRoughness = gSurface.b;
+			float gRoughness = gSurface.g;
+			float gMetallic = gSurface.b;
 
 			// calculate reflectance at normal incidence; if dia-electric (like plastic) use F0 
 			// of 0.04 and if it's a metal, use the albedo color as F0 (metallic workflow)    
@@ -142,6 +164,19 @@ Pass "DirectionalLight"
 			float NdotL = max(dot(N, L), 0.0);                
 			//vec3 color = ((kD * gAlbedo) / PI + specular) * radiance * (1.0 - shadow) * NdotL;
 			vec3 color = ((kD * gAlbedo) / PI + specular) * radiance * NdotL;
+
+
+			// Ambient Lighting:
+			
+			// Obtain the local up vector in view space
+			vec3 upVector = (Mat_V * vec4(0.0, 1.0, 0.0, 0.0)).xyz;
+
+			// Calculate hemisphere/ambient lighting
+			float NdotUp = max(0.0, dot(gNormal, upVector));
+
+			// Interpolate between SkyColor and GroundColor based on NdotUp
+			color += gAlbedo * mix(_AmbientLightColor.rgb * _AmbientLightIntensity, _AmbientSkyLightColor.rgb * _AmbientSkyLightIntensity, NdotUp);
+
 
 			result = vec4(color, 1.0);
 		}
