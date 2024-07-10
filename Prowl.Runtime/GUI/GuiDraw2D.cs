@@ -44,7 +44,7 @@ namespace Prowl.Runtime.GUI
 
         public void EndFrame(CommandBuffer commandBuffer, Rect screenRect)
         {
-            UIDrawList.Draw(commandBuffer, new(screenRect.width, screenRect.height), drawListsOrdered.ToArray());
+            UIDrawList.Draw(commandBuffer, new(screenRect.width, screenRect.height), _gui.UIScale, drawListsOrdered.ToArray());
         }
 
         /// <summary>

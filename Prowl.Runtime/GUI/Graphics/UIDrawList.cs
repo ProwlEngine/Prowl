@@ -1120,7 +1120,7 @@ namespace Prowl.Runtime.GUI.Graphics
             commandList.SetVertexBuffer(0, VertexBuffer);
         }
 
-        public static void Draw(CommandBuffer commandBuffer, Vector2 DisplaySize, UIDrawList[] lists)
+        public static void Draw(CommandBuffer commandBuffer, Vector2 DisplaySize, double clipscale, UIDrawList[] lists)
         {
             int framebufferWidth = (int)DisplaySize.x;
             int framebufferHeight = (int)DisplaySize.y;
@@ -1163,6 +1163,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
                     if (clipRect.x < framebufferWidth && clipRect.y < framebufferHeight && clipRect.z >= 0.0f && clipRect.w >= 0.0f)
                     {
+                        clipRect *= clipscale;
                         // Apply scissor/clipping rectangle
                         commandBuffer.SetScissorRects((int)clipRect.x, (int)clipRect.y, (int)(clipRect.z - clipRect.x), (int)(clipRect.w - clipRect.y));
                         commandBuffer.SetTexture("MainTexture", cmdPtr.Texture);

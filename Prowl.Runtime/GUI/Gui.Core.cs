@@ -15,6 +15,8 @@ namespace Prowl.Runtime.GUI
         public LayoutNode CurrentNode => layoutNodeScopes.First!.Value._node;
         public LayoutNode PreviousNode { get; private set; }
 
+        public double UIScale => 1.0 / uiScale;
+
         public readonly GuiDraw2D Draw2D;
         public readonly GuiDraw3D Draw3D;
 
@@ -28,7 +30,7 @@ namespace Prowl.Runtime.GUI
         private LayoutNode rootNode;
         private Dictionary<ulong, ulong> _computedNodeHashes;
         private HashSet<ulong> _createdNodes;
-        private float uiScale = 1f;
+        private double uiScale = 1;
 
         public Gui(bool antiAliasing)
         {
@@ -41,11 +43,11 @@ namespace Prowl.Runtime.GUI
             Draw3D = new(this);
         }
 
-        public void ProcessFrame(CommandBuffer commandBuffer, Rect screenRect, float uiScale, Vector2 frameBufferScale, bool antiAliasing, Action<Gui> gui)
+        public void ProcessFrame(CommandBuffer commandBuffer, Rect screenRect, double uiScale, Vector2 frameBufferScale, bool antiAliasing, Action<Gui> gui)
         {
             UpdateAnimations(Time.deltaTime);
 
-            uiScale = 1f / uiScale;
+            uiScale = 1.0 / uiScale;
             this.uiScale = uiScale;
             screenRect.width *= uiScale;
             screenRect.height *= uiScale;
