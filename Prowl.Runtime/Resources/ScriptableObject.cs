@@ -1,11 +1,15 @@
 ﻿namespace Prowl.Runtime
 {
-    public class ScriptableObject : EngineObject
+    public abstract class ScriptableObject : EngineObject, ISerializationCallbackReceiver
     {
-        public ScriptableObject() : base() { }
-        public ScriptableObject(string name) : base(name) { }
+        private ScriptableObject() : base() { }
+        private ScriptableObject(string name) : base(name) { }
 
-        public virtual void OnValidate() { }
+        // ScriptableObjects can only be created via the AssetDatabase loading them, so their guranteed to always Deserialize
+        public void OnAfterDeserialize() => OnEnable();
+        public void OnBeforeSerialize() { }
+
+        public virtual void OnEnable() { }
 
     }
 }
