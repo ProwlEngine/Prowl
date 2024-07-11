@@ -1,7 +1,9 @@
-﻿using Prowl.Runtime.Utils.NodeSystem;
+﻿using Prowl.Runtime.Utils;
+using Prowl.Runtime.Utils.NodeSystem;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 namespace Prowl.Runtime.NodeSystem
 {
@@ -52,13 +54,9 @@ namespace Prowl.Runtime.NodeSystem
             /// <summary> Allow all types of input</summary>
             None,
             /// <summary> Allow connections where input value type is assignable from output value type (eg. ScriptableObject --> Object)</summary>
-            Inherited,
+            AssignableTo,
             /// <summary> Allow only similar types </summary>
             Strict,
-            /// <summary> Allow connections where output value type is assignable from input value type (eg. Object --> ScriptableObject)</summary>
-            InheritedInverse,
-            /// <summary> Allow connections where output value type is assignable from input value or input value type is assignable from output value type</summary>
-            InheritedAny
         }
 
         /// <summary> Iterate over all ports on this node. </summary>
@@ -81,6 +79,7 @@ namespace Prowl.Runtime.NodeSystem
         [SerializeField, HideInInspector] private Dictionary<string, NodePort> ports = new Dictionary<string, NodePort>();
         [HideInInspector] public int InstanceID;
 
+        public virtual bool ShowTitle { get; } = true;
         public abstract string Title { get; }
         public abstract float Width { get; }
 
@@ -105,7 +104,7 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> Convenience function. </summary>
         /// <seealso cref="AddInstancePort"/>
         /// <seealso cref="AddInstanceOutput"/>
-        public NodePort AddDynamicInput(Type type, Node.ConnectionType connectionType = Node.ConnectionType.Multiple, Node.TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null)
+        public NodePort AddDynamicInput(Type type, Node.ConnectionType connectionType = Node.ConnectionType.Override, Node.TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null)
         {
             return AddDynamicPort(type, NodePort.IO.Input, connectionType, typeConstraint, fieldName);
         }
@@ -113,7 +112,7 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> Convenience function. </summary>
         /// <seealso cref="AddInstancePort"/>
         /// <seealso cref="AddInstanceInput"/>
-        public NodePort AddDynamicOutput(Type type, Node.ConnectionType connectionType = Node.ConnectionType.Multiple, Node.TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null)
+        public NodePort AddDynamicOutput(Type type, Node.ConnectionType connectionType = Node.ConnectionType.Override, Node.TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null)
         {
             return AddDynamicPort(type, NodePort.IO.Output, connectionType, typeConstraint, fieldName);
         }
@@ -121,7 +120,7 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> Add a dynamic, serialized port to this node. </summary>
         /// <seealso cref="AddDynamicInput"/>
         /// <seealso cref="AddDynamicOutput"/>
-        private NodePort AddDynamicPort(Type type, NodePort.IO direction, Node.ConnectionType connectionType = Node.ConnectionType.Multiple, Node.TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null)
+        private NodePort AddDynamicPort(Type type, NodePort.IO direction, Node.ConnectionType connectionType = Node.ConnectionType.Override, Node.TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null)
         {
             if (fieldName == null)
             {
@@ -254,16 +253,16 @@ namespace Prowl.Runtime.NodeSystem
         public class InputAttribute : Attribute
         {
             public ShowBackingValue backingValue;
-            public ConnectionType connectionType;
+            public ConnectionType connectionType = ConnectionType.Override;
             public bool dynamicPortList;
-            public TypeConstraint typeConstraint;
+            public TypeConstraint typeConstraint = TypeConstraint.AssignableTo;
 
             /// <summary> Mark a serializable field as an input port. You can access this through <see cref="GetInputPort(string)"/> </summary>
             /// <param name="backingValue">Should we display the backing value for this port as an editor field? </param>
             /// <param name="connectionType">Should we allow multiple connections? </param>
             /// <param name="typeConstraint">Constrains which input connections can be made to this port </param>
             /// <param name="dynamicPortList">If true, will display a reorderable list of inputs instead of a single port. Will automatically add and display values for lists and arrays </param>
-            public InputAttribute(ShowBackingValue backingValue = ShowBackingValue.Unconnected, ConnectionType connectionType = ConnectionType.Multiple, TypeConstraint typeConstraint = TypeConstraint.None, bool dynamicPortList = false)
+            public InputAttribute(ShowBackingValue backingValue = ShowBackingValue.Unconnected, ConnectionType connectionType = ConnectionType.Override, TypeConstraint typeConstraint = TypeConstraint.AssignableTo, bool dynamicPortList = false)
             {
                 this.backingValue = backingValue;
                 this.connectionType = connectionType;
@@ -279,14 +278,14 @@ namespace Prowl.Runtime.NodeSystem
             public ShowBackingValue backingValue;
             public ConnectionType connectionType;
             public bool dynamicPortList;
-            public TypeConstraint typeConstraint;
+            public TypeConstraint typeConstraint = TypeConstraint.AssignableTo;
 
             /// <summary> Mark a serializable field as an output port. You can access this through <see cref="GetOutputPort(string)"/> </summary>
             /// <param name="backingValue">Should we display the backing value for this port as an editor field? </param>
             /// <param name="connectionType">Should we allow multiple connections? </param>
             /// <param name="typeConstraint">Constrains which input connections can be made from this port </param>
             /// <param name="dynamicPortList">If true, will display a reorderable list of outputs instead of a single port. Will automatically add and display values for lists and arrays </param>
-            public OutputAttribute(ShowBackingValue backingValue = ShowBackingValue.Never, ConnectionType connectionType = ConnectionType.Multiple, TypeConstraint typeConstraint = TypeConstraint.None, bool dynamicPortList = false)
+            public OutputAttribute(ShowBackingValue backingValue = ShowBackingValue.Never, ConnectionType connectionType = ConnectionType.Override, TypeConstraint typeConstraint = TypeConstraint.AssignableTo, bool dynamicPortList = false)
             {
                 this.backingValue = backingValue;
                 this.connectionType = connectionType;
@@ -295,28 +294,32 @@ namespace Prowl.Runtime.NodeSystem
             }
         }
 
-        /// <summary> Manually supply node class with a context menu path </summary>
         [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
-        public class CreateNodeMenuAttribute : Attribute
+        public class NodeAttribute(string menuName) : Attribute
         {
-            public string menuName;
-            public int order;
-            /// <summary> Manually supply node class with a context menu path </summary>
-            /// <param name="menuName"> Path to this node in the context menu. Null or empty hides it. </param>
-            public CreateNodeMenuAttribute(string menuName)
+            public string catagory = menuName;
+
+            public static MultiValueDictionary<string, Type> nodeCatagories = new MultiValueDictionary<string, Type>();
+
+            [OnAssemblyLoad]
+            public static void OnAssemblyLoad()
             {
-                this.menuName = menuName;
-                this.order = 0;
+                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                    foreach (var type in assembly.GetTypes())
+                        if (type != null)
+                        {
+                            var attribute = type.GetCustomAttribute<NodeAttribute>();
+                            if (attribute != null)
+                                nodeCatagories.Add(attribute.catagory, type);
+                        }
             }
 
-            /// <summary> Manually supply node class with a context menu path </summary>
-            /// <param name="menuName"> Path to this node in the context menu. Null or empty hides it. </param>
-            /// <param name="order"> The order by which the menu items are displayed. </param>
-            public CreateNodeMenuAttribute(string menuName, int order)
+            [OnAssemblyUnload]
+            public static void OnAssemblyUnload()
             {
-                this.menuName = menuName;
-                this.order = order;
+                nodeCatagories.Clear();
             }
+
         }
 
         /// <summary> Prevents Node of the same type to be added more than once (configurable) to a NodeGraph </summary>

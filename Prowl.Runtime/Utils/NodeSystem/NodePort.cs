@@ -64,6 +64,10 @@ namespace Prowl.Runtime.NodeSystem
         }
         private Type valueType;
 
+        public Vector2 LastKnownPosition { get { return lastKnownPosition; } set { lastKnownPosition = value; } }
+
+        [SerializeIgnore] private Vector2 lastKnownPosition;
+
         [SerializeField] private string _fieldName;
         [SerializeField] private Node _node;
         [SerializeField] private string _typeQualifiedName;
@@ -326,25 +330,39 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> Returns true if this port can connect to specified port </summary>
         public bool CanConnectTo(NodePort port)
         {
-            // Figure out which is input and which is output
-            NodePort input = null, output = null;
-            if (IsInput) input = this;
-            else output = this;
-            if (port.IsInput) input = port;
-            else output = port;
-            // If there isn't one of each, they can't connect
-            if (input == null || output == null) return false;
+            // Determine which is input and which is output
+            NodePort input = IsInput ? this : port.IsInput ? port : null;
+            NodePort output = !IsInput ? this : !port.IsInput ? port : null;
+
+            // Cannot connect to self
+            if (input == output || input == null || output == null)
+                return false;
+
             // Check input type constraints
-            if (input.typeConstraint == Node.TypeConstraint.Inherited && !input.ValueType.IsAssignableFrom(output.ValueType)) return false;
-            if (input.typeConstraint == Node.TypeConstraint.Strict && input.ValueType != output.ValueType) return false;
-            if (input.typeConstraint == Node.TypeConstraint.InheritedInverse && !output.ValueType.IsAssignableFrom(input.ValueType)) return false;
-            if (input.typeConstraint == Node.TypeConstraint.InheritedAny && !input.ValueType.IsAssignableFrom(output.ValueType) && !output.ValueType.IsAssignableFrom(input.ValueType)) return false;
+            if (!CheckTypeConstraints(input, output))
+                return false;
+
             // Check output type constraints
-            if (output.typeConstraint == Node.TypeConstraint.Inherited && !input.ValueType.IsAssignableFrom(output.ValueType)) return false;
-            if (output.typeConstraint == Node.TypeConstraint.Strict && input.ValueType != output.ValueType) return false;
-            if (output.typeConstraint == Node.TypeConstraint.InheritedInverse && !output.ValueType.IsAssignableFrom(input.ValueType)) return false;
-            if (output.typeConstraint == Node.TypeConstraint.InheritedAny && !input.ValueType.IsAssignableFrom(output.ValueType) && !output.ValueType.IsAssignableFrom(input.ValueType)) return false;
+            if (!CheckTypeConstraints(output, input))
+                return false;
+
             // Success
+            return true;
+        }
+
+        private bool CheckTypeConstraints(NodePort input, NodePort output)
+        {
+            switch (input.typeConstraint)
+            {
+                case Node.TypeConstraint.AssignableTo:
+                    if (!input.ValueType.IsAssignableTo(output.ValueType))
+                        return false;
+                    break;
+                case Node.TypeConstraint.Strict:
+                    if (input.ValueType != output.ValueType)
+                        return false;
+                    break;
+            }
             return true;
         }
 

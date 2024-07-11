@@ -14,7 +14,8 @@ namespace Prowl.Runtime.NodeSystem
         /// See: <see cref="AddNode{T}"/> </summary>
         public List<Node> nodes = new List<Node>();
 
-        public abstract Type[] NodeTypes { get; }
+        public virtual Type[] NodeTypes { get; } = new Type[0];
+        public abstract string[] NodeCatagories { get; }
 
         /// <summary> Add a node to the graph by type (convenience method - will call the System.Type version) </summary>
         public T AddNode<T>() where T : Node
@@ -64,6 +65,7 @@ namespace Prowl.Runtime.NodeSystem
             SerializedProperty nodeTag = Serializer.Serialize(original);
             Node node = Serializer.Deserialize<Node>(nodeTag);
             node.graph = this;
+            node.position += new Vector2(30, 30);
             node.ClearConnections();
             nodes.Add(node);
             return node;
@@ -134,42 +136,15 @@ namespace Prowl.Runtime.NodeSystem
         #region Attributes
         /// <summary> Automatically ensures the existance of a certain node type, and prevents it from being deleted. </summary>
         [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
-        public class RequireNodeAttribute : Attribute
+        public class RequireNodeAttribute(params Type[] type) : Attribute
         {
-            public Type type0;
-            public Type type1;
-            public Type type2;
-        
-            /// <summary> Automatically ensures the existance of a certain node type, and prevents it from being deleted </summary>
-            public RequireNodeAttribute(Type type)
-            {
-                this.type0 = type;
-                this.type1 = null;
-                this.type2 = null;
-            }
-        
-            /// <summary> Automatically ensures the existance of a certain node type, and prevents it from being deleted </summary>
-            public RequireNodeAttribute(Type type, Type type2)
-            {
-                this.type0 = type;
-                this.type1 = type2;
-                this.type2 = null;
-            }
-        
-            /// <summary> Automatically ensures the existance of a certain node type, and prevents it from being deleted </summary>
-            public RequireNodeAttribute(Type type, Type type2, Type type3)
-            {
-                this.type0 = type;
-                this.type1 = type2;
-                this.type2 = type3;
-            }
-        
+            public Type[] types = type;
+
             public bool Requires(Type type)
             {
                 if (type == null) return false;
-                if (type == type0) return true;
-                else if (type == type1) return true;
-                else if (type == type2) return true;
+                foreach (Type t in types)
+                    if (t == type) return true;
                 return false;
             }
         }
