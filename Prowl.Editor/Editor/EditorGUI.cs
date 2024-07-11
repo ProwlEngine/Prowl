@@ -299,7 +299,7 @@ namespace Prowl.Editor
 
                     case GuiAttribType.ShowIf:
                         var showIf = guiAttribute as ShowIfAttribute;
-                        var field = target.GetType().GetField(showIf.propertyName);
+                        var field = target.GetType().GetField(showIf.propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                         if (field != null && field.FieldType == typeof(bool))
                         {
                             if ((bool)field.GetValue(target) == showIf.inverted)
@@ -307,7 +307,7 @@ namespace Prowl.Editor
                         }
                         else
                         {
-                            var prop = target.GetType().GetProperty(showIf.propertyName);
+                            var prop = target.GetType().GetProperty(showIf.propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                             if (prop != null && prop.PropertyType == typeof(bool))
                             {
                                 if ((bool)prop.GetValue(target) == showIf.inverted)
