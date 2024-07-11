@@ -1,5 +1,6 @@
 ﻿using Prowl.Runtime;
 using Prowl.Runtime.Utils;
+using System.Diagnostics;
 
 namespace Prowl.Editor.Preferences
 {
@@ -49,7 +50,7 @@ namespace Prowl.Editor.Preferences
         public Color LesserText     = new(110, 110, 120);
         public Color Background     = new(15, 15, 18);
         public Color WindowBGOne    = new(31, 33, 40);
-        public Color WindowBGTwo    = new Color(31, 33, 40) * 0.6f;
+        public Color WindowBGTwo    = new Color(25, 27, 32);
         public Color Borders        = new(49, 52, 66);
         public Color Hovering       = new Color(255, 255, 255) * 0.8f;
         public Color Highlighted    = Indigo;
