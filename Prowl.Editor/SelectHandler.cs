@@ -130,16 +130,16 @@ public class SelectHandler<T> where T : class
         lastSelectedIndex = index;
     }
 
-    public void SelectIfNot(T obj)
+    public void SelectIfNot(T obj, bool additively = false)
     {
         if (!IsSelected(obj))
-            Select(obj);
+            Select(obj, additively);
     }
 
-    public void Select(T obj)
+    public void Select(T obj, bool additively = false)
     {
         selectedThisFrame = true;
-        if (Input.GetKey(Key.LeftControl)) {
+        if (additively || Input.GetKey(Key.LeftControl)) {
             // Additive
             if (IsSelected(obj)) {
                 for (int i = 0; i < selected.Count; i++) {
