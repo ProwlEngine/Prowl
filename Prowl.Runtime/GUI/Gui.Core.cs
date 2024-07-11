@@ -31,6 +31,7 @@ namespace Prowl.Runtime.GUI
         private Dictionary<ulong, ulong> _computedNodeHashes;
         private HashSet<ulong> _createdNodes;
         private double uiScale = 1;
+        private double lastUIScale = -1;
 
         public Gui(bool antiAliasing)
         {
@@ -46,7 +47,7 @@ namespace Prowl.Runtime.GUI
         public void ProcessFrame(CommandBuffer commandBuffer, Rect screenRect, double uiScale, Vector2 frameBufferScale, bool antiAliasing, Action<Gui> gui)
         {
             UpdateAnimations(Time.deltaTime);
-
+            
             uiScale = 1.0 / uiScale;
             this.uiScale = uiScale;
             screenRect.width *= uiScale;
@@ -86,11 +87,15 @@ namespace Prowl.Runtime.GUI
                 layoutDirty = true;
             _computedNodeHashes = newNodeHashes;
 
+            if (lastUIScale == uiScale)
+                layoutDirty = true;
 
             // Now that we have the nodes we can properly process their LayoutNode
             // Like if theres a GridLayout node we can process that here
             if (layoutDirty)
             {
+                lastUIScale = uiScale;
+
                 rootNode.UpdateCache();
                 rootNode.ProcessLayout();
                 //rootNode.UpdateCache();
