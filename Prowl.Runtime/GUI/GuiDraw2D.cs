@@ -105,6 +105,8 @@ namespace Prowl.Runtime.GUI
             => _drawList[currentZIndex].AddRectFilled(topleft, topleft + size, color, roundness, rounded_corners);
         public void DrawLine(Vector2 start, Vector2 end, Color color, float thickness = 1f)
             => _drawList[currentZIndex].AddLine(start, end, color, thickness);
+        public void DrawBezierLine(Vector2 start, Vector2 startControl, Vector2 end, Vector2 endControl, Color color, float thickness = 1f, int segments = 0)
+            => _drawList[currentZIndex].AddBezierCurve(start, startControl, endControl, end, color, thickness, segments);
         public void DrawCircle(Vector2 center, float radius, Color color, int segments = 12, float thickness = 1f)
             => _drawList[currentZIndex].AddCircle(center, radius, color, segments, thickness);
         public void DrawCircleFilled(Vector2 center, float radius, Color color, int segments = 12)

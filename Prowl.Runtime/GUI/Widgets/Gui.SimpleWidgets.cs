@@ -89,7 +89,7 @@ namespace Prowl.Runtime.GUI
         public bool Checkbox(string ID, ref bool value, Offset x, Offset y, out LayoutNode node, WidgetStyle? inputstyle = null)
         {
             var style = inputstyle ?? new(30);
-            x.PixelOffset += 5;
+            x.PixelOffset += 2;
             y.PixelOffset += 2;
             using ((node = Node(ID)).Left(x).Top(y).Scale(style.ItemSize - 4).Enter())
             {
