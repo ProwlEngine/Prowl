@@ -328,7 +328,7 @@ namespace Prowl.Runtime.GUI
             }
             else
             {
-                if (g.IsKeyPressed(Key.Return))
+                if (!is_multiline && g.IsKeyPressed(Key.Return))
                     g.FocusID = 0;
 
                 var oldText = Text;
