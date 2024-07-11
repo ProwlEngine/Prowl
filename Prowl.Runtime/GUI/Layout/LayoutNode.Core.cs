@@ -306,10 +306,10 @@ namespace Prowl.Runtime.GUI.Layout
                 LayoutNode n;
                 using ((n = AppendNode("_VScroll")).Width(ScrollBarSize).Height(Size.Percentage(1f)).Left(Offset.Percentage(1f)).IgnoreLayout().Enter())
                 {
-                    Rect scrollRect = n.LayoutData.Rect;
-                    double overflowHeight = LayoutData.ContentRect.height - LayoutData.Rect.height;
+                    Rect scrollRect = n.LayoutData.InnerRect;
+                    double overflowHeight = LayoutData.ContentRect.height - LayoutData.InnerRect.height;
 
-                    double scrollRatio = LayoutData.Rect.height / LayoutData.ContentRect.height;
+                    double scrollRatio = LayoutData.InnerRect.height / LayoutData.ContentRect.height;
                     double scrollBarHeight = scrollRatio * scrollRect.height;
 
                     double scrollBarY = (VScroll / overflowHeight) * (scrollRect.height - scrollBarHeight);
@@ -329,7 +329,7 @@ namespace Prowl.Runtime.GUI.Layout
                     else if (interact.IsHovered()) Gui.Draw2D.DrawRectFilled(barRect, style.HoveredColor, (float)style.Roundness);
                     else Gui.Draw2D.DrawRectFilled(barRect, style.BGColor * 1.8f, style.Roundness);
 
-                    if (Gui.IsPointerHovering(LayoutData.Rect) && Gui.PointerWheel != 0)
+                    if (Gui.IsPointerHovering(LayoutData.InnerRect) && Gui.PointerWheel != 0)
                     {
                         VScroll -= Gui.PointerWheel * 10;
                         Gui.layoutDirty = true;
@@ -351,10 +351,10 @@ namespace Prowl.Runtime.GUI.Layout
                 LayoutNode n;
                 using ((n = AppendNode("_HScroll")).Height(ScrollBarSize).Width(Size.Percentage(1f)).Top(Offset.Percentage(1f)).IgnoreLayout().Enter())
                 {
-                    Rect scrollRect = n.LayoutData.Rect;
-                    double overflowHeight = LayoutData.ContentRect.width - LayoutData.Rect.width;
+                    Rect scrollRect = n.LayoutData.InnerRect;
+                    double overflowHeight = LayoutData.ContentRect.width - LayoutData.InnerRect.width;
 
-                    double scrollRatio = LayoutData.Rect.width / LayoutData.ContentRect.width;
+                    double scrollRatio = LayoutData.InnerRect.width / LayoutData.ContentRect.width;
                     double scrollBarWidth = scrollRatio * scrollRect.width;
 
                     double scrollBarX = (HScroll / overflowHeight) * (scrollRect.width - scrollBarWidth);
@@ -374,7 +374,7 @@ namespace Prowl.Runtime.GUI.Layout
                     else if (interact.IsHovered()) Gui.Draw2D.DrawRectFilled(barRect, style.HoveredColor, (float)style.Roundness);
                     else Gui.Draw2D.DrawRectFilled(barRect, style.BGColor * 1.8f, style.Roundness);
 
-                    //if (Gui.IsPointerHovering(LayoutData.Rect) && Gui.PointerWheel != 0)
+                    //if (Gui.IsPointerHovering(LayoutData.InnerRect) && Gui.PointerWheel != 0)
                     //{
                     //    HScroll -= Gui.PointerWheel * 10;
                     //    Gui.layoutDirty = true;
