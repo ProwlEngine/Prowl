@@ -341,7 +341,7 @@ namespace Prowl.Editor
         public static bool HandleAttributeButtons(string id, object target)
         {
             int count = 0;
-            foreach (MethodInfo method in target.GetType().GetMethods(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public))
+            foreach (MethodInfo method in target.GetType().GetMethods(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static))
             {
                 count++;
                 var attribute = method.GetCustomAttribute<GUIButtonAttribute>();
