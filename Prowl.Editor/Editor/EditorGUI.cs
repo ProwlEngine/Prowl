@@ -193,31 +193,51 @@ namespace Prowl.Editor
             LayoutNode node;
             using ((node = ActiveGUI.Node(name)).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Spacing(5).Enter())
             {
-                // Draw the Background & Borders
-                if (!config.HasFlag(PropertyGridConfig.NoBackground))
-                    ActiveGUI.Draw2D.DrawRectFilled(node.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne);
-
-                if (!config.HasFlag(PropertyGridConfig.NoBorder))
-                    ActiveGUI.Draw2D.DrawRect(node.LayoutData.Rect, EditorStylePrefs.Instance.Borders);
-
-                if (!config.HasFlag(PropertyGridConfig.NoHeader))
-                {
-                    node.PaddingTop(ItemSize);
-
-                    // Draw the header
-                    var headerRect = new Rect(node.LayoutData.GlobalPosition, new Vector2(node.LayoutData.Rect.width, ItemSize));
-                    if (!config.HasFlag(PropertyGridConfig.NoBackground))
-                        ActiveGUI.Draw2D.DrawRectFilled(headerRect, EditorStylePrefs.Indigo);
-
-                    ActiveGUI.Draw2D.DrawText(RuntimeUtils.Prettify(name), headerRect, false);
-                }
+                DrawGrid(name, config, node);
 
                 changed = DrawProperties(ref target, targetFields, config);
-
             }
 
+            return changed;
+        }
+
+        public static bool PropertyGrid(string name, ref object target, List<MemberInfo> members, PropertyGridConfig config = PropertyGridConfig.None)
+        {
+            bool changed = false;
+            if (target == null) return changed;
+
+            LayoutNode node;
+            using ((node = ActiveGUI.Node(name)).ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Spacing(5).Enter())
+            {
+                DrawGrid(name, config, node);
+
+                changed = DrawProperties(ref target, members, config);
+            }
 
             return changed;
+        }
+
+        private static void DrawGrid(string name, PropertyGridConfig config, LayoutNode node)
+        {
+
+            // Draw the Background & Borders
+            if (!config.HasFlag(PropertyGridConfig.NoBackground))
+                ActiveGUI.Draw2D.DrawRectFilled(node.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne);
+
+            if (!config.HasFlag(PropertyGridConfig.NoBorder))
+                ActiveGUI.Draw2D.DrawRect(node.LayoutData.Rect, EditorStylePrefs.Instance.Borders);
+
+            if (!config.HasFlag(PropertyGridConfig.NoHeader))
+            {
+                node.PaddingTop(ItemSize);
+
+                // Draw the header
+                var headerRect = new Rect(node.LayoutData.GlobalPosition, new Vector2(node.LayoutData.Rect.width, ItemSize));
+                if (!config.HasFlag(PropertyGridConfig.NoBackground))
+                    ActiveGUI.Draw2D.DrawRectFilled(headerRect, EditorStylePrefs.Indigo);
+
+                ActiveGUI.Draw2D.DrawText(RuntimeUtils.Prettify(name), headerRect, false);
+            }
         }
 
         private static bool DrawProperties(ref object target, TargetFields targetFields, PropertyGridConfig config = PropertyGridConfig.None)
@@ -239,6 +259,11 @@ namespace Prowl.Editor
             if (all || targetFields.HasFlag(TargetFields.Properties))
                 members.AddRange(target.GetType().GetProperties().Where(prop => prop.CanRead && prop.CanWrite && prop.GetCustomAttribute<ShowInInspectorAttribute>(false) != null));
 
+            return DrawProperties(ref target, members, config);
+        }
+
+        private static bool DrawProperties(ref object target, List<MemberInfo> members, PropertyGridConfig config = PropertyGridConfig.None)
+        {
             // Draw the fields & properties
             bool changed = false;
             int i = 0;
