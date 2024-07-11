@@ -74,12 +74,12 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> Iterate over all dynamic inputs on this node. </summary>
         public IEnumerable<NodePort> DynamicInputs { get { foreach (NodePort port in Ports) { if (port.IsDynamic && port.IsInput) yield return port; } } }
         /// <summary> Parent <see cref="NodeGraph"/> </summary>
-        [SerializeField] public NodeGraph graph;
+        [SerializeField, HideInInspector] public NodeGraph graph;
         /// <summary> Position on the <see cref="NodeGraph"/> </summary>
-        [SerializeField] public Vector2 position;
+        [SerializeField, HideInInspector] public Vector2 position;
         /// <summary> It is recommended not to modify these at hand. Instead, see <see cref="InputAttribute"/> and <see cref="OutputAttribute"/> </summary>
-        [SerializeField] private Dictionary<string, NodePort> ports = new Dictionary<string, NodePort>();
-        public int InstanceID;
+        [SerializeField, HideInInspector] private Dictionary<string, NodePort> ports = new Dictionary<string, NodePort>();
+        [HideInInspector] public int InstanceID;
 
         public abstract string Title { get; }
         public abstract float Width { get; }
