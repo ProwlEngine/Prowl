@@ -245,11 +245,14 @@ namespace Prowl.Editor.PropertyDrawers
 
     public abstract class PropertyDrawer
     {
+        public virtual double MinWidth => 75;
+
         public virtual bool PropertyLayout(Gui gui, string label, int index, Type propertyType, ref object? propertyValue, EditorGUI.PropertyGridConfig config)
         {
             double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
-            using (gui.Node(label, index).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
+            var width = MathD.Max(MinWidth, gui.CurrentNode.LayoutData.Rect.width);
+            using (gui.Node(label, index).Width(width).Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
             {
                 // Draw line down the middle
                 //var start = new Vector2(ActiveGUI.CurrentNode.LayoutData.Rect.x + ActiveGUI.CurrentNode.LayoutData.Rect.width / 2, ActiveGUI.CurrentNode.LayoutData.Rect.y);

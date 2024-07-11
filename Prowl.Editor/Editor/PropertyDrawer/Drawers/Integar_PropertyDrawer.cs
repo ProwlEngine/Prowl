@@ -1,9 +1,12 @@
-﻿using Prowl.Runtime.GUI;
+﻿using Prowl.Editor.Preferences;
+using Prowl.Runtime.GUI;
 
 namespace Prowl.Editor.PropertyDrawers
 {
     public class Integar_PropertyDrawer<T> : PropertyDrawer
     {
+        public override double MinWidth => EditorStylePrefs.Instance.ItemSize * 2;
+
         public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value)
         {
             long val = Convert.ToInt64(value);
