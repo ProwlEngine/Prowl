@@ -136,7 +136,7 @@ namespace Prowl.Runtime.GUI
             var fontsize = style.FontSize;
             var render_pos = new Vector2(g.CurrentNode.LayoutData.InnerRect.x, g.CurrentNode.LayoutData.InnerRect.y);
             // Center text vertically
-            render_pos.y += (g.CurrentNode.LayoutData.InnerRect.height - fontsize) / 2;
+            //render_pos.y += (g.CurrentNode.LayoutData.InnerRect.height - fontsize) / 2;
             render_pos.y += 3;
             render_pos.x += 5;
 
