@@ -36,7 +36,7 @@ namespace Prowl.Runtime
         public GuiAttribType AttribType() => GuiAttribType.Tooltip;
     }
 
-    [AttributeUsage(T.Field, AllowMultiple = false)]
+    [AttributeUsage(T.Field | T.Property, AllowMultiple = false)]
     public class ShowIfAttribute(string propertyName, bool inverted = false) : Attribute, InspectorUIAttribute
     {
         public string propertyName = propertyName;
