@@ -23,6 +23,8 @@ namespace Prowl.Runtime.NodeSystem
             }
         }
 
+        public Node? ConnectedNode => Connection?.ConnectedNode;
+
         public IO direction
         {
             get { return _direction; }
