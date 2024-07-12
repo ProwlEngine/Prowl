@@ -1,235 +1,77 @@
-﻿using Prowl.Editor.Preferences;
+﻿using Prowl.Editor.Assets;
+using Prowl.Editor.Preferences;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.NodeSystem;
+using Prowl.Runtime.Utils;
 using System.Reflection;
 using static Prowl.Runtime.NodeSystem.Node;
 
 namespace Prowl.Editor
 {
-    public class NodeEditor
+    public class NodeEditorAttribute(Type type) : Attribute
     {
-        private NodeGraph graph;
-        private NodeEditorInputHandler inputHandler;
-        private Gui gui;
+        public Type Type { get; private set; } = type;
 
-        private Vector2 offset;
-        private double zoom = 1.0f;
-        private double targetzoom = 1.0f;
-        private bool hasChanged = false;
+        public static Dictionary<Type, Type> nodeEditors = [];
 
-        private RenderTexture RenderTarget;
-
-        private Vector2? dragSelectionStart = null;
-        private Rect dragSelection;
-        private string? selectedCatagory = null;
-
-        private SelectHandler<WeakReference> SelectHandler = new((item) => !item.IsAlive, (a, b) => ReferenceEquals(a.Target, b.Target));
-
-        public NodeEditor(NodeGraph graph)
+        [OnAssemblyLoad]
+        public static void GenerateLookUp()
         {
-            this.graph = graph;
-
-            inputHandler = new NodeEditorInputHandler();
-
-            Input.PushHandler(inputHandler);
-            gui = new Gui(EditorPreferences.Instance.AntiAliasing);
-            Input.OnKeyEvent += gui.SetKeyState;
-            Input.OnMouseEvent += gui.SetPointerState;
-            gui.OnPointerPosSet += (pos) => { Input.MousePosition = pos; };
-            gui.OnCursorVisibilitySet += (visible) => { Input.CursorVisible = visible; };
-            Input.PopHandler();
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                foreach (var type in assembly.GetTypes())
+                    if (type != null)
+                    {
+                        var attribute = type.GetCustomAttribute<NodeEditorAttribute>();
+                        if (attribute == null) continue;
+                        if (nodeEditors.TryGetValue(attribute.Type, out var oldType))
+                            Debug.LogError($"Custom Node Editor Overwritten. {attribute.Type.Name} already has a Custom Node Editor: {oldType.Name}, being overwritten by: {type.Name}");
+                        nodeEditors[attribute.Type] = type;
+                    }
         }
 
-        ~NodeEditor()
+        [OnAssemblyUnload]
+        public static void ClearLookUp()
         {
-            inputHandler.Dispose();
+            nodeEditors.Clear();
         }
 
-        public void RefreshRenderTexture(Vector2 renderSize)
+        /// <returns>The editor type for that Extension</returns>
+        public static Type? GetEditor(Type type)
         {
-            RenderTarget?.Dispose();
+            if (nodeEditors.TryGetValue(type, out var editorType))
+                return editorType;
+            // If no direct custom editor, look for a base class custom editor
+            foreach (var pair in nodeEditors)
+                if (pair.Key.IsAssignableFrom(type))
+                    return pair.Value;
 
-            RenderTarget = new RenderTexture(
-                (uint)renderSize.x,
-                (uint)renderSize.y,
-                [Veldrid.PixelFormat.R8_G8_B8_A8_UNorm],
-                Veldrid.PixelFormat.D32_Float,
-                true);
+            return typeof(DefaultNodeEditor);
         }
+    }
 
-        public void SetFocus(bool focused) => inputHandler.IsFocused = focused;
+    public abstract class ScriptedNodeEditor
+    {
+        protected NodeEditor editor;
+        protected NodeGraph nodegraph;
+        protected SelectHandler<WeakReference> SelectHandler;
 
+        public void SetGraph(NodeGraph graph) => this.nodegraph = graph;
+        public void SetEditor(NodeEditor editor) => this.editor = editor;
+        public void SetSelectHandler(SelectHandler<WeakReference> handler) => SelectHandler = handler;
 
-        public Texture2D Update(bool focused, Vector2 screenPos, uint width, uint height, out bool changed)
-        {
-            Input.PushHandler(inputHandler);
+        public virtual void OnEnable() { }
 
-            SelectHandler.StartFrame();
-            try
-            {
-                inputHandler.position = screenPos;
-                inputHandler.IsFocused = focused;
-                inputHandler.EarlyUpdate();
+        public abstract bool DrawNode(int index, Gui g, Node node, Vector2 offset);
+        public virtual void OnDisable() { }
+    }
 
-                gui.PointerWheel = Input.MouseWheelDelta;
+    public class DefaultNodeEditor : ScriptedNodeEditor
+    {
+        private GraphRenderPipeline graph => nodegraph as GraphRenderPipeline;
 
-                if ((RenderTarget == null) || (MathD.Max(width, 1) != RenderTarget.Width || MathD.Max(height, 1) != RenderTarget.Height))
-                    RefreshRenderTexture(new(MathD.Max(width, 1), MathD.Max(height, 1)));
-
-                CommandBuffer commandBuffer = CommandBufferPool.Get("Node Editor Command Buffer");
-
-                commandBuffer.SetRenderTarget(RenderTarget);
-                commandBuffer.ClearRenderTarget(true, true, Color.black, depth: 1.0f);
-
-                hasChanged = false;
-                gui.ProcessFrame(commandBuffer, new Rect(0, 0, width, height), (float)zoom, Vector2.one, EditorPreferences.Instance.AntiAliasing, (g) =>
-                {
-                    g.Draw2D.DrawRectFilled(new Rect(0, 0, width / zoom, height / zoom), EditorStylePrefs.Instance.Background);
-
-                    if (g.PointerWheel != 0)
-                    {
-                        targetzoom = MathD.Clamp(targetzoom + g.PointerWheel * 0.1, 0.1, 2.0);
-                        g.ClosePopup();
-                        //offset -= (g.PointerPos - (new Vector2(width / targetzoom, height / targetzoom) / 2)) * g.PointerWheel * 0.5f;
-                    }
-
-                    zoom = MathD.Lerp(zoom, targetzoom, 0.1);
-
-                    int index = 0;
-                    var beforeOffset = offset;
-                    //offset += new Vector2(width / zoom, height / zoom) / 2;
-                    var safeNodes = graph.nodes.ToArray();
-                    foreach (var node in safeNodes)
-                    {
-                        hasChanged |= DrawNode(index++, g, node, offset);
-                    }
-                    //offset = beforeOffset;
-
-                    if (draggingPort != null && draggingPort != null)
-                    {
-                        // Draw Connection
-                        var port = (draggingPort!.Target as NodePort)!;
-                        var col = EditorStylePrefs.RandomPastel(port.ValueType, 1f);
-                        g.Draw2D.DrawLine(port.LastKnownPosition, g.PointerPos, col, 2);
-
-                        if (g.IsPointerUp(MouseButton.Left) || !draggingPort.IsAlive)
-                            draggingPort = null;
-                    }
-
-                    if (g.IsKeyDown(Key.V)) AlignVertically();
-                    if (g.IsKeyDown(Key.H)) AlignHorizontally();
-                    if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
-                    {
-                        var newlycreated = new List<Node>();
-                        SelectHandler.Foreach((go) => 
-                        {
-                            newlycreated.Add(graph.CopyNode(go.Target as Node)); 
-                        });
-                        SelectHandler.Clear();
-                        newlycreated.ForEach((n) => SelectHandler.SelectIfNot(new WeakReference(n)));
-                    }
-
-                    if (g.IsNodeHovered())
-                    {
-                        if (g.IsPointerClick(MouseButton.Right, true) || g.IsKeyDown(Key.Space))
-                            g.OpenPopup("NodeCreatePopup", g.PointerPos);
-
-                        if (g.IsPointerDown(MouseButton.Middle))
-                            offset += g.PointerDelta;
-
-                        if (!SelectHandler.SelectedThisFrame && g.IsNodePressed())
-                            SelectHandler.Clear();
-
-                        if (dragSelectionStart == null && g.IsPointerClick(MouseButton.Left))
-                            dragSelectionStart = g.PointerPos;
-                    }
-
-                    if (dragSelectionStart != null && g.IsPointerDown(MouseButton.Left))
-                    {
-                        var min = Vector2.Min(dragSelectionStart.Value, g.PointerPos);
-                        var max = Vector2.Max(dragSelectionStart.Value, g.PointerPos);
-                        dragSelection = new Rect(min, max - min);
-
-                        g.Draw2D.DrawRect(dragSelection, EditorStylePrefs.Instance.Highlighted, 2, 3);
-                        g.Draw2D.DrawRectFilled(dragSelection, EditorStylePrefs.Instance.Highlighted * 0.3f, 3);
-                    }
-                    else
-                        dragSelectionStart = null;
-
-                    var popupHolder = g.CurrentNode;
-                    if (g.BeginPopup("NodeCreatePopup", out var popup))
-                    {
-                        using (popup.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().MaxHeight(40).Scroll().Clip().Enter())
-                        {
-                            if (selectedCatagory == null)
-                            {
-                                foreach (var catagory in NodeAttribute.nodeCatagories.Keys)
-                                    if (EditorGUI.StyledButton(catagory))
-                                        selectedCatagory = catagory;
-                            }
-                            else
-                            {
-                                if (EditorGUI.StyledButton("Back"))
-                                    selectedCatagory = null;
-
-                                if (NodeAttribute.nodeCatagories.TryGetValue(selectedCatagory, out var types))
-                                {
-                                    foreach (var type in types)
-                                        if (EditorGUI.StyledButton(type.Name))
-                                        {
-                                            var node = graph.AddNode(type);
-                                            node.position = g.PointerPos;
-                                            g.ClosePopup(popupHolder);
-                                            hasChanged |= true;
-
-                                            SelectHandler.SetSelection(new WeakReference(node));
-                                        }
-                                }
-                            }
-
-                            foreach (var nodeType in graph.NodeTypes)
-                                if (EditorGUI.StyledButton(nodeType.Name))
-                                {
-                                    var node = graph.AddNode(nodeType);
-                                    node.position = g.PointerPos;
-                                    g.ClosePopup(popupHolder);
-                                    hasChanged |= true;
-
-                                    SelectHandler.SetSelection(new WeakReference(node));
-                                }
-                        }
-                    }
-                    else
-                    {
-                        selectedCatagory = null;
-                    }
-
-
-                    if (hasChanged)
-                    {
-                        graph.OnValidate();
-                        foreach (var node in graph.nodes)
-                            node.OnValidate();
-                    }
-                });
-
-                Graphics.ExecuteCommandBuffer(commandBuffer);
-
-                CommandBufferPool.Release(commandBuffer);
-            }
-            finally
-            {
-                changed = hasChanged;
-                Input.PopHandler();
-            }
-
-
-            return RenderTarget.ColorBuffers[0];
-        }
-
-        private bool DrawNode(int index, Gui g, Node node, Vector2 offset)
+        public override bool DrawNode(int index, Gui g, Node node, Vector2 offset)
         {
             bool changed = false;
             var itemSize = EditorStylePrefs.Instance.ItemSize;
@@ -316,18 +158,29 @@ namespace Prowl.Editor
 
             }
 
-
-
-
             return changed;
         }
 
-        private bool HandleNodeSelection(int index, Gui g, Node node)
+        protected bool HandleDraggingNode(Gui g, Node node)
+        {
+            if (g.IsNodeActive())
+            {
+                SelectHandler.Foreach((go) =>
+                {
+                    var n = go.Target as Node;
+                    n.position += g.PointerDelta;
+                });
+                return true;
+            }
+            return false;
+        }
+
+        protected bool HandleNodeSelection(int index, Gui g, Node node)
         {
             var roundness = (float)EditorStylePrefs.Instance.WindowRoundness;
             bool changed = false;
 
-            if(dragSelectionStart != null && g.CurrentNode.LayoutData.Rect.Overlaps(dragSelection))
+            if (editor.dragSelectionStart != null && g.CurrentNode.LayoutData.Rect.Overlaps(editor.dragSelection))
                 SelectHandler.SelectIfNot(new WeakReference(node), true);
 
             if (g.IsNodePressed(true) && !SelectHandler.IsSelected(new WeakReference(node)))
@@ -364,12 +217,12 @@ namespace Prowl.Editor
 
                         if (close |= EditorGUI.StyledButton("Align Vertically"))
                         {
-                            AlignVertically(); close = true;
+                            editor.AlignSelectedVertically(); close = true;
                         }
 
                         if (close |= EditorGUI.StyledButton("Align Horizontally"))
                         {
-                            AlignHorizontally(); close = true;
+                            editor.AlignSelectedHorizontally(); close = true;
                         }
                     }
 
@@ -384,23 +237,8 @@ namespace Prowl.Editor
             return changed;
         }
 
-        private void AlignHorizontally()
-        {
-            double totalX = 0;
-            SelectHandler.Foreach((go) => { totalX += (go.Target as Node).position.x; });
-            double avgX = totalX / SelectHandler.Count;
-            SelectHandler.Foreach((go) => { (go.Target as Node).position.x = avgX; });
-        }
 
-        private void AlignVertically()
-        {
-            double totalY = 0;
-            SelectHandler.Foreach((go) => { totalY += (go.Target as Node).position.y; });
-            double avgY = totalY / SelectHandler.Count;
-            SelectHandler.Foreach((go) => { (go.Target as Node).position.y = avgY; });
-        }
-
-        private bool DrawOutputs(Gui g, Node node)
+        protected bool DrawOutputs(Gui g, Node node)
         {
             bool changed = false;
             using (g.Node("Out").FitContentHeight().Layout(LayoutType.Column).Padding(5).Enter())
@@ -419,7 +257,7 @@ namespace Prowl.Editor
             return changed;
         }
 
-        private bool DrawInputs(Gui g, Node node, double itemSize)
+        protected bool DrawInputs(Gui g, Node node, double itemSize)
         {
             bool changed = false;
             using (g.Node("In").FitContentHeight().Padding(5).Enter())
@@ -454,12 +292,10 @@ namespace Prowl.Editor
             return changed;
         }
 
-        private WeakReference? draggingPort = null;
-
-        private bool DrawPort(Gui g, NodePort port, Vector2 center)
+        protected bool DrawPort(Gui g, NodePort port, Vector2 center)
         {
-            if(draggingPort?.IsAlive == false)
-                draggingPort = null;
+            if (editor.draggingPort?.IsAlive == false)
+                editor.draggingPort = null;
 
             bool changed = false;
             using (g.Node("Port", port.GetHashCode()).Scale(10).TopLeft(center.x, center.y).IgnoreLayout().Enter())
@@ -472,25 +308,25 @@ namespace Prowl.Editor
                 if (g.IsNodeHovered())
                 {
                     // If were hovering and not dragging port (or dragging this port) highlight it
-                    if(draggingPort == null || draggingPort.Target == port || (draggingPort.Target as NodePort)!.CanConnectTo(port))
+                    if (editor.draggingPort == null || editor.draggingPort.Target == port || (editor.draggingPort.Target as NodePort)!.CanConnectTo(port))
                         col *= 2.0f;
 
                     // If no port is being dragged and this node is active (being dragged) start a port drag
-                    if (draggingPort == null && g.IsNodeActive())
+                    if (editor.draggingPort == null && g.IsNodeActive())
                     {
-                        draggingPort = new(port);
+                        editor.draggingPort = new(port);
                     }
-                    else if (draggingPort != null && g.IsPointerUp(MouseButton.Left))
+                    else if (editor.draggingPort != null && g.IsPointerUp(MouseButton.Left))
                     {
-                        if (draggingPort.Target != port && (draggingPort.Target as NodePort)!.CanConnectTo(port))
+                        if (editor.draggingPort.Target != port && (editor.draggingPort.Target as NodePort)!.CanConnectTo(port))
                         {
-                            (draggingPort.Target as NodePort)!.Connect(port);
-                            draggingPort = null;
+                            (editor.draggingPort.Target as NodePort)!.Connect(port);
+                            editor.draggingPort = null;
                             changed = true;
                         }
                     }
 
-                    if(g.IsPointerClick(MouseButton.Right, true))
+                    if (g.IsPointerClick(MouseButton.Right, true))
                     {
                         port.ClearConnections();
                         changed = true;
@@ -498,9 +334,9 @@ namespace Prowl.Editor
                 }
 
 
-                if (draggingPort != null)
+                if (editor.draggingPort != null)
                 {
-                    if ((draggingPort.Target as NodePort)!.CanConnectTo(port)) // Draw Connection
+                    if ((editor.draggingPort.Target as NodePort)!.CanConnectTo(port)) // Draw Connection
                         g.Draw2D.DrawCircleFilled(trueCenter, 5, col);
                     else
 
@@ -525,23 +361,7 @@ namespace Prowl.Editor
             return changed;
         }
 
-        private bool HandleDraggingNode(Gui g, Node node)
-        {
-            if (g.IsNodeActive())
-            {
-                SelectHandler.Foreach((go) =>
-                {
-                    var n = go.Target as Node;
-                    n.position += g.PointerDelta;
-                });
-                //node.position += g.PointerDelta;
-                return true;
-            }
-
-            return false;
-        }
-
-        private bool DrawBackingField(Gui g, Node node, int fieldIndex, NodePort port)
+        protected bool DrawBackingField(Gui g, Node node, int fieldIndex, NodePort port)
         {
             bool changed = false;
             var fieldInfo = GetFieldInfo(port.node.GetType(), port.fieldName);
@@ -562,14 +382,382 @@ namespace Prowl.Editor
             }
             return changed;
         }
-
-        static FieldInfo GetFieldInfo(Type type, string fieldName)
+        protected static FieldInfo GetFieldInfo(Type type, string fieldName)
         {
             // If we can't find field in the first run, it's probably a private field in a base class.
             FieldInfo field = type.GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
             // Search base classes for private fields only. Public fields are found above
             while (field == null && (type = type.BaseType) != typeof(Node)) field = type.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
             return field;
+        }
+
+    }
+
+    [NodeEditor(typeof(CommentNode))]
+    public class CommentNodeEditor : DefaultNodeEditor
+    {
+        private bool isRenamingHeader = false;
+        private bool isRenamingDesc = false;
+
+        public override bool DrawNode(int index, Gui g, Node node, Vector2 offset)
+        {
+            var comment = node as CommentNode;
+
+            bool changed = false;
+            var itemSize = EditorStylePrefs.Instance.ItemSize;
+            var roundness = (float)EditorStylePrefs.Instance.WindowRoundness;
+            using (g.Node("Node", index).Scale(250).TopLeft(node.position.x + offset.x, node.position.y + offset.y).Layout(LayoutType.Column).ScaleChildren().Enter())
+            {
+                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new Color32(252, 215, 110, 255), roundness);
+
+                if (SelectHandler.IsSelected(new WeakReference(node)))
+                {
+                    var selRect = g.CurrentNode.LayoutData.Rect;
+                    selRect.Expand(5);
+                    g.Draw2D.DrawRect(selRect, EditorStylePrefs.Instance.Highlighted, 3, roundness);
+                    if (g.IsKeyPressed(Key.Delete))
+                    {
+                        nodegraph.RemoveNode(node);
+                        changed = true;
+                    }
+                }
+
+                using (g.Node("Header").ExpandWidth().MaxHeight(itemSize * 2).Clip().Enter())
+                {
+                    if (g.IsNodeHovered() && g.IsPointerDoubleClick())
+                        isRenamingHeader = true;
+
+                    
+                    if (isRenamingHeader)
+                    {
+                        changed |= g.InputField("HeaderRename", ref comment.Header, 200, Gui.InputFieldFlags.None, 0, 0, Size.Percentage(1f), Size.Percentage(1f));
+
+                        if (!g.IsPointerHovering() && (g.IsPointerClick(MouseButton.Left) || g.IsPointerClick(MouseButton.Right)))
+                            isRenamingHeader = false;
+                    }
+                    else
+                    {
+                        g.Draw2D.DrawText(comment.Header, 32, g.CurrentNode.LayoutData.Rect, Color.black * 0.5f);
+                    }
+
+
+                    changed |= HandleNodeSelection(index, g, node);
+
+                    changed |= HandleDraggingNode(g, node);
+                }
+
+                using (g.Node("Desc").ExpandWidth().Padding(10).Layout(LayoutType.Column).Clip().Enter())
+                {
+                    if(g.IsNodeHovered() && g.IsPointerDoubleClick())
+                        isRenamingDesc = true;
+
+                    if (isRenamingDesc)
+                    {
+                        changed |= g.InputField("DescRename", ref comment.Desc, 200, Gui.InputFieldFlags.Multiline, 0, 0, Size.Percentage(1f), Size.Percentage(1f));
+
+                        if(!g.IsPointerHovering() && (g.IsPointerClick(MouseButton.Left) || g.IsPointerClick(MouseButton.Right)))
+                            isRenamingDesc = false;
+                    }
+                    else
+                    {
+                        g.Draw2D.DrawText(comment.Desc, 25, g.CurrentNode.LayoutData.GlobalContentPosition, Color.black * 0.4f, g.CurrentNode.LayoutData.GlobalContentWidth);
+                    }
+
+                    changed |= HandleNodeSelection(index, g, node);
+
+                    changed |= HandleDraggingNode(g, node);
+                }
+
+            }
+
+            return changed;
+        }
+    }
+
+    public class NodeEditor
+    {
+        private NodeGraph graph;
+        private NodeEditorInputHandler inputHandler;
+        private Gui gui;
+
+        private Vector2 offset;
+        private double zoom = 1.0f;
+        private double targetzoom = 1.0f;
+        private bool hasChanged = false;
+
+        private RenderTexture RenderTarget;
+
+        internal WeakReference? draggingPort = null;
+
+        internal Vector2? dragSelectionStart = null;
+        internal Rect dragSelection;
+        private string? selectedCatagory = null;
+
+        private SelectHandler<WeakReference> SelectHandler = new((item) => !item.IsAlive, (a, b) => ReferenceEquals(a.Target, b.Target));
+
+        private readonly Dictionary<int, ScriptedNodeEditor> customEditors = [];
+
+        public NodeEditor(NodeGraph graph)
+        {
+            this.graph = graph;
+
+            inputHandler = new NodeEditorInputHandler();
+
+            Input.PushHandler(inputHandler);
+            gui = new Gui(EditorPreferences.Instance.AntiAliasing);
+            Input.OnKeyEvent += gui.SetKeyState;
+            Input.OnMouseEvent += gui.SetPointerState;
+            gui.OnPointerPosSet += (pos) => { Input.MousePosition = pos; };
+            gui.OnCursorVisibilitySet += (visible) => { Input.CursorVisible = visible; };
+            Input.PopHandler();
+        }
+
+        ~NodeEditor()
+        {
+            inputHandler.Dispose();
+        }
+
+        public void RefreshRenderTexture(Vector2 renderSize)
+        {
+            RenderTarget?.Dispose();
+
+            RenderTarget = new RenderTexture(
+                (uint)renderSize.x,
+                (uint)renderSize.y,
+                [Veldrid.PixelFormat.R8_G8_B8_A8_UNorm],
+                Veldrid.PixelFormat.D32_Float,
+                true);
+        }
+
+        public void SetFocus(bool focused) => inputHandler.IsFocused = focused;
+
+
+        public Texture2D Update(bool focused, Vector2 screenPos, uint width, uint height, out bool changed)
+        {
+            Input.PushHandler(inputHandler);
+
+            SelectHandler.StartFrame();
+            try
+            {
+                inputHandler.position = screenPos;
+                inputHandler.IsFocused = focused;
+                inputHandler.EarlyUpdate();
+
+                gui.PointerWheel = Input.MouseWheelDelta;
+
+                if ((RenderTarget == null) || (MathD.Max(width, 1) != RenderTarget.Width || MathD.Max(height, 1) != RenderTarget.Height))
+                    RefreshRenderTexture(new(MathD.Max(width, 1), MathD.Max(height, 1)));
+
+                CommandBuffer commandBuffer = CommandBufferPool.Get("Node Editor Command Buffer");
+
+                commandBuffer.SetRenderTarget(RenderTarget);
+                commandBuffer.ClearRenderTarget(true, true, Color.black, depth: 1.0f);
+
+                hasChanged = false;
+                gui.ProcessFrame(commandBuffer, new Rect(0, 0, width, height), (float)zoom, Vector2.one, EditorPreferences.Instance.AntiAliasing, (g) =>
+                {
+                    g.Draw2D.DrawRectFilled(new Rect(0, 0, width / zoom, height / zoom), EditorStylePrefs.Instance.Background);
+
+                    if (g.PointerWheel != 0)
+                    {
+                        targetzoom = MathD.Clamp(targetzoom + g.PointerWheel * 0.1, 0.1, 2.0);
+                        g.ClosePopup();
+                        //offset -= (g.PointerPos - (new Vector2(width / targetzoom, height / targetzoom) / 2)) * g.PointerWheel * 0.5f;
+                    }
+
+                    zoom = MathD.Lerp(zoom, targetzoom, 0.1);
+
+                    int index = 0;
+                    var beforeOffset = offset;
+                    //offset += new Vector2(width / zoom, height / zoom) / 2;
+                    var safeNodes = graph.nodes.ToArray();
+                    List<int> unusedKeys = new(customEditors.Keys);
+                    foreach (var node in safeNodes)
+                    {
+                        var key = node.GetHashCode();
+                        if (!customEditors.TryGetValue(key, out var customEditor))
+                        {
+                            Type? editorType = NodeEditorAttribute.GetEditor(node.GetType());
+                            if (editorType != null)
+                            {
+                                customEditor = (ScriptedNodeEditor)Activator.CreateInstance(editorType);
+                                customEditor.SetEditor(this);
+                                customEditor.SetGraph(graph);
+                                customEditor.SetSelectHandler(SelectHandler);
+                                customEditor.OnEnable();
+                                customEditors[key] = customEditor;
+                                unusedKeys.Remove(key);
+                            }
+                            else
+                            {
+                                gui.Draw2D.DrawText($"No Editor for Node {node.GetType().Name}", node.position, Color.red);
+                            }
+                        }
+                        else
+                        {
+                            // We are still editing the same object
+                            hasChanged |= customEditor.DrawNode(index++, g, node, offset);
+                            unusedKeys.Remove(key);
+                        }
+                    }
+
+                    foreach(var key in unusedKeys)
+                    {
+                        customEditors[key].OnDisable();
+                        customEditors.Remove(key);
+                    }
+                    //offset = beforeOffset;
+
+                    if (draggingPort != null && draggingPort != null)
+                    {
+                        // Draw Connection
+                        var port = (draggingPort!.Target as NodePort)!;
+                        var col = EditorStylePrefs.RandomPastel(port.ValueType, 1f);
+                        g.Draw2D.DrawLine(port.LastKnownPosition, g.PointerPos, col, 2);
+
+                        if (g.IsPointerUp(MouseButton.Left) || !draggingPort.IsAlive)
+                            draggingPort = null;
+                    }
+
+                    if (g.FocusID == 0)
+                    {
+                        if (g.IsKeyPressed(Key.C))
+                        {
+                            var comment = graph.AddNode<CommentNode>();
+                            comment.Header = "This a Comment :D";
+                            comment.Desc = "This is a Description";
+                            comment.position = g.PointerPos;
+                        }
+
+                        if (g.IsKeyPressed(Key.V)) AlignSelectedVertically();
+                        if (g.IsKeyPressed(Key.H)) AlignSelectedHorizontally();
+                        if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
+                        {
+                            var newlycreated = new List<Node>();
+                            SelectHandler.Foreach((go) =>
+                            {
+                                newlycreated.Add(graph.CopyNode(go.Target as Node));
+                            });
+                            SelectHandler.Clear();
+                            newlycreated.ForEach((n) => SelectHandler.SelectIfNot(new WeakReference(n)));
+                        }
+                    }
+
+                    if (g.IsNodeHovered())
+                    {
+                        if (g.IsPointerClick(MouseButton.Right, true) || g.IsKeyPressed(Key.Space))
+                            g.OpenPopup("NodeCreatePopup", g.PointerPos);
+
+                        if (g.IsPointerDown(MouseButton.Middle))
+                        {
+                            offset += g.PointerDelta;
+                            g.ClosePopup();
+                        }
+
+                        if (!SelectHandler.SelectedThisFrame && g.IsNodePressed())
+                            SelectHandler.Clear();
+
+                        if (dragSelectionStart == null && g.IsPointerClick(MouseButton.Left))
+                            dragSelectionStart = g.PointerPos;
+                    }
+
+                    if (dragSelectionStart != null && g.IsPointerDown(MouseButton.Left))
+                    {
+                        var min = Vector2.Min(dragSelectionStart.Value, g.PointerPos);
+                        var max = Vector2.Max(dragSelectionStart.Value, g.PointerPos);
+                        dragSelection = new Rect(min, max - min);
+
+                        g.Draw2D.DrawRect(dragSelection, EditorStylePrefs.Instance.Highlighted, 2, 3);
+                        g.Draw2D.DrawRectFilled(dragSelection, EditorStylePrefs.Instance.Highlighted * 0.3f, 3);
+                    }
+                    else
+                        dragSelectionStart = null;
+
+                    var popupHolder = g.CurrentNode;
+                    if (g.BeginPopup("NodeCreatePopup", out var popup))
+                    {
+                        using (popup.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Scroll().Clip().Enter())
+                        {
+                            if (selectedCatagory == null)
+                            {
+                                foreach (var catagory in NodeAttribute.nodeCatagories.Keys)
+                                    if (EditorGUI.StyledButton(catagory))
+                                        selectedCatagory = catagory;
+                            }
+                            else
+                            {
+                                if (EditorGUI.StyledButton("Back"))
+                                    selectedCatagory = null;
+
+                                if (NodeAttribute.nodeCatagories.TryGetValue(selectedCatagory, out var types))
+                                {
+                                    foreach (var type in types)
+                                        if (EditorGUI.StyledButton(type.Name))
+                                        {
+                                            var node = graph.AddNode(type);
+                                            node.position = g.PointerPos;
+                                            g.ClosePopup(popupHolder);
+                                            hasChanged |= true;
+
+                                            SelectHandler.SetSelection(new WeakReference(node));
+                                        }
+                                }
+                            }
+
+                            foreach (var nodeType in graph.NodeTypes)
+                                if (EditorGUI.StyledButton(nodeType.Name))
+                                {
+                                    var node = graph.AddNode(nodeType);
+                                    node.position = g.PointerPos;
+                                    g.ClosePopup(popupHolder);
+                                    hasChanged |= true;
+
+                                    SelectHandler.SetSelection(new WeakReference(node));
+                                }
+                        }
+                    }
+                    else
+                    {
+                        selectedCatagory = null;
+                    }
+
+
+                    if (hasChanged)
+                    {
+                        graph.OnValidate();
+                        foreach (var node in graph.nodes)
+                            node.OnValidate();
+                    }
+                });
+
+                Graphics.ExecuteCommandBuffer(commandBuffer);
+
+                CommandBufferPool.Release(commandBuffer);
+            }
+            finally
+            {
+                changed = hasChanged;
+                Input.PopHandler();
+            }
+
+
+            return RenderTarget.ColorBuffers[0];
+        }
+
+        public void AlignSelectedHorizontally()
+        {
+            double totalX = 0;
+            SelectHandler.Foreach((go) => { totalX += (go.Target as Node).position.x; });
+            double avgX = totalX / SelectHandler.Count;
+            SelectHandler.Foreach((go) => { (go.Target as Node).position.x = avgX; });
+        }
+
+        public void AlignSelectedVertically()
+        {
+            double totalY = 0;
+            SelectHandler.Foreach((go) => { totalY += (go.Target as Node).position.y; });
+            double avgY = totalY / SelectHandler.Count;
+            SelectHandler.Foreach((go) => { (go.Target as Node).position.y = avgY; });
         }
 
         public void Release()
