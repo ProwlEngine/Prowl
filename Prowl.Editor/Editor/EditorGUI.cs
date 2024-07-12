@@ -269,9 +269,6 @@ namespace Prowl.Editor
             int i = 0;
             foreach (var field in members.Distinct())
             {
-                var fieldType = field is FieldInfo ? (field as FieldInfo)!.FieldType : (field as PropertyInfo)!.PropertyType;
-                var fieldValue = field.GetValue(target);
-
                 // if has HideInInspector ignore
                 if (field.GetCustomAttributes(typeof(HideInInspectorAttribute), true).Length > 0)
                     continue;
@@ -280,6 +277,9 @@ namespace Prowl.Editor
                 var imGuiAttributes = attributes.Where(attr => attr is InspectorUIAttribute).Cast<InspectorUIAttribute>();
                 if (!HandleBeginGUIAttributes("attrib" + i, target, imGuiAttributes))
                     continue;
+
+                var fieldType = field is FieldInfo ? (field as FieldInfo)!.FieldType : (field as PropertyInfo)!.PropertyType;
+                var fieldValue = field.GetValue(target);
 
                 // Draw the property
                 bool propChange = DrawerAttribute.DrawProperty(ActiveGUI, field.Name, i++, fieldType, ref fieldValue, config);
