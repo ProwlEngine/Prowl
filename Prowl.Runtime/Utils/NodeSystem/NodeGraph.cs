@@ -47,7 +47,13 @@ namespace Prowl.Runtime.NodeSystem
 
         public void Validate()
         {
-            OnValidate();
+            var attrib = this.GetType().GetCustomAttribute<RequireNodeAttribute>(true);
+            if (attrib != null)
+                foreach (Type type in attrib.types)
+                    if (!nodes.Where(n => n.GetType() == type).Any())
+                        AddNode(type);
+
+                OnValidate();
             foreach (var node in nodes)
                 node.OnValidate();
         }
@@ -110,6 +116,17 @@ namespace Prowl.Runtime.NodeSystem
         /// <param name="node"> The node to remove </param>
         public virtual void RemoveNode(Node node)
         {
+            // check if we have a RequireNode attribute
+            var attrib = this.GetType().GetCustomAttribute<RequireNodeAttribute>(true);
+            if (attrib != null)
+            {
+                if (attrib.Requires(node.GetType()))
+                {
+                    Debug.LogError($"Cannot remove node of type {node.GetType()} from graph!");
+                    return;
+                }
+            }
+
             node.ClearConnections();
             nodes.Remove(node);
         }
@@ -166,6 +183,8 @@ namespace Prowl.Runtime.NodeSystem
                 node.VerifyConnections();
                 node.OnEnable();
             }
+
+            Validate();
         }
 
         #region Attributes
