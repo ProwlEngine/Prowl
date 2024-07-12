@@ -8,6 +8,8 @@ namespace Prowl.Editor.ScriptedEditors
     [CustomEditor(typeof(ScriptableObjectImporter))]
     public class ScriptableObjectEditor : ScriptedEditor
     {
+        ScriptableObject? scriptObject = null;
+
         public override void OnInspectorGUI()
         {
             var importer = (ScriptableObjectImporter)(target as MetaFile).importer;
@@ -16,7 +18,7 @@ namespace Prowl.Editor.ScriptedEditors
             {
                 bool changed = false;
 
-                ScriptableObject scriptObject = Serializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile((target as MetaFile).AssetPath));
+                scriptObject ??= Serializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile((target as MetaFile).AssetPath));
 
                 object t = scriptObject;
                 changed |= PropertyGrid("CompPropertyGrid", ref t, TargetFields.Serializable | EditorGUI.TargetFields.Properties, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground);
@@ -31,11 +33,11 @@ namespace Prowl.Editor.ScriptedEditors
                     AssetDatabase.Reimport((target as MetaFile).AssetPath);
                 }
             }
-            catch
+            catch (System.Exception e)
             {
                 double ItemSize = EditorStylePrefs.Instance.ItemSize;
                 gui.Node("DummyForText").ExpandWidth().Height(ItemSize * 10);
-                gui.Draw2D.DrawText("Failed to Deserialize ScriptableObject, The ScriptableObject file is invalid.", gui.CurrentNode.LayoutData.Rect);
+                gui.Draw2D.DrawText("Failed to Deserialize ScriptableObject, The ScriptableObject file is invalid. Error: " + e.ToString(), gui.CurrentNode.LayoutData.Rect);
             }
         }
 
