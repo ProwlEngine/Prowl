@@ -1,5 +1,4 @@
-﻿using Prowl.Editor.Assets;
-using Prowl.Editor.Preferences;
+﻿using Prowl.Editor.Preferences;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
@@ -272,7 +271,7 @@ namespace Prowl.Editor
                 foreach (var port in node.Inputs)
                 {
                     // Draw Backing
-                    using (g.Node("InputBackingField", fieldIndex++).FitContentWidth().Top(y).Enter())
+                    using (g.Node("InputBackingField", fieldIndex++).FitContentWidth().FitContentHeight().Top(y).Enter())
                     {
                         g.CurrentNode.Left(-(g.CurrentNode.LayoutData.Rect.width + 5));
                         changed |= DrawBackingField(g, node, fieldIndex, port);
