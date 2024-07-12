@@ -241,7 +241,8 @@ namespace Prowl.Runtime
         {
             if (value.TagType == PropertyType.Null) return null;
 
-            if (value.GetType().IsAssignableTo(targetType)) return value;
+            //if (value.GetType().IsAssignableTo(targetType)) return value; - Too loose, Will prevent type 'object' from being deserialized into its actual type
+            if (value.GetType() == targetType) return value;
 
             if (IsPrimitive(targetType))
             {
