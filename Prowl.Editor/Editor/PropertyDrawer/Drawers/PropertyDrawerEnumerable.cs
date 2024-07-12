@@ -87,12 +87,8 @@ namespace Prowl.Editor.PropertyDrawers
                         for (int i = 0; i < GetCount(list); i++)
                         {
                             var element = GetElement(list, i);
-                            using (gui.Node("_EnumElement", i).ExpandWidth().FitContentHeight().Enter())
+                            using (gui.Node("_EnumElement", i).ExpandWidth().FitContentHeight().Padding(5).Enter())
                             {
-
-                                if (drawerID == selectedDrawer && i == selectedElement)
-                                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
-
                                 if (gui.IsPointerPressed() && gui.IsPointerHovering())
                                 {
                                     selectedDrawer = drawerID;
@@ -100,13 +96,17 @@ namespace Prowl.Editor.PropertyDrawers
                                 }
                                 else if (gui.IsPointerHovering())
                                 {
-                                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
+                                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering * 0.3f);
                                 }
 
                                 config |= EditorGUI.PropertyGridConfig.NoBackground;
                                 changed |= DrawerAttribute.DrawProperty(gui, "Element " + i, i, ElementType(list), ref element, config);
                                 if (changed)
                                     SetElement(list, i, element);
+
+
+                                if (drawerID == selectedDrawer && i == selectedElement)
+                                    gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, 2, 2);
                             }
                         }
 
