@@ -69,8 +69,6 @@ namespace Prowl.Editor
 
     public class DefaultNodeEditor : ScriptedNodeEditor
     {
-        private GraphRenderPipeline graph => nodegraph as GraphRenderPipeline;
-
         public override bool DrawNode(int index, Gui g, Node node, Vector2 offset)
         {
             bool changed = false;
@@ -85,7 +83,7 @@ namespace Prowl.Editor
                     g.Draw2D.DrawRect(selRect, EditorStylePrefs.Instance.Highlighted, 3, roundness);
                     if (g.IsKeyPressed(Key.Delete))
                     {
-                        graph.RemoveNode(node);
+                        nodegraph.RemoveNode(node);
                         changed = true;
                     }
                 }
@@ -198,19 +196,19 @@ namespace Prowl.Editor
                     bool close = false;
                     if (EditorGUI.StyledButton("Duplicate"))
                     {
-                        graph.CopyNode(node); close = true;
+                        nodegraph.CopyNode(node); close = true;
                     }
 
                     if (EditorGUI.StyledButton("Delete"))
                     {
-                        graph.RemoveNode(node); close = true;
+                        nodegraph.RemoveNode(node); close = true;
                     }
 
                     if (SelectHandler.Count > 1)
                     {
                         if (EditorGUI.StyledButton("Delete All"))
                         {
-                            SelectHandler.Foreach((go) => { graph.RemoveNode(go.Target as Node); });
+                            SelectHandler.Foreach((go) => { nodegraph.RemoveNode(go.Target as Node); });
                             SelectHandler.Clear();
                             close = true;
                         }
