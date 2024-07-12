@@ -5,6 +5,32 @@ using System.Reflection;
 
 namespace Prowl.Runtime.NodeSystem
 {
+    public class GraphParameter
+    {
+        public enum ParameterType
+        {
+            Int,
+            Double,
+            Bool,
+            Texture,
+            Material
+        }
+
+        public string name;
+        public ParameterType type;
+        [ShowIf(nameof(IsInt))] public int intVal;
+        [ShowIf(nameof(IsDouble))] public double doubleVal;
+        [ShowIf(nameof(IsBool))] public bool boolVal;
+        [ShowIf(nameof(IsTexture))] public AssetRef<Texture> textureRef;
+        [ShowIf(nameof(IsMaterial))] public AssetRef<Material> materialRef;
+
+        public bool IsInt => type == ParameterType.Int;
+        public bool IsDouble => type == ParameterType.Double;
+        public bool IsBool => type == ParameterType.Bool;
+        public bool IsTexture => type == ParameterType.Texture;
+        public bool IsMaterial => type == ParameterType.Material;
+    }
+
     public abstract class NodeGraph : ScriptableObject, ISerializationCallbackReceiver
     {
         [SerializeField] int _nextID = 0;
@@ -16,6 +42,15 @@ namespace Prowl.Runtime.NodeSystem
 
         public virtual Type[] NodeTypes { get; } = new Type[0];
         public abstract string[] NodeCatagories { get; }
+
+        public List<GraphParameter> parameters = [];
+
+        public void Validate()
+        {
+            OnValidate();
+            foreach (var node in nodes)
+                node.OnValidate();
+        }
 
         /// <summary> Add a node to the graph by type (convenience method - will call the System.Type version) </summary>
         public T AddNode<T>() where T : Node

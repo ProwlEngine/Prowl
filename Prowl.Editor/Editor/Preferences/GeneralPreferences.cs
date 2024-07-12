@@ -95,7 +95,15 @@ namespace Prowl.Editor.Preferences
         public static Color Sky => new(11, 214, 244);
         public static Color Pink => new(251, 123, 184);
 
-        public static Color RandomPastel(Type type, float alpha = 1f) => RandomPastelColor(type.GetHashCode(), alpha);
+        public static Color RandomPastel(Type type, float alpha = 1f, float pastelStrength = 0.5f)
+        {
+            var inverted = 1.0f - pastelStrength;
+            System.Random random = new System.Random(type.GetHashCode());
+            float r = (float)(random.NextDouble() * inverted + pastelStrength);
+            float g = (float)(random.NextDouble() * inverted + pastelStrength);
+            float b = (float)(random.NextDouble() * inverted + pastelStrength);
+            return new Color(r, g, b, alpha);
+        }
 
         public static Color RandomPastelColor(int seed, float alpha = 1f)
         {

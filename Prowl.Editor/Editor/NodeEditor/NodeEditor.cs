@@ -94,7 +94,7 @@ namespace Prowl.Editor
                 {
                     using (g.Node("Header").ExpandWidth().Height(itemSize).Enter())
                     {
-                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.RandomPastel(node.GetType()), roundness, 3);
+                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.RandomPastel(node.GetType(), 1, 0.2f), roundness, 3);
                         var rect = g.CurrentNode.LayoutData.Rect;
                         rect.Min += new Vector2(1, 1);
                         rect.Max += new Vector2(1, 1);
@@ -304,7 +304,7 @@ namespace Prowl.Editor
                 var trueCenter = g.CurrentNode.LayoutData.Rect.Center;
                 port.LastKnownPosition = trueCenter;
 
-                var col = EditorStylePrefs.RandomPastel(port.ValueType, 1f);
+                var col = EditorStylePrefs.RandomPastel(port.ValueType, 1f, 0.2f);
                 if (g.IsNodeHovered())
                 {
                     // If were hovering and not dragging port (or dragging this port) highlight it
@@ -532,7 +532,7 @@ namespace Prowl.Editor
         public void SetFocus(bool focused) => inputHandler.IsFocused = focused;
 
 
-        public Texture2D Update(bool focused, Vector2 screenPos, uint width, uint height, out bool changed)
+        public Texture2D Update(Gui windowGui, bool focused, Vector2 screenPos, uint width, uint height, out bool changed)
         {
             Input.PushHandler(inputHandler);
 
@@ -553,7 +553,7 @@ namespace Prowl.Editor
                 commandBuffer.SetRenderTarget(RenderTarget);
                 commandBuffer.ClearRenderTarget(true, true, Color.black, depth: 1.0f);
 
-                hasChanged = false;
+                    hasChanged = false;
                 gui.ProcessFrame(commandBuffer, new Rect(0, 0, width, height), (float)zoom, Vector2.one, EditorPreferences.Instance.AntiAliasing, (g) =>
                 {
                     g.Draw2D.DrawRectFilled(new Rect(0, 0, width / zoom, height / zoom), EditorStylePrefs.Instance.Background);
@@ -612,7 +612,7 @@ namespace Prowl.Editor
                     {
                         // Draw Connection
                         var port = (draggingPort!.Target as NodePort)!;
-                        var col = EditorStylePrefs.RandomPastel(port.ValueType, 1f);
+                        var col = EditorStylePrefs.RandomPastel(port.ValueType, 1f, 0.2f);
                         g.Draw2D.DrawLine(port.LastKnownPosition, g.PointerPos, col, 2);
 
                         if (g.IsPointerUp(MouseButton.Left) || !draggingPort.IsAlive)
@@ -720,14 +720,6 @@ namespace Prowl.Editor
                     {
                         selectedCatagory = null;
                     }
-
-
-                    if (hasChanged)
-                    {
-                        graph.OnValidate();
-                        foreach (var node in graph.nodes)
-                            node.OnValidate();
-                    }
                 });
 
                 Graphics.ExecuteCommandBuffer(commandBuffer);
@@ -740,8 +732,18 @@ namespace Prowl.Editor
                 Input.PopHandler();
             }
 
-
             return RenderTarget.ColorBuffers[0];
+        }
+
+        public bool DrawBlackBoard(Gui gui)
+        {
+            using (gui.Node("BlackBoard").TopLeft(5).Width(250).Height(250).Enter())
+            {
+                object? obj = graph;
+                // Get graph.parameters field
+                FieldInfo props = graph.GetType().GetField("parameters", BindingFlags.Instance | BindingFlags.Public);
+                return EditorGUI.PropertyGrid("BlackBoard", ref obj, [props], EditorGUI.PropertyGridConfig.NoHeader);
+            }
         }
 
         public void AlignSelectedHorizontally()
