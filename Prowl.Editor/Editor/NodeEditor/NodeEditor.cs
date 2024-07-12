@@ -358,6 +358,8 @@ namespace Prowl.Editor
                 }
             }
 
+            g.Tooltip(port.ValueType.Name);
+
             return changed;
         }
 
