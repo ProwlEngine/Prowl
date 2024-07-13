@@ -367,6 +367,7 @@ namespace Prowl.Editor
 
         protected bool DrawBackingField(Gui g, Node node, int fieldIndex, NodePort port)
         {
+            if (port.IsDynamic) return false;
             bool changed = false;
             var fieldInfo = GetFieldInfo(port.node.GetType(), port.fieldName);
             InputAttribute field = fieldInfo.GetCustomAttributes<InputAttribute>(true).FirstOrDefault();
