@@ -19,7 +19,7 @@ namespace Prowl.Editor.PropertyDrawers
             {
                 FieldInfo fieldInfo = targetType.GetField(values.GetValue(i).ToString());
                 TextAttribute attribute = fieldInfo.GetCustomAttribute<TextAttribute>();
-                names[i] = attribute != null ? attribute.text : fieldInfo.Name;
+                names[i] = RuntimeUtils.Prettify(attribute != null ? attribute.text : fieldInfo.Name);
             }
 
             bool changed = gui.Combo("#_PropID", "#_PropPopupID", ref selectedIndex, names, 0, 0, Size.Percentage(1f), EditorStylePrefs.Instance.ItemSize);
