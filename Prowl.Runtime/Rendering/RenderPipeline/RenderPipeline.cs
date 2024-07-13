@@ -21,17 +21,19 @@ namespace Prowl.Runtime.RenderPipelines
             typeof(ParameterNode),
         ];
 
-        private List<RenderTexture> rts = [];
+        private List<NodeRenderTexture> rts = [];
 
         public Vector2 Resolution { get; private set; }
         public Camera CurrentCamera { get; private set; }
         public RenderingContext Context { get; private set; }
 
+        public Texture2D Result { get; internal set; }
+
         private Material blitMat;
 
-        public RenderTexture GetRT(RenderTextureDescription desc)
+        public NodeRenderTexture GetRT(RenderTextureDescription desc, RTBuffer[] colorFormats)
         {
-            var rt = RenderTexture.GetTemporaryRT(desc);
+            NodeRenderTexture rt = new(RenderTexture.GetTemporaryRT(desc), colorFormats);
             rts.Add(rt);
             return rt;
         }
@@ -58,10 +60,6 @@ namespace Prowl.Runtime.RenderPipelines
                     // Update the value of built-in shader variables, based on the current Camera
                     var target = context.SetupTargetCamera(cam, out var width, out var height);
 
-                    // Setup resolution for the Nodes
-                    Resolution = new Vector2(width, height);
-                    CurrentCamera = cam;
-
                     var cmd = CommandBufferPool.Get("Camera Buffer");
                     cmd.SetRenderTarget(target);
                     //if (cam.DoClear)
@@ -69,13 +67,27 @@ namespace Prowl.Runtime.RenderPipelines
                     cmd.ClearRenderTarget(true, true, Color.black);
                     context.ExecuteCommandBuffer(cmd);
 
-                    var outputNode = GetNode<OutputNode>();
-                    var outputTex = (outputNode.GetValue(null) as Texture2D) ?? throw new Exception($"Output Node must have a valid Texture2D!");
+                    // Setup resolution for the Nodes
+                    Resolution = new Vector2(width, height);
+                    CurrentCamera = cam;
+                    Result = null;
+
+                    //var outputNode = GetNode<OutputNode>();
+                    //var outputTex = (outputNode.GetValue(null) as Texture2D) ?? throw new Exception($"Output Node must have a valid Texture2D!");
+
+                    var pipelineNode = GetNode<OnPipelineNode>();
+                    pipelineNode?.Execute();
+
+                    if(Result == null)
+                    {
+                        CommandBufferPool.Release(cmd);
+                        continue;
+                    }
 
                     // blit result into target
                     cmd.SetRenderTarget(target);
                     cmd.ClearRenderTarget(false, true, Color.black);
-                    cmd.SetTexture("_Texture", outputTex);
+                    cmd.SetTexture("_Texture", Result);
                     blitMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Blit.shader"));
                     cmd.SetMaterial(blitMat, 0);
                     cmd.DrawSingle(Mesh.GetFullscreenQuad());
@@ -93,7 +105,10 @@ namespace Prowl.Runtime.RenderPipelines
                 {
                     // Release all Temp Render Textures back into the RT Pool
                     foreach (var rt in rts)
-                        RenderTexture.ReleaseTemporaryRT(rt);
+                    {
+                        rt.HasBeenReleased = true;
+                        RenderTexture.ReleaseTemporaryRT(rt.RenderTexture);
+                    }
                     rts.Clear();
                 }
             }
