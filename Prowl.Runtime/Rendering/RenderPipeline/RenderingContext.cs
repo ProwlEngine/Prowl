@@ -114,6 +114,8 @@ namespace Prowl.Runtime.RenderPipelines
 
         public void DrawRenderers(CommandBuffer buffer, List<Renderable> sorted, DrawSettings settings, LayerMask layerMask)
         {
+            if (sorted == null || sorted.Count == 0) return;
+
             // Apply Built-in Uniforms
             buffer.SetMatrix("Mat_V", Mat_V);
             buffer.SetMatrix("Mat_P", Mat_P);
