@@ -105,7 +105,7 @@ namespace Prowl.Editor
 
                         changed |= HandleNodeSelection(index, g, node);
 
-                        changed |= HandleDraggingNode(g, node);
+                        changed |= HandleDraggingNode(g, node, offset);
                     }
                 }
 
@@ -118,9 +118,8 @@ namespace Prowl.Editor
 
                     changed |= HandleNodeSelection(index, g, node);
 
-                    changed |= HandleDraggingNode(g, node);
+                    changed |= HandleDraggingNode(g, node, offset);
 
-                    int fieldIndex = 0;
                     using (g.Node("In/Out").ExpandWidth().FitContentHeight().Layout(LayoutType.Row).ScaleChildren().Enter())
                     {
                         if (node.Inputs.Count() > 0)
@@ -163,7 +162,7 @@ namespace Prowl.Editor
             return changed;
         }
 
-        protected bool HandleDraggingNode(Gui g, Node node)
+        protected bool HandleDraggingNode(Gui g, Node node, Vector2 offset)
         {
             if (g.IsNodeActive())
             {
@@ -172,6 +171,45 @@ namespace Prowl.Editor
                     var n = go.Target as Node;
                     n.position += g.PointerDelta;
                 });
+
+                if (!g.IsKeyDown(Key.LeftShift))
+                {
+                    // find the Nearest non-selected node on X Axis
+                    var nearestX = nodegraph.nodes.OrderBy((n) => Math.Abs(n.position.x - node.position.x)).FirstOrDefault((n) => !SelectHandler.IsSelected(new WeakReference(n)));
+                    if (nearestX != null)
+                    {
+                        if (Math.Abs(nearestX.position.x - node.position.x) < 5)
+                        {
+                            node.position.x = nearestX.position.x;
+                            g.Draw2D.DrawLine(node.position + offset, nearestX.position + offset, Color.yellow);
+                        }
+                    }
+
+                    // Clamp max width edge as well
+                    var nearestMaxX = nodegraph.nodes.OrderBy((n) => Math.Abs(n.position.x + n.Width - node.position.x - node.Width)).FirstOrDefault((n) => !SelectHandler.IsSelected(new WeakReference(n)));
+                    if (nearestMaxX != null)
+                    {
+                        if (Math.Abs(nearestMaxX.position.x + nearestMaxX.Width - node.position.x - node.Width) < 5)
+                        {
+                            node.position.x = nearestMaxX.position.x + nearestMaxX.Width - node.Width;
+                            g.Draw2D.DrawLine(node.position + offset + new Vector2(node.Width, 0), nearestMaxX.position + new Vector2(nearestMaxX.Width, 0) + offset, Color.yellow);
+                        }
+                    }
+
+                    // find the Nearest non-selected node on Y Axis
+                    var nearestY = nodegraph.nodes.OrderBy((n) => Math.Abs(n.position.y - node.position.y)).FirstOrDefault((n) => !SelectHandler.IsSelected(new WeakReference(n)));
+                    if (nearestY != null)
+                    {
+                        if (Math.Abs(nearestY.position.y - node.position.y) < 5)
+                        {
+                            node.position.y = nearestY.position.y;
+                            g.Draw2D.DrawLine(node.position + offset, nearestY.position + offset, Color.yellow);
+                        }
+                    }
+
+                    // Unfortunately we cant clamp the max height edge as we dont have the height of the other nodes
+                }
+
                 return true;
             }
             return false;
