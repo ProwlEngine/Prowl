@@ -722,16 +722,17 @@ namespace Prowl.Editor
                         }
                     }
 
+                    if (g.IsPointerDown(MouseButton.Middle))
+                    {
+                        offset += g.PointerDelta;
+                        g.ClosePopup();
+                    }
+
                     if (g.IsNodeHovered())
                     {
                         if (g.IsPointerClick(MouseButton.Right, true) || g.IsKeyPressed(Key.Space))
                             g.OpenPopup("NodeCreatePopup", g.PointerPos);
 
-                        if (g.IsPointerDown(MouseButton.Middle))
-                        {
-                            offset += g.PointerDelta;
-                            g.ClosePopup();
-                        }
 
                         if (!SelectHandler.SelectedThisFrame && g.IsNodePressed())
                             SelectHandler.Clear();
