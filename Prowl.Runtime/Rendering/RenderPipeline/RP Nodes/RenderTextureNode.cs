@@ -71,7 +71,7 @@ namespace Prowl.Runtime.RenderPipelines
         public RTBuffer[] ColorFormats = [new RTBuffer() { format = PixelFormat.R8_G8_B8_A8_UNorm, type = RTBuffer.Type.Color }];
 
         public bool HasDepth = true;
-        public Veldrid.PixelFormat DepthFormat = Veldrid.PixelFormat.D32_Float;
+        public Veldrid.PixelFormat DepthFormat = Veldrid.PixelFormat.D24_UNorm_S8_UInt;
 
         public override void OnValidate()
         {

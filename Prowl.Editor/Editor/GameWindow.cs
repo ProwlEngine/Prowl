@@ -65,7 +65,7 @@ public class GameWindow : EditorWindow
             (uint)GeneralPreferences.Instance.CurrentWidth, 
             (uint)GeneralPreferences.Instance.CurrentHeight, 
             [ Veldrid.PixelFormat.R8_G8_B8_A8_UNorm ], 
-            Veldrid.PixelFormat.D32_Float, 
+            Veldrid.PixelFormat.D24_UNorm_S8_UInt, 
             true);
 
         hasFrame = false;
