@@ -91,7 +91,7 @@ namespace Prowl.Editor
                 {
                     using (g.Node("Header").ExpandWidth().Height(itemSize).Enter())
                     {
-                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.RandomPastel(node.GetType(), 1, 0.2f), roundness, 3);
+                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.RandomPastel(node.GetType(), 1, 0.3f), roundness, 3);
                         var rect = g.CurrentNode.LayoutData.Rect;
                         rect.Min += new Vector2(1, 1);
                         rect.Max += new Vector2(1, 1);
