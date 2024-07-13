@@ -79,6 +79,8 @@ namespace Prowl.Runtime.NodeSystem
         [SerializeField, HideInInspector] private Dictionary<string, NodePort> ports = new Dictionary<string, NodePort>();
         [HideInInspector] public int InstanceID;
 
+        public string Error { get; set; } = "";
+
         public virtual bool ShowTitle { get; } = true;
         public abstract string Title { get; }
         public abstract float Width { get; }

@@ -98,6 +98,11 @@ namespace Prowl.Editor
                         g.Draw2D.DrawText(node.Title, rect, Color.black);
                         g.Draw2D.DrawText(node.Title, g.CurrentNode.LayoutData.Rect);
 
+                        if (!string.IsNullOrEmpty(node.Error))
+                        {
+                            g.Draw2D.DrawText(FontAwesome6.CircleExclamation + node.Error, g.CurrentNode.LayoutData.GlobalPosition + new Vector2(g.CurrentNode.LayoutData.GlobalContentWidth + 5, 5), Color.red);
+                        }
+
                         changed |= HandleNodeSelection(index, g, node);
 
                         changed |= HandleDraggingNode(g, node);
