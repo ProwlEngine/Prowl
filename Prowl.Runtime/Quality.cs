@@ -7,7 +7,7 @@ namespace Prowl.Runtime
 {
     public class QualitySetting
     {
-        public AssetRef<RenderPipeline> RenderPipeline = new DefaultRenderPipeline();
+        public AssetRef<RenderPipelines.RenderPipeline> RenderPipeline = null;
         public bool testSetting1;
         public float testSetting2;
     }
@@ -40,7 +40,7 @@ namespace Prowl.Runtime
                 Debug.LogError($"Missing Default Render Pipeline!");
             */
 
-            RenderPipeline defaultPipeline = new DefaultRenderPipeline();
+            RenderPipelines.RenderPipeline defaultPipeline = null;
 
             QualitySettings.Instance.Qualities = [
                 new QualitySetting()

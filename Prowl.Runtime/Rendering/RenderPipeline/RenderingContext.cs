@@ -112,48 +112,42 @@ namespace Prowl.Runtime.RenderPipelines
             return result;
         }
 
-        public void DrawRenderers(SortedList<double, List<Renderable>> sorted, DrawSettings settings, LayerMask layerMask)
+        public void DrawRenderers(CommandBuffer buffer, List<Renderable> sorted, DrawSettings settings, LayerMask layerMask)
         {
             // Apply Built-in Uniforms
-            CommandBuffer cmd = new();
-            cmd.SetMatrix("Mat_V", Mat_V);
-            cmd.SetMatrix("Mat_P", Mat_P);
-            cmd.SetFloat("Time", (float)Time.time);
-            ExecuteCommandBuffer(cmd);
-            cmd.Clear();
+            buffer.SetMatrix("Mat_V", Mat_V);
+            buffer.SetMatrix("Mat_P", Mat_P);
+            buffer.SetFloat("Time", (float)Time.time);
 
             //var VP = defaultUniforms.Mat_V * defaultUniforms.Mat_P;
-            foreach (var pair in sorted)
-                foreach (var renderable in pair.Value)
+            foreach (var renderable in sorted)
+            {
+                if (!layerMask.HasLayer(renderable.Layer))
+                    continue;
+
+                if (renderable.Material == null || !renderable.Material.Shader.IsAvailable)
+                    continue;
+
+                // Check for valid material passes
+                var passes = renderable.Material.Shader.Res.GetPassesWithTag("RenderOrder", settings.RenderOrder);
+
+                if (passes.Count > 0)
                 {
-                    if (!layerMask.HasLayer(renderable.Layer))
-                        continue;
+                    buffer.SetMatrix("Mat_ObjectToWorld", renderable.Matrix);
+                    Matrix4x4.Invert(renderable.Matrix, out Matrix4x4 inv);
+                    buffer.SetMatrix("Mat_WorldToObject", inv);
 
-                    if (renderable.Material == null || !renderable.Material.Shader.IsAvailable)
-                        continue;
+                    //cmd.SetMatrix("Mat_MVP", renderable.Matrix * VP);
+                    buffer.SetMatrix("Mat_MVP", renderable.Matrix * Mat_V * Mat_P);
 
-                    // Check for valid material passes
-                    var passes = renderable.Material.Shader.Res.GetPassesWithTag("RenderOrder", settings.RenderOrder);
+                    // Push Properties
+                    buffer.ApplyPropertyState(renderable.Properties);
 
-                    if (passes.Count > 0)
-                    {
-                        cmd.SetMatrix("Mat_ObjectToWorld", renderable.Matrix);
-                        Matrix4x4.Invert(renderable.Matrix, out Matrix4x4 inv);
-                        cmd.SetMatrix("Mat_WorldToObject", inv);
-
-                        //cmd.SetMatrix("Mat_MVP", renderable.Matrix * VP);
-                        cmd.SetMatrix("Mat_MVP", renderable.Matrix * Mat_V * Mat_P);
-                        ExecuteCommandBuffer(cmd);
-                        cmd.Clear();
-
-                        // Push Properties
-                        internalCommandList.Add(new SetPropertyStateCommand() { StateValue = renderable.Properties });
-
-                        // Draw each pass
-                        foreach (var pass in passes)
-                            renderable.Draw(pass, this);
-                    }
+                    // Draw each pass
+                    foreach (var pass in passes)
+                        renderable.Draw(buffer, pass, this);
                 }
+            }
 
         }
 

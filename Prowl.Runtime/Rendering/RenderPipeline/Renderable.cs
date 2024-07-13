@@ -19,5 +19,5 @@ public abstract class Renderable(Material material, Matrix4x4 matrix, byte layer
     public abstract IndexFormat IndexFormat { get; }
 
     public abstract void SetDrawData(CommandList commandList, VertexLayoutDescription[] resources);
-    public abstract void Draw(int pass, RenderingContext context);
+    public abstract void Draw(CommandBuffer buffer, int pass, RenderingContext context);
 }

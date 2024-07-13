@@ -17,15 +17,9 @@ public sealed class MeshRenderable : Renderable
     
     public override void SetDrawData(CommandList commandList, VertexLayoutDescription[] resources) => mesh.SetDrawData(commandList, resources);
 
-    public override void Draw(int pass, RenderingContext context)
+    public override void Draw(CommandBuffer buffer, int pass, RenderingContext context)
     {
-        CommandBuffer cmd = CommandBufferPool.Get("Mesh Renderable");
-
-        cmd.SetMaterial(Material, pass);
-        cmd.DrawSingle(this);
-
-        context.ExecuteCommandBuffer(cmd);
-
-        CommandBufferPool.Release(cmd);
+        buffer.SetMaterial(Material, pass);
+        buffer.DrawSingle(this);
     }
 }

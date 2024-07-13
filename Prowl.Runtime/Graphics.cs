@@ -1,11 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using Prowl.Runtime.RenderPipelines;
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using Veldrid;
 using Veldrid.StartupUtilities;
-using System.Runtime.InteropServices;
-using System;
-using System.Threading.Tasks;
-using Prowl.Runtime.RenderPipelines;
-using Prowl.Runtime.RenderPipelines;
 
 
 
@@ -20,7 +19,7 @@ namespace Prowl.Runtime
 
         public static ResourceFactory Factory => Device.ResourceFactory;
 
-        public static RenderPipeline ActivePipeline { get; private set; }
+        public static RenderPipelines.RenderPipeline ActivePipeline { get; private set; }
 
         public readonly static List<Renderable> Renderables = new();
 
@@ -57,7 +56,7 @@ namespace Prowl.Runtime
             Screen.Resize += (newSize) => Device.ResizeMainWindow((uint)newSize.x, (uint)newSize.y);
         }
 
-        private static void SetRenderPipeline(RenderPipeline renderPipeline)
+        private static void SetRenderPipeline(RenderPipelines.RenderPipeline renderPipeline)
         {
             if (ActivePipeline == renderPipeline)
                 return;
@@ -72,7 +71,7 @@ namespace Prowl.Runtime
             Renderables.Add(renderable);
         }
 
-        public static void StartFrame(RenderPipeline renderPipeline = null)
+        public static void StartFrame(RenderPipelines.RenderPipeline renderPipeline = null)
         {
             RenderTexture.UpdatePool();
             SetRenderPipeline(renderPipeline ?? Quality.GetQualitySettings().RenderPipeline.Res);
