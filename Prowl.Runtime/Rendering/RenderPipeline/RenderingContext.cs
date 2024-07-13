@@ -24,9 +24,11 @@ namespace Prowl.Runtime.RenderPipelines
             TargetFramebuffer = target;
         }
 
-        public void ExecuteCommandBuffer(CommandBuffer buffer)
+        public void ExecuteCommandBuffer(CommandBuffer buffer, bool clear = true)
         {
             internalCommandList.AddRange(buffer.Buffer);
+            if(clear)
+                buffer.Clear();
         }       
 
         private void InitializeRenderState(out CommandList commandList, out RenderState state)
