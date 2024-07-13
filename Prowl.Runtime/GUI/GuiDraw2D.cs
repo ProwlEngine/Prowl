@@ -115,6 +115,28 @@ namespace Prowl.Runtime.GUI
             => _drawList[currentZIndex].AddTriangle(a, b, c, color, thickness);
         public void DrawTriangleFilled(Vector2 a, Vector2 b, Vector2 c, Color color)
             => _drawList[currentZIndex].AddTriangleFilled(a, b, c, color);
+        public void DrawTriangle(Vector2 center, Vector2 dir, float width, Color color, float thickness = 1f)
+        {
+            Vector2 offset = -dir * width;
+            width *= 1.5f;
+            Vector2 normalizedDir = Vector2.Normalize(dir);
+            Vector2 right = new Vector2(-normalizedDir.y, normalizedDir.x);
+            Vector2 a = center + normalizedDir * width * 1.75f;
+            Vector2 b = center + right * width;
+            Vector2 c = center - right * width;
+            _drawList[currentZIndex].AddTriangle(a + offset, b + offset, c + offset, color, thickness);
+        }
+        public void DrawTriangleFilled(Vector2 center, Vector2 dir, float width, Color color)
+        {
+            Vector2 offset = -dir * width;
+            width *= 1.5f;
+            Vector2 normalizedDir = Vector2.Normalize(dir);
+            Vector2 right = new Vector2(-normalizedDir.y, normalizedDir.x);
+            Vector2 a = center + normalizedDir * width * 1.75f;
+            Vector2 b = center + right * width;
+            Vector2 c = center - right * width;
+            _drawList[currentZIndex].AddTriangleFilled(a + offset, b + offset, c + offset, color);
+        }
 
 
         #region DrawImage
