@@ -23,7 +23,7 @@ namespace Prowl.Runtime.NodeSystem
             }
         }
 
-        public Node? ConnectedNode => Connection?.ConnectedNode;
+        public Node? ConnectedNode => Connection?.node;
 
         public IO direction
         {
@@ -50,6 +50,7 @@ namespace Prowl.Runtime.NodeSystem
         public Node node { get { return _node; } }
         public bool IsDynamic { get { return _dynamic; } }
         public bool IsStatic { get { return !_dynamic; } }
+        public bool IsOnHeader { get { return _onHeader; } }
         public Type ValueType
         {
             get
@@ -78,6 +79,7 @@ namespace Prowl.Runtime.NodeSystem
         [SerializeField] private Node.ConnectionType _connectionType;
         [SerializeField] private Node.TypeConstraint _typeConstraint;
         [SerializeField] private bool _dynamic;
+        [SerializeField] private bool _onHeader;
         [SerializeField] public int InstanceID = 0;
 
         public NodePort() { } // For Serialization
@@ -95,12 +97,14 @@ namespace Prowl.Runtime.NodeSystem
                 {
                     _direction = IO.Input;
                     _connectionType = (attribs[i] as Node.InputAttribute).connectionType;
+                    _onHeader = (attribs[i] as Node.InputAttribute).onHeader;
                     _typeConstraint = (attribs[i] as Node.InputAttribute).typeConstraint;
                 }
                 else if (attribs[i] is Node.OutputAttribute)
                 {
                     _direction = IO.Output;
                     _connectionType = (attribs[i] as Node.OutputAttribute).connectionType;
+                    _onHeader = (attribs[i] as Node.OutputAttribute).onHeader;
                     _typeConstraint = (attribs[i] as Node.OutputAttribute).typeConstraint;
                 }
                 // Override ValueType of the Port
@@ -120,6 +124,7 @@ namespace Prowl.Runtime.NodeSystem
             ValueType = nodePort.valueType;
             _direction = nodePort.direction;
             _dynamic = nodePort._dynamic;
+            _onHeader = nodePort._onHeader;
             _connectionType = nodePort._connectionType;
             _typeConstraint = nodePort._typeConstraint;
             _node = node;
@@ -134,6 +139,7 @@ namespace Prowl.Runtime.NodeSystem
             _direction = direction;
             _node = node;
             _dynamic = true;
+            _onHeader = false;
             _connectionType = connectionType;
             _typeConstraint = typeConstraint;
             InstanceID = _node.graph.NextID;
@@ -357,7 +363,7 @@ namespace Prowl.Runtime.NodeSystem
             switch (input.typeConstraint)
             {
                 case Node.TypeConstraint.AssignableTo:
-                    if (!input.ValueType.IsAssignableTo(output.ValueType))
+                    if (!output.ValueType.IsAssignableTo(input.ValueType))
                         return false;
                     break;
                 case Node.TypeConstraint.Strict:

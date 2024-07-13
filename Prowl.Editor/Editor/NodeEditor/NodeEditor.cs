@@ -1,5 +1,6 @@
 ﻿using Prowl.Editor.Preferences;
 using Prowl.Editor.PropertyDrawers;
+using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.NodeSystem;
@@ -106,6 +107,19 @@ namespace Prowl.Editor
                         changed |= HandleNodeSelection(index, g, node);
 
                         changed |= HandleDraggingNode(g, node, offset);
+
+                        using (g.Node("In/Out").ExpandWidth().FitContentHeight().Layout(LayoutType.Row).ScaleChildren().Enter())
+                        {
+                            if (node.Inputs.Count() > 0)
+                            {
+                                changed |= DrawInputs(g, node, itemSize, true);
+                            }
+                            
+                            if (node.Outputs.Count() > 0)
+                            {
+                                changed |= DrawOutputs(g, node, itemSize, true);
+                            }
+                        }
                     }
                 }
 
@@ -124,12 +138,12 @@ namespace Prowl.Editor
                     {
                         if (node.Inputs.Count() > 0)
                         {
-                            changed |= DrawInputs(g, node, itemSize);
+                            changed |= DrawInputs(g, node, itemSize, false);
                         }
 
                         if (node.Outputs.Count() > 0)
                         {
-                            changed |= DrawOutputs(g, node, itemSize);
+                            changed |= DrawOutputs(g, node, itemSize, false);
                         }
                     }
 
@@ -278,7 +292,7 @@ namespace Prowl.Editor
         }
 
 
-        protected bool DrawOutputs(Gui g, Node node, double itemSize)
+        protected bool DrawOutputs(Gui g, Node node, double itemSize, bool headerOnly)
         {
             bool changed = false;
             int fieldIndex = 0;
@@ -286,23 +300,29 @@ namespace Prowl.Editor
             {
                 foreach (var port in node.Outputs)
                 {
+                    if (port.IsOnHeader != headerOnly)
+                        continue;
+
                     var width = g.CurrentNode.LayoutData.Rect.width;
                     var textwidth = Font.DefaultFont.CalcTextSize(port.fieldName, 0).x;
 
                     using (g.Node("OutputDummy", fieldIndex++).FitContentWidth().Height(itemSize).Enter())
                     {
                         // Draw Port Name
-                        var pos = g.CurrentNode.LayoutData.GlobalPosition;
-                        g.Draw2D.DrawText(port.fieldName, pos + new Vector2(width - textwidth - 15, 5));
+                        if (!headerOnly)
+                        {
+                            var pos = g.CurrentNode.LayoutData.GlobalPosition;
+                            g.Draw2D.DrawText(port.fieldName, pos + new Vector2(width - textwidth - 15, 5));
+                        }
 
-                        changed |= DrawPort(g, port, new Vector2(width - 10, 7));
+                        changed |= DrawPort(g, port, headerOnly ? new(width - 20, 3) : new (width - 10, 7), headerOnly);
                     }
                 }
             }
             return changed;
         }
 
-        protected bool DrawInputs(Gui g, Node node, double itemSize)
+        protected bool DrawInputs(Gui g, Node node, double itemSize, bool headerOnly)
         {
             bool changed = false;
             using (g.Node("In").FitContentHeight().Padding(5).Enter())
@@ -313,6 +333,9 @@ namespace Prowl.Editor
 
                 foreach (var port in node.Inputs)
                 {
+                    if (port.IsOnHeader != headerOnly)
+                        continue;
+
                     // Draw Backing
                     using (g.Node("InputBackingField", fieldIndex++).FitContentWidth().FitContentHeight().Top(y).Enter())
                     {
@@ -324,9 +347,12 @@ namespace Prowl.Editor
                     var width = g.CurrentNode.LayoutData.InnerRect.width;
                     using (g.Node("Input", fieldIndex++).ExpandWidth().Height(itemSize).Top(y).Layout(LayoutType.Row).ScaleChildren().Enter())
                     {
-                        var pos = g.CurrentNode.LayoutData.GlobalPosition;
-                        g.Draw2D.DrawText(port.fieldName, pos + new Vector2(5, 5));
-                        changed |= DrawPort(g, port, new Vector2(-10, 7));
+                        if (!headerOnly)
+                        {
+                            var pos = g.CurrentNode.LayoutData.GlobalPosition;
+                            g.Draw2D.DrawText(port.fieldName, pos + new Vector2(5, 5));
+                        }
+                        changed |= DrawPort(g, port, headerOnly ? new(0, 3) : new(-10, 7), headerOnly);
                         //g.Draw2D.DrawCircleFilled(pos + new Vector2(-5, 12), 5, EditorStylePrefs.RandomPastel(port.ValueType, 1f));
                     }
 
@@ -337,7 +363,7 @@ namespace Prowl.Editor
             return changed;
         }
 
-        protected bool DrawPort(Gui g, NodePort port, Vector2 center)
+        protected bool DrawPort(Gui g, NodePort port, Vector2 center, bool onHeader = false)
         {
             if (editor.draggingPort?.IsAlive == false)
                 editor.draggingPort = null;
@@ -379,17 +405,17 @@ namespace Prowl.Editor
                 }
 
 
-                if (editor.draggingPort != null)
+                if (onHeader)
                 {
-                    if ((editor.draggingPort.Target as NodePort)!.CanConnectTo(port)) // Draw Connection
-                        g.Draw2D.DrawCircleFilled(trueCenter, 5, col);
-                    else
-
-                        g.Draw2D.DrawCircleFilled(trueCenter, 5, col * 0.5f);
+                    g.Draw2D.DrawTriangleFilled(trueCenter, new Vector2(1, 0), 5, Color.white);
+                    //g.Draw2D.DrawTriangle(trueCenter, new Vector2(1, 0), 5, Color.white, 2);
                 }
                 else
                 {
-                    g.Draw2D.DrawCircleFilled(trueCenter, 5, col);
+                    var portCol = col;
+                    if (!(editor.draggingPort?.Target as NodePort)?.CanConnectTo(port) ?? false) // Draw Connection
+                        portCol *= 0.5f;
+                    g.Draw2D.DrawCircleFilled(trueCenter, 5, portCol);
                 }
 
                 if (port.IsOutput)
@@ -398,7 +424,7 @@ namespace Prowl.Editor
                     {
                         var a = trueCenter + new Vector2(50, 0);
                         var b = other.LastKnownPosition - new Vector2(50, 0);
-                        g.Draw2D.DrawBezierLine(trueCenter, a, other.LastKnownPosition, b, col, 2);
+                        g.Draw2D.DrawBezierLine(trueCenter, a, other.LastKnownPosition, b, onHeader ? Color.white : col, 2);
                     }
                 }
             }
@@ -411,6 +437,7 @@ namespace Prowl.Editor
         protected bool DrawBackingField(Gui g, Node node, int fieldIndex, NodePort port)
         {
             if (port.IsDynamic) return false;
+
             bool changed = false;
             var fieldInfo = GetFieldInfo(port.node.GetType(), port.fieldName);
             InputAttribute field = fieldInfo.GetCustomAttributes<InputAttribute>(true).FirstOrDefault();
@@ -430,6 +457,7 @@ namespace Prowl.Editor
             }
             return changed;
         }
+        
         protected static FieldInfo GetFieldInfo(Type type, string fieldName)
         {
             // If we can't find field in the first run, it's probably a private field in a base class.
@@ -491,7 +519,7 @@ namespace Prowl.Editor
 
                     changed |= HandleNodeSelection(index, g, node);
 
-                    changed |= HandleDraggingNode(g, node);
+                    changed |= HandleDraggingNode(g, node, offset);
                 }
 
                 using (g.Node("Desc").ExpandWidth().Padding(10).Layout(LayoutType.Column).Clip().Enter())
@@ -513,7 +541,7 @@ namespace Prowl.Editor
 
                     changed |= HandleNodeSelection(index, g, node);
 
-                    changed |= HandleDraggingNode(g, node);
+                    changed |= HandleDraggingNode(g, node, offset);
                 }
 
             }
@@ -661,7 +689,10 @@ namespace Prowl.Editor
                         // Draw Connection
                         var port = (draggingPort!.Target as NodePort)!;
                         var col = EditorStylePrefs.RandomPastel(port.ValueType, 1f, 0.2f);
-                        g.Draw2D.DrawLine(port.LastKnownPosition, g.PointerPos, col, 2);
+                        //g.Draw2D.DrawLine(port.LastKnownPosition, g.PointerPos, col, 2);
+                        var a = port.LastKnownPosition + (g.PointerPos.x > port.LastKnownPosition.x ? new Vector2(50, 0) : new Vector2(-50, 0));
+                        var b = g.PointerPos + (g.PointerPos.x > port.LastKnownPosition.x ? new Vector2(-50, 0) : new Vector2(50, 0));
+                        g.Draw2D.DrawBezierLine(port.LastKnownPosition, a, g.PointerPos, b, col, 2);
 
                         if (g.IsPointerUp(MouseButton.Left) || !draggingPort.IsAlive)
                             draggingPort = null;

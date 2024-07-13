@@ -255,18 +255,21 @@ namespace Prowl.Runtime.NodeSystem
         public class InputAttribute : Attribute
         {
             public ShowBackingValue backingValue;
-            public ConnectionType connectionType = ConnectionType.Override;
+            public ConnectionType connectionType;
             public bool dynamicPortList;
-            public TypeConstraint typeConstraint = TypeConstraint.AssignableTo;
+            public TypeConstraint typeConstraint;
+            public bool onHeader;
 
             /// <summary> Mark a serializable field as an input port. You can access this through <see cref="GetInputPort(string)"/> </summary>
             /// <param name="backingValue">Should we display the backing value for this port as an editor field? </param>
             /// <param name="connectionType">Should we allow multiple connections? </param>
             /// <param name="typeConstraint">Constrains which input connections can be made to this port </param>
+            /// <param name="onHeader">Display this port on the node's header </param>
             /// <param name="dynamicPortList">If true, will display a reorderable list of inputs instead of a single port. Will automatically add and display values for lists and arrays </param>
-            public InputAttribute(ShowBackingValue backingValue = ShowBackingValue.Unconnected, ConnectionType connectionType = ConnectionType.Override, TypeConstraint typeConstraint = TypeConstraint.AssignableTo, bool dynamicPortList = false)
+            public InputAttribute(ShowBackingValue backingValue = ShowBackingValue.Unconnected, ConnectionType connectionType = ConnectionType.Override, TypeConstraint typeConstraint = TypeConstraint.AssignableTo, bool onHeader = false, bool dynamicPortList = false)
             {
                 this.backingValue = backingValue;
+                this.onHeader = onHeader;
                 this.connectionType = connectionType;
                 this.dynamicPortList = dynamicPortList;
                 this.typeConstraint = typeConstraint;
@@ -277,20 +280,20 @@ namespace Prowl.Runtime.NodeSystem
         [AttributeUsage(AttributeTargets.Field)]
         public class OutputAttribute : Attribute
         {
-            public ShowBackingValue backingValue;
             public ConnectionType connectionType;
             public bool dynamicPortList;
-            public TypeConstraint typeConstraint = TypeConstraint.AssignableTo;
+            public TypeConstraint typeConstraint;
+            public bool onHeader;
 
             /// <summary> Mark a serializable field as an output port. You can access this through <see cref="GetOutputPort(string)"/> </summary>
-            /// <param name="backingValue">Should we display the backing value for this port as an editor field? </param>
             /// <param name="connectionType">Should we allow multiple connections? </param>
             /// <param name="typeConstraint">Constrains which input connections can be made from this port </param>
+            /// <param name="onHeader">Display this port on the node's header </param>
             /// <param name="dynamicPortList">If true, will display a reorderable list of outputs instead of a single port. Will automatically add and display values for lists and arrays </param>
-            public OutputAttribute(ShowBackingValue backingValue = ShowBackingValue.Never, ConnectionType connectionType = ConnectionType.Override, TypeConstraint typeConstraint = TypeConstraint.AssignableTo, bool dynamicPortList = false)
+            public OutputAttribute(ConnectionType connectionType = ConnectionType.Multiple, TypeConstraint typeConstraint = TypeConstraint.None, bool onHeader = false, bool dynamicPortList = false)
             {
-                this.backingValue = backingValue;
                 this.connectionType = connectionType;
+                this.onHeader = onHeader;
                 this.dynamicPortList = dynamicPortList;
                 this.typeConstraint = typeConstraint;
             }
