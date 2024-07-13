@@ -32,9 +32,9 @@ namespace Prowl.Runtime.GUI
                 g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, style.BorderColor, style.BorderThickness, style.Roundness);
 
                 if (label == null)
-                    g.Draw2D.DrawText(Items[ItemIndex], g.CurrentNode.LayoutData.InnerRect);
+                    g.Draw2D.DrawText(Items[ItemIndex], g.CurrentNode.LayoutData.InnerRect, false);
                 else
-                    g.Draw2D.DrawText(label, g.CurrentNode.LayoutData.InnerRect);
+                    g.Draw2D.DrawText(label, g.CurrentNode.LayoutData.InnerRect, false);
 
                 var popupWidth = g.CurrentNode.LayoutData.Rect.width;
                 if (interact.TakeFocus())
@@ -55,7 +55,7 @@ namespace Prowl.Runtime.GUI
 
                     popupWidth = Math.Max(popupWidth, longestText + 20);
 
-                    using (popupNode.Width(popupWidth).Height(Items.Length * style.ItemSize).Layout(LayoutType.Column).Enter())
+                    using (popupNode.Width(popupWidth).Height(Items.Length * style.ItemSize).MaxHeight(250).Scroll().Layout(LayoutType.Column).Clip().Enter())
                     {
                         for (var Index = 0; Index < Items.Length; ++Index)
                         {
