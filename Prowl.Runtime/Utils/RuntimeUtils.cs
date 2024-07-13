@@ -88,10 +88,14 @@ namespace Prowl.Runtime
             // Add space before each Capital letter (except the first)
             for (int i = 1; i < label.Length; i++)
             {
-                if (char.IsUpper(label[i]))
+                if (char.IsUpper(label[i]) && !char.IsUpper(label[i - 1]))
                 {
                     result.Append(' ');  // Add space
                     result.Append(label[i]);  // Append the current uppercase character
+                }
+                else if(label[i] == '_')
+                {
+                    continue;
                 }
                 else
                 {
