@@ -8,6 +8,8 @@ namespace Prowl.Editor.PropertyDrawers
     [Drawer(typeof(EngineObject))]
     public class EngineObject_PropertyDrawer : PropertyDrawer
     {
+        public override double MinWidth => 125;
+
         public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? targetValue)
         {
             gui.CurrentNode.Layout(LayoutType.Row).ScaleChildren();

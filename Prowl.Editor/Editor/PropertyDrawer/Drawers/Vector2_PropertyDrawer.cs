@@ -6,6 +6,8 @@ namespace Prowl.Editor.PropertyDrawers
     [Drawer(typeof(Vector2))]
     public class Vector2_PropertyDrawer : PropertyDrawer
     {
+        public override double MinWidth => 125;
+
         public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value)
         {
             gui.CurrentNode.Layout(LayoutType.Row).ScaleChildren();

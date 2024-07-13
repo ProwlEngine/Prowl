@@ -10,6 +10,7 @@ namespace Prowl.Editor.PropertyDrawers
     [Drawer(typeof(IAssetRef))]
     public class IAssetRef_PropertyDrawer : PropertyDrawer
     {
+        public override double MinWidth => 125;
         public static Guid assignedGUID;
         public static ushort assignedFileID;
         public static ulong guidAssignedToID = 0;
