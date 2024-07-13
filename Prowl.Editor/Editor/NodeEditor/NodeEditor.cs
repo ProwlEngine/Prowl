@@ -370,7 +370,7 @@ namespace Prowl.Editor
             bool changed = false;
             var fieldInfo = GetFieldInfo(port.node.GetType(), port.fieldName);
             InputAttribute field = fieldInfo.GetCustomAttributes<InputAttribute>(true).FirstOrDefault();
-            bool showBacking = true;
+            bool showBacking = false;
             if (field.backingValue != ShowBackingValue.Never)
                 showBacking = field.backingValue == ShowBackingValue.Always || (field.backingValue == ShowBackingValue.Unconnected && !port.IsConnected);
 
