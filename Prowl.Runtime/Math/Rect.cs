@@ -69,7 +69,15 @@ namespace Prowl.Runtime
                 Max.y = value + height;
             }
         }
-        public readonly Vector2 Position => Min;
+        public Vector2 Position
+        {
+            get => Min;
+            set
+            {
+                Max += value - Min;
+                Min = value;
+            }
+        }
         public readonly Vector2 Center => new((Min.x + Max.x) / 2, (Min.y + Max.y) / 2);
 
         public double width {
