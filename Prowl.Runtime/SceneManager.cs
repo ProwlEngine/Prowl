@@ -139,7 +139,7 @@ public static class SceneManager
         PostFixedUpdate?.Invoke();
     }
 
-    public static bool Draw(Veldrid.Framebuffer? frameBuffer = null)
+    public static bool Draw(RenderTexture? target = null)
     {
         var Cameras = AllGameObjects.SelectMany(x => x.GetComponentsInChildren<Camera>()).ToList();
 
@@ -148,7 +148,7 @@ public static class SceneManager
         if (Cameras.Count == 0)
             return false;
 
-        Graphics.Render(Cameras.ToArray(), frameBuffer ?? Graphics.ScreenFramebuffer);
+        Graphics.Render(Cameras.ToArray(), target ?? Graphics.ScreenTarget);
         return true;
     }
 

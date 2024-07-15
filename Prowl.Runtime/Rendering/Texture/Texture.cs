@@ -56,6 +56,14 @@ namespace Prowl.Runtime
             RecreateInternalTexture(description);
         }
 
+        internal Texture(Veldrid.Texture source, TextureType type) : base(source.Name)
+        {
+            if (source.Type != type)
+                throw new Exception($"Invalid texture type {source.Type}. Must be {type}");
+
+            CreateFromExisting(source);
+        }
+
         public override void OnDispose()
         {
             InternalTexture?.Dispose();
@@ -121,7 +129,52 @@ namespace Prowl.Runtime
             };
             
             if (description.Usage.HasFlag(TextureUsage.Sampled) || description.Usage.HasFlag(TextureUsage.Storage))
-                TextureView = Graphics.Factory.CreateTextureView(ref viewDescription);
+                TextureView = Graphics.Factory.CreateTextureView(in viewDescription);
+            else
+                TextureView = null;
+
+            IsMipmapped = false;
+        }
+
+        protected void CreateFromExisting(Veldrid.Texture resource)
+        {
+            OnDispose();
+
+            InternalTexture = resource;
+            IsMipmapped = false;
+
+            TextureViewDescription viewDescription = new()
+            {
+                ArrayLayers = resource.ArrayLayers,
+                BaseArrayLayer = 0,
+                MipLevels = resource.MipLevels,
+                BaseMipLevel = 0,
+                Format = resource.Format,
+                Target = InternalTexture
+            };
+            
+            if (resource.Usage.HasFlag(TextureUsage.Sampled) || resource.Usage.HasFlag(TextureUsage.Storage))
+                TextureView = Graphics.Factory.CreateTextureView(in viewDescription);
+            else
+                TextureView = null;
+
+            IsMipmapped = false;
+        }
+
+        internal void SetNativeResource(Veldrid.Texture resource)
+        {
+            TextureViewDescription viewDescription = new()
+            {
+                ArrayLayers = resource.ArrayLayers,
+                BaseArrayLayer = 0,
+                MipLevels = resource.MipLevels,
+                BaseMipLevel = 0,
+                Format = resource.Format,
+                Target = InternalTexture
+            };
+            
+            if (resource.Usage.HasFlag(TextureUsage.Sampled) || resource.Usage.HasFlag(TextureUsage.Storage))
+                TextureView = Graphics.Factory.CreateTextureView(in viewDescription);
             else
                 TextureView = null;
 

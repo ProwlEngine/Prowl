@@ -82,7 +82,7 @@ public static class EditorGuiManager
 
         CommandBuffer commandBuffer = CommandBufferPool.Get("GUI Command Buffer");
 
-        commandBuffer.SetRenderTarget(Graphics.ScreenFramebuffer);
+        commandBuffer.SetRenderTarget(Graphics.ScreenTarget);
         commandBuffer.ClearRenderTarget(true, true, Color.black, depth: 1.0f);
 
         Gui.ProcessFrame(commandBuffer, screenRect, (float)scale, framebufferAndInputScale, EditorPreferences.Instance.AntiAliasing, (g) => {

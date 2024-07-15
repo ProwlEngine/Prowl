@@ -46,7 +46,7 @@ namespace Prowl.Runtime.RenderPipelines
         {
             // Create and schedule a command to clear the current render target
             var rootBuffer = new CommandBuffer();
-            rootBuffer.SetRenderTarget(context.TargetFramebuffer);
+            rootBuffer.SetRenderTarget(context.TargetTexture);
             rootBuffer.ClearRenderTarget(true, true, Color.black);
 
             context.ExecuteCommandBuffer(rootBuffer);

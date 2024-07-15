@@ -98,7 +98,7 @@ namespace Prowl.Runtime
                 ),
 
                 PrimitiveTopology = passDesc.topology,
-                Outputs = passDesc.output ?? Graphics.ScreenFramebuffer.OutputDescription,
+                Outputs = passDesc.output ?? Graphics.ScreenTarget.Framebuffer.OutputDescription,
 
                 ShaderSet = new ShaderSetDescription(
                     vertexLayouts: passDesc.variant.VertexInputs,

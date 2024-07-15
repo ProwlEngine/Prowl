@@ -147,7 +147,7 @@ public class GameWindow : EditorWindow
             }
 
             if (GeneralPreferences.Instance.AutoRefreshGameView || !hasFrame)
-                if (!SceneManager.Draw(RenderTarget.Framebuffer))
+                if (!SceneManager.Draw(RenderTarget))
                 {
                     gui.Draw2D.DrawRect(innerRect, Color.red, 2);
                     gui.Draw2D.DrawText(Font.DefaultFont, "No Camera found", 40f, innerRect, Color.red);

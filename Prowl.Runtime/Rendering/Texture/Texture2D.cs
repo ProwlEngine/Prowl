@@ -62,6 +62,9 @@ namespace Prowl.Runtime
             }
         ) { }
 
+        public Texture2D(Veldrid.Texture resource) : base(resource, TextureType.Texture2D)
+        { }
+
         /// <summary>
         /// Sets the data of an area of the <see cref="Texture2D"/>.
         /// </summary>

@@ -39,8 +39,8 @@ namespace Prowl.Runtime
         {
             this.width = texture.Width;
             this.height = texture.Height;
-            this.depthBufferFormat = texture.DepthBufferFormat;
-            this.colorBufferFormats = texture.ColorBufferFormats;
+            this.depthBufferFormat = texture.DepthBuffer?.Format;
+            this.colorBufferFormats = texture.ColorBuffers.Select(x => x.Format).ToArray();
             this.sampled = texture.Sampled;
             this.enableRandomWrite = texture.RandomWriteEnabled;
             this.sampleCount = texture.SampleCount;
@@ -57,7 +57,7 @@ namespace Prowl.Runtime
             if (depthBufferFormat != key.depthBufferFormat)
                 return false;
 
-            if ((colorBufferFormats == null) != (key.colorBufferFormats == null))
+            if (colorBufferFormats == null != (key.colorBufferFormats == null))
                 return false;
 
             if (!colorBufferFormats.SequenceEqual(key.colorBufferFormats))
@@ -98,19 +98,19 @@ namespace Prowl.Runtime
     public sealed class RenderTexture : EngineObject, ISerializable
     {
         // Since Veldrid does not provide any methods to check how many color attachments a framebuffer supports, we can cap it ourselves to a reasonable value.
-        private int colorAttachmentLimit = 8;
+        const int colorAttachmentLimit = 8;
 
         public Framebuffer Framebuffer { get; private set; }
 
-        public PixelFormat[] ColorBufferFormats => ColorBuffers.Select(x => x.Format).ToArray();
         public Texture2D[] ColorBuffers { get; private set; }
 
-        public PixelFormat? DepthBufferFormat => DepthBuffer?.Format;
         public Texture2D DepthBuffer { get; private set; }
 
         public uint Width { get; private set; }
         public uint Height { get; private set; }
 
+        public bool TargetOnly { get; private set; }
+        
         public bool Sampled { get; private set; }
         public bool RandomWriteEnabled { get; private set; }
 
@@ -127,6 +127,26 @@ namespace Prowl.Runtime
             description.sampleCount
         )
         { }
+
+        internal RenderTexture(Framebuffer framebuffer)
+        {
+            this.Width = framebuffer.Width;
+            this.Height = framebuffer.Height;
+            this.Sampled = false;
+            this.RandomWriteEnabled = false;
+            this.SampleCount = TextureSampleCount.Count1;
+            this.TargetOnly = true;
+
+            if (framebuffer.DepthTarget != null)
+                this.DepthBuffer = new Texture2D(framebuffer.DepthTarget.Value.Target);
+
+            this.ColorBuffers = new Texture2D[framebuffer.ColorTargets.Length];
+
+            for (int i = 0; i < this.ColorBuffers.Length; i++)
+                this.ColorBuffers[i] = new Texture2D(framebuffer.ColorTargets[i].Target);
+
+            this.Framebuffer = framebuffer;
+        }
 
         /// <summary>
         /// Creates a new RenderTexture object
@@ -243,20 +263,30 @@ namespace Prowl.Runtime
             typeof(RenderTexture).GetConstructor(param).Invoke(this, values);
         }
 
+        struct TextureFormatComparer : IEqualityComparer<Texture2D>
+        {
+            public readonly bool Equals(Texture2D? x, Texture2D? y)
+            {
+                return x.Format == y.Format;
+            }
+
+            public readonly int GetHashCode([DisallowNull] Texture2D obj)
+            {
+                return obj.Format.GetHashCode();
+            }
+        }
+
         public bool FormatEquals(RenderTexture other, bool compareMS = true)
         {
             if (Width != other.Width || Height != other.Height)
                 return false;
 
-            if (DepthBufferFormat != other.DepthBufferFormat)
+            if (DepthBuffer.Format != other.DepthBuffer.Format)
                 return false;
 
-            if ((ColorBufferFormats == null) != (other.ColorBufferFormats == null))
+            if (!ColorBuffers.SequenceEqual(other.ColorBuffers, new TextureFormatComparer()))
                 return false;
 
-            if (!ColorBufferFormats.SequenceEqual(other.ColorBufferFormats))
-                return false;
-            
             if (Sampled != other.Sampled)
                 return false;
             

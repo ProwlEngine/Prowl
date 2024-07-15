@@ -8,7 +8,7 @@ namespace Prowl.Runtime.RenderPipelines
 {
     public class RenderingContext
     {
-        public readonly Framebuffer TargetFramebuffer;
+        public readonly RenderTexture TargetTexture;
         public Camera Camera => currentCamera;
         public List<Renderable> Renderables;
 
@@ -18,10 +18,10 @@ namespace Prowl.Runtime.RenderPipelines
         public Matrix4x4 Mat_V;
         public Matrix4x4 Mat_P;
 
-        public RenderingContext(List<Renderable> renderables, Framebuffer target)
+        public RenderingContext(List<Renderable> renderables, RenderTexture target)
         {
             Renderables = renderables;
-            TargetFramebuffer = target;
+            TargetTexture = target;
         }
 
         public void ExecuteCommandBuffer(CommandBuffer buffer, bool clear = true)
@@ -42,8 +42,8 @@ namespace Prowl.Runtime.RenderPipelines
             commandList = Graphics.GetCommandList();
             state = new RenderState();
 
-            state.SetFramebuffer(TargetFramebuffer);
-            commandList.SetFramebuffer(TargetFramebuffer);
+            state.SetFramebuffer(TargetTexture.Framebuffer);
+            commandList.SetFramebuffer(TargetTexture.Framebuffer);
 
             for (int i = 0; i < internalCommandList.Count; i++)
             {
@@ -80,20 +80,17 @@ namespace Prowl.Runtime.RenderPipelines
             renderStateToExecute.Dispose();
         }
 
-        public Framebuffer SetupTargetCamera(Camera cam, out uint width, out uint height)
+        public RenderTexture SetupTargetCamera(Camera cam, out uint width, out uint height)
         {
             currentCamera = cam;
 
-            Framebuffer target = TargetFramebuffer;
-            width = TargetFramebuffer.Width;
-            height = TargetFramebuffer.Height;
+            RenderTexture target = TargetTexture;
 
             if (cam.Target.IsAvailable)
-            {
-                width = cam.Target.Res!.Width;
-                height = cam.Target.Res!.Height;
-                target = cam.Target.Res!.Framebuffer;
-            }
+                target = cam.Target.Res!;
+            
+            width = target.Width;
+            height = target.Height;
 
             Mat_V = cam.View;
             Mat_P = cam.GetProjectionMatrix(width, height);

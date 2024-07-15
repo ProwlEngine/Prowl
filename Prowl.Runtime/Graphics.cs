@@ -14,12 +14,23 @@ namespace Prowl.Runtime
     {
         public static GraphicsDevice Device { get; internal set; }
 
-        public static Framebuffer ScreenFramebuffer => Device.SwapchainFramebuffer;
-        public static Vector2Int ScreenResolution => new Vector2(ScreenFramebuffer.Width, ScreenFramebuffer.Height);
+        private static RenderTexture _screenTarget;
+        public static RenderTexture ScreenTarget 
+        {
+            get
+            {
+                if (_screenTarget == null || _screenTarget.Framebuffer != Device.SwapchainFramebuffer)
+                    _screenTarget = new RenderTexture(Device.SwapchainFramebuffer);
+                
+                return _screenTarget;
+            }
+        }
+
+        public static Vector2Int ScreenResolution => new Vector2(ScreenTarget.Width, ScreenTarget.Height);
 
         public static ResourceFactory Factory => Device.ResourceFactory;
 
-        public static RenderPipelines.RenderPipeline ActivePipeline { get; private set; }
+        public static RenderPipeline ActivePipeline { get; private set; }
 
         public readonly static List<Renderable> Renderables = new();
 
@@ -56,7 +67,7 @@ namespace Prowl.Runtime
             Screen.Resize += (newSize) => Device.ResizeMainWindow((uint)newSize.x, (uint)newSize.y);
         }
 
-        private static void SetRenderPipeline(RenderPipelines.RenderPipeline renderPipeline)
+        private static void SetRenderPipeline(RenderPipeline renderPipeline)
         {
             if (ActivePipeline == renderPipeline)
                 return;
@@ -71,18 +82,18 @@ namespace Prowl.Runtime
             Renderables.Add(renderable);
         }
 
-        public static void StartFrame(RenderPipelines.RenderPipeline renderPipeline = null)
+        public static void StartFrame(RenderPipeline renderPipeline = null)
         {
             RenderTexture.UpdatePool();
             SetRenderPipeline(renderPipeline ?? Quality.GetQualitySettings().RenderPipeline.Res);
         }
 
-        public static void Render(Camera[] cameras, Framebuffer targetFramebuffer)
+        public static void Render(Camera[] cameras, RenderTexture targetTexture)
         {
             if (ActivePipeline == null)
                 return;
             
-            RenderingContext context = new(Renderables, targetFramebuffer);
+            RenderingContext context = new(Renderables, targetTexture);
 
             ActivePipeline.Render(context, cameras);
         }
@@ -165,7 +176,7 @@ namespace Prowl.Runtime
         {
             bool glOrGles = Device.BackendType == GraphicsBackend.OpenGL || Device.BackendType == GraphicsBackend.OpenGLES;
 
-            PixelFormat swapchainFormat = ScreenFramebuffer.OutputDescription.ColorAttachments[0].Format;
+            PixelFormat swapchainFormat = Device.SwapchainFramebuffer.ColorTargets[0].Target.Format;
             bool swapchainIsSrgb = swapchainFormat == PixelFormat.B8_G8_R8_A8_UNorm_SRgb
                 || swapchainFormat == PixelFormat.R8_G8_B8_A8_UNorm_SRgb;
 
