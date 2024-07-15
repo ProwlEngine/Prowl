@@ -152,6 +152,9 @@ namespace Prowl.Runtime.RenderPipelines
 
         public SortedList<double, List<Renderable>> SortRenderables(List<Renderable> cullingResults, SortMode sortingMode)
         {
+            if(cullingResults == null || cullingResults.Count == 0)
+                return new SortedList<double, List<Renderable>>();
+
             SortedList<double, List<Renderable>> sorted;
 
             if (sortingMode == SortMode.FrontToBack)
