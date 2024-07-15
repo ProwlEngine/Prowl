@@ -61,7 +61,7 @@ namespace Prowl.Runtime.RenderPipelines
 
         private RenderPipeline renderGraph => (RenderPipeline)graph;
 
-        [Input, SerializeIgnore] public double Scale = 1.0f;
+        [Input] public double Scale = 1.0f;
 
         [Output, SerializeIgnore] public NodeRenderTexture RT;
 
