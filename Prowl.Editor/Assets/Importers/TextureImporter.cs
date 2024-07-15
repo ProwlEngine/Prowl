@@ -4,10 +4,10 @@ using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Assets
 {
-    [Importer("FileIcon.png", typeof(Texture2D), ".png", ".bmp", ".jpg", ".jpeg", ".qoi", ".psd", ".tga", ".dds", ".hdr", ".ktx", ".pkm", ".pvr")]
+    [Importer("FileIcon.png", typeof(Texture2D), ".png", ".bmp", ".jpg", ".jpeg", ".tga", ".dds", ".pbm", ".webp", ".tif", ".tiff")]
     public class TextureImporter : ScriptedImporter
     {
-        public static readonly string[] Supported = { ".png", ".bmp", ".jpg", ".jpeg", ".qoi", ".psd", ".tga", ".dds", ".hdr", ".ktx", ".pkm", ".pvr" };
+        public static readonly string[] Supported = { ".png", ".bmp", ".jpg", ".jpeg", ".tga", ".dds", ".pbm", ".webp", ".tif", ".tiff" };
 
         public bool generateMipmaps = true;
 
