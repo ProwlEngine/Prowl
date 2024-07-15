@@ -1,4 +1,5 @@
-﻿using System;
+﻿using SharpGen.Runtime.Win32;
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 
@@ -163,7 +164,15 @@ namespace Prowl.Runtime.NodeSystem
         public object GetOutputValue()
         {
             if (direction == IO.Input) return null;
-            return node.GetValue(this);
+            try
+            {
+                return node.GetValue(this);
+            }
+            catch (Exception e)
+            {
+                node.Error = "Error: " + e.Message;
+                return null;
+            }
         }
 
         /// <summary> Return the output value of the first connected port. Returns null if none found or invalid.</summary>
