@@ -42,7 +42,8 @@ namespace Prowl.Runtime.RenderPipelines
         public override string Title => "On Pipeline";
         public override float Width => 150;
 
-        public string Event = "Geometry";
+        [Tooltip("Default Pipelines are 'Main' & 'Shadow'")]
+        public string Name = "Main";
 
         public override void Execute()
         {

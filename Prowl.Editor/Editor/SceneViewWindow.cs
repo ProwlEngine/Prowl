@@ -95,7 +95,7 @@ public class SceneViewWindow : EditorWindow
 
         SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
 
-        RenderingContext context = new RenderingContext(Graphics.Renderables, RenderTarget);
+        RenderingContext context = new RenderingContext("Main", Graphics.Renderables, RenderTarget);
         
         Graphics.Render([ Cam.GetData() ], context);
 

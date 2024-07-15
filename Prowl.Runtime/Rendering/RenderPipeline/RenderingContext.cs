@@ -11,6 +11,7 @@ namespace Prowl.Runtime.RenderPipelines
         public readonly RenderTexture TargetTexture;
         public CameraData Camera => currentCamera;
         public List<Renderable> Renderables;
+        public string PipelineName;
 
 
         private List<RenderingCommand> internalCommandList = new();
@@ -18,10 +19,11 @@ namespace Prowl.Runtime.RenderPipelines
         public Matrix4x4 Mat_V;
         public Matrix4x4 Mat_P;
 
-        public RenderingContext(List<Renderable> renderables, RenderTexture target)
+        public RenderingContext(string pipelineName, List<Renderable> renderables, RenderTexture target)
         {
             Renderables = renderables;
             TargetTexture = target;
+            PipelineName = pipelineName;
         }
 
         public void ExecuteCommandBuffer(CommandBuffer buffer, bool clear = true)

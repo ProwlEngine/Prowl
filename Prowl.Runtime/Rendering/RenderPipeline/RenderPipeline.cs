@@ -2,6 +2,7 @@
 using Prowl.Runtime.Utils;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Prowl.Runtime.RenderPipelines
 {
@@ -83,8 +84,14 @@ namespace Prowl.Runtime.RenderPipelines
                     //var outputNode = GetNode<OutputNode>();
                     //var outputTex = (outputNode.GetValue(null) as Texture2D) ?? throw new Exception($"Output Node must have a valid Texture2D!");
 
-                    var pipelineNode = GetNode<OnPipelineNode>();
-                    pipelineNode?.Execute();
+                    var pipelineNode = GetNodes<OnPipelineNode>().FirstOrDefault(n => n.Name == context.PipelineName);
+                    if(pipelineNode == null)
+                    {
+                        Debug.LogError($"Pipeline Node {context.PipelineName} not found!");
+                        return;
+                    }
+
+                    pipelineNode.Execute();
 
                     // blit result into target
                     //cmd.SetRenderTarget(target);

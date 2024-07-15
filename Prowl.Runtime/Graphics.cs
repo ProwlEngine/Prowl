@@ -93,7 +93,7 @@ namespace Prowl.Runtime
             if (ActivePipeline == null)
                 return;
             
-            RenderingContext context = new(Renderables, targetTexture);
+            RenderingContext context = new("Main", Renderables, targetTexture);
 
             ActivePipeline.Render(context, cameras);
         }
