@@ -166,3 +166,121 @@ Pass "TestShader"
 		}
 	ENDPROGRAM
 }
+
+Pass "Shadow"
+{
+    Tags { "RenderOrder" = "Shadow" }
+
+    // Rasterizer culling mode
+    Cull Front
+
+	Inputs
+	{
+		VertexInput 
+        {
+            Position // Input location 0
+            UV0 // Input location 1
+            Normals // Input location 2
+            Tangents // Input location 3
+            Colors // Input location 4
+        }
+        
+        // Set 0
+        Set
+        {
+            // Binding 0
+            Buffer DefaultUniforms
+            {
+                Mat_V Matrix4x4
+                Mat_P Matrix4x4
+                Mat_ObjectToWorld Matrix4x4
+                Mat_WorldToObject Matrix4x4
+                Mat_MVP Matrix4x4
+				Time Float
+            }
+
+			SampledTexture _AlbedoTex
+
+            Buffer StandardUniforms
+            {
+				_AlphaClip Float
+            }
+        }
+	}
+
+	PROGRAM VERTEX
+		layout(location = 0) in vec3 vertexPosition;
+		layout(location = 1) in vec2 vertexTexCoord;
+		layout(location = 2) in vec3 vertexNormal;
+		layout(location = 3) in vec3 vertexTangent;
+		layout(location = 4) in vec4 vertexColors;
+		
+		layout(set = 0, binding = 0, std140) uniform DefaultUniforms
+		{
+			mat4 Mat_V;
+			mat4 Mat_P;
+			mat4 Mat_ObjectToWorld;
+			mat4 Mat_WorldToObject;
+			mat4 Mat_MVP;
+			float Time;
+		};
+
+		layout(location = 0) out vec2 TexCoords;
+		layout(location = 1) out vec4 VertColor;
+		layout(location = 2) out vec3 FragPos;
+		layout(location = 3) out mat3 TBN;
+		
+		void main() 
+		{
+		 	vec4 viewPos = Mat_V * Mat_ObjectToWorld * vec4(vertexPosition, 1.0);
+		    FragPos = viewPos.xyz; 
+
+			gl_Position = Mat_MVP * vec4(vertexPosition, 1.0);
+			
+			TexCoords = vertexTexCoord;
+			VertColor = vertexColors;
+
+			mat3 normalMatrix = transpose(inverse(mat3(Mat_ObjectToWorld)));
+			
+			vec3 T = normalize(vec3(Mat_ObjectToWorld * vec4(vertexTangent, 0.0)));
+			vec3 B = normalize(vec3(Mat_ObjectToWorld * vec4(cross(vertexNormal, vertexTangent), 0.0)));
+			vec3 N = normalize(vec3(Mat_ObjectToWorld * vec4(vertexNormal, 0.0)));
+		    TBN = mat3(T, B, N);
+		}
+	ENDPROGRAM
+
+	PROGRAM FRAGMENT	
+		layout(location = 0) in vec2 TexCoords;
+		layout(location = 1) in vec4 VertColor;
+		layout(location = 2) in vec3 FragPos;
+		layout(location = 3) in mat3 TBN;
+		
+		layout (location = 0) out float fragmentdepth;
+		
+		layout(set = 0, binding = 0, std140) uniform DefaultUniforms
+		{
+			mat4 Mat_V;
+			mat4 Mat_P;
+			mat4 Mat_ObjectToWorld;
+			mat4 Mat_WorldToObject;
+			mat4 Mat_MVP;
+			float Time;
+		};
+
+		layout(set = 0, binding = 1) uniform texture2D _AlbedoTex;
+		layout(set = 0, binding = 2) uniform sampler _AlbedoTexSampler;
+		
+		
+		layout(set = 0, binding = 3, std140) uniform StandardUniforms
+		{
+			float _AlphaClip;
+		};
+		
+		void main()
+		{
+			// Albedo & Cutout
+			vec4 baseColor = texture(sampler2D(_AlbedoTex, _AlbedoTexSampler), TexCoords);// * _MainColor.rgb;
+			if(baseColor.w < _AlphaClip) discard;
+		}
+	ENDPROGRAM
+}
