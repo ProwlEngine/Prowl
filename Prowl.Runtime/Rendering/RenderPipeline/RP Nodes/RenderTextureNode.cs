@@ -5,7 +5,7 @@ using Veldrid;
 
 namespace Prowl.Runtime.RenderPipelines
 {
-    public class RTBuffer : ISerializationCallbackReceiver
+    public struct RTBuffer : ISerializationCallbackReceiver
     {
         public enum Type { Color, Normals, Position, Surface, Emissive, ObjectID, Velocity, Custom }
         public Type type;
@@ -30,14 +30,22 @@ namespace Prowl.Runtime.RenderPipelines
         private RTBuffer[] buffers;
         internal bool HasBeenReleased;
 
+        public bool TargetOnly => RT.TargetOnly;
+
         public RenderTexture RenderTexture => RT;
 
         public RTBuffer[] Buffers => buffers;
 
         public NodeRenderTexture(RenderTexture RT, RTBuffer[] buffers) { this.RT = RT; this.buffers = buffers; }
+        public NodeRenderTexture(RenderTexture RT) 
+        { 
+            this.RT = RT; 
+        }
 
         public Texture2D GetTexture(RTBuffer.Type type)
         {
+            if(TargetOnly) throw new Exception("Cannot get a buffer from a TargetOnly RenderTexture!");
+
             var index = Array.FindIndex(buffers, b => b.type == type);
             if (index == -1)
                 return null;
@@ -79,6 +87,8 @@ namespace Prowl.Runtime.RenderPipelines
                 ColorFormats = [new RTBuffer() { format = PixelFormat.R8_G8_B8_A8_UNorm, type = RTBuffer.Type.Color }];
 
             Scale = Math.Max(0.01f, Scale);
+
+            Error = "";
 
             if (ColorFormats.Length > 8)
             {

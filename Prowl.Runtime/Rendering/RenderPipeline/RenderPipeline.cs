@@ -1,14 +1,11 @@
 ﻿using Prowl.Runtime.NodeSystem;
-using Prowl.Runtime.RenderPipelines;
 using Prowl.Runtime.Utils;
 using System;
 using System.Collections.Generic;
-using Veldrid;
 
 namespace Prowl.Runtime.RenderPipelines
 {
     [CreateAssetMenu("GraphRenderPipeline")]
-    [RequireNode(typeof(OutputNode))]
     public class RenderPipeline : NodeGraph
     {
         public override string[] NodeCategories => [
@@ -27,7 +24,7 @@ namespace Prowl.Runtime.RenderPipelines
         public Camera CurrentCamera { get; private set; }
         public RenderingContext Context { get; private set; }
 
-        public Texture2D Result { get; internal set; }
+        public NodeRenderTexture Target { get; internal set; }
 
         private Material blitMat;
 
@@ -58,41 +55,32 @@ namespace Prowl.Runtime.RenderPipelines
                 try
                 {
                     // Update the value of built-in shader variables, based on the current Camera
-                    var target = context.SetupTargetCamera(cam, out var width, out var height);
+                    Target = new NodeRenderTexture(context.SetupTargetCamera(cam, out var width, out var height));
+                    Resolution = new Vector2(width, height);
+                    CurrentCamera = cam;
+
 
                     var cmd = CommandBufferPool.Get("Camera Buffer");
-                    cmd.SetRenderTarget(target);
+                    cmd.SetRenderTarget(Target.RenderTexture);
                     //if (cam.DoClear)
                     //    cmd.ClearRenderTarget(true, true, cam.ClearColor);
                     cmd.ClearRenderTarget(true, true, Color.black);
                     context.ExecuteCommandBuffer(cmd);
-
-                    // Setup resolution for the Nodes
-                    Resolution = new Vector2(width, height);
-                    CurrentCamera = cam;
-                    Result = null;
-
                     //var outputNode = GetNode<OutputNode>();
                     //var outputTex = (outputNode.GetValue(null) as Texture2D) ?? throw new Exception($"Output Node must have a valid Texture2D!");
 
                     var pipelineNode = GetNode<OnPipelineNode>();
                     pipelineNode?.Execute();
 
-                    if(Result == null)
-                    {
-                        CommandBufferPool.Release(cmd);
-                        continue;
-                    }
-
                     // blit result into target
-                    cmd.SetRenderTarget(target);
-                    cmd.ClearRenderTarget(false, true, Color.black);
-                    cmd.SetTexture("_Texture", Result);
-                    blitMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Blit.shader"));
-                    cmd.SetMaterial(blitMat, 0);
-                    cmd.DrawSingle(Mesh.GetFullscreenQuad());
-
-                    context.ExecuteCommandBuffer(cmd);
+                    //cmd.SetRenderTarget(target);
+                    //cmd.ClearRenderTarget(false, true, Color.black);
+                    //cmd.SetTexture("_Texture", Result);
+                    //blitMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Blit.shader"));
+                    //cmd.SetMaterial(blitMat, 0);
+                    //cmd.DrawSingle(Mesh.GetFullscreenQuad());
+                    //
+                    //context.ExecuteCommandBuffer(cmd);
 
                     CommandBufferPool.Release(cmd);
 

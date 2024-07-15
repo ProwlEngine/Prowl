@@ -162,6 +162,15 @@ namespace Prowl.Runtime.RenderPipelines
     }
 
     [Node("Rendering")]
+    public class TargetNode : Node
+    {
+        public override string Title => "Target";
+        public override float Width => 100;
+        [Output, SerializeIgnore] public NodeRenderTexture Target;
+        public override object GetValue(NodePort port) => (graph as RenderPipeline).Target;
+    }
+
+    [Node("Rendering")]
     public class PropertyNode : Node
     {
         public class NodeProperty
@@ -237,7 +246,7 @@ namespace Prowl.Runtime.RenderPipelines
                 else if(prop.Value is Color col)
                     state.SetColor(prop.Name, col);
                 else
-                    throw new System.Exception($"[PropertyStateNode] Unsupported type: {prop.Value.GetType()}");
+                    throw new System.Exception($"Unsupported type: {prop.Value.GetType()}");
             }
 
             return state;
@@ -260,6 +269,13 @@ namespace Prowl.Runtime.RenderPipelines
         {
             var rt = GetInputValue<NodeRenderTexture>("RT");
             if (rt == null) return null;
+
+            Error = "";
+            if (rt.TargetOnly)
+            {
+                Error = "RenderTexture is Target Only Cannot Access Buffers!";
+                return null;
+            }
 
             return rt.GetTexture(Type);
         }
@@ -286,6 +302,14 @@ namespace Prowl.Runtime.RenderPipelines
         {
             var rt = GetInputValue<NodeRenderTexture>("RT");
             if (rt == null) return null;
+
+            Error = "";
+            if (rt.TargetOnly)
+            {
+                Error = "RenderTexture is Target Only Cannot Access Buffers!";
+                return null;
+            }
+
 
             if (port.fieldName == nameof(Color))
                 return rt.GetTexture(RTBuffer.Type.Color);
