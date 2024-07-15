@@ -1,20 +1,20 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using Veldrid;
+using static Prowl.Runtime.Camera;
 
 namespace Prowl.Runtime.RenderPipelines
 {
     public class RenderingContext
     {
         public readonly RenderTexture TargetTexture;
-        public Camera Camera => currentCamera;
+        public CameraData Camera => currentCamera;
         public List<Renderable> Renderables;
 
 
         private List<RenderingCommand> internalCommandList = new();
-        private Camera currentCamera;
+        private CameraData currentCamera;
         public Matrix4x4 Mat_V;
         public Matrix4x4 Mat_P;
 
@@ -80,22 +80,12 @@ namespace Prowl.Runtime.RenderPipelines
             renderStateToExecute.Dispose();
         }
 
-        public RenderTexture SetupTargetCamera(Camera cam, out uint width, out uint height)
+        public void SetupTargetCamera(CameraData cam, uint width, uint height)
         {
             currentCamera = cam;
 
-            RenderTexture target = TargetTexture;
-
-            if (cam.Target.IsAvailable)
-                target = cam.Target.Res!;
-            
-            width = target.Width;
-            height = target.Height;
-
             Mat_V = cam.View;
             Mat_P = cam.GetProjectionMatrix(width, height);
-
-            return target;
         }
 
         public List<Renderable> Cull(BoundingFrustum camFrustrum)
@@ -162,7 +152,7 @@ namespace Prowl.Runtime.RenderPipelines
             else
                 sorted = new SortedList<double, List<Renderable>>(new BackToFrontComparer());
 
-            var camPos = currentCamera.Transform.position;
+            var camPos = currentCamera.Position;
             foreach (var renderable in cullingResults)
             {
                 double distance = 0;

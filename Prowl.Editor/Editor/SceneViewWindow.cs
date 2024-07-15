@@ -85,7 +85,7 @@ public class SceneViewWindow : EditorWindow
             RefreshRenderTexture((int)renderSize.x, (int)renderSize.y);
 
         var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Transform.position, Cam.GameObject.Transform.forward, Cam.GameObject.Transform.up);
-        var projection = Cam.GetProjectionMatrix((float)renderSize.x, (float)renderSize.y);
+        var projection = Cam.GetData().GetProjectionMatrix((float)renderSize.x, (float)renderSize.y);
 
         WindowCenter = gui.CurrentNode.LayoutData.Rect.Center;
 
@@ -97,7 +97,7 @@ public class SceneViewWindow : EditorWindow
 
         RenderingContext context = new RenderingContext(Graphics.Renderables, RenderTarget);
         
-        Graphics.Render([ Cam ], context);
+        Graphics.Render([ Cam.GetData() ], context);
 
         var imagePos = gui.CurrentNode.LayoutData.Rect.Position;
         var imageSize = gui.CurrentNode.LayoutData.Rect.Size;

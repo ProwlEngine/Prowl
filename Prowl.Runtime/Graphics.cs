@@ -88,7 +88,7 @@ namespace Prowl.Runtime
             SetRenderPipeline(renderPipeline ?? Quality.GetQualitySettings().RenderPipeline.Res);
         }
 
-        public static void Render(Camera[] cameras, RenderTexture targetTexture)
+        public static void Render(Camera.CameraData[] cameras, RenderTexture targetTexture)
         {
             if (ActivePipeline == null)
                 return;
@@ -98,7 +98,7 @@ namespace Prowl.Runtime
             ActivePipeline.Render(context, cameras);
         }
 
-        public static void Render(Camera[] cameras, RenderingContext context)
+        public static void Render(Camera.CameraData[] cameras, RenderingContext context)
         {
             if (ActivePipeline == null)
                 return;

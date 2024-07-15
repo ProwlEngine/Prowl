@@ -7,6 +7,52 @@ namespace Prowl.Runtime;
 [ExecuteAlways]
 public class Camera : MonoBehaviour
 {
+    public struct CameraData(Vector3 position, Vector3 forward, Vector3 up, float fieldOfView, float nearClip, float farClip, bool doClear, Color clearColor, bool isOrthographic, float orthographicSize, float renderScale, LayerMask layerMask, AssetRef<RenderTexture> target)
+    {
+        public Vector3 Position = position;
+        public Vector3 Forward = forward;
+        public Vector3 Up = up;
+        public float FieldOfView = fieldOfView;
+        public float NearClip = nearClip, FarClip = farClip;
+        public bool DoClear = doClear;
+        public Color ClearColor = clearColor;
+        public bool IsOrthographic = isOrthographic;
+        public float OrthographicSize = orthographicSize;
+        public float RenderScale = renderScale;
+        public LayerMask LayerMask = layerMask;
+
+        public AssetRef<RenderTexture> Target = target;
+
+        public Matrix4x4 View => Matrix4x4.CreateLookToLeftHanded(Position, Forward, Up);
+
+        public static CameraData CreatePerspective(Vector3 position, Vector3 forward, Vector3 up, float fieldOfView, float nearClip, float farClip, bool doClear, Color clearColor, LayerMask layerMask, AssetRef<RenderTexture> target)
+        {
+            return new CameraData(position, forward, up, fieldOfView, nearClip, farClip, doClear, clearColor, false, 0f, 1f, layerMask, target);
+        }
+
+        public static CameraData CreateOrthographic(Vector3 position, Vector3 forward, Vector3 up, float orthographicSize, float nearClip, float farClip, bool doClear, Color clearColor, LayerMask layerMask, AssetRef<RenderTexture> target)
+        {
+            return new CameraData(position, forward, up, 0f, nearClip, farClip, doClear, clearColor, true, orthographicSize, 1f, layerMask, target);
+        }
+
+        public Matrix4x4 GetProjectionMatrix(float width, float height)
+        {
+            if (IsOrthographic)
+                //return System.Numerics.Matrix4x4.CreateOrthographicLeftHanded(width, height, NearClip, FarClip).ToDouble();
+                return System.Numerics.Matrix4x4.CreateOrthographicOffCenterLeftHanded(-OrthographicSize, OrthographicSize, -OrthographicSize, OrthographicSize, NearClip, FarClip).ToDouble();
+            else
+                return System.Numerics.Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(FieldOfView.ToRad(), width / height, NearClip, FarClip).ToDouble();
+        }
+
+        public BoundingFrustum GetFrustrum(float width, float height)
+        {
+            Matrix4x4 viewMatrix = View;
+            Matrix4x4 projectionMatrix = GetProjectionMatrix(width, height);
+
+            return new BoundingFrustum(viewMatrix * projectionMatrix);
+        }
+    }
+
     public LayerMask LayerMask = LayerMask.Everything;
 
     public bool DoClear = true;
@@ -17,21 +63,12 @@ public class Camera : MonoBehaviour
     public float NearClip = 0.01f;
     public float FarClip = 1000f;
 
+    public float RenderScale = 1.0f;
+
     public enum ProjectionType { Perspective, Orthographic }
     public ProjectionType projectionType = ProjectionType.Perspective;
 
     public AssetRef<RenderTexture> Target;
-
-    public Matrix4x4 View => Matrix4x4.CreateLookToLeftHanded(this.Transform.position, GameObject.Transform.forward, GameObject.Transform.up);
-
-    public Matrix4x4 GetProjectionMatrix(float width, float height)
-    {
-        if (projectionType == ProjectionType.Orthographic)
-            //return System.Numerics.Matrix4x4.CreateOrthographicLeftHanded(width, height, NearClip, FarClip).ToDouble();
-            return System.Numerics.Matrix4x4.CreateOrthographicOffCenterLeftHanded(-OrthographicSize, OrthographicSize, -OrthographicSize, OrthographicSize, NearClip, FarClip).ToDouble();
-        else
-            return System.Numerics.Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(FieldOfView.ToRad(), width / height, NearClip, FarClip).ToDouble();
-    }
 
     public Ray ScreenPointToRay(Vector2 screenPoint, Vector2 screenScale)
     {
@@ -47,7 +84,7 @@ public class Camera : MonoBehaviour
 
         // Get the view and projection matrices
         Matrix4x4 viewMatrix = Matrix4x4.CreateLookToLeftHanded(GameObject.Transform.position, GameObject.Transform.forward, GameObject.Transform.up);
-        Matrix4x4 projectionMatrix = GetProjectionMatrix((int)screenScale.x, (int)screenScale.y);
+        Matrix4x4 projectionMatrix = GetData().GetProjectionMatrix((int)screenScale.x, (int)screenScale.y);
 
         // Calculate the inverse view-projection matrix
         Matrix4x4 viewProjectionMatrix = viewMatrix * projectionMatrix;
@@ -68,11 +105,8 @@ public class Camera : MonoBehaviour
         return new Ray(rayOrigin, rayDirection);
     }
 
-    public BoundingFrustum GetFrustrum(float width, float height)
+    public CameraData GetData()
     {
-        Matrix4x4 viewMatrix = View;
-        Matrix4x4 projectionMatrix = GetProjectionMatrix(width, height);
-
-        return new BoundingFrustum(viewMatrix * projectionMatrix);
+        return new CameraData(Transform.position, Transform.forward, Transform.up, FieldOfView, NearClip, FarClip, DoClear, ClearColor, projectionType == ProjectionType.Orthographic, OrthographicSize, RenderScale, LayerMask, Target);
     }
 }

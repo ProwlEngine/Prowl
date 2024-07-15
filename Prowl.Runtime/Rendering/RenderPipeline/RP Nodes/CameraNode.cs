@@ -140,7 +140,18 @@ namespace Prowl.Runtime.RenderPipelines
 
         public string ShaderName = "Defaults/Blit";
 
-        public override object GetValue(NodePort port) => new AssetRef<Material>(new Material(Application.AssetProvider.LoadAsset<Shader>(ShaderName + ".shader")));
+        [SerializeIgnore] AssetRef<Material> savedMat;
+        [SerializeIgnore] string savedName = "";
+
+        public override object GetValue(NodePort port)
+        {
+            if(savedName == ShaderName)
+                return savedMat;
+
+            savedMat = new AssetRef<Material>(new Material(Application.AssetProvider.LoadAsset<Shader>(ShaderName + ".shader")));
+            savedName = ShaderName;
+            return savedMat;
+        }
     }
 
     [Node("Rendering")]
@@ -148,7 +159,7 @@ namespace Prowl.Runtime.RenderPipelines
     {
         public override string Title => "Target Camera";
         public override float Width => 100;
-        [Output, SerializeIgnore] public Camera Camera;
+        [Output, SerializeIgnore] public Camera.CameraData Camera;
         public override object GetValue(NodePort port) => (graph as RenderPipeline).CurrentCamera;
     }
 
@@ -345,13 +356,13 @@ namespace Prowl.Runtime.RenderPipelines
         public override string Title => "Get Renderables";
         public override float Width => 150;
 
-        [Input, SerializeIgnore] public Camera Camera;
+        [Input, SerializeIgnore] public Camera.CameraData Camera;
 
         [Output, SerializeIgnore] public List<Renderable> Renderables;
 
         public override object GetValue(NodePort port)
         {
-            var cam = GetInputValue<Camera>("Camera");
+            var cam = GetInputValue<Camera.CameraData>("Camera");
 
             // Get the culling parameters from the current Camera
             var camFrustrum = cam.GetFrustrum((uint)(graph as RenderPipeline).Resolution.x, (uint)(graph as RenderPipeline).Resolution.y);

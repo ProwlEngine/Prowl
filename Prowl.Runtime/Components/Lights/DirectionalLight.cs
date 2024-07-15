@@ -1,6 +1,7 @@
 ﻿using Prowl.Icons;
 using Prowl.Runtime.RenderPipelines;
 using Prowl.Runtime.SceneManagement;
+using Veldrid;
 
 namespace Prowl.Runtime;
 
@@ -42,7 +43,7 @@ public class DirectionalLight : MonoBehaviour
     Material lightMat;
 
     RenderTexture? shadowMap;
-    Matrix4x4 depthMVP;
+    Camera.CameraData cam;
 
     //public override void OnPreRender()
     //{
@@ -53,7 +54,18 @@ public class DirectionalLight : MonoBehaviour
     {
         lightMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/DirectionalLight.shader"));
 
+        var forward = GameObject.Transform.forward;
+        //var proj = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, 0, shadowDistance * 2);
+        //var view = Matrix4x4.CreateLookToLeftHanded(-forward * shadowDistance, -forward, GameObject.Transform.up);
+        cam = Camera.CameraData.CreateOrthographic(Transform.position, Transform.forward, Transform.up, shadowDistance, 0.001f, shadowDistance * 2, true, Color.clear, LayerMask.Everything, shadowMap);
+
         PropertyState properties = new();
+
+        if (castShadows && shadowMap != null) 
+        {
+            properties.SetTexture("shadowMap", shadowMap.DepthBuffer);
+            properties.SetMatrix("matShadowView", cam.View);
+        }
 
         properties.SetVector("_LightDirection", GameObject.Transform.forward);// Vector3.TransformNormal(GameObject.Transform.forward, Graphics.MatView));
         properties.SetColor("_LightColor", color);
@@ -69,6 +81,7 @@ public class DirectionalLight : MonoBehaviour
         MeshRenderable renderable = new MeshRenderable(fsMesh, lightMat, Matrix4x4.Identity, this.GameObject.layerIndex, null, properties);
 
         Graphics.DrawRenderable(renderable);
+
 
 #warning Veldrid change
         /*
@@ -105,44 +118,21 @@ public class DirectionalLight : MonoBehaviour
         */
     }
 
-    public void UpdateShadowmap()
+    public override void LateUpdate()
     {
-        #warning Veldrid change
-        /*
-        // Populate Shadowmap
         if (castShadows)
         {
-            int res = (int)shadowResolution;
-            shadowMap ??= new RenderTexture(res, res, 0);
+            uint res = (uint)shadowResolution;
+            shadowMap ??= new RenderTexture(res, res, [ ], PixelFormat.D32_Float, true);
 
-            // Compute the MVP matrix from the light's point of view
-            //Graphics.MatDepthProjection = Matrix4x4.CreateOrthographicOffCenter(-25, 25, -25, 25, 1, 256);
-            Graphics.MatDepthProjection = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, 0, shadowDistance*2);
+            RenderingContext context = new("Shadow", Graphics.Renderables, shadowMap);
 
-            var forward = GameObject.Transform.forward;
-            Graphics.MatDepthView = Matrix4x4.CreateLookToLeftHanded(-forward * shadowDistance, -forward, GameObject.Transform.up);
-
-            depthMVP = Matrix4x4.Identity;
-            depthMVP = Matrix4x4.Multiply(depthMVP, Graphics.MatDepthView);
-            depthMVP = Matrix4x4.Multiply(depthMVP, Graphics.MatDepthProjection);
-
-            //Graphics.MatDepth = depthMVP;
-
-            shadowMap.Begin();
-            Graphics.Clear(1, 1, 1, 1);
-            foreach (var go in SceneManager.AllGameObjects)
-                if (go.enabledInHierarchy)
-                    foreach (var comp in go.GetComponents())
-                        if (comp.Enabled && comp.RenderOrder == RenderingOrder.Opaque)
-                            comp.OnRenderObjectDepth();
-            shadowMap.End();
+            Graphics.Render([ cam ], context);
         }
         else
         {
             shadowMap?.DestroyImmediate();
             shadowMap = null;
         }
-        */
     }
-
 }

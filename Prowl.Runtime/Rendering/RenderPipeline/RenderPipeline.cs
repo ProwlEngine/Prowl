@@ -21,7 +21,7 @@ namespace Prowl.Runtime.RenderPipelines
         private List<NodeRenderTexture> rts = [];
 
         public Vector2 Resolution { get; private set; }
-        public Camera CurrentCamera { get; private set; }
+        public Camera.CameraData CurrentCamera { get; private set; }
         public RenderingContext Context { get; private set; }
 
         public NodeRenderTexture Target { get; internal set; }
@@ -39,7 +39,7 @@ namespace Prowl.Runtime.RenderPipelines
         {
         }
 
-        public void Render(RenderingContext context, Camera[] cameras)
+        public void Render(RenderingContext context, Camera.CameraData[] cameras)
         {
             // Create and schedule a command to clear the current render target
             var rootBuffer = new CommandBuffer();
@@ -54,8 +54,22 @@ namespace Prowl.Runtime.RenderPipelines
             {
                 try
                 {
+                    // Get Width and Height an the target RenderTexture
+                    var target = context.TargetTexture;
+                    uint width = context.TargetTexture.Width;
+                    uint height = context.TargetTexture.Height;
+
+                    if (cam.Target.IsAvailable)
+                    {
+                        target = cam.Target.Res!;
+                        width = cam.Target.Res!.Width;
+                        height = cam.Target.Res!.Height;
+                    }
+
+                    context.SetupTargetCamera(cam, width, height);
+
                     // Update the value of built-in shader variables, based on the current Camera
-                    Target = new NodeRenderTexture(context.SetupTargetCamera(cam, out var width, out var height));
+                    Target = new NodeRenderTexture(target);
                     Resolution = new Vector2(width, height);
                     CurrentCamera = cam;
 
@@ -87,7 +101,7 @@ namespace Prowl.Runtime.RenderPipelines
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"Error rendering camera {cam.Name}: {e.Message}");
+                    Debug.LogError($"Error rendering camera: {e.Message}");
                 }
                 finally
                 {
