@@ -61,6 +61,8 @@ Pass "Screen"
 			lightingColor *= (1.0 - ao);
 			
 			vec3 color = baseColor + (lightingColor);
+			
+			color.rgb = pow(color.xyz, vec3(1.0/2.2));
 
 			OutputColor = vec4(color, 1.0);
 		}
