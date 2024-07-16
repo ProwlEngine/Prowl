@@ -19,6 +19,8 @@ namespace Prowl.Runtime.GUI
 
         public bool Combo(string ID, string popupName, ref int ItemIndex, string[] Items, Offset x, Offset y, Size width, Size height, WidgetStyle? inputstyle = null, string? label = null)
         {
+            ItemIndex = Math.Clamp(ItemIndex, 0, Items.Length - 1);
+
             var style = inputstyle ?? new(30);
             var g = Gui.ActiveGUI;
             using (g.Node(ID).Left(x).Top(y).Width(width).Height(height).Padding(2).Enter())
