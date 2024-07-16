@@ -10,6 +10,8 @@ using static Prowl.Runtime.NodeSystem.Node;
 
 namespace Prowl.Editor
 {
+
+
     public class NodeEditorAttribute(Type type) : Attribute
     {
         public Type Type { get; private set; } = type;
@@ -63,18 +65,19 @@ namespace Prowl.Editor
 
         public virtual void OnEnable() { }
 
-        public abstract bool DrawNode(int index, Gui g, Node node, Vector2 offset);
+        public abstract bool DrawNode(int index, Gui g, Node node);
         public virtual void OnDisable() { }
     }
 
     public class DefaultNodeEditor : ScriptedNodeEditor
     {
-        public override bool DrawNode(int index, Gui g, Node node, Vector2 offset)
+        public override bool DrawNode(int index, Gui g, Node node)
         {
             bool changed = false;
             var itemSize = EditorStylePrefs.Instance.ItemSize;
             var roundness = (float)EditorStylePrefs.Instance.WindowRoundness;
-            using (g.Node("Node", index).Width(node.Width).FitContentHeight().TopLeft(node.position.x + offset.x, node.position.y + offset.y).Layout(LayoutType.Column).Enter())
+            var nodePos = editor.GridToWindow(node.position);
+            using (g.Node("Node", index).Width(node.Width).FitContentHeight().TopLeft(nodePos.x, nodePos.y).Layout(LayoutType.Column).Enter())
             {
                 if (SelectHandler.IsSelected(new WeakReference(node)))
                 {
@@ -94,45 +97,33 @@ namespace Prowl.Editor
                     {
                         g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.RandomPastel(node.GetType(), 1, 0.3f), roundness, 3);
                         var rect = g.CurrentNode.LayoutData.Rect;
-                        rect.Min += new Vector2(1, 1);
-                        rect.Max += new Vector2(1, 1);
+                        rect.Position += new Vector2(1, 1);
                         g.Draw2D.DrawText(node.Title, rect, Color.black);
                         g.Draw2D.DrawText(node.Title, g.CurrentNode.LayoutData.Rect);
 
-                        if (!string.IsNullOrEmpty(node.Error))
-                        {
+                        if (!string.IsNullOrWhiteSpace(node.Error))
                             g.Draw2D.DrawText(FontAwesome6.CircleExclamation + node.Error, g.CurrentNode.LayoutData.GlobalPosition + new Vector2(g.CurrentNode.LayoutData.GlobalContentWidth + 5, 5), Color.red);
-                        }
 
                         changed |= HandleNodeSelection(index, g, node);
-
-                        changed |= HandleDraggingNode(g, node, offset);
+                        changed |= HandleDraggingNode(g, node);
 
                         using (g.Node("In/Out").ExpandWidth().FitContentHeight().Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
                             if (node.Inputs.Count() > 0)
-                            {
                                 changed |= DrawInputs(g, node, itemSize, true);
-                            }
                             
                             if (node.Outputs.Count() > 0)
-                            {
                                 changed |= DrawOutputs(g, node, itemSize, true);
-                            }
                         }
                     }
                 }
 
                 using (g.Node("Content").ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Enter())
                 {
-                    if (node.ShowTitle)
-                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne, roundness, 12);
-                    else
-                        g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne, roundness);
+                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne, roundness, node.ShowTitle ? 12 : 15);
 
                     changed |= HandleNodeSelection(index, g, node);
-
-                    changed |= HandleDraggingNode(g, node, offset);
+                    changed |= HandleDraggingNode(g, node);
 
                     using (g.Node("In/Out").ExpandWidth().FitContentHeight().Layout(LayoutType.Row).ScaleChildren().Enter())
                     {
@@ -176,7 +167,7 @@ namespace Prowl.Editor
             return changed;
         }
 
-        protected bool HandleDraggingNode(Gui g, Node node, Vector2 offset)
+        protected bool HandleDraggingNode(Gui g, Node node)
         {
             if (g.IsNodeActive())
             {
@@ -195,7 +186,9 @@ namespace Prowl.Editor
                         if (Math.Abs(nearestX.position.x - node.position.x) < 5)
                         {
                             node.position.x = nearestX.position.x;
-                            g.Draw2D.DrawLine(node.position + offset, nearestX.position + offset, Color.yellow);
+                            var nodePos = editor.GridToWindow(node.position);
+                            var nearestPos = editor.GridToWindow(nearestX.position);
+                            g.Draw2D.DrawLine(nodePos, nearestPos, Color.yellow);
                         }
                     }
 
@@ -206,7 +199,9 @@ namespace Prowl.Editor
                         if (Math.Abs(nearestMaxX.position.x + nearestMaxX.Width - node.position.x - node.Width) < 5)
                         {
                             node.position.x = nearestMaxX.position.x + nearestMaxX.Width - node.Width;
-                            g.Draw2D.DrawLine(node.position + offset + new Vector2(node.Width, 0), nearestMaxX.position + new Vector2(nearestMaxX.Width, 0) + offset, Color.yellow);
+                            var nodePos = editor.GridToWindow(node.position);
+                            var nearestPos = editor.GridToWindow(nearestMaxX.position);
+                            g.Draw2D.DrawLine(nodePos + new Vector2(node.Width, 0), nearestPos + new Vector2(nearestMaxX.Width, 0), Color.yellow);
                         }
                     }
 
@@ -217,7 +212,9 @@ namespace Prowl.Editor
                         if (Math.Abs(nearestY.position.y - node.position.y) < 5)
                         {
                             node.position.y = nearestY.position.y;
-                            g.Draw2D.DrawLine(node.position + offset, nearestY.position + offset, Color.yellow);
+                            var nodePos = editor.GridToWindow(node.position);
+                            var nearestPos = editor.GridToWindow(nearestY.position);
+                            g.Draw2D.DrawLine(nodePos, nearestPos, Color.yellow);
                         }
                     }
 
@@ -365,9 +362,6 @@ namespace Prowl.Editor
 
         protected bool DrawPort(Gui g, NodePort port, Vector2 center, bool onHeader = false)
         {
-            if (editor.draggingPort?.IsAlive == false)
-                editor.draggingPort = null;
-
             bool changed = false;
             using (g.Node("Port", port.GetHashCode()).Scale(10).TopLeft(center.x, center.y).IgnoreLayout().Enter())
             {
@@ -378,20 +372,24 @@ namespace Prowl.Editor
                 var col = EditorStylePrefs.RandomPastel(port.ValueType, 1f, 0.2f);
                 if (g.IsNodeHovered())
                 {
+
                     // If were hovering and not dragging port (or dragging this port) highlight it
-                    if (editor.draggingPort == null || editor.draggingPort.Target == port || (editor.draggingPort.Target as NodePort)!.CanConnectTo(port))
+                    if (editor.draggingPort == null || editor.draggingPort == port || (editor.draggingPort as NodePort).CanConnectTo(port))
                         col *= 2.0f;
 
                     // If no port is being dragged and this node is active (being dragged) start a port drag
                     if (editor.draggingPort == null && g.IsNodeActive())
                     {
-                        editor.draggingPort = new(port);
+                        editor.draggingPort = port;
+                        editor.reroutePoints.Clear();
                     }
                     else if (editor.draggingPort != null && g.IsPointerUp(MouseButton.Left))
                     {
-                        if (editor.draggingPort.Target != port && (editor.draggingPort.Target as NodePort)!.CanConnectTo(port))
+                        var dragging = (editor.draggingPort as NodePort);
+                        if (editor.draggingPort != port && dragging.CanConnectTo(port))
                         {
-                            (editor.draggingPort.Target as NodePort)!.Connect(port);
+                            dragging.Connect(port);
+                            dragging.GetReroutePoints(dragging.ConnectionCount - 1).AddRange(editor.reroutePoints);
                             editor.draggingPort = null;
                             changed = true;
                         }
@@ -413,20 +411,20 @@ namespace Prowl.Editor
                 else
                 {
                     var portCol = col;
-                    if (!(editor.draggingPort?.Target as NodePort)?.CanConnectTo(port) ?? false) // Draw Connection
+                    if (!editor.draggingPort?.CanConnectTo(port) ?? false) // Draw Connection
                         portCol *= 0.5f;
                     g.Draw2D.DrawCircleFilled(trueCenter, 5, portCol);
                 }
 
-                if (port.IsOutput)
-                {
-                    foreach (var other in port.GetConnections())
-                    {
-                        var a = trueCenter + new Vector2(50, 0);
-                        var b = other.LastKnownPosition - new Vector2(50, 0);
-                        g.Draw2D.DrawBezierLine(trueCenter, a, other.LastKnownPosition, b, onHeader ? Color.white : col, 2);
-                    }
-                }
+                //if (port.IsOutput)
+                //{
+                //    foreach (var other in port.GetConnections())
+                //    {
+                //        var a = trueCenter + new Vector2(50, 0);
+                //        var b = other.LastKnownPosition - new Vector2(50, 0);
+                //        g.Draw2D.DrawBezierLine(trueCenter, a, other.LastKnownPosition, b, onHeader ? Color.white : col, 2);
+                //    }
+                //}
             }
 
             g.Tooltip(port.ValueType.Name);
@@ -475,14 +473,15 @@ namespace Prowl.Editor
         private bool isRenamingHeader = false;
         private bool isRenamingDesc = false;
 
-        public override bool DrawNode(int index, Gui g, Node node, Vector2 offset)
+        public override bool DrawNode(int index, Gui g, Node node)
         {
             var comment = node as CommentNode;
 
             bool changed = false;
             var itemSize = EditorStylePrefs.Instance.ItemSize;
             var roundness = (float)EditorStylePrefs.Instance.WindowRoundness;
-            using (g.Node("Node", index).Scale(250).TopLeft(node.position.x + offset.x, node.position.y + offset.y).Layout(LayoutType.Column).ScaleChildren().Enter())
+            var nodePos = editor.GridToWindow(node.position);
+            using (g.Node("Node", index).Scale(250).TopLeft(nodePos.x, nodePos.y).Layout(LayoutType.Column).ScaleChildren().Enter())
             {
                 g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, new Color32(252, 215, 110, 255), roundness);
 
@@ -519,7 +518,7 @@ namespace Prowl.Editor
 
                     changed |= HandleNodeSelection(index, g, node);
 
-                    changed |= HandleDraggingNode(g, node, offset);
+                    changed |= HandleDraggingNode(g, node);
                 }
 
                 using (g.Node("Desc").ExpandWidth().Padding(10).Layout(LayoutType.Column).Clip().Enter())
@@ -541,7 +540,7 @@ namespace Prowl.Editor
 
                     changed |= HandleNodeSelection(index, g, node);
 
-                    changed |= HandleDraggingNode(g, node, offset);
+                    changed |= HandleDraggingNode(g, node);
                 }
 
             }
@@ -552,18 +551,25 @@ namespace Prowl.Editor
 
     public class NodeEditor
     {
+        public bool IsDragging => draggingPort != null || dragSelectionStart != null;
+        public bool IsDraggingPort => draggingPort != null;
+
         private NodeGraph graph;
         private NodeEditorInputHandler inputHandler;
         private Gui gui;
 
-        private Vector2 offset;
+        private Vector2 topleft;
         private double zoom = 1.0f;
         private double targetzoom = 1.0f;
         private bool hasChanged = false;
 
         private RenderTexture RenderTarget;
 
-        internal WeakReference? draggingPort = null;
+        private Rect viewRect;
+
+
+        internal NodePort? draggingPort = null;
+        internal List<Vector2> reroutePoints = new();
 
         internal Vector2? dragSelectionStart = null;
         internal Rect dragSelection;
@@ -629,7 +635,7 @@ namespace Prowl.Editor
                 commandBuffer.SetRenderTarget(RenderTarget);
                 commandBuffer.ClearRenderTarget(true, true, Color.black, depth: 1.0f);
 
-                    hasChanged = false;
+                hasChanged = false;
                 gui.ProcessFrame(commandBuffer, new Rect(0, 0, width, height), (float)zoom, Vector2.one, EditorPreferences.Instance.AntiAliasing, (g) =>
                 {
                     g.Draw2D.DrawRectFilled(new Rect(0, 0, width / zoom, height / zoom), EditorStylePrefs.Instance.Background);
@@ -643,9 +649,18 @@ namespace Prowl.Editor
 
                     zoom = MathD.Lerp(zoom, targetzoom, 0.1);
 
+                    if (g.IsPointerDown(MouseButton.Middle))
+                    {
+                        topleft -= g.PointerDelta;
+                        g.ClosePopup();
+                    }
+
+                    viewRect = new Rect(topleft.x, topleft.y, width / zoom, height / zoom);
+
+                    // Draw Connections behind nodes
+                    DrawConnections();
+
                     int index = 0;
-                    var beforeOffset = offset;
-                    //offset += new Vector2(width / zoom, height / zoom) / 2;
                     var safeNodes = graph.nodes.ToArray();
                     List<int> unusedKeys = new(customEditors.Keys);
                     foreach (var node in safeNodes)
@@ -672,7 +687,7 @@ namespace Prowl.Editor
                         else
                         {
                             // We are still editing the same object
-                            hasChanged |= customEditor.DrawNode(index++, g, node, offset);
+                            hasChanged |= customEditor.DrawNode(index++, g, node);
                             unusedKeys.Remove(key);
                         }
                     }
@@ -682,63 +697,23 @@ namespace Prowl.Editor
                         customEditors[key].OnDisable();
                         customEditors.Remove(key);
                     }
-                    //offset = beforeOffset;
 
-                    if (draggingPort != null && draggingPort != null)
+                    if (draggingPort != null)
                     {
                         // Draw Connection
-                        var port = (draggingPort!.Target as NodePort)!;
-                        var col = EditorStylePrefs.RandomPastel(port.ValueType, 1f, 0.2f);
-                        //g.Draw2D.DrawLine(port.LastKnownPosition, g.PointerPos, col, 2);
-                        var a = port.LastKnownPosition + (g.PointerPos.x > port.LastKnownPosition.x ? new Vector2(50, 0) : new Vector2(-50, 0));
-                        var b = g.PointerPos + (g.PointerPos.x > port.LastKnownPosition.x ? new Vector2(-50, 0) : new Vector2(50, 0));
-                        g.Draw2D.DrawBezierLine(port.LastKnownPosition, a, g.PointerPos, b, col, 2);
+                        var col = EditorStylePrefs.RandomPastel(draggingPort.ValueType);
 
-                        if (g.IsPointerUp(MouseButton.Left) || !draggingPort.IsAlive)
+                        List<Vector2> gridPoints = [draggingPort.LastKnownPosition];
+                        reroutePoints.ForEach((p) => gridPoints.Add(GridToWindow(p)));
+                        gridPoints.Add(g.PointerPos);
+                        DrawNoodle(col, EditorStylePrefs.Instance.NoodlePathType, EditorStylePrefs.Instance.NoodleStrokeType, EditorStylePrefs.Instance.NoodleStrokeWidth, gridPoints);
+
+                        if (g.IsPointerUp(MouseButton.Left))
                             draggingPort = null;
-                    }
-
-                    if (g.FocusID == 0)
-                    {
-                        if (g.IsKeyPressed(Key.C))
+                        else if (g.IsPointerClick(MouseButton.Right))
                         {
-                            var comment = graph.AddNode<CommentNode>();
-                            comment.Header = "This a Comment :D";
-                            comment.Desc = "This is a Description";
-                            comment.position = g.PointerPos;
+                            reroutePoints.Add(WindowToGrid(g.PointerPos));
                         }
-
-                        if (g.IsKeyPressed(Key.V)) AlignSelectedVertically();
-                        if (g.IsKeyPressed(Key.H)) AlignSelectedHorizontally();
-                        if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
-                        {
-                            var newlycreated = new List<Node>();
-                            SelectHandler.Foreach((go) =>
-                            {
-                                newlycreated.Add(graph.CopyNode(go.Target as Node));
-                            });
-                            SelectHandler.Clear();
-                            newlycreated.ForEach((n) => SelectHandler.SelectIfNot(new WeakReference(n)));
-                        }
-                    }
-
-                    if (g.IsPointerDown(MouseButton.Middle))
-                    {
-                        offset += g.PointerDelta;
-                        g.ClosePopup();
-                    }
-
-                    if (g.IsNodeHovered())
-                    {
-                        if (g.IsPointerClick(MouseButton.Right, true) || g.IsKeyPressed(Key.Space))
-                            g.OpenPopup("NodeCreatePopup", g.PointerPos);
-
-
-                        if (!SelectHandler.SelectedThisFrame && g.IsNodePressed())
-                            SelectHandler.Clear();
-
-                        if (dragSelectionStart == null && g.IsPointerClick(MouseButton.Left))
-                            dragSelectionStart = g.PointerPos;
                     }
 
                     if (dragSelectionStart != null && g.IsPointerDown(MouseButton.Left))
@@ -753,52 +728,92 @@ namespace Prowl.Editor
                     else
                         dragSelectionStart = null;
 
-                    var popupHolder = g.CurrentNode;
-                    if (g.BeginPopup("NodeCreatePopup", out var popup))
+                    if (!IsDragging)
                     {
-                        using (popup.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Scroll().Clip().Enter())
+                        if (g.FocusID == 0)
                         {
-                            if (selectedCatagory == null)
+                            if (g.IsKeyPressed(Key.C))
                             {
-                                foreach (var catagory in NodeAttribute.nodeCatagories.Keys)
-                                    if (EditorGUI.StyledButton(catagory))
-                                        selectedCatagory = catagory;
-                            }
-                            else
-                            {
-                                if (EditorGUI.StyledButton("Back"))
-                                    selectedCatagory = null;
-
-                                if (NodeAttribute.nodeCatagories.TryGetValue(selectedCatagory, out var types))
-                                {
-                                    foreach (var type in types)
-                                        if (EditorGUI.StyledButton(type.Name))
-                                        {
-                                            var node = graph.AddNode(type);
-                                            node.position = g.PointerPos;
-                                            g.ClosePopup(popupHolder);
-                                            hasChanged |= true;
-
-                                            SelectHandler.SetSelection(new WeakReference(node));
-                                        }
-                                }
+                                var comment = graph.AddNode<CommentNode>();
+                                comment.Header = "This a Comment :D";
+                                comment.Desc = "This is a Description";
+                                comment.position = g.PointerPos;
                             }
 
-                            foreach (var nodeType in graph.NodeTypes)
-                                if (EditorGUI.StyledButton(nodeType.Name))
+                            if (g.IsKeyPressed(Key.V)) AlignSelectedVertically();
+                            if (g.IsKeyPressed(Key.H)) AlignSelectedHorizontally();
+                            if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
+                            {
+                                var newlycreated = new List<Node>();
+                                SelectHandler.Foreach((go) =>
                                 {
-                                    var node = graph.AddNode(nodeType);
-                                    node.position = g.PointerPos;
-                                    g.ClosePopup(popupHolder);
-                                    hasChanged |= true;
-
-                                    SelectHandler.SetSelection(new WeakReference(node));
-                                }
+                                    newlycreated.Add(graph.CopyNode(go.Target as Node));
+                                });
+                                SelectHandler.Clear();
+                                newlycreated.ForEach((n) => SelectHandler.SelectIfNot(new WeakReference(n)));
+                            }
                         }
-                    }
-                    else
-                    {
-                        selectedCatagory = null;
+
+                        if (g.IsNodeHovered())
+                        {
+                            if (g.IsPointerClick(MouseButton.Right, true) || g.IsKeyPressed(Key.Space))
+                                g.OpenPopup("NodeCreatePopup", g.PointerPos);
+
+
+                            if (!SelectHandler.SelectedThisFrame && g.IsNodePressed())
+                                SelectHandler.Clear();
+
+                            if (dragSelectionStart == null && g.IsPointerClick(MouseButton.Left))
+                                dragSelectionStart = g.PointerPos;
+                        }
+
+                        var popupHolder = g.CurrentNode;
+                        if (g.BeginPopup("NodeCreatePopup", out var popup))
+                        {
+                            using (popup.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Scroll().Clip().Enter())
+                            {
+                                if (selectedCatagory == null)
+                                {
+                                    foreach (var catagory in NodeAttribute.nodeCatagories.Keys)
+                                        if (EditorGUI.StyledButton(catagory))
+                                            selectedCatagory = catagory;
+                                }
+                                else
+                                {
+                                    if (EditorGUI.StyledButton("Back"))
+                                        selectedCatagory = null;
+
+                                    if (NodeAttribute.nodeCatagories.TryGetValue(selectedCatagory, out var types))
+                                    {
+                                        foreach (var type in types)
+                                            if (EditorGUI.StyledButton(type.Name))
+                                            {
+                                                var node = graph.AddNode(type);
+                                                node.position = WindowToGrid(g.PointerPos);
+                                                g.ClosePopup(popupHolder);
+                                                hasChanged |= true;
+
+                                                SelectHandler.SetSelection(new WeakReference(node));
+                                            }
+                                    }
+                                }
+
+                                foreach (var nodeType in graph.NodeTypes)
+                                    if (EditorGUI.StyledButton(nodeType.Name))
+                                    {
+                                        var node = graph.AddNode(nodeType);
+                                        node.position = WindowToGrid(g.PointerPos);
+                                        g.ClosePopup(popupHolder);
+                                        hasChanged |= true;
+
+                                        SelectHandler.SetSelection(new WeakReference(node));
+                                    }
+                            }
+                        }
+                        else
+                        {
+                            selectedCatagory = null;
+                        }
                     }
                 });
 
@@ -813,6 +828,252 @@ namespace Prowl.Editor
             }
 
             return RenderTarget.ColorBuffers[0];
+        }
+
+        public void GetViewRect(double width, double height) => viewRect = new Rect(topleft.x, topleft.y, width / zoom, height / zoom);
+        
+        public void SetViewRect(Rect rect, double width, double height)
+        {
+            topleft = rect.Min;
+
+        }
+
+        // Make relative to window
+        public Vector2 GridToWindow(Vector2 gridPos) => gridPos - topleft;
+
+        // Make relative to grid
+        public Vector2 WindowToGrid(Vector2 windowPos) => windowPos + topleft;
+
+        private void DrawConnections()
+        {
+            //List<RerouteReference> selection = preBoxSelectionReroute != null ? new List<RerouteReference>(preBoxSelectionReroute) : new List<RerouteReference>();
+            //hoveredReroute = new RerouteReference();
+            
+            List<Vector2> gridPoints = new(2);
+            foreach (var node in graph.nodes)
+            {
+                //If a null node is found, return. This can happen if the nodes associated script is deleted. It is currently not possible in Unity to delete a null asset.
+                if (node == null) continue;
+
+                // Draw full connections and output > reroute
+                foreach (var output in node.Outputs)
+                {
+                    Color portColor = EditorStylePrefs.RandomPastel(output.ValueType);
+
+                    for (int k = 0; k < output.ConnectionCount; k++)
+                    {
+                        var input = output.GetConnection(k);
+
+                        // Error handling
+                        if (input == null) continue; //If a script has been updated and the port doesn't exist, it is removed and null is returned. If this happens, return.
+                        if (!input.IsConnectedTo(output)) input.Connect(output);
+
+                        gridPoints.Clear();
+                        gridPoints.Add(output.LastKnownPosition);
+                        var reroutes = output.GetReroutePoints(k);
+                        reroutes.ForEach((p) => gridPoints.Add(GridToWindow(p)));
+                        gridPoints.Add(input.LastKnownPosition);
+                        DrawNoodle(portColor, EditorStylePrefs.Instance.NoodlePathType, EditorStylePrefs.Instance.NoodleStrokeType, EditorStylePrefs.Instance.NoodleStrokeWidth, gridPoints);
+
+                        // Loop through reroute points and draw the points
+                        for (int i = 0; i < reroutes.Count; i++)
+                        {
+                            gui.Draw2D.DrawCircleFilled(GridToWindow(reroutes[i]), 5, portColor);
+                        }
+                    }
+                }
+            }
+
+            //if (Event.current.type != EventType.Layout && currentActivity == NodeActivity.DragGrid) selectedReroutes = selection;
+        }
+
+        static Vector2 CalculateBezierPoint(Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, double t)
+        {
+            double u = 1 - t;
+            double tt = t * t, uu = u * u;
+            double uuu = uu * u, ttt = tt * t;
+            return new Vector2(
+                (uuu * p0.x) + (3 * uu * t * p1.x) + (3 * u * tt * p2.x) + (ttt * p3.x),
+                (uuu * p0.y) + (3 * uu * t * p1.y) + (3 * u * tt * p2.y) + (ttt * p3.y)
+            );
+        }
+
+        public void DrawNoodle(Color color, EditorStylePrefs.NoodlePath path, EditorStylePrefs.NoodleStroke stroke, double noodleThickness, List<Vector2> gridPoints)
+        {
+            float thickness = (float)noodleThickness;
+
+            int length = gridPoints.Count;
+            switch (path)
+            {
+                case EditorStylePrefs.NoodlePath.Curvy:
+                    Vector2 outputTangent = Vector2.right;
+                    for (int i = 0; i < length - 1; i++)
+                    {
+                        Vector2 inputTangent;
+                        // Cached most variables that repeat themselves here to avoid so many indexer calls :p
+                        Vector2 point_a = gridPoints[i];
+                        Vector2 point_b = gridPoints[i + 1];
+                        double dist_ab = Vector2.Distance(point_a, point_b);
+                        if (i == 0) outputTangent = dist_ab * 0.01f * Vector2.right;
+                        if (i < length - 2)
+                        {
+                            Vector2 point_c = gridPoints[i + 2];
+                            Vector2 ab = (point_b - point_a).normalized;
+                            Vector2 cb = (point_b - point_c).normalized;
+                            Vector2 ac = (point_c - point_a).normalized;
+                            Vector2 p = (ab + cb) * 0.5f;
+                            double tangentLength = (dist_ab + Vector2.Distance(point_b, point_c)) * 0.005f;
+                            double side = ((ac.x * (point_b.y - point_a.y)) - (ac.y * (point_b.x - point_a.x)));
+
+                            p = tangentLength * MathD.Sign(side) * new Vector2(-p.y, p.x);
+                            inputTangent = p;
+                        }
+                        else
+                        {
+                            inputTangent = dist_ab * 0.01f * Vector2.left;
+                        }
+
+                        // Calculates the tangents for the bezier's curves.
+                        Vector2 tangent_a = point_a + outputTangent * 50;
+                        Vector2 tangent_b = point_b + inputTangent * 50;
+                        // Hover effect.
+                        int division = MathD.RoundToInt(.2f * dist_ab) + 3;
+                        // Coloring and bezier drawing.
+                        int draw = 0;
+                        Vector2 bezierPrevious = point_a;
+                        for (int j = 1; j <= division; ++j)
+                        {
+                            if (stroke == EditorStylePrefs.NoodleStroke.Dashed)
+                            {
+                                draw++;
+                                if (draw >= 2) draw = -2;
+                                if (draw < 0) continue;
+                                if (draw == 0) bezierPrevious = CalculateBezierPoint(point_a, tangent_a, tangent_b, point_b, (j - 1f) / (float)division);
+                            }
+                            Vector2 bezierNext = CalculateBezierPoint(point_a, tangent_a, tangent_b, point_b, j / (float)division);
+                            gui.Draw2D.DrawLine(bezierPrevious, bezierNext, color, thickness);
+                            bezierPrevious = bezierNext;
+                        }
+                        outputTangent = -inputTangent;
+                    }
+                    break;
+                case EditorStylePrefs.NoodlePath.Straight:
+                    for (int i = 0; i < length - 1; i++)
+                    {
+                        Vector2 point_a = gridPoints[i];
+                        Vector2 point_b = gridPoints[i + 1];
+                        // Draws the line with the coloring.
+                        Vector2 prev_point = point_a;
+                        // Approximately one segment per 5 pixels
+                        int segments = (int)Vector2.Distance(point_a, point_b) / 5;
+                        segments = Math.Max(segments, 1);
+
+                        int draw = 0;
+                        for (int j = 0; j <= segments; j++)
+                        {
+                            draw++;
+                            float t = j / (float)segments;
+                            Vector2 lerp = Vector2.Lerp(point_a, point_b, t);
+                            if (draw > 0)
+                            {
+                                gui.Draw2D.DrawLine(prev_point, lerp, color, thickness);
+                            }
+                            prev_point = lerp;
+                            if (stroke == EditorStylePrefs.NoodleStroke.Dashed && draw >= 2) draw = -2;
+                        }
+                    }
+                    break;
+                case EditorStylePrefs.NoodlePath.Angled:
+                    for (int i = 0; i < length - 1; i++)
+                    {
+                        if (i == length - 1) continue; // Skip last index
+                        if (gridPoints[i].x <= gridPoints[i + 1].x - 50)
+                        {
+                            double midpoint = (gridPoints[i].x + gridPoints[i + 1].x) * 0.5f;
+                            Vector2 start_1 = gridPoints[i];
+                            Vector2 end_1 = gridPoints[i + 1];
+                            start_1.x = midpoint;
+                            end_1.x = midpoint;
+                            if (i == length - 2)
+                            {
+                                gui.Draw2D.DrawLine(gridPoints[i], start_1, color, thickness);
+                                gui.Draw2D.DrawLine(start_1, end_1, color, thickness);
+                                gui.Draw2D.DrawLine(end_1, gridPoints[i + 1], color, thickness);
+                            }
+                            else
+                            {
+                                gui.Draw2D.DrawLine(gridPoints[i], start_1, color, thickness);
+                                gui.Draw2D.DrawLine(start_1, end_1, color, thickness);
+                                gui.Draw2D.DrawLine(end_1, gridPoints[i + 1], color, thickness);
+                            }
+                        }
+                        else
+                        {
+                            double midpoint = (gridPoints[i].y + gridPoints[i + 1].y) * 0.5f;
+                            Vector2 start_1 = gridPoints[i];
+                            Vector2 end_1 = gridPoints[i + 1];
+                            start_1.x += 25;
+                            end_1.x -= 25;
+                            Vector2 start_2 = start_1;
+                            Vector2 end_2 = end_1;
+                            start_2.y = midpoint;
+                            end_2.y = midpoint;
+                            if (i == length - 2)
+                            {
+                                gui.Draw2D.DrawLine(gridPoints[i], start_1, color, thickness);
+                                gui.Draw2D.DrawLine(start_1, start_2, color, thickness);
+                                gui.Draw2D.DrawLine(start_2, end_2, color, thickness);
+                                gui.Draw2D.DrawLine(end_2, end_1, color, thickness);
+                                gui.Draw2D.DrawLine(end_1, gridPoints[i + 1], color, thickness);
+                            }
+                            else
+                            {
+                                gui.Draw2D.DrawLine(gridPoints[i], start_1, color, thickness);
+                                gui.Draw2D.DrawLine(start_1, start_2, color, thickness);
+                                gui.Draw2D.DrawLine(start_2, end_2, color, thickness);
+                                gui.Draw2D.DrawLine(end_2, end_1, color, thickness);
+                                gui.Draw2D.DrawLine(end_1, gridPoints[i + 1], color, thickness);
+                            }
+                        }
+                    }
+                    break;
+                case EditorStylePrefs.NoodlePath.ShaderLab:
+                    Vector2 start = gridPoints[0];
+                    Vector2 end = gridPoints[length - 1];
+                    //Modify first and last point in array so we can loop trough them nicely.
+                    gridPoints[0] = gridPoints[0] + Vector2.right * 20;
+                    gridPoints[length - 1] = gridPoints[length - 1] + Vector2.left * 20;
+                    //Draw first vertical lines going out from nodes
+                    gui.Draw2D.DrawLine(start, gridPoints[0], color, thickness);
+                    gui.Draw2D.DrawLine(end, gridPoints[length - 1], color, thickness);
+                    for (int i = 0; i < length - 1; i++)
+                    {
+                        Vector2 point_a = gridPoints[i];
+                        Vector2 point_b = gridPoints[i + 1];
+                        // Draws the line with the coloring.
+                        Vector2 prev_point = point_a;
+                        // Approximately one segment per 5 pixels
+                        int segments = (int)Vector2.Distance(point_a, point_b) / 5;
+                        segments = Math.Max(segments, 1);
+
+                        int draw = 0;
+                        for (int j = 0; j <= segments; j++)
+                        {
+                            draw++;
+                            double t = j / (float)segments;
+                            Vector2 lerp = Vector2.Lerp(point_a, point_b, t);
+                            if (draw > 0)
+                            {
+                                gui.Draw2D.DrawLine(prev_point, lerp, color, thickness);
+                            }
+                            prev_point = lerp;
+                            if (stroke == EditorStylePrefs.NoodleStroke.Dashed && draw >= 2) draw = -2;
+                        }
+                    }
+                    gridPoints[0] = start;
+                    gridPoints[length - 1] = end;
+                    break;
+            }
         }
 
         public bool DrawBlackBoard(Gui gui)
@@ -845,6 +1106,25 @@ namespace Prowl.Editor
         public void Release()
         {
             RenderTarget?.DestroyImmediate();
+        }
+
+        public struct RerouteReference
+        {
+            public NodePort port;
+            public int connectionIndex;
+            public int pointIndex;
+
+            public RerouteReference(NodePort port, int connectionIndex, int pointIndex)
+            {
+                this.port = port;
+                this.connectionIndex = connectionIndex;
+                this.pointIndex = pointIndex;
+            }
+
+            public void InsertPoint(Vector2 pos) { port.GetReroutePoints(connectionIndex).Insert(pointIndex, pos); }
+            public void SetPoint(Vector2 pos) { port.GetReroutePoints(connectionIndex)[pointIndex] = pos; }
+            public void RemovePoint() { port.GetReroutePoints(connectionIndex).RemoveAt(pointIndex); }
+            public Vector2 GetPoint() { return port.GetReroutePoints(connectionIndex)[pointIndex]; }
         }
     }
 }

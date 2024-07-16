@@ -436,6 +436,12 @@ namespace Prowl.Runtime.NodeSystem
             }
         }
 
+        /// <summary> Get reroute points for a given connection. This is used for organization </summary>
+        public List<Vector2> GetReroutePoints(int index)
+        {
+            return connections[index].reroutePoints;
+        }
+
         /// <summary> Swap connections with another node </summary>
         public void SwapConnections(NodePort targetPort)
         {
@@ -512,6 +518,8 @@ namespace Prowl.Runtime.NodeSystem
             public NodePort Port { get { return port != null ? port : port = GetPort(); } }
 
             [NonSerialized] private NodePort port;
+            /// <summary> Extra connection path points for organization </summary>
+            [SerializeField] public List<Vector2> reroutePoints = new List<Vector2>();
 
             public PortConnection() { } // for serialization
 
