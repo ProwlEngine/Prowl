@@ -71,6 +71,13 @@ namespace Prowl.Editor.Preferences
         public double AssetRoundness = 4;
         public double ButtonRoundness = 4;
 
+        public enum NoodlePath { Straight, Curvy, Angled, ShaderLab }
+        public enum NoodleStroke { Basic, Dashed }
+        [Text("Node Editor:")]
+        public NoodlePath NoodlePathType = NoodlePath.Curvy;
+        public NoodleStroke NoodleStrokeType = NoodleStroke.Basic;
+        public double NoodleStrokeWidth = 4;
+
         // Base Colors 
         public static Color Black => new(0, 0, 0, 255);
         public static Color Base4 => new(100, 100, 110);

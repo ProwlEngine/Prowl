@@ -124,7 +124,7 @@ public class DirectionalLight : MonoBehaviour
         {
             uint res = (uint)shadowResolution;
             shadowMap ??= new RenderTexture(res, res, [ ], PixelFormat.D32_Float, true);
-
+             
             RenderingContext context = new("Shadow", Graphics.Renderables, shadowMap);
 
             Graphics.Render([ cam ], context);

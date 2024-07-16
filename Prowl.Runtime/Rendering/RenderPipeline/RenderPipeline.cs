@@ -45,7 +45,7 @@ namespace Prowl.Runtime.RenderPipelines
             // Create and schedule a command to clear the current render target
             var rootBuffer = new CommandBuffer();
             rootBuffer.SetRenderTarget(context.TargetTexture);
-            rootBuffer.ClearRenderTarget(true, true, Color.black);
+            rootBuffer.ClearRenderTarget(context.TargetTexture.ColorBuffers.Length > 0, context.TargetTexture.DepthBuffer != null, Color.black);
 
             context.ExecuteCommandBuffer(rootBuffer);
 
@@ -77,12 +77,9 @@ namespace Prowl.Runtime.RenderPipelines
 
                     var cmd = CommandBufferPool.Get("Camera Buffer");
                     cmd.SetRenderTarget(Target.RenderTexture);
-                    //if (cam.DoClear)
-                    //    cmd.ClearRenderTarget(true, true, cam.ClearColor);
-                    cmd.ClearRenderTarget(true, true, Color.black);
+                    if (cam.DoClear)
+                        cmd.ClearRenderTarget(Target.HasColors, Target.HasDepth, cam.ClearColor);
                     context.ExecuteCommandBuffer(cmd);
-                    //var outputNode = GetNode<OutputNode>();
-                    //var outputTex = (outputNode.GetValue(null) as Texture2D) ?? throw new Exception($"Output Node must have a valid Texture2D!");
 
                     var pipelineNode = GetNodes<OnPipelineNode>().FirstOrDefault(n => n.Name == context.PipelineName);
                     if(pipelineNode == null)
@@ -92,16 +89,6 @@ namespace Prowl.Runtime.RenderPipelines
                     }
 
                     pipelineNode.Execute();
-
-                    // blit result into target
-                    //cmd.SetRenderTarget(target);
-                    //cmd.ClearRenderTarget(false, true, Color.black);
-                    //cmd.SetTexture("_Texture", Result);
-                    //blitMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Blit.shader"));
-                    //cmd.SetMaterial(blitMat, 0);
-                    //cmd.DrawSingle(Mesh.GetFullscreenQuad());
-                    //
-                    //context.ExecuteCommandBuffer(cmd);
 
                     CommandBufferPool.Release(cmd);
 

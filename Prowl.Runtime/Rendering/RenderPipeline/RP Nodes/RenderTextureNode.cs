@@ -36,6 +36,10 @@ namespace Prowl.Runtime.RenderPipelines
 
         public RTBuffer[] Buffers => buffers;
 
+        public bool HasColors => RT.ColorBuffers.Length > 0;
+        public bool HasDepth => RT.DepthBuffer != null;
+
+
         public NodeRenderTexture(RenderTexture RT, RTBuffer[] buffers) { this.RT = RT; this.buffers = buffers; }
         public NodeRenderTexture(RenderTexture RT) 
         { 
