@@ -185,7 +185,7 @@ namespace Prowl.Runtime
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static Vector2 MoveTowards(Vector2 current, Vector2 target, float maxDistanceDelta)
+        public static Vector2 MoveTowards(Vector2 current, Vector2 target, double maxDistanceDelta)
         {
             Vector2 toVector = target - current;
             double dist = toVector.magnitude;
