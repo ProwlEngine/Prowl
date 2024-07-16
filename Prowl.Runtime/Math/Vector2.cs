@@ -210,6 +210,17 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
+        /// Clamps the magnitude of the given vector to the given value.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector2 ClampMagnitude(Vector2 vector, double maxLength)
+        {
+            if (vector.sqrMagnitude > maxLength * maxLength)
+                return vector.normalized * maxLength;
+            return vector;
+        }
+
+        /// <summary>
         /// Returns the reflection of a vector off a surface that has the specified normal.
         /// </summary>
         /// <param name="vector">The source vector.</param>
