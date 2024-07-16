@@ -4,7 +4,7 @@
     public class ForLoopNode : InOutFlowNode
     {
         public override string Title => "For Loop";
-        public override float Width => 140;
+        public override float Width => 160;
 
         [Output(ConnectionType.Override, TypeConstraint.Strict), SerializeIgnore]
         public FlowNode Completed;
