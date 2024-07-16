@@ -110,10 +110,10 @@ namespace Prowl.Editor
                         using (g.Node("In/Out").ExpandWidth().FitContentHeight().Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
                             if (node.Inputs.Count() > 0)
-                                changed |= DrawInputs(g, node, itemSize, true);
+                                changed |= DrawInputs(g, node, itemSize, true, false);
                             
                             if (node.Outputs.Count() > 0)
-                                changed |= DrawOutputs(g, node, itemSize, true);
+                                changed |= DrawOutputs(g, node, itemSize, true, false);
                         }
                     }
                 }
@@ -129,12 +129,12 @@ namespace Prowl.Editor
                     {
                         if (node.Inputs.Count() > 0)
                         {
-                            changed |= DrawInputs(g, node, itemSize, false);
+                            changed |= DrawInputs(g, node, itemSize, false, true);
                         }
 
                         if (node.Outputs.Count() > 0)
                         {
-                            changed |= DrawOutputs(g, node, itemSize, false);
+                            changed |= DrawOutputs(g, node, itemSize, false, true);
                         }
                     }
 
@@ -289,7 +289,7 @@ namespace Prowl.Editor
         }
 
 
-        protected bool DrawOutputs(Gui g, Node node, double itemSize, bool headerOnly)
+        protected bool DrawOutputs(Gui g, Node node, double itemSize, bool isHeader, bool showName)
         {
             bool changed = false;
             int fieldIndex = 0;
@@ -297,7 +297,7 @@ namespace Prowl.Editor
             {
                 foreach (var port in node.Outputs)
                 {
-                    if (port.IsOnHeader != headerOnly)
+                    if (port.IsOnHeader != isHeader)
                         continue;
 
                     var width = g.CurrentNode.LayoutData.Rect.width;
@@ -306,20 +306,21 @@ namespace Prowl.Editor
                     using (g.Node("OutputDummy", fieldIndex++).FitContentWidth().Height(itemSize).Enter())
                     {
                         // Draw Port Name
-                        if (!headerOnly)
+                        if (showName)
                         {
                             var pos = g.CurrentNode.LayoutData.GlobalPosition;
                             g.Draw2D.DrawText(port.fieldName, pos + new Vector2(width - textwidth - 15, 5));
                         }
 
-                        changed |= DrawPort(g, port, headerOnly ? new(width - 20, 3) : new (width - 10, 7), headerOnly);
+                        bool isFlow = port.ValueType == typeof(FlowNode);
+                        changed |= DrawPort(g, port, isHeader ? new(width - 20, 3) : new (width - 10, 7), isFlow);
                     }
                 }
             }
             return changed;
         }
 
-        protected bool DrawInputs(Gui g, Node node, double itemSize, bool headerOnly)
+        protected bool DrawInputs(Gui g, Node node, double itemSize, bool isHeader, bool showName)
         {
             bool changed = false;
             using (g.Node("In").FitContentHeight().Padding(5).Enter())
@@ -330,7 +331,7 @@ namespace Prowl.Editor
 
                 foreach (var port in node.Inputs)
                 {
-                    if (port.IsOnHeader != headerOnly)
+                    if (port.IsOnHeader != isHeader)
                         continue;
 
                     // Draw Backing
@@ -344,12 +345,13 @@ namespace Prowl.Editor
                     var width = g.CurrentNode.LayoutData.InnerRect.width;
                     using (g.Node("Input", fieldIndex++).ExpandWidth().Height(itemSize).Top(y).Layout(LayoutType.Row).ScaleChildren().Enter())
                     {
-                        if (!headerOnly)
+                        if (showName)
                         {
                             var pos = g.CurrentNode.LayoutData.GlobalPosition;
                             g.Draw2D.DrawText(port.fieldName, pos + new Vector2(5, 5));
                         }
-                        changed |= DrawPort(g, port, headerOnly ? new(0, 3) : new(-10, 7), headerOnly);
+                        bool isFlow = port.ValueType == typeof(FlowNode);
+                        changed |= DrawPort(g, port, isHeader ? new(0, 3) : new(-10, 7), isFlow);
                         //g.Draw2D.DrawCircleFilled(pos + new Vector2(-5, 12), 5, EditorStylePrefs.RandomPastel(port.ValueType, 1f));
                     }
 
