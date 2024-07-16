@@ -2,7 +2,7 @@
 
 namespace Prowl.Runtime.RenderPipelines
 {
-    [Node("Rendering")]
+    [Node("Rendering/Target Camera")]
     public class TargetCameraNode : Node
     {
         public override string Title => "Target Camera";

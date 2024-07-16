@@ -1,18 +1,17 @@
-﻿using Prowl.Runtime.NodeSystem;
-
-namespace Prowl.Runtime.RenderPipelines
+﻿namespace Prowl.Runtime.NodeSystem
 {
     public abstract class FlowNode : Node
     {
-        public void ExecuteNext(string port = "To")
+        public void ExecuteNext(string portName = "To")
         {
-            var next = GetOutputPort("To").ConnectedNode as FlowNode;
+            var port = GetOutputPort(portName);
+            var next = port.ConnectedNode as FlowNode;
 
             if (next == null) return; // No connected node this is the end of the flow
 
             try
             {
-                next.Execute();
+                next.Execute(port.GetConnection(0));
             }
             catch (System.Exception ex)
             {
@@ -20,7 +19,7 @@ namespace Prowl.Runtime.RenderPipelines
             }
         }
 
-        public abstract void Execute();
+        public abstract void Execute(NodePort input);
     }
 
     public abstract class InFlowNode : FlowNode

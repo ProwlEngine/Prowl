@@ -2,7 +2,7 @@
 
 namespace Prowl.Runtime.RenderPipelines
 {
-    [Node("Rendering")]
+    [Node("Rendering/Blit Material")]
     public class BlitMaterialNode : InOutFlowNode
     {
         public override string Title => "Blit Material";
@@ -12,7 +12,7 @@ namespace Prowl.Runtime.RenderPipelines
         [Input, SerializeIgnore] public AssetRef<Material> Material;
         [Input, SerializeIgnore] public PropertyState Property;
 
-        public override void Execute()
+        public override void Execute(NodePort port)
         {
             var target = GetInputValue<NodeRenderTexture>("Target");
             var material = GetInputValue<AssetRef<Material>>("Material");

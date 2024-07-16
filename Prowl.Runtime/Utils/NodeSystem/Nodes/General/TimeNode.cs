@@ -1,6 +1,6 @@
 ﻿namespace Prowl.Runtime.NodeSystem
 {
-    [Node("General")]
+    [Node("General/Time")]
     public class TimeNode : Node
     {
         public override bool ShowTitle => false;

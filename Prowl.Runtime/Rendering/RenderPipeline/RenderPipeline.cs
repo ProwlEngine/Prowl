@@ -11,12 +11,13 @@ namespace Prowl.Runtime.RenderPipelines
     {
         public override string[] NodeCategories => [
             "General",
+            "Flow Control",
             "Math",
             "Rendering",
         ];
 
-        public override Type[] NodeTypes => [
-            typeof(ParameterNode),
+        public override (string, Type)[] NodeTypes => [
+            ("Parameter", typeof(ParameterNode)),
         ];
 
         private List<NodeRenderTexture> rts = [];
@@ -88,7 +89,7 @@ namespace Prowl.Runtime.RenderPipelines
                         return;
                     }
 
-                    pipelineNode.Execute();
+                    pipelineNode.Execute(null);
 
                     CommandBufferPool.Release(cmd);
 

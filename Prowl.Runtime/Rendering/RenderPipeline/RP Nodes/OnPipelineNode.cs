@@ -2,7 +2,7 @@
 
 namespace Prowl.Runtime.RenderPipelines
 {
-    [Node("Rendering")]
+    [Node("Rendering/On Pipeline")]
     public class OnPipelineNode : OutFlowNode
     {
         public override string Title => "On Pipeline";
@@ -11,7 +11,7 @@ namespace Prowl.Runtime.RenderPipelines
         [Tooltip("Default Pipelines are 'Main' & 'Shadow'")]
         public string Name = "Main";
 
-        public override void Execute()
+        public override void Execute(NodePort port)
         {
             ExecuteNext();
         }

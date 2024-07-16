@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Prowl.Runtime.RenderPipelines
 {
-    [Node("Rendering")]
+    [Node("Rendering/Get Renderables")]
     public class GetRenderablesNode : Node
     {
         public override string Title => "Get Renderables";

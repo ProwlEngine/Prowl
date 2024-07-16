@@ -57,10 +57,10 @@ namespace Prowl.Runtime.RenderPipelines
         }
     }
 
-    [Node("Rendering")]
+    [Node("Rendering/Create Render Texture")]
     public class RenderTextureNode : InOutFlowNode
     {
-        public override string Title => "Render Texture";
+        public override string Title => "Create Render Texture";
         public override float Width => 250;
 
         private RenderPipeline renderGraph => (RenderPipeline)graph;
@@ -79,6 +79,8 @@ namespace Prowl.Runtime.RenderPipelines
         public bool StartCleared = true;
         [ShowIf(nameof(StartCleared))] public Color ClearColor = Color.black;
         public bool EnableRandomWrite = false;
+
+        public Veldrid.TextureSampleCount SampleCount = Veldrid.TextureSampleCount.Count1;
 
         public RTBuffer[] ColorFormats = [new RTBuffer() { format = PixelFormat.R8_G8_B8_A8_UNorm, type = RTBuffer.Type.Color }];
 
@@ -123,7 +125,7 @@ namespace Prowl.Runtime.RenderPipelines
             throw new Exception("Cannot get Render Texture, it has not been created yet!");
         }
 
-        public override void Execute()
+        public override void Execute(NodePort port)
         {
             var pixelFormats = ColorFormats.Select(f => f.format).ToArray();
             RenderTextureDescription desc = new()
@@ -131,7 +133,7 @@ namespace Prowl.Runtime.RenderPipelines
                 enableRandomWrite = EnableRandomWrite,
                 sampled = true,
                 depthBufferFormat = HasDepth ? DepthFormat : null,
-                sampleCount = Veldrid.TextureSampleCount.Count1,
+                sampleCount = SampleCount,
                 colorBufferFormats = pixelFormats,
             };
 

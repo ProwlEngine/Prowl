@@ -2,7 +2,7 @@
 
 namespace Prowl.Runtime.RenderPipelines
 {
-    [Node("Rendering")]
+    [Node("Rendering/Property")]
     public class PropertyNode : Node
     {
         public class NodeProperty

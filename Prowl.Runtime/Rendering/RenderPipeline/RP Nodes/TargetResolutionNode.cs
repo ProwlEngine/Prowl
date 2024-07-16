@@ -2,7 +2,7 @@
 
 namespace Prowl.Runtime.RenderPipelines
 {
-    [Node("Rendering")]
+    [Node("Rendering/Target Resolution")]
     public class TargetResolutionNode : Node
     {
         public override string Title => "Target Resolution";

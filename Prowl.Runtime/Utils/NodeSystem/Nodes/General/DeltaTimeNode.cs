@@ -1,6 +1,6 @@
 ﻿namespace Prowl.Runtime.NodeSystem
 {
-    [Node("General")]
+    [Node("General/Delta Time")]
     public class DeltaTimeNode : Node
     {
         public override bool ShowTitle => false;

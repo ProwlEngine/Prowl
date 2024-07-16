@@ -2,7 +2,7 @@
 
 namespace Prowl.Runtime.RenderPipelines
 {
-    [Node("Rendering")]
+    [Node("Rendering/Split RenderTexture")]
     public class SplitRenderTextureNode : Node
     {
         public override string Title => "Split RenderTexture";

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Prowl.Runtime.RenderPipelines
 {
-    [Node("Rendering")]
+    [Node("Rendering/Draw Renderables")]
     public class DrawRenderablesNode : InOutFlowNode
     {
         public override string Title => "Draw Renderables";
@@ -17,7 +17,7 @@ namespace Prowl.Runtime.RenderPipelines
         public AssetRef<Material> Material;
         public AssetRef<Material> Fallback;
 
-        public override void Execute()
+        public override void Execute(NodePort port)
         {
             var renderables = GetInputValue<List<Renderable>>("Renderables");
             var target = GetInputValue<NodeRenderTexture>("Target");

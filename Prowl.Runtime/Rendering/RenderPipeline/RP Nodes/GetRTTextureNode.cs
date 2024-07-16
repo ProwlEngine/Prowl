@@ -2,7 +2,7 @@
 
 namespace Prowl.Runtime.RenderPipelines
 {
-    [Node("Rendering")]
+    [Node("Rendering/Get RT Texture")]
     public class GetRTTextureNode : Node
     {
         public override string Title => "Get RT Texture";

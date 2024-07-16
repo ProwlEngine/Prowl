@@ -2,7 +2,7 @@
 
 namespace Prowl.Runtime.RenderPipelines
 {
-    [Node("Rendering")]
+    [Node("Rendering/Create Material")]
     public class MaterialFromShaderNode : Node
     {
         public override string Title => "Create Material";
