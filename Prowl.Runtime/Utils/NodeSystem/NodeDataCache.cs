@@ -31,7 +31,7 @@ namespace Prowl.Runtime.Utils.NodeSystem
         }
 
         /// <summary> Update static ports and dynamic ports managed by DynamicPortLists to reflect class fields. </summary>
-        public static void UpdatePorts(Node node, Dictionary<string, NodePort> ports)
+        public static void UpdatePorts(Node node, Node.NodePortDictionary ports)
         {
             if (!Initialized) BuildCache();
 
