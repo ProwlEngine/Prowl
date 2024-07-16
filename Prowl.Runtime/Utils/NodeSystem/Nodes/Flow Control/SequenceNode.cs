@@ -4,7 +4,7 @@ using System.Linq;
 namespace Prowl.Runtime.NodeSystem
 {
     [Node("Flow Control/Sequence")]
-    public class SequenceNode : InOutFlowNode
+    public class SequenceNode : InFlowNode
     {
         public override string Title => "Sequence";
         public override float Width => 100;
