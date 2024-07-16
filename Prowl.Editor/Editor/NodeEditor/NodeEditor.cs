@@ -565,15 +565,14 @@ namespace Prowl.Editor
 
         private RenderTexture RenderTarget;
 
-        private Rect viewRect;
-
-
         internal NodePort? draggingPort = null;
         internal List<Vector2> reroutePoints = new();
 
         internal Vector2? dragSelectionStart = null;
         internal Rect dragSelection;
-        private string? selectedCatagory = null;
+
+        private string _searchText = string.Empty;
+        private static MenuItemInfo rootMenuItem;
 
         private SelectHandler<WeakReference> SelectHandler = new((item) => !item.IsAlive, (a, b) => ReferenceEquals(a.Target, b.Target));
 
@@ -598,6 +597,9 @@ namespace Prowl.Editor
         {
             inputHandler.Dispose();
         }
+
+        [OnAssemblyUnload]
+        public static void OnAssemblyUnload() => rootMenuItem = null;
 
         public void RefreshRenderTexture(Vector2 renderSize)
         {
@@ -646,7 +648,6 @@ namespace Prowl.Editor
                         g.ClosePopup();
                         //offset -= (g.PointerPos - (new Vector2(width / targetzoom, height / targetzoom) / 2)) * g.PointerWheel * 0.5f;
                     }
-
                     zoom = MathD.Lerp(zoom, targetzoom, 0.1);
 
                     if (g.IsPointerDown(MouseButton.Middle))
@@ -655,65 +656,17 @@ namespace Prowl.Editor
                         g.ClosePopup();
                     }
 
-                    viewRect = new Rect(topleft.x, topleft.y, width / zoom, height / zoom);
-
                     // Draw Connections behind nodes
                     DrawConnections();
+                    DrawNodes(g);
 
-                    int index = 0;
-                    var safeNodes = graph.nodes.ToArray();
-                    List<int> unusedKeys = new(customEditors.Keys);
-                    foreach (var node in safeNodes)
-                    {
-                        var key = node.GetHashCode();
-                        if (!customEditors.TryGetValue(key, out var customEditor))
-                        {
-                            Type? editorType = NodeEditorAttribute.GetEditor(node.GetType());
-                            if (editorType != null)
-                            {
-                                customEditor = (ScriptedNodeEditor)Activator.CreateInstance(editorType);
-                                customEditor.SetEditor(this);
-                                customEditor.SetGraph(graph);
-                                customEditor.SetSelectHandler(SelectHandler);
-                                customEditor.OnEnable();
-                                customEditors[key] = customEditor;
-                                unusedKeys.Remove(key);
-                            }
-                            else
-                            {
-                                gui.Draw2D.DrawText($"No Editor for Node {node.GetType().Name}", node.position, Color.red);
-                            }
-                        }
-                        else
-                        {
-                            // We are still editing the same object
-                            hasChanged |= customEditor.DrawNode(index++, g, node);
-                            unusedKeys.Remove(key);
-                        }
-                    }
-
-                    foreach(var key in unusedKeys)
-                    {
-                        customEditors[key].OnDisable();
-                        customEditors.Remove(key);
-                    }
 
                     if (draggingPort != null)
                     {
-                        // Draw Connection
-                        var col = EditorStylePrefs.RandomPastel(draggingPort.ValueType);
-
-                        List<Vector2> gridPoints = [draggingPort.LastKnownPosition];
-                        reroutePoints.ForEach((p) => gridPoints.Add(GridToWindow(p)));
-                        gridPoints.Add(g.PointerPos);
-                        DrawNoodle(col, EditorStylePrefs.Instance.NoodlePathType, EditorStylePrefs.Instance.NoodleStrokeType, EditorStylePrefs.Instance.NoodleStrokeWidth, gridPoints);
-
-                        if (g.IsPointerUp(MouseButton.Left))
+                        if (gui.IsPointerUp(MouseButton.Left))
                             draggingPort = null;
-                        else if (g.IsPointerClick(MouseButton.Right))
-                        {
-                            reroutePoints.Add(WindowToGrid(g.PointerPos));
-                        }
+                        else if (gui.IsPointerClick(MouseButton.Right))
+                            reroutePoints.Add(WindowToGrid(gui.PointerPos));
                     }
 
                     if (dragSelectionStart != null && g.IsPointerDown(MouseButton.Left))
@@ -732,34 +685,11 @@ namespace Prowl.Editor
                     {
                         if (g.FocusID == 0)
                         {
-                            if (g.IsKeyPressed(Key.C))
-                            {
-                                var comment = graph.AddNode<CommentNode>();
-                                comment.Header = "This a Comment :D";
-                                comment.Desc = "This is a Description";
-                                comment.position = g.PointerPos;
-                            }
-
-                            if (g.IsKeyPressed(Key.V)) AlignSelectedVertically();
-                            if (g.IsKeyPressed(Key.H)) AlignSelectedHorizontally();
-                            if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
-                            {
-                                var newlycreated = new List<Node>();
-                                SelectHandler.Foreach((go) =>
-                                {
-                                    newlycreated.Add(graph.CopyNode(go.Target as Node));
-                                });
-                                SelectHandler.Clear();
-                                newlycreated.ForEach((n) => SelectHandler.SelectIfNot(new WeakReference(n)));
-                            }
+                            KeyShortcuts(g);
                         }
 
                         if (g.IsNodeHovered())
                         {
-                            if (g.IsPointerClick(MouseButton.Right, true) || g.IsKeyPressed(Key.Space))
-                                g.OpenPopup("NodeCreatePopup", g.PointerPos);
-
-
                             if (!SelectHandler.SelectedThisFrame && g.IsNodePressed())
                                 SelectHandler.Clear();
 
@@ -767,53 +697,7 @@ namespace Prowl.Editor
                                 dragSelectionStart = g.PointerPos;
                         }
 
-                        var popupHolder = g.CurrentNode;
-                        if (g.BeginPopup("NodeCreatePopup", out var popup))
-                        {
-                            using (popup.Width(180).Padding(5).Layout(LayoutType.Column).Spacing(5).FitContentHeight().Scroll().Clip().Enter())
-                            {
-                                if (selectedCatagory == null)
-                                {
-                                    foreach (var catagory in NodeAttribute.nodeCatagories.Keys)
-                                        if (EditorGUI.StyledButton(catagory))
-                                            selectedCatagory = catagory;
-                                }
-                                else
-                                {
-                                    if (EditorGUI.StyledButton("Back"))
-                                        selectedCatagory = null;
-
-                                    if (NodeAttribute.nodeCatagories.TryGetValue(selectedCatagory, out var types))
-                                    {
-                                        foreach (var type in types)
-                                            if (EditorGUI.StyledButton(type.Name))
-                                            {
-                                                var node = graph.AddNode(type);
-                                                node.position = WindowToGrid(g.PointerPos);
-                                                g.ClosePopup(popupHolder);
-                                                hasChanged |= true;
-
-                                                SelectHandler.SetSelection(new WeakReference(node));
-                                            }
-                                    }
-                                }
-
-                                foreach (var nodeType in graph.NodeTypes)
-                                    if (EditorGUI.StyledButton(nodeType.Name))
-                                    {
-                                        var node = graph.AddNode(nodeType);
-                                        node.position = WindowToGrid(g.PointerPos);
-                                        g.ClosePopup(popupHolder);
-                                        hasChanged |= true;
-
-                                        SelectHandler.SetSelection(new WeakReference(node));
-                                    }
-                            }
-                        }
-                        else
-                        {
-                            selectedCatagory = null;
-                        }
+                        CreateNodeContextMenu(g);
                     }
                 });
 
@@ -830,12 +714,92 @@ namespace Prowl.Editor
             return RenderTarget.ColorBuffers[0];
         }
 
-        public void GetViewRect(double width, double height) => viewRect = new Rect(topleft.x, topleft.y, width / zoom, height / zoom);
-        
-        public void SetViewRect(Rect rect, double width, double height)
+        private void KeyShortcuts(Gui g)
         {
-            topleft = rect.Min;
+            if (g.IsKeyPressed(Key.C))
+            {
+                var comment = graph.AddNode<CommentNode>();
+                comment.Header = "This a Comment :D";
+                comment.Desc = "This is a Description";
+                comment.position = g.PointerPos;
+            }
 
+            if (g.IsKeyPressed(Key.V)) AlignSelectedVertically();
+            if (g.IsKeyPressed(Key.H)) AlignSelectedHorizontally();
+            if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
+            {
+                var newlycreated = new List<Node>();
+                SelectHandler.Foreach((go) =>
+                {
+                    newlycreated.Add(graph.CopyNode(go.Target as Node));
+                });
+                SelectHandler.Clear();
+                newlycreated.ForEach((n) => SelectHandler.SelectIfNot(new WeakReference(n)));
+            }
+        }
+
+        private void CreateNodeContextMenu(Gui g)
+        {
+            if (g.IsNodeHovered())
+            {
+                if (g.IsPointerClick(MouseButton.Right, true) || g.IsKeyPressed(Key.Space))
+                    g.OpenPopup("NodeCreatePopup", g.PointerPos);
+            }
+
+            var popupHolder = g.CurrentNode;
+            if (g.BeginPopup("NodeCreatePopup", out var popup))
+            {
+                using (popup.Width(200).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
+                {
+                    gui.Search("##searchBox", ref _searchText, 0, 0, Size.Percentage(1f));
+
+                    EditorGUI.Separator();
+
+                    rootMenuItem ??= GetNodeMenuTree(graph.NodeCategories, graph.NodeTypes);
+                    DrawMenuItems(rootMenuItem);
+                }
+            }
+        }
+
+        private void DrawNodes(Gui g)
+        {
+            int index = 0;
+            var safeNodes = graph.nodes.ToArray();
+            List<int> unusedKeys = new(customEditors.Keys);
+            foreach (var node in safeNodes)
+            {
+                var key = node.GetHashCode();
+                if (!customEditors.TryGetValue(key, out var customEditor))
+                {
+                    Type? editorType = NodeEditorAttribute.GetEditor(node.GetType());
+                    if (editorType != null)
+                    {
+                        customEditor = (ScriptedNodeEditor)Activator.CreateInstance(editorType);
+                        customEditor.SetEditor(this);
+                        customEditor.SetGraph(graph);
+                        customEditor.SetSelectHandler(SelectHandler);
+                        customEditor.OnEnable();
+                        customEditors[key] = customEditor;
+                        unusedKeys.Remove(key);
+                    }
+                    else
+                    {
+                        gui.Draw2D.DrawText($"No Editor for Node {node.GetType().Name}", node.position, Color.red);
+                    }
+                }
+                else
+                {
+                    // We are still editing the same object
+                    hasChanged |= customEditor.DrawNode(index++, g, node);
+                    unusedKeys.Remove(key);
+                }
+            }
+
+            foreach (var key in unusedKeys)
+            {
+                customEditors[key].OnDisable();
+                customEditors.Remove(key);
+            }
         }
 
         // Make relative to window
@@ -846,9 +810,6 @@ namespace Prowl.Editor
 
         private void DrawConnections()
         {
-            //List<RerouteReference> selection = preBoxSelectionReroute != null ? new List<RerouteReference>(preBoxSelectionReroute) : new List<RerouteReference>();
-            //hoveredReroute = new RerouteReference();
-            
             List<Vector2> gridPoints = new(2);
             foreach (var node in graph.nodes)
             {
@@ -863,6 +824,7 @@ namespace Prowl.Editor
                     for (int k = 0; k < output.ConnectionCount; k++)
                     {
                         var input = output.GetConnection(k);
+                        var reroutes = output.GetReroutePoints(k);
 
                         // Error handling
                         if (input == null) continue; //If a script has been updated and the port doesn't exist, it is removed and null is returned. If this happens, return.
@@ -870,7 +832,6 @@ namespace Prowl.Editor
 
                         gridPoints.Clear();
                         gridPoints.Add(output.LastKnownPosition);
-                        var reroutes = output.GetReroutePoints(k);
                         reroutes.ForEach((p) => gridPoints.Add(GridToWindow(p)));
                         gridPoints.Add(input.LastKnownPosition);
                         DrawNoodle(portColor, EditorStylePrefs.Instance.NoodlePathType, EditorStylePrefs.Instance.NoodleStrokeType, EditorStylePrefs.Instance.NoodleStrokeWidth, gridPoints);
@@ -884,7 +845,17 @@ namespace Prowl.Editor
                 }
             }
 
-            //if (Event.current.type != EventType.Layout && currentActivity == NodeActivity.DragGrid) selectedReroutes = selection;
+            // Draw the noodle being dragged
+            if (draggingPort != null)
+            {
+                var col = EditorStylePrefs.RandomPastel(draggingPort.ValueType);
+
+                gridPoints.Clear();
+                gridPoints.Add(draggingPort.LastKnownPosition);
+                reroutePoints.ForEach((p) => gridPoints.Add(GridToWindow(p)));
+                gridPoints.Add(gui.PointerPos);
+                DrawNoodle(col, EditorStylePrefs.Instance.NoodlePathType, EditorStylePrefs.Instance.NoodleStrokeType, EditorStylePrefs.Instance.NoodleStrokeWidth, gridPoints);
+            }
         }
 
         static Vector2 CalculateBezierPoint(Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, double t)
@@ -1108,23 +1079,153 @@ namespace Prowl.Editor
             RenderTarget?.DestroyImmediate();
         }
 
-        public struct RerouteReference
-        {
-            public NodePort port;
-            public int connectionIndex;
-            public int pointIndex;
 
-            public RerouteReference(NodePort port, int connectionIndex, int pointIndex)
+        private void DrawMenuItems(MenuItemInfo menuItem)
+        {
+            bool foundName = false;
+            bool hasSearch = string.IsNullOrEmpty(_searchText) == false;
+            foreach (var item in menuItem.Children)
             {
-                this.port = port;
-                this.connectionIndex = connectionIndex;
-                this.pointIndex = pointIndex;
+                if (hasSearch && (item.Name.Contains(_searchText, StringComparison.CurrentCultureIgnoreCase) == false || item.Type == null))
+                {
+                    DrawMenuItems(item);
+                    if (hasSearch && item.Name.Equals(_searchText, StringComparison.CurrentCultureIgnoreCase))
+                        foundName = true;
+                    continue;
+                }
+
+                if (item.Type != null)
+                {
+                    if (EditorGUI.StyledButton(item.Name))
+                    {
+                        var node = graph.AddNode(item.Type);
+                        node.position = WindowToGrid(gui.PointerPos);
+                    }
+                }
+                else
+                {
+
+                    if (EditorGUI.StyledButton(item.Name))
+                        Gui.ActiveGUI.OpenPopup(item.Name + "Popup", Gui.ActiveGUI.PreviousNode.LayoutData.Rect.TopRight);
+
+                    // Enter the Button's Node
+                    using (Gui.ActiveGUI.PreviousNode.Enter())
+                    {
+                        // Draw a > to indicate a popup
+                        Rect rect = Gui.ActiveGUI.CurrentNode.LayoutData.Rect;
+                        rect.x = rect.x + rect.width - 25;
+                        rect.width = 20;
+                        Gui.ActiveGUI.Draw2D.DrawText(FontAwesome6.ChevronRight, rect, Color.white);
+                    }
+
+                    if (Gui.ActiveGUI.BeginPopup(item.Name + "Popup", out var node))
+                    {
+                        double largestWidth = 0;
+                        foreach (var child in item.Children)
+                        {
+                            double width = Font.DefaultFont.CalcTextSize(child.Name, 0).x + 30;
+                            if (width > largestWidth)
+                                largestWidth = width;
+                        }
+
+                        using (node.Width(largestWidth).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
+                        {
+                            DrawMenuItems(item);
+                        }
+                    }
+                }
+            }
+        }
+
+        private MenuItemInfo GetNodeMenuTree(string[] nodeCategories, (string, Type)[] nodeTypes)
+        {
+            var allNodeTypes = AppDomain.CurrentDomain.GetAssemblies()
+                .SelectMany(assembly => assembly.GetTypes())
+                .Where(type => type.IsSubclassOf(typeof(Node)) && !type.IsAbstract)
+                .ToArray();
+
+            var items = allNodeTypes.Select(type => {
+                string Name = type.Name;
+                var addToMenuAttribute = type.GetCustomAttribute<NodeAttribute>();
+                if (addToMenuAttribute != null)
+                    Name = addToMenuAttribute.catagory;
+                return (Name, type);
+            }).ToArray();
+
+
+            // Create a root MenuItemInfo object to serve as the starting point of the tree
+            MenuItemInfo root = new MenuItemInfo { Name = "Root" };
+
+            foreach (var (path, type) in items)
+            {
+                string[] parts = path.Split('/');
+
+                // If first part is 'Hidden' then skip this node
+                if (parts[0] == "Hidden") continue;
+
+                // Make sure this root path is allowed in this graph
+                if (nodeCategories != null && !nodeCategories.Contains(parts[0], StringComparer.OrdinalIgnoreCase)) continue;
+
+                MenuItemInfo currentNode = root;
+
+                for (int i = 0; i < parts.Length - 1; i++)  // Skip the last part
+                {
+                    string part = parts[i];
+                    MenuItemInfo childNode = currentNode.Children.Find(c => c.Name == part);
+
+                    if (childNode == null)
+                    {
+                        childNode = new MenuItemInfo { Name = part };
+                        currentNode.Children.Add(childNode);
+                    }
+
+                    currentNode = childNode;
+                }
+
+                MenuItemInfo leafNode = new MenuItemInfo
+                {
+                    Name = parts[^1],  // Get the last part
+                    Type = type
+                };
+
+                currentNode.Children.Add(leafNode);
             }
 
-            public void InsertPoint(Vector2 pos) { port.GetReroutePoints(connectionIndex).Insert(pointIndex, pos); }
-            public void SetPoint(Vector2 pos) { port.GetReroutePoints(connectionIndex)[pointIndex] = pos; }
-            public void RemovePoint() { port.GetReroutePoints(connectionIndex).RemoveAt(pointIndex); }
-            public Vector2 GetPoint() { return port.GetReroutePoints(connectionIndex)[pointIndex]; }
+            // Add Graph specific nodes to the root
+            if (nodeTypes != null)
+            {
+                foreach (var type in nodeTypes)
+                    root.Children.Add(new MenuItemInfo { Name = type.Item1, Type = type.Item2 });
+            }
+
+            SortChildren(root);
+            return root;
+        }
+
+        private void SortChildren(MenuItemInfo node)
+        {
+            node.Children.Sort((x, y) => x.Type == null ? -1 : 1);
+
+            foreach (var child in node.Children)
+                SortChildren(child);
+        }
+
+        private class MenuItemInfo
+        {
+            public string Name;
+            public Type Type;
+            public List<MenuItemInfo> Children = new();
+
+            public MenuItemInfo() { }
+
+            public MenuItemInfo(Type type)
+            {
+                Type = type;
+                Name = type.Name;
+                var addToMenuAttribute = type.GetCustomAttribute<NodeAttribute>();
+                if (addToMenuAttribute != null)
+                    Name = addToMenuAttribute.catagory;
+            }
         }
     }
 }
