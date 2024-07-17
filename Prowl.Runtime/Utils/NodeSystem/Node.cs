@@ -108,7 +108,7 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> Convenience function. </summary>
         /// <seealso cref="AddInstancePort"/>
         /// <seealso cref="AddInstanceOutput"/>
-        public NodePort AddDynamicInput(Type type, Node.ConnectionType connectionType = Node.ConnectionType.Override, Node.TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null)
+        public NodePort AddDynamicInput(Type type, Node.ConnectionType connectionType = Node.ConnectionType.Override, Node.TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null, bool onHeader = false)
         {
             return AddDynamicPort(type, NodePort.IO.Input, connectionType, typeConstraint, fieldName);
         }
@@ -116,7 +116,7 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> Convenience function. </summary>
         /// <seealso cref="AddInstancePort"/>
         /// <seealso cref="AddInstanceInput"/>
-        public NodePort AddDynamicOutput(Type type, Node.ConnectionType connectionType = Node.ConnectionType.Override, Node.TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null)
+        public NodePort AddDynamicOutput(Type type, Node.ConnectionType connectionType = Node.ConnectionType.Override, Node.TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null, bool onHeader = false)
         {
             return AddDynamicPort(type, NodePort.IO.Output, connectionType, typeConstraint, fieldName);
         }
@@ -124,7 +124,7 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> Add a dynamic, serialized port to this node. </summary>
         /// <seealso cref="AddDynamicInput"/>
         /// <seealso cref="AddDynamicOutput"/>
-        private NodePort AddDynamicPort(Type type, NodePort.IO direction, Node.ConnectionType connectionType = Node.ConnectionType.Override, Node.TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null)
+        private NodePort AddDynamicPort(Type type, NodePort.IO direction, Node.ConnectionType connectionType = Node.ConnectionType.Override, Node.TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null, bool onHeader = false)
         {
             if (fieldName == null)
             {
@@ -137,7 +137,7 @@ namespace Prowl.Runtime.NodeSystem
                 Debug.LogWarning("Port '" + fieldName + "' already exists in " + GetType().Name);
                 return ports[fieldName];
             }
-            NodePort port = new NodePort(fieldName, type, direction, connectionType, typeConstraint, this);
+            NodePort port = new NodePort(fieldName, type, direction, connectionType, typeConstraint, this, onHeader);
             ports.Add(fieldName, port);
             return port;
         }

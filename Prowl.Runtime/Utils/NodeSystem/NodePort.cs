@@ -133,14 +133,14 @@ namespace Prowl.Runtime.NodeSystem
         }
 
         /// <summary> Construct a dynamic port. Dynamic ports are not forgotten on reimport, and is ideal for runtime-created ports. </summary>
-        public NodePort(string fieldName, Type type, IO direction, Node.ConnectionType connectionType, Node.TypeConstraint typeConstraint, Node node)
+        public NodePort(string fieldName, Type type, IO direction, Node.ConnectionType connectionType, Node.TypeConstraint typeConstraint, Node node, bool onHeader)
         {
             _fieldName = fieldName;
             this.ValueType = type;
             _direction = direction;
             _node = node;
             _dynamic = true;
-            _onHeader = false;
+            _onHeader = onHeader;
             _connectionType = connectionType;
             _typeConstraint = typeConstraint;
             InstanceID = _node.graph.NextID;
