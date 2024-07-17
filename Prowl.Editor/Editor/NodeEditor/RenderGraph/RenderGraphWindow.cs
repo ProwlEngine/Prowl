@@ -49,6 +49,11 @@ namespace Prowl.Editor
 
                     changed |= editor.DrawBlackBoard(gui);
 
+                    if (!editor.IsDragging)
+                    {
+                        editor.DrawContextMenu(gui);
+                    }
+
                     if (changed)
                     {
                         graph.Validate();

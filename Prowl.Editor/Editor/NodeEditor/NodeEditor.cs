@@ -698,8 +698,6 @@ namespace Prowl.Editor
                             if (dragSelectionStart == null && g.IsPointerClick(MouseButton.Left))
                                 dragSelectionStart = g.PointerPos;
                         }
-
-                        CreateNodeContextMenu(g);
                     }
                 });
 
@@ -737,29 +735,6 @@ namespace Prowl.Editor
                 });
                 SelectHandler.Clear();
                 newlycreated.ForEach((n) => SelectHandler.SelectIfNot(new WeakReference(n)));
-            }
-        }
-
-        private void CreateNodeContextMenu(Gui g)
-        {
-            if (g.IsNodeHovered())
-            {
-                if (g.IsPointerClick(MouseButton.Right, true) || g.IsKeyPressed(Key.Space))
-                    g.OpenPopup("NodeCreatePopup", g.PointerPos);
-            }
-
-            var popupHolder = g.CurrentNode;
-            if (g.BeginPopup("NodeCreatePopup", out var popup))
-            {
-                using (popup.Width(200).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
-                {
-                    gui.Search("##searchBox", ref _searchText, 0, 0, Size.Percentage(1f));
-
-                    EditorGUI.Separator();
-
-                    rootMenuItem ??= GetNodeMenuTree(graph.NodeCategories, graph.NodeTypes);
-                    DrawMenuItems(rootMenuItem);
-                }
             }
         }
 
@@ -1057,6 +1032,29 @@ namespace Prowl.Editor
                 // Get graph.parameters field
                 FieldInfo props = graph.GetType().GetField("parameters", BindingFlags.Instance | BindingFlags.Public);
                 return EditorGUI.PropertyGrid("BlackBoard", ref obj, [props], EditorGUI.PropertyGridConfig.NoHeader);
+            }
+        }
+
+        public void DrawContextMenu(Gui g)
+        {
+            if (g.IsNodeHovered())
+            {
+                if (g.IsPointerClick(MouseButton.Right, true) || g.IsKeyPressed(Key.Space))
+                    g.OpenPopup("NodeCreatePopup", g.PointerPos);
+            }
+
+            var popupHolder = g.CurrentNode;
+            if (g.BeginPopup("NodeCreatePopup", out var popup))
+            {
+                using (popup.Width(200).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
+                {
+                    g.Search("##searchBox", ref _searchText, 0, 0, Size.Percentage(1f));
+
+                    EditorGUI.Separator();
+
+                    rootMenuItem ??= GetNodeMenuTree(graph.NodeCategories, graph.NodeTypes, graph.NodeReflectionTypes);
+                    DrawMenuItems(rootMenuItem, g);
+                }
             }
         }
 
