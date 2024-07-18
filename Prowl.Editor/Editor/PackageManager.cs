@@ -31,7 +31,7 @@ namespace Prowl.Editor
         string package_Title, package_Authors, package_Description, package_Downloads, package_Version, package_PublishDate, package_ProjectURL, package_LicenseURL;
         Texture2D? package_Icon;
         List<(string, string)> package_Dependencies;
-        IPackageSearchMetadata? _catalog;
+        IPackageSearchMetadata? _metadata;
 
         List<(IPackageSearchMetadata, Texture2D?)> PackageEntries = [];
 
@@ -196,7 +196,7 @@ namespace Prowl.Editor
                 var installWidth = width - 75 - 10 - 10;
                 using (gui.Node("Installed").Height(itemSize).ExpandWidth().Layout(LayoutType.Row).Enter())
                 {
-                    var installedPackage = AssetDatabase.GetInstalledPackage(_catalog.Identity.Id);
+                    var installedPackage = AssetDatabase.GetInstalledPackage(_metadata.Identity.Id);
                     if (installedPackage != null)
                     {
                         if (gui.Combo("Version", "VersionPopup", ref _selectedVersionIndex, _projectVersions, 0, 0, 75, itemSize))
@@ -205,12 +205,12 @@ namespace Prowl.Editor
                         bool canUpdate = _projectVersions[_selectedVersionIndex] != installedPackage.Identity.Version.ToString();
                         if (canUpdate && EditorGUI.StyledButton("Update", installWidth / 2, itemSize))
                         {
-                            AssetDatabase.UninstallPackage(_catalog.Identity.Id, installedPackage.Identity.Version.ToString());
-                            AssetDatabase.InstallPackage(_catalog.Identity.Id, _projectVersions[_selectedVersionIndex]);
+                            AssetDatabase.UninstallPackage(_metadata.Identity.Id, installedPackage.Identity.Version.ToString());
+                            AssetDatabase.InstallPackage(_metadata.Identity.Id, _projectVersions[_selectedVersionIndex]);
                         }
 
                         if (EditorGUI.StyledButton("Uninstall", canUpdate ? installWidth / 2 : installWidth, itemSize))
-                            AssetDatabase.UninstallPackage(_catalog.Identity.Id, installedPackage.Identity.Version.ToString());
+                            AssetDatabase.UninstallPackage(_metadata.Identity.Id, installedPackage.Identity.Version.ToString());
 
                         sb.AppendLine("==========");
                         sb.AppendLine("Installed Version: " + installedPackage.Identity.Version.ToString());
@@ -221,7 +221,7 @@ namespace Prowl.Editor
                         if (gui.Combo("Version", "VersionPopup", ref _selectedVersionIndex, _projectVersions, 0, 0, 75, itemSize))
                             PopulateDetails(_projectVersions[_selectedVersionIndex]);
                         if (EditorGUI.StyledButton("Install", installWidth, itemSize))
-                            AssetDatabase.InstallPackage(_catalog.Identity.Id, _projectVersions[_selectedVersionIndex]);
+                            AssetDatabase.InstallPackage(_metadata.Identity.Id, _projectVersions[_selectedVersionIndex]);
                     }
                 }
 
@@ -230,7 +230,7 @@ namespace Prowl.Editor
                 sb.AppendLine(package_Description);
                 sb.AppendLine("");
                 sb.AppendLine("Authors: " + package_Authors);
-                sb.AppendLine("Downloads: " + package_Downloads);
+                //sb.AppendLine("Downloads: " + package_Downloads);
                 sb.AppendLine("Version: " + package_Version);
                 sb.AppendLine("Publish Date: " + package_PublishDate);
 
@@ -378,35 +378,35 @@ namespace Prowl.Editor
 
         private async void PopulateDetails(string version)
         {
-            _catalog = _selectedPackageMetaData.SingleOrDefault(x => x.Identity.Version.ToString() == version);
+            _metadata = _selectedPackageMetaData.SingleOrDefault(x => x.Identity.Version.ToString() == version);
 
             package_Version = version;
             package_Dependencies = [];
 
             package_Icon?.DestroyImmediate();
 
-            if (_catalog != null)
+            if (_metadata != null)
             {
-                package_Icon = await DownloadIcon(_catalog.IconUrl);
+                package_Icon = await DownloadIcon(_metadata.IconUrl);
 
-                package_Title = _catalog.Title;
-                package_Authors = _catalog.Authors;
-                package_Description = _catalog.Description;
-                package_Downloads = _catalog.DownloadCount?.ToString() ?? "Unknown";
-                package_PublishDate = DateTime.Parse(_catalog.Published.ToString()).ToString("g");
-                package_ProjectURL = _catalog.ProjectUrl.ToString();
-                package_LicenseURL = _catalog.LicenseUrl.ToString();
+                package_Title = _metadata.Title;
+                package_Authors = _metadata.Authors;
+                package_Description = _metadata.Description;
+                package_Downloads = _metadata.DownloadCount?.ToString() ?? "Unknown";
+                package_PublishDate = DateTime.Parse(_metadata.Published.ToString()).ToString("g");
+                package_ProjectURL = _metadata.ProjectUrl.ToString();
+                package_LicenseURL = _metadata.LicenseUrl.ToString();
 
-                if (_catalog.DependencySets.ToList().Count > 0)
-                    foreach (var dependency in _catalog.DependencySets.FirstOrDefault().Packages)
+                if (_metadata.DependencySets.ToList().Count > 0)
+                    foreach (var dependency in _metadata.DependencySets.FirstOrDefault().Packages)
                         package_Dependencies.Add(( dependency.Id, dependency.VersionRange.ToString()));
             }
             else
             {
-                _catalog = _selectedPackageMetaData.Last();
-                package_Icon = await DownloadIcon(_catalog.IconUrl);
+                _metadata = _selectedPackageMetaData.Last();
+                package_Icon = await DownloadIcon(_metadata.IconUrl);
 
-                package_Title = _catalog.Title;
+                package_Title = _metadata.Title;
                 package_Authors = "Unknown";
                 package_Description = "Unknown";
                 package_Downloads = "Unknown";
