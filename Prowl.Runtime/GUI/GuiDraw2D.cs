@@ -227,10 +227,36 @@ namespace Prowl.Runtime.GUI
             _drawList[currentZIndex].PopTexture();
         }
 
-        internal void DrawRect(Rect rect, object border, object borderThickness, object widgetRoundness)
+        public void LoadingIndicatorCircle(Vector2 center, double radius, Vector4 mainColor, Vector4 backdropColor, int circleCount, float speed)
         {
-            throw new NotImplementedException();
+            double circleRadius = radius / 15.0f;
+            double updatedIndicatorRadius = radius - 4.0f * circleRadius;
+
+            double t = Time.time;
+            double degreeOffset = 2.0f * MathD.PI / circleCount;
+
+            for (int i = 0; i < circleCount; ++i)
+            {
+                double x = updatedIndicatorRadius * MathD.Sin(degreeOffset * i);
+                double y = updatedIndicatorRadius * MathD.Cos(degreeOffset * i);
+                double growth = MathD.Max(0.0f, MathD.Sin(t * speed * 8 - i * degreeOffset));
+
+                Vector4 color = new Vector4
+                {
+                    x = mainColor.x * growth + backdropColor.x * (1.0f - growth),
+                    y = mainColor.y * growth + backdropColor.y * (1.0f - growth),
+                    z = mainColor.z * growth + backdropColor.z * (1.0f - growth),
+                    w = 1.0f
+                };
+
+                _drawList[currentZIndex].AddCircleFilled(
+                    new Vector2(center.x + x, center.y - y),
+                    (float)(circleRadius + growth * circleRadius),
+                    (Color)color
+                );
+            }
         }
+
     }
 
 }
