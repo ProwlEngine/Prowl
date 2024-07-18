@@ -1,11 +1,31 @@
-﻿using Prowl.Runtime;
+﻿using NuGet.Common;
+using NuGet.Configuration;
+using NuGet.Frameworks;
+using NuGet.Packaging;
+using NuGet.Packaging.Core;
+using NuGet.Packaging.Signing;
+using NuGet.Protocol;
+using NuGet.Protocol.Core.Types;
+using NuGet.Resolver;
+using NuGet.Versioning;
+using Prowl.Editor.Preferences;
+using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 using System.IO.Compression;
+using System.Text;
 
 namespace Prowl.Editor.Assets
 {
     public static partial class AssetDatabase
     {
+        /// <summary>
+        /// The packages the projects wants.
+        /// Key: Package ID
+        /// Value: Package Version
+        /// </summary>
+        public static Dictionary<string, string> DesiredPackages = [];
+
+        public static List<IPackageSearchMetadata> Packages = [];
 
         #region Public Methods
 
@@ -87,17 +107,19 @@ namespace Prowl.Editor.Assets
         /// </summary>
         /// <param name="directory">The directory to export the package from.</param>
         /// <param name="includeDependencies">Whether to include dependencies in the package.</param>
-        public static void ExportPackage(DirectoryInfo directory, bool includeDependencies = false)
+        public static void ExportProwlPackage(DirectoryInfo directory, bool includeDependencies = false)
         {
 #warning TODO: Handle Dependencies, We do track them now, just need to support that here
             if (includeDependencies) throw new NotImplementedException("Dependency tracking is not implemented yet.");
 
-            FileDialogContext imFileDialogInfo = new() {
+            FileDialogContext imFileDialogInfo = new()
+            {
                 title = "Export Package",
                 directoryPath = new DirectoryInfo(Project.ProjectDirectory),
                 fileName = "New Package.prowlpackage",
                 type = FileDialogType.SaveFile,
-                OnComplete = (path) => {
+                OnComplete = (path) =>
+                {
                     var file = new FileInfo(path);
                     if (File.Exists(file.FullName))
                     {
@@ -121,7 +143,7 @@ namespace Prowl.Editor.Assets
         /// Imports a package from the specified file.
         /// </summary>
         /// <param name="packageFile">The package file to import.</param>
-        public static void ImportPackage(FileInfo packageFile)
+        public static void ImportProwlPackage(FileInfo packageFile)
         {
             if (!File.Exists(packageFile.FullName))
             {
@@ -136,6 +158,237 @@ namespace Prowl.Editor.Assets
 #warning TODO: Handle if we already have the asset in our asset database (just dont import it)
 
             Update();
+        }
+
+        #endregion
+
+        #region Nuget Packages
+
+        public static IPackageSearchMetadata? GetInstalledPackage(string packageId)
+        {
+            return Packages.Where(x => x.Identity.Id == packageId).FirstOrDefault();
+        }
+
+        internal static async void LoadPackages()
+        {
+            // Load Packages.txt
+            string packagesPath = Path.Combine(Project.ProjectPackagesDirectory, "Packages.txt");
+            if (File.Exists(packagesPath))
+            {
+                string[] lines = File.ReadAllText(packagesPath).Split(';');
+                foreach (string line in lines)
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+
+                    string[] nodes = line.Split('=');
+                    if (nodes.Length != 2)
+                    {
+                        Runtime.Debug.LogError($"Invalid Package: {line}");
+                        continue;
+                    }
+
+                    DesiredPackages[nodes[0]] = nodes[1];
+                }
+            }
+
+            // Validate Packages
+            foreach (var pair in DesiredPackages)
+            {
+                var dependency = (await AssetDatabase.GetPackageMetadata(pair.Key, Project.ProjectPackagesDirectory, PackageManagerPreferences.Instance.IncludePrerelease))
+                    .Where(x => x.Identity.Version.ToString() == pair.Value).FirstOrDefault();
+                if (dependency == null)
+                {
+                    // The package is not installed, Lets try to install it
+                    try
+                    {
+                        await AssetDatabase.InstallPackage(pair.Key, pair.Value);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogError($"Error Installing Package: {pair.Key} {pair.Value} : {ex.Message}");
+                    }
+                }
+                else
+                {
+                    Debug.Log($"Found Package: {pair.Key} : {pair.Value}");
+                    Packages.Add(dependency);
+                }
+            }
+        }
+
+        public static void SaveProjectPackagesFile()
+        {
+            StringBuilder sb = new StringBuilder();
+            foreach (var pair in DesiredPackages)
+            {
+                sb.AppendLine($"{pair.Key}={pair.Value};");
+            }
+            File.WriteAllText(Path.Combine(Project.ProjectPackagesDirectory, "Packages.txt"), sb.ToString());
+        }
+
+        public static async Task<List<NuGetVersion>> GetPackageVersions(string packageId, string source, bool includePrerelease)
+        {
+            ArgumentNullException.ThrowIfNull(packageId, nameof(packageId));
+            ArgumentNullException.ThrowIfNull(source, nameof(source));
+
+            SourceRepository repository = Repository.Factory.GetCoreV3(source);
+            FindPackageByIdResource resource = await repository.GetResourceAsync<FindPackageByIdResource>();
+            IEnumerable<NuGetVersion> versions = await resource.GetAllVersionsAsync(packageId, new(), NugetLogger.Instance, CancellationToken.None);
+            return includePrerelease ? versions.ToList() : versions.Where(x => x.IsPrerelease == false).ToList();
+        }
+
+        public static async Task<List<IPackageSearchMetadata>> SearchPackages(string packageKeyword, string source, bool includePrerelease)
+        {
+            ArgumentNullException.ThrowIfNull(packageKeyword, nameof(packageKeyword));
+            ArgumentNullException.ThrowIfNull(source, nameof(source));
+
+            SourceRepository repository = Repository.Factory.GetCoreV3(source);
+            PackageSearchResource resource = await repository.GetResourceAsync<PackageSearchResource>();
+            SearchFilter searchFilter = new SearchFilter(includePrerelease);
+            var results = await resource.SearchAsync(packageKeyword, searchFilter, 0, 50, NugetLogger.Instance, CancellationToken.None);
+            return results.Where(p => p.Tags.Contains("Prowl")).ToList(); // TODO: Is this a good way to handle Tags?
+        }
+
+        public static async Task<List<IPackageSearchMetadata>> GetPackageMetadata(string packageId, string source, bool includePrerelease)
+        {
+            ArgumentNullException.ThrowIfNull(packageId, nameof(packageId));
+            ArgumentNullException.ThrowIfNull(source, nameof(source));
+
+            SourceRepository repository = Repository.Factory.GetCoreV3(source);
+            PackageMetadataResource resource = await repository.GetResourceAsync<PackageMetadataResource>();
+            return (await resource.GetMetadataAsync(packageId, includePrerelease, true, new(), NugetLogger.Instance, CancellationToken.None)).ToList();
+        }
+
+        public static async Task InstallPackage(string packageId, string version)
+        {
+            ArgumentNullException.ThrowIfNull(packageId, nameof(packageId));
+            ArgumentNullException.ThrowIfNull(version, nameof(version));
+
+            var nuGetFramework = NuGetFramework.ParseFolder("net8.0"); // TODO: Not really sure what todo with this? should we use "Prowl" instead of net8.0?
+            var settings = Settings.LoadDefaultSettings(null);
+            var srp = new SourceRepositoryProvider(new PackageSourceProvider(settings), Repository.Provider.GetCoreV3());
+
+            using (var cache = new SourceCacheContext())
+            {
+                List<SourceRepository> repositories = new();
+                foreach (var source in PackageManagerPreferences.Instance.Sources)
+                {
+                    if (source.IsEnabled)
+                    {
+                        var sourceRepo = srp.CreateRepository(new PackageSource(source.Source, source.Name, true));
+                        repositories.Add(sourceRepo);
+                    }
+                }
+
+                var available = new HashSet<SourcePackageDependencyInfo>(PackageIdentityComparer.Default);
+                await GetPackageDependencies(new(packageId, NuGetVersion.Parse(version)), nuGetFramework, cache, NugetLogger.Instance, repositories, available);
+
+                PackageResolverContext resolverContext = new(DependencyBehavior.Lowest, [ packageId ], [], [], [], available, srp.GetRepositories().Select(s => s.PackageSource), NugetLogger.Instance);
+
+                PackageResolver resolver = new();
+ 
+                var packagesToInstall = resolver.Resolve(resolverContext, CancellationToken.None).Select(p => available.Single(x => PackageIdentityComparer.Default.Equals(x, p)));
+
+                PackagePathResolver packagePathResolver = new(Project.ProjectPackagesDirectory);
+                PackageExtractionContext packageExtractionContext = new(PackageSaveMode.Defaultv3, XmlDocFileSaveMode.None, ClientPolicyContext.GetClientPolicy(settings, NugetLogger.Instance), NugetLogger.Instance);
+
+                FrameworkReducer frameworkReducer = new();
+                PackageDownloadContext downloadContext = new(cache);
+
+                foreach (var packageToInstall in packagesToInstall)
+                {
+                    var installedPath = packagePathResolver.GetInstalledPath(packageToInstall);
+                    if (installedPath == null)
+                    {
+                        var downloadResource = await packageToInstall.Source.GetResourceAsync<DownloadResource>(CancellationToken.None);
+                        var downloadResult = await downloadResource.GetDownloadResourceResultAsync(packageToInstall, downloadContext, SettingsUtility.GetGlobalPackagesFolder(settings), NugetLogger.Instance, CancellationToken.None);
+
+                        await PackageExtractor.ExtractPackageAsync(downloadResult.PackageSource, downloadResult.PackageStream, packagePathResolver, packageExtractionContext, CancellationToken.None);
+                    }
+
+                    DesiredPackages[packageToInstall.Id] = packageToInstall.Version.ToString();
+
+                    var metaData = (await GetPackageMetadata(packageId, Project.ProjectPackagesDirectory, PackageManagerPreferences.Instance.IncludePrerelease)).Where(x => x.Identity.Version.ToString() == packageToInstall.Version.ToString()).FirstOrDefault();
+
+                    Packages.RemoveAll(x => x.Identity.Id == packageId);
+                    Packages.Add(metaData);
+
+                    SaveProjectPackagesFile();
+                }
+            }
+
+            Update();
+        }
+
+        public static async Task UninstallPackage(string packageId, string version)
+        {
+            ArgumentNullException.ThrowIfNull(packageId, nameof(packageId));
+            ArgumentNullException.ThrowIfNull(version, nameof(version));
+
+            // Simply delete the folder & remove from the list
+            var packageDirectory = Path.Combine(Project.ProjectPackagesDirectory, $"{packageId}.{version}");
+            if (Directory.Exists(packageDirectory))
+                Directory.Delete(packageDirectory, true);
+
+            Packages.RemoveAll(x => x.Identity.Id == packageId);
+            DesiredPackages.Remove(packageId);
+
+            SaveProjectPackagesFile();
+
+            Update();
+        }
+
+        public static async Task GetPackageDependencies(PackageIdentity package, NuGetFramework framework, SourceCacheContext cacheContext, ILogger logger, IEnumerable<SourceRepository> repositories, ISet<SourcePackageDependencyInfo> availablePackages)
+        {
+            if (availablePackages.Contains(package))
+                return;
+
+            foreach (var sourceRepository in repositories)
+            {
+                var dependencyInfoResource = await sourceRepository.GetResourceAsync<DependencyInfoResource>();
+                var dependencyInfo = await dependencyInfoResource.ResolvePackage(package, framework, cacheContext, logger, CancellationToken.None);
+
+                if (dependencyInfo == null)
+                    continue;
+
+                foreach (var dependency in dependencyInfo.Dependencies)
+                    await GetPackageDependencies(new(dependency.Id, dependency.VersionRange.MinVersion), framework, cacheContext, logger, repositories, availablePackages);
+            }
+        }
+
+        public class NugetLogger : LoggerBase
+        {
+            private static ILogger? _instance;
+            public static ILogger Instance => _instance ??= new NugetLogger();
+
+            public override void Log(ILogMessage message) => Debug.Log(message.Message);
+
+            public override void Log(LogLevel level, string data)
+            {
+                switch (level)
+                {
+                    case LogLevel.Debug or LogLevel.Verbose or LogLevel.Minimal: Debug.Log(data); break;
+                    case LogLevel.Warning: Debug.LogWarning(data); break;
+                    case LogLevel.Error: Debug.LogError(data); break;
+                }
+            }
+
+            public override Task LogAsync(ILogMessage message)
+            {
+                Debug.Log(message.Message);
+                return Task.CompletedTask;
+            }
+
+            public override Task LogAsync(LogLevel level, string data)
+            {
+                switch (level)
+                {
+                    case LogLevel.Debug or LogLevel.Verbose or LogLevel.Minimal: Debug.Log(data); break;
+                    case LogLevel.Warning: Debug.LogWarning(data); break;
+                    case LogLevel.Error: Debug.LogError(data); break;
+                }
+                return Task.CompletedTask;
+            }
         }
 
         #endregion

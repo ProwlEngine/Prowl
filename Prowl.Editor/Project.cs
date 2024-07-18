@@ -1,11 +1,7 @@
 using Prowl.Editor.Assets;
-using Prowl.Editor.ProjectSettings;
-using Prowl.Editor.EditorWindows;
 using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
-using Prowl.Runtime.Utils;
 using System.Diagnostics;
-using System.IO.Compression;
 using System.Reflection;
 
 namespace Prowl.Editor;
@@ -28,7 +24,6 @@ public static class Project
 
     public static string Editor_Assembly_Proj => Path.Combine(ProjectDirectory, @"CSharp-Editor.csproj");
     public static string Editor_Assembly_DLL => Path.Combine(ProjectDirectory, @"Temp/bin/Debug/net8.0/CSharp-Editor.dll");
-
 
     public static event Action OnProjectChanged;
     public static bool HasProject { get; private set; } = false;
@@ -63,8 +58,10 @@ public static class Project
         CreateDefaults("Defaults");
         AssetDatabase.AddRootFolder("Defaults");
         AssetDatabase.Update(false, true); // Ensure defaults are all loaded in
+
         AssetDatabase.AddRootFolder("Packages");
         AssetDatabase.Update(false, true); // Ensure packages are all loaded in
+
         AssetDatabase.AddRootFolder("Assets");
         AssetDatabase.Update(true, true); // Not that all folders are in we can unload anything thats not in the project anymore since last session
 
@@ -72,6 +69,8 @@ public static class Project
         SceneManager.InstantiateNewScene();
 
         OnProjectChanged?.Invoke();
+
+        AssetDatabase.LoadPackages();
     }
 
     /// <summary>
