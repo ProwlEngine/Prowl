@@ -17,6 +17,8 @@ public static class Debug
 
     public static event OnLog? OnLog;
 
+    public static void LogFormat(string message, params object[] args) => Log(string.Format(message, args));
+
     public static void Log(object message)
     {
         Log("", message.ToString(), ConsoleColor.White, LogSeverity.Normal);
@@ -27,6 +29,8 @@ public static class Debug
         Log("", message, ConsoleColor.White, LogSeverity.Normal);
     }
 
+    public static void LogWarningFormat(string message, params object[] args) => LogWarning(string.Format(message, args));
+
     public static void LogWarning(object message)
     {
         Log("Warning: ", message.ToString(), ConsoleColor.Yellow, LogSeverity.Warning);
@@ -36,6 +40,8 @@ public static class Debug
     {
         Log("Warning: ", message, ConsoleColor.Yellow, LogSeverity.Warning);
     }
+
+    public static void LogErrorFormat(string message, params object[] args) => LogError(string.Format(message, args));
 
     public static void LogError(object message, Exception exception = null)
     {
@@ -52,6 +58,8 @@ public static class Debug
         if (exception != null)
             Log("", exception.ToString(), ConsoleColor.Red, LogSeverity.Error);
     }
+
+    public static void LogSuccessFormat(string message, params object[] args) => LogSuccess(string.Format(message, args));
 
     public static void LogSuccess(object message)
     {
@@ -102,12 +110,12 @@ public static class Debug
         }
     }
 
-    internal static void Assert(bool condition, string? message)
+    public static void Assert(bool condition, string? message)
     {
         System.Diagnostics.Debug.Assert(condition, message);
     }
 
-    internal static void Assert(bool condition)
+    public static void Assert(bool condition)
     {
         System.Diagnostics.Debug.Assert(condition);
     }
