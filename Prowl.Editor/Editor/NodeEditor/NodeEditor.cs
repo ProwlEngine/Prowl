@@ -5,6 +5,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.NodeSystem;
 using Prowl.Runtime.Utils;
+using Prowl.Runtime.Utils.NodeSystem.Nodes;
 using System.Reflection;
 using static Prowl.Runtime.NodeSystem.Node;
 
@@ -574,7 +575,7 @@ namespace Prowl.Editor
         internal Rect dragSelection;
 
         private string _searchText = string.Empty;
-        private static MenuItemInfo rootMenuItem;
+        private static NodeMenuItemInfo rootMenuItem;
 
         private SelectHandler<WeakReference> SelectHandler = new((item) => !item.IsAlive, (a, b) => ReferenceEquals(a.Target, b.Target));
 
@@ -1080,7 +1081,7 @@ namespace Prowl.Editor
         }
 
 
-        private void DrawMenuItems(MenuItemInfo menuItem)
+        private void DrawMenuItems(NodeMenuItemInfo menuItem, Gui g)
         {
             bool foundName = false;
             bool hasSearch = string.IsNullOrEmpty(_searchText) == false;
@@ -1088,7 +1089,7 @@ namespace Prowl.Editor
             {
                 if (hasSearch && (item.Name.Contains(_searchText, StringComparison.CurrentCultureIgnoreCase) == false || item.Type == null))
                 {
-                    DrawMenuItems(item);
+                    DrawMenuItems(item, g);
                     if (hasSearch && item.Name.Equals(_searchText, StringComparison.CurrentCultureIgnoreCase))
                         foundName = true;
                     continue;
@@ -1098,7 +1099,18 @@ namespace Prowl.Editor
                 {
                     if (EditorGUI.StyledButton(item.Name))
                     {
-                        var node = graph.AddNode(item.Type);
+                        Node node = null;
+                        if(item.Method != null)
+                        {
+                            // Reflected Node
+                            var rNode = graph.AddNode<ReflectedNode>();
+                            rNode.SetMethod(item.Method);
+                            node = rNode;
+                        }
+                        else
+                        {
+                            node = graph.AddNode(item.Type);
+                        }
                         node.position = WindowToGrid(gui.PointerPos);
                     }
                 }
@@ -1106,38 +1118,40 @@ namespace Prowl.Editor
                 {
 
                     if (EditorGUI.StyledButton(item.Name))
-                        Gui.ActiveGUI.OpenPopup(item.Name + "Popup", Gui.ActiveGUI.PreviousNode.LayoutData.Rect.TopRight);
+                        g.OpenPopup(item.Name + "Popup", g.PreviousNode.LayoutData.Rect.TopRight);
 
                     // Enter the Button's Node
-                    using (Gui.ActiveGUI.PreviousNode.Enter())
+                    using (g.PreviousNode.Enter())
                     {
                         // Draw a > to indicate a popup
-                        Rect rect = Gui.ActiveGUI.CurrentNode.LayoutData.Rect;
+                        Rect rect = g.CurrentNode.LayoutData.Rect;
                         rect.x = rect.x + rect.width - 25;
                         rect.width = 20;
-                        Gui.ActiveGUI.Draw2D.DrawText(FontAwesome6.ChevronRight, rect, Color.white);
+                        g.Draw2D.DrawText(FontAwesome6.ChevronRight, rect, Color.white);
                     }
 
-                    if (Gui.ActiveGUI.BeginPopup(item.Name + "Popup", out var node))
+                    if (g.BeginPopup(item.Name + "Popup", out var node))
                     {
                         double largestWidth = 0;
                         foreach (var child in item.Children)
                         {
                             double width = Font.DefaultFont.CalcTextSize(child.Name, 0).x + 30;
+                            if(child.Type == null)
+                                width += 25;
                             if (width > largestWidth)
                                 largestWidth = width;
                         }
 
-                        using (node.Width(largestWidth).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
+                        using (node.Width(largestWidth).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().MaxHeight(400).Scroll().Clip().Enter())
                         {
-                            DrawMenuItems(item);
+                            DrawMenuItems(item, g);
                         }
                     }
                 }
             }
         }
 
-        private MenuItemInfo GetNodeMenuTree(string[] nodeCategories, (string, Type)[] nodeTypes)
+        private NodeMenuItemInfo GetNodeMenuTree(string[] nodeCategories, (string, Type)[] nodeTypes, (string, Type)[] reflectionTypes)
         {
             var allNodeTypes = AppDomain.CurrentDomain.GetAssemblies()
                 .SelectMany(assembly => assembly.GetTypes())
@@ -1154,7 +1168,7 @@ namespace Prowl.Editor
 
 
             // Create a root MenuItemInfo object to serve as the starting point of the tree
-            MenuItemInfo root = new MenuItemInfo { Name = "Root" };
+            NodeMenuItemInfo root = new NodeMenuItemInfo { Name = "Root" };
 
             foreach (var (path, type) in items)
             {
@@ -1166,43 +1180,40 @@ namespace Prowl.Editor
                 // Make sure this root path is allowed in this graph
                 if (nodeCategories != null && !nodeCategories.Contains(parts[0], StringComparer.OrdinalIgnoreCase)) continue;
 
-                MenuItemInfo currentNode = root;
-
-                for (int i = 0; i < parts.Length - 1; i++)  // Skip the last part
-                {
-                    string part = parts[i];
-                    MenuItemInfo childNode = currentNode.Children.Find(c => c.Name == part);
-
-                    if (childNode == null)
-                    {
-                        childNode = new MenuItemInfo { Name = part };
-                        currentNode.Children.Add(childNode);
-                    }
-
-                    currentNode = childNode;
-                }
-
-                MenuItemInfo leafNode = new MenuItemInfo
-                {
-                    Name = parts[^1],  // Get the last part
-                    Type = type
-                };
-
-                currentNode.Children.Add(leafNode);
+                root.AddChild(path, type);
             }
 
             // Add Graph specific nodes to the root
             if (nodeTypes != null)
             {
                 foreach (var type in nodeTypes)
-                    root.Children.Add(new MenuItemInfo { Name = type.Item1, Type = type.Item2 });
+                    root.Children.Add(new NodeMenuItemInfo { Name = type.Item1, Type = type.Item2 });
+
+                // Add all methods in Input class
+                //foreach (var method in typeof(Input).GetMethods().Where(m => m.IsSpecialName == false && m.DeclaringType == typeof(Input)))
+                //    if(ReflectedNode.IsSupported(method))
+                //        root.Children.Add(new NodeMenuItemInfo { Name = ReflectedNode.GetNodeName(method), Type = typeof(Input), Method = method });
+
+                // Add all methods in GameObject class
+                //foreach (var method in typeof(GameObject).GetMethods(BindingFlags.DeclaredOnly | BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public).Where(m => m.IsSpecialName == false && m.DeclaringType == typeof(GameObject)))
+                //    if(ReflectedNode.IsSupported(method))
+                //        root.AddChild(ReflectedNode.GetNodeName(method), typeof(GameObject), method);
+            }
+
+            // Add all Reflection Types
+            if (reflectionTypes != null)
+            {
+                foreach (var type in reflectionTypes)
+                    foreach (var method in type.Item2.GetMethods(BindingFlags.DeclaredOnly | BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public).Where(m => m.IsSpecialName == false && m.DeclaringType == type.Item2))
+                        if(ReflectedNode.IsSupported(method))
+                            root.AddChild(type.Item1 + "/" + ReflectedNode.GetNodeName(method), type.Item2, method);
             }
 
             SortChildren(root);
             return root;
         }
 
-        private void SortChildren(MenuItemInfo node)
+        private void SortChildren(NodeMenuItemInfo node)
         {
             node.Children.Sort((x, y) => x.Type == null ? -1 : 1);
 
@@ -1210,21 +1221,50 @@ namespace Prowl.Editor
                 SortChildren(child);
         }
 
-        private class MenuItemInfo
+        private class NodeMenuItemInfo
         {
             public string Name;
             public Type Type;
-            public List<MenuItemInfo> Children = new();
+            public MethodInfo Method;
+            public List<NodeMenuItemInfo> Children = new();
 
-            public MenuItemInfo() { }
+            public NodeMenuItemInfo() { }
 
-            public MenuItemInfo(Type type)
+            public NodeMenuItemInfo(Type type, MethodInfo method = null)
             {
                 Type = type;
+                Method = method;
                 Name = type.Name;
                 var addToMenuAttribute = type.GetCustomAttribute<NodeAttribute>();
                 if (addToMenuAttribute != null)
                     Name = addToMenuAttribute.catagory;
+            }
+
+            public void AddChild(string path, Type type, MethodInfo method = null)
+            {
+                string[] parts = path.Split('/');
+                NodeMenuItemInfo currentNode = this;
+
+                for (int i = 0; i < parts.Length - 1; i++)  // Skip the last part
+                {
+                    string part = parts[i];
+                    NodeMenuItemInfo childNode = currentNode.Children.Find(c => c.Name == part);
+
+                    if (childNode == null)
+                    {
+                        childNode = new NodeMenuItemInfo { Name = part };
+                        currentNode.Children.Add(childNode);
+                    }
+
+                    currentNode = childNode;
+                }
+
+                NodeMenuItemInfo leafNode = new NodeMenuItemInfo(type, method)
+                {
+                    Name = parts[^1]  // Get the last part
+                };
+
+                currentNode.Children.Add(leafNode);
             }
         }
     }

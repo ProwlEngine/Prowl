@@ -12,7 +12,7 @@ namespace Prowl.Runtime.RenderPipelines
         public override string[] NodeCategories => [
             "General",
             "Flow Control",
-            "Math",
+            "Operations",
             "Rendering",
         ];
 
@@ -85,7 +85,7 @@ namespace Prowl.Runtime.RenderPipelines
                     var pipelineNode = GetNodes<OnPipelineNode>().FirstOrDefault(n => n.Name == context.PipelineName);
                     if(pipelineNode == null)
                     {
-                        Debug.LogError($"Pipeline Node {context.PipelineName} not found!");
+                        //Debug.LogError($"Pipeline Node {context.PipelineName} not found!");
                         return;
                     }
 
