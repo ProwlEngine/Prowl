@@ -28,12 +28,36 @@ namespace Prowl.Editor
             }
         }
 
-        public static void Text(string text, [CallerLineNumber] int line = 0)
+        public static void Text(string text, [CallerLineNumber] int line = 0, bool doWrap = true)
         {
             var g = ActiveGUI;
-            using (g.Node(text, line).ExpandWidth().Height(ItemSize).Enter())
+            var height = Font.DefaultFont.CalcTextSize(text, 0, doWrap ? g.CurrentNode.LayoutData.InnerRect.width : -1).y;
+            using (g.Node(text, line).ExpandWidth().Height(height).Enter())
             {
-                g.Draw2D.DrawText(text, g.CurrentNode.LayoutData.Rect);
+                //g.Draw2D.DrawText(text, g.CurrentNode.LayoutData.Rect);
+
+                var rect = g.CurrentNode.LayoutData.InnerRect;
+                var pos = new Vector2(rect.x, rect.y);
+                var wrap = rect.width;
+                var textSize = Font.DefaultFont.CalcTextSize(text, 20, 0, doWrap ? wrap : -1);
+                pos.x += MathD.Max((rect.width - textSize.x) * 0.5f, 0.0);
+                pos.y += (rect.height - textSize.y) * 0.5f;
+                g.Draw2D.DrawText(Font.DefaultFont, text, 20, pos, Color.white, doWrap ? wrap : 0, rect);
+            }
+        }
+
+        public static void TextSimple(string text, [CallerLineNumber] int line = 0, bool doWrap = true)
+        {
+            var g = ActiveGUI;
+            var height = Font.DefaultFont.CalcTextSize(text, 0, doWrap ? g.CurrentNode.LayoutData.InnerRect.width : -1).y;
+            using (g.Node(text, line).ExpandWidth().Height(height).Enter())
+            {
+                //g.Draw2D.DrawText(text, g.CurrentNode.LayoutData.Rect);
+
+                var rect = g.CurrentNode.LayoutData.InnerRect;
+                var pos = new Vector2(rect.x, rect.y);
+                var wrap = rect.width;
+                g.Draw2D.DrawText(Font.DefaultFont, text, 20, pos, Color.white, doWrap ? wrap : 0, rect);
             }
         }
 
