@@ -223,7 +223,7 @@ namespace Prowl.Runtime.GUI
 
             style.Roundness = 8f;
             style.BorderThickness = 1f;
-            var changed = InputField(ID, ref searchText, 32, InputFieldFlags.None, x, y, width, height, style);
+            var changed = InputField(ID, ref searchText, 32, InputFieldFlags.EnterReturnsTrue, x, y, width, height, style);
             if(string.IsNullOrWhiteSpace(searchText) && !g.PreviousInteractableIsFocus())
             {
                 var pos = g.PreviousNode.LayoutData.InnerRect.Position + new Vector2(8, 3);
