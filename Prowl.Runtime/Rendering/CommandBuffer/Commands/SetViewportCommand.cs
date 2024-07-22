@@ -8,8 +8,9 @@ namespace Prowl.Runtime
     {
         public int Index; 
         public bool SetFull;
-        public int X, Y, Z;
-        public int Width, Height, Depth;
+        public int X, Y;
+        public int Width, Height;
+        public float Z, Depth;
 
         readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {

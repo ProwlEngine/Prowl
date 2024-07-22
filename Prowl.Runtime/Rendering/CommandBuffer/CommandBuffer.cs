@@ -149,7 +149,7 @@ namespace Prowl.Runtime
             });
         }
 
-        public void SetViewport(int viewport, int x, int y, int width, int height, int z, int depth)
+        public void SetViewport(int viewport, int x, int y, int width, int height, float z, float depth)
         {
             buffer.Add(new SetViewportCommand() { 
                 SetFull = false, 
@@ -159,7 +159,7 @@ namespace Prowl.Runtime
             });
         }
 
-        public void SetViewports(int x, int y, int width, int height, int z, int depth)
+        public void SetViewports(int x, int y, int width, int height, float z, float depth)
         {
             buffer.Add(new SetViewportCommand() { 
                 SetFull = false, 

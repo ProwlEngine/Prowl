@@ -57,7 +57,7 @@ public class DirectionalLight : MonoBehaviour
         var forward = GameObject.Transform.forward;
         //var proj = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, 0, shadowDistance * 2);
         //var view = Matrix4x4.CreateLookToLeftHanded(-forward * shadowDistance, -forward, GameObject.Transform.up);
-        cam = Camera.CameraData.CreateOrthographic(Transform.position, Transform.forward, Transform.up, shadowDistance, 0.001f, shadowDistance * 2, true, Color.clear, LayerMask.Everything, shadowMap);
+        cam = Camera.CameraData.CreateOrthographic(0, Transform.position, Transform.forward, Transform.up, shadowDistance, 0.001f, shadowDistance * 2, true, Color.clear, new(0,0,1,1), LayerMask.Everything, shadowMap);
 
         PropertyState properties = new();
 

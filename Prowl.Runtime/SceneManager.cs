@@ -61,7 +61,8 @@ public static class SceneManager
         var cam = new GameObject("Main Camera");
         cam.tag = "Main Camera";
         cam.Transform.position = new(0, 0, -10);
-        cam.AddComponent<Camera>();
+        var camComp = cam.AddComponent<Camera>();
+        camComp.DrawOrder = -1;
     }
 
     private static void OnGameObjectConstructed(GameObject go)

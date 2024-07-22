@@ -7,8 +7,9 @@ namespace Prowl.Runtime;
 [ExecuteAlways]
 public class Camera : MonoBehaviour
 {
-    public struct CameraData(Vector3 position, Vector3 forward, Vector3 up, float fieldOfView, float nearClip, float farClip, bool doClear, Color clearColor, bool isOrthographic, float orthographicSize, float renderScale, LayerMask layerMask, AssetRef<RenderTexture> target)
+    public struct CameraData(int order, Vector3 position, Vector3 forward, Vector3 up, float fieldOfView, float nearClip, float farClip, bool doClear, Color clearColor, Rect viewrect, bool isOrthographic, float orthographicSize, float renderScale, LayerMask layerMask, AssetRef<RenderTexture> target)
     {
+        public int RenderOrder = -order;
         public Vector3 Position = position;
         public Vector3 Forward = forward;
         public Vector3 Up = up;
@@ -20,19 +21,20 @@ public class Camera : MonoBehaviour
         public float OrthographicSize = orthographicSize;
         public float RenderScale = renderScale;
         public LayerMask LayerMask = layerMask;
+        public Rect Viewrect = viewrect;
 
         public AssetRef<RenderTexture> Target = target;
 
         public Matrix4x4 View => Matrix4x4.CreateLookToLeftHanded(Position, Forward, Up);
 
-        public static CameraData CreatePerspective(Vector3 position, Vector3 forward, Vector3 up, float fieldOfView, float nearClip, float farClip, bool doClear, Color clearColor, LayerMask layerMask, AssetRef<RenderTexture> target)
+        public static CameraData CreatePerspective(int order, Vector3 position, Vector3 forward, Vector3 up, float fieldOfView, float nearClip, float farClip, bool doClear, Color clearColor, Rect viewrect, LayerMask layerMask, AssetRef<RenderTexture> target)
         {
-            return new CameraData(position, forward, up, fieldOfView, nearClip, farClip, doClear, clearColor, false, 0f, 1f, layerMask, target);
+            return new CameraData(order, position, forward, up, fieldOfView, nearClip, farClip, doClear, clearColor, viewrect, false, 0f, 1f, layerMask, target);
         }
 
-        public static CameraData CreateOrthographic(Vector3 position, Vector3 forward, Vector3 up, float orthographicSize, float nearClip, float farClip, bool doClear, Color clearColor, LayerMask layerMask, AssetRef<RenderTexture> target)
+        public static CameraData CreateOrthographic(int order, Vector3 position, Vector3 forward, Vector3 up, float orthographicSize, float nearClip, float farClip, bool doClear, Color clearColor, Rect viewrect, LayerMask layerMask, AssetRef<RenderTexture> target)
         {
-            return new CameraData(position, forward, up, 0f, nearClip, farClip, doClear, clearColor, true, orthographicSize, 1f, layerMask, target);
+            return new CameraData(order, position, forward, up, 0f, nearClip, farClip, doClear, clearColor, viewrect, true, orthographicSize, 1f, layerMask, target);
         }
 
         public Matrix4x4 GetProjectionMatrix(float width, float height)
@@ -60,6 +62,7 @@ public class Camera : MonoBehaviour
     public float FieldOfView = 60f;
     public float OrthographicSize = 0.5f;
     public int DrawOrder = 0;
+    public Rect Viewrect = new Rect(0, 0, 1, 1);
     public float NearClip = 0.01f;
     public float FarClip = 1000f;
 
@@ -107,6 +110,6 @@ public class Camera : MonoBehaviour
 
     public CameraData GetData()
     {
-        return new CameraData(Transform.position, Transform.forward, Transform.up, FieldOfView, NearClip, FarClip, DoClear, ClearColor, projectionType == ProjectionType.Orthographic, OrthographicSize, RenderScale, LayerMask, Target);
+        return new CameraData(DrawOrder, Transform.position, Transform.forward, Transform.up, FieldOfView, NearClip, FarClip, DoClear, ClearColor, Viewrect, projectionType == ProjectionType.Orthographic, OrthographicSize, RenderScale, LayerMask, Target);
     }
 }
