@@ -7,12 +7,16 @@ namespace Prowl.Runtime
         [SerializeField] private Dictionary<string, Vector4> values;
         [SerializeField] private Dictionary<string, Matrix4x4> matrices;
         [SerializeField] private Dictionary<string, AssetRef<Texture>> textures;
+        // structuredBuffers are a special case and are not serialized
+        // they are used by scripts to push arrays of data to the GPU
+        private Dictionary<string, ComputeBuffer> buffer; 
 
         public PropertyState() 
         { 
             values = new();
             matrices = new();
             textures = new();
+            buffer = new();
         }
 
         public PropertyState(PropertyState clone)
@@ -20,6 +24,7 @@ namespace Prowl.Runtime
             values = new(clone.values);
             matrices = new(clone.matrices);
             textures = new(clone.textures);
+            buffer = new(clone.buffer);
         }
 
         public void ApplyOverride(PropertyState overrideState)
@@ -32,6 +37,9 @@ namespace Prowl.Runtime
 
             foreach (var pair in overrideState.textures)
                 textures[pair.Key] = pair.Value;
+
+            foreach (var pair in overrideState.buffer)
+                buffer[pair.Key] = pair.Value;
         }
 
 
@@ -75,11 +83,15 @@ namespace Prowl.Runtime
         public void SetTexture(string name, AssetRef<Texture> value) => textures[name] = value;
         public AssetRef<Texture> GetTexture(string name) => textures.GetValueOrDefault(name, Texture2D.EmptyWhite);
 
+        public void SetBuffer(string name, ComputeBuffer value) => buffer[name] = value;
+        public ComputeBuffer GetBuffer(string name) => buffer!.GetValueOrDefault(name, null);
+
         public void Clear()
         {
             values.Clear();
             textures.Clear();
             matrices.Clear();
+            buffer.Clear();
         }
     }
 }

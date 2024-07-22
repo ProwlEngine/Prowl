@@ -475,6 +475,11 @@ namespace Prowl.Editor.ShaderParser
                         resources.Add(new TextureResource(_tokenizer.Token.ToString(), false, ShaderStages.Vertex | ShaderStages.Fragment));
                     break;
 
+                    case "StructuredBuffer":
+                        ExpectToken(TokenType.Identifier);
+                        resources.Add(new StructuredBufferResource(_tokenizer.Token.ToString(), ShaderStages.Vertex | ShaderStages.Fragment));
+                    break;
+
                     case "SampledTexture":
                         ExpectToken(TokenType.Identifier);
                         resources.Add(new TextureResource(_tokenizer.Token.ToString(), false, ShaderStages.Vertex | ShaderStages.Fragment));
