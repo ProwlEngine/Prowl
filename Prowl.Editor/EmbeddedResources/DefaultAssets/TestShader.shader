@@ -205,6 +205,16 @@ Pass "TestShader"
 			// Roughness: surface.g
 			// Metallic: surface.b
 			
+			//http://www.jp.square-enix.com/tech/library/pdf/ImprovedGeometricSpecularAA.pdf - based on Godot's implementation
+			float roughness2 = surface.g * surface.g;
+			float limiterStrength = 0.2;
+			float limiterClamp = 0.18;
+			vec3 dndu = dFdx(Normal), dndv = dFdx(Normal);
+			float variance = limiterStrength * (dot(dndu, dndu) + dot(dndv, dndv));
+			float kernelRoughness2 = min(2.0 * variance, limiterClamp); //limit effect
+			float filteredRoughness2 = min(1.0, roughness2 + kernelRoughness2);
+			surface.g = sqrt(filteredRoughness2);
+			
 			// calculate reflectance at normal incidence; if dia-electric (like plastic) use F0 
 			// of 0.04 and if it's a metal, use the albedo color as F0 (metallic workflow)    
 			vec3 F0 = vec3(0.04); 
