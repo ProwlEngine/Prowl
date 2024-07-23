@@ -1,0 +1,1719 @@
+{
+  "$id": 1,
+  "$type": "Prowl.Runtime.RenderPipelines.RenderPipeline",
+  "_nextID": 139420,
+  "nodes": [
+    {
+      "$id": 2,
+      "$type": "Prowl.Runtime.RenderPipelines.OnPipelineNode",
+      "Name": "Main",
+      "graph": {
+        "$id": 1,
+
+      },
+      "position": {
+        "$id": 3,
+        "$type": "Prowl.Runtime.Vector2",
+        "x": -82.57142854710014D,
+        "y": 194D
+      },
+      "ports": {
+        "$id": 4,
+        "$type": "Prowl.Runtime.NodeSystem.Node+NodePortDictionary",
+        "keys": [
+          "To"
+        ],
+        "values": [
+          {
+            "$id": 5,
+            "$type": "Prowl.Runtime.NodeSystem.NodePort",
+            "_fieldName": "To",
+            "_node": {
+              "$id": 2,
+
+            },
+            "_typeQualifiedName": "Prowl.Runtime.NodeSystem.FlowNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+            "connections": [
+              {
+                "$id": 6,
+                "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                "fieldName": "From",
+                "node": {
+                  "$id": 7,
+                  "$type": "Prowl.Runtime.RenderPipelines.CreateLightsBufferNode",
+                  "graph": {
+                    "$id": 1,
+
+                  },
+                  "position": {
+                    "$id": 8,
+                    "$type": "Prowl.Runtime.Vector2",
+                    "x": 101.42857145289986D,
+                    "y": 194D
+                  },
+                  "ports": {
+                    "$id": 9,
+                    "$type": "Prowl.Runtime.NodeSystem.Node+NodePortDictionary",
+                    "keys": [
+                      "Buffer",
+                      "LightCount",
+                      "To",
+                      "From"
+                    ],
+                    "values": [
+                      {
+                        "$id": 10,
+                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                        "_fieldName": "Buffer",
+                        "_node": {
+                          "$id": 7,
+
+                        },
+                        "_typeQualifiedName": "Prowl.Runtime.ComputeBuffer, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                        "connections": [
+                          {
+                            "$id": 11,
+                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                            "fieldName": "Value",
+                            "node": {
+                              "$id": 12,
+                              "$type": "Prowl.Runtime.RenderPipelines.PropertyNode",
+                              "Name": "_Lights",
+                              "graph": {
+                                "$id": 1,
+
+                              },
+                              "position": {
+                                "$id": 13,
+                                "$type": "Prowl.Runtime.Vector2",
+                                "x": 239.80711232920135D,
+                                "y": 746.0712891758487D
+                              },
+                              "ports": {
+                                "$id": 14,
+                                "$type": "Prowl.Runtime.NodeSystem.Node+NodePortDictionary",
+                                "keys": [
+                                  "Value",
+                                  "Property"
+                                ],
+                                "values": [
+                                  {
+                                    "$id": 15,
+                                    "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                    "_fieldName": "Value",
+                                    "_node": {
+                                      "$id": 12,
+
+                                    },
+                                    "_typeQualifiedName": "System.Object, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e",
+                                    "connections": [
+                                      {
+                                        "$id": 16,
+                                        "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                        "fieldName": "Buffer",
+                                        "node": {
+                                          "$id": 7,
+
+                                        },
+                                        "InstanceID": 138815,
+                                        "reroutePoints": [
+
+                                        ]
+                                      }
+                                    ],
+                                    "_direction": 0,
+                                    "_connectionType": 1,
+                                    "_typeConstraint": 1,
+                                    "_dynamic": false,
+                                    "_onHeader": false,
+                                    "InstanceID": 134099
+                                  },
+                                  {
+                                    "$id": 17,
+                                    "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                    "_fieldName": "Property",
+                                    "_node": {
+                                      "$id": 12,
+
+                                    },
+                                    "_typeQualifiedName": "Prowl.Runtime.RenderPipelines.PropertyNode+NodeProperty, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                    "connections": [
+                                      {
+                                        "$id": 18,
+                                        "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                        "fieldName": "Property 1",
+                                        "node": {
+                                          "$id": 19,
+                                          "$type": "Prowl.Runtime.RenderPipelines.PropertyStateNode",
+                                          "graph": {
+                                            "$id": 1,
+
+                                          },
+                                          "position": {
+                                            "$id": 20,
+                                            "$type": "Prowl.Runtime.Vector2",
+                                            "x": 429.7500031478703D,
+                                            "y": 794.3457409860569D
+                                          },
+                                          "ports": {
+                                            "$id": 21,
+                                            "$type": "Prowl.Runtime.NodeSystem.Node+NodePortDictionary",
+                                            "keys": [
+                                              "PropertyState",
+                                              "Property 1",
+                                              "Property 2",
+                                              "Property 3"
+                                            ],
+                                            "values": [
+                                              {
+                                                "$id": 22,
+                                                "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                "_fieldName": "PropertyState",
+                                                "_node": {
+                                                  "$id": 19,
+
+                                                },
+                                                "_typeQualifiedName": "Prowl.Runtime.PropertyState, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                "connections": [
+                                                  {
+                                                    "$id": 23,
+                                                    "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                    "fieldName": "Property",
+                                                    "node": {
+                                                      "$id": 24,
+                                                      "$type": "Prowl.Runtime.RenderPipelines.DrawRenderablesNode",
+                                                      "ShaderTag": "Opaque",
+                                                      "Material": {
+                                                        "$id": 25,
+                                                        "$type": "Prowl.Runtime.AssetRef`1[[Prowl.Runtime.Material, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+                                                        "AssetID": "00000000-0000-0000-0000-000000000000"
+                                                      },
+                                                      "Fallback": {
+                                                        "$id": 26,
+                                                        "$type": "Prowl.Runtime.AssetRef`1[[Prowl.Runtime.Material, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
+                                                        "AssetID": "00000000-0000-0000-0000-000000000000"
+                                                      },
+                                                      "graph": {
+                                                        "$id": 1,
+
+                                                      },
+                                                      "position": {
+                                                        "$id": 27,
+                                                        "$type": "Prowl.Runtime.Vector2",
+                                                        "x": 641D,
+                                                        "y": 194D
+                                                      },
+                                                      "ports": {
+                                                        "$id": 28,
+                                                        "$type": "Prowl.Runtime.NodeSystem.Node+NodePortDictionary",
+                                                        "keys": [
+                                                          "Renderables",
+                                                          "Target",
+                                                          "Property",
+                                                          "To",
+                                                          "From"
+                                                        ],
+                                                        "values": [
+                                                          {
+                                                            "$id": 29,
+                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                            "_fieldName": "Renderables",
+                                                            "_node": {
+                                                              "$id": 24,
+
+                                                            },
+                                                            "_typeQualifiedName": "System.Collections.Generic.List`1[[Prowl.Runtime.RenderPipelines.Renderable, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e",
+                                                            "connections": [
+                                                              {
+                                                                "$id": 30,
+                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                "fieldName": "Sorted",
+                                                                "node": {
+                                                                  "$id": 31,
+                                                                  "$type": "Prowl.Runtime.RenderPipelines.SortRenderablesNode",
+                                                                  "SortMode": 0,
+                                                                  "graph": {
+                                                                    "$id": 1,
+
+                                                                  },
+                                                                  "position": {
+                                                                    "$id": 32,
+                                                                    "$type": "Prowl.Runtime.Vector2",
+                                                                    "x": 337D,
+                                                                    "y": 71.00000017029899D
+                                                                  },
+                                                                  "ports": {
+                                                                    "$id": 33,
+                                                                    "$type": "Prowl.Runtime.NodeSystem.Node+NodePortDictionary",
+                                                                    "keys": [
+                                                                      "Renderables",
+                                                                      "Sorted"
+                                                                    ],
+                                                                    "values": [
+                                                                      {
+                                                                        "$id": 34,
+                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                        "_fieldName": "Renderables",
+                                                                        "_node": {
+                                                                          "$id": 31,
+
+                                                                        },
+                                                                        "_typeQualifiedName": "System.Collections.Generic.List`1[[Prowl.Runtime.RenderPipelines.Renderable, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e",
+                                                                        "connections": [
+                                                                          {
+                                                                            "$id": 35,
+                                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                            "fieldName": "Renderables",
+                                                                            "node": {
+                                                                              "$id": 36,
+                                                                              "$type": "Prowl.Runtime.RenderPipelines.GetRenderablesNode",
+                                                                              "graph": {
+                                                                                "$id": 1,
+
+                                                                              },
+                                                                              "position": {
+                                                                                "$id": 37,
+                                                                                "$type": "Prowl.Runtime.Vector2",
+                                                                                "x": 162.42857145289986D,
+                                                                                "y": 71.00000017029899D
+                                                                              },
+                                                                              "ports": {
+                                                                                "$id": 38,
+                                                                                "$type": "Prowl.Runtime.NodeSystem.Node+NodePortDictionary",
+                                                                                "keys": [
+                                                                                  "Camera",
+                                                                                  "Renderables"
+                                                                                ],
+                                                                                "values": [
+                                                                                  {
+                                                                                    "$id": 39,
+                                                                                    "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                    "_fieldName": "Camera",
+                                                                                    "_node": {
+                                                                                      "$id": 36,
+
+                                                                                    },
+                                                                                    "_typeQualifiedName": "Prowl.Runtime.Camera+CameraData, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                    "connections": [
+                                                                                      {
+                                                                                        "$id": 40,
+                                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                                        "fieldName": "Camera",
+                                                                                        "node": {
+                                                                                          "$id": 41,
+                                                                                          "$type": "Prowl.Runtime.RenderPipelines.TargetCameraNode",
+                                                                                          "graph": {
+                                                                                            "$id": 1,
+
+                                                                                          },
+                                                                                          "position": {
+                                                                                            "$id": 42,
+                                                                                            "$type": "Prowl.Runtime.Vector2",
+                                                                                            "x": 38.42857145289986D,
+                                                                                            "y": 71.00000017029899D
+                                                                                          },
+                                                                                          "ports": {
+                                                                                            "$id": 43,
+                                                                                            "$type": "Prowl.Runtime.NodeSystem.Node+NodePortDictionary",
+                                                                                            "keys": [
+                                                                                              "Camera"
+                                                                                            ],
+                                                                                            "values": [
+                                                                                              {
+                                                                                                "$id": 44,
+                                                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                                "_fieldName": "Camera",
+                                                                                                "_node": {
+                                                                                                  "$id": 41,
+
+                                                                                                },
+                                                                                                "_typeQualifiedName": "Prowl.Runtime.Camera+CameraData, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                                "connections": [
+                                                                                                  {
+                                                                                                    "$id": 45,
+                                                                                                    "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                                                    "fieldName": "Camera",
+                                                                                                    "node": {
+                                                                                                      "$id": 36,
+
+                                                                                                    },
+                                                                                                    "InstanceID": 85388,
+                                                                                                    "reroutePoints": [
+
+                                                                                                    ]
+                                                                                                  }
+                                                                                                ],
+                                                                                                "_direction": 1,
+                                                                                                "_connectionType": 0,
+                                                                                                "_typeConstraint": 0,
+                                                                                                "_dynamic": false,
+                                                                                                "_onHeader": false,
+                                                                                                "InstanceID": 85384
+                                                                                              }
+                                                                                            ]
+                                                                                          },
+                                                                                          "InstanceID": 139399
+                                                                                        },
+                                                                                        "InstanceID": 85389,
+                                                                                        "reroutePoints": [
+
+                                                                                        ]
+                                                                                      }
+                                                                                    ],
+                                                                                    "_direction": 0,
+                                                                                    "_connectionType": 1,
+                                                                                    "_typeConstraint": 1,
+                                                                                    "_dynamic": false,
+                                                                                    "_onHeader": false,
+                                                                                    "InstanceID": 85386
+                                                                                  },
+                                                                                  {
+                                                                                    "$id": 46,
+                                                                                    "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                    "_fieldName": "Renderables",
+                                                                                    "_node": {
+                                                                                      "$id": 36,
+
+                                                                                    },
+                                                                                    "_typeQualifiedName": "System.Collections.Generic.List`1[[Prowl.Runtime.RenderPipelines.Renderable, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e",
+                                                                                    "connections": [
+                                                                                      {
+                                                                                        "$id": 47,
+                                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                                        "fieldName": "Renderables",
+                                                                                        "node": {
+                                                                                          "$id": 31,
+
+                                                                                        },
+                                                                                        "InstanceID": 85393,
+                                                                                        "reroutePoints": [
+
+                                                                                        ]
+                                                                                      }
+                                                                                    ],
+                                                                                    "_direction": 1,
+                                                                                    "_connectionType": 0,
+                                                                                    "_typeConstraint": 0,
+                                                                                    "_dynamic": false,
+                                                                                    "_onHeader": false,
+                                                                                    "InstanceID": 85387
+                                                                                  }
+                                                                                ]
+                                                                              },
+                                                                              "InstanceID": 139400
+                                                                            },
+                                                                            "InstanceID": 85394,
+                                                                            "reroutePoints": [
+
+                                                                            ]
+                                                                          }
+                                                                        ],
+                                                                        "_direction": 0,
+                                                                        "_connectionType": 1,
+                                                                        "_typeConstraint": 1,
+                                                                        "_dynamic": false,
+                                                                        "_onHeader": false,
+                                                                        "InstanceID": 85391
+                                                                      },
+                                                                      {
+                                                                        "$id": 48,
+                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                        "_fieldName": "Sorted",
+                                                                        "_node": {
+                                                                          "$id": 31,
+
+                                                                        },
+                                                                        "_typeQualifiedName": "System.Collections.Generic.List`1[[Prowl.Runtime.RenderPipelines.Renderable, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e",
+                                                                        "connections": [
+                                                                          {
+                                                                            "$id": 49,
+                                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                            "fieldName": "Renderables",
+                                                                            "node": {
+                                                                              "$id": 24,
+
+                                                                            },
+                                                                            "InstanceID": 85414,
+                                                                            "reroutePoints": [
+
+                                                                            ]
+                                                                          }
+                                                                        ],
+                                                                        "_direction": 1,
+                                                                        "_connectionType": 0,
+                                                                        "_typeConstraint": 0,
+                                                                        "_dynamic": false,
+                                                                        "_onHeader": false,
+                                                                        "InstanceID": 85392
+                                                                      }
+                                                                    ]
+                                                                  },
+                                                                  "InstanceID": 139401
+                                                                },
+                                                                "InstanceID": 85415,
+                                                                "reroutePoints": [
+
+                                                                ]
+                                                              }
+                                                            ],
+                                                            "_direction": 0,
+                                                            "_connectionType": 1,
+                                                            "_typeConstraint": 1,
+                                                            "_dynamic": false,
+                                                            "_onHeader": false,
+                                                            "InstanceID": 85403
+                                                          },
+                                                          {
+                                                            "$id": 50,
+                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                            "_fieldName": "Target",
+                                                            "_node": {
+                                                              "$id": 24,
+
+                                                            },
+                                                            "_typeQualifiedName": "Prowl.Runtime.RenderPipelines.NodeRenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                            "connections": [
+                                                              {
+                                                                "$id": 51,
+                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                "fieldName": "RT",
+                                                                "node": {
+                                                                  "$id": 52,
+                                                                  "$type": "Prowl.Runtime.RenderPipelines.RenderTextureNode",
+                                                                  "Scale": 1D,
+                                                                  "Resolution": 0,
+                                                                  "FixedWidth": 512F,
+                                                                  "FixedHeight": 512F,
+                                                                  "StartCleared": true,
+                                                                  "ClearColor": {
+                                                                    "$id": 53,
+                                                                    "$type": "Prowl.Runtime.Color",
+                                                                    "r": 0F,
+                                                                    "g": 0F,
+                                                                    "b": 0F,
+                                                                    "a": 1F
+                                                                  },
+                                                                  "EnableRandomWrite": false,
+                                                                  "SampleCount": 0,
+                                                                  "ColorFormats": [
+                                                                    {
+                                                                      "$id": 54,
+                                                                      "$type": "Prowl.Runtime.RenderPipelines.RTBuffer",
+                                                                      "type": 0,
+                                                                      "serialized_format": 0B
+                                                                    },
+                                                                    {
+                                                                      "$id": 55,
+                                                                      "$type": "Prowl.Runtime.RenderPipelines.RTBuffer",
+                                                                      "type": 1,
+                                                                      "serialized_format": 44B
+                                                                    },
+                                                                    {
+                                                                      "$id": 56,
+                                                                      "$type": "Prowl.Runtime.RenderPipelines.RTBuffer",
+                                                                      "type": 3,
+                                                                      "serialized_format": 0B
+                                                                    },
+                                                                    {
+                                                                      "$id": 57,
+                                                                      "$type": "Prowl.Runtime.RenderPipelines.RTBuffer",
+                                                                      "type": 5,
+                                                                      "serialized_format": 24B
+                                                                    }
+                                                                  ],
+                                                                  "HasDepth": true,
+                                                                  "DepthFormat": 7,
+                                                                  "graph": {
+                                                                    "$id": 1,
+
+                                                                  },
+                                                                  "position": {
+                                                                    "$id": 58,
+                                                                    "$type": "Prowl.Runtime.Vector2",
+                                                                    "x": 287D,
+                                                                    "y": 194D
+                                                                  },
+                                                                  "ports": {
+                                                                    "$id": 59,
+                                                                    "$type": "Prowl.Runtime.NodeSystem.Node+NodePortDictionary",
+                                                                    "keys": [
+                                                                      "Scale",
+                                                                      "RT",
+                                                                      "To",
+                                                                      "From"
+                                                                    ],
+                                                                    "values": [
+                                                                      {
+                                                                        "$id": 60,
+                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                        "_fieldName": "Scale",
+                                                                        "_node": {
+                                                                          "$id": 52,
+
+                                                                        },
+                                                                        "_typeQualifiedName": "System.Double, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e",
+                                                                        "connections": [
+
+                                                                        ],
+                                                                        "_direction": 0,
+                                                                        "_connectionType": 1,
+                                                                        "_typeConstraint": 1,
+                                                                        "_dynamic": false,
+                                                                        "_onHeader": false,
+                                                                        "InstanceID": 85396
+                                                                      },
+                                                                      {
+                                                                        "$id": 61,
+                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                        "_fieldName": "RT",
+                                                                        "_node": {
+                                                                          "$id": 52,
+
+                                                                        },
+                                                                        "_typeQualifiedName": "Prowl.Runtime.RenderPipelines.NodeRenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                        "connections": [
+                                                                          {
+                                                                            "$id": 62,
+                                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                            "fieldName": "Target",
+                                                                            "node": {
+                                                                              "$id": 24,
+
+                                                                            },
+                                                                            "InstanceID": 87650,
+                                                                            "reroutePoints": [
+
+                                                                            ]
+                                                                          },
+                                                                          {
+                                                                            "$id": 63,
+                                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                            "fieldName": "RT",
+                                                                            "node": {
+                                                                              "$id": 64,
+                                                                              "$type": "Prowl.Runtime.RenderPipelines.GetRTTextureNode",
+                                                                              "Type": 0,
+                                                                              "graph": {
+                                                                                "$id": 1,
+
+                                                                              },
+                                                                              "position": {
+                                                                                "$id": 65,
+                                                                                "$type": "Prowl.Runtime.Vector2",
+                                                                                "x": 642.2499999813735D,
+                                                                                "y": 411.2238243108219D
+                                                                              },
+                                                                              "ports": {
+                                                                                "$id": 66,
+                                                                                "$type": "Prowl.Runtime.NodeSystem.Node+NodePortDictionary",
+                                                                                "keys": [
+                                                                                  "RT",
+                                                                                  "Texture"
+                                                                                ],
+                                                                                "values": [
+                                                                                  {
+                                                                                    "$id": 67,
+                                                                                    "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                    "_fieldName": "RT",
+                                                                                    "_node": {
+                                                                                      "$id": 64,
+
+                                                                                    },
+                                                                                    "_typeQualifiedName": "Prowl.Runtime.RenderPipelines.NodeRenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                    "connections": [
+                                                                                      {
+                                                                                        "$id": 68,
+                                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                                        "fieldName": "RT",
+                                                                                        "node": {
+                                                                                          "$id": 52,
+
+                                                                                        },
+                                                                                        "InstanceID": 87654,
+                                                                                        "reroutePoints": [
+
+                                                                                        ]
+                                                                                      }
+                                                                                    ],
+                                                                                    "_direction": 0,
+                                                                                    "_connectionType": 1,
+                                                                                    "_typeConstraint": 1,
+                                                                                    "_dynamic": false,
+                                                                                    "_onHeader": false,
+                                                                                    "InstanceID": 85420
+                                                                                  },
+                                                                                  {
+                                                                                    "$id": 69,
+                                                                                    "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                    "_fieldName": "Texture",
+                                                                                    "_node": {
+                                                                                      "$id": 64,
+
+                                                                                    },
+                                                                                    "_typeQualifiedName": "Prowl.Runtime.Texture2D, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                    "connections": [
+                                                                                      {
+                                                                                        "$id": 70,
+                                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                                        "fieldName": "Value",
+                                                                                        "node": {
+                                                                                          "$id": 71,
+                                                                                          "$type": "Prowl.Runtime.RenderPipelines.PropertyNode",
+                                                                                          "Name": "_Texture",
+                                                                                          "graph": {
+                                                                                            "$id": 1,
+
+                                                                                          },
+                                                                                          "position": {
+                                                                                            "$id": 72,
+                                                                                            "$type": "Prowl.Runtime.Vector2",
+                                                                                            "x": 864.3488399105647D,
+                                                                                            "y": 411.2238243108219D
+                                                                                          },
+                                                                                          "ports": {
+                                                                                            "$id": 73,
+                                                                                            "$type": "Prowl.Runtime.NodeSystem.Node+NodePortDictionary",
+                                                                                            "keys": [
+                                                                                              "Value",
+                                                                                              "Property"
+                                                                                            ],
+                                                                                            "values": [
+                                                                                              {
+                                                                                                "$id": 74,
+                                                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                                "_fieldName": "Value",
+                                                                                                "_node": {
+                                                                                                  "$id": 71,
+
+                                                                                                },
+                                                                                                "_typeQualifiedName": "System.Object, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e",
+                                                                                                "connections": [
+                                                                                                  {
+                                                                                                    "$id": 75,
+                                                                                                    "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                                                    "fieldName": "Texture",
+                                                                                                    "node": {
+                                                                                                      "$id": 64,
+
+                                                                                                    },
+                                                                                                    "InstanceID": 85434,
+                                                                                                    "reroutePoints": [
+
+                                                                                                    ]
+                                                                                                  }
+                                                                                                ],
+                                                                                                "_direction": 0,
+                                                                                                "_connectionType": 1,
+                                                                                                "_typeConstraint": 1,
+                                                                                                "_dynamic": false,
+                                                                                                "_onHeader": false,
+                                                                                                "InstanceID": 85431
+                                                                                              },
+                                                                                              {
+                                                                                                "$id": 76,
+                                                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                                "_fieldName": "Property",
+                                                                                                "_node": {
+                                                                                                  "$id": 71,
+
+                                                                                                },
+                                                                                                "_typeQualifiedName": "Prowl.Runtime.RenderPipelines.PropertyNode+NodeProperty, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                                "connections": [
+                                                                                                  {
+                                                                                                    "$id": 77,
+                                                                                                    "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                                                    "fieldName": "Property 1",
+                                                                                                    "node": {
+                                                                                                      "$id": 78,
+                                                                                                      "$type": "Prowl.Runtime.RenderPipelines.PropertyStateNode",
+                                                                                                      "graph": {
+                                                                                                        "$id": 1,
+
+                                                                                                      },
+                                                                                                      "position": {
+                                                                                                        "$id": 79,
+                                                                                                        "$type": "Prowl.Runtime.Vector2",
+                                                                                                        "x": 1058.5571001288758D,
+                                                                                                        "y": 411.2238243108219D
+                                                                                                      },
+                                                                                                      "ports": {
+                                                                                                        "$id": 80,
+                                                                                                        "$type": "Prowl.Runtime.NodeSystem.Node+NodePortDictionary",
+                                                                                                        "keys": [
+                                                                                                          "PropertyState",
+                                                                                                          "Property 1",
+                                                                                                          "Property 2"
+                                                                                                        ],
+                                                                                                        "values": [
+                                                                                                          {
+                                                                                                            "$id": 81,
+                                                                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                                            "_fieldName": "PropertyState",
+                                                                                                            "_node": {
+                                                                                                              "$id": 78,
+
+                                                                                                            },
+                                                                                                            "_typeQualifiedName": "Prowl.Runtime.PropertyState, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                                            "connections": [
+                                                                                                              {
+                                                                                                                "$id": 82,
+                                                                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                                                                "fieldName": "Property",
+                                                                                                                "node": {
+                                                                                                                  "$id": 83,
+                                                                                                                  "$type": "Prowl.Runtime.RenderPipelines.BlitMaterialNode",
+                                                                                                                  "graph": {
+                                                                                                                    "$id": 1,
+
+                                                                                                                  },
+                                                                                                                  "position": {
+                                                                                                                    "$id": 84,
+                                                                                                                    "$type": "Prowl.Runtime.Vector2",
+                                                                                                                    "x": 1199.3488355147222D,
+                                                                                                                    "y": 194D
+                                                                                                                  },
+                                                                                                                  "ports": {
+                                                                                                                    "$id": 85,
+                                                                                                                    "$type": "Prowl.Runtime.NodeSystem.Node+NodePortDictionary",
+                                                                                                                    "keys": [
+                                                                                                                      "Target",
+                                                                                                                      "Material",
+                                                                                                                      "Property",
+                                                                                                                      "To",
+                                                                                                                      "From"
+                                                                                                                    ],
+                                                                                                                    "values": [
+                                                                                                                      {
+                                                                                                                        "$id": 86,
+                                                                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                                                        "_fieldName": "Target",
+                                                                                                                        "_node": {
+                                                                                                                          "$id": 83,
+
+                                                                                                                        },
+                                                                                                                        "_typeQualifiedName": "Prowl.Runtime.RenderPipelines.NodeRenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                                                        "connections": [
+                                                                                                                          {
+                                                                                                                            "$id": 87,
+                                                                                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                                                                            "fieldName": "Target",
+                                                                                                                            "node": {
+                                                                                                                              "$id": 88,
+                                                                                                                              "$type": "Prowl.Runtime.RenderPipelines.TargetRenderTextureNode",
+                                                                                                                              "graph": {
+                                                                                                                                "$id": 1,
+
+                                                                                                                              },
+                                                                                                                              "position": {
+                                                                                                                                "$id": 89,
+                                                                                                                                "$type": "Prowl.Runtime.Vector2",
+                                                                                                                                "x": 924.3488407301286D,
+                                                                                                                                "y": 221.4999995902181D
+                                                                                                                              },
+                                                                                                                              "ports": {
+                                                                                                                                "$id": 90,
+                                                                                                                                "$type": "Prowl.Runtime.NodeSystem.Node+NodePortDictionary",
+                                                                                                                                "keys": [
+                                                                                                                                  "Target"
+                                                                                                                                ],
+                                                                                                                                "values": [
+                                                                                                                                  {
+                                                                                                                                    "$id": 91,
+                                                                                                                                    "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                                                                    "_fieldName": "Target",
+                                                                                                                                    "_node": {
+                                                                                                                                      "$id": 88,
+
+                                                                                                                                    },
+                                                                                                                                    "_typeQualifiedName": "Prowl.Runtime.RenderPipelines.NodeRenderTexture, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                                                                    "connections": [
+                                                                                                                                      {
+                                                                                                                                        "$id": 92,
+                                                                                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                                                                                        "fieldName": "Target",
+                                                                                                                                        "node": {
+                                                                                                                                          "$id": 83,
+
+                                                                                                                                        },
+                                                                                                                                        "InstanceID": 97688,
+                                                                                                                                        "reroutePoints": [
+
+                                                                                                                                        ]
+                                                                                                                                      }
+                                                                                                                                    ],
+                                                                                                                                    "_direction": 1,
+                                                                                                                                    "_connectionType": 0,
+                                                                                                                                    "_typeConstraint": 0,
+                                                                                                                                    "_dynamic": false,
+                                                                                                                                    "_onHeader": false,
+                                                                                                                                    "InstanceID": 97547
+                                                                                                                                  }
+                                                                                                                                ]
+                                                                                                                              },
+                                                                                                                              "InstanceID": 139408
+                                                                                                                            },
+                                                                                                                            "InstanceID": 97689,
+                                                                                                                            "reroutePoints": [
+
+                                                                                                                            ]
+                                                                                                                          }
+                                                                                                                        ],
+                                                                                                                        "_direction": 0,
+                                                                                                                        "_connectionType": 1,
+                                                                                                                        "_typeConstraint": 1,
+                                                                                                                        "_dynamic": false,
+                                                                                                                        "_onHeader": false,
+                                                                                                                        "InstanceID": 85423
+                                                                                                                      },
+                                                                                                                      {
+                                                                                                                        "$id": 93,
+                                                                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                                                        "_fieldName": "Material",
+                                                                                                                        "_node": {
+                                                                                                                          "$id": 83,
+
+                                                                                                                        },
+                                                                                                                        "_typeQualifiedName": "Prowl.Runtime.AssetRef`1[[Prowl.Runtime.Material, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                                                        "connections": [
+                                                                                                                          {
+                                                                                                                            "$id": 94,
+                                                                                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                                                                            "fieldName": "Material",
+                                                                                                                            "node": {
+                                                                                                                              "$id": 95,
+                                                                                                                              "$type": "Prowl.Runtime.RenderPipelines.MaterialFromShaderNode",
+                                                                                                                              "ShaderName": "Defaults/Blit",
+                                                                                                                              "graph": {
+                                                                                                                                "$id": 1,
+
+                                                                                                                              },
+                                                                                                                              "position": {
+                                                                                                                                "$id": 96,
+                                                                                                                                "$type": "Prowl.Runtime.Vector2",
+                                                                                                                                "x": 864.3488399105647D,
+                                                                                                                                "y": 303.40239742147594D
+                                                                                                                              },
+                                                                                                                              "ports": {
+                                                                                                                                "$id": 97,
+                                                                                                                                "$type": "Prowl.Runtime.NodeSystem.Node+NodePortDictionary",
+                                                                                                                                "keys": [
+                                                                                                                                  "Material"
+                                                                                                                                ],
+                                                                                                                                "values": [
+                                                                                                                                  {
+                                                                                                                                    "$id": 98,
+                                                                                                                                    "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                                                                    "_fieldName": "Material",
+                                                                                                                                    "_node": {
+                                                                                                                                      "$id": 95,
+
+                                                                                                                                    },
+                                                                                                                                    "_typeQualifiedName": "Prowl.Runtime.AssetRef`1[[Prowl.Runtime.Material, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]], Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                                                                    "connections": [
+                                                                                                                                      {
+                                                                                                                                        "$id": 99,
+                                                                                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                                                                                        "fieldName": "Material",
+                                                                                                                                        "node": {
+                                                                                                                                          "$id": 83,
+
+                                                                                                                                        },
+                                                                                                                                        "InstanceID": 86023,
+                                                                                                                                        "reroutePoints": [
+
+                                                                                                                                        ]
+                                                                                                                                      }
+                                                                                                                                    ],
+                                                                                                                                    "_direction": 1,
+                                                                                                                                    "_connectionType": 0,
+                                                                                                                                    "_typeConstraint": 0,
+                                                                                                                                    "_dynamic": false,
+                                                                                                                                    "_onHeader": false,
+                                                                                                                                    "InstanceID": 85584
+                                                                                                                                  }
+                                                                                                                                ]
+                                                                                                                              },
+                                                                                                                              "InstanceID": 139407
+                                                                                                                            },
+                                                                                                                            "InstanceID": 86024,
+                                                                                                                            "reroutePoints": [
+
+                                                                                                                            ]
+                                                                                                                          }
+                                                                                                                        ],
+                                                                                                                        "_direction": 0,
+                                                                                                                        "_connectionType": 1,
+                                                                                                                        "_typeConstraint": 1,
+                                                                                                                        "_dynamic": false,
+                                                                                                                        "_onHeader": false,
+                                                                                                                        "InstanceID": 85424
+                                                                                                                      },
+                                                                                                                      {
+                                                                                                                        "$id": 100,
+                                                                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                                                        "_fieldName": "Property",
+                                                                                                                        "_node": {
+                                                                                                                          "$id": 83,
+
+                                                                                                                        },
+                                                                                                                        "_typeQualifiedName": "Prowl.Runtime.PropertyState, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                                                        "connections": [
+                                                                                                                          {
+                                                                                                                            "$id": 101,
+                                                                                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                                                                            "fieldName": "PropertyState",
+                                                                                                                            "node": {
+                                                                                                                              "$id": 78,
+
+                                                                                                                            },
+                                                                                                                            "InstanceID": 134096,
+                                                                                                                            "reroutePoints": [
+
+                                                                                                                            ]
+                                                                                                                          }
+                                                                                                                        ],
+                                                                                                                        "_direction": 0,
+                                                                                                                        "_connectionType": 1,
+                                                                                                                        "_typeConstraint": 1,
+                                                                                                                        "_dynamic": false,
+                                                                                                                        "_onHeader": false,
+                                                                                                                        "InstanceID": 85425
+                                                                                                                      },
+                                                                                                                      {
+                                                                                                                        "$id": 102,
+                                                                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                                                        "_fieldName": "To",
+                                                                                                                        "_node": {
+                                                                                                                          "$id": 83,
+
+                                                                                                                        },
+                                                                                                                        "_typeQualifiedName": "Prowl.Runtime.NodeSystem.FlowNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                                                        "connections": [
+
+                                                                                                                        ],
+                                                                                                                        "_direction": 1,
+                                                                                                                        "_connectionType": 1,
+                                                                                                                        "_typeConstraint": 2,
+                                                                                                                        "_dynamic": false,
+                                                                                                                        "_onHeader": true,
+                                                                                                                        "InstanceID": 85426
+                                                                                                                      },
+                                                                                                                      {
+                                                                                                                        "$id": 103,
+                                                                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                                                        "_fieldName": "From",
+                                                                                                                        "_node": {
+                                                                                                                          "$id": 83,
+
+                                                                                                                        },
+                                                                                                                        "_typeQualifiedName": "Prowl.Runtime.NodeSystem.FlowNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                                                        "connections": [
+                                                                                                                          {
+                                                                                                                            "$id": 104,
+                                                                                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                                                                            "fieldName": "To",
+                                                                                                                            "node": {
+                                                                                                                              "$id": 24,
+
+                                                                                                                            },
+                                                                                                                            "InstanceID": 86191,
+                                                                                                                            "reroutePoints": [
+
+                                                                                                                            ]
+                                                                                                                          }
+                                                                                                                        ],
+                                                                                                                        "_direction": 0,
+                                                                                                                        "_connectionType": 1,
+                                                                                                                        "_typeConstraint": 2,
+                                                                                                                        "_dynamic": false,
+                                                                                                                        "_onHeader": true,
+                                                                                                                        "InstanceID": 85427
+                                                                                                                      }
+                                                                                                                    ]
+                                                                                                                  },
+                                                                                                                  "InstanceID": 139405
+                                                                                                                },
+                                                                                                                "InstanceID": 134095,
+                                                                                                                "reroutePoints": [
+
+                                                                                                                ]
+                                                                                                              }
+                                                                                                            ],
+                                                                                                            "_direction": 1,
+                                                                                                            "_connectionType": 0,
+                                                                                                            "_typeConstraint": 0,
+                                                                                                            "_dynamic": false,
+                                                                                                            "_onHeader": false,
+                                                                                                            "InstanceID": 133936
+                                                                                                          },
+                                                                                                          {
+                                                                                                            "$id": 105,
+                                                                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                                            "_fieldName": "Property 1",
+                                                                                                            "_node": {
+                                                                                                              "$id": 78,
+
+                                                                                                            },
+                                                                                                            "_typeQualifiedName": "Prowl.Runtime.RenderPipelines.PropertyNode+NodeProperty, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                                            "connections": [
+                                                                                                              {
+                                                                                                                "$id": 106,
+                                                                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                                                                "fieldName": "Property",
+                                                                                                                "node": {
+                                                                                                                  "$id": 71,
+
+                                                                                                                },
+                                                                                                                "InstanceID": 134093,
+                                                                                                                "reroutePoints": [
+
+                                                                                                                ]
+                                                                                                              }
+                                                                                                            ],
+                                                                                                            "_direction": 0,
+                                                                                                            "_connectionType": 1,
+                                                                                                            "_typeConstraint": 2,
+                                                                                                            "_dynamic": true,
+                                                                                                            "_onHeader": false,
+                                                                                                            "InstanceID": 134091
+                                                                                                          },
+                                                                                                          {
+                                                                                                            "$id": 107,
+                                                                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                                                            "_fieldName": "Property 2",
+                                                                                                            "_node": {
+                                                                                                              "$id": 78,
+
+                                                                                                            },
+                                                                                                            "_typeQualifiedName": "Prowl.Runtime.RenderPipelines.PropertyNode+NodeProperty, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                                                            "connections": [
+
+                                                                                                            ],
+                                                                                                            "_direction": 0,
+                                                                                                            "_connectionType": 1,
+                                                                                                            "_typeConstraint": 2,
+                                                                                                            "_dynamic": true,
+                                                                                                            "_onHeader": false,
+                                                                                                            "InstanceID": 139418
+                                                                                                          }
+                                                                                                        ]
+                                                                                                      },
+                                                                                                      "InstanceID": 139410
+                                                                                                    },
+                                                                                                    "InstanceID": 134092,
+                                                                                                    "reroutePoints": [
+
+                                                                                                    ]
+                                                                                                  }
+                                                                                                ],
+                                                                                                "_direction": 1,
+                                                                                                "_connectionType": 0,
+                                                                                                "_typeConstraint": 0,
+                                                                                                "_dynamic": false,
+                                                                                                "_onHeader": false,
+                                                                                                "InstanceID": 85432
+                                                                                              }
+                                                                                            ]
+                                                                                          },
+                                                                                          "InstanceID": 139406
+                                                                                        },
+                                                                                        "InstanceID": 85433,
+                                                                                        "reroutePoints": [
+
+                                                                                        ]
+                                                                                      }
+                                                                                    ],
+                                                                                    "_direction": 1,
+                                                                                    "_connectionType": 0,
+                                                                                    "_typeConstraint": 0,
+                                                                                    "_dynamic": false,
+                                                                                    "_onHeader": false,
+                                                                                    "InstanceID": 85421
+                                                                                  }
+                                                                                ]
+                                                                              },
+                                                                              "InstanceID": 139404
+                                                                            },
+                                                                            "InstanceID": 87653,
+                                                                            "reroutePoints": [
+
+                                                                            ]
+                                                                          }
+                                                                        ],
+                                                                        "_direction": 1,
+                                                                        "_connectionType": 0,
+                                                                        "_typeConstraint": 0,
+                                                                        "_dynamic": false,
+                                                                        "_onHeader": false,
+                                                                        "InstanceID": 85397
+                                                                      },
+                                                                      {
+                                                                        "$id": 108,
+                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                        "_fieldName": "To",
+                                                                        "_node": {
+                                                                          "$id": 52,
+
+                                                                        },
+                                                                        "_typeQualifiedName": "Prowl.Runtime.NodeSystem.FlowNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                        "connections": [
+                                                                          {
+                                                                            "$id": 109,
+                                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                            "fieldName": "From",
+                                                                            "node": {
+                                                                              "$id": 24,
+
+                                                                            },
+                                                                            "InstanceID": 86193,
+                                                                            "reroutePoints": [
+
+                                                                            ]
+                                                                          }
+                                                                        ],
+                                                                        "_direction": 1,
+                                                                        "_connectionType": 1,
+                                                                        "_typeConstraint": 2,
+                                                                        "_dynamic": false,
+                                                                        "_onHeader": true,
+                                                                        "InstanceID": 85398
+                                                                      },
+                                                                      {
+                                                                        "$id": 110,
+                                                                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                                        "_fieldName": "From",
+                                                                        "_node": {
+                                                                          "$id": 52,
+
+                                                                        },
+                                                                        "_typeQualifiedName": "Prowl.Runtime.NodeSystem.FlowNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                                        "connections": [
+                                                                          {
+                                                                            "$id": 111,
+                                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                            "fieldName": "To",
+                                                                            "node": {
+                                                                              "$id": 7,
+
+                                                                            },
+                                                                            "InstanceID": 137141,
+                                                                            "reroutePoints": [
+
+                                                                            ]
+                                                                          }
+                                                                        ],
+                                                                        "_direction": 0,
+                                                                        "_connectionType": 1,
+                                                                        "_typeConstraint": 2,
+                                                                        "_dynamic": false,
+                                                                        "_onHeader": true,
+                                                                        "InstanceID": 85399
+                                                                      }
+                                                                    ]
+                                                                  },
+                                                                  "InstanceID": 139402
+                                                                },
+                                                                "InstanceID": 87651,
+                                                                "reroutePoints": [
+
+                                                                ]
+                                                              }
+                                                            ],
+                                                            "_direction": 0,
+                                                            "_connectionType": 1,
+                                                            "_typeConstraint": 1,
+                                                            "_dynamic": false,
+                                                            "_onHeader": false,
+                                                            "InstanceID": 85404
+                                                          },
+                                                          {
+                                                            "$id": 112,
+                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                            "_fieldName": "Property",
+                                                            "_node": {
+                                                              "$id": 24,
+
+                                                            },
+                                                            "_typeQualifiedName": "Prowl.Runtime.PropertyState, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                            "connections": [
+                                                              {
+                                                                "$id": 113,
+                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                "fieldName": "PropertyState",
+                                                                "node": {
+                                                                  "$id": 19,
+
+                                                                },
+                                                                "InstanceID": 135283,
+                                                                "reroutePoints": [
+
+                                                                ]
+                                                              }
+                                                            ],
+                                                            "_direction": 0,
+                                                            "_connectionType": 1,
+                                                            "_typeConstraint": 1,
+                                                            "_dynamic": false,
+                                                            "_onHeader": false,
+                                                            "InstanceID": 85405
+                                                          },
+                                                          {
+                                                            "$id": 114,
+                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                            "_fieldName": "To",
+                                                            "_node": {
+                                                              "$id": 24,
+
+                                                            },
+                                                            "_typeQualifiedName": "Prowl.Runtime.NodeSystem.FlowNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                            "connections": [
+                                                              {
+                                                                "$id": 115,
+                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                "fieldName": "From",
+                                                                "node": {
+                                                                  "$id": 83,
+
+                                                                },
+                                                                "InstanceID": 86190,
+                                                                "reroutePoints": [
+
+                                                                ]
+                                                              }
+                                                            ],
+                                                            "_direction": 1,
+                                                            "_connectionType": 1,
+                                                            "_typeConstraint": 2,
+                                                            "_dynamic": false,
+                                                            "_onHeader": true,
+                                                            "InstanceID": 85406
+                                                          },
+                                                          {
+                                                            "$id": 116,
+                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                            "_fieldName": "From",
+                                                            "_node": {
+                                                              "$id": 24,
+
+                                                            },
+                                                            "_typeQualifiedName": "Prowl.Runtime.NodeSystem.FlowNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                            "connections": [
+                                                              {
+                                                                "$id": 117,
+                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                "fieldName": "To",
+                                                                "node": {
+                                                                  "$id": 52,
+
+                                                                },
+                                                                "InstanceID": 86194,
+                                                                "reroutePoints": [
+
+                                                                ]
+                                                              }
+                                                            ],
+                                                            "_direction": 0,
+                                                            "_connectionType": 1,
+                                                            "_typeConstraint": 2,
+                                                            "_dynamic": false,
+                                                            "_onHeader": true,
+                                                            "InstanceID": 85407
+                                                          }
+                                                        ]
+                                                      },
+                                                      "InstanceID": 139403
+                                                    },
+                                                    "InstanceID": 135282,
+                                                    "reroutePoints": [
+
+                                                    ]
+                                                  }
+                                                ],
+                                                "_direction": 1,
+                                                "_connectionType": 0,
+                                                "_typeConstraint": 0,
+                                                "_dynamic": false,
+                                                "_onHeader": false,
+                                                "InstanceID": 134102
+                                              },
+                                              {
+                                                "$id": 118,
+                                                "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                "_fieldName": "Property 1",
+                                                "_node": {
+                                                  "$id": 19,
+
+                                                },
+                                                "_typeQualifiedName": "Prowl.Runtime.RenderPipelines.PropertyNode+NodeProperty, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                "connections": [
+                                                  {
+                                                    "$id": 119,
+                                                    "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                    "fieldName": "Property",
+                                                    "node": {
+                                                      "$id": 12,
+
+                                                    },
+                                                    "InstanceID": 135275,
+                                                    "reroutePoints": [
+
+                                                    ]
+                                                  }
+                                                ],
+                                                "_direction": 0,
+                                                "_connectionType": 1,
+                                                "_typeConstraint": 2,
+                                                "_dynamic": true,
+                                                "_onHeader": false,
+                                                "InstanceID": 135273
+                                              },
+                                              {
+                                                "$id": 120,
+                                                "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                "_fieldName": "Property 2",
+                                                "_node": {
+                                                  "$id": 19,
+
+                                                },
+                                                "_typeQualifiedName": "Prowl.Runtime.RenderPipelines.PropertyNode+NodeProperty, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                "connections": [
+                                                  {
+                                                    "$id": 121,
+                                                    "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                    "fieldName": "Property",
+                                                    "node": {
+                                                      "$id": 122,
+                                                      "$type": "Prowl.Runtime.RenderPipelines.PropertyNode",
+                                                      "Name": "_LightCount",
+                                                      "graph": {
+                                                        "$id": 1,
+
+                                                      },
+                                                      "position": {
+                                                        "$id": 123,
+                                                        "$type": "Prowl.Runtime.Vector2",
+                                                        "x": 239.80711232920135D,
+                                                        "y": 865.5957399243491D
+                                                      },
+                                                      "ports": {
+                                                        "$id": 124,
+                                                        "$type": "Prowl.Runtime.NodeSystem.Node+NodePortDictionary",
+                                                        "keys": [
+                                                          "Value",
+                                                          "Property"
+                                                        ],
+                                                        "values": [
+                                                          {
+                                                            "$id": 125,
+                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                            "_fieldName": "Value",
+                                                            "_node": {
+                                                              "$id": 122,
+
+                                                            },
+                                                            "_typeQualifiedName": "System.Object, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e",
+                                                            "connections": [
+                                                              {
+                                                                "$id": 126,
+                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                "fieldName": "LightCount",
+                                                                "node": {
+                                                                  "$id": 7,
+
+                                                                },
+                                                                "InstanceID": 138819,
+                                                                "reroutePoints": [
+
+                                                                ]
+                                                              }
+                                                            ],
+                                                            "_direction": 0,
+                                                            "_connectionType": 1,
+                                                            "_typeConstraint": 1,
+                                                            "_dynamic": false,
+                                                            "_onHeader": false,
+                                                            "InstanceID": 135060
+                                                          },
+                                                          {
+                                                            "$id": 127,
+                                                            "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                            "_fieldName": "Property",
+                                                            "_node": {
+                                                              "$id": 122,
+
+                                                            },
+                                                            "_typeQualifiedName": "Prowl.Runtime.RenderPipelines.PropertyNode+NodeProperty, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                            "connections": [
+                                                              {
+                                                                "$id": 128,
+                                                                "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                                                                "fieldName": "Property 2",
+                                                                "node": {
+                                                                  "$id": 19,
+
+                                                                },
+                                                                "InstanceID": 137090,
+                                                                "reroutePoints": [
+
+                                                                ]
+                                                              }
+                                                            ],
+                                                            "_direction": 1,
+                                                            "_connectionType": 0,
+                                                            "_typeConstraint": 0,
+                                                            "_dynamic": false,
+                                                            "_onHeader": false,
+                                                            "InstanceID": 135061
+                                                          }
+                                                        ]
+                                                      },
+                                                      "InstanceID": 139413
+                                                    },
+                                                    "InstanceID": 137091,
+                                                    "reroutePoints": [
+
+                                                    ]
+                                                  }
+                                                ],
+                                                "_direction": 0,
+                                                "_connectionType": 1,
+                                                "_typeConstraint": 2,
+                                                "_dynamic": true,
+                                                "_onHeader": false,
+                                                "InstanceID": 137089
+                                              },
+                                              {
+                                                "$id": 129,
+                                                "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                                                "_fieldName": "Property 3",
+                                                "_node": {
+                                                  "$id": 19,
+
+                                                },
+                                                "_typeQualifiedName": "Prowl.Runtime.RenderPipelines.PropertyNode+NodeProperty, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                                                "connections": [
+
+                                                ],
+                                                "_direction": 0,
+                                                "_connectionType": 1,
+                                                "_typeConstraint": 2,
+                                                "_dynamic": true,
+                                                "_onHeader": false,
+                                                "InstanceID": 139419
+                                              }
+                                            ]
+                                          },
+                                          "InstanceID": 139412
+                                        },
+                                        "InstanceID": 135274,
+                                        "reroutePoints": [
+
+                                        ]
+                                      }
+                                    ],
+                                    "_direction": 1,
+                                    "_connectionType": 0,
+                                    "_typeConstraint": 0,
+                                    "_dynamic": false,
+                                    "_onHeader": false,
+                                    "InstanceID": 134100
+                                  }
+                                ]
+                              },
+                              "InstanceID": 139411
+                            },
+                            "InstanceID": 138814,
+                            "reroutePoints": [
+
+                            ]
+                          }
+                        ],
+                        "_direction": 1,
+                        "_connectionType": 0,
+                        "_typeConstraint": 0,
+                        "_dynamic": false,
+                        "_onHeader": false,
+                        "InstanceID": 133490
+                      },
+                      {
+                        "$id": 130,
+                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                        "_fieldName": "LightCount",
+                        "_node": {
+                          "$id": 7,
+
+                        },
+                        "_typeQualifiedName": "System.Int32, System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e",
+                        "connections": [
+                          {
+                            "$id": 131,
+                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                            "fieldName": "Value",
+                            "node": {
+                              "$id": 122,
+
+                            },
+                            "InstanceID": 138818,
+                            "reroutePoints": [
+
+                            ]
+                          }
+                        ],
+                        "_direction": 1,
+                        "_connectionType": 0,
+                        "_typeConstraint": 0,
+                        "_dynamic": false,
+                        "_onHeader": false,
+                        "InstanceID": 133491
+                      },
+                      {
+                        "$id": 132,
+                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                        "_fieldName": "To",
+                        "_node": {
+                          "$id": 7,
+
+                        },
+                        "_typeQualifiedName": "Prowl.Runtime.NodeSystem.FlowNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                        "connections": [
+                          {
+                            "$id": 133,
+                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                            "fieldName": "From",
+                            "node": {
+                              "$id": 52,
+
+                            },
+                            "InstanceID": 137140,
+                            "reroutePoints": [
+
+                            ]
+                          }
+                        ],
+                        "_direction": 1,
+                        "_connectionType": 1,
+                        "_typeConstraint": 2,
+                        "_dynamic": false,
+                        "_onHeader": true,
+                        "InstanceID": 133492
+                      },
+                      {
+                        "$id": 134,
+                        "$type": "Prowl.Runtime.NodeSystem.NodePort",
+                        "_fieldName": "From",
+                        "_node": {
+                          "$id": 7,
+
+                        },
+                        "_typeQualifiedName": "Prowl.Runtime.NodeSystem.FlowNode, Prowl.Runtime, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                        "connections": [
+                          {
+                            "$id": 135,
+                            "$type": "Prowl.Runtime.NodeSystem.NodePort+PortConnection",
+                            "fieldName": "To",
+                            "node": {
+                              "$id": 2,
+
+                            },
+                            "InstanceID": 137137,
+                            "reroutePoints": [
+
+                            ]
+                          }
+                        ],
+                        "_direction": 0,
+                        "_connectionType": 1,
+                        "_typeConstraint": 2,
+                        "_dynamic": false,
+                        "_onHeader": true,
+                        "InstanceID": 133493
+                      }
+                    ]
+                  },
+                  "InstanceID": 139409
+                },
+                "InstanceID": 137136,
+                "reroutePoints": [
+
+                ]
+              }
+            ],
+            "_direction": 1,
+            "_connectionType": 1,
+            "_typeConstraint": 2,
+            "_dynamic": false,
+            "_onHeader": true,
+            "InstanceID": 85382
+          }
+        ]
+      },
+      "InstanceID": 139398
+    },
+    {
+      "$id": 41,
+
+    },
+    {
+      "$id": 36,
+
+    },
+    {
+      "$id": 31,
+
+    },
+    {
+      "$id": 52,
+
+    },
+    {
+      "$id": 24,
+
+    },
+    {
+      "$id": 64,
+
+    },
+    {
+      "$id": 83,
+
+    },
+    {
+      "$id": 71,
+
+    },
+    {
+      "$id": 95,
+
+    },
+    {
+      "$id": 88,
+
+    },
+    {
+      "$id": 7,
+
+    },
+    {
+      "$id": 78,
+
+    },
+    {
+      "$id": 12,
+
+    },
+    {
+      "$id": 19,
+
+    },
+    {
+      "$id": 122,
+
+    }
+  ],
+  "parameters": [
+
+  ],
+  "AssetID": "684a9bd0-068a-443f-ae36-be49176f58b6",
+  "FileID": 0V,
+  "Name": "NewRenderPipeline"
+}

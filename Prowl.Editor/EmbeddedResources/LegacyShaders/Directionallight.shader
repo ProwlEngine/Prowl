@@ -187,7 +187,6 @@ Pass 0
 			vec3 N = normalize(gNormal);
 			vec3 V = normalize(-gPos);
 
-			
 			vec3 L = normalize(-LightDirection);
 			vec3 H = normalize(V + L);
 

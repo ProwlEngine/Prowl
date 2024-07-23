@@ -1,6 +1,5 @@
 ﻿using Prowl.Icons;
 using Prowl.Runtime.RenderPipelines;
-using Prowl.Runtime.SceneManagement;
 using Veldrid;
 
 namespace Prowl.Runtime;

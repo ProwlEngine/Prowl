@@ -30,7 +30,7 @@ namespace Prowl.Runtime
         {   
             QualitySetting[] Qualities = QualitySettings.Instance.Qualities;
 
-            if (Qualities != null && Qualities.Length > 0 && Qualities[0] != null)
+            if (Qualities != null && Qualities.Length > 0 && Qualities[0] != null && Qualities[0].RenderPipeline.IsAvailable)
                 return;
 
             /*
@@ -40,12 +40,10 @@ namespace Prowl.Runtime
                 Debug.LogError($"Missing Default Render Pipeline!");
             */
 
-            RenderPipelines.RenderPipeline defaultPipeline = null;
-
             QualitySettings.Instance.Qualities = [
                 new QualitySetting()
                 {
-                    RenderPipeline = defaultPipeline,
+                    RenderPipeline = new(Guid.Parse("f047d341-111b-4450-ad49-dd5f9e2070a9")),
                 }
             ];
         }

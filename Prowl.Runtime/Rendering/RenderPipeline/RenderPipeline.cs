@@ -20,6 +20,10 @@ namespace Prowl.Runtime.RenderPipelines
             ("Parameter", typeof(ParameterNode)),
         ];
 
+        //public override (string, Type)[] NodeReflectionTypes => [
+        //    ("Reflection/Vector3", typeof(Vector3)),
+        //];
+
         private List<NodeRenderTexture> rts = [];
 
         public Vector2 Resolution { get; private set; }
@@ -43,12 +47,15 @@ namespace Prowl.Runtime.RenderPipelines
 
         public void Render(RenderingContext context, Camera.CameraData[] cameras)
         {
-            // Create and schedule a command to clear the current render target
-            var rootBuffer = new CommandBuffer();
-            rootBuffer.SetRenderTarget(context.TargetTexture);
-            rootBuffer.ClearRenderTarget(context.TargetTexture.ColorBuffers.Length > 0, context.TargetTexture.DepthBuffer != null, Color.black);
+            // Sort the cameras by their render order
+            cameras = cameras.OrderBy(c => c.RenderOrder).ToArray();
 
-            context.ExecuteCommandBuffer(rootBuffer);
+            //// Create and schedule a command to clear the current render target
+            //var rootBuffer = new CommandBuffer();
+            //rootBuffer.SetRenderTarget(context.TargetTexture);
+            //rootBuffer.ClearRenderTarget(context.TargetTexture.ColorBuffers.Length > 0, context.TargetTexture.DepthBuffer != null, Color.black);
+            //
+            //context.ExecuteCommandBuffer(rootBuffer);
 
             Context = context;
 
@@ -75,9 +82,13 @@ namespace Prowl.Runtime.RenderPipelines
                     Resolution = new Vector2(width, height);
                     CurrentCamera = cam;
 
-
                     var cmd = CommandBufferPool.Get("Camera Buffer");
                     cmd.SetRenderTarget(Target.RenderTexture);
+                    var viewX = (int)(cam.Viewrect.x * width);
+                    var viewY = (int)(cam.Viewrect.y * height);
+                    var viewWidth = (int)(cam.Viewrect.width * width);
+                    var viewHeight = (int)(cam.Viewrect.height * height);
+                    cmd.SetViewports(viewX, viewY, viewWidth, viewHeight, 0f, 1f);
                     if (cam.DoClear)
                         cmd.ClearRenderTarget(Target.HasColors, Target.HasDepth, cam.ClearColor);
                     context.ExecuteCommandBuffer(cmd);
