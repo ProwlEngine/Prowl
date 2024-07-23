@@ -16,6 +16,14 @@ namespace Prowl.Runtime
             this.a = a;
         }
 
+        public Color32(uint rgba)
+        {
+            r = (byte)(rgba & 0xFF);
+            g = (byte)((rgba >> 8) & 0xFF);
+            b = (byte)((rgba >> 16) & 0xFF);
+            a = (byte)((rgba >> 24) & 0xFF);
+        }
+
         internal uint GetUInt()
         {
             uint @out;
