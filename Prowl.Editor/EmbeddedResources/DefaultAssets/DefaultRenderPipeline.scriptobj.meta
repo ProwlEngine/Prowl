@@ -9,7 +9,7 @@
   "assetTypes": [
     "Prowl.Runtime.RenderPipelines.RenderPipeline"
   ],
-  "lastModified": 5250261260785271327L,
+  "lastModified": 5250261264244017117L,
   "importer": {
     "$id": 2,
     "$type": "Prowl.Editor.Assets.ScriptableObjectImporter",
