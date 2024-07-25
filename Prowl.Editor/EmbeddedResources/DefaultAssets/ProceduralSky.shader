@@ -308,8 +308,7 @@ Pass "ProceduralSky"
 
 		void main()
 		{
-			vec3 sunDisc = vec3(step(0.9, dot(normalize(vec3(0, 1, 1)), -_SunDir)));
-			sunDisc = vec3(1.0 - step(dot(normalize(vDir), normalize(-_SunDir)), 0.9995));
+			vec3 sunDisc = vec3(1.0 - step(dot(normalize(vDir), normalize(-_SunDir)), 0.9995));
 			OutputColor = vec4(sunDisc + (vCol * 2.0), 1.0);
 		}
 	ENDPROGRAM
