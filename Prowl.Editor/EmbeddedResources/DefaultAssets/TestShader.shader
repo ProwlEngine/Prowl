@@ -5,7 +5,7 @@ Pass "TestShader"
     Tags { "RenderOrder" = "Opaque" }
 
     // Rasterizer culling mode
-    Cull None
+    Cull Back
 
 	Inputs
 	{
