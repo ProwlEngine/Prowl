@@ -28,7 +28,9 @@ namespace Prowl.Runtime
 
             if (Index < 0)
             {
-                for (uint i = 0; i < state.ActiveFramebuffer.ColorTargets.Length; i++)
+                list.SetViewport(0, viewport);
+
+                for (uint i = 1; i < state.ActiveFramebuffer.ColorTargets.Length; i++)
                     list.SetViewport(i, viewport);
             }
             else
