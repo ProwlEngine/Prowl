@@ -1,7 +1,4 @@
 ﻿using Prowl.Icons;
-using Material = Prowl.Runtime.Material;
-using Mesh = Prowl.Runtime.Mesh;
-using Shader = Prowl.Runtime.Shader;
 
 namespace Prowl.Runtime;
 

@@ -1,0 +1,25 @@
+{
+  "$id": 1,
+  "$type": "Prowl.Editor.Assets.MetaFile",
+  "version": 1,
+  "guid": "e37aaaf8-5f76-4dbb-b37c-e377faf30fed",
+  "assetNames": [
+    "default_white"
+  ],
+  "assetTypes": [
+    "Prowl.Runtime.Texture2D"
+  ],
+  "lastModified": 5250261254779957340L,
+  "importer": {
+    "$id": 2,
+    "$type": "Prowl.Editor.Assets.TextureImporter",
+    "generateMipmaps": true,
+    "textureWrap": 0,
+    "textureMinFilter": 0,
+    "textureMagFilter": 0,
+    "textureMipFilter": 0
+  },
+  "dependencies": [
+
+  ]
+}

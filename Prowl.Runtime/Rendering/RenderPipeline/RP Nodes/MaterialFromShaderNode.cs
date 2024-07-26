@@ -16,7 +16,7 @@ namespace Prowl.Runtime.RenderPipelines
 
         public override object GetValue(NodePort port)
         {
-            if(savedName == ShaderName)
+            if(savedName == ShaderName && savedMat.IsAvailable)
                 return savedMat;
 
             savedMat = new AssetRef<Material>(new Material(Application.AssetProvider.LoadAsset<Shader>(ShaderName + ".shader")));

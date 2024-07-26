@@ -18,7 +18,9 @@ namespace Prowl.Runtime.RenderPipelines
             var material = GetInputValue<AssetRef<Material>>("Material");
             var property = GetInputValue<PropertyState>("Property");
 
-            if(target == null)
+            Error = "";
+
+            if (target == null)
             {
                 Error = "Target is null!";
                 return;

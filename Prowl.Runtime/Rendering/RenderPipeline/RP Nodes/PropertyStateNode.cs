@@ -56,6 +56,8 @@ namespace Prowl.Runtime.RenderPipelines
                     state.SetVector(prop.Name, vec4);
                 else if(prop.Value is Color col)
                     state.SetColor(prop.Name, col);
+                else if (prop.Value is ComputeBuffer buf)
+                    state.SetBuffer(prop.Name, buf);
                 else
                     throw new System.Exception($"Unsupported type: {prop.Value.GetType()}");
             }

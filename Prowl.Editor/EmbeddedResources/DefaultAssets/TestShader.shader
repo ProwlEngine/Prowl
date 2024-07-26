@@ -5,7 +5,7 @@ Pass "TestShader"
     Tags { "RenderOrder" = "Opaque" }
 
     // Rasterizer culling mode
-    Cull None
+    Cull Back
 
 	Inputs
 	{
@@ -34,7 +34,6 @@ Pass "TestShader"
 
 			SampledTexture _AlbedoTex
 			SampledTexture _NormalTex
-			SampledTexture _EmissiveTex
 			SampledTexture _SurfaceTex
 
             Buffer StandardUniforms
@@ -42,9 +41,11 @@ Pass "TestShader"
 				_MainColor Vector4 // color
 				_AlphaClip Float
 				_ObjectID Float
-				_EmissiveColor Vector3 // Emissive color
-				_EmissionIntensity Float
+				
+				_LightCount Float
             }
+			
+			StructuredBuffer _Lights
         }
 	}
 
@@ -69,6 +70,7 @@ Pass "TestShader"
 		layout(location = 1) out vec4 VertColor;
 		layout(location = 2) out vec3 FragPos;
 		layout(location = 3) out mat3 TBN;
+		layout(location = 6) out vec3 vNorm;
 		
 		void main() 
 		{
@@ -79,6 +81,8 @@ Pass "TestShader"
 			
 			TexCoords = vertexTexCoord;
 			VertColor = vertexColors;
+			vNorm = vertexNormal;
+			
 
 			mat3 normalMatrix = transpose(inverse(mat3(Mat_ObjectToWorld)));
 			
@@ -94,13 +98,12 @@ Pass "TestShader"
 		layout(location = 1) in vec4 VertColor;
 		layout(location = 2) in vec3 FragPos;
 		layout(location = 3) in mat3 TBN;
+		layout(location = 6) in vec3 vNorm;
 
 		layout(location = 0) out vec4 Albedo;
-		layout(location = 1) out vec3 Position;
-		layout(location = 2) out vec3 Normal;
-		layout(location = 3) out vec3 Emissive;
-		layout(location = 4) out vec3 AoRoughnessMetallic;
-		layout(location = 5) out uint ObjectID;
+		layout(location = 1) out vec3 Normal;
+		layout(location = 2) out vec3 AoRoughnessMetallic;
+		layout(location = 3) out uint ObjectID;
 		
 		layout(set = 0, binding = 0, std140) uniform DefaultUniforms
 		{
@@ -118,34 +121,70 @@ Pass "TestShader"
 		layout(set = 0, binding = 3) uniform texture2D _NormalTex;
 		layout(set = 0, binding = 4) uniform sampler _NormalTexSampler;
 
-		layout(set = 0, binding = 5) uniform texture2D _EmissiveTex;
-		layout(set = 0, binding = 6) uniform sampler _EmissiveTexSampler;
-
-		layout(set = 0, binding = 7) uniform texture2D _SurfaceTex;
-		layout(set = 0, binding = 8) uniform sampler _SurfaceTexSampler;
+		layout(set = 0, binding = 5) uniform texture2D _SurfaceTex;
+		layout(set = 0, binding = 6) uniform sampler _SurfaceTexSampler;
 		
 		
-		layout(set = 0, binding = 9, std140) uniform StandardUniforms
+		layout(set = 0, binding = 7, std140) uniform StandardUniforms
 		{
 			vec4 _MainColor; // color
 			float _AlphaClip;
 			float _ObjectID;
-			vec3 _EmissiveColor; // Emissive color
-			float _EmissionIntensity;
+			float _LightCount;
 		};
 		
+		struct gpuLight 
+		{
+			vec4 PositionType; // 4 float - 16 bytes
+			vec4 DirectionRange; // 4 float - 16 bytes - 32 bytes
+			uint Color; // 1 uint - 4 bytes - 36 bytes
+			float Intensity; // 1 float - 4 bytes - 40 bytes
+			vec2 SpotData; // 2 float - 8 bytes - 48 bytes
+			vec4 ShadowData; // 4 float - 16 bytes - 64 bytes
+		};
+		
+		layout(set = 0, binding = 8, std140) buffer _Lights
+		{
+			gpuLight allLights[];
+		};
+		
+		vec4 unpackAndConvertRGBA(uint packed)
+		{
+			uvec4 color;
+			color.r = packed & 0xFF;
+			color.g = (packed >> 8) & 0xFF;
+			color.b = (packed >> 16) & 0xFF;
+			color.a = (packed >> 24) & 0xFF;
+			
+			// Convert to float and normalize to [0, 1] range
+			vec4 normalizedColor = vec4(color) / 255.0;
+			return normalizedColor;
+		}
+		
 		#include "Prowl"
+		#include "PBR"
+		
+		void CookTorrance(vec3 N, vec3 H, vec3 L, vec3 V, vec3 F0, float roughness, float metallic, out vec3 kD, out vec3 specular)
+		{
+			float NDF = DistributionGGX(N, H, roughness);        
+			float G   = GeometrySmith(N, V, L, roughness);  
+			vec3 F    = FresnelSchlick(max(dot(H, V), 0.0), F0);
+			
+			vec3 nominator    = NDF * G * F;
+			float denominator = 4 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001; 
+			specular = nominator / denominator;
+			
+			vec3 kS = F;
+			kD = vec3(1.0) - kS;
+			kD *= 1.0 - metallic;  
+		}
 
 		void main()
 		{
 			// Albedo & Cutout
 			vec4 baseColor = texture(sampler2D(_AlbedoTex, _AlbedoTexSampler), TexCoords);// * _MainColor.rgb;
 			if(baseColor.w < _AlphaClip) discard;
-			Albedo.rgb = pow(baseColor.xyz, vec3(2.2));
-			Albedo.a = 1.0;
-
-			// Position
-			Position = FragPos;
+			baseColor.rgb = pow(baseColor.xyz, vec3(2.2));
 
 			// Normal
 			vec3 normal = texture(sampler2D(_NormalTex, _NormalTexSampler), TexCoords).rgb;
@@ -153,16 +192,135 @@ Pass "TestShader"
 			normal = normalize(TBN * normal); 
 			Normal = (Mat_V * vec4(normal, 0)).rgb;
 
-			// Emissive
-			vec3 emissiveColor = texture(sampler2D(_EmissiveTex, _EmissiveTexSampler), TexCoords).rgb * _EmissiveColor.rgb * _EmissionIntensity;
-			Emissive = emissiveColor;
-
 			// AO, Roughness, Metallic
 			vec3 surface = texture(sampler2D(_SurfaceTex, _SurfaceTexSampler), TexCoords).rgb;
 			AoRoughnessMetallic = vec3(surface.r, surface.g, surface.b);
 
 			// Object ID
 			ObjectID = uint(_ObjectID);
+			
+			
+			// Calculate Lighting
+			// AO: surface.r
+			// Roughness: surface.g
+			// Metallic: surface.b
+			
+			//http://www.jp.square-enix.com/tech/library/pdf/ImprovedGeometricSpecularAA.pdf - based on Godot's implementation
+			float roughness2 = surface.g * surface.g;
+			float limiterStrength = 0.2;
+			float limiterClamp = 0.18;
+			vec3 dndu = dFdx(Normal), dndv = dFdx(Normal);
+			float variance = limiterStrength * (dot(dndu, dndu) + dot(dndv, dndv));
+			float kernelRoughness2 = min(2.0 * variance, limiterClamp); //limit effect
+			float filteredRoughness2 = min(1.0, roughness2 + kernelRoughness2);
+			surface.g = sqrt(filteredRoughness2);
+			
+			// calculate reflectance at normal incidence; if dia-electric (like plastic) use F0 
+			// of 0.04 and if it's a metal, use the albedo color as F0 (metallic workflow)    
+			vec3 F0 = vec3(0.04); 
+			F0 = mix(F0, baseColor.rgb, surface.b);
+			vec3 N = normalize(Normal);
+			vec3 V = normalize(-FragPos);
+			
+			vec3 lighting = vec3(0.0, 0.0, 0.0);
+			float ambientStrength = 0.0;
+			for(int i = 0; i < _LightCount; i++)
+			{
+				gpuLight light = allLights[i];
+				vec3 lightColor = unpackAndConvertRGBA(light.Color).rgb;
+				float intensity = light.Intensity;
+					
+				if(light.PositionType.w == 0.0) // Directional Light
+				{
+					vec3 L = normalize(-(Mat_V * vec4(light.DirectionRange.xyz, 0)).rgb);
+					vec3 H = normalize(V + L);
+					
+					vec3 kD;
+					vec3 specular;
+					CookTorrance(N, H, L, V, F0, surface.g, surface.b, kD, specular); 
+					
+					// shadows
+					//vec4 fragPosLightSpace = matCamViewInverse * vec4(FragPos + (N * u_NormalBias), 1);
+					//float shadow = ShadowCalculation(fragPosLightSpace.xyz, FragPos, N, L);
+						
+					// add to outgoing radiance Lo
+					vec3 radiance = lightColor * intensity;   
+					float NdotL = max(dot(N, L), 0.0);                
+					//vec3 color = ((kD * baseColor.rgb) / PI + specular) * radiance * (1.0 - shadow) * NdotL;
+					vec3 color = ((kD * baseColor.rgb) / PI + specular) * radiance * NdotL;
+					
+					// Ambient Lighting
+					ambientStrength += light.SpotData.x;
+					
+					lighting += color; 
+				}
+				else if(light.PositionType.w == 1.0) // Point Light
+				{
+					float radius = light.DirectionRange.w;
+					
+					vec3 lightPos = (Mat_V * vec4(light.PositionType.xyz, 1)).xyz;
+					vec3 L = normalize(lightPos - FragPos);
+					vec3 H = normalize(V + L);
+					
+					vec3 kD;
+					vec3 specular;
+					CookTorrance(N, H, L, V, F0, surface.g, surface.b, kD, specular); 
+					
+					// attenuation
+					float distance = length(lightPos - FragPos);
+					float falloff  = (clamp(1.0 - pow(distance / radius, 4), 0.0, 1.0) * clamp(1.0 - pow(distance / radius, 4), 0.0, 1.0)) / (distance * distance + 1.0);
+					vec3 radiance  = lightColor * intensity * falloff;
+			    
+					// add to outgoing radiance Lo
+					float NdotL = max(dot(N, L), 0.0);                
+					vec3 color = (kD * baseColor.rgb / PI + specular) * radiance * NdotL;
+					
+					lighting += color; 
+				}
+				else // Spot Light
+				{
+					vec3 lightPos = (Mat_V * vec4(light.PositionType.xyz, 1)).xyz;
+					vec3 L = normalize(lightPos - FragPos);
+					vec3 H = normalize(V + L);
+					float theta = dot(L, normalize(-(Mat_V * vec4(light.DirectionRange.xyz, 0)).rgb));
+			
+					// attenuation
+					float radius = light.DirectionRange.w;
+					float lightAngle = light.SpotData.x;
+					float lightFalloff = light.SpotData.y;
+					
+					float distance = length(lightPos - FragPos);
+					float falloff  = (clamp(1.0 - pow(distance / radius, 4), 0.0, 1.0) * clamp(1.0 - pow(distance / radius, 4), 0.0, 1.0)) / (distance * distance + 1.0);
+					
+					// cone attenuation
+					float epsilon   = lightAngle - lightFalloff;
+					float coneAttenuation = clamp((theta - lightFalloff) / epsilon, 0.0, 1.0);  
+					
+					vec3 radiance = lightColor * intensity * falloff * coneAttenuation;
+					
+					vec3 kD;
+					vec3 specular;
+					CookTorrance(N, H, L, V, F0, surface.g, surface.b, kD, specular); 
+					specular *= vec3(coneAttenuation);
+					
+					// add to outgoing radiance Lo
+					float NdotL = max(dot(N, L), 0.0);                
+					vec3 color = (kD * baseColor.rgb / PI + specular) * radiance * NdotL;
+					
+					lighting += color;
+				}
+			}
+			
+			lighting *= (1.0 - surface.r);
+			
+			baseColor.rgb *= ambientStrength;
+			baseColor.rgb += lighting;
+			
+			//baseColor.rgb = pow(baseColor.xyz, vec3(1.0/2.2));
+			
+			Albedo.rgb = baseColor.xyz;
+			Albedo.a = 1.0;
+			
 		}
 	ENDPROGRAM
 }
