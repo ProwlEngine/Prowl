@@ -231,6 +231,7 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 - [JaggerJo](https://github.com/JaggerJo)
 - [Jihad Khawaja](https://github.com/jihadkhawaja)
 - [Jasper Honkasalo](https://github.com/japsuu)
+- [Kai Angulo (k0t)](https://github.com/sinnwrig)
  
 # License 📜
 
