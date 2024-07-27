@@ -69,7 +69,7 @@ The goal is a viable open-source Unity alternative, ideally, Unity projects can 
        - Graph -> Binary
     - Fully 64-bit using Doubles
     - Large World Coordinates Support
-       - Camera Relative Rendering
+       - ~~Camera Relative Rendering~~ - Needs to be Reimplemented
     - Scene System
     - Modular Audio Backend
        - OpenAL
@@ -85,6 +85,10 @@ The goal is a viable open-source Unity alternative, ideally, Unity projects can 
 -   **Graphics Rendering:**
     - Modular Graphics Backend
         - OpenGL
+        - OpenGL ES
+        - Vulkan
+        - Metal
+    - Powerful Customizable Node-Graph based Render Pipeline
     -  PBR (Physically Based Rendering) using Cook-Torrance BRDF
         - Albedo Map
         - Normal Map
@@ -92,21 +96,16 @@ The goal is a viable open-source Unity alternative, ideally, Unity projects can 
         - Metallic Map
         - Ambient Occclusion Map
         - Emission Map
-    - Deferred Renderer
+    - Forward Renderer
+    - Multiple Shader Passes
     - Point, Spot, and Directional Lights
-    - Shadow Mapping + Contact Hardening (Variable Penumbra)
+        - Spot & Directional Light Shadows - Point shadows is not implemented
+        - Shadow Atlas
+        - Dynamic Shadow Resolutions
     - Post Processing
         - HDR with Tonemapping (Melon, Aces, Reinhard, Uncharted, Filmic)
-        - Bokeh Depth of Field
-        - Screen Space Reflections
-        - Kawase Multi-Pass Bloom
-        - Temporal Anti-Aliasing
-    - Stochastic Transparency
-    - Adjustable Render Resolutions per camera
-    - Dedicated Shadow Pass for Shaders
-    - Procedural Skybox with Skybox-Blended Fog
-    - GPU Skinned Mesh Rendering
-    - Skeletal Animations
+    - Transparency
+    - Procedural Super Performant Skybox
 
 -   **Asset Pipeline:**
     - A Powerful Asset Pipeline with a very similar structure to unity
