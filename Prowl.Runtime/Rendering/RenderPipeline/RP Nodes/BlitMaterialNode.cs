@@ -28,16 +28,12 @@ namespace Prowl.Runtime.RenderPipelines
 
             if (material.IsAvailable)
             {
-                CommandBuffer cmd = CommandBufferPool.Get(Title);
-                cmd.SetRenderTarget(target.RenderTexture);
+                var context = (graph as RenderPipeline).Context;
+                context.SetRenderTarget(target.RenderTexture);
                 if (property != null)
-                    cmd.ApplyPropertyState(property);
-                cmd.SetMaterial(material.Res, 0);
-                cmd.DrawSingle(Mesh.GetFullscreenQuad());
-
-                (graph as RenderPipeline).Context.ExecuteCommandBuffer(cmd);
-
-                CommandBufferPool.Release(cmd);
+                    context.ApplyPropertyState(property);
+                context.SetMaterial(material.Res, 0);
+                context.DrawSingle(Mesh.GetFullscreenQuad());
             }
             else
             {

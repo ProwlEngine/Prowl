@@ -1,7 +1,10 @@
 ﻿using Prowl.Runtime.NodeSystem;
+using Silk.NET.OpenAL;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using Vortice.DXGI;
+using static Prowl.Runtime.Light;
 
 namespace Prowl.Runtime.RenderPipelines
 {
@@ -13,60 +16,115 @@ namespace Prowl.Runtime.RenderPipelines
         public override float Width => 100f;
 
         [Output, SerializeIgnore] public ComputeBuffer Buffer;
-        [Output, SerializeIgnore] public int LightCount;
+        [Output, SerializeIgnore] public double LightCount;
+
+        [Output, SerializeIgnore] public NodeRenderTexture ShadowMap;
+        [Output, SerializeIgnore] public Camera.CameraData LightCamera;
+
+        [Output(ConnectionType.Override, TypeConstraint.Strict), SerializeIgnore]
+        public FlowNode DrawShadowMap;
 
         public override void Execute(NodePort input)
         {
-            List<GPULight> lights = new List<GPULight>();
+            var context = (graph as RenderPipeline).Context;
+
+            List<Light> lights = new List<Light>();
 
             Camera.CameraData cam = (graph as RenderPipeline).CurrentCamera;
 
+            ShadowAtlas.TryInitialize();
+
+            ShadowAtlas.Clear();
+            var atlasClear = new CommandBuffer();
+            atlasClear.SetRenderTarget(ShadowAtlas.GetAtlas());
+            atlasClear.ClearRenderTarget(true, false, Color.black);
+
+            context.ExecuteCommandBuffer(atlasClear);
+
             // Find all Directional Lights
             foreach (var gameObj in SceneManagement.SceneManager.AllGameObjects)
+                foreach (var l in gameObj.GetComponentsInChildren<Light>())
+                    lights.Add(l);
+
+            // We have AtlasWidth slots for shadow maps
+            // a single shadow map can consume multiple slots if its larger then 128x128
+            // We need to distribute these slots and resolutions out to lights
+            // based on their distance from the camera
+            int width = ShadowAtlas.GetAtlasWidth();
+
+            // Sort lights by distance from camera
+            lights = lights.OrderBy(l => {
+                if (l is DirectionalLight)
+                    return 0; // Directional Lights always get highest priority
+                else
+                    return Vector3.Distance(cam.Position, l.GameObject.Transform.position);
+            }).ToList();
+
+            List<GPULight> gpuLights = [];
+            foreach(var light in lights)
             {
-                var dLights = gameObj.GetComponentsInChildren<DirectionalLight>();
-                foreach (var l in dLights)
-                    lights.Add(new GPULight
-                    {
-                        PositionType = new Vector4(l.qualitySamples, 0, 0, 0),
-                        DirectionRange = new Vector4(l.GameObject.Transform.forward, l.shadowDistance),
-                        Color = l.color.GetUInt(),
-                        Intensity = l.intensity,
-                        SpotData = new Vector2(l.ambientLighting.Intensity, 0),
-                        ShadowData = new Vector4(l.shadowRadius, l.shadowPenumbra, l.shadowBias, l.shadowNormalBias)
-                    });
+                // Calculate resolution based on distance
+                int res = 1024; // Directional lights are always 1024
+                if (light is not DirectionalLight)
+                    res = CalculateResolution(Vector3.Distance(cam.Position, light.Transform.position));
 
-                var pLights = gameObj.GetComponentsInChildren<PointLight>();
-                foreach (var l in pLights)
-                    lights.Add(new GPULight
-                    {
-                        PositionType = new Vector4(l.GameObject.Transform.position, 1),
-                        DirectionRange = new Vector4(0, 0, 0, l.radius),
-                        Color = l.color.GetUInt(),
-                        Intensity = l.intensity,
-                        SpotData = new Vector2(0, 0),
-                        ShadowData = new Vector4(0, 0, 0, 0)
-                    });
+                var camData = light.GetCameraData(res);
+                if (light.castShadows && camData != null)
+                {
+                    var gpu = light.GetGPULight(ShadowAtlas.GetSize());
 
-                var sLights = gameObj.GetComponentsInChildren<SpotLight>();
-                foreach (var l in sLights)
-                    lights.Add(new GPULight
+                    // Find a slot for the shadow map
+                    var slot = ShadowAtlas.ReserveTiles(res, res, light.InstanceID);
+
+                    if (slot != null)
                     {
-                        PositionType = new Vector4(l.GameObject.Transform.position, 2),
-                        DirectionRange = new Vector4(l.GameObject.Transform.forward, l.distance),
-                        Color = l.color.GetUInt(),
-                        Intensity = l.intensity,
-                        SpotData = new Vector2(l.angle, l.falloff),
-                        ShadowData = new Vector4(0, 0, 0, 0)
-                    });
+                        gpu.AtlasX = slot.Value.x;
+                        gpu.AtlasY = slot.Value.y;
+                        gpu.AtlasWidth = res;
+
+                        // Draw the shadow map
+                        ShadowMap = new(ShadowAtlas.GetAtlas());
+                        LightCamera = camData.Value;
+                        context.PushCamera(camData.Value);
+
+                        context.SetViewports(slot.Value.x, slot.Value.y, res, res, 0f, 1000f);
+                        try
+                        {
+                            ExecuteNext(nameof(DrawShadowMap));
+                        }
+                        finally
+                        {
+                            context.PopCamera();
+                            context.SetFullViewports();
+                        }
+                    }
+                    else
+                    {
+                        gpu.AtlasX = -1;
+                        gpu.AtlasY = -1;
+                        gpu.AtlasWidth = 0;
+                    }
+
+                    gpuLights.Add(gpu);
+                }
+                else
+                {
+                    var gpu = light.GetGPULight(0);
+                    gpu.AtlasX = -1;
+                    gpu.AtlasY = -1;
+                    gpu.AtlasWidth = 0;
+                    gpuLights.Add(gpu);
+                }
+
             }
+
 
             unsafe
             {
                 if (lights.Count > 0)
                 { 
                     Buffer = new ComputeBuffer((uint)(sizeof(GPULight) * lights.Count));
-                    Buffer.SetData(lights.ToArray());
+                    Buffer.SetData(gpuLights.ToArray());
                 }
                 else
                 {
@@ -76,7 +134,19 @@ namespace Prowl.Runtime.RenderPipelines
                 LightCount = lights.Count;
             }
 
+            context.SetTexture("_ShadowAtlas", ShadowAtlas.GetAtlas().DepthBuffer);
+
             ExecuteNext();
+        }
+
+        private int CalculateResolution(double distance)
+        {
+            double t = MathD.Clamp(distance / 16f, 0, 1);
+            var tileSize = ShadowAtlas.GetTileSize();
+            int resolution = MathD.RoundToInt(MathD.Lerp(ShadowAtlas.GetMaxShadowSize(), tileSize, t));
+
+            // Round to nearest multiple of tile size
+            return MathD.Max(tileSize, (resolution / tileSize) * tileSize);
         }
 
         public override object GetValue(NodePort port)
@@ -86,18 +156,12 @@ namespace Prowl.Runtime.RenderPipelines
             if (port.fieldName == nameof(LightCount))
                 return LightCount;
 
-            return null;
-        }
+            if (port.fieldName == nameof(ShadowMap))
+                return ShadowMap;
+            if (port.fieldName == nameof(LightCamera))
+                return LightCamera;
 
-        [StructLayout(LayoutKind.Sequential)]
-        internal struct GPULight
-        {
-            public System.Numerics.Vector4 PositionType; // 4 float - 16 bytes
-            public System.Numerics.Vector4 DirectionRange; // 4 float - 16 bytes - 32 bytes
-            public uint Color; // 1 uint - 4 bytes - 36 bytes
-            public float Intensity; // 1 float - 4 bytes - 40 bytes
-            public System.Numerics.Vector2 SpotData; // 2 float - 8 bytes - 48 bytes
-            public System.Numerics.Vector4 ShadowData; // 4 float - 16 bytes - 64 bytes
+            return null;
         }
     }
 }

@@ -61,49 +61,44 @@ namespace Prowl.Runtime.RenderPipelines
 
             foreach (var cam in cameras)
             {
+                // Get Width and Height an the target RenderTexture
+                var target = context.TargetTexture;
+                uint width = context.TargetTexture.Width;
+                uint height = context.TargetTexture.Height;
+
+                if (cam.Target.IsAvailable)
+                {
+                    target = cam.Target.Res!;
+                    width = cam.Target.Res!.Width;
+                    height = cam.Target.Res!.Height;
+                }
+
+                context.PushCamera(cam);
+
                 try
                 {
-                    // Get Width and Height an the target RenderTexture
-                    var target = context.TargetTexture;
-                    uint width = context.TargetTexture.Width;
-                    uint height = context.TargetTexture.Height;
-
-                    if (cam.Target.IsAvailable)
-                    {
-                        target = cam.Target.Res!;
-                        width = cam.Target.Res!.Width;
-                        height = cam.Target.Res!.Height;
-                    }
-
-                    context.SetupTargetCamera(cam, width, height);
-
                     // Update the value of built-in shader variables, based on the current Camera
                     Target = new NodeRenderTexture(target);
                     Resolution = new Vector2(width, height);
                     CurrentCamera = cam;
 
-                    var cmd = CommandBufferPool.Get("Camera Buffer");
-                    cmd.SetRenderTarget(Target.RenderTexture);
+                    context.SetRenderTarget(Target.RenderTexture);
                     var viewX = (int)(cam.Viewrect.x * width);
                     var viewY = (int)(cam.Viewrect.y * height);
                     var viewWidth = (int)(cam.Viewrect.width * width);
                     var viewHeight = (int)(cam.Viewrect.height * height);
-                    cmd.SetViewports(viewX, viewY, viewWidth, viewHeight, 0f, 1f);
+                    context.SetViewports(viewX, viewY, viewWidth, viewHeight, 0f, 1f);
                     if (cam.DoClear)
-                        cmd.ClearRenderTarget(Target.HasColors, Target.HasDepth, cam.ClearColor);
-                    context.ExecuteCommandBuffer(cmd);
+                        context.ClearRenderTarget(Target.HasDepth, Target.HasColors, cam.ClearColor);
 
                     var pipelineNode = GetNodes<OnPipelineNode>().FirstOrDefault(n => n.Name == context.PipelineName);
-                    if(pipelineNode == null)
+                    if (pipelineNode == null)
                     {
                         //Debug.LogError($"Pipeline Node {context.PipelineName} not found!");
                         return;
                     }
 
                     pipelineNode.Execute(null);
-
-                    CommandBufferPool.Release(cmd);
-
                 }
                 catch (Exception e)
                 {
@@ -111,6 +106,9 @@ namespace Prowl.Runtime.RenderPipelines
                 }
                 finally
                 {
+
+                    context.PopCamera();
+
                     // Release all Temp Render Textures back into the RT Pool
                     foreach (var rt in rts)
                     {

@@ -5,13 +5,13 @@ using Veldrid;
 
 namespace Prowl.Runtime
 {
-    public sealed class CommandBuffer
+    public class CommandBuffer
     {
         public string Name;
 
         // Holds a list of structs which implement RenderingCommand.ExecuteCommand() to avoid filling it with anonymous lambdas.
         // TODO: While the struct-based approach is better than lambdas, there is still some overhead when the structs get boxed, which is not ideal. 
-        private List<RenderingCommand> buffer = new();
+        protected List<RenderingCommand> buffer = new();
 
         public IEnumerable<RenderingCommand> Buffer => buffer;
 
@@ -244,7 +244,7 @@ namespace Prowl.Runtime
             });
         }
 
-        public void SetTexture(string name, Texture texture)
+        public void SetTexture(string name, AssetRef<Texture> texture)
         {
             buffer.Add(new SetTexturePropertyCommand()
             {
@@ -304,6 +304,15 @@ namespace Prowl.Runtime
             {
                 Name = name,
                 MatrixValue = matrix
+            });
+        }
+
+        public void SetBuffer(string name, ComputeBuffer buffer)
+        {
+            this.buffer.Add(new SetBufferPropertyCommand()
+            {
+                Name = name,
+                BufferValue = buffer
             });
         }
 

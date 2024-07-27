@@ -18,7 +18,7 @@ namespace Prowl.Runtime
     internal struct SetTexturePropertyCommand : RenderingCommand
     {
         public string Name;
-        public Texture TextureValue;
+        public AssetRef<Texture> TextureValue;
 
         readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
@@ -34,6 +34,17 @@ namespace Prowl.Runtime
         readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
             state.propertyState.SetMatrix(Name, MatrixValue);
+        }
+    }
+
+    internal struct SetBufferPropertyCommand : RenderingCommand
+    {
+        public string Name;
+        public ComputeBuffer BufferValue;
+
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
+        {
+            state.propertyState.SetBuffer(Name, BufferValue);
         }
     }
 

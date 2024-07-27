@@ -84,8 +84,7 @@ public class SceneViewWindow : EditorWindow
         if (RenderTarget == null || (int)renderSize.x != RenderTarget.Width || (int)renderSize.y != RenderTarget.Height)
             RefreshRenderTexture((int)renderSize.x, (int)renderSize.y);
 
-        var view = Matrix4x4.CreateLookToLeftHanded(Cam.GameObject.Transform.position, Cam.GameObject.Transform.forward, Cam.GameObject.Transform.up);
-        var projection = Cam.GetData().GetProjectionMatrix((float)renderSize.x, (float)renderSize.y);
+        var data = Cam.GetData(renderSize);
 
         WindowCenter = gui.CurrentNode.LayoutData.Rect.Center;
 
@@ -97,7 +96,7 @@ public class SceneViewWindow : EditorWindow
 
         RenderingContext context = new RenderingContext("Main", Graphics.Renderables, RenderTarget);
         
-        Graphics.Render([ Cam.GetData() ], context);
+        Graphics.Render([data], context);
 
         var imagePos = gui.CurrentNode.LayoutData.Rect.Position;
         var imageSize = gui.CurrentNode.LayoutData.Rect.Size;
@@ -133,7 +132,7 @@ public class SceneViewWindow : EditorWindow
                 GridType.YZ => (Vector3.right, Vector3.forward),
             };
         
-            Matrix4x4.Invert(view * projection, out Matrix4x4 invertedMVP);
+            Matrix4x4.Invert(data.View * data.Projection, out Matrix4x4 invertedMVP);
         
             buffer.SetMatrix("MvpInverse", invertedMVP);
         
@@ -165,7 +164,7 @@ public class SceneViewWindow : EditorWindow
         Ray mouseRay = Cam.ScreenPointToRay(gui.PointerPos - imagePos, new Vector2(RenderTarget.Width, RenderTarget.Height));
 
         bool blockPicking = gui.IsBlockedByInteractable(gui.PointerPos);
-        HandleGizmos(selectedGOs, mouseRay, view, projection, blockPicking);
+        HandleGizmos(selectedGOs, mouseRay, data.View, data.Projection, blockPicking);
 
         Rect rect = gui.CurrentNode.LayoutData.Rect;
         rect.width = 100;

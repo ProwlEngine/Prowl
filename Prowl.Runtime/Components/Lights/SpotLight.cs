@@ -3,69 +3,38 @@
 namespace Prowl.Runtime;
 
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Lightbulb}  Spot Light")]
-public class SpotLight : MonoBehaviour
+public class SpotLight : Light
 {
-    public Color color = Color.white;
     public float distance = 4.0f;
     public float angle = 0.97f;
     public float falloff = 0.96f;
-    public float intensity = 1.0f;
 
-    Material lightMat;
-    Mesh mesh;
-    int lastCamID = -1;
-
-    public override void Update()
+    public override GPULight GetGPULight(int res)
     {
-        #warning Veldrid change
-        /*
-        if (mesh == null)
-            mesh = Mesh.CreateSphere(1f, 16, 16);
+        var forward = Transform.forward;
+        var proj = Matrix4x4.CreatePerspectiveFieldOfView(MathD.ToRad(90), 1f, 0.01f, distance);
+        var view = Matrix4x4.CreateLookToLeftHanded(Transform.position, -forward, Transform.up);
 
-        if (lightMat == null)
+        return new GPULight
         {
-            lightMat = new Material(Shader.Find("Defaults/Spotlight.shader"));
-        }
-        else
-        {
-            if (lastCamID != Camera.Current.InstanceID)
-            {
-                lastCamID = Camera.Current.InstanceID;
-                lightMat.SetTexture("gAlbedoAO", Camera.Current.gBuffer.AlbedoAO);
-                lightMat.SetTexture("gNormalMetallic", Camera.Current.gBuffer.NormalMetallic);
-                lightMat.SetTexture("gPositionRoughness", Camera.Current.gBuffer.PositionRoughness);
-            }
+            PositionType = new Vector4(GameObject.Transform.position, 2),
+            DirectionRange = new Vector4(GameObject.Transform.forward, distance),
+            Color = color.GetUInt(),
+            Intensity = intensity,
+            SpotData = new Vector2(angle, falloff),
+            ShadowData = new Vector4(0, 0, shadowBias, shadowNormalBias),
+            ShadowMatrix = (view * proj).ToFloat(),
+            AtlasX = 0,
+            AtlasY = 0,
+            AtlasWidth = 0
+        };
+    }
 
-            lightMat.SetVector("LightPosition", Vector3.Transform(GameObject.Transform.position - Camera.Current.GameObject.Transform.position, Graphics.MatView));
-            lightMat.SetVector("LightDirection", Vector3.TransformNormal(GameObject.Transform.forward, Graphics.MatView));
-            //lightMat.SetVector("LightDirection",this.GameObject.Forward);
-
-            lightMat.SetFloat("LightDistance", distance);
-            lightMat.SetFloat("Angle", angle);
-            lightMat.SetFloat("Falloff", falloff);
-
-            lightMat.SetColor("LightColor", color);
-            lightMat.SetFloat("LightIntensity", intensity);
-
-            //Camera.Current.Stop3D();
-            lightMat.SetPass(0);
-            //Camera.Current.DrawFullScreenTexture(Camera.Current.gBuffer.depth);
-            //Raylib.DrawRectangle(0, 0, 9999, 9999, Color.white);
-            // set matrix scale to radius
-            var mat = Matrix4x4.CreateScale(distance) * GameObject.GlobalCamRelative;
-            Graphics.DrawMeshNow(mesh, mat, lightMat);
-            //Camera.Current.Start3D();
-
-
-            //Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
-            //Gizmos.Color = Color.yellow;
-            //Gizmos.DrawSpotlight(Vector3.zero, distance, (1.0f - angle) * 5f);
-            var b = Color.blue;
-            b.a = 0.4f;
-            //Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
-            //Gizmos.Color = b;
-            //Gizmos.DrawSpotlight(Vector3.zero, distance, (1.0f - falloff) * 5f);
-        }
-        */
+    public override Camera.CameraData? GetCameraData(int res)
+    {
+        var forward = Transform.forward;
+        var proj = Matrix4x4.CreatePerspectiveFieldOfView(MathD.ToRad(90), 1f, 0.01f, distance);
+        var view = Matrix4x4.CreateLookToLeftHanded(Transform.position, -forward, Transform.up);
+        return new Camera.CameraData(0, Transform.position, view, proj, MathD.ToRad(90), 0.01f, distance, true, Color.clear, new(0, 0, res, res), 1f, LayerMask.Everything, null);
     }
 }

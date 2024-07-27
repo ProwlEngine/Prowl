@@ -6,18 +6,19 @@ using static Prowl.Runtime.Camera;
 
 namespace Prowl.Runtime.RenderPipelines
 {
-    public class RenderingContext
+    public class RenderingContext : CommandBuffer
     {
         public readonly RenderTexture TargetTexture;
-        public CameraData Camera => currentCamera;
         public List<Renderable> Renderables;
         public string PipelineName;
 
 
-        private List<RenderingCommand> internalCommandList = new();
-        private CameraData currentCamera;
-        public Matrix4x4 Mat_V;
-        public Matrix4x4 Mat_P;
+
+        private Stack<(CameraData, Matrix4x4[])> cameraStack = [];
+
+        public CameraData? Camera => cameraStack.Count > 0 ? cameraStack.Peek().Item1 : null;
+        public Matrix4x4 Mat_V => cameraStack.Count > 0 ? cameraStack.Peek().Item2[0] : Matrix4x4.Identity;
+        public Matrix4x4 Mat_P => cameraStack.Count > 0 ? cameraStack.Peek().Item2[1] : Matrix4x4.Identity;
 
         public RenderingContext(string pipelineName, List<Renderable> renderables, RenderTexture target)
         {
@@ -28,7 +29,7 @@ namespace Prowl.Runtime.RenderPipelines
 
         public void ExecuteCommandBuffer(CommandBuffer buffer, bool clear = true)
         {
-            internalCommandList.AddRange(buffer.Buffer);
+            base.buffer.AddRange(buffer.Buffer);
             if(clear)
                 buffer.Clear();
         }       
@@ -38,7 +39,7 @@ namespace Prowl.Runtime.RenderPipelines
             commandList = null;
             state = null;
 
-            if (internalCommandList.Count == 0)
+            if (buffer.Count == 0)
                 return;
 
             commandList = Graphics.GetCommandList();
@@ -47,19 +48,19 @@ namespace Prowl.Runtime.RenderPipelines
             state.SetFramebuffer(TargetTexture.Framebuffer);
             commandList.SetFramebuffer(TargetTexture.Framebuffer);
 
-            for (int i = 0; i < internalCommandList.Count; i++)
+            for (int i = 0; i < buffer.Count; i++)
             {
                 try 
                 {
-                    internalCommandList[i].ExecuteCommand(commandList, state);
+                    buffer[i].ExecuteCommand(commandList, state);
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"Failed to execute command: {internalCommandList[i]}", ex);
+                    Debug.LogError($"Failed to execute command: {buffer[i]}", ex);
                 }
             }
 
-            internalCommandList.Clear();
+            buffer.Clear();
         } 
 
         public void Submit()
@@ -82,12 +83,18 @@ namespace Prowl.Runtime.RenderPipelines
             renderStateToExecute.Dispose();
         }
 
-        public void SetupTargetCamera(CameraData cam, uint width, uint height)
+        public void PushCamera(CameraData cam)
         {
-            currentCamera = cam;
+            Matrix4x4[] matrices = [cam.View, cam.Projection];
+            cameraStack.Push((cam, matrices));
+        }
 
-            Mat_V = cam.View;
-            Mat_P = cam.GetProjectionMatrix(width, height);
+        public void PopCamera()
+        {
+            if (cameraStack.Count == 0)
+                return;
+
+            var (cam, matrices) = cameraStack.Pop();
         }
 
         public List<Renderable> Cull(BoundingFrustum camFrustrum)
@@ -101,6 +108,7 @@ namespace Prowl.Runtime.RenderPipelines
             return result;
         }
 
+        public void DrawRenderers(List<Renderable> sorted, DrawSettings settings, LayerMask layerMask) => DrawRenderers(this, sorted, settings, layerMask);
         public void DrawRenderers(CommandBuffer buffer, List<Renderable> sorted, DrawSettings settings, LayerMask layerMask)
         {
             if (sorted == null || sorted.Count == 0) return;
@@ -154,7 +162,7 @@ namespace Prowl.Runtime.RenderPipelines
             else
                 sorted = new SortedList<double, List<Renderable>>(new BackToFrontComparer());
 
-            var camPos = currentCamera.Position;
+            var camPos = Camera.Value.Position;
             foreach (var renderable in cullingResults)
             {
                 double distance = 0;

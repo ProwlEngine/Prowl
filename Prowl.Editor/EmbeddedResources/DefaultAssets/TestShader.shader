@@ -46,6 +46,8 @@ Pass "TestShader"
             }
 			
 			StructuredBuffer _Lights
+			
+			SampledTexture _ShadowAtlas
         }
 	}
 
@@ -71,11 +73,13 @@ Pass "TestShader"
 		layout(location = 2) out vec3 FragPos;
 		layout(location = 3) out mat3 TBN;
 		layout(location = 6) out vec3 vNorm;
+		layout(location = 7) out vec3 VertPos;
 		
 		void main() 
 		{
 		 	vec4 viewPos = Mat_V * Mat_ObjectToWorld * vec4(vertexPosition, 1.0);
 		    FragPos = viewPos.xyz; 
+			VertPos = (Mat_ObjectToWorld * vec4(vertexPosition, 1.0)).xyz;
 
 			gl_Position = Mat_MVP * vec4(vertexPosition, 1.0);
 			
@@ -99,6 +103,7 @@ Pass "TestShader"
 		layout(location = 2) in vec3 FragPos;
 		layout(location = 3) in mat3 TBN;
 		layout(location = 6) in vec3 vNorm;
+		layout(location = 7) in vec3 VertPos;
 
 		layout(location = 0) out vec4 Albedo;
 		layout(location = 1) out vec3 Normal;
@@ -135,18 +140,26 @@ Pass "TestShader"
 		
 		struct gpuLight 
 		{
-			vec4 PositionType; // 4 float - 16 bytes
-			vec4 DirectionRange; // 4 float - 16 bytes - 32 bytes
-			uint Color; // 1 uint - 4 bytes - 36 bytes
-			float Intensity; // 1 float - 4 bytes - 40 bytes
-			vec2 SpotData; // 2 float - 8 bytes - 48 bytes
-			vec4 ShadowData; // 4 float - 16 bytes - 64 bytes
+			vec4 PositionType;
+			vec4 DirectionRange;
+			uint Color;
+			float Intensity;
+			vec2 SpotData;
+			vec4 ShadowData;
+			mat4 ShadowMatrix;
+			int AtlasX;
+			int AtlasY;
+			int AtlasWidth;
+			int Padding;
 		};
 		
 		layout(set = 0, binding = 8, std140) buffer _Lights
 		{
 			gpuLight allLights[];
 		};
+
+		layout(set = 0, binding = 9) uniform texture2D _ShadowAtlas;
+		layout(set = 0, binding = 10) uniform sampler _ShadowAtlasSampler;
 		
 		vec4 unpackAndConvertRGBA(uint packed)
 		{
@@ -179,6 +192,42 @@ Pass "TestShader"
 			kD *= 1.0 - metallic;  
 		}
 
+
+		float ShadowCalculation(vec4 fragPosLightSpace, gpuLight light)
+		{
+			// perform perspective divide
+			vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+			// transform to [0,1] range
+			projCoords = projCoords * 0.5 + 0.5;
+			
+			if (projCoords.x > 1.0 || projCoords.y > 1.0 || projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.y < 0.0 || projCoords.z < 0.0)
+			    return 0.0;
+			
+			float AtlasX = float(light.AtlasX);
+			float AtlasY = float(light.AtlasY);
+			float AtlasWidth = float(light.AtlasWidth);
+			
+			// convert projCoords.xy to atlas coordinates
+			vec2 atlasCoords;
+			atlasCoords.x = AtlasX + (projCoords.x * AtlasWidth);
+			atlasCoords.y = AtlasY + ((1.0 - projCoords.y) * AtlasWidth);
+			
+			// normalize the atlas coordinates to [0,1] range for the shadow atlas texture lookup
+			atlasCoords /= vec2(4096.0);
+			
+			atlasCoords.y = 1.0 - atlasCoords.y;
+			
+			// get closest depth value from light's perspective (using [0,1] range fragPosLight as coords)
+			float closestDepth = texture(sampler2D(_ShadowAtlas, _ShadowAtlasSampler), atlasCoords.xy).r; 
+			// get depth of current fragment from light's perspective
+			float currentDepth = projCoords.z;
+			// check whether current frag pos is in shadow
+			
+			float shadow = (currentDepth - light.ShadowData.z) > closestDepth  ? 1.0 : 0.0;
+		
+			return shadow;
+		}  
+		
 		void main()
 		{
 			// Albedo & Cutout
@@ -240,19 +289,19 @@ Pass "TestShader"
 					CookTorrance(N, H, L, V, F0, surface.g, surface.b, kD, specular); 
 					
 					// shadows
-					//vec4 fragPosLightSpace = matCamViewInverse * vec4(FragPos + (N * u_NormalBias), 1);
-					//float shadow = ShadowCalculation(fragPosLightSpace.xyz, FragPos, N, L);
-						
+					vec4 fragPosLightSpace = light.ShadowMatrix * vec4(VertPos + (normal * light.ShadowData.w), 1.0);
+					float shadow = ShadowCalculation(fragPosLightSpace, light);
+					
 					// add to outgoing radiance Lo
 					vec3 radiance = lightColor * intensity;   
 					float NdotL = max(dot(N, L), 0.0);                
-					//vec3 color = ((kD * baseColor.rgb) / PI + specular) * radiance * (1.0 - shadow) * NdotL;
-					vec3 color = ((kD * baseColor.rgb) / PI + specular) * radiance * NdotL;
+					vec3 color = ((kD * baseColor.rgb) / PI + specular) * radiance * (1.0 - shadow) * NdotL;
+					//vec3 color = ((kD * baseColor.rgb) / PI + specular) * radiance * NdotL;
 					
 					// Ambient Lighting
 					ambientStrength += light.SpotData.x;
 					
-					lighting += color; 
+					lighting += color;
 				}
 				else if(light.PositionType.w == 1.0) // Point Light
 				{
@@ -303,9 +352,14 @@ Pass "TestShader"
 					CookTorrance(N, H, L, V, F0, surface.g, surface.b, kD, specular); 
 					specular *= vec3(coneAttenuation);
 					
+					// shadows
+					vec4 fragPosLightSpace = light.ShadowMatrix * vec4(VertPos + (normal * light.ShadowData.w), 1.0);
+					float shadow = ShadowCalculation(fragPosLightSpace, light);
+
 					// add to outgoing radiance Lo
-					float NdotL = max(dot(N, L), 0.0);                
-					vec3 color = (kD * baseColor.rgb / PI + specular) * radiance * NdotL;
+					float NdotL = max(dot(N, L), 0.0);        
+					vec3 color = ((kD * baseColor.rgb) / PI + specular) * radiance * (1.0 - shadow) * NdotL;        
+					//vec3 color = (kD * baseColor.rgb / PI + specular) * radiance * NdotL;
 					
 					lighting += color;
 				}
@@ -315,6 +369,7 @@ Pass "TestShader"
 			
 			baseColor.rgb *= ambientStrength;
 			baseColor.rgb += lighting;
+			//baseColor.rgb = lighting;
 			
 			//baseColor.rgb = pow(baseColor.xyz, vec3(1.0/2.2));
 			
@@ -330,7 +385,7 @@ Pass "Shadow"
     Tags { "RenderOrder" = "Shadow" }
 
     // Rasterizer culling mode
-    Cull Front
+    Cull None
 
 	Inputs
 	{
@@ -338,9 +393,6 @@ Pass "Shadow"
         {
             Position // Input location 0
             UV0 // Input location 1
-            Normals // Input location 2
-            Tangents // Input location 3
-            Colors // Input location 4
         }
         
         // Set 0
@@ -358,20 +410,12 @@ Pass "Shadow"
             }
 
 			SampledTexture _AlbedoTex
-
-            Buffer StandardUniforms
-            {
-				_AlphaClip Float
-            }
         }
 	}
 
 	PROGRAM VERTEX
 		layout(location = 0) in vec3 vertexPosition;
 		layout(location = 1) in vec2 vertexTexCoord;
-		layout(location = 2) in vec3 vertexNormal;
-		layout(location = 3) in vec3 vertexTangent;
-		layout(location = 4) in vec4 vertexColors;
 		
 		layout(set = 0, binding = 0, std140) uniform DefaultUniforms
 		{
@@ -384,36 +428,21 @@ Pass "Shadow"
 		};
 
 		layout(location = 0) out vec2 TexCoords;
-		layout(location = 1) out vec4 VertColor;
-		layout(location = 2) out vec3 FragPos;
-		layout(location = 3) out mat3 TBN;
+		layout(location = 1) out vec3 VertPos;
 		
 		void main() 
 		{
-		 	vec4 viewPos = Mat_V * Mat_ObjectToWorld * vec4(vertexPosition, 1.0);
-		    FragPos = viewPos.xyz; 
-
 			gl_Position = Mat_MVP * vec4(vertexPosition, 1.0);
 			
-			TexCoords = vertexTexCoord;
-			VertColor = vertexColors;
-
-			mat3 normalMatrix = transpose(inverse(mat3(Mat_ObjectToWorld)));
+			VertPos = (Mat_ObjectToWorld * vec4(vertexPosition, 1.0)).xyz;
 			
-			vec3 T = normalize(vec3(Mat_ObjectToWorld * vec4(vertexTangent, 0.0)));
-			vec3 B = normalize(vec3(Mat_ObjectToWorld * vec4(cross(vertexNormal, vertexTangent), 0.0)));
-			vec3 N = normalize(vec3(Mat_ObjectToWorld * vec4(vertexNormal, 0.0)));
-		    TBN = mat3(T, B, N);
+			TexCoords = vertexTexCoord;
 		}
 	ENDPROGRAM
 
 	PROGRAM FRAGMENT	
 		layout(location = 0) in vec2 TexCoords;
-		layout(location = 1) in vec4 VertColor;
-		layout(location = 2) in vec3 FragPos;
-		layout(location = 3) in mat3 TBN;
-		
-		layout (location = 0) out float fragmentdepth;
+		layout(location = 1) in vec3 VertPos;
 		
 		layout(set = 0, binding = 0, std140) uniform DefaultUniforms
 		{
@@ -424,21 +453,20 @@ Pass "Shadow"
 			mat4 Mat_MVP;
 			float Time;
 		};
-
+		
 		layout(set = 0, binding = 1) uniform texture2D _AlbedoTex;
 		layout(set = 0, binding = 2) uniform sampler _AlbedoTexSampler;
-		
-		
-		layout(set = 0, binding = 3, std140) uniform StandardUniforms
-		{
-			float _AlphaClip;
-		};
 		
 		void main()
 		{
 			// Albedo & Cutout
-			vec4 baseColor = texture(sampler2D(_AlbedoTex, _AlbedoTexSampler), TexCoords);// * _MainColor.rgb;
-			if(baseColor.w < _AlphaClip) discard;
+			//vec4 baseColor = texture(sampler2D(_AlbedoTex, _AlbedoTexSampler), TexCoords);// * _MainColor.rgb;
+			//if(baseColor.w < 0.8) discard;
+			
+			vec4 fragPosLightSpace = (Mat_P * Mat_V) * vec4(VertPos, 1.0);
+			vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+			projCoords = projCoords * 0.5 + 0.5;
+			gl_FragDepth = projCoords.z;
 		}
 	ENDPROGRAM
 }

@@ -153,14 +153,11 @@ namespace Prowl.Runtime.RenderPipelines
             meRenderTexture = renderGraph.GetRT(desc, ColorFormats);
             if (StartCleared)
             {
-                var cmd = CommandBufferPool.Get("RT Node Buffer");
-                cmd.SetRenderTarget(meRenderTexture.RenderTexture);
+                (graph as RenderPipeline).Context.SetRenderTarget(meRenderTexture.RenderTexture);
                 if (HasDepth)
-                    cmd.ClearRenderTarget(true, true, ClearColor);
+                    (graph as RenderPipeline).Context.ClearRenderTarget(true, true, ClearColor);
                 else
-                    cmd.ClearRenderTarget(false, true, ClearColor);
-                (graph as RenderPipeline).Context.ExecuteCommandBuffer(cmd);
-                CommandBufferPool.Release(cmd);
+                    (graph as RenderPipeline).Context.ClearRenderTarget(false, true, ClearColor);
             }
 
             ExecuteNext();

@@ -11,7 +11,6 @@ namespace Prowl.Runtime.RenderPipelines
         [Input] public AssetRef<Mesh> Mesh;
         [Input] public AssetRef<Material> Material;
         [Input, SerializeIgnore] public NodeRenderTexture Target;
-        [Input, SerializeIgnore] public PropertyState Property;
         [Input, SerializeIgnore] public int ShaderPass;
 
         public override void Execute(NodePort port)
@@ -19,7 +18,6 @@ namespace Prowl.Runtime.RenderPipelines
             var mesh = GetInputValue<AssetRef<Mesh>>("Mesh", Mesh);
             var material = GetInputValue<AssetRef<Material>>("Material", Material);
             var target = GetInputValue<NodeRenderTexture>("Target");
-            var property = GetInputValue<PropertyState>("Property");
 
             Error = "";
             if (mesh == null || !mesh.IsAvailable)
@@ -39,14 +37,11 @@ namespace Prowl.Runtime.RenderPipelines
                 return;
             }
 
-            CommandBuffer cmd = CommandBufferPool.Get("Draw Mesh");
-            cmd.SetRenderTarget(target.RenderTexture);
+            var context = (graph as RenderPipeline).Context;
+            context.SetRenderTarget(target.RenderTexture);
 
-            if (property != null)
-                cmd.ApplyPropertyState(property);
-
-            cmd.SetMatrix("Mat_V", (graph as RenderPipeline).Context.Mat_V);
-            cmd.SetMatrix("Mat_P", (graph as RenderPipeline).Context.Mat_P);
+            context.SetMatrix("Mat_V", (graph as RenderPipeline).Context.Mat_V);
+            context.SetMatrix("Mat_P", (graph as RenderPipeline).Context.Mat_P);
 
             // TODO: This shouldnt be here
             DirectionalLight sun = null;
@@ -59,14 +54,13 @@ namespace Prowl.Runtime.RenderPipelines
                         break;
                     }
                 }
-            cmd.SetVector("_SunDir", sun.Transform.forward);
+            if(sun != null)
+                context.SetVector("_SunDir", sun.Transform.forward);
+            else
+                context.SetVector("_SunDir", new Vector3(0, 1, 0));
 
-            cmd.SetMaterial(material.Res, ShaderPass);
-            cmd.DrawSingle(mesh.Res);
-
-            (graph as RenderPipeline).Context.ExecuteCommandBuffer(cmd);
-
-            CommandBufferPool.Release(cmd);
+            context.SetMaterial(material.Res, ShaderPass);
+            context.DrawSingle(mesh.Res);
 
             ExecuteNext();
         }

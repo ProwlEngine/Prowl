@@ -149,7 +149,20 @@ public static class SceneManager
         if (Cameras.Count == 0)
             return false;
 
-        Graphics.Render(Cameras.Select(c => c.GetData()).ToArray(), target ?? Graphics.ScreenTarget);
+        Graphics.Render(Cameras.Select(c => 
+        {
+            var t = target ?? Graphics.ScreenTarget;
+            uint width = t.Width;
+            uint height = t.Height;
+
+            if (c.Target.IsAvailable)
+            {
+                width = c.Target.Res!.Width;
+                height = c.Target.Res!.Height;
+            }
+            return c.GetData(new Vector2(width, height));
+            
+        }).ToArray(), target ?? Graphics.ScreenTarget);
         return true;
     }
 
