@@ -64,9 +64,9 @@ namespace Prowl.Runtime.RenderPipelines
             foreach(var light in lights)
             {
                 // Calculate resolution based on distance
-                int res = 1024; // Directional lights are always 1024
-                if (light is not DirectionalLight)
-                    res = CalculateResolution(Vector3.Distance(cam.Position, light.Transform.position));
+                int res = CalculateResolution(Vector3.Distance(cam.Position, light.Transform.position)); // Directional lights are always 1024
+                if (light is DirectionalLight dir)
+                    res = (int)dir.shadowResolution;
 
                 var camData = light.GetCameraData(res);
                 if (light.castShadows && camData != null)
