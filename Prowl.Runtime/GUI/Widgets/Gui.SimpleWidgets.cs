@@ -1,6 +1,7 @@
 ﻿using Prowl.Icons;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
+using Silk.NET.Maths;
 using System;
 
 namespace Prowl.Runtime.GUI
@@ -124,13 +125,30 @@ namespace Prowl.Runtime.GUI
                 var oldZ = ActiveGUI.CurrentZIndex;
                 ActiveGUI.SetZIndex(500000);
 
-                var pos = (topleft ?? PointerPos) + new Vector2(10, 10);
+                var pos = topleft ?? PointerPos;
                 var size = UIDrawList.DefaultFont.CalcTextSize(tip, 0, wrapWidth);
                 var style = new WidgetStyle(30);
-                Draw2D.DrawRectFilled(pos - new Vector2(5), size + new Vector2(10), style.BGColor, 10);
-                Draw2D.DrawRect(pos - new Vector2(5), size + new Vector2(10), style.BorderColor, 2, 10);
-                Draw2D.DrawText(tip, pos, wrapWidth);
+                var offset = new Vector2(10);
+                var margin = new Vector2(5);
 
+                // Checks if the tooltip is outside the window, and keeps it aligned inside the window.
+                if(pos.x < Window.Size.X - margin.x - offset.x - size.x)
+                    pos += new Vector2(offset.x, 0);
+                else
+                    pos -= new Vector2(offset.x + margin.x + pos.x + size.x - Window.Size.X, 0);
+
+                if(pos.y < Window.Size.Y - margin.y - offset.y - size.y)
+                    pos += new Vector2(0, offset.y);
+                else
+                    pos -= new Vector2(0, size.y + offset.y + margin.y);
+
+                // Background
+                Draw2D.DrawRectFilled(pos, size + new Vector2(margin.x * 2, margin.y), style.BorderColor, 5);
+                // border (removed temporary for better design)
+                // Draw2D.DrawRect(pos - new Vector2(5), size + new Vector2(10), style.BorderColor, 2, 5);
+                // Message
+                Draw2D.DrawText(tip, pos + margin, wrapWidth);
+                
                 ActiveGUI.SetZIndex(oldZ);
             }
 
