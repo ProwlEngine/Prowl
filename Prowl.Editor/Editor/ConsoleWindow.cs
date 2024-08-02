@@ -37,26 +37,26 @@ namespace Prowl.Editor
 
             using(gui.Node("Header").Width(Size.Percentage(1f)).MaxHeight(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.Row).Enter())
             {
-                if (EditorGUI.StyledButton(FontAwesome6.TrashCan + " Clear", 75, EditorStylePrefs.Instance.ItemSize, false, null, null, 0))
+                if (EditorGUI.StyledButton(FontAwesome6.TrashCan + " Clear", 75, EditorStylePrefs.Instance.ItemSize, false, null, null, 0, "Clear all logs"))
                 {
                     _logMessages.Clear();
                     _logCount = 0;
                 }
 
                 // Logs
-                if (EditorGUI.StyledButton(FontAwesome6.Terminal, 30, EditorStylePrefs.Instance.ItemSize, false, null, null, 0))
+                if (EditorGUI.StyledButton(FontAwesome6.Terminal, 30, EditorStylePrefs.Instance.ItemSize, false, null, null, 0, "Logs"))
                     GeneralPreferences.Instance.ShowDebugLogs = !GeneralPreferences.Instance.ShowDebugLogs;
                 DrawHand(GeneralPreferences.Instance.ShowDebugLogs);
                 // Warnings
-                if (EditorGUI.StyledButton(FontAwesome6.TriangleExclamation, 30, EditorStylePrefs.Instance.ItemSize, false, null, null, 0))
+                if (EditorGUI.StyledButton(FontAwesome6.TriangleExclamation, 30, EditorStylePrefs.Instance.ItemSize, false, null, null, 0, "Warnings"))
                     GeneralPreferences.Instance.ShowDebugWarnings = !GeneralPreferences.Instance.ShowDebugWarnings;
                 DrawHand(GeneralPreferences.Instance.ShowDebugWarnings);
                 // Errors
-                if (EditorGUI.StyledButton(FontAwesome6.CircleExclamation, 30, EditorStylePrefs.Instance.ItemSize, false, null, null, 0))
+                if (EditorGUI.StyledButton(FontAwesome6.CircleExclamation, 30, EditorStylePrefs.Instance.ItemSize, false, null, null, 0, "Errors"))
                     GeneralPreferences.Instance.ShowDebugErrors = !GeneralPreferences.Instance.ShowDebugErrors;
                 DrawHand(GeneralPreferences.Instance.ShowDebugErrors);
                 // Success
-                if (EditorGUI.StyledButton(FontAwesome6.CircleCheck, 30, EditorStylePrefs.Instance.ItemSize, false, null, null, 0))
+                if (EditorGUI.StyledButton(FontAwesome6.CircleCheck, 30, EditorStylePrefs.Instance.ItemSize, false, null, null, 0, "Success"))
                     GeneralPreferences.Instance.ShowDebugSuccess = !GeneralPreferences.Instance.ShowDebugSuccess;
                 DrawHand(GeneralPreferences.Instance.ShowDebugSuccess);
             }

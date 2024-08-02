@@ -59,7 +59,7 @@ namespace Prowl.Editor
             }
         }
 
-        public static bool StyledButton(string label, double width, double height, bool border = true, Color? textcolor = null, Color? bgcolor = null, float? roundness = null)
+        public static bool StyledButton(string label, double width, double height, bool border = true, Color? textcolor = null, Color? bgcolor = null, float? roundness = null, string tooltip = "")
         {
             roundness ??= (float)EditorStylePrefs.Instance.ButtonRoundness;
             var g = ActiveGUI;
@@ -76,9 +76,10 @@ namespace Prowl.Editor
                     return true;
                 }
 
-                if (g.IsNodeHovered())
+                if (g.IsNodeHovered()){
                     g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, roundness.Value);
-
+                    g.Tooltip(tooltip);
+                }
                 g.Draw2D.DrawText(label, g.CurrentNode.LayoutData.Rect, textcolor ?? Color.white);
 
                 return false;

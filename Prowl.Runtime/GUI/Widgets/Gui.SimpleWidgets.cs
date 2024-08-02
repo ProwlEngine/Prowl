@@ -119,10 +119,10 @@ namespace Prowl.Runtime.GUI
 
         public void Tooltip(string tip, Vector2? topleft = null, float wrapWidth = -1)
         {
-            if (PreviousInteractableIsHovered())
+            if(PreviousInteractableIsHovered() && tip != "")
             {
-                var oldZ = Gui.ActiveGUI.CurrentZIndex;
-                Gui.ActiveGUI.SetZIndex(500000);
+                var oldZ = ActiveGUI.CurrentZIndex;
+                ActiveGUI.SetZIndex(500000);
 
                 var pos = (topleft ?? PointerPos) + new Vector2(10, 10);
                 var size = UIDrawList.DefaultFont.CalcTextSize(tip, 0, wrapWidth);
@@ -131,7 +131,7 @@ namespace Prowl.Runtime.GUI
                 Draw2D.DrawRect(pos - new Vector2(5), size + new Vector2(10), style.BorderColor, 2, 10);
                 Draw2D.DrawText(tip, pos, wrapWidth);
 
-                Gui.ActiveGUI.SetZIndex(oldZ);
+                ActiveGUI.SetZIndex(oldZ);
             }
 
         }
