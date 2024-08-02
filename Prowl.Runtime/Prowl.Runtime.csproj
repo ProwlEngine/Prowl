@@ -19,6 +19,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <None Remove="EmbeddedResources\Logo.ico" />
       <None Remove="EmbeddedResources\fa-regular-400.ttf" />
       <None Remove="EmbeddedResources\fa-solid-900.ttf" />
       <None Remove="EmbeddedResources\font.ttf" />
@@ -47,6 +48,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <EmbeddedResource Include="EmbeddedResources\Logo.png" />
       <EmbeddedResource Include="EmbeddedResources\fa-regular-400.ttf" />
       <EmbeddedResource Include="EmbeddedResources\fa-solid-900.ttf" />
       <EmbeddedResource Include="EmbeddedResources\font.ttf" />
@@ -58,6 +60,7 @@
       <PackageReference Include="Silk.NET" Version="2.20.0" />
       <PackageReference Include="Silk.NET.OpenAL.Soft.Native" Version="1.21.1.2" />
       <PackageReference Include="StbTrueTypeSharp" Version="1.26.12" />
+      <PackageReference Include="SixLabors.ImageSharp" Version="3.1.3" />
     </ItemGroup>
     
     <ItemGroup>
