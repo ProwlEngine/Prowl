@@ -465,10 +465,12 @@ public class SceneViewWindow : EditorWindow
                     GlobalSelectHandler.Select(new WeakReference(Cam.GameObject));
 
                 gui.TextNode("Label", FontAwesome6.Camera).Expand();
-                if (gui.IsNodeHovered())
+                if (gui.IsNodeHovered()){
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
+                    gui.Tooltip("Select Editor Camera", align: Gui.TooltipAlign.Right);
+                }
             }
-            gui.Tooltip("Select Editor Camera");
+
 
             var gridType = SceneViewPreferences.Instance.GridType;
             int gridTypeIndex = (int)gridType;
@@ -484,10 +486,12 @@ public class SceneViewWindow : EditorWindow
                     gizmo.Orientation = (TransformGizmo.GizmoOrientation)((int)gizmo.Orientation == 1 ? 0 : 1);
 
                 gui.TextNode("Label", gizmo.Orientation == 0 ? FontAwesome6.Globe : FontAwesome6.Cube).Expand();
-                if (gui.IsNodeHovered())
+                if (gui.IsNodeHovered()){
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
+                    gui.Tooltip("World Space: " + (gizmo.Orientation == 0 ? "World" : "Local"), align: Gui.TooltipAlign.Right);
+                }
             }
-            gui.Tooltip("Gizmo Mode: " + (gizmo.Orientation == 0 ? "World" : "Local"));
+
 
             using (gui.Node("OpenPreferences").Scale(buttonSize).Enter())
             {
@@ -495,10 +499,11 @@ public class SceneViewWindow : EditorWindow
                     new PreferencesWindow(typeof(SceneViewPreferences));
 
                 gui.TextNode("Label", FontAwesome6.Gear).Expand();
-                if (gui.IsNodeHovered())
+                if (gui.IsNodeHovered()){
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
+                    gui.Tooltip("Open Editor Preferences", align: Gui.TooltipAlign.Right);
+                }
             }
-            gui.Tooltip("Open Editor Preferences");
         }
     }
 
