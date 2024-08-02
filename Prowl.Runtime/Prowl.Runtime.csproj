@@ -19,7 +19,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <None Remove="EmbeddedResources\Logo.ico" />
       <None Remove="EmbeddedResources\fa-regular-400.ttf" />
       <None Remove="EmbeddedResources\fa-solid-900.ttf" />
       <None Remove="EmbeddedResources\font.ttf" />
