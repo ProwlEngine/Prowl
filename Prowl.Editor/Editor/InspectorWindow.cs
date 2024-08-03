@@ -5,6 +5,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
 using System.IO;
+using System.Reflection;
 
 namespace Prowl.Editor
 {
@@ -160,7 +161,15 @@ namespace Prowl.Editor
                         else
                         {
                             // No Editor, Just display Property Grid
-                            EditorGUI.PropertyGrid("Default Drawer", ref Selected, EditorGUI.TargetFields.Serializable, EditorGUI.PropertyGridConfig.NoHeader);
+                            if(EditorGUI.PropertyGrid("Default Drawer", ref Selected, EditorGUI.TargetFields.Serializable, EditorGUI.PropertyGridConfig.NoHeader))
+                            {
+                                // Search for a function named "OnValidate()"
+                                var method = Selected.GetType().GetMethod("OnValidate", BindingFlags.Public | BindingFlags.Instance);
+                                if (method != null)
+                                {
+                                    method.Invoke(Selected, null);
+                                }
+                            }
                         }
                     }
                     else if (customEditor.Value.Item1 == Selected)
