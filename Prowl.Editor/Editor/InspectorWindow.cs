@@ -95,28 +95,7 @@ namespace Prowl.Editor
 
                 bool destroyCustomEditor = true;
 
-                if (Selected is EngineObject engineObj)
-                {
-                    if (customEditor == null)
-                    {
-                        // Just selected a new object create the editor
-                        Type? editorType = CustomEditorAttribute.GetEditor(engineObj.GetType());
-                        if (editorType != null)
-                        {
-                            customEditor = (engineObj, (ScriptedEditor)Activator.CreateInstance(editorType));
-                            customEditor.Value.Item2.target = Selected;
-                            customEditor.Value.Item2.OnEnable();
-                            destroyCustomEditor = false;
-                        }
-                    }
-                    else if (customEditor.Value.Item1 == engineObj)
-                    {
-                        // We are still editing the same object
-                        customEditor.Value.Item2.OnInspectorGUI();
-                        destroyCustomEditor = false;
-                    }
-                }
-                else if (Selected is FileInfo path)
+                if (Selected is FileInfo path)
                 {
                     if (customEditor == null)
                     {
@@ -167,7 +146,29 @@ namespace Prowl.Editor
                 }
                 else
                 {
-                    DrawInspectorLabel("Object: " + Selected != null ? Selected.ToString() : "Null");
+                    if (customEditor == null)
+                    {
+                        // Just selected a new object create the editor
+                        Type? editorType = CustomEditorAttribute.GetEditor(Selected.GetType());
+                        if (editorType != null)
+                        {
+                            customEditor = (Selected, (ScriptedEditor)Activator.CreateInstance(editorType));
+                            customEditor.Value.Item2.target = Selected;
+                            customEditor.Value.Item2.OnEnable();
+                            destroyCustomEditor = false;
+                        }
+                        else
+                        {
+                            // No Editor, Just display Property Grid
+                            EditorGUI.PropertyGrid("Default Drawer", ref Selected, EditorGUI.TargetFields.Serializable, EditorGUI.PropertyGridConfig.NoHeader);
+                        }
+                    }
+                    else if (customEditor.Value.Item1 == Selected)
+                    {
+                        // We are still editing the same object
+                        customEditor.Value.Item2.OnInspectorGUI();
+                        destroyCustomEditor = false;
+                    }
                 }
 
                 if (destroyCustomEditor)
