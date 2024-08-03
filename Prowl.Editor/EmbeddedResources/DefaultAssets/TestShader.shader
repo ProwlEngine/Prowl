@@ -238,6 +238,8 @@ Pass "TestShader"
 			// Normal
 			vec3 normal = texture(sampler2D(_NormalTex, _NormalTexSampler), TexCoords).rgb;
 			normal = normal * 2.0 - 1.0;   
+			normal.xy *= 3.0; // Make Normals Stronger
+			normal = normalize(normal);
 			normal = normalize(TBN * normal); 
 			Normal = (Mat_V * vec4(normal, 0)).rgb;
 
