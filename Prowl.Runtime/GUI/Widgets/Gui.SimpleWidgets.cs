@@ -215,7 +215,7 @@ namespace Prowl.Runtime.GUI
             SetNodeStorage(popupHolder ?? CurrentNode, "Popup_ID", -1);
         }
 
-        public bool Search(string ID, ref string searchText, Offset x, Offset y, Size width, Size? height = null, WidgetStyle? inputstyle = null)
+        public bool Search(string ID, ref string searchText, Offset x, Offset y, Size width, Size? height = null, WidgetStyle? inputstyle = null, bool enterReturnsTrue = true)
         {
             var style = inputstyle ?? new(30);
             searchText ??= "";
@@ -223,7 +223,7 @@ namespace Prowl.Runtime.GUI
 
             style.Roundness = 8f;
             style.BorderThickness = 1f;
-            var changed = InputField(ID, ref searchText, 32, InputFieldFlags.EnterReturnsTrue, x, y, width, height, style);
+            var changed = InputField(ID, ref searchText, 32, enterReturnsTrue ? InputFieldFlags.EnterReturnsTrue : InputFieldFlags.None, x, y, width, height, style);
             if(string.IsNullOrWhiteSpace(searchText) && !g.PreviousInteractableIsFocus())
             {
                 var pos = g.PreviousNode.LayoutData.InnerRect.Position + new Vector2(8, 3);
