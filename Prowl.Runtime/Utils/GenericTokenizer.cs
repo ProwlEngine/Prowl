@@ -35,7 +35,7 @@ namespace Prowl.Runtime
 
             public bool MoveNext()
             {
-                while (InputPosition < Input.Length && char.IsWhiteSpace(Input.Span[InputPosition]))
+                while (InputPosition < Input.Length && CheckWhiteSpace(Input.Span[InputPosition]))
                     InputPosition++;
 
                 if (InputPosition >= Input.Length)
@@ -62,6 +62,40 @@ namespace Prowl.Runtime
                 }
 
                 return HandleDefaultToken();
+            }
+
+            public bool SliceTo(string token)
+            {
+                int startPos = InputPosition;
+
+                while (MoveNext())
+                {
+                    if (Token.Equals(token))
+                    {
+                        TokenMemory = Input.Slice(startPos, InputPosition - startPos);
+
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            public bool SliceTo(TTokenType token)
+            {
+                int startPos = InputPosition;
+
+                while (MoveNext())
+                {
+                    if (TokenType.Equals(token))
+                    {
+                        TokenMemory = Input.Slice(startPos, InputPosition - startPos);
+
+                        return true;
+                    }
+                }
+
+                return false;
             }
 
             private bool HandleQuotedString(char quoteChar)
@@ -97,7 +131,7 @@ namespace Prowl.Runtime
                 InputPosition++;
                 while (InputPosition < Input.Length
                        && !_isSymbol(Input.Span[InputPosition])
-                       && !char.IsWhiteSpace(Input.Span[InputPosition])
+                       && !CheckWhiteSpace(Input.Span[InputPosition])
                        && Input.Span[InputPosition] != '"'
                        && Input.Span[InputPosition] != '\'')
                     InputPosition++;
@@ -163,8 +197,11 @@ namespace Prowl.Runtime
                 var result = new string(s[..len]);
                 return result;
             }
+
+            public static bool CheckWhiteSpace(char c, bool keepNewlines = false)
+            {
+                return keepNewlines ? char.IsWhiteSpace(c) && c != '\n' && c != '\r' : char.IsWhiteSpace(c);
+            }
         }
-
-
     }
 }
