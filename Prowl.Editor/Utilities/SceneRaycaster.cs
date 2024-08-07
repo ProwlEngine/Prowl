@@ -2,7 +2,7 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor
 {
-    public static class MeshRaycaster
+    public static class SceneRaycaster
     {
         public struct MeshHitInfo
         {
