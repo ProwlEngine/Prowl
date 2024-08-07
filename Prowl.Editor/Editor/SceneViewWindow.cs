@@ -204,7 +204,7 @@ public class SceneViewWindow : EditorWindow
         {
             if (gui.IsPointerClick(MouseButton.Left) && !gizmo.IsOver && !viewManipulator.IsOver)
             {
-                var hit = MeshRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+                var hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
 
                 // If the Scene Camera has no Render Graph, the gBuffer may not be initialized
                 if (hit.gameObject != null)
@@ -418,7 +418,7 @@ public class SceneViewWindow : EditorWindow
             GameObject go = (GameObject)EngineObject.Instantiate(original, true);
             if (go != null)
             {
-                var hit = MeshRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+                var hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
 
                 if (hit.worldPosition == Vector3.zero)
                     go.Transform.position = Cam.GameObject.Transform.position + Cam.GameObject.Transform.forward * 10;
@@ -433,7 +433,7 @@ public class SceneViewWindow : EditorWindow
             var t = go;
             if (t != null)
             {
-                var hit = MeshRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+                var hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
 
                 if (hit.worldPosition == Vector3.zero)
                     t.Transform.position = Cam.GameObject.Transform.position + Cam.GameObject.Transform.forward * 10;
@@ -449,7 +449,7 @@ public class SceneViewWindow : EditorWindow
         }
         else if (DragnDrop.Drop<Material>(out var material))
         {
-            var hit = MeshRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+            var hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
 
             if (hit.gameObject != null)
             {
