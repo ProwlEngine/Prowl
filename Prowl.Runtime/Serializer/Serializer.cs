@@ -322,7 +322,10 @@ namespace Prowl.Runtime
 
             SerializedProperty? typeProperty = compound.Get("$type");
             if (typeProperty == null)
+            {
+                Debug.LogError($"Failed to deserialize object, missing object ID: {id?.IntValue}, Did the order of deserialization change?");
                 return null;
+            }
 
             string type = typeProperty.StringValue;
             if (string.IsNullOrWhiteSpace(type))
@@ -331,7 +334,27 @@ namespace Prowl.Runtime
             Type oType = RuntimeUtils.FindType(type);
             if (oType == null)
             {
-                Debug.LogError("Couldn't find type: " + type);
+                Debug.LogError($"Couldn't find Type: {type}, skipping...");
+
+                // Its possible this type has other types inside it that got serialized
+                // They may still be valid and other things may have references to it
+                // If this fails it may delete all those as well since they can no longer deserialize
+                // so lets try to skip past this type and see if we can deserialize the rest
+
+                void Search(SerializedProperty prop)
+                {
+                    foreach (var tag in prop.Tags)
+                    {
+                        if (tag.Value.TagType == PropertyType.Compound)
+                            _ = DeserializeObject(tag.Value, ctx);
+                        else if (tag.Value.TagType == PropertyType.List)
+                            foreach (var listTag in tag.Value.List)
+                                Search(listTag);
+                    }
+                }
+
+                Search(compound);
+
                 return null;
             }
 
