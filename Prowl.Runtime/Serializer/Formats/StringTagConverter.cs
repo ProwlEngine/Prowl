@@ -397,7 +397,7 @@ namespace Prowl.Runtime
 
         public class StringTagTokenizer
         {
-            private readonly GenericTokenizer<TextTokenType> _tokenizer;
+            private readonly Utils.Tokenizer<TextTokenType> _tokenizer;
 
             public StringTagTokenizer(ReadOnlyMemory<char> input)
             {
@@ -411,7 +411,7 @@ namespace Prowl.Runtime
                     {':', () => HandleSingleCharToken(TextTokenType.NameValueSeparator)}
                 };
 
-                _tokenizer = new GenericTokenizer<TextTokenType>(
+                _tokenizer = new Utils.Tokenizer<TextTokenType>(
                     input,
                     symbolHandlers,
                     c => c is '{' or '}' or ',' or ';' or ':' or '[' or ']',
