@@ -13,34 +13,33 @@ namespace Prowl.Runtime
         public string SourceCode;
     }
 
-    public struct ShaderPassDescription
+    public struct ShaderPassDescription()
     {
-        public Dictionary<string, string> Tags;
-        public BlendStateDescription BlendState;
-        public DepthStencilStateDescription DepthStencilState;
-        public FaceCullMode CullingMode;
-        public bool DepthClipEnabled;
+        public Dictionary<string, string>? Tags;
+        public BlendStateDescription? BlendState;
+        public DepthStencilStateDescription? DepthStencilState;
+        public FaceCullMode? CullingMode;
+        public bool? DepthClipEnabled;
 
-        public Dictionary<string, HashSet<string>> Keywords;
+        public Dictionary<string, HashSet<string>>? Keywords;
 
 
-        public ShaderPassDescription()
+        private static T? SetDefault<T>(T? currentValue, T? defaultValue)
         {
-            Tags = [ ];
+            if (currentValue == null && defaultValue != null)
+                return defaultValue;
 
-            Keywords = new() { { string.Empty, [ string.Empty ] } };
+            return currentValue;
+        }
 
-            BlendState = BlendStateDescription.SingleOverrideBlend;
-            
-            DepthStencilState = new DepthStencilStateDescription(
-                depthTestEnabled: true,
-                depthWriteEnabled: true,
-                comparisonKind: ComparisonKind.LessEqual
-            );
-
-            CullingMode = FaceCullMode.Back;
-            
-            DepthClipEnabled = true;
+        public void ApplyDefaults(ShaderPassDescription defaults)
+        {
+            Tags = SetDefault(Tags, defaults.Tags);
+            BlendState = SetDefault(BlendState, defaults.BlendState);
+            DepthStencilState = SetDefault(DepthStencilState, defaults.DepthStencilState);
+            CullingMode = SetDefault(CullingMode, defaults.CullingMode);
+            DepthClipEnabled = SetDefault(DepthClipEnabled, defaults.DepthClipEnabled);
+            Keywords = SetDefault(Keywords, defaults.Keywords);
         }
     }
 
@@ -49,22 +48,17 @@ namespace Prowl.Runtime
         [SerializeField, HideInInspector]
         private string name;
 
-
         [SerializeField, HideInInspector]
         private Dictionary<string, string> tags;
-
 
         [SerializeField, HideInInspector]
         private BlendStateDescription blend;
 
-
         [SerializeField, HideInInspector]
         private DepthStencilStateDescription depthStencilState;
 
-
         [SerializeField, HideInInspector]
         private FaceCullMode cullMode = FaceCullMode.Back;
-
 
         [SerializeField, HideInInspector]
         private bool depthClipEnabled = true;
@@ -89,6 +83,8 @@ namespace Prowl.Runtime
         [SerializeField, HideInInspector]
         private ShaderVariant[] serializedVariants;
 
+        [SerializeField, HideInInspector]
+        private IVariantCompiler compiler;
 
 
         /// <summary>
@@ -121,24 +117,52 @@ namespace Prowl.Runtime
 
         private ShaderPass() { }
 
-        public ShaderPass(string name, ShaderSource[] sources, ShaderPassDescription description, IVariantCompiler compiler) 
+        public ShaderPass(string name, ShaderPassDescription description, IVariantCompiler compiler) 
         {
             this.name = name;
-            this.tags = new(description.Tags);     
-            this.blend = description.BlendState;
-            this.depthStencilState = description.DepthStencilState;
-            this.cullMode = description.CullingMode;
-            this.depthClipEnabled = description.DepthClipEnabled;       
 
-            this.keywords = new(description.Keywords);
-            GenerateVariants(compiler, sources);
+            this.tags = description.Tags ?? new();     
+            this.blend = description.BlendState ?? BlendStateDescription.SingleOverrideBlend;
+            this.depthStencilState = description.DepthStencilState ?? DepthStencilStateDescription.DepthOnlyLessEqual;
+            this.cullMode = description.CullingMode ?? FaceCullMode.Back;
+            this.depthClipEnabled = description.DepthClipEnabled ?? true;       
+            this.keywords = description.Keywords ?? new() { { "", [] } };
+
+            this.compiler = compiler;
+
+            GenerateVariants();
         }
 
-        public ShaderVariant GetVariant(KeywordState? keywordID = null) =>
-            variants[ValidateKeyword(keywordID ?? KeywordState.Empty)];
+        public ShaderVariant GetVariant(KeywordState? keywordID = null)
+            => GetOrCompile(ValidateKeyword(keywordID ?? KeywordState.Empty));
 
-        public bool TryGetVariant(KeywordState? keywordID, out ShaderVariant? variant) =>
-            variants.TryGetValue(keywordID ?? KeywordState.Empty, out variant);
+        public bool TryGetVariant(KeywordState? keywordID, out ShaderVariant? variant)
+        {
+            keywordID ??= KeywordState.Empty;
+            variant = null;
+
+            if (!variants.ContainsKey(keywordID))
+                return false;
+
+            variant = GetOrCompile(keywordID);
+            return true;
+        }
+
+        private ShaderVariant GetOrCompile(KeywordState keywordID)
+        {
+            var variant = variants[keywordID];
+
+            if (variant != null)
+                return variant;
+            
+            if (compiler == null)
+                throw new Exception("Cannot compile shader variant. Compiler for pass is null.");
+
+            variant = compiler.CompileVariant(keywordID);
+            variants[keywordID] = variant;
+
+            return variant;
+        }
 
         public bool HasTag(string tag, string? tagValue = null)
         {   
@@ -149,7 +173,7 @@ namespace Prowl.Runtime
         }
 
         // Fills the dictionary with every possible permutation for the given definitions, initializing values with the generator function
-        private void GenerateVariants(IVariantCompiler compiler, ShaderSource[] sources)
+        private void GenerateVariants()
         {   
             this.variants = new();
 
@@ -161,7 +185,7 @@ namespace Prowl.Runtime
                 if (depth == combinations.Count) // Reached the end for this permutation, add a result.
                 {
                     KeywordState key = new(combination);
-                    variants.Add(key, compiler.CompileVariant(sources, key));
+                    variants.Add(key, null);
  
                     return;
                 }

@@ -30,8 +30,10 @@ namespace Prowl.Runtime
 
 
         public KeywordState VariantKeywords => variantKeywords;
+
         public VertexLayoutDescription[] VertexInputs => vertexInputs;
         public ShaderResource[][] ResourceSets => resourceSets;
+        
         public IEnumerable<KeyValuePair<GraphicsBackend, ShaderDescription[]>> CompiledPrograms => compiledPrograms;
 
         private ShaderVariant() { }
