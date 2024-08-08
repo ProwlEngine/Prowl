@@ -1,5 +1,4 @@
-﻿using Prowl.Editor.Assets;
-using Prowl.Editor.Preferences;
+﻿using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
@@ -486,7 +485,7 @@ public class SceneViewWindow : EditorWindow
                 if (gui.IsNodeHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
             }
-            gui.Tooltip("Select Editor Camera");
+            gui.Tooltip("Select Editor Camera", align: Gui.TooltipAlign.Right);
 
             var gridType = SceneViewPreferences.Instance.GridType;
             int gridTypeIndex = (int)gridType;
@@ -505,7 +504,7 @@ public class SceneViewWindow : EditorWindow
                 if (gui.IsNodeHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
             }
-            gui.Tooltip("Gizmo Mode: " + (gizmo.Orientation == 0 ? "World" : "Local"));
+            gui.Tooltip("Gizmo Mode: " + (gizmo.Orientation == 0 ? "World" : "Local"), align: Gui.TooltipAlign.Right);
 
             using (gui.Node("OpenPreferences").Scale(buttonSize).Enter())
             {
@@ -516,7 +515,7 @@ public class SceneViewWindow : EditorWindow
                 if (gui.IsNodeHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
             }
-            gui.Tooltip("Open Editor Preferences");
+            gui.Tooltip("Open Editor Preferences", align: Gui.TooltipAlign.Right);
         }
     }
 
