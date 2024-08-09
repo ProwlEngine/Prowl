@@ -46,8 +46,6 @@ namespace Prowl.Runtime
 
             resources.Add(tex.TextureView);
         }
-
-        public override string GetResourceName() => textureName;
     }
 
     public class SamplerResource : ShaderResource
@@ -85,7 +83,5 @@ namespace Prowl.Runtime
 
             resources.Add(tex.Sampler.InternalSampler);
         }
-
-        public override string GetResourceName() => textureName;
     }
 }

@@ -9,7 +9,5 @@ namespace Prowl.Runtime
         public abstract void GetDescription(List<ResourceLayoutElementDescription> elements);
 
         public abstract void BindResource(CommandList commandList, List<BindableResource> resources, RenderState state);
-
-        public abstract string GetResourceName();
     }
 }

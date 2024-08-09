@@ -204,7 +204,7 @@ namespace Prowl.Runtime
 
                     foreach (var res in set)
                     {
-                        if (res is BufferResource bufRes)
+                        if (res is UniformBufferResource bufRes)
                         {
                             builder.Append("\t\t\tBuffer\n\t\t\t{\n");
 
@@ -216,7 +216,7 @@ namespace Prowl.Runtime
                             builder.Append("\t\t\t}\n");
                         }
                         else
-                            builder.Append($"\t\t\t{res.GetType().Name} {res.GetResourceName()}\n");
+                            builder.Append($"\t\t\t{res.GetType().Name} {res.ToString()}\n");
                     }
 
                     builder.Append("\t\t}\n\n");

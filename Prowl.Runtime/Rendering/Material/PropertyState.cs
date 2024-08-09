@@ -9,7 +9,7 @@ namespace Prowl.Runtime
         [SerializeField] private Dictionary<string, AssetRef<Texture>> textures;
         // structuredBuffers are a special case and are not serialized
         // they are used by scripts to push arrays of data to the GPU
-        private Dictionary<string, ComputeBuffer> buffer; 
+        private Dictionary<string, GraphicsBuffer> buffer; 
 
         public PropertyState() 
         { 
@@ -83,8 +83,8 @@ namespace Prowl.Runtime
         public void SetTexture(string name, AssetRef<Texture> value) => textures[name] = value;
         public AssetRef<Texture> GetTexture(string name) => textures.GetValueOrDefault(name, Texture2D.EmptyWhite);
 
-        public void SetBuffer(string name, ComputeBuffer value) => buffer[name] = value;
-        public ComputeBuffer GetBuffer(string name) => buffer!.GetValueOrDefault(name, null);
+        public void SetBuffer(string name, GraphicsBuffer value) => buffer[name] = value;
+        public GraphicsBuffer GetBuffer(string name) => buffer!.GetValueOrDefault(name, null);
 
         public void Clear()
         {

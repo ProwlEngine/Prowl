@@ -8,12 +8,12 @@ namespace Prowl.Runtime.RenderPipelines
         public override string Title => "Set Buffer";
         public override float Width => 75;
 
-        [Input(ShowBackingValue.Never, ConnectionType.Override, TypeConstraint.AssignableTo), SerializeIgnore] public ComputeBuffer Buffer;
+        [Input(ShowBackingValue.Never, ConnectionType.Override, TypeConstraint.AssignableTo), SerializeIgnore] public GraphicsBuffer Buffer;
         [Input(ShowBackingValue.Unconnected, ConnectionType.Override)] public string Name;
 
         public override void Execute(NodePort input)
         {
-            var val = GetInputValue<ComputeBuffer>("Buffer");
+            var val = GetInputValue<GraphicsBuffer>("Buffer");
             if (val == null) throw new System.Exception("Buffer is null");
 
             var name = GetInputValue<string>("Name", Name);

@@ -1213,22 +1213,10 @@ namespace Prowl.Runtime.GUI.Graphics
                 BlendState = BlendStateDescription.SingleAlphaBlend,
             };
 
-            ShaderSource[] sources = 
-            [
-                new()
-                {
-                    Stage = ShaderStages.Vertex,
-                    SourceCode = "gui-vertex"
-                },
-
-                new()
-                {
-                    Stage = ShaderStages.Fragment,
-                    SourceCode = "gui-frag"
-                }
-            ];
-
             var compiler = new EmbeddedVariantCompiler() {
+                sourceVert = "gui-vertex",
+                sourceFrag = "gui-frag",
+
                 Inputs = [ 
                     new VertexLayoutDescription(
                         new VertexElementDescription("Position", VertexElementFormat.Float3, VertexElementSemantic.Position),
@@ -1239,7 +1227,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
                 Resources = [
                     [
-                        new BufferResource("ProjectionMatrixBuffer", ShaderStages.Vertex, ("ProjectionMatrix", ResourceType.Matrix4x4)),
+                        new UniformBufferResource("ProjectionMatrixBuffer", ShaderStages.Vertex, new BufferProperty("ProjectionMatrix", ResourceType.Matrix4x4, 0)),
                         new SamplerResource("MainSampler", ShaderStages.Fragment),
                     ],
 
@@ -1249,7 +1237,7 @@ namespace Prowl.Runtime.GUI.Graphics
                 ]
             };
 
-            ShaderPass pass = new ShaderPass("UI Pass", sources, description, compiler);
+            ShaderPass pass = new ShaderPass("UI Pass", description, compiler);
 
             UIPass = pass;
             UIVariant = pass.GetVariant(KeywordState.Default);
@@ -1257,13 +1245,15 @@ namespace Prowl.Runtime.GUI.Graphics
 
         private class EmbeddedVariantCompiler : IVariantCompiler
         {
+            public string sourceVert;
+            public string sourceFrag;
             public VertexLayoutDescription[] Inputs;
             public ShaderResource[][] Resources;
 
-            public ShaderVariant CompileVariant(ShaderSource[] sources, KeywordState keywords)
+            public ShaderVariant CompileVariant(KeywordState keywords)
             {
-                byte[] vertexShaderBytes = LoadEmbeddedShaderCode(sources[0].SourceCode);
-                byte[] fragmentShaderBytes = LoadEmbeddedShaderCode(sources[1].SourceCode);
+                byte[] vertexShaderBytes = LoadEmbeddedShaderCode(sourceVert);
+                byte[] fragmentShaderBytes = LoadEmbeddedShaderCode(sourceFrag);
 
                 var vertex = new ShaderDescription(
                     ShaderStages.Vertex, 

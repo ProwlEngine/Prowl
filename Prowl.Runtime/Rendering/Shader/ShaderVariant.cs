@@ -36,6 +36,8 @@ namespace Prowl.Runtime
         
         public IEnumerable<KeyValuePair<GraphicsBackend, ShaderDescription[]>> CompiledPrograms => compiledPrograms;
 
+        public static ShaderVariant Empty = new ShaderVariant(KeywordState.Empty, [], [], []);
+
         private ShaderVariant() { }
 
         public ShaderVariant(KeywordState keywords, (GraphicsBackend, ShaderDescription[])[] programs, VertexLayoutDescription[] vertexInputs, ShaderResource[][] resourceSets)
@@ -53,7 +55,10 @@ namespace Prowl.Runtime
             if (compiledPrograms.TryGetValue(backend.Value, out ShaderDescription[] programs))
                 return programs;
 
-            throw new Exception($"No compiled programs for graphics backend {backend}");
+            return [
+                new ShaderDescription(ShaderStages.Vertex, [], "main"),
+                new ShaderDescription(ShaderStages.Fragment, [], "main"),
+            ];
         }
 
         public void OnBeforeSerialize()

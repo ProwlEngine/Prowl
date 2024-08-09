@@ -3,22 +3,21 @@ using Veldrid;
 
 namespace Prowl.Runtime
 {
-    public class StructuredBufferResource : ShaderResource
-    {
+    public class GraphicsBufferResource : ShaderResource
+    {        
         [SerializeField, HideInInspector]
-        private string structuredBufferName;
-        public string StructuredBufferName => structuredBufferName;
+        private string bufferName;
+        public string BufferName => bufferName;
 
         [SerializeField, HideInInspector]
         private ShaderStages stages;
         public ShaderStages Stages => stages;
 
+        private GraphicsBufferResource() { }
 
-        private StructuredBufferResource() { }
-
-        public StructuredBufferResource(string bufferName, ShaderStages stages)
+        public GraphicsBufferResource(string bufferName, ShaderStages stages)
         {
-            this.structuredBufferName = bufferName;
+            this.bufferName = bufferName;
             this.stages = stages;
         }
 
@@ -26,16 +25,14 @@ namespace Prowl.Runtime
         {
             ResourceKind kind = ResourceKind.StructuredBufferReadWrite;
             
-            elements.Add(new ResourceLayoutElementDescription(structuredBufferName, kind, stages));
+            elements.Add(new ResourceLayoutElementDescription(bufferName, kind, stages));
         }
 
         public override void BindResource(CommandList commandList, List<BindableResource> resources, RenderState state)
         {
-            ComputeBuffer buffer = state.propertyState.GetBuffer(structuredBufferName);
+            GraphicsBuffer buffer = state.propertyState.GetBuffer(bufferName);
 
             resources.Add(buffer.Buffer);
         }
-
-        public override string GetResourceName() => structuredBufferName;
     }
 }

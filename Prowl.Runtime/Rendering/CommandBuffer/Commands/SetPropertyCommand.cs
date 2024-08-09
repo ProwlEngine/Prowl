@@ -40,7 +40,7 @@ namespace Prowl.Runtime
     internal struct SetBufferPropertyCommand : RenderingCommand
     {
         public string Name;
-        public ComputeBuffer BufferValue;
+        public GraphicsBuffer BufferValue;
 
         readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {

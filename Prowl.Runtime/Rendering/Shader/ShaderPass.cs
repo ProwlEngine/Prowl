@@ -83,9 +83,6 @@ namespace Prowl.Runtime
         [SerializeField, HideInInspector]
         private ShaderVariant[] serializedVariants;
 
-        [SerializeField, HideInInspector]
-        private IVariantCompiler compiler;
-
 
         /// <summary>
         /// The name to identify this <see cref="ShaderPass"/> 
@@ -126,43 +123,16 @@ namespace Prowl.Runtime
             this.depthStencilState = description.DepthStencilState ?? DepthStencilStateDescription.DepthOnlyLessEqual;
             this.cullMode = description.CullingMode ?? FaceCullMode.Back;
             this.depthClipEnabled = description.DepthClipEnabled ?? true;       
-            this.keywords = description.Keywords ?? new() { { "", [] } };
+            this.keywords = description.Keywords ?? new() { { string.Empty, [ string.Empty ] } };
 
-            this.compiler = compiler;
-
-            GenerateVariants();
+            GenerateVariants(compiler);
         }
 
         public ShaderVariant GetVariant(KeywordState? keywordID = null)
-            => GetOrCompile(ValidateKeyword(keywordID ?? KeywordState.Empty));
+            => variants[ValidateKeyword(keywordID ?? KeywordState.Empty)];
 
         public bool TryGetVariant(KeywordState? keywordID, out ShaderVariant? variant)
-        {
-            keywordID ??= KeywordState.Empty;
-            variant = null;
-
-            if (!variants.ContainsKey(keywordID))
-                return false;
-
-            variant = GetOrCompile(keywordID);
-            return true;
-        }
-
-        private ShaderVariant GetOrCompile(KeywordState keywordID)
-        {
-            var variant = variants[keywordID];
-
-            if (variant != null)
-                return variant;
-            
-            if (compiler == null)
-                throw new Exception("Cannot compile shader variant. Compiler for pass is null.");
-
-            variant = compiler.CompileVariant(keywordID);
-            variants[keywordID] = variant;
-
-            return variant;
-        }
+            => variants.TryGetValue(keywordID ?? KeywordState.Empty, out variant);
 
         public bool HasTag(string tag, string? tagValue = null)
         {   
@@ -173,7 +143,7 @@ namespace Prowl.Runtime
         }
 
         // Fills the dictionary with every possible permutation for the given definitions, initializing values with the generator function
-        private void GenerateVariants()
+        private void GenerateVariants(IVariantCompiler compiler)
         {   
             this.variants = new();
 
@@ -185,7 +155,7 @@ namespace Prowl.Runtime
                 if (depth == combinations.Count) // Reached the end for this permutation, add a result.
                 {
                     KeywordState key = new(combination);
-                    variants.Add(key, null);
+                    variants.Add(key, compiler.CompileVariant(key));
  
                     return;
                 }

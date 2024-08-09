@@ -15,7 +15,7 @@ namespace Prowl.Runtime.RenderPipelines
 
         public override float Width => 100f;
 
-        [Output, SerializeIgnore] public ComputeBuffer Buffer;
+        [Output, SerializeIgnore] public GraphicsBuffer Buffer;
         [Output, SerializeIgnore] public double LightCount;
 
         [Output, SerializeIgnore] public NodeRenderTexture ShadowMap;
@@ -123,12 +123,12 @@ namespace Prowl.Runtime.RenderPipelines
             {
                 if (lights.Count > 0)
                 { 
-                    Buffer = new ComputeBuffer((uint)(sizeof(GPULight) * lights.Count));
+                    Buffer = new GraphicsBuffer(Veldrid.BufferUsage.StructuredBufferReadOnly, (uint)(sizeof(GPULight) * lights.Count));
                     Buffer.SetData(gpuLights.ToArray());
                 }
                 else
                 {
-                    Buffer = new ComputeBuffer(1);
+                    Buffer = new GraphicsBuffer(Veldrid.BufferUsage.StructuredBufferReadOnly, 1);
                 }
 
                 LightCount = lights.Count;
