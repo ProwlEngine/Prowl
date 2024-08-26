@@ -230,6 +230,7 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 - [JaggerJo](https://github.com/JaggerJo)
 - [Jihad Khawaja](https://github.com/jihadkhawaja)
 - [Jasper Honkasalo](https://github.com/japsuu)
+- [Trevias Xk (treviasxk)](https://github.com/treviasxk)
  
 # License 📜
 

@@ -6,7 +6,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-      
+        <ApplicationIcon>EmbeddedResources/Logo.ico</ApplicationIcon>
       <RestoreAdditionalProjectSources>
         https://api.nuget.org/v3/index.json;
         https://www.myget.org/F/sixlabors/api/v3/index.json;

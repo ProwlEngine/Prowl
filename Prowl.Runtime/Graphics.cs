@@ -64,7 +64,13 @@ namespace Prowl.Runtime
                     Debug.LogError("Failed to set DPI awareness", exception);
             }
 
-            Screen.Resize += (newSize) => Device.ResizeMainWindow((uint)newSize.x, (uint)newSize.y);
+            Screen.Resize += ResizeGraphicsResources;
+        }
+
+        private static void ResizeGraphicsResources(Vector2Int newSize)
+        {
+            _screenTarget.UpdateFramebufferInfo();
+            Device.ResizeMainWindow((uint)newSize.x, (uint)newSize.y);
         }
 
         private static void SetRenderPipeline(RenderPipeline renderPipeline)

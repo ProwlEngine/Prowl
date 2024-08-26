@@ -1,15 +1,12 @@
 using Prowl.Editor.Assets;
 using Prowl.Editor.Docking;
 using Prowl.Editor.Preferences;
-using Prowl.Editor.ProjectSettings;
 using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.SceneManagement;
 using System.Reflection;
-using Prowl.Runtime.RenderPipelines;
 
 namespace Prowl.Editor;
 
@@ -119,19 +116,19 @@ public static class EditorGuiManager
                     switch (PlayMode.Current)
                     {
                         case PlayMode.Mode.Editing:
-                            if (EditorGUI.StyledButton(FontAwesome6.Play, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false))
+                            if (EditorGUI.StyledButton(FontAwesome6.Play, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, tooltip: "Play"))
                                 PlayMode.Start();
                             break;
                         case PlayMode.Mode.Playing:
-                            if (EditorGUI.StyledButton(FontAwesome6.Pause, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false))
+                            if (EditorGUI.StyledButton(FontAwesome6.Pause, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, tooltip: "Pause"))
                                 PlayMode.Pause();
-                            if (EditorGUI.StyledButton(FontAwesome6.Stop, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, EditorStylePrefs.Red))
+                            if (EditorGUI.StyledButton(FontAwesome6.Stop, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, EditorStylePrefs.Red, tooltip: "Stop"))
                                 PlayMode.Stop();
                             break;
                         case PlayMode.Mode.Paused:
-                            if (EditorGUI.StyledButton(FontAwesome6.Play, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false))
+                            if (EditorGUI.StyledButton(FontAwesome6.Play, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, tooltip: "Play"))
                                 PlayMode.Resume();
-                            if (EditorGUI.StyledButton(FontAwesome6.Stop, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, EditorStylePrefs.Red))
+                            if (EditorGUI.StyledButton(FontAwesome6.Stop, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, EditorStylePrefs.Red, tooltip: "Stop"))
                                 PlayMode.Stop();
                             break;
 

@@ -1,5 +1,4 @@
 ﻿using Prowl.Icons;
-using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
 using System;
 
@@ -119,23 +118,90 @@ namespace Prowl.Runtime.GUI
             }
         }
 
-        public void Tooltip(string tip, Vector2? topleft = null, float wrapWidth = -1)
+        public enum TooltipAlign {
+            TopLeft,
+            TopMiddle,
+            TopRight,
+            Left,
+            Right,
+            BottomLeft,
+            BottomMiddle,
+            BottomRight,
+        }
+
+        public void Tooltip(string tip, Vector2? topleft = null, float wrapWidth = -1, TooltipAlign align = TooltipAlign.TopRight)
         {
-            if (PreviousInteractableIsHovered())
+            if(PreviousInteractableIsHovered() && tip != "")
             {
-                var oldZ = Gui.ActiveGUI.CurrentZIndex;
-                Gui.ActiveGUI.SetZIndex(500000);
+                var oldZ = ActiveGUI.CurrentZIndex;
+                ActiveGUI.SetZIndex(500000);
 
-                var pos = (topleft ?? PointerPos) + new Vector2(10, 10);
-                var size = Font.DefaultFont.CalcTextSize(tip, 0, wrapWidth);
+                var pos = topleft ?? PointerPos;
                 var style = new WidgetStyle(30);
-                Draw2D.DrawRectFilled(pos - new Vector2(5), size + new Vector2(10), style.BGColor, 10);
-                Draw2D.DrawRect(pos - new Vector2(5), size + new Vector2(10), style.BorderColor, 2, 10);
-                Draw2D.DrawText(tip, pos, wrapWidth);
+                var margin = new Vector2(10);
+                var padding = new Vector2(5);
+                var size = Font.DefaultFont.CalcTextSize(tip, 0, wrapWidth) + padding * 2 - new Vector2(0, 5);
+                var offset = new Vector2(0);
 
-                Gui.ActiveGUI.SetZIndex(oldZ);
+                switch(align){
+                    case TooltipAlign.TopLeft:
+                        offset = new Vector2(-size.x - margin.x, -size.y - margin.y);
+                    break;
+                    case TooltipAlign.TopMiddle:
+                        offset = new Vector2(-size.x / 2 + margin.x, -size.y - margin.y);
+                    break;
+                    case TooltipAlign.TopRight:
+                        offset = new Vector2(margin.x, -size.y - margin.y);
+                    break;
+                    case TooltipAlign.Right:
+                        offset = new Vector2(margin.x, -size.y / 2);
+                    break;
+                    case TooltipAlign.Left:
+                        offset = new Vector2(-size.x - margin.x, -size.y / 2);
+                    break;
+                    case TooltipAlign.BottomLeft:
+                        offset = new Vector2(-size.x - margin.x, margin.y);
+                    break;
+                    case TooltipAlign.BottomMiddle:
+                        offset = new Vector2(-size.x / 2, margin.y);
+                    break;
+                    case TooltipAlign.BottomRight:
+                        offset = new Vector2(margin.x, margin.y);
+                    break;
+                }
+
+                // Checks if the tooltip is outside the window, and keeps it aligned inside the window.
+                if(pos.x > Screen.InternalWindow.Width / 2){
+                    if(pos.x < Screen.InternalWindow.Width - offset.x - size.x)
+                        pos += new Vector2(offset.x, 0);
+                    else
+                        pos -= new Vector2(margin.x + pos.x + size.x - Screen.InternalWindow.Width, 0);
+                }else{
+                    if(pos.x < MathD.Abs(offset.x) + margin.x)
+                        pos = new Vector2(margin.x, pos.y);
+                    else
+                        pos += new Vector2(offset.x, 0);
+                }
+
+                if(pos.y > Screen.InternalWindow.Width / 2){
+                    if(pos.y < Screen.InternalWindow.Height - offset.y - size.y)
+                        pos += new Vector2(0, offset.y);
+                    else
+                        pos -= new Vector2(0, size.y + offset.y);
+                }else{
+                    if(pos.y < MathD.Abs(offset.y) + margin.y)
+                        pos = new Vector2(pos.x, pos.y + margin.y);
+                    else
+                        pos += new Vector2(0, offset.y);
+                }
+
+                // Background
+                Draw2D.DrawRectFilled(pos, size, style.BorderColor, 5);
+                // Message
+                Draw2D.DrawText(tip, pos + padding, wrapWidth);
+
+                ActiveGUI.SetZIndex(oldZ);
             }
-
         }
 
         public void OpenPopup(string id, Vector2? topleft = null, LayoutNode? popupHolder = null)

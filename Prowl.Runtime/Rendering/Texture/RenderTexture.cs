@@ -148,6 +148,12 @@ namespace Prowl.Runtime
             this.Framebuffer = framebuffer;
         }
 
+        internal void UpdateFramebufferInfo()
+        {
+            this.Width = Framebuffer.Width;
+            this.Height = Framebuffer.Height;
+        }
+
         /// <summary>
         /// Creates a new RenderTexture object
         /// </summary>
