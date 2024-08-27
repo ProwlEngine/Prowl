@@ -350,7 +350,6 @@ namespace Prowl.Runtime
 
         public static void UpdatePool()
         {
-            var disposableTextures = new List<RenderTexture>();
             foreach (var pair in pool)
             {
                 for (int i = pair.Value.Count - 1; i >= 0; i--)
@@ -358,14 +357,11 @@ namespace Prowl.Runtime
                     var (renderTexture, frameCreated) = pair.Value[i];
                     if (Time.frameCount - frameCreated > MaxUnusedFrames)
                     {
-                        disposableTextures.Add(renderTexture);
+                        renderTexture.Destroy();
                         pair.Value.RemoveAt(i);
                     }
                 }
             }
-
-            foreach (var renderTexture in disposableTextures)
-                renderTexture.Destroy();
         }
 
         #endregion
