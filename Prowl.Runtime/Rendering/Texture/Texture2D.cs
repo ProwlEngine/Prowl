@@ -102,8 +102,8 @@ namespace Prowl.Runtime
         /// </summary>
         /// <param name="data">The pointer to the location to copy to.</param>
         /// <param name="mipLevel">The mip level to copy.</param>
-        public unsafe void CopyDataPtr(void* data, uint mipLevel = 0) =>
-            InternalCopyDataPtr(data, out _, out _, 0, mipLevel);
+        public unsafe void CopyDataPtr(void* data, uint dataSize, uint mipLevel = 0) =>
+            InternalCopyDataPtr(data, dataSize, out _, out _, 0, mipLevel);
 
         /// <summary>
         /// Copies the data of a portion of a <see cref="Texture2D"/>.

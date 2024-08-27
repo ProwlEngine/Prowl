@@ -87,8 +87,8 @@ namespace Prowl.Runtime
         /// <param name="data">The pointer to the copied .</param>
         /// <param name="mipLevel">The mip level to copy.</param>
         /// <param name="layer">The array layer to copy.</param>
-        public unsafe void CopyDataPtr(void* data, uint layer, uint mipLevel = 0) =>
-            InternalCopyDataPtr(data, out _, out _, layer, mipLevel);
+        public unsafe void CopyDataPtr(void* data, uint dataSize, uint layer, uint mipLevel = 0) =>
+            InternalCopyDataPtr(data, dataSize, out _, out _, layer, mipLevel);
 
         /// <summary>
         /// Copies the data of a portion of a <see cref="Texture2DArray"/> into a CPU-accessible region.

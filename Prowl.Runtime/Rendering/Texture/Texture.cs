@@ -37,6 +37,9 @@ namespace Prowl.Runtime
         /// <summary>The multisample count of this <see cref="Texture"/></summary>
         public TextureSampleCount SampleCount => InternalTexture.SampleCount;
 
+        /// <summary>Gets whether this <see cref="Texture"/> owns its internal texture, or was created using an existing texture.</summary>
+        public bool OwnsTexture { get; private set; }
+
 
         /// <summary>The internal <see cref="Veldrid.Texture"/> representation.</summary>
         internal Veldrid.Texture InternalTexture { get; private set; }
@@ -46,9 +49,9 @@ namespace Prowl.Runtime
 
 
         private Veldrid.Texture stagingTexture = null;
-
         
 
+        
         internal Texture() : base("New Texture") { }
 
         internal Texture(TextureDescription description) : base("New Texture") 
@@ -116,7 +119,7 @@ namespace Prowl.Runtime
             if (!IsSupportedDescription(description, out _, out Exception exception))
                 throw exception;
 
-            InternalTexture = Graphics.Factory.CreateTexture(ref description);
+            InternalTexture = Graphics.Factory.CreateTexture(description);
 
             TextureViewDescription viewDescription = new()
             {
@@ -134,6 +137,7 @@ namespace Prowl.Runtime
                 TextureView = null;
 
             IsMipmapped = false;
+            OwnsTexture = true;
         }
 
         protected void CreateFromExisting(Veldrid.Texture resource)
@@ -142,6 +146,7 @@ namespace Prowl.Runtime
 
             InternalTexture = resource;
             IsMipmapped = false;
+            OwnsTexture = false;
 
             TextureViewDescription viewDescription = new()
             {
@@ -157,32 +162,13 @@ namespace Prowl.Runtime
                 TextureView = Graphics.Factory.CreateTextureView(in viewDescription);
             else
                 TextureView = null;
-
-            IsMipmapped = false;
-        }
-
-        internal void SetNativeResource(Veldrid.Texture resource)
-        {
-            TextureViewDescription viewDescription = new()
-            {
-                ArrayLayers = resource.ArrayLayers,
-                BaseArrayLayer = 0,
-                MipLevels = resource.MipLevels,
-                BaseMipLevel = 0,
-                Format = resource.Format,
-                Target = InternalTexture
-            };
-            
-            if (resource.Usage.HasFlag(TextureUsage.Sampled) || resource.Usage.HasFlag(TextureUsage.Storage))
-                TextureView = Graphics.Factory.CreateTextureView(in viewDescription);
-            else
-                TextureView = null;
-
-            IsMipmapped = false;
         }
 
         unsafe protected void InternalSetDataPtr(void* data, Vector3Int rectPos, Vector3Int rectSize, uint layer, uint mipLevel)
         {
+            if (!OwnsTexture)
+                throw new Exception("Cannot modify texture created from external texture object.");
+
             if (InternalTexture.SampleCount != TextureSampleCount.Count1)
                 throw new Exception("Setting data manually on a multisampled texture is not allowed.");
 
@@ -210,7 +196,7 @@ namespace Prowl.Runtime
                 InternalSetDataPtr(ptr, rectPos, rectSize, layer, mipLevel);
         }
 
-        unsafe protected void InternalCopyDataPtr(void* dataPtr, out uint rowPitch, out uint depthPitch, uint arrayLayer, uint mipLevel)
+        unsafe protected void InternalCopyDataPtr(void* dataPtr, uint dataSize, out uint rowPitch, out uint depthPitch, uint arrayLayer, uint mipLevel)
         {
             EnsureStagingTexture();
 
@@ -224,7 +210,7 @@ namespace Prowl.Runtime
             rowPitch = resource.RowPitch;
             depthPitch = resource.DepthPitch;
 
-            Buffer.MemoryCopy((void*)resource.Data, dataPtr, resource.SizeInBytes, resource.SizeInBytes);
+            Buffer.MemoryCopy((void*)resource.Data, dataPtr, dataSize, Math.Min(resource.SizeInBytes, dataSize));
 
             Graphics.Device.Unmap(stagingTexture, subresource);
         }
@@ -254,7 +240,7 @@ namespace Prowl.Runtime
         private void EnsureStagingTexture()
         {
             if (InternalTexture.SampleCount != TextureSampleCount.Count1)
-                throw new Exception("Cannot copy data from a multisampled texture. Resolve this multisampled texture to another texture to access texture data.");
+                throw new Exception("Cannot modify or read a multisampled texture. Resolve this multisampled texture to another texture to access texture data.");
 
             if (InternalTexture.Usage.HasFlag(TextureUsage.Staging))
             {
@@ -285,7 +271,7 @@ namespace Prowl.Runtime
                 SampleCount = TextureSampleCount.Count1,
             };
 
-            stagingTexture = Graphics.Device.ResourceFactory.CreateTexture(ref description);
+            stagingTexture = Graphics.Factory.CreateTexture(description);
 
             return;
         }
@@ -327,6 +313,9 @@ namespace Prowl.Runtime
             
             return Equals(texture, true);
         }
+
+        public override int GetHashCode()
+            => base.GetHashCode();
 
         public bool Equals(Texture other, bool compareMS = true)
         {
