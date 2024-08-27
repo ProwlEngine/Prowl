@@ -109,7 +109,7 @@ namespace Prowl.Runtime
         public uint Width { get; private set; }
         public uint Height { get; private set; }
 
-        public bool TargetOnly { get; private set; }
+        public bool OwnsFramebuffer { get; private set; }
         
         public bool Sampled { get; private set; }
         public bool RandomWriteEnabled { get; private set; }
@@ -135,7 +135,7 @@ namespace Prowl.Runtime
             this.Sampled = false;
             this.RandomWriteEnabled = false;
             this.SampleCount = TextureSampleCount.Count1;
-            this.TargetOnly = true;
+            this.OwnsFramebuffer = false;
 
             if (framebuffer.DepthTarget != null)
                 this.DepthBuffer = new Texture2D(framebuffer.DepthTarget.Value.Target);
