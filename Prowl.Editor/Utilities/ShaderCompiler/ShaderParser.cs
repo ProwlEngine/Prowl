@@ -65,13 +65,13 @@ namespace Prowl.Editor.Utilities
             string name;
 
             List<ShaderProperty> properties = [];
-            ParsedPass globalDefaults = null;
+            ParsedPass? globalDefaults = null;
             List<ParsedPass> parsedPasses = new();
         
             string? fallback = null;
 
             tokenizer.MoveNext();
-            if (tokenizer.Token != "Shader")
+            if (tokenizer.Token.ToString() != "Shader")
                 throw new InvalidOperationException($"Expected top-level 'Shader' declaration, found {tokenizer.Token}");
             
             tokenizer.MoveNext(); // Move to string
@@ -110,14 +110,12 @@ namespace Prowl.Editor.Utilities
                 ParsedPass parsedPass = parsedPasses[i];
 
                 ShaderPassDescription passDesc = parsedPass.Description;
-
-                if (globalDefaults != null)
-                    passDesc.ApplyDefaults(globalDefaults.Description);
-
                 StringBuilder sourceBuilder = new(parsedPass.Program);
 
                 if (globalDefaults != null)
                 {
+                    passDesc.ApplyDefaults(globalDefaults.Description);
+
                     sourceBuilder.Insert(0, '\n'); 
                     sourceBuilder.Insert(0, globalDefaults.Program);
                 }
@@ -549,7 +547,7 @@ namespace Prowl.Editor.Utilities
             string? line;
             while ((line = sr.ReadLine()) != null) 
             {
-                string[] linesSplit = line.Split((string?)null, StringSplitOptions.RemoveEmptyEntries);
+                string[] linesSplit = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
 
                 if (linesSplit.Length < 3)
                     continue;
@@ -624,33 +622,16 @@ namespace Prowl.Editor.Utilities
 
             while (tokenizer.MoveNext())
             {
-                if (tokenizer.Token.Equals(token))
+                if (tokenizer.Token.ToString() == token)
                 {
-                    tokenizer.TokenMemory = tokenizer.Input.Slice(startPos, tokenizer.InputPosition - startPos);
+                    tokenizer.TokenMemory = tokenizer.Input.Slice(startPos, tokenizer.InputPosition - tokenizer.Token.Length - startPos);
 
                     return true;
                 }
             }
             return false;
         }
-
-
-        public static bool SliceTo(Tokenizer<ShaderToken> tokenizer, ShaderToken token)
-        {
-            int startPos = tokenizer.InputPosition;
-
-            while (tokenizer.MoveNext())
-            {
-                if (tokenizer.TokenType.Equals(token))
-                {
-                    tokenizer.TokenMemory = tokenizer.Input.Slice(startPos, tokenizer.InputPosition - startPos);
-
-                    return true;
-                }
-            }
-            return false;
-        }
-
+        
 
         private static void EnsureUndef(object? value, string property)
         {
@@ -694,7 +675,7 @@ namespace Prowl.Editor.Utilities
     {
         public string Name = "";
         public ShaderPassDescription Description;
-        public string Program = "";
+        public string? Program = null;
     }
 
     public struct EntryPoint(ShaderStages stages, string name)

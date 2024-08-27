@@ -1,4 +1,5 @@
 ﻿using Prowl.Icons;
+using Prowl.Runtime.RenderPipelines;
 using System;
 
 namespace Prowl.Runtime;
@@ -46,6 +47,7 @@ public class Camera : MonoBehaviour
     public ProjectionType projectionType = ProjectionType.Perspective;
 
     public AssetRef<RenderTexture> Target;
+    public AssetRef<RenderPipeline<CameraData>> Pipeline;
 
     public Ray ScreenPointToRay(Vector2 screenPoint, Vector2 screenScale)
     {

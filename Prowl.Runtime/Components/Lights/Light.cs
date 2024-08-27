@@ -34,5 +34,4 @@ public abstract class Light : MonoBehaviour
         public int AtlasX, AtlasY, AtlasWidth;
         public int Padding;
     }
-
 }

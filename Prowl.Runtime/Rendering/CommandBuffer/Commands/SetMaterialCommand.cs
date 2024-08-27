@@ -19,8 +19,8 @@ namespace Prowl.Runtime
             state.pipelineSettings.pass = Material.Shader.Res.GetPass(Pass);
             state.pipelineSettings.variant = state.pipelineSettings.pass.GetVariant(keys);
 
-            Pipeline pipeline = PipelineCache.GetPipelineForDescription(state.pipelineSettings);
-            PipelineCache.GetDescriptionForPipeline(pipeline, out _);
+            Pipeline pipeline = ShaderPipelineCache.GetPipelineForDescription(state.pipelineSettings);
+            ShaderPipelineCache.GetDescriptionForPipeline(pipeline, out _);
 
             if (state.activePipeline != pipeline)
             {

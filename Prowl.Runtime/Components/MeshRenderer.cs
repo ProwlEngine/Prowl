@@ -21,10 +21,6 @@ public class MeshRenderer : MonoBehaviour, ISerializable
         PropertyState properties = new();
         properties.SetInt("_ObjectID", this.InstanceID);
         properties.SetColor("_MainColor", mainColor);
-
-        MeshRenderable renderable = new MeshRenderable(Mesh.Res!, Material.Res!, this.Transform.localToWorldMatrix, this.GameObject.layerIndex, Mesh.Res!.bounds, properties);
-
-        Graphics.DrawRenderable(renderable);
     }
 
     public SerializedProperty Serialize(Serializer.SerializationContext ctx)

@@ -194,33 +194,16 @@ namespace Prowl.Runtime
                 builder.Append("\t\tVertexInputs\n\t\t{\n");
                 foreach(var input in pass.GetVariant(KeywordState.Empty).VertexInputs)
                 {
-                    builder.Append($"\t\t\t{input.Elements[0].Name}\n");
+                    builder.Append($"\t\t\t{input.semantic}\n");
                 }
                 builder.Append("\t\t}\n\n");
 
-                foreach(var set in pass.GetVariant(KeywordState.Empty).ResourceSets)
+                builder.Append("\t\tUniforms\n\t\t{\n");
+                foreach(var uniform in pass.GetVariant(KeywordState.Empty).Uniforms)
                 {
-                    builder.Append("\t\tSet\n\t\t{\n");
-
-                    foreach (var res in set)
-                    {
-                        if (res is UniformBufferResource bufRes)
-                        {
-                            builder.Append("\t\t\tBuffer\n\t\t\t{\n");
-
-                            foreach (var elem in bufRes.Resources)
-                            {
-                                builder.Append($"\t\t\t\t{elem.Name} {elem.Type}\n");
-                            }
-
-                            builder.Append("\t\t\t}\n");
-                        }
-                        else
-                            builder.Append($"\t\t\t{res.GetType().Name} {res.ToString()}\n");
-                    }
-
-                    builder.Append("\t\t}\n\n");
+                    builder.Append(uniform.ToString().Replace("\n", "\n\t\t\t"));
                 }
+                builder.Append("\t\t}\n");
 
                 builder.Append("\t}\n");
 

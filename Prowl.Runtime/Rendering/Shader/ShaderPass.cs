@@ -7,12 +7,6 @@ using System.Linq;
 
 namespace Prowl.Runtime
 {
-    public struct ShaderSource
-    {
-        public ShaderStages Stage;
-        public string SourceCode;
-    }
-
     public struct ShaderPassDescription()
     {
         public Dictionary<string, string>? Tags;
@@ -24,159 +18,123 @@ namespace Prowl.Runtime
         public Dictionary<string, HashSet<string>>? Keywords;
 
 
-        private static T? SetDefault<T>(T? currentValue, T? defaultValue)
+        private static void SetDefault<T>(ref T? currentValue, T? defaultValue)
         {
             if (currentValue == null && defaultValue != null)
-                return defaultValue;
-
-            return currentValue;
+                currentValue = defaultValue;
         }
 
         public void ApplyDefaults(ShaderPassDescription defaults)
         {
-            Tags = SetDefault(Tags, defaults.Tags);
-            BlendState = SetDefault(BlendState, defaults.BlendState);
-            DepthStencilState = SetDefault(DepthStencilState, defaults.DepthStencilState);
-            CullingMode = SetDefault(CullingMode, defaults.CullingMode);
-            DepthClipEnabled = SetDefault(DepthClipEnabled, defaults.DepthClipEnabled);
-            Keywords = SetDefault(Keywords, defaults.Keywords);
+            SetDefault(ref Tags, defaults.Tags);
+            SetDefault(ref BlendState, defaults.BlendState);
+            SetDefault(ref DepthStencilState, defaults.DepthStencilState);
+            SetDefault(ref CullingMode, defaults.CullingMode);
+            SetDefault(ref DepthClipEnabled, defaults.DepthClipEnabled);
+            SetDefault(ref Keywords, defaults.Keywords);
         }
     }
 
     public sealed class ShaderPass : ISerializationCallbackReceiver
     {
         [SerializeField, HideInInspector]
-        private string name;
+        private string _name;
 
         [SerializeField, HideInInspector]
-        private Dictionary<string, string> tags;
+        private Dictionary<string, string> _tags;
 
         [SerializeField, HideInInspector]
-        private BlendStateDescription blend;
+        private BlendStateDescription _blend;
 
         [SerializeField, HideInInspector]
-        private DepthStencilStateDescription depthStencilState;
+        private DepthStencilStateDescription _depthStencilState;
 
         [SerializeField, HideInInspector]
-        private FaceCullMode cullMode = FaceCullMode.Back;
+        private FaceCullMode _cullMode = FaceCullMode.Back;
 
         [SerializeField, HideInInspector]
-        private bool depthClipEnabled = true;
-
+        private bool _depthClipEnabled = true;
 
         [NonSerialized]
-        private Dictionary<string, HashSet<string>> keywords;
-
-        [SerializeField, HideInInspector]
-        private string[] serializedKeywordKeys;
-
-        [SerializeField, HideInInspector]
-        private string[][] serializedKeywordValues;
-
+        private Dictionary<string, HashSet<string>> _keywords;
 
         [NonSerialized]
-        private Dictionary<KeywordState, ShaderVariant> variants;
-
-        [SerializeField, HideInInspector]
-        private KeywordState[] serializedVariantKeys;
-        
-        [SerializeField, HideInInspector]
-        private ShaderVariant[] serializedVariants;
+        private Dictionary<KeywordState, ShaderVariant> _variants;
 
 
         /// <summary>
         /// The name to identify this <see cref="ShaderPass"/> 
         /// </summary>
-        public string Name => name;
+        public string Name => _name;
 
         /// <summary>
         /// The tags to identify this <see cref="ShaderPass"/> 
         /// </summary>
-        public IEnumerable<KeyValuePair<string, string>> Tags => tags;
+        public IEnumerable<KeyValuePair<string, string>> Tags => _tags;
 
         /// <summary>
         /// The blending options to use when rendering this <see cref="ShaderPass"/> 
         /// </summary>
-        public BlendStateDescription Blend => blend;
+        public BlendStateDescription Blend => _blend;
 
         /// <summary>
         /// The depth stencil state to use when rendering this <see cref="ShaderPass"/> 
         /// </summary>
-        public DepthStencilStateDescription DepthStencilState => depthStencilState;
+        public DepthStencilStateDescription DepthStencilState => _depthStencilState;
 
-        public FaceCullMode CullMode => cullMode;
-        public bool DepthClipEnabled => depthClipEnabled;
+        /// <summary>
+        /// Pass face culling mode.
+        /// </summary>
+        public FaceCullMode CullMode => _cullMode;
+
+        /// <summary>
+        /// Pass depth clip mode.
+        /// </summary>
+        public bool DepthClipEnabled => _depthClipEnabled;
 
 
-        public IEnumerable<KeyValuePair<string, HashSet<string>>> Keywords => keywords;
-        public IEnumerable<KeyValuePair<KeywordState, ShaderVariant>> Variants => variants;
+        public IEnumerable<KeyValuePair<string, HashSet<string>>> Keywords => _keywords;
+        public IEnumerable<KeyValuePair<KeywordState, ShaderVariant>> Variants => _variants;
 
 
         private ShaderPass() { }
 
-        public ShaderPass(string name, ShaderPassDescription description, IVariantCompiler compiler) 
+        public ShaderPass(string name, ShaderPassDescription description, ShaderVariant[] variants) 
         {
-            this.name = name;
+            this._name = name;
 
-            this.tags = description.Tags ?? new();     
-            this.blend = description.BlendState ?? BlendStateDescription.SingleOverrideBlend;
-            this.depthStencilState = description.DepthStencilState ?? DepthStencilStateDescription.DepthOnlyLessEqual;
-            this.cullMode = description.CullingMode ?? FaceCullMode.Back;
-            this.depthClipEnabled = description.DepthClipEnabled ?? true;       
-            this.keywords = description.Keywords ?? new() { { string.Empty, [ string.Empty ] } };
+            this._tags = description.Tags ?? new();     
+            this._blend = description.BlendState ?? BlendStateDescription.SingleOverrideBlend;
+            this._depthStencilState = description.DepthStencilState ?? DepthStencilStateDescription.DepthOnlyLessEqual;
+            this._cullMode = description.CullingMode ?? FaceCullMode.Back;
+            this._depthClipEnabled = description.DepthClipEnabled ?? true;       
+            this._keywords = description.Keywords ?? new() { { string.Empty, [ string.Empty ] } };
 
-            GenerateVariants(compiler);
+            this._variants = new();
+
+            foreach (var variant in variants)
+                this._variants[variant.VariantKeywords] = variant;
         }
 
         public ShaderVariant GetVariant(KeywordState? keywordID = null)
-            => variants[ValidateKeyword(keywordID ?? KeywordState.Empty)];
+            => _variants[ValidateKeyword(keywordID ?? KeywordState.Empty)];
 
         public bool TryGetVariant(KeywordState? keywordID, out ShaderVariant? variant)
-            => variants.TryGetValue(keywordID ?? KeywordState.Empty, out variant);
+            => _variants.TryGetValue(keywordID ?? KeywordState.Empty, out variant);
 
         public bool HasTag(string tag, string? tagValue = null)
         {   
-            if (tags.TryGetValue(tag, out string value))
+            if (_tags.TryGetValue(tag, out string value))
                 return tagValue == null || value == tagValue;
 
             return false;
-        }
-
-        // Fills the dictionary with every possible permutation for the given definitions, initializing values with the generator function
-        private void GenerateVariants(IVariantCompiler compiler)
-        {   
-            this.variants = new();
-
-            List<KeyValuePair<string, HashSet<string>>> combinations = keywords.ToList();
-            List<KeyValuePair<string, string>> combination = new(combinations.Count);
-
-            void GenerateRecursive(int depth)
-            {
-                if (depth == combinations.Count) // Reached the end for this permutation, add a result.
-                {
-                    KeywordState key = new(combination);
-                    variants.Add(key, compiler.CompileVariant(key));
- 
-                    return;
-                }
-
-                var pair = combinations[depth];
-                foreach (var value in pair.Value) // Go down a level for every value
-                {
-                    combination.Add(new(pair.Key, value));
-                    GenerateRecursive(depth + 1);
-                    combination.RemoveAt(combination.Count - 1); // Go up once we're done
-                }
-            }
-
-            GenerateRecursive(0);
         }
 
         public KeywordState ValidateKeyword(KeywordState key)
         {
             KeywordState combinedKey = new();
 
-            foreach (var definition in keywords)
+            foreach (var definition in _keywords)
             {
                 string defaultValue = definition.Value.First();
                 string value = key.GetKey(definition.Key, defaultValue);
@@ -188,26 +146,36 @@ namespace Prowl.Runtime
             return combinedKey;
         }
 
+    
+        [SerializeField, HideInInspector]
+        private string[] _serializedKeywordKeys;
+
+        [SerializeField, HideInInspector]
+        private string[][] _serializedKeywordValues;
+
+        
+        [SerializeField, HideInInspector]
+        private ShaderVariant[] _serializedVariants;
+
         public void OnBeforeSerialize()
         {
-            serializedKeywordKeys = keywords.Keys.ToArray();
-            serializedKeywordValues = keywords.Values.Select(x => x.ToArray()).ToArray();
+            _serializedKeywordKeys = _keywords.Keys.ToArray();
+            _serializedKeywordValues = _keywords.Values.Select(x => x.ToArray()).ToArray();
 
-            serializedVariantKeys = variants.Keys.ToArray();
-            serializedVariants = variants.Values.ToArray();
+            _serializedVariants = _variants.Values.ToArray();
         }
 
         public void OnAfterDeserialize()
         {
-            keywords = new();
+            _keywords = new();
 
-            for (int i = 0; i < serializedKeywordKeys.Length; i++)
-                keywords.Add(serializedKeywordKeys[i], new(serializedKeywordValues[i]));
+            for (int i = 0; i < _serializedKeywordKeys.Length; i++)
+                _keywords.Add(_serializedKeywordKeys[i], new(_serializedKeywordValues[i]));
 
-            variants = new();
+            _variants = new();
 
-            for (int i = 0; i < serializedVariantKeys.Length; i++)
-                variants.Add(serializedVariantKeys[i], serializedVariants[i]);
+            foreach (var variant in _serializedVariants)
+                _variants.Add(variant.VariantKeywords, variant);
         }
     }
 }

@@ -6,8 +6,8 @@ using System.Linq;
 
 namespace Prowl.Runtime.RenderPipelines
 {
-    public interface IRenderPipeline<T>
+    public abstract class RenderPipeline<T> : EngineObject
     {
-        public void Render(RenderTexture target, T data);   
+        public abstract void Render(RenderTexture target, T data);   
     }
 }

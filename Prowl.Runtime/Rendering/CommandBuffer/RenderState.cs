@@ -9,101 +9,46 @@ namespace Prowl.Runtime
     /// The current rendering state passed to RenderCommand.ExecuteCommand().
     /// Defines relevant information about keywords, targets, and pipeline state for commands to use.
     /// </summary>
-    public class RenderState : IDisposable
+    public class RenderState
     {
         private Framebuffer activeFramebuffer;
         internal Framebuffer ActiveFramebuffer => activeFramebuffer;
-
-        internal IGeometryDrawData activeDrawData;
         
+        internal ShaderPass activePass;
+
         internal PropertyState propertyState;
         internal KeywordState keywordState;
 
-        internal PassPipelineDescription pipelineSettings;
-        internal Pipeline activePipeline;
-
-        private List<ResourceSet> resourceSets;
-        private Dictionary<ShaderResource, DeviceBuffer> uniformBuffers;
+        internal ShaderPipelineDescription pipelineDescription;
+        internal ShaderPipeline activePipeline;
 
 
         public void SetFramebuffer(Framebuffer framebuffer)
         {
             activeFramebuffer = framebuffer;
-            pipelineSettings.output = activeFramebuffer.OutputDescription;
+            pipelineDescription.output = activeFramebuffer.OutputDescription;
         }
 
-
-        public DeviceBuffer GetBufferForResource(ShaderResource resource, uint bufferSizeInBytes)
-        {
-            if (!uniformBuffers.TryGetValue(resource, out DeviceBuffer buffer) || buffer.SizeInBytes < bufferSizeInBytes)
-            {
-                buffer = Graphics.Factory.CreateBuffer(new BufferDescription(bufferSizeInBytes, BufferUsage.UniformBuffer | BufferUsage.DynamicWrite));
-                uniformBuffers[resource] = buffer;
-            }
-            
-            return buffer;
-        }
-
-
-        public void RegisterSetForDisposal(ResourceSet set) =>
-            resourceSets.Add(set);
-
-        public void RegisterSetsForDisposal(IEnumerable<ResourceSet> sets) =>
-            resourceSets.AddRange(sets);
 
         public RenderState()
         {
             activeFramebuffer = null;
-            activeDrawData = null;
-                    
+            activePass = null;
+
             propertyState = new();
-
-            pipelineSettings.pass = null;
-            pipelineSettings.variant = null;
-            pipelineSettings.output = null;
-            pipelineSettings.frontFace = FrontFace.Clockwise;
-            pipelineSettings.fillMode = PolygonFillMode.Solid;
-            pipelineSettings.topology = PrimitiveTopology.TriangleList;
-            pipelineSettings.scissorTest = false;
-
             keywordState = KeywordState.Default;
 
             activePipeline = null;
 
-            resourceSets = new();
-            uniformBuffers = new();
-        }
-
-
-        public void Dispose()
-        {
-            foreach (var set in resourceSets)
-                set.Dispose();
-            
-            foreach (var buf in uniformBuffers.Values)
-                buf.Dispose();
-
-            activeFramebuffer = null;
-            activeDrawData = null;
-
-            propertyState.Clear();
-
-            pipelineSettings.pass = null;
-            pipelineSettings.variant = null;
-            pipelineSettings.output = null;
-            pipelineSettings.frontFace = FrontFace.Clockwise;
-            pipelineSettings.fillMode = PolygonFillMode.Solid;
-            pipelineSettings.topology = PrimitiveTopology.TriangleList;  
-            pipelineSettings.scissorTest = false;
+            pipelineDescription.variant = null;
+            pipelineDescription.output = null;
+            pipelineDescription.fillMode = PolygonFillMode.Solid;
+            pipelineDescription.topology = PrimitiveTopology.TriangleList;
+            pipelineDescription.scissorTest = false;
 
             keywordState = KeywordState.Default;
 
             activePipeline = null;
-
-            uniformBuffers.Clear();
-            resourceSets.Clear();
-
-            GC.SuppressFinalize(this);
         }
     }
 }

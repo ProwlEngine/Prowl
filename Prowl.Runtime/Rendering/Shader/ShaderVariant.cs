@@ -7,72 +7,63 @@ using System.Linq;
 
 namespace Prowl.Runtime
 {
-    public sealed class ShaderVariant : ISerializationCallbackReceiver
+    public sealed class ShaderVariant
     {
         [SerializeField, HideInInspector]
         private KeywordState variantKeywords;
 
-        [SerializeField, HideInInspector]
-        private VertexLayoutDescription[] vertexInputs;
+        
+        [HideInInspector]
+        public StageInput[] VertexInputs;
+        
+        [HideInInspector]
+        public Uniform[] Uniforms;
 
-        [SerializeField, HideInInspector]
-        private ShaderResource[][] resourceSets;
+        [HideInInspector]
+        public ShaderStages[] UniformStages;
 
-        [NonSerialized]
-        private Dictionary<GraphicsBackend, ShaderDescription[]> compiledPrograms;
 
-        // For serialization
-        [SerializeField, HideInInspector]
-        private byte[] serializedBackends;
+        [HideInInspector]
+        public ShaderDescription[] VulkanShaders;
 
-        [SerializeField, HideInInspector]
-        private ShaderDescription[][] serializedShaders;
+        [HideInInspector]
+        public ShaderDescription[] OpenGLShaders;
+
+        [HideInInspector]
+        public ShaderDescription[] OpenGLESShaders;
+
+        [HideInInspector]
+        public ShaderDescription[] MetalShaders;
+
+        [HideInInspector]
+        public ShaderDescription[] Direct3D11Shaders;
 
 
         public KeywordState VariantKeywords => variantKeywords;
 
-        public VertexLayoutDescription[] VertexInputs => vertexInputs;
-        public ShaderResource[][] ResourceSets => resourceSets;
-        
-        public IEnumerable<KeyValuePair<GraphicsBackend, ShaderDescription[]>> CompiledPrograms => compiledPrograms;
-
-        public static ShaderVariant Empty = new ShaderVariant(KeywordState.Empty, [], [], []);
 
         private ShaderVariant() { }
 
-        public ShaderVariant(KeywordState keywords, (GraphicsBackend, ShaderDescription[])[] programs, VertexLayoutDescription[] vertexInputs, ShaderResource[][] resourceSets)
+        public ShaderVariant(KeywordState keywords)
         {
             this.variantKeywords = keywords;
-            this.vertexInputs = vertexInputs;
-            this.resourceSets = resourceSets;
-            this.compiledPrograms = new(programs.Select(x => new KeyValuePair<GraphicsBackend, ShaderDescription[]>(x.Item1, x.Item2)));
         }
 
-        public ShaderDescription[] GetProgramsForBackend(GraphicsBackend? backend = null)
+        public ShaderDescription[] GetProgramsForBackend()
         {
-            backend ??= Graphics.Device.BackendType;
+            var backend = Graphics.Device.BackendType;
 
-            if (compiledPrograms.TryGetValue(backend.Value, out ShaderDescription[] programs))
-                return programs;
+            Exception invalidBackend = new Exception($"No compiled shaders for backend: {backend}");
 
-            return [
-                new ShaderDescription(ShaderStages.Vertex, [], "main"),
-                new ShaderDescription(ShaderStages.Fragment, [], "main"),
-            ];
-        }
-
-        public void OnBeforeSerialize()
-        {
-            serializedBackends = compiledPrograms.Keys.Select(x => (byte)x).ToArray();
-            serializedShaders = compiledPrograms.Values.ToArray();
-        }
-
-        public void OnAfterDeserialize()
-        {
-            compiledPrograms = new();
-
-            for (int i = 0; i < serializedBackends.Length; i++)
-                compiledPrograms.Add((GraphicsBackend)serializedBackends[i], serializedShaders[i]);
+            return backend switch
+            {
+                GraphicsBackend.Direct3D11 => Direct3D11Shaders ?? throw invalidBackend,
+                GraphicsBackend.Vulkan => VulkanShaders ?? throw invalidBackend,
+                GraphicsBackend.OpenGL => OpenGLShaders ?? throw invalidBackend,
+                GraphicsBackend.OpenGLES => OpenGLESShaders ?? throw invalidBackend,
+                GraphicsBackend.Metal => MetalShaders ?? throw invalidBackend,
+                _ => throw invalidBackend,
+            };
         }
     }
 }

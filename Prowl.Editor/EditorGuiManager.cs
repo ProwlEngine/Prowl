@@ -70,9 +70,9 @@ public static class EditorGuiManager
         // Sort by docking as well, Docked windows are guranteed to come first
         Windows.Sort((a, b) => b.IsDocked.CompareTo(a.IsDocked));
 
-        Rect screenRect = new Rect(0, 0, Runtime.Graphics.ScreenResolution.x, Runtime.Graphics.ScreenResolution.y);
+        Rect screenRect = new Rect(0, 0, Runtime.Graphics.TargetResolution.x, Runtime.Graphics.TargetResolution.y);
 
-        Vector2 framebufferAndInputScale = new((float)Runtime.Graphics.ScreenResolution.x / Screen.Size.x, (float)Runtime.Graphics.ScreenResolution.y / (float)Screen.Size.y);
+        Vector2 framebufferAndInputScale = new((float)Runtime.Graphics.TargetResolution.x / Screen.Size.x, (float)Runtime.Graphics.TargetResolution.y / (float)Screen.Size.y);
 
         Gui.PointerWheel = Input.MouseWheelDelta;
         double scale = EditorStylePrefs.Instance.Scale;
@@ -258,7 +258,7 @@ public static class EditorGuiManager
 
         WindowsToRemove.Clear();
         
-        Graphics.ExecuteCommandBuffer(commandBuffer);
+        Graphics.SubmitCommandBuffer(commandBuffer);
 
         CommandBufferPool.Release(commandBuffer);
     }

@@ -14,19 +14,22 @@ namespace Prowl.Runtime
         /// <summary>The height of this <see cref="Texture2D"/>.</summary>
         public uint Height => InternalTexture.Height;
 
-        public static Texture2D EmptyWhite = CreateDefaultTex(1, 1, [ Color.white]);
+        public static Texture2D EmptyWhite = CreateDefaultTex(1, 1, [ Color.white ]);
+
+        public static Texture2D Empty = CreateDefaultTex(1, 1, [ Color.clear ]);
+        public static Texture2D EmptyRW = CreateDefaultTex(1, 1, [ Color.black ], TextureUsage.Storage);
 
         public static Texture2D Checker => CreateDefaultTex(4, 4, [
-            Color.white, new Color(0.25f, 0.25f, 0.25f, 1.0f), Color.white, new Color(0.25f, 0.25f, 0.25f, 1.0f),
-            new Color(0.25f, 0.25f, 0.25f, 1.0f), Color.white, new Color(0.25f, 0.25f, 0.25f, 1.0f), Color.white,
-            Color.white, new Color(0.25f, 0.25f, 0.25f, 1.0f), Color.white, new Color(0.25f, 0.25f, 0.25f, 1.0f),
-            new Color(0.25f, 0.25f, 0.25f, 1.0f), Color.white, new Color(0.25f, 0.25f, 0.25f, 1.0f), Color.white
+            Color.white, Color.gray, Color.white, Color.black,
+            Color.gray, Color.white, Color.gray, Color.white,
+            Color.white, Color.gray, Color.white, Color.gray,
+            Color.gray, Color.white, Color.gray, Color.white
         ]);
 
 
-        private static Texture2D CreateDefaultTex(uint sizeX, uint sizeY, Color32[] colors)
+        private static Texture2D CreateDefaultTex(uint sizeX, uint sizeY, Color32[] colors, TextureUsage usage = TextureUsage.Sampled)
         {
-            Texture2D texture = new Texture2D(sizeX, sizeY, 0, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled);
+            Texture2D texture = new Texture2D(sizeX, sizeY, 0, PixelFormat.R8_G8_B8_A8_UNorm, usage);
             texture.Name = "Default Created Texture";
 
             texture.Sampler.SetFilter(FilterType.Point, FilterType.Point, FilterType.Point);

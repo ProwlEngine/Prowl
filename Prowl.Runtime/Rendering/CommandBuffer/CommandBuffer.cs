@@ -307,15 +307,6 @@ namespace Prowl.Runtime
             });
         }
 
-        public void SetBuffer(string name, GraphicsBuffer buffer)
-        {
-            this.buffer.Add(new SetBufferPropertyCommand()
-            {
-                Name = name,
-                BufferValue = buffer
-            });
-        }
-
         public void ApplyPropertyState(PropertyState properties)
         {
             buffer.Add(new SetPropertyStateCommand()

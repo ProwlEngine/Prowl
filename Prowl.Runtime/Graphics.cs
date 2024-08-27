@@ -13,6 +13,7 @@ namespace Prowl.Runtime
     public static class Graphics
     {
         public static GraphicsDevice Device { get; internal set; }
+        public static ResourceFactory Factory => Device.ResourceFactory;
 
         private static RenderTexture _screenTarget;
         public static RenderTexture ScreenTarget 
@@ -26,13 +27,7 @@ namespace Prowl.Runtime
             }
         }
 
-        public static Vector2Int ScreenResolution => new Vector2(ScreenTarget.Width, ScreenTarget.Height);
-
-        public static ResourceFactory Factory => Device.ResourceFactory;
-
-        public static RenderPipeline ActivePipeline { get; private set; }
-
-        public readonly static List<Renderable> Renderables = new();
+        public static Vector2Int TargetResolution => new Vector2(ScreenTarget.Width, ScreenTarget.Height);
 
         public static bool VSync
         {
@@ -73,49 +68,10 @@ namespace Prowl.Runtime
             Device.ResizeMainWindow((uint)newSize.x, (uint)newSize.y);
         }
 
-        private static void SetRenderPipeline(RenderPipeline renderPipeline)
-        {
-            if (ActivePipeline == renderPipeline)
-                return;
-            
-            ActivePipeline?.ReleaseResources();
-            ActivePipeline = renderPipeline;
-            ActivePipeline?.InitializeResources();
-        }
-
-        public static void DrawRenderable(Renderable renderable)
-        {
-            Renderables.Add(renderable);
-        }
-
-        public static void StartFrame(RenderPipeline renderPipeline = null)
-        {
-            RenderTexture.UpdatePool();
-            SetRenderPipeline(renderPipeline ?? Quality.GetQualitySettings().RenderPipeline.Res);
-        }
-
-        public static void Render(Camera.CameraData[] cameras, RenderTexture targetTexture)
-        {
-            if (ActivePipeline == null)
-                return;
-            
-            RenderingContext context = new("Main", Renderables, targetTexture);
-
-            ActivePipeline.Render(context, cameras);
-        }
-
-        public static void Render(Camera.CameraData[] cameras, RenderingContext context)
-        {
-            if (ActivePipeline == null)
-                return;
-
-            ActivePipeline.Render(context, cameras);
-        }
-
         public static void EndFrame()
         {   
             Device.SwapBuffers();
-            Renderables.Clear();
+            RenderTexture.UpdatePool();
         }
 
         public static CommandList GetCommandList()
@@ -127,7 +83,8 @@ namespace Prowl.Runtime
             return list;
         }
 
-        public static void ExecuteCommandBuffer(CommandBuffer commandBuffer)
+
+        private static CommandList CreateCommandListForBuffer(CommandBuffer commandBuffer)
         {
             CommandList list = GetCommandList();
 
@@ -136,9 +93,16 @@ namespace Prowl.Runtime
             foreach (var command in commandBuffer.Buffer)
                 command.ExecuteCommand(list, state);
 
+            return list;
+        }
+
+        public static void SubmitCommandBuffer(CommandBuffer commandBuffer, bool awaitComplete = false)
+        {
+            CommandList list = CreateCommandListForBuffer(commandBuffer);
+            
             try 
             {
-                ExecuteCommandList(list, true);
+                SubmitCommandList(list, awaitComplete);
             }
             catch (Exception ex)
             {
@@ -146,25 +110,24 @@ namespace Prowl.Runtime
             }
             finally
             {
-                state.Dispose();
                 list.Dispose();   
             }
         }
 
-        public static Task AsyncExecuteCommandBuffer(CommandBuffer commandBuffer)
+        public static Task SubmitCommandBufferAsync(CommandBuffer commandBuffer)
         {
-            return new Task(() => ExecuteCommandBuffer(commandBuffer));
+            return new Task(() => SubmitCommandBuffer(commandBuffer, true));
         }
 
-        public static void ExecuteCommandList(CommandList list, bool waitForCompletion = false)
+        internal static void SubmitCommandList(CommandList list, bool awaitComplete, ulong timeout = ulong.MaxValue)
         {   
             list.End();
 
-            if (waitForCompletion)
+            if (awaitComplete)
             {
                 Fence fence = Factory.CreateFence(false);
                 Device.SubmitCommands(list, fence);
-                Device.WaitForFence(fence);
+                Device.WaitForFence(fence, timeout);
                 fence.Dispose();
 
                 return;
@@ -173,65 +136,25 @@ namespace Prowl.Runtime
             Device.SubmitCommands(list);
         }
 
-        public static Task AsyncExecuteCommandList(CommandList list)
+        internal static Task SubmitCommandListAsync(CommandList list, ulong timeout)
         {
-            return new Task(() => ExecuteCommandList(list, true));
+            return new Task(() => SubmitCommandList(list, true, timeout));
         }
 
-        public static SpecializationConstant[] GetSpecializations()
-        {
-            bool glOrGles = Device.BackendType == GraphicsBackend.OpenGL || Device.BackendType == GraphicsBackend.OpenGLES;
-
-            PixelFormat swapchainFormat = Device.SwapchainFramebuffer.ColorTargets[0].Target.Format;
-            bool swapchainIsSrgb = swapchainFormat == PixelFormat.B8_G8_R8_A8_UNorm_SRgb
-                || swapchainFormat == PixelFormat.R8_G8_B8_A8_UNorm_SRgb;
-
-            SpecializationConstant[] specializations =
-            [
-                new SpecializationConstant(0, Device.IsClipSpaceYInverted),
-                new SpecializationConstant(1, !swapchainIsSrgb),
-                new SpecializationConstant(2, glOrGles),
-                new SpecializationConstant(3, Device.IsDepthRangeZeroToOne),
-            ];
-
-            return specializations;
-        }
-
-        public static void CopyTexture(Texture source, Texture destination, bool waitForCompletion = false)
-        {
-            InternalCopyTexture(source.InternalTexture, destination.InternalTexture, waitForCompletion);
-        }
-
-        public static void CopyTexture(Texture source, Texture destination, uint mipLevel, uint arrayLayer, bool waitForCompletion = false)
-        {
-            InternalCopyTexture(source.InternalTexture, destination.InternalTexture, mipLevel, arrayLayer, waitForCompletion);
-        }
-
-        internal static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, bool waitForCompletion = false)
-        {
-            CommandList commandList = GetCommandList();
-
-            commandList.CopyTexture(source, destination);
-            
-            ExecuteCommandList(commandList, waitForCompletion);
-
-            commandList.Dispose();
-        }
-
-        internal static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, uint mipLevel, uint arrayLayer, bool waitForCompletion = false)
+        internal static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, uint mipLevel, uint arrayLayer, bool awaitComplete = false)
         {
             CommandList commandList = GetCommandList();
 
             commandList.CopyTexture(source, destination, mipLevel, arrayLayer);
             
-            ExecuteCommandList(commandList, waitForCompletion);
+            SubmitCommandList(commandList, awaitComplete);
 
             commandList.Dispose();
         }
 
         internal static void Dispose()
         {
-            PipelineCache.Dispose();
+            ShaderPipelineCache.Dispose();
             GUI.Graphics.UIDrawList.DisposeBuffers();
         
             Device.Dispose();

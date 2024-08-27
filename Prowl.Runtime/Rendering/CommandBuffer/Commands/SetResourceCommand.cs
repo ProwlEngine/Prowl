@@ -10,7 +10,7 @@ namespace Prowl.Runtime
 
         readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
-            PipelineCache.GetDescriptionForPipeline(state.activePipeline, out GraphicsPipelineDescription pipelineDescription);
+            ShaderPipelineCache.GetDescriptionForPipeline(state.activePipeline, out GraphicsPipelineDescription pipelineDescription);
 
             ShaderVariant variant = state.pipelineSettings.variant;
 
@@ -45,7 +45,7 @@ namespace Prowl.Runtime
     {
         readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
-            PipelineCache.GetDescriptionForPipeline(state.activePipeline, out GraphicsPipelineDescription pipelineDescription);
+            ShaderPipelineCache.GetDescriptionForPipeline(state.activePipeline, out GraphicsPipelineDescription pipelineDescription);
 
             ShaderVariant variant = state.pipelineSettings.variant;
 

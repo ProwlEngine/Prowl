@@ -90,7 +90,7 @@ namespace Prowl.Runtime
 
             commandList.GenerateMipmaps(InternalTexture);
 
-            Graphics.ExecuteCommandList(commandList, waitForCompletion);
+            Graphics.SubmitCommandList(commandList, waitForCompletion);
 
             commandList.Dispose();
 
