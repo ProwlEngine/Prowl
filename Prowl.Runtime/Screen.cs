@@ -99,6 +99,6 @@ namespace Prowl.Runtime
             }
         }
 
-        public static void Stop() => InternalWindow.Close();
+        public static void Close() => InternalWindow.Close();
     }
 }
