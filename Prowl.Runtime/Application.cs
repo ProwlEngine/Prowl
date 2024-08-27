@@ -131,6 +131,6 @@ public static class Application
 
     public static void Quit()
     {
-        Screen.Stop();
+        Screen.Close();
     }
 }
