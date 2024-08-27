@@ -144,7 +144,7 @@ Getting Prowl up and running is super easy!
   - ✔️ Windows
   - ✔️ MacOS
   - ✔️ Linux
-  - ❌ Andriod
+  - ❌ Android
   - ❌ iOS
   - ❌ Web
 - ✔️ UI Engine
