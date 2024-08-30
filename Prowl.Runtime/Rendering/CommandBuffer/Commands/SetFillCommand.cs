@@ -6,11 +6,11 @@ namespace Prowl.Runtime
 {
     internal struct SetFillCommand : RenderingCommand
     {
-        public bool Wireframe;
+        public PolygonFillMode FillMode;
 
         readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
-            state.pipelineSettings.fillMode = Wireframe ? PolygonFillMode.Wireframe : PolygonFillMode.Solid;
+            state.fill = FillMode;
         }
     }
 }

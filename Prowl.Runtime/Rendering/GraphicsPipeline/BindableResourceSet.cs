@@ -6,9 +6,9 @@ using Veldrid;
 
 namespace Prowl.Runtime
 {
-    internal class BindableResourceSet
+    public class BindableResourceSet : IDisposable
     {
-        public ShaderPipeline Pipeline { get; private set; }
+        public GraphicsPipeline Pipeline { get; private set; }
 
         private bool modifiedResources; 
 
@@ -21,7 +21,7 @@ namespace Prowl.Runtime
         private bool[] bufferWasModified;
 
 
-        public BindableResourceSet(ShaderPipeline pipeline, ResourceSetDescription description, DeviceBuffer[] buffers, byte[][] intermediate)
+        public BindableResourceSet(GraphicsPipeline pipeline, ResourceSetDescription description, DeviceBuffer[] buffers, byte[][] intermediate)
         {
             this.Pipeline = pipeline;
             this.description = description;
@@ -56,7 +56,7 @@ namespace Prowl.Runtime
         
         public bool UpdateBuffer(CommandList list, string ID)
         {
-            if (!GetUniform(ID, out Uniform? uniform, out int buffer, out _))
+            if (!GetUniform(ID, out Uniform? uniform, out sbyte buffer, out _))
                 return false;
             
             if (buffer < 0)
@@ -68,13 +68,12 @@ namespace Prowl.Runtime
         }
 
 
-        public bool GetUniform(string ID, out Uniform? uniform, out int buffer, out UniformMember member)
+        public bool GetUniform(string ID, out Uniform? uniform, out sbyte buffer, out UniformMember member)
         {
             uniform = null;
-            buffer = -1;
             member = default;
 
-            if (!Pipeline.GetUniform(ID, out int uniformIndex, out buffer, out int memberIndex))
+            if (!Pipeline.GetUniform(ID, out byte uniformIndex, out buffer, out short memberIndex))
                 return false;
 
             uniform = Pipeline.Uniforms[uniformIndex];
@@ -197,7 +196,7 @@ namespace Prowl.Runtime
 
         private unsafe bool UploadData<T>(string ID, T* dataPtr, ValueType type, int maxSize) where T : unmanaged
         {
-            if (!GetUniform(ID, out Uniform? uniform, out int bufferIndex, out UniformMember member))
+            if (!GetUniform(ID, out Uniform? uniform, out sbyte bufferIndex, out UniformMember member))
                 return false;
 
             if (bufferIndex < 0)
@@ -228,6 +227,15 @@ namespace Prowl.Runtime
             SetResource(value.Buffer, uniform.binding);
 
             return true;
+        }
+
+
+        public void Dispose()
+        {
+            resources.Dispose();
+
+            for (int i = 0; i < uniformBuffers.Length; i++)
+                uniformBuffers[i].Dispose();
         }
     }
 }

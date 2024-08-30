@@ -14,12 +14,12 @@ namespace Prowl.Runtime
             state.pipelineSettings.pass = Pass;
             state.pipelineSettings.variant = Variant;
 
-            Pipeline pipeline = ShaderPipelineCache.GetPipelineForDescription(state.pipelineSettings);
-            ShaderPipelineCache.GetDescriptionForPipeline(pipeline, out _);
+            Pipeline pipeline = GraphicsPipelineCache.GetPipelineForDescription(state.pipelineSettings);
+            GraphicsPipelineCache.GetDescriptionForPipeline(pipeline, out _);
 
-            if (state.activePipeline != pipeline)
+            if (state.graphicsPipeline != pipeline)
             {
-                state.activePipeline = pipeline;
+                state.graphicsPipeline = pipeline;
                 list.SetPipeline(pipeline);
             }
         }

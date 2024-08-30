@@ -161,40 +161,28 @@ namespace Prowl.Runtime
 
         DeviceBuffer vertexBuffer;
         DeviceBuffer indexBuffer; 
-               
-        int[] bufferOffsets;
 
-        public int UVStart => bufferOffsets[0];
-        public int UV2Start => bufferOffsets[1];
-        public int NormalsStart => bufferOffsets[2];
-        public int ColorsStart => bufferOffsets[3]; 
-        public int TangentsStart => bufferOffsets[4];
-        public int BoneIndexStart => bufferOffsets[5];
-        public int BoneWeightStart => bufferOffsets[6];
-        public int BufferLength => bufferOffsets[7];
+        public int UVStart { get; private set; }
+        public int UV2Start { get; private set; }
+        public int NormalsStart { get; private set; }
+        public int ColorsStart { get; private set; }
+        public int TangentsStart { get; private set; }
+        public int BoneIndexStart { get; private set; }
+        public int BoneWeightStart { get; private set; }
+        public int BufferLength { get; private set; }
 
-        public static readonly VertexLayoutDescription[] MeshResourceDescriptions = [
-            new VertexLayoutDescription(new VertexElementDescription("POSITION", VertexElementFormat.Float3, VertexElementSemantic.Position)),
-            new VertexLayoutDescription(new VertexElementDescription("TEXCOORD0", VertexElementFormat.Float2, VertexElementSemantic.TextureCoordinate)),
-            new VertexLayoutDescription(new VertexElementDescription("TEXCOORD1", VertexElementFormat.Float2, VertexElementSemantic.TextureCoordinate)),
-            new VertexLayoutDescription(new VertexElementDescription("NORMAL", VertexElementFormat.Float3, VertexElementSemantic.Normal)),
-            new VertexLayoutDescription(new VertexElementDescription("TANGENT", VertexElementFormat.Float3, VertexElementSemantic.Normal)),
-            new VertexLayoutDescription(new VertexElementDescription("COLOR", VertexElementFormat.Byte4_Norm, VertexElementSemantic.Color)),
-            new VertexLayoutDescription(new VertexElementDescription("BONEINDEX", VertexElementFormat.Float4, VertexElementSemantic.Position)),
-            new VertexLayoutDescription(new VertexElementDescription("BONEWEIGHT", VertexElementFormat.Float4, VertexElementSemantic.Color)),
-        ];
 
-        public static readonly VertexLayoutDescription PositionDescritpion = MeshResourceDescriptions[0];
-        public static readonly VertexLayoutDescription UV0Description = MeshResourceDescriptions[1];
-        public static readonly VertexLayoutDescription UV1Description = MeshResourceDescriptions[2];
-        public static readonly VertexLayoutDescription NormalsDescription = MeshResourceDescriptions[3];
-        public static readonly VertexLayoutDescription TangentsDescription = MeshResourceDescriptions[4];
-        public static readonly VertexLayoutDescription ColorsDescription = MeshResourceDescriptions[5];
-        public static readonly VertexLayoutDescription BoneIndicesDescription = MeshResourceDescriptions[6];
-        public static readonly VertexLayoutDescription BoneWeightsDescription = MeshResourceDescriptions[7];
-
-        public static VertexLayoutDescription VertexLayoutForResource(MeshResource resource) =>
-            MeshResourceDescriptions[(int)resource];
+        public static readonly Dictionary<string, VertexElementFormat> MeshSemantics = new()
+        {
+            { "POSITION0", VertexElementFormat.Float3 },
+            { "TEXCOORD0", VertexElementFormat.Float2 },
+            { "TEXCOORD1", VertexElementFormat.Float2 },
+            { "NORMAL0", VertexElementFormat.Float3 },
+            { "TANGENT0", VertexElementFormat.Float3 },
+            { "COLOR0", VertexElementFormat.Byte4_Norm },
+            { "BLENDINDICES0", VertexElementFormat.Float4 },
+            { "BLENDWEIGHT0", VertexElementFormat.Float4 },
+        };
 
         public Mesh() { }
 
@@ -261,76 +249,81 @@ namespace Prowl.Runtime
                     break;
             }
 
-            bufferOffsets = GetResourceOffsets();
+            RecalculateBufferOffsets();
 
             // Vertex buffer upload
             vertexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)BufferLength, BufferUsage.VertexBuffer));
 
-            Graphics.Device.UpdateBuffer(vertexBuffer, 0, vertices);
+            CommandList list = Graphics.GetCommandList();
+
+            list.UpdateBuffer(vertexBuffer, 0, vertices);
             
             if (HasUV)
-                Graphics.Device.UpdateBuffer(vertexBuffer, (uint)UVStart, uv);
+                list.UpdateBuffer(vertexBuffer, (uint)UVStart, uv);
 
             if (HasUV2)
-                Graphics.Device.UpdateBuffer(vertexBuffer, (uint)UV2Start, uv2);
+                list.UpdateBuffer(vertexBuffer, (uint)UV2Start, uv2);
 
             if (HasNormals)
-                Graphics.Device.UpdateBuffer(vertexBuffer, (uint)NormalsStart, normals);
+                list.UpdateBuffer(vertexBuffer, (uint)NormalsStart, normals);
 
             if (HasColors)
-                Graphics.Device.UpdateBuffer(vertexBuffer, (uint)ColorsStart, colors);
+                list.UpdateBuffer(vertexBuffer, (uint)ColorsStart, colors);
 
             if (HasTangents)
-                Graphics.Device.UpdateBuffer(vertexBuffer, (uint)TangentsStart, tangents);
+                list.UpdateBuffer(vertexBuffer, (uint)TangentsStart, tangents);
 
             if (HasBoneIndices)
-                Graphics.Device.UpdateBuffer(vertexBuffer, (uint)BoneIndexStart, boneIndices);
+                list.UpdateBuffer(vertexBuffer, (uint)BoneIndexStart, boneIndices);
 
             if (HasBoneWeights)
-                Graphics.Device.UpdateBuffer(vertexBuffer, (uint)BoneWeightStart, boneWeights);
+                list.UpdateBuffer(vertexBuffer, (uint)BoneWeightStart, boneWeights);
 
             if (indexFormat == IndexFormat.UInt16)
             {
                 indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)indices16.Length * sizeof(ushort), BufferUsage.IndexBuffer));
-                Graphics.Device.UpdateBuffer(indexBuffer, 0, indices16);
+                list.UpdateBuffer(indexBuffer, 0, indices16);
             }
             else if (indexFormat == IndexFormat.UInt32)
             {
                 indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)indices32.Length * sizeof(uint), BufferUsage.IndexBuffer));
-                Graphics.Device.UpdateBuffer(indexBuffer, 0, indices32);
+                list.UpdateBuffer(indexBuffer, 0, indices32);
             }
+
+            Graphics.SubmitCommandList(list, false);
         }
         
-        public void SetDrawData(CommandList commandList, VertexLayoutDescription[] resources)
+        public void SetDrawData(CommandList commandList, GraphicsPipeline pipeline)
         {
             Upload();
 
             commandList.SetIndexBuffer(IndexBuffer, IndexFormat);
 
-            for (uint i = 0; i < resources.Length; i++)
-            {
-                VertexLayoutDescription resource = resources[i];
+            pipeline.BindVertexBuffer(commandList, "POSITION0", VertexBuffer, 0);
+            pipeline.BindVertexBuffer(commandList, "TEXCOORD0", VertexBuffer, (uint)UVStart);
+            pipeline.BindVertexBuffer(commandList, "TEXCOORD1", VertexBuffer, (uint)UV2Start);
+            pipeline.BindVertexBuffer(commandList, "NORMAL0", VertexBuffer, (uint)NormalsStart);
+            pipeline.BindVertexBuffer(commandList, "TANGENT0", VertexBuffer, (uint)TangentsStart);
+            pipeline.BindVertexBuffer(commandList, "COLOR0", VertexBuffer, (uint)ColorsStart);
+            pipeline.BindVertexBuffer(commandList, "BLENDINDICES0", VertexBuffer, (uint)BoneIndexStart);
+            pipeline.BindVertexBuffer(commandList, "BLENDWEIGHT0", VertexBuffer, (uint)BoneWeightStart);
+        }
 
-                if (resource.Elements.Length != 1)
-                    continue;
+        private T ReadVertexData<T>(T value)
+        {
+            if (isReadable == false)
+                throw new InvalidOperationException("Mesh is not readable");
+            return value;
+        }
 
-                if (resource.Equals(PositionDescritpion))
-                    commandList.SetVertexBuffer(i, VertexBuffer, 0);
-                else if (resource.Equals(UV0Description))
-                    commandList.SetVertexBuffer(i, VertexBuffer, (uint)UVStart); 
-                else if (resource.Equals(UV1Description))
-                    commandList.SetVertexBuffer(i, VertexBuffer, (uint)UV2Start);   
-                else if (resource.Equals(NormalsDescription))      
-                    commandList.SetVertexBuffer(i, VertexBuffer, (uint)NormalsStart);   
-                else if (resource.Equals(TangentsDescription))     
-                    commandList.SetVertexBuffer(i, VertexBuffer, (uint)TangentsStart);   
-                else if (resource.Equals(ColorsDescription))       
-                    commandList.SetVertexBuffer(i, VertexBuffer, (uint)ColorsStart);   
-                else if (resource.Equals(BoneIndicesDescription))  
-                    commandList.SetVertexBuffer(i, VertexBuffer, (uint)BoneIndexStart);  
-                else if (resource.Equals(BoneWeightsDescription))  
-                    commandList.SetVertexBuffer(i, VertexBuffer, (uint)BoneWeightStart);
-            }
+        private void WriteVertexData<T>(ref T target, T value, int length, bool mustMatchLength = true)
+        {
+            if (isWritable == false)
+                throw new InvalidOperationException("Mesh is not writable");
+            if ((value == null || length == 0 || length != (vertices?.Length ?? 0)) && mustMatchLength)
+                throw new ArgumentException("Array length should match vertices length");
+            changed = true;
+            target = value;
         }
 
         public void RecalculateBounds()
@@ -424,7 +417,35 @@ namespace Prowl.Runtime
             Tangents = tangents;
         }
 
+        internal void RecalculateBufferOffsets()
+        {
+            const int floatSize = sizeof(float);
+
+            const int vec2Size = floatSize * 2;
+            const int vec3Size = floatSize * 3;
+            const int vec4Size = floatSize * 4;
+
+            int vertLen = vertices.Length;
+
+            UVStart = vertLen * vec3Size; // Where vertices end
+            UV2Start = UVStart + (HasUV ? vertLen * vec2Size : 0); // Where UV0 ends
+            NormalsStart = UV2Start + (HasUV2 ? vertLen * vec2Size : 0); // Where UV1 ends
+            TangentsStart = NormalsStart + (HasNormals ? vertLen * vec3Size : 0); // Where Normals end
+            ColorsStart = TangentsStart + (HasTangents ? vertLen * vec3Size : 0); // Where Tangents end
+            BoneIndexStart = ColorsStart + (HasColors ? vertLen * vec4Size : 0); // Where Colors end
+            BoneWeightStart = BoneIndexStart + (HasBoneIndices ? vertLen * vec4Size : 0); // Where bone indices end
+            BufferLength = BoneWeightStart + (HasBoneWeights ? vertLen * vec4Size : 0); // Where bone weights end
+        }
+
         public override void OnDispose() => DeleteGPUBuffers();
+
+        private void DeleteGPUBuffers()
+        {
+            vertexBuffer?.Dispose();
+            vertexBuffer = null;
+            indexBuffer?.Dispose();
+            indexBuffer = null;
+        }
 
         private static Mesh fullScreenQuad;
         public static Mesh GetFullscreenQuad()
@@ -675,55 +696,6 @@ namespace Prowl.Runtime
             mesh.RecalculateNormals();
             mesh.RecalculateTangents();
             return mesh;
-        }
-
-        private void DeleteGPUBuffers()
-        {
-            vertexBuffer?.Dispose();
-            vertexBuffer = null;
-            indexBuffer?.Dispose();
-            indexBuffer = null;
-        }
-
-        private T ReadVertexData<T>(T value)
-        {
-            if (isReadable == false)
-                throw new InvalidOperationException("Mesh is not readable");
-            return value;
-        }
-
-        private void WriteVertexData<T>(ref T target, T value, int length, bool mustMatchLength = true)
-        {
-            if (isWritable == false)
-                throw new InvalidOperationException("Mesh is not writable");
-            if ((value == null || length == 0 || length != (vertices?.Length ?? 0)) && mustMatchLength)
-                throw new ArgumentException("Array length should match vertices length");
-            changed = true;
-            target = value;
-        }
-
-        internal int[] GetResourceOffsets()
-        {
-            int floatSize = sizeof(float);
-
-            int vec2Size = floatSize * 2;
-            int vec3Size = floatSize * 3;
-            int vec4Size = floatSize * 4;
-
-            int[] offsets = new int[8];
-
-            int vertLen = vertices.Length;
-
-            offsets[0] = vertLen * vec3Size; // Where vertices end
-            offsets[1] = offsets[0] + (HasUV ? vertLen * vec2Size : 0); // Where UV0 ends
-            offsets[2] = offsets[1] + (HasUV2 ? vertLen * vec2Size : 0); // Where UV1 ends
-            offsets[3] = offsets[2] + (HasNormals ? vertLen * vec3Size : 0); // Where Normals end
-            offsets[4] = offsets[3] + (HasColors ? vertLen * vec4Size : 0); // Where Colors end
-            offsets[5] = offsets[4] + (HasTangents ? vertLen * vec3Size : 0); // Where Tangents end
-            offsets[6] = offsets[5] + (HasBoneIndices ? vertLen * vec4Size : 0); // Where bone indices end
-            offsets[7] = offsets[6] + (HasBoneWeights ? vertLen * vec4Size : 0); // Where bone weights end
-
-            return offsets;
         }
 
         public SerializedProperty Serialize(Serializer.SerializationContext ctx)

@@ -6,11 +6,11 @@ namespace Prowl.Runtime
 {
     internal struct SetResourceCommand : RenderingCommand
     {
-        public uint Slot;
+        public string? BufferName;
 
         readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
-            ShaderPipelineCache.GetDescriptionForPipeline(state.activePipeline, out GraphicsPipelineDescription pipelineDescription);
+            state.GetPipeline(out GraphicsPipeline pipeline, out Pipeline actualPipeline);
 
             ShaderVariant variant = state.pipelineSettings.variant;
 
@@ -45,7 +45,7 @@ namespace Prowl.Runtime
     {
         readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
-            ShaderPipelineCache.GetDescriptionForPipeline(state.activePipeline, out GraphicsPipelineDescription pipelineDescription);
+            GraphicsPipelineCache.GetDescriptionForPipeline(state.graphicsPipeline, out Veldrid.GraphicsPipelineDescription pipelineDescription);
 
             ShaderVariant variant = state.pipelineSettings.variant;
 

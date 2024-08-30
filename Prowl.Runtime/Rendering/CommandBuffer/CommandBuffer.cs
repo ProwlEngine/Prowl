@@ -240,7 +240,7 @@ namespace Prowl.Runtime
         {
             buffer.Add(new SetFillCommand()
             {
-                Wireframe = wireframe
+                FillMode = wireframe ? PolygonFillMode.Wireframe : PolygonFillMode.Solid
             });
         }
 

@@ -10,7 +10,7 @@ namespace Prowl.Runtime
 
         readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
-            DrawData.SetDrawData(list, state.pipelineSettings.variant.VertexInputs);
+            DrawData.SetDrawData(list, state.graphicsPipeline);
             state.activeDrawData = DrawData;
         }
     }

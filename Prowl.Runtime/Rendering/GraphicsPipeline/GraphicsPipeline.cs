@@ -2,64 +2,80 @@ using System;
 using System.Collections.Generic;
 using Veldrid;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 
 
 namespace Prowl.Runtime
 {
-    public struct ShaderPipelineDescription : IEquatable<ShaderPipelineDescription>
+    public struct GraphicsPipelineDescription : IEquatable<GraphicsPipelineDescription>
     {
         public ShaderPass pass;
         public ShaderVariant variant;
-        
-        public PolygonFillMode fillMode; // Defined by mesh.
-        public PrimitiveTopology topology; // Defined by mesh.
 
-        public static readonly FrontFace FrontFace = FrontFace.Clockwise;
-
-        public bool scissorTest;
         public OutputDescription? output;
 
         public override readonly int GetHashCode()
         {
-            return HashCode.Combine(pass, variant, fillMode, topology, scissorTest, output);
+            return HashCode.Combine(pass, variant, output);
         }
 
         public override bool Equals([NotNullWhen(true)] object? obj)
         {
-            if (obj is not ShaderPipelineDescription other)
+            if (obj is not GraphicsPipelineDescription other)
                 return false;
 
             return Equals(other);
         }
 
-        public bool Equals(ShaderPipelineDescription other)
+        public bool Equals(GraphicsPipelineDescription other)
         {
             return 
                 pass == other.pass &&
-                variant == other.variant && 
-                fillMode == other.fillMode &&
-                topology == other.topology &&
-                scissorTest == other.scissorTest &&
+                variant == other.variant &&
                 output.Equals(other.output);
         }
     }
 
-    internal sealed partial class ShaderPipeline : IDisposable
+    public sealed partial class GraphicsPipeline : IDisposable
     {
+        public static readonly FrontFace FrontFace = FrontFace.Clockwise;
+
         public readonly ShaderVariant shader;
 
         public readonly ShaderSetDescription shaderSet;
         public readonly ResourceLayout resourceLayout;
 
         private Dictionary<string, uint> semanticLookup;
-        private Dictionary<string, ulong> uniformLookup;
+        private Dictionary<string, uint> uniformLookup;
 
-        private int bufferCount;
+        private byte bufferCount;
 
         public Uniform[] Uniforms => shader.Uniforms;
 
+        private Veldrid.GraphicsPipelineDescription description;
+        
+        private static readonly int pipelineCount = 20; // 20 possible combinations (5 topologies, 2 fill modes, 2 scissor modes)
+        private Pipeline[] pipelines;
 
-        public ShaderPipeline(ShaderPipelineDescription description)
+
+        public Pipeline GetPipeline(PolygonFillMode fill, PrimitiveTopology topology, bool scissor)
+        {
+            int index = (int)topology * 4 + (int)fill * 2 + (scissor ? 0 : 1);
+
+            if (pipelines[index] == null)
+            {
+                description.RasterizerState.ScissorTestEnabled = scissor;
+                description.RasterizerState.FillMode = fill;
+                description.PrimitiveTopology = topology;
+
+                pipelines[index] = Graphics.Factory.CreateGraphicsPipeline(description);
+            }
+
+            return pipelines[index];
+        }
+
+
+        public GraphicsPipeline(GraphicsPipelineDescription description)
         {
             this.shader = description.variant;
 
@@ -94,9 +110,6 @@ namespace Prowl.Runtime
                 }
             }
 
-            foreach (var k in semanticLookup.Keys)
-                Console.WriteLine(k);
-
             this.shaderSet = new ShaderSetDescription(vertexLayouts, shaders);
 
             // Create resource layout and uniform lookups
@@ -105,52 +118,51 @@ namespace Prowl.Runtime
             ResourceLayoutDescription layoutDescription = new ResourceLayoutDescription(
                 new ResourceLayoutElementDescription[Uniforms.Length]);
 
-            for (ushort uniformIndex = 0; uniformIndex < Uniforms.Length; uniformIndex++)
+            for (byte uniformIndex = 0; uniformIndex < Uniforms.Length; uniformIndex++)
             {
                 Uniform uniform = Uniforms[uniformIndex];
                 ShaderStages stages = shader.UniformStages[uniformIndex];
 
                 layoutDescription.Elements[uniformIndex] = 
-                    new ResourceLayoutElementDescription(GetGLSLName(uniform.name), uniform.kind, stages);
+                    new ResourceLayoutElementDescription(uniform.name, uniform.kind, stages);
 
                 uniformLookup[uniform.name] = Pack(uniformIndex, -1, -1);
 
                 if (uniform.kind != ResourceKind.UniformBuffer)
                     continue;
                 
-                uniformLookup[uniform.name] = Pack(uniformIndex, (short)bufferCount, -1);
+                uniformLookup[uniform.name] = Pack(uniformIndex, (sbyte)bufferCount, -1);
 
                 for (short member = 0; member < uniform.members.Length; member++)
-                    uniformLookup[uniform.members[member].name] = Pack(uniformIndex, (short)bufferCount, member);
+                    uniformLookup[uniform.members[member].name] = Pack(uniformIndex, (sbyte)bufferCount, member);
 
                 bufferCount++;
             }
 
             this.resourceLayout = Graphics.Factory.CreateResourceLayout(layoutDescription);
 
-            /*
+            this.pipelines = new Pipeline[pipelineCount];
+
             RasterizerStateDescription rasterizerState = new(
                 description.pass.CullMode, 
-                description.fillMode, 
-                ShaderPipelineDescription.FrontFace, 
-                description.pass.DepthClipEnabled, 
-                description.scissorTest);
+                PolygonFillMode.Solid,
+                FrontFace, 
+                description.pass.DepthClipEnabled,
+                false
+            );
 
-            GraphicsPipelineDescription pipelineDescription = new(
+            this.description = new(
                 description.pass.Blend, 
                 description.pass.DepthStencilState, 
                 rasterizerState, 
-                description.topology,
+                PrimitiveTopology.LineList,
                 shaderSet, 
                 [ resourceLayout ],
                 description.output ?? Graphics.ScreenTarget.Framebuffer.OutputDescription);
-
-            this.pipelineObject = Graphics.Factory.CreateGraphicsPipeline(pipelineDescription);
-            */
         }
 
 
-        private BindableResource GetBindableResource(GraphicsDevice device, Uniform uniform, out DeviceBuffer? buffer)
+        private static BindableResource GetBindableResource(Uniform uniform, out DeviceBuffer? buffer)
         {
             buffer = null;
 
@@ -170,13 +182,13 @@ namespace Prowl.Runtime
                 return GraphicsBuffer.EmptyRW.Buffer;
 
             uint bufferSize = (uint)Math.Ceiling(uniform.size / (double)16) * 16;
-            buffer = device.ResourceFactory.CreateBuffer(new BufferDescription(bufferSize, BufferUsage.UniformBuffer | BufferUsage.DynamicWrite));
+            buffer = Graphics.Factory.CreateBuffer(new BufferDescription(bufferSize, BufferUsage.UniformBuffer | BufferUsage.DynamicWrite));
 
             return buffer;
         }
 
 
-        public BindableResourceSet CreateResources(GraphicsDevice device)
+        public BindableResourceSet CreateResources()
         {
             DeviceBuffer[] boundBuffers = new DeviceBuffer[bufferCount];
             BindableResource[] boundResources = new BindableResource[Uniforms.Length];
@@ -184,7 +196,7 @@ namespace Prowl.Runtime
 
             for (int i = 0, b = 0; i < Uniforms.Length; i++)
             {
-                boundResources[i] = GetBindableResource(device, Uniforms[i], out DeviceBuffer? buffer);
+                boundResources[i] = GetBindableResource(Uniforms[i], out DeviceBuffer? buffer);
 
                 if (buffer != null)
                 {
@@ -202,22 +214,21 @@ namespace Prowl.Runtime
         }
 
 
-        public bool GetUniform(string name, out int uniform, out int buffer, out int member)
+        public bool GetUniform(string name, out byte uniform, out sbyte buffer, out short member)
         {
-            uniform = -1;
+            uniform = 0;
             buffer = -1;
             member = -1;
 
-            if (uniformLookup.TryGetValue(name, out ulong packed))
+            if (uniformLookup.TryGetValue(name, out uint packed))
             {
-                Unpack(packed, out ushort u, out short b, out member);
-                uniform = u;
-                buffer = b;
+                Unpack(packed, out uniform, out buffer, out member);
                 return true;
             }
 
             return false;
         }
+
 
 
         public void BindVertexBuffer(CommandList list, string semantic, DeviceBuffer buffer, uint offset = 0)
@@ -227,28 +238,23 @@ namespace Prowl.Runtime
         }
 
 
-        // This is so fucking stupid. 
-        // The following GLSL:
-        // "uniform type_SomeBuf { mat4 a; } _SomeBuf;"
-        // must be bound using 'type_SomeBuf' instead of '_SomeBuf'.
-        // Absolutely NO IDEA if this works for other devices, assuming it will... even though _SomeBuf seems more correct?
-        private static string GetGLSLName(string name)
-        {
-            if (name[0] == '_')
-                return "type" + name.Replace("$", "");
-            
-            return "type_" + name.Replace("$", "");
-        }
+        public static uint Pack(byte a, sbyte b, short c)
+            => ((uint)a << 24) | ((uint)(byte)b << 16) | (ushort)c;
 
-        public static ulong Pack(ushort a, short b, int c)
-            => ((ulong)(ushort)a << 48) | ((ulong)(ushort)b << 32) | (uint)c;
 
-        public static void Unpack(ulong packed, out ushort a, out short b, out int c)    
-            => (a, b, c) = ((ushort)(packed >> 48), (short)(packed >> 32), (int)(packed & uint.MaxValue));
+        public static void Unpack(uint packed, out byte a, out sbyte b, out short c)    
+            => (a, b, c) = ((byte)(packed >> 24), (sbyte)(packed >> 16), (short)(packed & ushort.MaxValue));
+
         
-        public static void Dispose()
+        public void Dispose()
         {
+            for (int i = 0; i < shaderSet.Shaders.Length; i++)
+                shaderSet.Shaders[i]?.Dispose();
 
+            for (int i = 0; i < pipelines.Length; i++)
+                pipelines[i]?.Dispose();
+
+            resourceLayout?.Dispose();
         }
     }
 }

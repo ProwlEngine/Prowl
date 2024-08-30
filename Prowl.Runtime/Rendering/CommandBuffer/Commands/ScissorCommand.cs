@@ -16,9 +16,9 @@ namespace Prowl.Runtime
             if (SetActive != null)
             {
                 if (SetActive.Value)
-                    state.pipelineSettings.scissorTest = true;
+                    state.scissor = true;
                 else
-                    state.pipelineSettings.scissorTest = false;
+                    state.scissor = false;
 
                 return;
             }

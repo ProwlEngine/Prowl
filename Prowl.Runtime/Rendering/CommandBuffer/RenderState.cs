@@ -9,18 +9,27 @@ namespace Prowl.Runtime
     /// The current rendering state passed to RenderCommand.ExecuteCommand().
     /// Defines relevant information about keywords, targets, and pipeline state for commands to use.
     /// </summary>
-    public class RenderState
+    internal class RenderState : IDisposable
     {
         private Framebuffer activeFramebuffer;
         internal Framebuffer ActiveFramebuffer => activeFramebuffer;
         
-        internal ShaderPass activePass;
+        private KeywordState keywordState;
+        internal ShaderPass ActivePass => pipelineDescription.pass;
+        internal ShaderVariant ActiveVariant => pipelineDescription.variant;
 
-        internal PropertyState propertyState;
-        internal KeywordState keywordState;
+        public PropertyState propertyState;
+        
+        private GraphicsPipelineDescription pipelineDescription;
 
-        internal ShaderPipelineDescription pipelineDescription;
-        internal ShaderPipeline activePipeline;
+        public PolygonFillMode fill;
+        public PrimitiveTopology topology;
+        public bool scissor;
+
+        public GraphicsPipeline graphicsPipeline;
+        public BindableResourceSet pipelineResources;
+        public Pipeline actualActivePipeline;
+
 
 
         public void SetFramebuffer(Framebuffer framebuffer)
@@ -30,25 +39,57 @@ namespace Prowl.Runtime
         }
 
 
+        public void SetPass(ShaderPass pass)
+        {
+            pipelineDescription.pass = pass;
+        }
+
+
+        public void SetKeyword(string keyword, string value)
+        {
+            keywordState.SetKey(keyword, value);
+
+            pipelineDescription.variant = pipelineDescription.pass.GetVariant(keywordState);
+        }
+
+
+        public void GetPipeline(out GraphicsPipeline graphicsPipeline, out Pipeline actualPipeline)
+        {
+            graphicsPipeline = GraphicsPipelineCache.GetPipeline(pipelineDescription);
+            actualPipeline = graphicsPipeline.GetPipeline(fill, topology, scissor);
+
+            if (this.graphicsPipeline != graphicsPipeline)
+            {
+                pipelineResources?.Dispose();
+                pipelineResources = graphicsPipeline.CreateResources();
+            }
+
+            this.graphicsPipeline = graphicsPipeline;
+            this.actualActivePipeline = actualPipeline;
+        }
+
+
         public RenderState()
         {
             activeFramebuffer = null;
-            activePass = null;
 
             propertyState = new();
             keywordState = KeywordState.Default;
 
-            activePipeline = null;
+            graphicsPipeline = null;
+            actualActivePipeline = null;
 
+            pipelineDescription.pass = null;
             pipelineDescription.variant = null;
             pipelineDescription.output = null;
-            pipelineDescription.fillMode = PolygonFillMode.Solid;
-            pipelineDescription.topology = PrimitiveTopology.TriangleList;
-            pipelineDescription.scissorTest = false;
 
             keywordState = KeywordState.Default;
+        }
+        
 
-            activePipeline = null;
+        public void Dispose()
+        {
+            pipelineResources?.Dispose();
         }
     }
 }
