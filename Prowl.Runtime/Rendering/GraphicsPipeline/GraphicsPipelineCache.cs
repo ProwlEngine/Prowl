@@ -8,9 +8,9 @@ using System.Text.RegularExpressions;
 
 namespace Prowl.Runtime
 {
-    public static class GraphicsPipelineCache    
+    public static class GraphicsPipelineCache
     {
-        private static Dictionary<GraphicsPipelineDescription, GraphicsPipeline> pipelineCache;
+        private static Dictionary<GraphicsPipelineDescription, GraphicsPipeline> pipelineCache = new();
 
 
         internal static GraphicsPipeline GetPipeline(in GraphicsPipelineDescription description)

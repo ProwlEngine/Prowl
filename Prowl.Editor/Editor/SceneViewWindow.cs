@@ -55,9 +55,9 @@ public class SceneViewWindow : EditorWindow
         RenderTarget?.Dispose();
 
         RenderTarget = new RenderTexture(
-            (uint)width, (uint)height, 
-            [ Veldrid.PixelFormat.R8_G8_B8_A8_UNorm ], 
-            Veldrid.PixelFormat.D24_UNorm_S8_UInt, 
+            (uint)width, (uint)height,
+            [Veldrid.PixelFormat.R8_G8_B8_A8_UNorm],
+            Veldrid.PixelFormat.D24_UNorm_S8_UInt,
             true);
     }
 
@@ -93,9 +93,9 @@ public class SceneViewWindow : EditorWindow
 
         SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
 
-        RenderingContext context = new RenderingContext("Main", Graphics.Renderables, RenderTarget);
-        
-        Graphics.Render([data], context);
+        // RenderingContext context = new RenderingContext("Main", Graphics.Renderables, RenderTarget);
+
+        // Graphics.Render([data], context);
 
         var imagePos = gui.CurrentNode.LayoutData.Rect.Position;
         var imageSize = gui.CurrentNode.LayoutData.Rect.Size;
@@ -117,24 +117,24 @@ public class SceneViewWindow : EditorWindow
             }
         }
 
-        
+
         if (SceneViewPreferences.Instance.GridType != GridType.None)
         {
             CommandBuffer buffer = CommandBufferPool.Get("Scene View Buffer");
             gridMesh ??= Mesh.GetFullscreenQuad();
             gridMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Grid.shader"));
-        
-            (Vector3, Vector3) planeInfo = SceneViewPreferences.Instance.GridType switch  
+
+            (Vector3, Vector3) planeInfo = SceneViewPreferences.Instance.GridType switch
             {
                 GridType.XZ => (Vector3.up, Vector3.right),
                 GridType.XY => (Vector3.forward, Vector3.up),
                 GridType.YZ => (Vector3.right, Vector3.forward),
             };
-        
+
             Matrix4x4.Invert(data.View * data.Projection, out Matrix4x4 invertedMVP);
-        
+
             buffer.SetMatrix("MvpInverse", invertedMVP);
-        
+
             buffer.SetVector("CameraPosition", Cam.Transform.position);
             buffer.SetVector("PlaneNormal", planeInfo.Item1);
             buffer.SetVector("PlaneRight", planeInfo.Item2);
@@ -143,15 +143,15 @@ public class SceneViewWindow : EditorWindow
             buffer.SetFloat("LineWidth", SceneViewPreferences.Instance.LineWidth);
             buffer.SetFloat("PrimaryGridSize", SceneViewPreferences.Instance.PrimaryGridSize);
             buffer.SetFloat("SecondaryGridSize", SceneViewPreferences.Instance.SecondaryGridSize);
-        
+
             buffer.SetMaterial(gridMat, 0);
             buffer.DrawSingle(gridMesh);
 
-            context.ExecuteCommandBuffer(buffer);
+            // context.ExecuteCommandBuffer(buffer);
 
             CommandBufferPool.Release(buffer);
 
-            context.Submit();
+            // context.Submit();
         }
 
         var selectedWeaks = HierarchyWindow.SelectHandler.Selected;
@@ -334,7 +334,7 @@ public class SceneViewWindow : EditorWindow
                         averagePosition - (Cam.GameObject.Transform.forward * zoomFactor);
                 }
             }
-            
+
             if (gui.PointerWheel != 0)
             {
                 // Larger distance more zoom, but clamped
@@ -360,17 +360,17 @@ public class SceneViewWindow : EditorWindow
         gizmo.Snapping = Input.GetKey(Key.LeftControl);
         gizmo.SnapDistance = SceneViewPreferences.Instance.SnapDistance;
         gizmo.SnapAngle = SceneViewPreferences.Instance.SnapAngle;
-        
+
         Vector3 centerOfAll = Vector3.zero;
-        
+
         for (int i = 0; i < selectedGOs.Count; i++)
         {
             var selectedGo = selectedGOs[i];
             centerOfAll += selectedGo.Transform.position;
         }
-        
+
         centerOfAll /= selectedGOs.Count;
-        
+
         Quaternion rotation = Quaternion.identity;
         Vector3 scale = Vector3.one;
         if (selectedGOs.Count == 1)
@@ -378,7 +378,7 @@ public class SceneViewWindow : EditorWindow
             rotation = selectedGOs[0].Transform.rotation;
             scale = selectedGOs[0].Transform.localScale;
         }
-        
+
         gizmo.SetTransform(centerOfAll, rotation, scale);
         var result = gizmo.Update(mouseRay, gui.PointerPos, blockPicking);
         if (result.HasValue)

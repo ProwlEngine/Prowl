@@ -6,6 +6,7 @@ using Prowl.Runtime.RenderPipelines;
 
 namespace Prowl.Editor
 {
+    /*
     public class RenderGraphWindow : EditorWindow
     {
         NodeEditor editor;
@@ -86,4 +87,5 @@ namespace Prowl.Editor
         }
 
     }
+    */
 }

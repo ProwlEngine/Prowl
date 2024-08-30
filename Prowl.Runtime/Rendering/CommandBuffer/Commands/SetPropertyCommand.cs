@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+
 using Veldrid;
 
 namespace Prowl.Runtime
@@ -11,7 +12,18 @@ namespace Prowl.Runtime
 
         readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
-            state.propertyState.SetVector(Name, Value);
+            state.pipelineResources.SetVector(Name, Value);
+        }
+    }
+
+    internal struct SetPropertyArrayCommand : RenderingCommand
+    {
+        public string Name;
+        public Vector4[] Value;
+
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
+        {
+            state.pipelineResources.SetVectorArray(Name, Value);
         }
     }
 
@@ -22,7 +34,7 @@ namespace Prowl.Runtime
 
         readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
-            state.propertyState.SetTexture(Name, TextureValue);
+            state.pipelineResources.SetTexture(Name, TextureValue.Res);
         }
     }
 
@@ -33,7 +45,18 @@ namespace Prowl.Runtime
 
         readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
-            state.propertyState.SetMatrix(Name, MatrixValue);
+            state.pipelineResources.SetMatrix(Name, MatrixValue);
+        }
+    }
+
+    internal struct SetMatrixArrayPropertyCommand : RenderingCommand
+    {
+        public string Name;
+        public Matrix4x4[] MatrixValue;
+
+        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
+        {
+            state.pipelineResources.SetMatrixArray(Name, MatrixValue);
         }
     }
 
@@ -44,17 +67,7 @@ namespace Prowl.Runtime
 
         readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
         {
-            state.propertyState.SetBuffer(Name, BufferValue);
-        }
-    }
-
-    internal struct SetPropertyStateCommand : RenderingCommand
-    {
-        public PropertyState StateValue;
-
-        readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
-        {
-            state.propertyState.ApplyOverride(StateValue);
+            state.pipelineResources.SetBuffer(Name, BufferValue);
         }
     }
 }

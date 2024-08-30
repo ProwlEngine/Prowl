@@ -1,141 +1,175 @@
-using Prowl.Runtime;
-using Veldrid;
-
 using System.Text;
 
-using DirectXShaderCompiler.NET;
+using Prowl.Runtime;
+
 using SPIRVCross.NET;
 using SPIRVCross.NET.GLSL;
-using SPIRVCross.NET.MSL;
 using SPIRVCross.NET.HLSL;
+using SPIRVCross.NET.MSL;
+
+using Veldrid;
+
+#pragma warning disable
 
 namespace Prowl.Editor.Utilities
 {
-    public sealed partial class ShaderCrossCompiler : IVariantCompiler
+    public struct ReflectedResourceInfo
     {
-        [SerializeField]
-        public (uint, uint) model;
+        public StageInput[] vertexInputs;
+        public Uniform[] uniforms;
+        public ShaderStages[] stages;
+    }
 
-        [SerializeField]
-        public EntryPoint[] entrypoints;
-
-        [SerializeField]
-        public string sourceCode;
-
-        public ShaderCrossCompiler(string source, EntryPoint[] entrypoints, (uint, uint) model)
+    public static partial class ShaderCompiler
+    {
+        // HLSL semantics are treated as identifiers for the program to know what inputs go where.
+        // semantics and their formats are enforced by the reflector to provide guarantee that at least 1 buffer will be bound to a known input.
+        static readonly Dictionary<string, VertexElementFormat> semantics = new()
         {
-            this.sourceCode = source;
-            this.entrypoints = entrypoints;
-            this.model = model;
-        }
+            { "POSITION0", VertexElementFormat.Float4 },
+            { "TEXCOORD0", VertexElementFormat.Float4 },
+            { "NORMAL0", VertexElementFormat.Float4 },
+            { "COLOR0", VertexElementFormat.Byte4_Norm },
+        };
 
-        private static byte[] GetBytes(GraphicsBackend backend, string code)
+        public static ReflectedResourceInfo Reflect(Context context, ShaderDescription[] compiledSPIRV)
         {
-            return backend switch
-            {
-                GraphicsBackend.Direct3D11 or 
-                GraphicsBackend.OpenGL or 
-                GraphicsBackend.OpenGLES 
-                    => Encoding.ASCII.GetBytes(code),
-                
-                GraphicsBackend.Metal 
-                    => Encoding.UTF8.GetBytes(code),
+            StageInput[] vertexInputs = [];
 
-                _ => throw new Exception($"Invalid GraphicsBackend: {backend}"),
-            };
-        }
-
-        private static ShaderType StageToType(ShaderStages stage)
-        {
-            return stage switch
-            {
-                ShaderStages.Vertex => ShaderType.Vertex,
-                ShaderStages.Geometry => ShaderType.Geometry,
-                ShaderStages.TessellationControl => ShaderType.Hull,
-                ShaderStages.TessellationEvaluation => ShaderType.Domain,
-                ShaderStages.Fragment => ShaderType.Fragment,
-                ShaderStages.Compute => ShaderType.Compute,
-            };
-        }
-
-        public ShaderVariant CompileVariant(KeywordState keywords)
-        {
-            using Context ctx = new Context();
-
-            ShaderDescription[] compiledSPIRV = new ShaderDescription[entrypoints.Length]; 
+            List<Uniform> uniforms = [];
+            List<ShaderStages> stages = [];
 
             for (int i = 0; i < compiledSPIRV.Length; i++)
             {
-                EntryPoint entry = entrypoints[i];
+                ShaderDescription shader = compiledSPIRV[i];
 
-                ShaderType type = StageToType(entry.Stage);
+                ParsedIR IR = context.ParseSpirv(shader.ShaderBytes);
 
-                DirectXShaderCompiler.NET.CompilerOptions options = new(type.ToProfile(6, 0))
-                {
-                    generateAsSpirV = true,
-                    useOpenGLMemoryLayout = true,
-                    entryPoint = entry.Name,
-                };
+                var compiler = context.CreateReflector(IR);
 
-                foreach (var keyword in keywords.KeyValuePairs)
-                {
-                    if (!string.IsNullOrWhiteSpace(keyword.Key) && !string.IsNullOrWhiteSpace(keyword.Value))
-                        options.SetMacro(keyword.Key, keyword.Value);
-                }
+                var resources = compiler.CreateShaderResources();
 
-                CompilationResult result = ShaderCompiler.Compile(sourceCode, options, DontInclude);
+                if (shader.Stage == ShaderStages.Vertex)
+                    vertexInputs = VertexInputReflector.GetStageInputs(compiler, resources, semantics.TryGetValue);
 
-                if (result.compilationErrors != null)
-                {
-                    Debug.LogError("Failed to compile shader: ", new Exception(result.compilationErrors));
-                    return ShaderVariant.Empty;
-                }
+                var stageUniforms = UniformReflector.GetUniforms(compiler, resources);
 
-                compiledSPIRV[i] = new ShaderDescription(entry.Stage, result.objectBytes, entry.Name);
+                MergeUniforms(uniforms, stages, stageUniforms, shader.Stage);
             }
 
-            using Context context = new Context();
-
-            return new ShaderVariant(keywords, [ (GraphicsBackend.Vulkan, compiledSPIRV) ], [], []);    
+            return new ReflectedResourceInfo() { vertexInputs = vertexInputs, uniforms = uniforms.ToArray(), stages = stages.ToArray() };
         }
 
 
-        
-
-        // Fills the dictionary with every possible permutation for the given definitions, initializing values with the generator function
-        private void GenerateVariants()
-        {   
-            this.variants = new();
-
-            List<KeyValuePair<string, HashSet<string>>> combinations = keywords.ToList();
-            List<KeyValuePair<string, string>> combination = new(combinations.Count);
-
-            void GenerateRecursive(int depth)
-            {
-                if (depth == combinations.Count) // Reached the end for this permutation, add a result.
-                {
-                    KeywordState key = new(combination);
-                    variants.Add(key, compiler.CompileVariant(key));
- 
-                    return;
-                }
-
-                var pair = combinations[depth];
-                foreach (var value in pair.Value) // Go down a level for every value
-                {
-                    combination.Add(new(pair.Key, value));
-                    GenerateRecursive(depth + 1);
-                    combination.RemoveAt(combination.Count - 1); // Go up once we're done
-                }
-            }
-
-            GenerateRecursive(0);
-        }
-
-
-        static string DontInclude(string includeName)
+        public static ShaderDescription[] CrossCompile(Context context, GraphicsBackend backend, ShaderDescription[] compiledSPIRV)
         {
-            return $"// Including {includeName}";
+            ShaderDescription[] result = new ShaderDescription[compiledSPIRV.Length];
+
+            for (int i = 0; i < result.Length; i++)
+            {
+                ShaderDescription shader = compiledSPIRV[i];
+                result[i] = CrossCompile(context, backend, shader.Stage, shader.EntryPoint, shader.ShaderBytes);
+            }
+
+            return result;
+        }
+
+
+        private static ShaderDescription CrossCompile(
+            Context context,
+            GraphicsBackend backend,
+            ShaderStages stage,
+            string entrypoint,
+            byte[] sourceSPIRV)
+        {
+            ShaderDescription shader = new();
+
+            shader.Stage = stage;
+            shader.EntryPoint = entrypoint;
+
+            ParsedIR IR = context.ParseSpirv(sourceSPIRV);
+
+            shader.ShaderBytes = backend switch
+            {
+                GraphicsBackend.Direct3D11 => CompileHLSL(context, IR),
+                GraphicsBackend.Metal => CompileMSL(context, IR),
+                GraphicsBackend.OpenGL => CompileGLSL(context, IR, false),
+                GraphicsBackend.OpenGLES => CompileGLSL(context, IR, true),
+                _ => sourceSPIRV,
+            };
+
+            return shader;
+        }
+
+
+        private static byte[] CompileHLSL(Context context, ParsedIR IR)
+        {
+            HLSLCrossCompiler compiler = context.CreateHLSLCompiler(IR);
+
+            compiler.hlslOptions.shaderModel = 50;
+            compiler.hlslOptions.pointSizeCompat = true;
+
+            string c = compiler.Compile();
+
+            return Encoding.ASCII.GetBytes(c);
+        }
+
+
+        private static byte[] CompileMSL(Context context, ParsedIR IR)
+        {
+            MSLCrossCompiler compiler = context.CreateMSLCompiler(IR);
+
+            return Encoding.UTF8.GetBytes(compiler.Compile());
+        }
+
+
+        private static byte[] CompileGLSL(Context context, ParsedIR IR, bool es, bool supportsCompute = true)
+        {
+            GLSLCrossCompiler compiler = context.CreateGLSLCompiler(IR);
+
+            compiler.glslOptions.ES = es;
+
+            if (supportsCompute)
+                compiler.glslOptions.version = !es ? 430u : 310u;
+            else
+                compiler.glslOptions.version = !es ? 330u : 300u;
+
+            compiler.BuildDummySamplerForCombinedImages(out _);
+            compiler.BuildCombinedImageSamplers();
+
+            foreach (var res in compiler.GetCombinedImageSamplers())
+                compiler.SetName(res.combined_id, compiler.GetName(res.image_id));
+
+            var resources = compiler.CreateShaderResources();
+
+            // Removes annoying 'type_' prefix
+            foreach (var res in resources.UniformBuffers)
+                compiler.SetName(res.base_type_id, compiler.GetName(res.id));
+
+            string c = compiler.Compile();
+
+            return Encoding.ASCII.GetBytes(c);
+        }
+
+
+        private static void MergeUniforms(List<Uniform> uniforms, List<ShaderStages> stages, Uniform[] other, ShaderStages stage)
+        {
+            foreach (var ub in other)
+            {
+                int match = uniforms.FindIndex(x => x.IsEqual(ub));
+
+                if (match == -1)
+                {
+                    // No match, add the uniform
+                    uniforms.Add(ub);
+                    stages.Add(stage);
+                }
+                else
+                {
+                    // Uniform already exists, OR the shader stage.
+                    stages[match] |= stage;
+                }
+            }
         }
     }
 }

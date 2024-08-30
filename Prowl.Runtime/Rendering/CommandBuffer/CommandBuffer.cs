@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
 using Veldrid;
 
 namespace Prowl.Runtime
@@ -10,7 +11,7 @@ namespace Prowl.Runtime
         public string Name;
 
         // Holds a list of structs which implement RenderingCommand.ExecuteCommand() to avoid filling it with anonymous lambdas.
-        // TODO: While the struct-based approach is better than lambdas, there is still some overhead when the structs get boxed, which is not ideal. 
+        // TODO: While the struct-based approach is better than lambdas, there is still some overhead when the structs get boxed, which is not ideal.
         protected List<RenderingCommand> buffer = new();
 
         public IEnumerable<RenderingCommand> Buffer => buffer;
@@ -27,20 +28,22 @@ namespace Prowl.Runtime
 
         public void SetRenderTarget(Framebuffer framebuffer)
         {
-            buffer.Add(new SetFramebufferCommand() { 
+            buffer.Add(new SetFramebufferCommand()
+            {
                 Framebuffer = framebuffer
             });
         }
 
         public void SetRenderTarget(RenderTexture renderTarget)
         {
-            buffer.Add(new SetFramebufferCommand() { 
+            buffer.Add(new SetFramebufferCommand()
+            {
                 Framebuffer = renderTarget.Framebuffer
             });
         }
 
         public void ClearRenderTarget(bool clearDepth, bool clearColor, Color backgroundColor, int attachment = -1, float depth = 1, byte stencil = 0)
-        {  
+        {
             buffer.Add(new ClearCommand()
             {
                 ClearDepthStencil = clearDepth,
@@ -54,10 +57,9 @@ namespace Prowl.Runtime
 
         public void SetMaterial(Material material, int pass = 0)
         {
-            buffer.Add(new SetMaterialCommand()
+            buffer.Add(new SetPassCommand()
             {
-                Material = material,
-                Pass = pass,
+                Pass = material.Shader.Res.GetPass(pass)
             });
         }
 
@@ -69,7 +71,7 @@ namespace Prowl.Runtime
         public void DrawSingle(IGeometryDrawData drawData, int indexCount = -1, uint indexOffset = 0)
         {
             SetDrawData(drawData);
-            UploadResourceSets();
+            UpdateResources();
             ManualDraw((uint)(indexCount <= 0 ? drawData.IndexCount : indexCount), indexOffset, 1, 0, 0);
         }
 
@@ -80,14 +82,16 @@ namespace Prowl.Runtime
 
         public void SetDrawData(IGeometryDrawData drawData)
         {
-            buffer.Add(new SetDrawDataCommand() {
+            buffer.Add(new SetDrawDataCommand()
+            {
                 DrawData = drawData,
             });
         }
 
         public void ManualDraw(uint indexCount, uint indexOffset, uint instanceCount, uint instanceStart, int vertexOffset)
         {
-            buffer.Add(new ManualDrawCommand() {
+            buffer.Add(new ManualDrawCommand()
+            {
                 IndexCount = indexCount,
                 IndexOffset = indexOffset,
                 InstanceCount = instanceCount,
@@ -96,141 +100,168 @@ namespace Prowl.Runtime
             });
         }
 
-        public void SetPipeline(ShaderPass pass, ShaderVariant variant)
+        public void SetPass(ShaderPass pass)
         {
-            buffer.Add(new SetPipelineCommand() {
-                Pass = pass,
-                Variant = variant
+            buffer.Add(new SetPassCommand()
+            {
+                Pass = pass
             });
         }
 
-        public void UploadResourceSet(uint slot)
+        public void UpdateResources()
         {
-            buffer.Add(new SetResourceCommand() {
-                Slot = slot
-            });
+            buffer.Add(new SetResourceCommand());
         }
 
-        public void UploadResourceSets()
+        public void UpdateBuffer(string name)
         {
-            buffer.Add(new SetResourcesCommand());
+            buffer.Add(new SetResourceCommand()
+            {
+                BufferName = name
+            });
         }
 
         public void PushDebugGroup(string name)
         {
-            buffer.Add(new DebugGroupCommand() { 
-                Name = name, 
-                Pop = false 
+            buffer.Add(new DebugGroupCommand()
+            {
+                Name = name,
+                Pop = false
             });
         }
 
         public void PopDebugGroup()
         {
-            buffer.Add(new DebugGroupCommand() { 
-                Pop = true 
+            buffer.Add(new DebugGroupCommand()
+            {
+                Pop = true
             });
         }
 
         public void ResolveMultisampledTexture(RenderTexture src, RenderTexture dest)
         {
-            buffer.Add(new ResolveCommand() { 
-                RTResolve = true, 
-                RTSource = src, 
-                RTDestination = dest 
+            buffer.Add(new ResolveCommand()
+            {
+                RTResolve = true,
+                RTSource = src,
+                RTDestination = dest
             });
         }
 
         public void ResolveMultisampledTexture(Texture src, Texture dest)
         {
-            buffer.Add(new ResolveCommand() { 
-                RTResolve = false, 
-                Source = src, 
-                Destination = dest 
+            buffer.Add(new ResolveCommand()
+            {
+                RTResolve = false,
+                Source = src,
+                Destination = dest
             });
         }
 
         public void SetViewport(int viewport, int x, int y, int width, int height, float z, float depth)
         {
-            buffer.Add(new SetViewportCommand() { 
-                SetFull = false, 
-                Index = viewport, 
-                X = x, Y = y, Z = z, 
-                Width = width, Height = height, Depth = depth
+            buffer.Add(new SetViewportCommand()
+            {
+                SetFull = false,
+                Index = viewport,
+                X = x,
+                Y = y,
+                Z = z,
+                Width = width,
+                Height = height,
+                Depth = depth
             });
         }
 
         public void SetViewports(int x, int y, int width, int height, float z, float depth)
         {
-            buffer.Add(new SetViewportCommand() { 
-                SetFull = false, 
-                Index = -1, 
-                X = x, Y = y, Z = z, 
-                Width = width, Height = height, Depth = depth
+            buffer.Add(new SetViewportCommand()
+            {
+                SetFull = false,
+                Index = -1,
+                X = x,
+                Y = y,
+                Z = z,
+                Width = width,
+                Height = height,
+                Depth = depth
             });
         }
 
         public void SetFullViewport(int index = 0)
         {
-            buffer.Add(new SetViewportCommand() { 
-                SetFull = true, 
-                Index = index 
+            buffer.Add(new SetViewportCommand()
+            {
+                SetFull = true,
+                Index = index
             });
         }
 
         public void SetFullViewports()
         {
-            buffer.Add(new SetViewportCommand() { 
-                SetFull = true, 
-                Index = -1 
+            buffer.Add(new SetViewportCommand()
+            {
+                SetFull = true,
+                Index = -1
             });
         }
 
         public void SetScissorRect(int index, int x, int y, int width, int height)
         {
-            buffer.Add(new ScissorCommand() { 
-                SetFull = false, 
+            buffer.Add(new ScissorCommand()
+            {
+                SetFull = false,
                 Index = index,
-                X = x, Y = y,
-                Width = width, Height = height
+                X = x,
+                Y = y,
+                Width = width,
+                Height = height
             });
         }
 
         public void SetScissorRects(int x, int y, int width, int height)
         {
-            buffer.Add(new ScissorCommand() { 
-                SetFull = false, 
+            buffer.Add(new ScissorCommand()
+            {
+                SetFull = false,
                 Index = -1,
-                X = x, Y = y,
-                Width = width, Height = height
+                X = x,
+                Y = y,
+                Width = width,
+                Height = height
             });
         }
 
         public void SetFullScissorRect(int index)
         {
-            buffer.Add(new ScissorCommand() {
-                SetFull = true, 
-                Index = index 
+            buffer.Add(new ScissorCommand()
+            {
+                SetFull = true,
+                Index = index
             });
         }
 
         public void SetFullScissorRects()
         {
-            buffer.Add(new ScissorCommand() { 
-                SetFull = true, 
-                Index = -1 
+            buffer.Add(new ScissorCommand()
+            {
+                SetFull = true,
+                Index = -1
             });
         }
 
         public void SetScissor(bool active)
         {
-            buffer.Add(new ScissorCommand() {
+            buffer.Add(new ScissorCommand()
+            {
                 SetActive = active
             });
         }
 
         public void SetKeyword(string keyword, string value)
         {
-            buffer.Add(new SetKeywordCommand() {
+            buffer.Add(new SetKeywordCommand()
+            {
                 Name = keyword,
                 Value = value
             });
@@ -271,6 +302,15 @@ namespace Prowl.Runtime
             });
         }
 
+        public void SetVectorArray(string name, Vector4[] values)
+        {
+            buffer.Add(new SetPropertyArrayCommand()
+            {
+                Name = name,
+                Value = values
+            });
+        }
+
         public void SetVector(string name, Vector3 value)
         {
             buffer.Add(new SetPropertyCommand()
@@ -307,11 +347,12 @@ namespace Prowl.Runtime
             });
         }
 
-        public void ApplyPropertyState(PropertyState properties)
+        public void SetMatrixArray(string name, Matrix4x4[] matrices)
         {
-            buffer.Add(new SetPropertyStateCommand()
+            buffer.Add(new SetMatrixArrayPropertyCommand()
             {
-                StateValue = properties
+                Name = name,
+                MatrixValue = matrices
             });
         }
 

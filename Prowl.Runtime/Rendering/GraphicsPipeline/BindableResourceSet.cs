@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+
 using Veldrid;
 
 #pragma warning disable
@@ -10,9 +11,10 @@ namespace Prowl.Runtime
     {
         public GraphicsPipeline Pipeline { get; private set; }
 
-        private bool modifiedResources; 
+        private bool modifiedResources;
+        private bool modifiedAnyBuffer;
 
-        public ResourceSetDescription description; 
+        public ResourceSetDescription description;
         private ResourceSet resources;
 
         private DeviceBuffer[] uniformBuffers;
@@ -28,40 +30,44 @@ namespace Prowl.Runtime
             this.uniformBuffers = buffers;
             this.intermediateBuffers = intermediate;
             this.bufferWasModified = new bool[uniformBuffers.Length];
+            this.modifiedResources = true; // Initial resource set upload
         }
 
 
-        public void Bind(ResourceFactory factory, CommandList list)
+        public void Bind(CommandList list)
         {
             if (modifiedResources)
             {
                 resources?.Dispose();
-                resources = factory.CreateResourceSet(description);
+                resources = Graphics.Factory.CreateResourceSet(description);
 
                 modifiedResources = false;
             }
 
-            for (int i = 0; i < uniformBuffers.Length; i++)
+            if (modifiedAnyBuffer)
             {
-                if (bufferWasModified[i])
+                for (int i = 0; i < uniformBuffers.Length; i++)
                 {
-                    list.UpdateBuffer(uniformBuffers[i], 0, intermediateBuffers[i]);
-                    bufferWasModified[i] = false;
+                    if (bufferWasModified[i])
+                    {
+                        list.UpdateBuffer(uniformBuffers[i], 0, intermediateBuffers[i]);
+                        bufferWasModified[i] = false;
+                    }
                 }
             }
 
             list.SetGraphicsResourceSet(0, resources);
         }
 
-        
+
         public bool UpdateBuffer(CommandList list, string ID)
         {
             if (!GetUniform(ID, out Uniform? uniform, out sbyte buffer, out _))
                 return false;
-            
+
             if (buffer < 0)
                 return false;
-            
+
             list.UpdateBuffer(uniformBuffers[buffer], 0, intermediateBuffers[buffer]);
 
             return true;
@@ -90,14 +96,14 @@ namespace Prowl.Runtime
             BindableResource res = description.BoundResources[index];
 
             modifiedResources |= res.Resource != newResource.Resource;
-            
+
             description.BoundResources[index] = newResource;
         }
 
 
         public bool SetTexture(string ID, Texture value)
         {
-            if (value == null || 
+            if (value == null ||
                 (!value.Usage.HasFlag(TextureUsage.Sampled) &&
                 !value.Usage.HasFlag(TextureUsage.Storage)))
                 return false;
@@ -127,7 +133,7 @@ namespace Prowl.Runtime
 
             if (uniform.kind != ResourceKind.Sampler)
                 return false;
-            
+
             SetResource(value.InternalSampler, uniform.binding);
 
             return true;
@@ -148,7 +154,7 @@ namespace Prowl.Runtime
 
         public unsafe bool SetVector(string ID, Vector4 value)
             => UploadData(ID, &value, ValueType.Float, sizeof(float) * 4);
-        
+
 
         public unsafe bool SetMatrix(string ID, Matrix4x4 value)
             => UploadData(ID, &value, ValueType.Float, sizeof(float) * 4 * 4);
@@ -159,7 +165,7 @@ namespace Prowl.Runtime
             if (values != null)
                 fixed (float* valuesPtr = values)
                     return UploadData(ID, valuesPtr, ValueType.Float, sizeof(float) * values.Length);
-        
+
             return false;
         }
 
@@ -183,7 +189,7 @@ namespace Prowl.Runtime
             return false;
         }
 
-        
+
         public unsafe bool SetMatrixArray(string ID, Matrix4x4[] values)
         {
             if (values != null)
@@ -206,24 +212,25 @@ namespace Prowl.Runtime
                 return false;
 
             long size = Math.Min(member.size, maxSize);
-            byte[] bytes = intermediateBuffers[bufferIndex]; 
+            byte[] bytes = intermediateBuffers[bufferIndex];
 
             fixed (byte* bytesPtr = bytes)
                 Buffer.MemoryCopy(dataPtr, (bytesPtr + member.bufferOffsetInBytes), member.size, size);
-            
+
+            modifiedAnyBuffer |= true;
             bufferWasModified[bufferIndex] |= true;
 
             return true;
         }
 
-        public bool SetBuffer(CommandList list, string ID, GraphicsBuffer value)
+        public bool SetBuffer(string ID, GraphicsBuffer value)
         {
             if (!GetUniform(ID, out Uniform? uniform, out _, out _))
                 return false;
-                
+
             if (!value.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadWrite) && uniform.kind == ResourceKind.StructuredBufferReadWrite)
                 return false;
-            
+
             SetResource(value.Buffer, uniform.binding);
 
             return true;

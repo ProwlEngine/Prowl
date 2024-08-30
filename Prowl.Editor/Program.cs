@@ -3,13 +3,14 @@ using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
+
 using System.Text.RegularExpressions;
 
 namespace Prowl.Editor;
 
 public static class Program
 {
-    static string myFunkyShader = 
+    static string myFunkyShader =
 """
 Shader "Funky"
 
@@ -29,7 +30,7 @@ Pass "DaPass"
     {
         // Depth write
         DepthWrite On
-        
+
         // Comparison kind
         DepthTest LessEqual
     }
@@ -38,7 +39,7 @@ Pass "DaPass"
     Cull None
 
 	SHADERPROGRAM
-		
+
         #pragma vertex vert
         #pragma fragment frag
 
@@ -54,13 +55,16 @@ Pass "DaPass"
             float4 col : COLOR;
         };
 
+        float4 SomeColor;
+        float4x4 SomeMatrix;
+
 
         v2f vert(attributes input)
         {
             v2f output = (v2f)0;
 
-            output.pos = input.pos;
-            output.col = input.col;
+            output.pos = mul(SomeMatrix, input.pos);
+            output.col = input.col * SomeColor;
 
             return output;
         }
@@ -68,7 +72,7 @@ Pass "DaPass"
 
         float4 frag(v2f input) : SV_TARGET
         {
-            return input.col;
+            return input.col / SomeColor;
         }
 	ENDPROGRAM
 }
@@ -84,14 +88,16 @@ Pass "DaPass"
     private static bool CreatedDefaultWindows = false;
     public static int Main(string[] args)
     {
-        Shader shader = Utilities.ShaderParser.ParseShader(myFunkyShader);
-
-        return 0;
+        //Shader shader = Utilities.ShaderParser.ParseShader(myFunkyShader);
+        //
+        //Console.WriteLine(shader.GetStringRepresentation());
+        //
+        //return 0;
 
         // set global Culture to invariant
         Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
         Application.Initialize += () =>
-        {        
+        {
             // Editor-specific initialization code
             EditorGuiManager.Initialize();
             ImporterAttribute.GenerateLookUp();
@@ -124,7 +130,7 @@ Pass "DaPass"
                     var assettree = EditorGuiManager.DockWindowTo(new AssetsTreeWindow(), assetbrowser, Docking.DockZone.Left, 0.2f);
                     // So for the Inspector we need to use the Child to dock now
                     var inspector = EditorGuiManager.DockWindowTo(new InspectorWindow(), assetbrowser.Child[1], Docking.DockZone.Right, 0.75f);
-                    // Now Asset Browser is Subdivided twice, 
+                    // Now Asset Browser is Subdivided twice,
                     assetbrowser = assetbrowser.Child[1].Child[0];
                     var game = EditorGuiManager.DockWindowTo(new GameWindow(), assetbrowser, Docking.DockZone.Top, 0.65f);
                     var scene = EditorGuiManager.DockWindowTo(new SceneViewWindow(), game, Docking.DockZone.Center);

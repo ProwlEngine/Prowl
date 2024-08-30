@@ -6,7 +6,9 @@ using Prowl.Runtime.GUI;
 using Prowl.Runtime.NodeSystem;
 using Prowl.Runtime.Utils;
 using Prowl.Runtime.Utils.NodeSystem.Nodes;
+
 using System.Reflection;
+
 using static Prowl.Runtime.NodeSystem.Node;
 
 namespace Prowl.Editor
@@ -112,7 +114,7 @@ namespace Prowl.Editor
                         {
                             if (node.Inputs.Count() > 0)
                                 changed |= DrawInputs(g, node, itemSize, true, false);
-                            
+
                             if (node.Outputs.Count() > 0)
                                 changed |= DrawOutputs(g, node, itemSize, true, false);
                         }
@@ -314,7 +316,7 @@ namespace Prowl.Editor
                         }
 
                         bool isFlow = port.ValueType == typeof(FlowNode);
-                        changed |= DrawPort(g, port, isHeader ? new(width - 20, 3) : new (width - 10, 7), isFlow);
+                        changed |= DrawPort(g, port, isHeader ? new(width - 20, 3) : new(width - 10, 7), isFlow);
                     }
                 }
             }
@@ -458,7 +460,7 @@ namespace Prowl.Editor
             }
             return changed;
         }
-        
+
         protected static FieldInfo GetFieldInfo(Type type, string fieldName)
         {
             // If we can't find field in the first run, it's probably a private field in a base class.
@@ -505,7 +507,7 @@ namespace Prowl.Editor
                     if (g.IsNodeHovered() && g.IsPointerDoubleClick())
                         isRenamingHeader = true;
 
-                    
+
                     if (isRenamingHeader)
                     {
                         changed |= g.InputField("HeaderRename", ref comment.Header, 200, Gui.InputFieldFlags.None, 0, 0, Size.Percentage(1f), Size.Percentage(1f));
@@ -526,14 +528,14 @@ namespace Prowl.Editor
 
                 using (g.Node("Desc").ExpandWidth().Padding(10).Layout(LayoutType.Column).Clip().Enter())
                 {
-                    if(g.IsNodeHovered() && g.IsPointerDoubleClick())
+                    if (g.IsNodeHovered() && g.IsPointerDoubleClick())
                         isRenamingDesc = true;
 
                     if (isRenamingDesc)
                     {
                         changed |= g.InputField("DescRename", ref comment.Desc, 200, Gui.InputFieldFlags.Multiline, 0, 0, Size.Percentage(1f), Size.Percentage(1f));
 
-                        if(!g.IsPointerHovering() && (g.IsPointerClick(MouseButton.Left) || g.IsPointerClick(MouseButton.Right)))
+                        if (!g.IsPointerHovering() && (g.IsPointerClick(MouseButton.Left) || g.IsPointerClick(MouseButton.Right)))
                             isRenamingDesc = false;
                     }
                     else
@@ -702,7 +704,7 @@ namespace Prowl.Editor
                     }
                 });
 
-                Graphics.ExecuteCommandBuffer(commandBuffer);
+                Graphics.SubmitCommandBuffer(commandBuffer);
 
                 CommandBufferPool.Release(commandBuffer);
             }
@@ -1100,7 +1102,7 @@ namespace Prowl.Editor
                     if (EditorGUI.StyledButton(item.Name))
                     {
                         Node node = null;
-                        if(item.Method != null)
+                        if (item.Method != null)
                         {
                             // Reflected Node
                             var rNode = graph.AddNode<ReflectedNode>();
@@ -1136,7 +1138,7 @@ namespace Prowl.Editor
                         foreach (var child in item.Children)
                         {
                             double width = Font.DefaultFont.CalcTextSize(child.Name, 0).x + 30;
-                            if(child.Type == null)
+                            if (child.Type == null)
                                 width += 25;
                             if (width > largestWidth)
                                 largestWidth = width;
@@ -1158,7 +1160,8 @@ namespace Prowl.Editor
                 .Where(type => type.IsSubclassOf(typeof(Node)) && !type.IsAbstract)
                 .ToArray();
 
-            var items = allNodeTypes.Select(type => {
+            var items = allNodeTypes.Select(type =>
+            {
                 string Name = type.Name;
                 var addToMenuAttribute = type.GetCustomAttribute<NodeAttribute>();
                 if (addToMenuAttribute != null)
@@ -1205,7 +1208,7 @@ namespace Prowl.Editor
             {
                 foreach (var type in reflectionTypes)
                     foreach (var method in type.Item2.GetMethods(BindingFlags.DeclaredOnly | BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public).Where(m => m.IsSpecialName == false && m.DeclaringType == type.Item2))
-                        if(ReflectedNode.IsSupported(method))
+                        if (ReflectedNode.IsSupported(method))
                             root.AddChild(type.Item1 + "/" + ReflectedNode.GetNodeName(method), type.Item2, method);
             }
 

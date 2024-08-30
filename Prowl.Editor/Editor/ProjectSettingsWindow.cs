@@ -3,7 +3,9 @@ using Prowl.Editor.ProjectSettings;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
+
 using System.Reflection;
+
 using static Prowl.Editor.EditorGUI;
 
 namespace Prowl.Editor;
@@ -18,7 +20,6 @@ public class ProjectSettingsWindow : SingletonEditorWindow
     {
         RenderSideViewElement(PhysicsSetting.Instance);
         RenderSideViewElement(BuildProjectSetting.Instance);
-        RenderSideViewElement(QualitySettings.Instance);
     }
 }
 

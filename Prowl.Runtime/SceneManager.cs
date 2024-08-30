@@ -1,4 +1,5 @@
 using Prowl.Runtime.Utils;
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -82,10 +83,11 @@ public static class SceneManager
 
     [OnAssemblyUnload]
     public static void Clear()
-    { 
+    {
         List<GameObject> toRemove = new List<GameObject>();
         for (int i = 0; i < _gameObjects.Count; i++)
-            if (!_dontDestroyOnLoad.Contains(_gameObjects[i].InstanceID)) {
+            if (!_dontDestroyOnLoad.Contains(_gameObjects[i].InstanceID))
+            {
                 _gameObjects[i].Destroy();
                 toRemove.Add(_gameObjects[i]);
             }
@@ -111,7 +113,8 @@ public static class SceneManager
         if (Application.isPlaying)
             Physics.Update();
 
-        ForeachComponent((x) => {
+        ForeachComponent((x) =>
+        {
 
             x.Do(x.UpdateCoroutines);
             x.Do(x.Update);
@@ -133,7 +136,8 @@ public static class SceneManager
     public static void PhysicsUpdate()
     {
         PreFixedUpdate?.Invoke();
-        ForeachComponent((x) => {
+        ForeachComponent((x) =>
+        {
             x.Do(x.UpdateFixedUpdateCoroutines);
             x.Do(x.FixedUpdate);
         });
@@ -149,20 +153,18 @@ public static class SceneManager
         if (Cameras.Count == 0)
             return false;
 
-        Graphics.Render(Cameras.Select(c => 
+        foreach (Camera? cam in Cameras)
         {
-            var t = target ?? Graphics.ScreenTarget;
+            RenderTexture t = cam.Target.Res ?? target ?? Graphics.ScreenTarget;
+
             uint width = t.Width;
             uint height = t.Height;
 
-            if (c.Target.IsAvailable)
-            {
-                width = c.Target.Res!.Width;
-                height = c.Target.Res!.Height;
-            }
-            return c.GetData(new Vector2(width, height));
-            
-        }).ToArray(), target ?? Graphics.ScreenTarget);
+            Camera.CameraData data = cam.GetData(new Vector2(width, height));
+
+            cam.Pipeline.Res.Render(t, data);
+        }
+
         return true;
     }
 
@@ -196,7 +198,7 @@ public static class SceneManager
 
     static bool Has(GameObject curr, int instanceID)
     {
-        if(curr.InstanceID == instanceID)
+        if (curr.InstanceID == instanceID)
             return true;
         foreach (var child in curr.children)
             if (Has(child, instanceID))

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+
 using Veldrid;
 
 namespace Prowl.Runtime
@@ -14,7 +15,7 @@ namespace Prowl.Runtime
 
 
         readonly void RenderingCommand.ExecuteCommand(CommandList list, RenderState state)
-        {   
+        {
             list.DrawIndexed(
                 indexCount: IndexCount,
                 instanceCount: InstanceCount,

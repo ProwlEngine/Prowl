@@ -10,8 +10,8 @@ struct PS_INPUT
 
 fragment float4 FS(
     PS_INPUT input [[ stage_in ]],
-    texture2d<float> FontTexture [[ texture(0) ]],
-    sampler FontSampler [[ sampler(0) ]])
+    texture2d<float> FontTexture [[ texture(2) ]],
+    sampler FontSampler [[ sampler(3) ]])
 {
     return input.col * FontTexture.sample(FontSampler, input.uv);
 }

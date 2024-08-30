@@ -1,11 +1,14 @@
 ﻿using Prowl.Icons;
 using Prowl.Runtime.GUI.Graphics;
+
 using StbTrueTypeSharp;
+
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+
 using Veldrid;
 
 using static Prowl.Runtime.GUI.Graphics.UIDrawList;
@@ -449,18 +452,18 @@ namespace Prowl.Runtime
                             // We are NOT calling PrimRectUV() here because non-inlined causes too much overhead in a debug build.
                             // Inlined here:
                             {
-                                drawList.Indices[idxWrite++] = (ushort)vtxCurrentIdx; 
-                                drawList.Indices[idxWrite++] = (ushort)(vtxCurrentIdx + 1); 
+                                drawList.Indices[idxWrite++] = (ushort)vtxCurrentIdx;
+                                drawList.Indices[idxWrite++] = (ushort)(vtxCurrentIdx + 1);
                                 drawList.Indices[idxWrite++] = (ushort)(vtxCurrentIdx + 2);
 
-                                drawList.Indices[idxWrite++] = (ushort)vtxCurrentIdx; 
-                                drawList.Indices[idxWrite++] = (ushort)(vtxCurrentIdx + 2); 
+                                drawList.Indices[idxWrite++] = (ushort)vtxCurrentIdx;
+                                drawList.Indices[idxWrite++] = (ushort)(vtxCurrentIdx + 2);
                                 drawList.Indices[idxWrite++] = (ushort)(vtxCurrentIdx + 3);
-                                
-                                drawList.Vertices[vtxWrite++] = new UIVertex { Position = new Vector3(x1, y1, drawList.PrimitiveCount), UV = new Vector2(u1, v1), Color = color };
-                                drawList.Vertices[vtxWrite++] = new UIVertex { Position = new Vector3(x2, y1, drawList.PrimitiveCount), UV = new Vector2(u2, v1), Color = color };
-                                drawList.Vertices[vtxWrite++] = new UIVertex { Position = new Vector3(x2, y2, drawList.PrimitiveCount), UV = new Vector2(u2, v2), Color = color };
-                                drawList.Vertices[vtxWrite++] = new UIVertex { Position = new Vector3(x1, y2, drawList.PrimitiveCount), UV = new Vector2(u1, v2), Color = color };
+
+                                drawList.SetV(vtxWrite++, new UIVertex { Position = new Vector3(x1, y1, drawList.PrimitiveCount), UV = new Vector2(u1, v1), Color = color });
+                                drawList.SetV(vtxWrite++, new UIVertex { Position = new Vector3(x2, y1, drawList.PrimitiveCount), UV = new Vector2(u2, v1), Color = color });
+                                drawList.SetV(vtxWrite++, new UIVertex { Position = new Vector3(x2, y2, drawList.PrimitiveCount), UV = new Vector2(u2, v2), Color = color });
+                                drawList.SetV(vtxWrite++, new UIVertex { Position = new Vector3(x1, y2, drawList.PrimitiveCount), UV = new Vector2(u1, v2), Color = color });
                                 vtxCurrentIdx += 4;
                             }
                         }

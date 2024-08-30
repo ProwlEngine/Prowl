@@ -11,14 +11,14 @@ namespace Prowl.Runtime
     /// </summary>
     public class KeywordState : ISerializationCallbackReceiver, IEquatable<KeywordState>
     {
-        public static KeywordState Empty = new();
+        public static KeywordState Empty = new([new("", "")]);
 
         public static KeywordState Default = new(
-            [ 
-                new("UV_STARTS_AT_TOP", Graphics.Device.IsUvOriginTopLeft ? "1" : "0"), 
-                new("DEPTH_ZERO_TO_ONE", Graphics.Device.IsDepthRangeZeroToOne ? "1" : "0"), 
-                new("CLIP_SPACE_Y_INVERTED", Graphics.Device.IsClipSpaceYInverted ? "1" : "0") 
-            ] 
+            [
+                new("UV_STARTS_AT_TOP", Graphics.Device?.IsUvOriginTopLeft ?? false ? "1" : "0"),
+                new("DEPTH_ZERO_TO_ONE", Graphics.Device?.IsDepthRangeZeroToOne ?? false ? "1" : "0"),
+                new("CLIP_SPACE_Y_INVERTED", Graphics.Device?.IsClipSpaceYInverted ?? false ? "1" : "0")
+            ]
         );
 
         private struct KeyValuePairComparer : IEqualityComparer<KeyValuePair<string, string>>
@@ -37,7 +37,7 @@ namespace Prowl.Runtime
 
         [SerializeField, HideInInspector]
         private string[] values;
-        
+
         private bool _hasValidHash;
         private int _hash;
 
@@ -65,7 +65,7 @@ namespace Prowl.Runtime
 
             foreach (var pair in add.KeyValuePairs)
                 result.SetKey(pair.Key, pair.Value);
-            
+
             return result;
         }
 
@@ -92,7 +92,7 @@ namespace Prowl.Runtime
         {
             if (obj is not KeywordState other)
                 return false;
-                
+
             return Equals(other);
         }
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+
 using Veldrid;
 
 namespace Prowl.Runtime
@@ -21,7 +22,7 @@ namespace Prowl.Runtime
     {
         public string Name;
         public string DisplayName;
-        public ShaderPropertyType PropertyType; 
+        public ShaderPropertyType PropertyType;
         public string DefaultProperty;
     }
 
@@ -35,10 +36,10 @@ namespace Prowl.Runtime
         [SerializeField, HideInInspector]
         private ShaderPass[] passes;
         public IEnumerable<ShaderPass> Passes => passes;
-        
+
 
         private readonly Dictionary<string, int> nameIndexLookup = new();
-        private readonly Dictionary<string, List<int>> tagIndexLookup = new(); 
+        private readonly Dictionary<string, List<int>> tagIndexLookup = new();
 
 
         internal Shader() : base("New Shader") { }
@@ -77,18 +78,18 @@ namespace Prowl.Runtime
         }
 
         public int GetPassIndex(string passName)
-        {   
+        {
             return nameIndexLookup.GetValueOrDefault(passName, -1);
         }
 
         public int? GetPassWithTag(string tag, string? tagValue = null)
-        {   
+        {
             List<int> passes = GetPassesWithTag(tag, tagValue);
             return passes.Count > 0 ? passes[0] : null;
         }
 
         public List<int> GetPassesWithTag(string tag, string? tagValue = null)
-        {   
+        {
             List<int> passes = [];
 
             if (tagIndexLookup.TryGetValue(tag, out List<int> passesWithTag))
@@ -104,7 +105,7 @@ namespace Prowl.Runtime
 
             return passes;
         }
-        
+
         public void OnBeforeSerialize() { }
 
         public void OnAfterDeserialize()
@@ -127,7 +128,7 @@ namespace Prowl.Runtime
             }
 
             builder.Append("}\n\n");
-            
+
             foreach (ShaderPass pass in Passes)
             {
                 builder.Append($"Pass {pass.Name}\n{{\n");
@@ -182,7 +183,7 @@ namespace Prowl.Runtime
                 builder.Append($"\t\tDepthFail {dDesc.StencilFront.DepthFail} {dDesc.StencilBack.DepthFail}\n");
                 builder.Append($"\t\tFail {dDesc.StencilFront.Fail} {dDesc.StencilBack.Fail}\n");
                 builder.Append($"\t\tPass {dDesc.StencilFront.Pass} {dDesc.StencilBack.Pass}\n\n");
-                
+
                 builder.Append($"\t\tReadMask {dDesc.StencilReadMask}\n");
                 builder.Append($"\t\tRef {dDesc.StencilReference}\n");
                 builder.Append($"\t\tWriteMask {dDesc.StencilWriteMask}\n");
@@ -192,18 +193,18 @@ namespace Prowl.Runtime
                 builder.Append("\tInputs\n\t{\n");
 
                 builder.Append("\t\tVertexInputs\n\t\t{\n");
-                foreach(var input in pass.GetVariant(KeywordState.Empty).VertexInputs)
+                foreach (var input in pass.GetVariant(KeywordState.Empty).VertexInputs)
                 {
                     builder.Append($"\t\t\t{input.semantic}\n");
                 }
                 builder.Append("\t\t}\n\n");
 
                 builder.Append("\t\tUniforms\n\t\t{\n");
-                foreach(var uniform in pass.GetVariant(KeywordState.Empty).Uniforms)
+                foreach (var uniform in pass.GetVariant(KeywordState.Empty).Uniforms)
                 {
-                    builder.Append(uniform.ToString().Replace("\n", "\n\t\t\t"));
+                    builder.Append("\t\t\t" + uniform.ToString().Replace("\n", "\n\t\t\t"));
                 }
-                builder.Append("\t\t}\n");
+                builder.Append("\n\t\t}\n");
 
                 builder.Append("\t}\n");
 

@@ -6,6 +6,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.SceneManagement;
+
 using System.Reflection;
 
 namespace Prowl.Editor;
@@ -56,7 +57,7 @@ public static class EditorGuiManager
 
     public static DockNode DockWindowTo(EditorWindow window, DockNode? node, DockZone zone, double split = 0.5f)
     {
-        if(node != null)
+        if (node != null)
             return Container.AttachWindow(window, node, zone, split);
         else
             return Container.AttachWindow(window, Container.Root, DockZone.Center, split);
@@ -82,7 +83,8 @@ public static class EditorGuiManager
         commandBuffer.SetRenderTarget(Graphics.ScreenTarget);
         commandBuffer.ClearRenderTarget(true, true, Color.black, depth: 1.0f);
 
-        Gui.ProcessFrame(commandBuffer, screenRect, (float)scale, framebufferAndInputScale, EditorPreferences.Instance.AntiAliasing, (g) => {
+        Gui.ProcessFrame(commandBuffer, screenRect, (float)scale, framebufferAndInputScale, EditorPreferences.Instance.AntiAliasing, (g) =>
+        {
 
             // Draw Background
             g.Draw2D.DrawRectFilled(g.ScreenRect, EditorStylePrefs.Instance.Background);
@@ -141,9 +143,9 @@ public static class EditorGuiManager
                 Container ??= new();
                 var rect = g.CurrentNode.LayoutData.Rect;
                 //rect.Expand(-(float)EditorStylePrefs.Instance.DockSpacing);
-                rect.Min.x += (float)EditorStylePrefs.Instance.DockSpacing; 
-                //rect.Min.y += (float)EditorStylePrefs.Instance.DockSpacing; 
-                rect.Max.x -= (float)EditorStylePrefs.Instance.DockSpacing; 
+                rect.Min.x += (float)EditorStylePrefs.Instance.DockSpacing;
+                //rect.Min.y += (float)EditorStylePrefs.Instance.DockSpacing;
+                rect.Max.x -= (float)EditorStylePrefs.Instance.DockSpacing;
                 rect.Max.y -= (float)EditorStylePrefs.Instance.DockSpacing;
                 //rect.Min.y = (float)EditorStylePrefs.Instance.DockSpacing; // Top needs no padding
                 Container.Update(rect);
@@ -157,9 +159,9 @@ public static class EditorGuiManager
                     g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
                     g.SetZIndex(0);
 
-                if (!g.IsPointerDown(MouseButton.Left))
-                    DragSplitter = null;
-            }
+                    if (!g.IsPointerDown(MouseButton.Left))
+                        DragSplitter = null;
+                }
 
                 if (DraggingWindow == null)
                 {
@@ -249,7 +251,7 @@ public static class EditorGuiManager
 
         foreach (var window in WindowsToRemove)
         {
-            if(window.IsDocked)
+            if (window.IsDocked)
                 Container.DetachWindow(window);
             if (FocusedWindow != null && FocusedWindow.Target == window)
                 FocusedWindow = null;
@@ -257,7 +259,7 @@ public static class EditorGuiManager
         }
 
         WindowsToRemove.Clear();
-        
+
         Graphics.SubmitCommandBuffer(commandBuffer);
 
         CommandBufferPool.Release(commandBuffer);
@@ -299,7 +301,8 @@ public static class EditorGuiManager
     [MenuItem("File/Save Scene As")]
     public static void SaveSceneAs()
     {
-        FileDialogContext imFileDialogInfo = new FileDialogContext() {
+        FileDialogContext imFileDialogInfo = new FileDialogContext()
+        {
             title = "Save As",
             fileName = "New Scene.scene",
             directoryPath = new DirectoryInfo(Project.ProjectAssetDirectory),
@@ -476,7 +479,7 @@ public static class EditorGuiManager
     [MenuItem("Windows/Console")] public static void Window_Console() => new ConsoleWindow();
     [MenuItem("Windows/Project Settings")] public static void Window_ProjectSettings() => new ProjectSettingsWindow();
     [MenuItem("Windows/Editor Preferences")] public static void Window_Preferences() => new PreferencesWindow();
-    [MenuItem("Windows/Render Graph")] public static void Window_RenderGraph() => new RenderGraphWindow();
+    // [MenuItem("Windows/Render Graph")] public static void Window_RenderGraph() => new RenderGraphWindow();
 
 
 

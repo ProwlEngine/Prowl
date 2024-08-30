@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
 using Veldrid;
 
 namespace Prowl.Runtime
@@ -13,13 +14,13 @@ namespace Prowl.Runtime
     {
         private Framebuffer activeFramebuffer;
         internal Framebuffer ActiveFramebuffer => activeFramebuffer;
-        
+
         private KeywordState keywordState;
         internal ShaderPass ActivePass => pipelineDescription.pass;
         internal ShaderVariant ActiveVariant => pipelineDescription.variant;
 
-        public PropertyState propertyState;
-        
+        public IGeometryDrawData activeDrawData;
+
         private GraphicsPipelineDescription pipelineDescription;
 
         public PolygonFillMode fill;
@@ -42,6 +43,8 @@ namespace Prowl.Runtime
         public void SetPass(ShaderPass pass)
         {
             pipelineDescription.pass = pass;
+
+            pipelineDescription.variant = pipelineDescription.pass.GetVariant(keywordState);
         }
 
 
@@ -72,8 +75,8 @@ namespace Prowl.Runtime
         public RenderState()
         {
             activeFramebuffer = null;
+            activeDrawData = null;
 
-            propertyState = new();
             keywordState = KeywordState.Default;
 
             graphicsPipeline = null;
@@ -85,7 +88,7 @@ namespace Prowl.Runtime
 
             keywordState = KeywordState.Default;
         }
-        
+
 
         public void Dispose()
         {
