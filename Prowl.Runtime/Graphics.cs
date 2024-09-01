@@ -1,8 +1,10 @@
 ﻿using Prowl.Runtime.RenderPipelines;
+
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+
 using Veldrid;
 using Veldrid.StartupUtilities;
 
@@ -10,22 +12,12 @@ using Veldrid.StartupUtilities;
 
 namespace Prowl.Runtime
 {
-    public static class Graphics
+    public static partial class Graphics
     {
         public static GraphicsDevice Device { get; internal set; }
         public static ResourceFactory Factory => Device.ResourceFactory;
 
-        private static RenderTexture _screenTarget;
-        public static RenderTexture ScreenTarget 
-        {
-            get
-            {
-                if (_screenTarget == null || _screenTarget.Framebuffer != Device.SwapchainFramebuffer)
-                    _screenTarget = new RenderTexture(Device.SwapchainFramebuffer);
-                
-                return _screenTarget;
-            }
-        }
+        public static Framebuffer ScreenTarget => Device.SwapchainFramebuffer;
 
         public static Vector2Int TargetResolution => new Vector2(ScreenTarget.Width, ScreenTarget.Height);
 
@@ -35,8 +27,8 @@ namespace Prowl.Runtime
             set { Device.SyncToVerticalBlank = value; }
         }
 
-        [DllImport("Shcore.dll")]
-        internal static extern int SetProcessDpiAwareness(int value);
+        [LibraryImport("Shcore.dll")]
+        internal static partial int SetProcessDpiAwareness(int value);
 
         public static void Initialize(bool VSync = true, GraphicsBackend preferredBackend = GraphicsBackend.OpenGL)
         {
@@ -60,16 +52,17 @@ namespace Prowl.Runtime
             }
 
             Screen.Resize += ResizeGraphicsResources;
+
+            GUI.Graphics.UIDrawListRenderer.Initialize(Device.SwapchainFramebuffer.OutputDescription, GUI.Graphics.ColorSpaceHandling.Direct);
         }
 
         private static void ResizeGraphicsResources(Vector2Int newSize)
         {
-            _screenTarget.UpdateFramebufferInfo();
             Device.ResizeMainWindow((uint)newSize.x, (uint)newSize.y);
         }
 
         public static void EndFrame()
-        {   
+        {
             Device.SwapBuffers();
             RenderTexture.UpdatePool();
         }
@@ -99,8 +92,8 @@ namespace Prowl.Runtime
         public static void SubmitCommandBuffer(CommandBuffer commandBuffer, bool awaitComplete = false)
         {
             CommandList list = CreateCommandListForBuffer(commandBuffer);
-            
-            try 
+
+            try
             {
                 SubmitCommandList(list, awaitComplete);
             }
@@ -110,7 +103,7 @@ namespace Prowl.Runtime
             }
             finally
             {
-                list.Dispose();   
+                list.Dispose();
             }
         }
 
@@ -119,8 +112,8 @@ namespace Prowl.Runtime
             return new Task(() => SubmitCommandBuffer(commandBuffer, true));
         }
 
-        internal static void SubmitCommandList(CommandList list, bool awaitComplete, ulong timeout = ulong.MaxValue)
-        {   
+        public static void SubmitCommandList(CommandList list, bool awaitComplete, ulong timeout = ulong.MaxValue)
+        {
             list.End();
 
             if (awaitComplete)
@@ -146,7 +139,7 @@ namespace Prowl.Runtime
             CommandList commandList = GetCommandList();
 
             commandList.CopyTexture(source, destination, mipLevel, arrayLayer);
-            
+
             SubmitCommandList(commandList, awaitComplete);
 
             commandList.Dispose();
@@ -155,8 +148,8 @@ namespace Prowl.Runtime
         internal static void Dispose()
         {
             GraphicsPipelineCache.Dispose();
-            GUI.Graphics.UIDrawList.DisposeBuffers();
-        
+            GUI.Graphics.UIDrawListRenderer.Dispose();
+
             Device.Dispose();
         }
     }
