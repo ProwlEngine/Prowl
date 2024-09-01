@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 using Veldrid;
 
@@ -8,17 +9,36 @@ namespace Prowl.Runtime
 {
     public class CommandBuffer
     {
-        public string Name;
+        private CommandList _commandList;
+        private Framebuffer _activeFramebuffer;
+        private KeywordState _keywordState;
 
-        // Holds a list of structs which implement RenderingCommand.ExecuteCommand() to avoid filling it with anonymous lambdas.
-        // TODO: While the struct-based approach is better than lambdas, there is still some overhead when the structs get boxed, which is not ideal.
-        protected List<RenderingCommand> buffer = new();
+        private ShaderPass _activePass => _pipelineDescription.pass;
+        private ShaderVariant _activeVariant => _pipelineDescription.variant;
 
-        public IEnumerable<RenderingCommand> Buffer => buffer;
+        private IGeometryDrawData _activeDrawData;
+
+        private GraphicsPipelineDescription _pipelineDescription;
+
+        private PolygonFillMode _fill;
+        private PrimitiveTopology _topology;
+        private bool _scissor;
+
+        private GraphicsPipeline _graphicsPipeline;
+        private BindableResourceSet _pipelineResources;
+        private Pipeline _actualActivePipeline;
+
+
+        public string Name
+        {
+            get => _commandList.Name;
+            set => _commandList.Name = value;
+        }
 
         public CommandBuffer()
         {
             Name = "New Command Buffer";
+            _keywordState = KeywordState.Default;
         }
 
         public CommandBuffer(string name)
@@ -28,252 +48,160 @@ namespace Prowl.Runtime
 
         public void SetRenderTarget(Framebuffer framebuffer)
         {
-            buffer.Add(new SetFramebufferCommand()
-            {
-                Framebuffer = framebuffer
-            });
+            _activeFramebuffer = framebuffer;
+            _pipelineDescription.output = _activeFramebuffer.OutputDescription;
+            _commandList.SetFramebuffer(framebuffer);
         }
 
         public void SetRenderTarget(RenderTexture renderTarget)
         {
-            buffer.Add(new SetFramebufferCommand()
-            {
-                Framebuffer = renderTarget.Framebuffer
-            });
+            SetRenderTarget(renderTarget.Framebuffer);
         }
 
         public void ClearRenderTarget(bool clearDepth, bool clearColor, Color backgroundColor, int attachment = -1, float depth = 1, byte stencil = 0)
         {
-            buffer.Add(new ClearCommand()
+            if (clearDepth)
+                _commandList.ClearDepthStencil(depth, stencil);
+
+            RgbaFloat colorF = new RgbaFloat(backgroundColor);
+
+            if (clearColor)
             {
-                ClearDepthStencil = clearDepth,
-                ClearColor = clearColor,
-                ColorAttachment = attachment,
-                Depth = depth,
-                Stencil = stencil,
-                BackgroundColor = backgroundColor
-            });
+                if (attachment < 0)
+                {
+                    for (uint i = 0; i < _activeFramebuffer.ColorTargets.Length; i++)
+                        _commandList.ClearColorTarget(i, colorF);
+                }
+                else
+                {
+                    _commandList.ClearColorTarget((uint)attachment, colorF);
+                }
+            }
         }
 
         public void SetMaterial(Material material, int pass = 0)
         {
-            buffer.Add(new SetPassCommand()
-            {
-                Pass = material.Shader.Res.GetPass(pass)
-            });
-        }
-
-        public void Blit()
-        {
-            throw new NotImplementedException();
+            _pipelineDescription.pass = material.Shader.Res.GetPass(pass);
+            _pipelineDescription.variant = _pipelineDescription.pass.GetVariant(_keywordState);
         }
 
         public void DrawSingle(IGeometryDrawData drawData, int indexCount = -1, uint indexOffset = 0)
         {
             SetDrawData(drawData);
-            UpdateResources();
+            BindResources();
             ManualDraw((uint)(indexCount <= 0 ? drawData.IndexCount : indexCount), indexOffset, 1, 0, 0);
-        }
-
-        public void DrawMeshIndirect()
-        {
-            throw new NotImplementedException();
         }
 
         public void SetDrawData(IGeometryDrawData drawData)
         {
-            buffer.Add(new SetDrawDataCommand()
-            {
-                DrawData = drawData,
-            });
+            _activeDrawData = drawData;
         }
 
         public void ManualDraw(uint indexCount, uint indexOffset, uint instanceCount, uint instanceStart, int vertexOffset)
         {
-            buffer.Add(new ManualDrawCommand()
-            {
-                IndexCount = indexCount,
-                IndexOffset = indexOffset,
-                InstanceCount = instanceCount,
-                InstanceStart = instanceStart,
-                VertexOffset = vertexOffset
-            });
+            _commandList.DrawIndexed(indexCount, instanceCount, indexOffset, vertexOffset, instanceStart);
         }
 
         public void SetPass(ShaderPass pass)
         {
-            buffer.Add(new SetPassCommand()
-            {
-                Pass = pass
-            });
+            _pipelineDescription.pass = pass;
+            _pipelineDescription.variant = _pipelineDescription.pass.GetVariant(_keywordState);
         }
 
-        public void UpdateResources()
+        public void BindResources()
         {
-            buffer.Add(new SetResourceCommand());
+            _pipelineResources.Bind(_commandList);
         }
 
         public void UpdateBuffer(string name)
         {
-            buffer.Add(new SetResourceCommand()
-            {
-                BufferName = name
-            });
+            _pipelineResources.UpdateBuffer(_commandList, name);
         }
 
         public void PushDebugGroup(string name)
         {
-            buffer.Add(new DebugGroupCommand()
-            {
-                Name = name,
-                Pop = false
-            });
+            _commandList.PushDebugGroup(name);
         }
 
         public void PopDebugGroup()
         {
-            buffer.Add(new DebugGroupCommand()
-            {
-                Pop = true
-            });
-        }
-
-        public void ResolveMultisampledTexture(RenderTexture src, RenderTexture dest)
-        {
-            buffer.Add(new ResolveCommand()
-            {
-                RTResolve = true,
-                RTSource = src,
-                RTDestination = dest
-            });
+            _commandList.PopDebugGroup();
         }
 
         public void ResolveMultisampledTexture(Texture src, Texture dest)
         {
-            buffer.Add(new ResolveCommand()
-            {
-                RTResolve = false,
-                Source = src,
-                Destination = dest
-            });
+            if (!src.Equals(dest, false))
+                throw new InvalidOperationException("Destination format does not match source format for texture resolve.");
+
+            _commandList.ResolveTexture(src.InternalTexture, dest.InternalTexture);
         }
 
-        public void SetViewport(int viewport, int x, int y, int width, int height, float z, float depth)
+        public void ResolveMultisampledTexture(RenderTexture src, RenderTexture dest)
         {
-            buffer.Add(new SetViewportCommand()
-            {
-                SetFull = false,
-                Index = viewport,
-                X = x,
-                Y = y,
-                Z = z,
-                Width = width,
-                Height = height,
-                Depth = depth
-            });
+            if (!src.FormatEquals(dest, false))
+                throw new InvalidOperationException("Destination format does not match source format for texture resolve.");
+
+            for (int i = 0; i < src.ColorBuffers.Length; i++)
+                _commandList.ResolveTexture(src.ColorBuffers[i].InternalTexture, dest.ColorBuffers[i].InternalTexture);
         }
 
-        public void SetViewports(int x, int y, int width, int height, float z, float depth)
+        public void SetViewport(uint viewport, int x, int y, int width, int height, int z, int depth)
         {
-            buffer.Add(new SetViewportCommand()
-            {
-                SetFull = false,
-                Index = -1,
-                X = x,
-                Y = y,
-                Z = z,
-                Width = width,
-                Height = height,
-                Depth = depth
-            });
+            _commandList.SetViewport(viewport, new Viewport(x, y, width, height, z, depth));
         }
 
-        public void SetFullViewport(int index = 0)
+        public void SetViewports(int x, int y, int width, int height, int z, int depth)
         {
-            buffer.Add(new SetViewportCommand()
-            {
-                SetFull = true,
-                Index = index
-            });
+            _commandList.SetViewports(new Viewport(x, y, width, height, z, depth));
+        }
+
+        public void SetFullViewport(uint index = 0)
+        {
+            _commandList.SetFullViewport(index);
         }
 
         public void SetFullViewports()
         {
-            buffer.Add(new SetViewportCommand()
-            {
-                SetFull = true,
-                Index = -1
-            });
+            _commandList.SetFullViewports();
         }
 
-        public void SetScissorRect(int index, int x, int y, int width, int height)
+        public void SetScissorRect(uint index, uint x, uint y, uint width, uint height)
         {
-            buffer.Add(new ScissorCommand()
-            {
-                SetFull = false,
-                Index = index,
-                X = x,
-                Y = y,
-                Width = width,
-                Height = height
-            });
+            _commandList.SetScissorRect(index, x, y, width, height);
         }
 
-        public void SetScissorRects(int x, int y, int width, int height)
+        public void SetScissorRects(uint x, uint y, uint width, uint height)
         {
-            buffer.Add(new ScissorCommand()
-            {
-                SetFull = false,
-                Index = -1,
-                X = x,
-                Y = y,
-                Width = width,
-                Height = height
-            });
+            _commandList.SetScissorRects(x, y, width, height);
         }
 
-        public void SetFullScissorRect(int index)
+        public void SetFullScissorRect(uint index)
         {
-            buffer.Add(new ScissorCommand()
-            {
-                SetFull = true,
-                Index = index
-            });
+            _commandList.SetFullScissorRect(index);
         }
 
         public void SetFullScissorRects()
         {
-            buffer.Add(new ScissorCommand()
-            {
-                SetFull = true,
-                Index = -1
-            });
+            _commandList.SetFullScissorRects();
         }
 
         public void SetScissor(bool active)
         {
-            buffer.Add(new ScissorCommand()
-            {
-                SetActive = active
-            });
+            _scissor = active;
         }
 
         public void SetKeyword(string keyword, string value)
         {
-            buffer.Add(new SetKeywordCommand()
-            {
-                Name = keyword,
-                Value = value
-            });
+            _keywordState.SetKey(keyword, value);
+            _pipelineDescription.variant = _pipelineDescription.pass.GetVariant(_keywordState);
         }
 
         public void SetWireframe(bool wireframe)
         {
-            buffer.Add(new SetFillCommand()
-            {
-                FillMode = wireframe ? PolygonFillMode.Wireframe : PolygonFillMode.Solid
-            });
+            _fill = wireframe ? PolygonFillMode.Wireframe : PolygonFillMode.Solid;
         }
+
+
 
         public void SetTexture(string name, AssetRef<Texture> texture)
         {
@@ -354,11 +282,6 @@ namespace Prowl.Runtime
                 Name = name,
                 MatrixValue = matrices
             });
-        }
-
-        public void Clear()
-        {
-            buffer.Clear();
         }
     }
 }
