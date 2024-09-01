@@ -155,7 +155,7 @@ public static class SceneManager
 
         foreach (Camera? cam in Cameras)
         {
-            RenderTexture t = cam.Target.Res ?? target ?? Graphics.ScreenTarget;
+            Veldrid.Framebuffer t = cam.Target.Res ?? target ?? Graphics.ScreenTarget;
 
             uint width = t.Width;
             uint height = t.Height;
