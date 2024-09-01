@@ -42,9 +42,9 @@ namespace Prowl.Runtime.GUI
             }
         }
 
-        public void EndFrame(CommandBuffer commandBuffer, Rect screenRect)
+        public void EndFrame(Veldrid.CommandList commandList, Rect screenRect)
         {
-            UIDrawList.Draw(commandBuffer, new(screenRect.width, screenRect.height), _gui.UIScale, drawListsOrdered.ToArray());
+            UIDrawListRenderer.Draw(commandList, drawListsOrdered.ToArray(), new(screenRect.width, screenRect.height), _gui.UIScale);
         }
 
         /// <summary>
@@ -53,18 +53,18 @@ namespace Prowl.Runtime.GUI
         /// All drawing operations applied after this will be cut off by the clip rect and only draw inside it
         /// </summary>
         /// <param name="overwrite">Overwrite all current clip rects instead of using Intersection</param>
-        public void PushClip(Rect rect, bool overwrite = false) => 
+        public void PushClip(Rect rect, bool overwrite = false) =>
             _drawList[currentZIndex].PushClipRect(new(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height), overwrite);
 
         /// <summary> Pop the last clip rect </summary>
-        public void PopClip() => 
+        public void PopClip() =>
             _drawList[currentZIndex].PopClipRect();
 
         /// <summary> Peek at the current clip rect </summary>
         public Rect PeekClip()
         {
-            var clip = _drawList[currentZIndex].ClipRectStack.Peek();
-            return new(clip.x, clip.y, (clip.z - clip.x), (clip.w - clip.y));
+            Vector4 clip = _drawList[currentZIndex].PeekClipRect();
+            return new(clip.x, clip.y, clip.z - clip.x, clip.w - clip.y);
         }
 
         public void SetZIndex(int index, bool keepClipSpace)
@@ -78,7 +78,7 @@ namespace Prowl.Runtime.GUI
             if (keepClipSpace)
             {
                 var previousList = _drawList[currentZIndex];
-                _drawList[index].PushClipRect(previousList.ClipRectStack.Peek());
+                _drawList[index].PushClipRect(previousList.PeekClipRect());
                 _drawList[index].PushTexture(Font.DefaultFont.Texture);
             }
         }
@@ -219,7 +219,7 @@ namespace Prowl.Runtime.GUI
         public void DrawText(Font font, string text, double fontSize, Vector2 position, Color color, double wrapwidth = 0.0f, Rect? clip = null)
         {
             _drawList[currentZIndex].PushTexture(font.Texture);
-        
+
             if (clip != null)
                 _drawList[currentZIndex].AddText(font, (float)fontSize, position, color, text, wrap_width: (float)wrapwidth, cpu_fine_clip_rect: new Vector4(clip.Value.Position, clip.Value.Position + clip.Value.Size));
             else

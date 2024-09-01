@@ -1,4 +1,5 @@
 ﻿using Prowl.Runtime.GUI.Layout;
+
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
@@ -44,10 +45,10 @@ namespace Prowl.Runtime.GUI
             Draw3D = new(this);
         }
 
-        public void ProcessFrame(CommandBuffer commandBuffer, Rect screenRect, double uiScale, Vector2 frameBufferScale, bool antiAliasing, Action<Gui> gui)
+        public void ProcessFrame(Veldrid.CommandList commandList, Rect screenRect, double uiScale, Vector2 frameBufferScale, bool antiAliasing, Action<Gui> gui)
         {
             UpdateAnimations(Time.deltaTime);
-            
+
             uiScale = 1.0 / uiScale;
             this.uiScale = uiScale;
             screenRect.width *= uiScale;
@@ -77,13 +78,13 @@ namespace Prowl.Runtime.GUI
             DoPass(gui, frameBufferScale);
             PopNode();
 
-            Draw2D.EndFrame(commandBuffer, screenRect);
+            Draw2D.EndFrame(commandList, screenRect);
 
             // Look for any nodes whos HashCode does not match the previously computed nodes
             layoutDirty |= _createdNodes.Count != (_computedNodeHashes.Count - 1); // -1 because createdNodes doesn't count the root node but computedNodeHashes does
 
             var newNodeHashes = new Dictionary<ulong, ulong>();
-            if(MatchHash(rootNode, ref newNodeHashes))
+            if (MatchHash(rootNode, ref newNodeHashes))
                 layoutDirty = true;
             _computedNodeHashes = newNodeHashes;
 

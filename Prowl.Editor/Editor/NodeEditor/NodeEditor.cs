@@ -637,13 +637,15 @@ namespace Prowl.Editor
                 if ((RenderTarget == null) || (MathD.Max(width, 1) != RenderTarget.Width || MathD.Max(height, 1) != RenderTarget.Height))
                     RefreshRenderTexture(new(MathD.Max(width, 1), MathD.Max(height, 1)));
 
-                CommandBuffer commandBuffer = CommandBufferPool.Get("Node Editor Command Buffer");
+                Veldrid.CommandList commandList = Graphics.GetCommandList();
+                commandList.Name = "Node Editor Command Buffer";
 
-                commandBuffer.SetRenderTarget(RenderTarget);
-                commandBuffer.ClearRenderTarget(true, true, Color.black, depth: 1.0f);
+                commandList.SetFramebuffer(RenderTarget.Framebuffer);
+                commandList.ClearColorTarget(0, Veldrid.RgbaFloat.Black);
+                commandList.ClearDepthStencil(1.0f);
 
                 hasChanged = false;
-                gui.ProcessFrame(commandBuffer, new Rect(0, 0, width, height), (float)zoom, Vector2.one, EditorPreferences.Instance.AntiAliasing, (g) =>
+                gui.ProcessFrame(commandList, new Rect(0, 0, width, height), (float)zoom, Vector2.one, EditorPreferences.Instance.AntiAliasing, (g) =>
                 {
                     g.Draw2D.DrawRectFilled(new Rect(0, 0, width / zoom, height / zoom), EditorStylePrefs.Instance.Background);
 
@@ -704,9 +706,9 @@ namespace Prowl.Editor
                     }
                 });
 
-                Graphics.SubmitCommandBuffer(commandBuffer);
+                Graphics.SubmitCommandList(commandList, false);
 
-                CommandBufferPool.Release(commandBuffer);
+                commandList.Dispose();
             }
             finally
             {

@@ -337,9 +337,9 @@ namespace Prowl.Runtime
             bool wordWrapEnabled = wrapWidth > 0.0;
             int wordWrapEol = -1;
 
-            int vtxWrite = drawList.VertexWritePos;
-            int idxWrite = drawList.IndexWritePos;
-            uint vtxCurrentIdx = drawList.CurrentVertexIndex;
+            //int vtxWrite = drawList._vertexWritePos;
+            //int idxWrite = drawList._indexWritePos;
+            //uint vtxCurrentIdx = drawList._currentVertexIndex;
 
             int s = textBegin;
             if (!wordWrapEnabled && y + lineHeight < clipRect.y)
@@ -449,23 +449,30 @@ namespace Prowl.Runtime
                                 }
                             }
 
+                            // We ARE calling PrimRectUV() here because is it now aggressively inlined and UIDrawList now needs less public exposed fields.
+                            // However, perf. has not been tested in debug builds.
+                            // It is cleaner to read now though :)
+                            drawList.PrimRectUV(new Vector2(x1, y1), new Vector2(x2, y2), new Vector2(u1, v1), new Vector2(u2, v2), color);
+
+                            /*
                             // We are NOT calling PrimRectUV() here because non-inlined causes too much overhead in a debug build.
                             // Inlined here:
                             {
-                                drawList.Indices[idxWrite++] = (ushort)vtxCurrentIdx;
-                                drawList.Indices[idxWrite++] = (ushort)(vtxCurrentIdx + 1);
-                                drawList.Indices[idxWrite++] = (ushort)(vtxCurrentIdx + 2);
+                                drawList._indices[idxWrite++] = (ushort)vtxCurrentIdx;
+                                drawList._indices[idxWrite++] = (ushort)(vtxCurrentIdx + 1);
+                                drawList._indices[idxWrite++] = (ushort)(vtxCurrentIdx + 2);
 
-                                drawList.Indices[idxWrite++] = (ushort)vtxCurrentIdx;
-                                drawList.Indices[idxWrite++] = (ushort)(vtxCurrentIdx + 2);
-                                drawList.Indices[idxWrite++] = (ushort)(vtxCurrentIdx + 3);
+                                drawList._indices[idxWrite++] = (ushort)vtxCurrentIdx;
+                                drawList._indices[idxWrite++] = (ushort)(vtxCurrentIdx + 2);
+                                drawList._indices[idxWrite++] = (ushort)(vtxCurrentIdx + 3);
 
-                                drawList.SetV(vtxWrite++, new UIVertex { Position = new Vector3(x1, y1, drawList.PrimitiveCount), UV = new Vector2(u1, v1), Color = color });
-                                drawList.SetV(vtxWrite++, new UIVertex { Position = new Vector3(x2, y1, drawList.PrimitiveCount), UV = new Vector2(u2, v1), Color = color });
-                                drawList.SetV(vtxWrite++, new UIVertex { Position = new Vector3(x2, y2, drawList.PrimitiveCount), UV = new Vector2(u2, v2), Color = color });
-                                drawList.SetV(vtxWrite++, new UIVertex { Position = new Vector3(x1, y2, drawList.PrimitiveCount), UV = new Vector2(u1, v2), Color = color });
+                                drawList._vertices[vtxWrite++] = new UIVertex(new Vector3(x1, y1, drawList._primitiveCount), new Vector2(u1, v1), color);
+                                drawList._vertices[vtxWrite++] = new UIVertex(new Vector3(x2, y1, drawList._primitiveCount), new Vector2(u2, v1), color);
+                                drawList._vertices[vtxWrite++] = new UIVertex(new Vector3(x2, y2, drawList._primitiveCount), new Vector2(u2, v2), color);
+                                drawList._vertices[vtxWrite++] = new UIVertex(new Vector3(x1, y2, drawList._primitiveCount), new Vector2(u1, v2), color);
                                 vtxCurrentIdx += 4;
                             }
+                            */
                         }
                     }
                 }
@@ -473,9 +480,9 @@ namespace Prowl.Runtime
                 x += charWidth;
             }
 
-            drawList.VertexWritePos = vtxWrite;
-            drawList.CurrentVertexIndex = vtxCurrentIdx;
-            drawList.IndexWritePos = idxWrite;
+            //drawList._vertexWritePos = vtxWrite;
+            //drawList._currentVertexIndex = vtxCurrentIdx;
+            //drawList._indexWritePos = idxWrite;
 
             return new Rect(pos.x, pos.y, x, y + lineHeight);
         }

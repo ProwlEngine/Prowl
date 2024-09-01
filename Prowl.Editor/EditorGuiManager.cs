@@ -71,21 +71,22 @@ public static class EditorGuiManager
         // Sort by docking as well, Docked windows are guranteed to come first
         Windows.Sort((a, b) => b.IsDocked.CompareTo(a.IsDocked));
 
-        Rect screenRect = new Rect(0, 0, Runtime.Graphics.TargetResolution.x, Runtime.Graphics.TargetResolution.y);
+        Rect screenRect = new Rect(0, 0, Graphics.TargetResolution.x, Graphics.TargetResolution.y);
 
-        Vector2 framebufferAndInputScale = new((float)Runtime.Graphics.TargetResolution.x / Screen.Size.x, (float)Runtime.Graphics.TargetResolution.y / (float)Screen.Size.y);
+        Vector2 framebufferAndInputScale = new((float)Graphics.TargetResolution.x / Screen.Size.x, (float)Graphics.TargetResolution.y / (float)Screen.Size.y);
 
         Gui.PointerWheel = Input.MouseWheelDelta;
         double scale = EditorStylePrefs.Instance.Scale;
 
-        CommandBuffer commandBuffer = CommandBufferPool.Get("GUI Command Buffer");
+        Veldrid.CommandList commandList = Graphics.GetCommandList();
+        commandList.Name = "GUI Command Buffer";
 
-        commandBuffer.SetRenderTarget(Graphics.ScreenTarget);
-        commandBuffer.ClearRenderTarget(true, true, Color.black, depth: 1.0f);
+        commandList.SetFramebuffer(Graphics.ScreenTarget);
+        commandList.ClearColorTarget(0, Veldrid.RgbaFloat.Black);
+        commandList.ClearDepthStencil(1.0f, 0);
 
-        Gui.ProcessFrame(commandBuffer, screenRect, (float)scale, framebufferAndInputScale, EditorPreferences.Instance.AntiAliasing, (g) =>
+        Gui.ProcessFrame(commandList, screenRect, (float)scale, framebufferAndInputScale, EditorPreferences.Instance.AntiAliasing, (g) =>
         {
-
             // Draw Background
             g.Draw2D.DrawRectFilled(g.ScreenRect, EditorStylePrefs.Instance.Background);
 
@@ -141,7 +142,7 @@ public static class EditorGuiManager
             using (g.Node("Main_Content").ExpandWidth().Enter())
             {
                 Container ??= new();
-                var rect = g.CurrentNode.LayoutData.Rect;
+                Rect rect = g.CurrentNode.LayoutData.Rect;
                 //rect.Expand(-(float)EditorStylePrefs.Instance.DockSpacing);
                 rect.Min.x += (float)EditorStylePrefs.Instance.DockSpacing;
                 //rect.Min.y += (float)EditorStylePrefs.Instance.DockSpacing;
@@ -225,7 +226,7 @@ public static class EditorGuiManager
                 var windowList = new List<EditorWindow>(Windows);
                 for (int i = 0; i < windowList.Count; i++)
                 {
-                    var window = windowList[i];
+                    EditorWindow window = windowList[i];
                     if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(MouseButton.Left) || g.IsPointerClick(MouseButton.Right)))
                         if (!g.IsBlockedByInteractable(g.PointerPos, window.MaxZ))
                             FocusWindow(window);
@@ -260,9 +261,9 @@ public static class EditorGuiManager
 
         WindowsToRemove.Clear();
 
-        Graphics.SubmitCommandBuffer(commandBuffer);
+        Graphics.SubmitCommandList(commandList, false);
 
-        CommandBufferPool.Release(commandBuffer);
+        commandList.Dispose();
     }
 
     #region MenuBar
