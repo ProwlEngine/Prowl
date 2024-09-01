@@ -12,14 +12,13 @@ public static string GetScriptFolder([CallerFilePath] string path = null) => Pat
 // Step 1: Determine the script's directory
 string scriptDirectory = GetScriptFolder();
 
-string srcVertex = File.ReadAllText(Path.Combine(scriptDirectory, "HLSL", "gui-vertex.hlsl"));
-string srcFragment = File.ReadAllText(Path.Combine(scriptDirectory, "HLSL", "gui-frag.hlsl"));
+string srcVertex = File.ReadAllText(Path.Combine(scriptDirectory, "src", "gui-vertex.hlslv"));
+string srcVertexLinear = File.ReadAllText(Path.Combine(scriptDirectory, "src", "gui-vertex-linear.hlslv"));
+string srcFragment = File.ReadAllText(Path.Combine(scriptDirectory, "src", "gui-frag.hlslv"));
 
-string outputVertex = Path.Combine(scriptDirectory, "SPIR-V", "gui-vertex.spv");
-string outputFragment = Path.Combine(scriptDirectory, "SPIR-V", "gui-frag.spv");
-
-// Ensure the destination directory exists
-Directory.CreateDirectory(Path.Combine(scriptDirectory, "SPIR-V"));
+string outputVertex = Path.Combine(scriptDirectory, "gui-vertex.spv");
+string outputVertexLinear = Path.Combine(scriptDirectory, "gui-vertex-linear.spv");
+string outputFragment = Path.Combine(scriptDirectory, "gui-frag.spv");
 
 CompilerOptions options = new(ShaderType.Vertex.ToProfile(6, 0));
 
@@ -31,9 +30,18 @@ options.entryPoint = "VS";
 CompilationResult vsResult = ShaderCompiler.Compile(srcVertex, options, (x) => "");
 
 if (vsResult.compilationErrors != null)
-    throw new Exception($"Compilation errors encountered for vertex stage:\n\n{vsResult.compilationErrors}");
+    Console.WriteLine($"Messages encountered for vertex stage:\n\n{vsResult.compilationErrors}");
 
 File.WriteAllBytes(outputVertex, vsResult.objectBytes);
+
+
+CompilationResult vsLinearResult = ShaderCompiler.Compile(srcVertexLinear, options, (x) => "");
+
+if (vsLinearResult.compilationErrors != null)
+    Console.WriteLine($"Messages encountered for linear vertex stage:\n\n{vsLinearResult.compilationErrors}");
+
+File.WriteAllBytes(outputVertexLinear, vsLinearResult.objectBytes);
+
 
 options.entryPoint = "FS";
 options.profile = ShaderType.Fragment.ToProfile(6, 0);
@@ -41,7 +49,7 @@ options.profile = ShaderType.Fragment.ToProfile(6, 0);
 CompilationResult fsResult = ShaderCompiler.Compile(srcFragment, options, (x) => "");
 
 if (fsResult.compilationErrors != null)
-    throw new Exception($"Compilation errors encountered for vertex stage:\n\n{fsResult.compilationErrors}");
+    Console.WriteLine($"Messages encountered for fragment stage:\n\n{fsResult.compilationErrors}");
 
 File.WriteAllBytes(outputFragment, fsResult.objectBytes);
 

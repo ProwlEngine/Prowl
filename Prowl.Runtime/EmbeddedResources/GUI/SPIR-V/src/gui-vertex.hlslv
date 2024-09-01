@@ -1,3 +1,4 @@
+[[vk::binding(0, 0)]]
 cbuffer ProjectionMatrixBuffer : register(b0)
 {
     float4x4 ProjectionMatrix;
@@ -5,15 +6,25 @@ cbuffer ProjectionMatrixBuffer : register(b0)
 
 struct VS_INPUT
 {
+    [[vk::location(0)]]
     float2 pos : POSITION;
+
+    [[vk::location(1)]]
     float2 uv  : TEXCOORD0;
+
+    [[vk::location(2)]]
     float4 col : COLOR0;
 };
 
 struct PS_INPUT
 {
+    [[vk::location(0)]]
     float4 pos : SV_POSITION;
+
+    [[vk::location(1)]]
     float4 col : COLOR0;
+
+    [[vk::location(2)]]
     float2 uv  : TEXCOORD0;
 };
 
@@ -23,5 +34,6 @@ PS_INPUT VS(VS_INPUT input)
     output.pos = mul(ProjectionMatrix, float4(input.pos.xy, 0.f, 1.f));
     output.col = input.col;
     output.uv = input.uv;
+    output.pos.y *= -1.0;
     return output;
 }

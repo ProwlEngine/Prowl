@@ -2,11 +2,11 @@
 
 uniform sampler2D FontTexture;
 
-in vec4 in_var_COLOR0;
-in vec2 in_var_TEXCOORD0;
+in vec4 color;
+in vec2 texCoord;
 
 out vec4 outputColor;
 
 void main() {
-    outputColor = in_var_COLOR0 * texture(FontTexture, in_var_TEXCOORD0);
+    outputColor = color * texture(FontTexture, texCoord);
 }
