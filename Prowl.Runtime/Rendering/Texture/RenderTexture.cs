@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+
 using Veldrid;
 
 namespace Prowl.Runtime
@@ -20,10 +21,10 @@ namespace Prowl.Runtime
         public TextureSampleCount sampleCount;
 
         public RenderTextureDescription(
-            uint width, uint height, 
-            PixelFormat? depthFormat, 
-            PixelFormat[] colorFormats, 
-            bool sampled = true, bool randomWrite = false, 
+            uint width, uint height,
+            PixelFormat? depthFormat,
+            PixelFormat[] colorFormats,
+            bool sampled = true, bool randomWrite = false,
             TextureSampleCount sampleCount = Veldrid.TextureSampleCount.Count1)
         {
             this.width = width;
@@ -62,10 +63,10 @@ namespace Prowl.Runtime
 
             if (!colorBufferFormats.SequenceEqual(key.colorBufferFormats))
                 return false;
-            
+
             if (key.sampled != sampled)
                 return false;
-            
+
             if (key.enableRandomWrite != enableRandomWrite)
                 return false;
 
@@ -109,8 +110,6 @@ namespace Prowl.Runtime
         public uint Width { get; private set; }
         public uint Height { get; private set; }
 
-        public bool OwnsFramebuffer { get; private set; }
-        
         public bool Sampled { get; private set; }
         public bool RandomWriteEnabled { get; private set; }
 
@@ -128,30 +127,10 @@ namespace Prowl.Runtime
         )
         { }
 
-        internal RenderTexture(Framebuffer framebuffer)
+
+        public static implicit operator Framebuffer(RenderTexture texture)
         {
-            this.Width = framebuffer.Width;
-            this.Height = framebuffer.Height;
-            this.Sampled = false;
-            this.RandomWriteEnabled = false;
-            this.SampleCount = TextureSampleCount.Count1;
-            this.OwnsFramebuffer = false;
-
-            if (framebuffer.DepthTarget != null)
-                this.DepthBuffer = new Texture2D(framebuffer.DepthTarget.Value.Target);
-
-            this.ColorBuffers = new Texture2D[framebuffer.ColorTargets.Length];
-
-            for (int i = 0; i < this.ColorBuffers.Length; i++)
-                this.ColorBuffers[i] = new Texture2D(framebuffer.ColorTargets[i].Target);
-
-            this.Framebuffer = framebuffer;
-        }
-
-        internal void UpdateFramebufferInfo()
-        {
-            this.Width = Framebuffer.Width;
-            this.Height = Framebuffer.Height;
+            return texture.Framebuffer;
         }
 
         /// <summary>
@@ -163,13 +142,14 @@ namespace Prowl.Runtime
         /// <param name="depthFormat">The format of the depth stencil buffer in the <see cref="RenderTexture"/>. Passing null or empty will omit the creation of the depth stencil buffer.</param>
         /// <param name="enableRandomWrite">Enable random reads/writes to the <see cref="RenderTexture"/> internal buffers. This is useful within compute shaders which draw to the texture.</param>
         public RenderTexture(
-            uint width, uint height, 
-            PixelFormat[] colorFormats = null, 
-            PixelFormat? depthFormat = null, 
-            bool sampled = false, 
+            uint width, uint height,
+            PixelFormat[] colorFormats = null,
+            PixelFormat? depthFormat = null,
+            bool sampled = false,
             bool enableRandomWrite = false,
             TextureSampleCount sampleCount = TextureSampleCount.Count1
-        ) : base("RenderTexture") {
+        ) : base("RenderTexture")
+        {
             if (colorFormats != null && colorFormats.Length > colorAttachmentLimit)
                 throw new Exception($"Invalid number of color buffers! [0-{colorAttachmentLimit}]");
 
@@ -295,7 +275,7 @@ namespace Prowl.Runtime
 
             if (Sampled != other.Sampled)
                 return false;
-            
+
             if (RandomWriteEnabled != other.RandomWriteEnabled)
                 return false;
 
@@ -313,10 +293,10 @@ namespace Prowl.Runtime
         private const int MaxUnusedFrames = 10;
 
         public static RenderTexture GetTemporaryRT(
-            uint width, uint height, 
-            PixelFormat? depthFormat, 
-            PixelFormat[] colorFormats, 
-            bool sampled = true, bool randomWrite = false, 
+            uint width, uint height,
+            PixelFormat? depthFormat,
+            PixelFormat[] colorFormats,
+            bool sampled = true, bool randomWrite = false,
             TextureSampleCount samples = TextureSampleCount.Count1)
         {
             return GetTemporaryRT(new RenderTextureDescription(width, height, depthFormat, colorFormats, sampled, randomWrite, samples));
