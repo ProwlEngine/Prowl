@@ -29,20 +29,37 @@
     <ItemGroup>
         <EmbeddedResource Include="EmbeddedResources\*.*" />
 
+        <!--
         <EmbeddedResource Include="EmbeddedResources/GUI/GLSL/gui-vertex.glsl" LogicalName="gui-vertex.glsl" />
+        <EmbeddedResource Include="EmbeddedResources/GUI/GLSL/gui-vertex-linear.glsl" LogicalName="gui-vertex-linear.glsl" />
         <EmbeddedResource Include="EmbeddedResources/GUI/GLSL/gui-frag.glsl" LogicalName="gui-frag.glsl" />
 
         <EmbeddedResource Include="EmbeddedResources/GUI/GLSLES/gui-vertex.glsles" LogicalName="gui-vertex.glsles" />
+        <EmbeddedResource Include="EmbeddedResources/GUI/GLSLES/gui-vertex-linear.glsles" LogicalName="gui-vertex-linear.glsles" />
         <EmbeddedResource Include="EmbeddedResources/GUI/GLSLES/gui-frag.glsles" LogicalName="gui-frag.glsles" />
 
         <EmbeddedResource Include="EmbeddedResources/GUI/HLSL/gui-vertex.hlsl" LogicalName="gui-vertex.hlsl" />
+        <EmbeddedResource Include="EmbeddedResources/GUI/HLSL/gui-vertex-linear.hlsl" LogicalName="gui-vertex-linear.hlsl" />
         <EmbeddedResource Include="EmbeddedResources/GUI/HLSL/gui-frag.hlsl" LogicalName="gui-frag.hlsl" />
 
         <EmbeddedResource Include="EmbeddedResources/GUI/SPIR-V/gui-vertex.spv" LogicalName="gui-vertex.spv" />
+        <EmbeddedResource Include="EmbeddedResources/GUI/SPIR-V/gui-vertex-linear.spv" LogicalName="gui-vertex-linear.spv" />
         <EmbeddedResource Include="EmbeddedResources/GUI/SPIR-V/gui-frag.spv" LogicalName="gui-frag.spv" />
 
         <EmbeddedResource Include="EmbeddedResources/GUI/Metal/gui-vertex.metal" LogicalName="gui-vertex.metal" />
+        <EmbeddedResource Include="EmbeddedResources/GUI/Metal/gui-vertex-linear.metal" LogicalName="gui-vertex-linear.metal" />
         <EmbeddedResource Include="EmbeddedResources/GUI/Metal/gui-frag.metal" LogicalName="gui-frag.metal" />
+        -->
+
+        <EmbeddedResource Include="EmbeddedResources/GUI/**/gui-vertex.*">
+          <LogicalName>%(Filename)%(Extension)</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="EmbeddedResources/GUI/**/gui-vertex-linear.*">
+          <LogicalName>%(Filename)%(Extension)</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="EmbeddedResources/GUI/**/gui-frag.*">
+          <LogicalName>%(Filename)%(Extension)</LogicalName>
+        </EmbeddedResource>
     </ItemGroup>
 
     <ItemGroup>
