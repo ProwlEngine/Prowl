@@ -76,34 +76,17 @@ namespace Prowl.Runtime
             return list;
         }
 
-
-        private static CommandList CreateCommandListForBuffer(CommandBuffer commandBuffer)
-        {
-            CommandList list = GetCommandList();
-
-            RenderState state = new RenderState();
-
-            foreach (var command in commandBuffer.Buffer)
-                command.ExecuteCommand(list, state);
-
-            return list;
-        }
-
         public static void SubmitCommandBuffer(CommandBuffer commandBuffer, bool awaitComplete = false)
         {
-            CommandList list = CreateCommandListForBuffer(commandBuffer);
+            commandBuffer.Clear();
 
             try
             {
-                SubmitCommandList(list, awaitComplete);
+                SubmitCommandList(commandBuffer._commandList, awaitComplete);
             }
             catch (Exception ex)
             {
                 Debug.LogError("Failed to execute command list", ex);
-            }
-            finally
-            {
-                list.Dispose();
             }
         }
 

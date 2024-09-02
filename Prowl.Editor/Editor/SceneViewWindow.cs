@@ -77,13 +77,13 @@ public class SceneViewWindow : EditorWindow
 
         gui.CurrentNode.Padding(5);
 
-        var renderSize = gui.CurrentNode.LayoutData.Rect.Size;
+        Vector2 renderSize = gui.CurrentNode.LayoutData.Rect.Size;
         if (renderSize.x == 0 || renderSize.y == 0) return;
 
         if (RenderTarget == null || (int)renderSize.x != RenderTarget.Width || (int)renderSize.y != RenderTarget.Height)
             RefreshRenderTexture((int)renderSize.x, (int)renderSize.y);
 
-        var data = Cam.GetData(renderSize);
+        Camera.CameraData data = Cam.GetData(renderSize);
 
         WindowCenter = gui.CurrentNode.LayoutData.Rect.Center;
 
@@ -93,22 +93,26 @@ public class SceneViewWindow : EditorWindow
 
         SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
 
-        // RenderingContext context = new RenderingContext("Main", Graphics.Renderables, RenderTarget);
+        CommandBuffer buffer = CommandBufferPool.Get("Scene View Buffer");
 
+        buffer.SetRenderTarget(RenderTarget!);
+        buffer.ClearRenderTarget(true, true, Color.black);
+
+        // RenderingContext context = new RenderingContext("Main", Graphics.Renderables, RenderTarget);
         // Graphics.Render([data], context);
 
-        var imagePos = gui.CurrentNode.LayoutData.Rect.Position;
-        var imageSize = gui.CurrentNode.LayoutData.Rect.Size;
-        gui.Draw2D.DrawImage(RenderTarget.ColorBuffers[0], imagePos, imageSize, Color.white);
+        Vector2 imagePos = gui.CurrentNode.LayoutData.Rect.Position;
+        Vector2 imageSize = gui.CurrentNode.LayoutData.Rect.Size;
+        gui.Draw2D.DrawImage(RenderTarget!.ColorBuffers[0], imagePos, imageSize, Color.white);
 
         // TODO: Camera rendering clears Gizmos untill the rendering overhaul, so gizmos will Flicker here
-        foreach (var activeGO in SceneManager.AllGameObjects)
+        foreach (GameObject activeGO in SceneManager.AllGameObjects)
         {
             if (activeGO.enabledInHierarchy)
             {
                 if (activeGO.hideFlags.HasFlag(HideFlags.NoGizmos)) continue;
 
-                foreach (var component in activeGO.GetComponents())
+                foreach (MonoBehaviour component in activeGO.GetComponents())
                 {
                     component.DrawGizmos();
                     if (HierarchyWindow.SelectHandler.IsSelected(new WeakReference(activeGO)))
@@ -120,7 +124,6 @@ public class SceneViewWindow : EditorWindow
 
         if (SceneViewPreferences.Instance.GridType != GridType.None)
         {
-            CommandBuffer buffer = CommandBufferPool.Get("Scene View Buffer");
             gridMesh ??= Mesh.GetFullscreenQuad();
             gridMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Grid.shader"));
 
@@ -133,7 +136,7 @@ public class SceneViewWindow : EditorWindow
 
             Matrix4x4.Invert(data.View * data.Projection, out Matrix4x4 invertedMVP);
 
-            buffer.SetMatrix("MvpInverse", invertedMVP);
+            buffer.SetMatrix("MvpInverse", invertedMVP.ToFloat());
 
             buffer.SetVector("CameraPosition", Cam.Transform.position);
             buffer.SetVector("PlaneNormal", planeInfo.Item1);
@@ -146,17 +149,17 @@ public class SceneViewWindow : EditorWindow
 
             buffer.SetMaterial(gridMat, 0);
             buffer.DrawSingle(gridMesh);
-
-            // context.ExecuteCommandBuffer(buffer);
-
-            CommandBufferPool.Release(buffer);
-
-            // context.Submit();
         }
 
-        var selectedWeaks = HierarchyWindow.SelectHandler.Selected;
+
+        Graphics.SubmitCommandBuffer(buffer);
+
+        CommandBufferPool.Release(buffer);
+
+
+        List<WeakReference> selectedWeaks = HierarchyWindow.SelectHandler.Selected;
         var selectedGOs = new List<GameObject>();
-        foreach (var weak in selectedWeaks)
+        foreach (WeakReference weak in selectedWeaks)
             if (weak.Target is GameObject go)
                 selectedGOs.Add(go);
 
@@ -195,7 +198,7 @@ public class SceneViewWindow : EditorWindow
         // Flip Y
         mouseUV.y = 1.0 - mouseUV.y;
 
-        var viewportInteractable = gui.GetInteractable();
+        Interactable viewportInteractable = gui.GetInteractable();
 
         HandleDragnDrop();
         gui.SetCursorVisibility(true);
@@ -203,7 +206,7 @@ public class SceneViewWindow : EditorWindow
         {
             if (gui.IsPointerClick(MouseButton.Left) && !gizmo.IsOver && !viewManipulator.IsOver)
             {
-                var hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+                SceneRaycaster.MeshHitInfo hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
 
                 // If the Scene Camera has no Render Graph, the gBuffer may not be initialized
                 if (hit.gameObject != null)
@@ -216,7 +219,7 @@ public class SceneViewWindow : EditorWindow
                     else
                     {
                         // Find Prefab go.IsPrefab
-                        var prefab = hit.gameObject.Transform;
+                        Transform prefab = hit.gameObject.Transform;
                         while (prefab.parent != null)
                         {
                             prefab = prefab.parent;
@@ -270,7 +273,7 @@ public class SceneViewWindow : EditorWindow
                         LastFocusedCameraChanged = false;
                     }
 
-                    var mouseDelta = gui.PointerDelta;
+                    Vector2 mouseDelta = gui.PointerDelta;
                     if (SceneViewPreferences.Instance.InvertLook)
                         mouseDelta.y = -mouseDelta.y;
                     camY += mouseDelta.x * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
@@ -288,8 +291,8 @@ public class SceneViewWindow : EditorWindow
                 if (gui.IsPointerDown(MouseButton.Middle))
                 {
                     gui.SetCursorVisibility(false);
-                    var mouseDelta = gui.PointerDelta;
-                    var pos = Cam.GameObject.Transform.position;
+                    Vector2 mouseDelta = gui.PointerDelta;
+                    Vector3 pos = Cam.GameObject.Transform.position;
                     pos -= Cam.GameObject.Transform.right * mouseDelta.x * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
                     pos += Cam.GameObject.Transform.up * mouseDelta.y * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
                     Cam.GameObject.Transform.position = pos;
@@ -316,7 +319,7 @@ public class SceneViewWindow : EditorWindow
 
                     // Calculate the bounding box based on the positions of selected objects
                     Bounds combinedBounds = new Bounds();
-                    foreach (var obj in HierarchyWindow.SelectHandler.Selected)
+                    foreach (WeakReference obj in HierarchyWindow.SelectHandler.Selected)
                     {
                         if (obj.Target is GameObject go)
                         {
@@ -365,7 +368,7 @@ public class SceneViewWindow : EditorWindow
 
         for (int i = 0; i < selectedGOs.Count; i++)
         {
-            var selectedGo = selectedGOs[i];
+            GameObject selectedGo = selectedGOs[i];
             centerOfAll += selectedGo.Transform.position;
         }
 
@@ -380,10 +383,10 @@ public class SceneViewWindow : EditorWindow
         }
 
         gizmo.SetTransform(centerOfAll, rotation, scale);
-        var result = gizmo.Update(mouseRay, gui.PointerPos, blockPicking);
+        GizmoResult? result = gizmo.Update(mouseRay, gui.PointerPos, blockPicking);
         if (result.HasValue)
         {
-            foreach (var selectedGo in selectedGOs)
+            foreach (GameObject selectedGo in selectedGOs)
             {
                 if (result.Value.TranslationDelta.HasValue)
                     selectedGo.Transform.position += result.Value.TranslationDelta.Value;
@@ -410,14 +413,14 @@ public class SceneViewWindow : EditorWindow
 
     private void HandleDragnDrop()
     {
-        if (DragnDrop.Drop<GameObject>(out var original))
+        if (DragnDrop.Drop<GameObject>(out GameObject? original))
         {
             if (original.AssetID == Guid.Empty) return;
 
             GameObject go = (GameObject)EngineObject.Instantiate(original, true);
             if (go != null)
             {
-                var hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+                SceneRaycaster.MeshHitInfo hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
 
                 if (hit.worldPosition == Vector3.zero)
                     go.Transform.position = Cam.GameObject.Transform.position + Cam.GameObject.Transform.forward * 10;
@@ -426,13 +429,13 @@ public class SceneViewWindow : EditorWindow
             }
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
-        else if (DragnDrop.Drop<Prefab>(out var prefab))
+        else if (DragnDrop.Drop<Prefab>(out Prefab? prefab))
         {
-            var go = prefab.Instantiate();
-            var t = go;
+            GameObject go = prefab.Instantiate();
+            GameObject t = go;
             if (t != null)
             {
-                var hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+                SceneRaycaster.MeshHitInfo hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
 
                 if (hit.worldPosition == Vector3.zero)
                     t.Transform.position = Cam.GameObject.Transform.position + Cam.GameObject.Transform.forward * 10;
@@ -442,18 +445,18 @@ public class SceneViewWindow : EditorWindow
 
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
-        else if (DragnDrop.Drop<Scene>(out var scene))
+        else if (DragnDrop.Drop<Scene>(out Scene? scene))
         {
             SceneManager.LoadScene(scene);
         }
-        else if (DragnDrop.Drop<Material>(out var material))
+        else if (DragnDrop.Drop<Material>(out Material? material))
         {
-            var hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+            SceneRaycaster.MeshHitInfo hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
 
             if (hit.gameObject != null)
             {
                 // Look for a MeshRenderer
-                var renderer = hit.gameObject.GetComponent<MeshRenderer>();
+                MeshRenderer? renderer = hit.gameObject.GetComponent<MeshRenderer>();
                 if (renderer != null)
                     renderer.Material = material;
             }
@@ -487,7 +490,7 @@ public class SceneViewWindow : EditorWindow
             }
             gui.Tooltip("Select Editor Camera", align: Gui.TooltipAlign.Right);
 
-            var gridType = SceneViewPreferences.Instance.GridType;
+            GridType gridType = SceneViewPreferences.Instance.GridType;
             int gridTypeIndex = (int)gridType;
             Gui.WidgetStyle style = EditorGUI.GetInputStyle();
             style.BGColor = Color.clear;

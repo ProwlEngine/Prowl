@@ -1,5 +1,5 @@
 using System;
-using System.Numerics;
+using System.Linq;
 
 using Veldrid;
 
@@ -11,16 +11,11 @@ namespace Prowl.Runtime
     {
         public GraphicsPipeline Pipeline { get; private set; }
 
-        private bool modifiedResources;
-        private bool modifiedAnyBuffer;
-
         public ResourceSetDescription description;
         private ResourceSet resources;
 
         private DeviceBuffer[] uniformBuffers;
-
         private byte[][] intermediateBuffers;
-        private bool[] bufferWasModified;
 
 
         public BindableResourceSet(GraphicsPipeline pipeline, ResourceSetDescription description, DeviceBuffer[] buffers, byte[][] intermediate)
@@ -28,212 +23,107 @@ namespace Prowl.Runtime
             this.Pipeline = pipeline;
             this.description = description;
             this.uniformBuffers = buffers;
-            this.intermediateBuffers = intermediate;
-            this.bufferWasModified = new bool[uniformBuffers.Length];
-            this.modifiedResources = true; // Initial resource set upload
+            this.intermediateBuffers = buffers.Select(x => new byte[x.SizeInBytes]).ToArray();
         }
 
 
-        public void Bind(CommandList list)
+        public void Bind(CommandList list, PropertyState state)
         {
-            if (modifiedResources)
+            bool recreateResourceSet = false | (resources == null);
+
+            for (int i = 0; i < Pipeline.Uniforms.Length; i++)
+            {
+                Uniform uniform = Pipeline.Uniforms[i];
+
+                switch (uniform.kind)
+                {
+                    case ResourceKind.UniformBuffer:
+                        UpdateBuffer(list, uniform.name, state);
+                        break;
+
+                    case ResourceKind.StructuredBufferReadOnly:
+                        if (state._buffers.TryGetValue(uniform.name, out GraphicsBuffer buffer))
+                            if (buffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadOnly))
+                                UpdateResource(buffer.Buffer, uniform.binding, ref recreateResourceSet);
+                        break;
+
+                    case ResourceKind.StructuredBufferReadWrite:
+                        if (state._buffers.TryGetValue(uniform.name, out GraphicsBuffer rwbuffer))
+                            if (rwbuffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadWrite))
+                                UpdateResource(rwbuffer.Buffer, uniform.binding, ref recreateResourceSet);
+                        break;
+
+                    case ResourceKind.TextureReadOnly:
+                        if (state._textures.TryGetValue(uniform.name, out AssetRef<Texture> texture))
+                            if (texture.Res.Usage.HasFlag(TextureUsage.Sampled))
+                                UpdateResource(texture.Res.TextureView, uniform.binding, ref recreateResourceSet);
+                        break;
+
+                    case ResourceKind.TextureReadWrite:
+                        if (state._textures.TryGetValue(uniform.name, out AssetRef<Texture> rwtexture))
+                            if (rwtexture.Res.Usage.HasFlag(TextureUsage.Storage))
+                                UpdateResource(rwtexture.Res.TextureView, uniform.binding, ref recreateResourceSet);
+                        break;
+
+                    case ResourceKind.Sampler:
+                        if (state._textures.TryGetValue(SliceSampler(uniform.name), out AssetRef<Texture> stexture))
+                            if (stexture.Res.Usage.HasFlag(TextureUsage.Sampled))
+                                UpdateResource(stexture.Res.Sampler.InternalSampler, uniform.binding, ref recreateResourceSet);
+                        break;
+                }
+            }
+
+            if (recreateResourceSet)
             {
                 resources?.Dispose();
                 resources = Graphics.Factory.CreateResourceSet(description);
-
-                modifiedResources = false;
-            }
-
-            if (modifiedAnyBuffer)
-            {
-                for (int i = 0; i < uniformBuffers.Length; i++)
-                {
-                    if (bufferWasModified[i])
-                    {
-                        list.UpdateBuffer(uniformBuffers[i], 0, intermediateBuffers[i]);
-                        bufferWasModified[i] = false;
-                    }
-                }
             }
 
             list.SetGraphicsResourceSet(0, resources);
         }
 
 
-        public bool UpdateBuffer(CommandList list, string ID)
+        private void UpdateResource(BindableResource newResource, uint binding, ref bool wasChanged)
         {
-            if (!GetUniform(ID, out Uniform? uniform, out sbyte buffer, out _))
+            if (description.BoundResources[binding].Resource != newResource.Resource)
+            {
+                wasChanged |= true;
+                description.BoundResources[binding] = newResource;
+            }
+        }
+
+
+        public bool UpdateBuffer(CommandList list, string ID, PropertyState state)
+        {
+            if (!Pipeline.GetBuffer(ID, out ushort uniformIndex, out ushort bufferIndex))
                 return false;
 
-            if (buffer < 0)
-                return false;
+            Uniform uniform = Pipeline.Uniforms[uniformIndex];
+            DeviceBuffer buffer = uniformBuffers[bufferIndex];
+            byte[] tempBuffer = intermediateBuffers[bufferIndex];
 
-            list.UpdateBuffer(uniformBuffers[buffer], 0, intermediateBuffers[buffer]);
+            for (int i = 0; i < uniform.members.Length; i++)
+            {
+                UniformMember member = uniform.members[i];
+
+                if (state._values.TryGetValue(member.name, out byte[] value))
+                    Buffer.BlockCopy(value, 0, tempBuffer, (int)member.bufferOffsetInBytes, (int)member.size);
+            }
+
+            list.UpdateBuffer(buffer, 0, tempBuffer);
 
             return true;
         }
 
 
-        public bool GetUniform(string ID, out Uniform? uniform, out sbyte buffer, out UniformMember member)
+        private static string SliceSampler(string name)
         {
-            uniform = null;
-            member = default;
+            const string prefix = "sampler";
 
-            if (!Pipeline.GetUniform(ID, out byte uniformIndex, out buffer, out short memberIndex))
-                return false;
+            if (name.StartsWith(prefix))
+                return name.Substring(prefix.Length);
 
-            uniform = Pipeline.Uniforms[uniformIndex];
-
-            if (memberIndex >= 0)
-                member = uniform.members[memberIndex];
-
-            return true;
-        }
-
-
-        public void SetResource(BindableResource newResource, uint index)
-        {
-            BindableResource res = description.BoundResources[index];
-
-            modifiedResources |= res.Resource != newResource.Resource;
-
-            description.BoundResources[index] = newResource;
-        }
-
-
-        public bool SetTexture(string ID, Texture value)
-        {
-            if (value == null ||
-                (!value.Usage.HasFlag(TextureUsage.Sampled) &&
-                !value.Usage.HasFlag(TextureUsage.Storage)))
-                return false;
-
-            if (!GetUniform(ID, out Uniform? uniform, out _, out _))
-                return false;
-
-            if (uniform.kind != ResourceKind.TextureReadOnly && uniform.kind != ResourceKind.TextureReadWrite)
-                return false;
-
-            if (!value.Usage.HasFlag(TextureUsage.Storage) && uniform.kind == ResourceKind.TextureReadWrite)
-                return false;
-
-            SetResource(value.TextureView, uniform.binding);
-
-            return true;
-        }
-
-
-        public bool SetSampler(string ID, TextureSampler value)
-        {
-            if (value == null)
-                return false;
-
-            if (!GetUniform(ID, out Uniform? uniform, out _, out _))
-                return false;
-
-            if (uniform.kind != ResourceKind.Sampler)
-                return false;
-
-            SetResource(value.InternalSampler, uniform.binding);
-
-            return true;
-        }
-
-
-        public unsafe bool SetFloat(string ID, float value)
-            => UploadData(ID, &value, ValueType.Float, sizeof(float));
-
-
-        public unsafe bool SetInt(string ID, int value)
-            => UploadData(ID, &value, ValueType.Int, sizeof(int));
-
-
-        public unsafe bool SetInt(string ID, uint value)
-            => UploadData(ID, &value, ValueType.UInt, sizeof(uint));
-
-
-        public unsafe bool SetVector(string ID, Vector4 value)
-            => UploadData(ID, &value, ValueType.Float, sizeof(float) * 4);
-
-
-        public unsafe bool SetMatrix(string ID, Matrix4x4 value)
-            => UploadData(ID, &value, ValueType.Float, sizeof(float) * 4 * 4);
-
-
-        public unsafe bool SetFloatArray(string ID, float[] values)
-        {
-            if (values != null)
-                fixed (float* valuesPtr = values)
-                    return UploadData(ID, valuesPtr, ValueType.Float, sizeof(float) * values.Length);
-
-            return false;
-        }
-
-
-        public unsafe bool SetIntArray(string ID, int[] values)
-        {
-            if (values != null)
-                fixed (int* valuesPtr = values)
-                    return UploadData(ID, valuesPtr, ValueType.Int, sizeof(int) * values.Length);
-
-            return false;
-        }
-
-
-        public unsafe bool SetVectorArray(string ID, Vector4[] values)
-        {
-            if (values != null)
-                fixed (Vector4* valuesPtr = values)
-                    return UploadData(ID, valuesPtr, ValueType.Float, sizeof(float) * 4 * values.Length);
-
-            return false;
-        }
-
-
-        public unsafe bool SetMatrixArray(string ID, Matrix4x4[] values)
-        {
-            if (values != null)
-                fixed (Matrix4x4* valuesPtr = values)
-                    return UploadData(ID, valuesPtr, ValueType.Float, sizeof(float) * 4 * 4 * values.Length);
-
-            return false;
-        }
-
-
-        private unsafe bool UploadData<T>(string ID, T* dataPtr, ValueType type, int maxSize) where T : unmanaged
-        {
-            if (!GetUniform(ID, out Uniform? uniform, out sbyte bufferIndex, out UniformMember member))
-                return false;
-
-            if (bufferIndex < 0)
-                return false;
-
-            if (uniform.kind != ResourceKind.UniformBuffer || member.type != type)
-                return false;
-
-            long size = Math.Min(member.size, maxSize);
-            byte[] bytes = intermediateBuffers[bufferIndex];
-
-            fixed (byte* bytesPtr = bytes)
-                Buffer.MemoryCopy(dataPtr, (bytesPtr + member.bufferOffsetInBytes), member.size, size);
-
-            modifiedAnyBuffer |= true;
-            bufferWasModified[bufferIndex] |= true;
-
-            return true;
-        }
-
-        public bool SetBuffer(string ID, GraphicsBuffer value)
-        {
-            if (!GetUniform(ID, out Uniform? uniform, out _, out _))
-                return false;
-
-            if (!value.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadWrite) && uniform.kind == ResourceKind.StructuredBufferReadWrite)
-                return false;
-
-            SetResource(value.Buffer, uniform.binding);
-
-            return true;
+            return name;
         }
 
 

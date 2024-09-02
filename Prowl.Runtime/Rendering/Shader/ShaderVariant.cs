@@ -7,19 +7,19 @@ using System.Linq;
 
 namespace Prowl.Runtime
 {
-    public sealed class ShaderVariant
+    public sealed class ShaderVariant : ISerializationCallbackReceiver
     {
         [SerializeField, HideInInspector]
         private KeywordState variantKeywords;
 
-        
+
         [HideInInspector]
         public StageInput[] VertexInputs;
-        
+
         [HideInInspector]
         public Uniform[] Uniforms;
 
-        [HideInInspector]
+        [NonSerialized]
         public ShaderStages[] UniformStages;
 
 
@@ -65,5 +65,12 @@ namespace Prowl.Runtime
                 _ => throw invalidBackend,
             };
         }
+
+
+        [SerializeField]
+        private byte[] _serializedShaderStages;
+
+        public void OnBeforeSerialize() => _serializedShaderStages = UniformStages.Select(x => (byte)x).ToArray();
+        public void OnAfterDeserialize() => UniformStages = _serializedShaderStages.Select(x => (ShaderStages)x).ToArray();
     }
 }

@@ -1,4 +1,5 @@
 using System;
+
 using Veldrid;
 
 namespace Prowl.Runtime
@@ -22,10 +23,10 @@ namespace Prowl.Runtime
             return Equals(other);
         }
 
-        public bool Equals(StageInput other) 
+        public bool Equals(StageInput other)
             => semantic == other.semantic;
-        
+
         public override int GetHashCode()
             => semantic.GetHashCode();
-    } 
+    }
 }

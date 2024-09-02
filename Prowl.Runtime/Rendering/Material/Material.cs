@@ -1,5 +1,10 @@
 ﻿using System;
 
+using Vector2F = System.Numerics.Vector2;
+using Vector3F = System.Numerics.Vector3;
+using Vector4F = System.Numerics.Vector4;
+using Matrix4x4F = System.Numerics.Matrix4x4;
+
 namespace Prowl.Runtime
 {
     public sealed class Material : EngineObject
@@ -12,9 +17,9 @@ namespace Prowl.Runtime
 
         public Material(AssetRef<Shader> shader, PropertyState? properties = null, KeywordState? keywords = null) : base("New Material")
         {
-            if (shader.Res == null) 
+            if (shader.Res == null)
                 throw new ArgumentNullException(nameof(shader));
-            
+
             Shader = shader;
             Properties = properties ?? new();
             LocalKeywords = keywords ?? KeywordState.Default;
@@ -23,13 +28,14 @@ namespace Prowl.Runtime
         public void SetKeyword(string keyword, string value) => LocalKeywords.SetKey(keyword, value);
 
         public void SetColor(string name, Color value) => Properties.SetColor(name, value);
-        public void SetVector(string name, Vector2 value) => Properties.SetVector(name, value);
-        public void SetVector(string name, Vector3 value) => Properties.SetVector(name, value);
-        public void SetVector(string name, Vector4 value) => Properties.SetVector(name, value);
+        public void SetVector(string name, Vector2F value) => Properties.SetVector(name, value);
+        public void SetVector(string name, Vector3F value) => Properties.SetVector(name, value);
+        public void SetVector(string name, Vector4F value) => Properties.SetVector(name, value);
         public void SetFloat(string name, float value) => Properties.SetFloat(name, value);
         public void SetInt(string name, int value) => Properties.SetInt(name, value);
-        public void SetMatrix(string name, Matrix4x4 value) => Properties.SetMatrix(name, value);
+        public void SetMatrix(string name, Matrix4x4F value) => Properties.SetMatrix(name, value);
         public void SetTexture(string name, AssetRef<Texture> value) => Properties.SetTexture(name, value);
+
 
         //public void SetMatrices(string name, System.Numerics.Matrix4x4[] value) { }
 

@@ -4,9 +4,9 @@ using System.Collections.Generic;
 namespace Prowl.Runtime.Utils
 {
     // Based on how https://github.com/Unity-Technologies/Graphics/blob/master/Packages/com.unity.render-pipelines.core/Runtime/Common/ObjectPools.cs works
-     
+
     /// <summary>
-    /// A pool of object instances. 
+    /// A pool of object instances.
     /// </summary>
     /// <typeparam name="T">The instance type to pool.</typeparam>
     public class ObjectPool<T> where T : new()
@@ -14,11 +14,11 @@ namespace Prowl.Runtime.Utils
         protected readonly Stack<T> poolStack = new Stack<T>();
 
         /// <summary>The count of objects stored in the internal pool and the instances released by <see cref="Get"/>.</summary>
-        protected int PoolCount { get; private set; }
-        
+        protected int PoolCount { get; private set; } = 0;
+
         /// <summary>The count of active and released objects the pool contains.</summary>
         protected int ActiveCount => PoolCount - InactiveCount;
-        
+
         /// <summary>The count of inactive objects the pool contains.</summary>
         protected int InactiveCount => poolStack.Count;
 
@@ -29,10 +29,10 @@ namespace Prowl.Runtime.Utils
 
         /// <summary>
         /// <para>
-        /// Get an object from the pool. If no object is available, creates a new instance. 
+        /// Get an object from the pool. If no object is available, creates a new instance.
         /// </para>
-        /// Once this object has been created and given back to the caller, the caller does not truly need to call <see cref="Release"/>. 
-        /// However, it is best practice to do so, otherwise the pool ends up as a glorified instantiator. 
+        /// Once this object has been created and given back to the caller, the caller does not truly need to call <see cref="Release"/>.
+        /// However, it is best practice to do so, otherwise the pool ends up as a glorified instantiator.
         /// </summary>
         public T Get()
         {
@@ -54,8 +54,8 @@ namespace Prowl.Runtime.Utils
         /// <para>
         /// Get an object from the pool with an instantiator to use if none exists.
         /// </para>
-        /// Once this object has been created and given back to the caller, the caller does not truly need to call <see cref="Release"/>. 
-        /// However, it is best practice to do so, otherwise the pool ends up as a glorified instantiator. 
+        /// Once this object has been created and given back to the caller, the caller does not truly need to call <see cref="Release"/>.
+        /// However, it is best practice to do so, otherwise the pool ends up as a glorified instantiator.
         /// </summary>
         public T Get(Func<T> instantiator)
         {
@@ -78,7 +78,7 @@ namespace Prowl.Runtime.Utils
         /// </summary>
         /// <param name="element">Object to release.</param>
         public void Release(T element)
-        {    
+        {
             poolStack.Push(element);
         }
     }

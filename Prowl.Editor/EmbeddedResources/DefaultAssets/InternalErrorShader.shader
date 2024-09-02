@@ -9,7 +9,7 @@ Pass "InternalError"
     {
         // Depth write
         DepthWrite On
-        
+
         // Comparison kind
         DepthTest LessEqual
     }
@@ -17,44 +17,20 @@ Pass "InternalError"
     // Rasterizer culling mode
     Cull None
 
-	Inputs
-	{
-		VertexInput 
+    SHADERPROGRAM
+        #pragma vertex Vertex
+        #pragma fragment Fragment
+
+        float4x4 Mat_MVP;
+
+        float4 Vertex(float3 position : POSITION) : SV_POSITION
         {
-            Position // Input location 0
+            return mul(Mat_MVP, float4(position, 1.0));
         }
 
-        // Set 0
-        Set
+        float4 Fragment() : SV_TARGET
         {
-            // Binding 0
-            Buffer MVPBuffer
-            {
-				Mat_MVP Matrix4x4
-            }
+            return float4(1.0, 0.0, 1.0, 1.0);
         }
-	}
-
-	PROGRAM VERTEX
-		layout(location = 0) in vec3 vertexPosition;
-		
-		layout(set = 0, binding = 0, std140) uniform MVPBuffer
-		{
-			mat4 Mat_MVP;
-		};
-
-		void main() 
-		{
-			gl_Position = Mat_MVP * vec4(vertexPosition, 1.0);
-		}
-	ENDPROGRAM
-
-	PROGRAM FRAGMENT
-		layout(location = 0) out vec4 OutputColor;
-
-		void main()
-		{
-			OutputColor = vec4(1.0, 0.0, 1.0, 1.0);
-		}
 	ENDPROGRAM
 }

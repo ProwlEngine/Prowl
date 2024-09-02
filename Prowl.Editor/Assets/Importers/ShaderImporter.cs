@@ -2,26 +2,20 @@
 using Prowl.Runtime.Utils;
 using Prowl.Editor.Utilities;
 
-using System.Text.RegularExpressions;
-
 namespace Prowl.Editor.Assets
 {
-    [Importer("ShaderIcon.png", typeof(Runtime.Shader), ".shader")]
+    [Importer("ShaderIcon.png", typeof(Shader), ".shader")]
     public class ShaderImporter : ScriptedImporter
     {
+        private static Shader s_internalError;
+
         public static readonly string[] Supported = { ".shader" };
-
-        private static FileInfo currentAssetPath;
-
-        private static readonly Regex _preprocessorIncludeRegex = new Regex(@"^\s*#include\s*[""<](.+?)["">]\s*$", RegexOptions.Multiline);
 
         public override void Import(SerializedAsset ctx, FileInfo assetPath)
         {
-            currentAssetPath = assetPath;
-
             string shaderScript = File.ReadAllText(assetPath.FullName);
 
-            Runtime.Shader? shader;
+            Shader? shader;
 
             try
             {
@@ -30,12 +24,20 @@ namespace Prowl.Editor.Assets
             catch (Exception ex)
             {
                 if (assetPath.Name == "InternalErrorShader.shader")
+                {
                     Debug.LogError("InternalErrorShader failed to compile. Non-compiling shaders loaded through script will cause cascading exceptions.", ex);
+                    ctx.SetMainObject(null);
+                    return;
+                }
 
                 Debug.LogError("Failed to compile shader", ex);
-                shader = Application.AssetProvider.LoadAsset<Runtime.Shader>("Defaults/InternalErrorShader.shader").Res;
+
+                if (s_internalError == null)
+                    s_internalError = Application.AssetProvider.LoadAsset<Shader>("Defaults/InternalErrorShader.shader").Res!;
+
+                shader = s_internalError;
             }
-            
+
             ctx.SetMainObject(shader);
         }
     }

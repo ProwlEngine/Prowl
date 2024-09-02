@@ -21,8 +21,8 @@ namespace Prowl.Runtime
         UInt
     }
 
-    public struct UniformMember 
-    { 
+    public struct UniformMember
+    {
         public string name;
 
         public uint bufferOffsetInBytes;
@@ -32,12 +32,12 @@ namespace Prowl.Runtime
         public uint size;
         public uint arrayStride;
         public uint matrixStride;
-        
+
         public ValueType type;
     }
 
     public class Uniform
-    { 
+    {
         private static string CleanseName(string rawName)
         {
             return rawName.Replace("type.", "");
@@ -51,6 +51,8 @@ namespace Prowl.Runtime
 
         public UniformMember[] members;
 
+
+        private Uniform() { }
 
         public Uniform(string rawName, uint binding, ResourceKind kind)
         {
@@ -83,7 +85,7 @@ namespace Prowl.Runtime
                 return sb.ToString();
 
             sb.AppendLine($"  Byte size: {size}");
-            
+
             if (members == null)
                 return sb.ToString();
 
@@ -112,7 +114,7 @@ namespace Prowl.Runtime
 
             if (kind == ResourceKind.UniformBuffer && size != other.size && !members.SequenceEqual(other.members))
                 return false;
-            
+
             return name == other.name && binding == other.binding;
         }
     }

@@ -29,7 +29,7 @@ namespace Prowl.Runtime
 
         public bool Equals(GraphicsPipelineDescription other)
         {
-            return 
+            return
                 pass == other.pass &&
                 variant == other.variant &&
                 output.Equals(other.output);
@@ -46,14 +46,14 @@ namespace Prowl.Runtime
         public readonly ResourceLayout resourceLayout;
 
         private Dictionary<string, uint> semanticLookup;
-        private Dictionary<string, uint> uniformLookup;
+        private Dictionary<string, uint> bufferLookup;
 
         private byte bufferCount;
 
         public Uniform[] Uniforms => shader.Uniforms;
 
         private Veldrid.GraphicsPipelineDescription description;
-        
+
         private static readonly int pipelineCount = 20; // 20 possible combinations (5 topologies, 2 fill modes, 2 scissor modes)
         private Pipeline[] pipelines;
 
@@ -80,7 +80,7 @@ namespace Prowl.Runtime
             this.shader = description.variant;
 
             ShaderDescription[] shaderDescriptions = shader.GetProgramsForBackend();
-            
+
             // Create shader set description
             Veldrid.Shader[] shaders = new Veldrid.Shader[shaderDescriptions.Length];
 
@@ -102,8 +102,8 @@ namespace Prowl.Runtime
                 semanticLookup[input.semantic] = (uint)inputIndex;
 
                 // If the last char of the semantic is a single '0', add a non-indexed version of the semantic to the lookup.
-                if (input.semantic.Length >= 2 && 
-                    input.semantic[input.semantic.Length - 1] == '0' && 
+                if (input.semantic.Length >= 2 &&
+                    input.semantic[input.semantic.Length - 1] == '0' &&
                     !char.IsNumber(input.semantic[input.semantic.Length - 2]))
                 {
                     semanticLookup[input.semantic.Substring(0, input.semantic.Length - 1)] = (uint)inputIndex;
@@ -113,29 +113,23 @@ namespace Prowl.Runtime
             this.shaderSet = new ShaderSetDescription(vertexLayouts, shaders);
 
             // Create resource layout and uniform lookups
-            this.uniformLookup = new();
+            this.bufferLookup = new();
 
             ResourceLayoutDescription layoutDescription = new ResourceLayoutDescription(
                 new ResourceLayoutElementDescription[Uniforms.Length]);
 
-            for (byte uniformIndex = 0; uniformIndex < Uniforms.Length; uniformIndex++)
+            for (ushort uniformIndex = 0; uniformIndex < Uniforms.Length; uniformIndex++)
             {
                 Uniform uniform = Uniforms[uniformIndex];
                 ShaderStages stages = shader.UniformStages[uniformIndex];
 
-                layoutDescription.Elements[uniformIndex] = 
+                layoutDescription.Elements[uniformIndex] =
                     new ResourceLayoutElementDescription(uniform.name, uniform.kind, stages);
-
-                uniformLookup[uniform.name] = Pack(uniformIndex, -1, -1);
 
                 if (uniform.kind != ResourceKind.UniformBuffer)
                     continue;
-                
-                uniformLookup[uniform.name] = Pack(uniformIndex, (sbyte)bufferCount, -1);
 
-                for (short member = 0; member < uniform.members.Length; member++)
-                    uniformLookup[uniform.members[member].name] = Pack(uniformIndex, (sbyte)bufferCount, member);
-
+                bufferLookup[uniform.name] = Pack(uniformIndex, bufferCount);
                 bufferCount++;
             }
 
@@ -144,21 +138,21 @@ namespace Prowl.Runtime
             this.pipelines = new Pipeline[pipelineCount];
 
             RasterizerStateDescription rasterizerState = new(
-                description.pass.CullMode, 
+                description.pass.CullMode,
                 PolygonFillMode.Solid,
-                FrontFace, 
+                FrontFace,
                 description.pass.DepthClipEnabled,
                 false
             );
 
             this.description = new(
-                description.pass.Blend, 
-                description.pass.DepthStencilState, 
-                rasterizerState, 
+                description.pass.Blend,
+                description.pass.DepthStencilState,
+                rasterizerState,
                 PrimitiveTopology.LineList,
-                shaderSet, 
-                [ resourceLayout ],
-                description.output ?? Graphics.ScreenTarget.Framebuffer.OutputDescription);
+                shaderSet,
+                [resourceLayout],
+                description.output ?? Graphics.ScreenTarget.OutputDescription);
         }
 
 
@@ -171,13 +165,13 @@ namespace Prowl.Runtime
 
             if (uniform.kind == ResourceKind.TextureReadWrite)
                 return Texture2D.EmptyRW.TextureView;
-            
+
             if (uniform.kind == ResourceKind.Sampler)
                 return Graphics.Device.PointSampler;
 
             if (uniform.kind == ResourceKind.StructuredBufferReadOnly)
                 return GraphicsBuffer.Empty.Buffer;
-            
+
             if (uniform.kind == ResourceKind.StructuredBufferReadWrite)
                 return GraphicsBuffer.EmptyRW.Buffer;
 
@@ -203,7 +197,7 @@ namespace Prowl.Runtime
                     boundBuffers[b] = buffer;
                     intermediateBuffers[b] = new byte[buffer.SizeInBytes];
 
-                    b++; 
+                    b++;
                 }
             }
 
@@ -214,21 +208,26 @@ namespace Prowl.Runtime
         }
 
 
-        public bool GetUniform(string name, out byte uniform, out sbyte buffer, out short member)
+        public bool GetBuffer(string name, out ushort uniform, out ushort buffer)
         {
             uniform = 0;
-            buffer = -1;
-            member = -1;
+            buffer = 0;
 
-            if (uniformLookup.TryGetValue(name, out uint packed))
+            if (bufferLookup.TryGetValue(name, out uint packed))
             {
-                Unpack(packed, out uniform, out buffer, out member);
+                Unpack(packed, out uniform, out buffer);
                 return true;
             }
 
             return false;
         }
 
+
+        private static uint Pack(ushort a, ushort b)
+            => ((uint)a << 16) | b;
+
+        private static void Unpack(uint packed, out ushort a, out ushort b)
+            => (a, b) = ((ushort)(packed >> 16), (ushort)(packed & ushort.MaxValue));
 
 
         public void BindVertexBuffer(CommandList list, string semantic, DeviceBuffer buffer, uint offset = 0)
@@ -238,14 +237,6 @@ namespace Prowl.Runtime
         }
 
 
-        public static uint Pack(byte a, sbyte b, short c)
-            => ((uint)a << 24) | ((uint)(byte)b << 16) | (ushort)c;
-
-
-        public static void Unpack(uint packed, out byte a, out sbyte b, out short c)    
-            => (a, b, c) = ((byte)(packed >> 24), (sbyte)(packed >> 16), (short)(packed & ushort.MaxValue));
-
-        
         public void Dispose()
         {
             for (int i = 0; i < shaderSet.Shaders.Length; i++)

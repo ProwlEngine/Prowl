@@ -32,12 +32,12 @@ public static class Application
 
     private static GraphicsBackend[] preferredUnixBackends = // Cover Unix-like (Linux, FreeBSD, OpenBSD)
     [
-        GraphicsBackend.Vulkan,
         GraphicsBackend.OpenGL,
+        GraphicsBackend.Vulkan,
         GraphicsBackend.OpenGLES,
     ];
 
-    private static GraphicsBackend[] preferredMacBackends = // Covers MacOS/Apple 
+    private static GraphicsBackend[] preferredMacBackends = // Covers MacOS/Apple
     [
         GraphicsBackend.Metal,
         GraphicsBackend.OpenGL,
@@ -73,7 +73,7 @@ public static class Application
 
         isRunning = true;
         isPlaying = true; // Base application is not the editor, isplaying is always true
-        
+
         Screen.Start($"{title} - {GetBackend()}", new Vector2Int(width, height), new Vector2Int(100, 100), WindowState.Normal);
     }
 
@@ -86,7 +86,7 @@ public static class Application
         AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
 
         AssemblyManager.Initialize();
-        
+
         Initialize?.Invoke();
 
         Debug.LogSuccess("Initialization complete");
@@ -101,13 +101,13 @@ public static class Application
             AppTime.Update();
 
             Time.TimeStack.Push(AppTime);
-            
+
             Update?.Invoke();
             Render?.Invoke();
 
             Time.TimeStack.Pop();
-        } 
-        catch (Exception e) 
+        }
+        catch (Exception e)
         {
             Console.WriteLine(e.ToString());
         }
