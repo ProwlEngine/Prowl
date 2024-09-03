@@ -22,16 +22,6 @@ namespace Prowl.Editor.Utilities
 
     public static partial class ShaderCompiler
     {
-        // HLSL semantics are treated as identifiers for the program to know what inputs go where.
-        // semantics and their formats are enforced by the reflector to provide guarantee that at least 1 buffer will be bound to a known input.
-        static readonly Dictionary<string, VertexElementFormat> semantics = new()
-        {
-            { "POSITION0", VertexElementFormat.Float4 },
-            { "TEXCOORD0", VertexElementFormat.Float4 },
-            { "NORMAL0", VertexElementFormat.Float4 },
-            { "COLOR0", VertexElementFormat.Byte4_Norm },
-        };
-
         public static ReflectedResourceInfo Reflect(Context context, ShaderDescription[] compiledSPIRV)
         {
             StageInput[] vertexInputs = [];
@@ -50,7 +40,7 @@ namespace Prowl.Editor.Utilities
                 var resources = compiler.CreateShaderResources();
 
                 if (shader.Stage == ShaderStages.Vertex)
-                    vertexInputs = VertexInputReflector.GetStageInputs(compiler, resources, semantics.TryGetValue);
+                    vertexInputs = VertexInputReflector.GetStageInputs(compiler, resources, Mesh.MeshSemantics.TryGetValue);
 
                 var stageUniforms = UniformReflector.GetUniforms(compiler, resources);
 
