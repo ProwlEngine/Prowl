@@ -1,11 +1,12 @@
-﻿using System.Reflection;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Reflection;
 
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Utils;
-
-using static BepuPhysics.Collidables.CompoundBuilder;
 
 namespace Prowl.Editor
 {

@@ -1,4 +1,7 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 
@@ -93,7 +96,7 @@ namespace Prowl.Runtime
                     // But this in combination with the "AssetID" tag and Guid.TryParse should be reliable enough while being fast
                     if (typeName!.StringValue.Contains("Prowl.Runtime.AssetRef") && TryGet("AssetID", out var assetId))
                     {
-                        // Is an AssetRef were cloning, Spit out 
+                        // Is an AssetRef were cloning, Spit out
                         if (Guid.TryParse(assetId!.StringValue, out var id) && id != Guid.Empty)
                             refs.Add(id);
                     }
@@ -147,9 +150,9 @@ namespace Prowl.Runtime
             }
         }
 
-        /// <summary> 
+        /// <summary>
         /// Returns true if tags of this type have a primitive value attached.
-        /// All tags except Compound and List have values. 
+        /// All tags except Compound and List have values.
         /// </summary>
         public bool IsPrimitive
         {

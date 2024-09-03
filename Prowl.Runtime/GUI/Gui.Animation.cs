@@ -1,4 +1,7 @@
-﻿using System.Collections.Generic;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Collections.Generic;
 
 using Prowl.Runtime.Utils;
 
@@ -58,7 +61,7 @@ namespace Prowl.Runtime.GUI
         /// <summary>
         /// Create and animate a bool value over time
         /// This is useful for creating animations based on bool values
-        /// 
+        ///
         /// An ID will be assigned based on the current Node and the next available ID
         /// You can manually assign an ID if you want it to persist across nodes
         /// </summary>

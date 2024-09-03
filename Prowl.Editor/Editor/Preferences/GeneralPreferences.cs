@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
@@ -79,7 +80,7 @@ namespace Prowl.Editor.Preferences
         public NoodleStroke NoodleStrokeType = NoodleStroke.Basic;
         public double NoodleStrokeWidth = 4;
 
-        // Base Colors 
+        // Base Colors
         public static Color Black => new(0, 0, 0, 255);
         public static Color Base4 => new(100, 100, 110);
         public static Color Base5 => new(139, 139, 147);

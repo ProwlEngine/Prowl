@@ -1,4 +1,7 @@
-﻿#region License
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+#region License
 /*
 MIT License
 Copyright © 2006 The Mono.Xna Team
@@ -107,7 +110,7 @@ namespace Prowl.Runtime
 
         public ContainmentType Contains(BoundingFrustum frustum)
         {
-            //TODO: bad done here need a fix. 
+            //TODO: bad done here need a fix.
             //Because question is not frustum contain box but reverse and this is not the same
             int i;
             ContainmentType contained;

@@ -1,9 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Prowl.Editor.Utilities
 {
@@ -63,7 +61,7 @@ namespace Prowl.Editor.Utilities
 
         /// <summary>Calculate a unique file path for the given directory, file name and extension with period '.mat'</summary>
         /// <returns>
-        /// Path.Combine(dir.FullName, $"{fileName}.{ext}") If that path exists, 
+        /// Path.Combine(dir.FullName, $"{fileName}.{ext}") If that path exists,
         /// we add an incrementing number to the end of the file name and try again.
         /// </returns>
         public static FileInfo GetUniqueFilePath(DirectoryInfo dir, string fileName, string ext)

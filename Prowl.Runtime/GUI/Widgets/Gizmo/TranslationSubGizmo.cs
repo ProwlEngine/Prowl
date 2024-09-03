@@ -1,6 +1,8 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using static Prowl.Runtime.GUI.ScaleSubGizmo;
+using System;
+
 using static Prowl.Runtime.GUI.TransformGizmo;
 
 namespace Prowl.Runtime.GUI

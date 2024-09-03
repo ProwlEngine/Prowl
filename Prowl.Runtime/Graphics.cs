@@ -1,9 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-
-using Prowl.Runtime.RenderPipelines;
 
 using Veldrid;
 using Veldrid.StartupUtilities;

@@ -1,9 +1,9 @@
-﻿using System.Collections.Generic;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Collections.Generic;
 
 using Prowl.Icons;
-
-using Material = Prowl.Runtime.Material;
-using Mesh = Prowl.Runtime.Mesh;
 
 namespace Prowl.Runtime;
 
@@ -45,7 +45,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
         int camID = Camera.Current.InstanceID;
         if (!prevMats.ContainsKey(camID)) prevMats[camID] = GameObject.GlobalCamRelative;
         var prevMat = prevMats[camID];
-        
+
         if (Mesh.IsAvailable && Material.IsAvailable)
         {
             GetBoneMatrices();

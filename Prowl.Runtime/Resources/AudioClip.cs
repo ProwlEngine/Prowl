@@ -1,9 +1,9 @@
-﻿using System;
-using System.Linq;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 
 using Prowl.Runtime.Audio;
-
-using Silk.NET.OpenAL;
 
 namespace Prowl.Runtime
 {

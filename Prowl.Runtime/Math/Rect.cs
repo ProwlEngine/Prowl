@@ -1,4 +1,7 @@
-﻿#region License
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+#region License
 /*
 MIT License
 Copyright © 2006 The Mono.Xna Team
@@ -27,8 +30,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 #endregion License
-
-using System;
 
 namespace Prowl.Runtime
 {

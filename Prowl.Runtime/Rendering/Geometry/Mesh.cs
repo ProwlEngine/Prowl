@@ -1,4 +1,7 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -557,19 +560,19 @@ namespace Prowl.Runtime
             {
                 // Front face
                 new(-x, -y, z), new(x, -y, z), new(x, y, z), new(-x, y, z),
-                
+
                 // Back face
                 new(-x, -y, -z), new(x, -y, -z), new(x, y, -z), new(-x, y, -z),
-                
+
                 // Left face
                 new(-x, -y, -z), new(-x, y, -z), new(-x, y, z), new(-x, -y, z),
-                
+
                 // Right face
                 new(x, -y, z), new(x, y, z), new(x, y, -z), new(x, -y, -z),
-                
+
                 // Top face
                 new(-x, y, z), new(x, y, z), new(x, y, -z), new(-x, y, -z),
-                
+
                 // Bottom face
                 new(-x, -y, -z), new(x, -y, -z), new(x, -y, z), new(-x, -y, z)
             };

@@ -1,9 +1,9 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
-
-using Prowl.Runtime.Utils;
 
 using Veldrid;
 
@@ -65,22 +65,22 @@ namespace Prowl.Runtime
 
 
         /// <summary>
-        /// The name to identify this <see cref="ShaderPass"/> 
+        /// The name to identify this <see cref="ShaderPass"/>
         /// </summary>
         public string Name => _name;
 
         /// <summary>
-        /// The tags to identify this <see cref="ShaderPass"/> 
+        /// The tags to identify this <see cref="ShaderPass"/>
         /// </summary>
         public IEnumerable<KeyValuePair<string, string>> Tags => _tags;
 
         /// <summary>
-        /// The blending options to use when rendering this <see cref="ShaderPass"/> 
+        /// The blending options to use when rendering this <see cref="ShaderPass"/>
         /// </summary>
         public BlendStateDescription Blend => _blend;
 
         /// <summary>
-        /// The depth stencil state to use when rendering this <see cref="ShaderPass"/> 
+        /// The depth stencil state to use when rendering this <see cref="ShaderPass"/>
         /// </summary>
         public DepthStencilStateDescription DepthStencilState => _depthStencilState;
 

@@ -1,5 +1,7 @@
-﻿using Prowl.Icons;
-using Prowl.Runtime.RenderPipelines;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Icons;
 
 using Material = Prowl.Runtime.Material;
 using Mesh = Prowl.Runtime.Mesh;

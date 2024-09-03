@@ -1,17 +1,15 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Collections.Generic;
-using System.Numerics;
-using System.Runtime.CompilerServices;
 
 using BepuPhysics;
 using BepuPhysics.Collidables;
-using BepuPhysics.CollisionDetection;
-using BepuPhysics.Constraints;
 
 using BepuUtilities;
 using BepuUtilities.Memory;
 
-using Prowl.Runtime;
 using Prowl.Runtime.Contacts;
 using Prowl.Runtime.Controller;
 using Prowl.Runtime.Raycast;

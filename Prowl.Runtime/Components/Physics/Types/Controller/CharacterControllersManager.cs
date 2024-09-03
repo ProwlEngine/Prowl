@@ -1,4 +1,7 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
@@ -476,7 +479,7 @@ namespace Prowl.Runtime.Controller
             for (int characterIndex = start; characterIndex < exclusiveEnd; ++characterIndex)
             {
                 //Note that this iterates over both active and inactive characters rather than segmenting inactive characters into their own collection.
-                //This demands branching, but the expectation is that the vast majority of characters will be active, so there is less value in copying them into stasis.                
+                //This demands branching, but the expectation is that the vast majority of characters will be active, so there is less value in copying them into stasis.
                 ref var character = ref characters[characterIndex];
                 ref var bodyLocation = ref Physics.Sim.Bodies.HandleToLocation[character.BodyHandle.Value];
                 if (bodyLocation.SetIndex == 0)
@@ -491,10 +494,10 @@ namespace Prowl.Runtime.Controller
                         }
                     }
                     //We need to protect against one possible corner case: if the body supporting the character was removed, the associated motion constraint was also removed.
-                    //Arbitrarily un-support the character if we detect this.      
+                    //Arbitrarily un-support the character if we detect this.
                     if (character.Supported)
                     {
-                        //If the constraint no longer exists at all, 
+                        //If the constraint no longer exists at all,
                         if (!Physics.Sim.Solver.ConstraintExists(character.MotionConstraintHandle) ||
                             //or if the constraint does exist but is now used by a different constraint type,
                             (Physics.Sim.Solver.HandleToConstraint[character.MotionConstraintHandle.Value].TypeId != DynamicCharacterMotionTypeProcessor.BatchTypeId &&
@@ -677,7 +680,7 @@ namespace Prowl.Runtime.Controller
 
 
         /// <summary>
-        /// Updates all character support states and motion constraints based on the current character goals and all the contacts collected since the last call to AnalyzeContacts. 
+        /// Updates all character support states and motion constraints based on the current character goals and all the contacts collected since the last call to AnalyzeContacts.
         /// Attach to a simulation callback where the most recent contact is available and before the solver executes.
         /// </summary>
         void AnalyzeContacts(float dt, IThreadDispatcher threadDispatcher)
