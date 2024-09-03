@@ -13,53 +13,85 @@ namespace Prowl.Editor;
 /// <summary>
 /// Project is a static class that handles all Project related information and actions
 /// </summary>
-public static class Project
+public class Project
 {
     #region Public Properties
-    public static string Projects_Directory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Prowl", "Projects");
-    public static string ProjectDirectory => Path.Combine(Projects_Directory, Name);
-    public static string ProjectAssetDirectory => Path.Combine(ProjectDirectory, @"Assets");
-    public static string ProjectDefaultsDirectory => Path.Combine(ProjectDirectory, @"Defaults");
-    public static string ProjectPackagesDirectory => Path.Combine(ProjectDirectory, @"Packages");
-    public static string TempDirectory => Path.Combine(ProjectDirectory, @"Temp");
 
-    public static string Assembly_Proj => Path.Combine(ProjectDirectory, @"CSharp.csproj");
-    public static string Assembly_DLL => Path.Combine(ProjectDirectory, @"Temp/bin/Debug/net8.0/CSharp.dll");
+    public DirectoryInfo ProjectDirectory;
+    public bool Exists => ProjectDirectory.Exists;
+    public string Name => ProjectDirectory.Name;
+    public string ProjectPath => ProjectDirectory.FullName;
 
-    public static string Editor_Assembly_Proj => Path.Combine(ProjectDirectory, @"CSharp-Editor.csproj");
-    public static string Editor_Assembly_DLL => Path.Combine(ProjectDirectory, @"Temp/bin/Debug/net8.0/CSharp-Editor.dll");
+    public DirectoryInfo AssetDirectory;
+    public DirectoryInfo LibraryDirectory;
+    public DirectoryInfo DefaultsDirectory;
+    public DirectoryInfo PackagesDirectory;
+    public DirectoryInfo TempDirectory;
+
+    public FileInfo Assembly_Proj;
+    public FileInfo Assembly_DLL;
+
+    public FileInfo Editor_Assembly_Proj;
+    public FileInfo Editor_Assembly_DLL;
 
     public static event Action OnProjectChanged;
-    public static bool HasProject { get; private set; } = false;
-    public static string Name { get; private set; } = "";
+
+    public static Project? Active { get; private set; }
+    public static bool HasProject => Active != null;
+
     #endregion
 
     #region Public Methods
 
+    private DirectoryInfo GetSubdirectory(string subdirectoryPath)
+    {
+        return new DirectoryInfo(Path.Combine(ProjectPath, subdirectoryPath));
+    }
+
+    private FileInfo GetFile(string filePath)
+    {
+        return new FileInfo(Path.Combine(ProjectPath, filePath));
+    }
+
+    public Project(DirectoryInfo directory)
+    {
+        ProjectDirectory = directory;
+
+        AssetDirectory = GetSubdirectory(@"Assets");
+        LibraryDirectory = GetSubdirectory(@"Library");
+        DefaultsDirectory = GetSubdirectory(@"Defaults");
+        PackagesDirectory = GetSubdirectory(@"Packages");
+        TempDirectory = GetSubdirectory(@"Temp");
+
+        Assembly_Proj = GetFile(@"CSharp.csproj");
+        Assembly_DLL = GetFile(@"Temp/bin/Debug/net8.0/CSharp.dll");
+
+        Editor_Assembly_Proj = GetFile(@"CSharp-Editor.csproj");
+        Editor_Assembly_DLL = GetFile(@"Temp/bin/Debug/net8.0/CSharp-Editor.dll");
+    }
+
     /// <summary>
     /// Loads a project from a given name
     /// </summary>
-    /// <param name="projectName">Name of project to load</param>
+    /// <param name="project">The project to load</param>
     /// <exception cref="UnauthorizedAccessException">Throws if Project Name doesn't exist</exception>
     /// <exception cref="ArgumentNullException">Throws if projectName is null or empty</exception>
-    public static void Open(string projectName)
+    public static void Open(Project project)
     {
-        var projectDir = GetPath(projectName);
-        if (!projectDir.Exists)
+        if (!project.Exists)
         {
-            Runtime.Debug.LogError($"A project with the name {projectName} does not exists at path {projectDir.FullName}");
+            Runtime.Debug.LogError($"A project with the name {project.Name} does not exists at path {project.ProjectPath}");
             return;
         }
 
-        Name = projectName;
-        HasProject = true;
+        Active = project;
         Program.RegisterReloadOfExternalAssemblies();
 
-        CreateProjectDirectories(projectDir);
+        CreateTempDirectories(project);
 
-        Application.DataPath = ProjectDirectory;
+        Application.DataPath = project.ProjectPath;
 
-        CreateDefaults("Defaults");
+        CreateDefaults(project);
         AssetDatabase.AddRootFolder("Defaults");
         AssetDatabase.Update(false, true); // Ensure defaults are all loaded in
 
@@ -81,41 +113,43 @@ public static class Project
     /// Will create a new Project file and its main Folders in a Dedicated folder
     /// </summary>
     /// <param name="ProjectName">Name of project</param>
-    public static void CreateNew(string ProjectName)
+    public static Project CreateNew(DirectoryInfo projectPath)
     {
-        Name = ProjectName;
-        var projectDir = GetPath(ProjectName);
-        if (projectDir.Exists)
+        Project project = new Project(projectPath);
+
+        ProjectCache.AddProject(project);
+
+        if (project.Exists)
         {
-            Runtime.Debug.LogError($"A project with the name {ProjectName} already exists.");
-            return;
+            Runtime.Debug.LogError($"Project at path {project.ProjectPath} already exists.");
+            return project;
         }
 
         // Create Path
-        projectDir.Create();
+        project.ProjectDirectory.Create();
 
         // Create Assets Folder
-        CreateProjectDirectories(projectDir);
-        CreateDefaults("Defaults");
+        CreateTempDirectories(project);
+        CreateDefaults(project);
 
         // Create Config Folder
-        string configPath = Path.Combine(projectDir.FullName, @"Config");
+        string configPath = Path.Combine(project.ProjectPath, @"Config");
         Directory.CreateDirectory(configPath);
 
+        return project;
     }
 
-    private static void CreateProjectDirectories(DirectoryInfo projectDir)
+    private static void CreateTempDirectories(Project project)
     {
-        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Assets"));
-        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Library"));
-        Directory.CreateDirectory(Path.Combine(projectDir.FullName, @"Packages"));
+        project.ProjectDirectory.CreateSubdirectory(@"Assets");
+        project.ProjectDirectory.CreateSubdirectory(@"Library");
+        project.ProjectDirectory.CreateSubdirectory(@"Packages");
     }
 
-    static void CreateDefaults(string rootFolder)
+    private static void CreateDefaults(Project project)
     {
-        if (string.IsNullOrWhiteSpace(rootFolder)) throw new ArgumentException("Root Folder cannot be null or whitespace");
-        DirectoryInfo info = new(Path.Combine(Project.ProjectDirectory, rootFolder));
-        if (!info.Exists) info.Create();
+        if (!project.DefaultsDirectory.Exists)
+            project.DefaultsDirectory.Create();
 
 #warning TODO: Only copy if the file doesn't exist, or if somehow if the engine version is different or something...
 
@@ -125,12 +159,15 @@ public static class Project
             string[] nodes = file.Split('.');
             string fileName = nodes[^2];
             string fileExtension = nodes[^1];
-            string filePath = Path.Combine(info.FullName, fileName + "." + fileExtension);
+
+            string filePath = Path.Combine(project.DefaultsDirectory.FullName, fileName + "." + fileExtension);
+
             if (File.Exists(filePath))
                 File.Delete(filePath);
+
             //if (!File.Exists(filePath))
             {
-                using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(file);
+                using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(file)!;
                 using FileStream fileStream = File.Create(filePath);
                 stream.CopyTo(fileStream);
             }
@@ -143,7 +180,7 @@ public static class Project
     /// <param name="csprojPath">Directory of the .csproj file to compile</param>
     /// <param name="isRelease">Is Release Build?</param>
     /// <returns>True if Compiling was successfull</returns>
-    public static bool Compile(string csprojPath, DirectoryInfo output, bool isRelease = false)
+    public static bool Compile(Project project, string csprojPath, DirectoryInfo output, bool isRelease = false)
     {
         if (!HasProject)
         {
@@ -153,7 +190,7 @@ public static class Project
 
         // Reload CSProject Files
         BoundedLog($"Starting Project Compilation...");
-        GenerateCSProjectFiles(output);
+        GenerateCSProjectFiles(project, output);
 
         // Compile the Project Assembly using 'dotnet build'
         BoundedLog($"Compiling external assembly in {csprojPath}...");
@@ -211,28 +248,23 @@ public static class Project
         return exitCode == 0;
     }
 
-    /// <summary>
-    /// Return the DirectoryInfo of a Project with a given name
-    /// </summary>
-    /// <param name="name">The Project Name</param>
-    /// <returns>Directory of given project</returns>
-    public static DirectoryInfo GetPath(string name) => new DirectoryInfo(Path.Combine(Projects_Directory, name));
-
     #endregion
 
 
     #region Private Methods
 
 
-    private static string GetIncludesFrom(IEnumerable<string> filePaths)
+    private static string GetIncludesFrom(IEnumerable<FileInfo> filePaths)
     {
         List<string> includeElements = new();
-        foreach (string filePath in filePaths)
-            includeElements.Add($"<Compile Include=\"{filePath}\" />");
+
+        foreach (FileInfo filePath in filePaths)
+            includeElements.Add($"<Compile Include=\"{filePath.FullName}\" />");
+
         return string.Join("\n", includeElements);
     }
 
-    private static void GenerateCSProjectFiles(DirectoryInfo output)
+    private static void GenerateCSProjectFiles(Project project, DirectoryInfo output)
     {
         if (!HasProject) throw new Exception("No Project Loaded, Cannot generate CS Project Files!");
 
@@ -245,17 +277,31 @@ public static class Project
         // Get all references by Prowl.Runtime
         var references = gameEngineAssembly.GetReferencedAssemblies().Select(Assembly.Load).ToList();
 
-        Runtime.Debug.Log($"Updating {Assembly_Proj}...");
+        Runtime.Debug.Log($"Updating {project.Assembly_Proj.FullName}...");
 
-        IEnumerable<string> nonEditorScripts = Directory.GetFiles(ProjectAssetDirectory, "*.cs", SearchOption.AllDirectories)
-        .Where(csFile => !string.Equals(Path.GetFileName(Path.GetDirectoryName(csFile)), "Editor", StringComparison.OrdinalIgnoreCase));
+        List<FileInfo> nonEditorScripts = new();
+        List<FileInfo> editorScripts = new();
+        Stack<DirectoryInfo> directoriesToProcess = new(project.AssetDirectory.GetDirectories());
+
+        while (directoriesToProcess.Count > 0)
+        {
+            DirectoryInfo directory = directoriesToProcess.Pop();
+
+            foreach (DirectoryInfo subdirectory in directory.GetDirectories())
+                directoriesToProcess.Push(subdirectory);
+
+            if (string.Equals(directory.Name, "Editor", StringComparison.OrdinalIgnoreCase))
+                editorScripts.AddRange(directory.GetFiles("*.cs"));
+            else
+                nonEditorScripts.AddRange(directory.GetFiles("*.cs"));
+        }
 
         string propertyGroupTemplate =
             @$"<PropertyGroup>
                 <TargetFramework>net8.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
-                <ProjectRoot>{ProjectDirectory}</ProjectRoot>
+                <ProjectRoot>{project.ProjectPath}</ProjectRoot>
             </PropertyGroup>
             <PropertyGroup Condition="" '$(Configuration)' == 'Debug' "">
                 <OutputPath>{output.FullName}</OutputPath>
@@ -285,12 +331,9 @@ public static class Project
                 </ItemGroup>
             </Project>";
 
-        File.WriteAllText(Assembly_Proj, gameproj);
+        File.WriteAllText(project.Assembly_Proj.FullName, gameproj);
 
-        Runtime.Debug.Log($"Updating {Editor_Assembly_Proj}...");
-
-        IEnumerable<string> editorScripts = Directory.GetDirectories(ProjectAssetDirectory, "Editor", SearchOption.AllDirectories)
-        .SelectMany(editorFolder => Directory.GetFiles(editorFolder, "*.cs"));
+        Runtime.Debug.Log($"Updating {project.Editor_Assembly_Proj.FullName}...");
 
         string editorproj =
             @$"<Project Sdk=""Microsoft.NET.Sdk"">
@@ -308,13 +351,13 @@ public static class Project
                         <Private>false</Private>
                     </Reference>
                     <Reference Include=""CSharp"">
-                        <HintPath>{Assembly_Proj}</HintPath>
+                        <HintPath>{project.Assembly_Proj.FullName}</HintPath>
                         <Private>false</Private>
                     </Reference>
                 </ItemGroup>
             </Project>";
 
-        File.WriteAllText(Editor_Assembly_Proj, editorproj);
+        File.WriteAllText(project.Editor_Assembly_Proj.FullName, editorproj);
 
         Runtime.Debug.Log("Finished Updating Build Information");
     }

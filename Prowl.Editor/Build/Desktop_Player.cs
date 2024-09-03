@@ -51,7 +51,7 @@ namespace Prowl.Editor.Build
 
 
             BoundedLog($"Compiling project assembly to {output.FullName}...");
-            if (!Project.Compile(Project.Assembly_Proj, output, configuration == Configuration.Release))
+            if (!Project.Compile(Project.Active, Project.Active.Assembly_Proj.FullName, output, configuration == Configuration.Release))
             {
                 Debug.LogError($"Failed to compile Project assembly!");
                 return;

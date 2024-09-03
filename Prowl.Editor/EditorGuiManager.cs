@@ -309,7 +309,7 @@ public static class EditorGuiManager
         {
             title = "Save As",
             fileName = "New Scene.scene",
-            directoryPath = new DirectoryInfo(Project.ProjectAssetDirectory),
+            directoryPath = Project.Active.AssetDirectory,
             type = FileDialogType.SaveFile,
             OnComplete = (path) =>
             {
@@ -408,7 +408,7 @@ public static class EditorGuiManager
     [MenuItem("Assets/Create/Folder")]
     public static void CreateDir()
     {
-        Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+        Directory ??= Project.Active.AssetDirectory;
 
         DirectoryInfo dir = new(Path.Combine(Directory.FullName, "New Folder"));
         AssetDatabase.GenerateUniqueAssetPath(ref dir);
@@ -422,7 +422,7 @@ public static class EditorGuiManager
     [MenuItem("Assets/Create/Material")]
     public static void CreateMaterial()
     {
-        Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+        Directory ??= Project.Active.AssetDirectory;
 
         FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New Material.mat"));
         AssetDatabase.GenerateUniqueAssetPath(ref file);
@@ -441,7 +441,7 @@ public static class EditorGuiManager
     [MenuItem("Assets/Create/Script")]
     public static void CreateScript()
     {
-        Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+        Directory ??= Project.Active.AssetDirectory;
 
         FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New Script.cs"));
         AssetDatabase.GenerateUniqueAssetPath(ref file);

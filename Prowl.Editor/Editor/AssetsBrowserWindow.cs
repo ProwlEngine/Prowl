@@ -135,7 +135,7 @@ namespace Prowl.Editor
                 //var pathPos = new Vector2(itemHeight + 200 + (itemPadding * 3), 7);
                 //pathPos += g.CurrentNode.LayoutData.GlobalContentPosition;
                 var pathPos = new Vector2(itemHeight + 200 + (itemPadding * 3), 0);
-                string assetPath = Path.GetRelativePath(Project.ProjectDirectory, CurDirectoryNode.Directory.FullName);
+                string assetPath = Path.GetRelativePath(Project.Active.ProjectPath, CurDirectoryNode.Directory.FullName);
                 //g.DrawText(Font.DefaultFont, assetPath, 20, pathPos, GuiStyle.Base11);
                 string[] nodes = assetPath.Split(Path.DirectorySeparatorChar);
                 double[] nodeSizes = new double[nodes.Length];
@@ -173,7 +173,7 @@ namespace Prowl.Editor
                     {
                         if (gui.IsNodePressed())
                         {
-                            string path = Project.ProjectDirectory + "/" + string.Join("/", nodes.Take(i + 1));
+                            string path = Project.Active.ProjectPath + "/" + string.Join("/", nodes.Take(i + 1));
                             if (AssetDatabase.PathToCachedNode(path, out var node))
                                 CurDirectoryNode = node;
                         }

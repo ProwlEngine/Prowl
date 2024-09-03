@@ -28,14 +28,14 @@ namespace Prowl.Editor.Assets
         /// </summary>
         /// <param name="file">The file to convert to a relative path.</param>
         /// <returns>The relative path of the file within the project.</returns>
-        public static string ToRelativePath(FileInfo file) => Path.GetRelativePath(Project.ProjectDirectory, file.FullName);
+        public static string ToRelativePath(FileInfo file) => Path.GetRelativePath(Project.Active.ProjectPath, file.FullName);
 
         /// <summary>
         /// Converts a relative path within the project to a full file path.
         /// </summary>
         /// <param name="relativePath">The relative path to convert to a full file path.</param>
         /// <returns>The full file path of the relative path.</returns>
-        public static FileInfo FromRelativePath(string relativePath) => new(Path.Combine(Project.ProjectDirectory, relativePath));
+        public static FileInfo FromRelativePath(string relativePath) => new(Path.Combine(Project.Active.ProjectPath, relativePath));
 
         /// <summary>
         /// Opens the specified file with the operating system's default program.
@@ -51,16 +51,26 @@ namespace Prowl.Editor.Assets
                 {
                     string args = prefs.fileEditorArgs;
 
-                    args = args.Replace("${ProjectDirectory}", Project.ProjectDirectory);
+                    args = args.Replace("${ProjectDirectory}", Project.Active.ProjectPath);
                     args = args.Replace("${File}", file.FullName);
                     args = args.Replace("${Line}", line.ToString());
                     args = args.Replace("${Character}", character.ToString());
 
-                    Process.Start(prefs.fileEditor, args);
+                    ProcessStartInfo info = new();
+                    info.UseShellExecute = true;
+                    info.Arguments = args;
+                    info.FileName = prefs.fileEditor;
+
+                    Process.Start(info);
                 }
                 else
                 {
-                    Process.Start(prefs.fileEditor, file.FullName);
+                    ProcessStartInfo info = new();
+                    info.UseShellExecute = true;
+                    info.Arguments = file.FullName;
+                    info.FileName = prefs.fileEditor;
+
+                    Process.Start(info);
                 }
             }
             else if (OperatingSystem.IsWindows())
@@ -171,9 +181,7 @@ namespace Prowl.Editor.Assets
         // https://stackoverflow.com/questions/5617320/given-full-path-check-if-path-is-subdirectory-of-some-other-path-or-otherwise
         public static bool FileIsInProject(FileInfo file)
         {
-            string normalizedPath = Path.GetFullPath(file.FullName.Replace('/', '\\').WithEnding("\\"));
-            string normalizedBaseDirPath = Path.GetFullPath(Project.ProjectAssetDirectory.Replace('/', '\\').WithEnding("\\"));
-            return normalizedPath.StartsWith(normalizedBaseDirPath, StringComparison.OrdinalIgnoreCase);
+            return file.FullName.StartsWith(Project.Active.AssetDirectory.FullName, StringComparison.OrdinalIgnoreCase);
         }
 
         public static void GenerateUniqueAssetPath(ref DirectoryInfo dir)

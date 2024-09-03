@@ -348,7 +348,7 @@ namespace Prowl.Editor
                 {
                     if (_currentPage == Page.Installed)
                     {
-                        metadata.AddRange(await AssetDatabase.GetPackageMetadata(packageId, Project.ProjectPackagesDirectory, PackageManagerPreferences.Instance.IncludePrerelease));
+                        metadata.AddRange(await AssetDatabase.GetPackageMetadata(packageId, Project.Active.PackagesDirectory.FullName, PackageManagerPreferences.Instance.IncludePrerelease));
                     }
                     else if (_currentPage == Page.AllPackages)
                     {

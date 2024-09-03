@@ -252,7 +252,7 @@ namespace Prowl.Editor
             }
             if (EditorGUI.StyledButton("Show Project In Explorer"))
             {
-                AssetDatabase.OpenPath(new DirectoryInfo(Project.ProjectAssetDirectory));
+                AssetDatabase.OpenPath(Project.Active.AssetDirectory);
                 closePopup = true;
             }
         }

@@ -435,10 +435,11 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             {
                 if (EditorGUI.StyledButton("Create Script " + _searchText))
                 {
-                    FileInfo file = new FileInfo(Project.ProjectAssetDirectory + $"/{_searchText}.cs");
+                    FileInfo file = new FileInfo(Path.Combine(Project.Active!.AssetDirectory.FullName, $"/{_searchText}.cs"));
                     if (File.Exists(file.FullName))
                         return;
-                    using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
+
+                    using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt")!;
                     using StreamReader reader = new StreamReader(stream);
                     string script = reader.ReadToEnd();
                     script = script.Replace("%SCRIPTNAME%", EditorUtils.FilterAlpha(_searchText));

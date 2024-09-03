@@ -99,7 +99,7 @@ namespace Prowl.Editor
             using (gui.Node("Butt's").ExpandWidth().Height(75).Enter())
             {
                 gui.InputField("CreateInput", ref buildName, 0x100, Gui.InputFieldFlags.None, 0, 15, 400, null, EditorGUI.GetInputStyle());
-                string path = Path.Combine(Project.ProjectDirectory, "Builds", buildName);
+                string path = Path.Combine(Project.Active.ProjectPath, "Builds", buildName);
                 string displayPath = path;
                 if (displayPath.Length > 55)
                     displayPath = string.Concat("...", path.AsSpan(path.Length - 55));

@@ -69,7 +69,7 @@ public static class Program
                     // new AssetSelectorWindow(typeof(Texture2D), (guid, fileid) => {  });
                 }
 
-                Application.DataPath = Project.ProjectDirectory;
+                Application.DataPath = Project.Active.ProjectPath;
 
                 if (GeneralPreferences.Instance.LockFPS)
                 {
@@ -144,18 +144,24 @@ public static class Program
                     // Unload External Assemblies
                     AssemblyManager.Unload();
 
+                    Project active = Project.Active;
+
+                    DirectoryInfo temp = active.TempDirectory;
+                    DirectoryInfo bin = new DirectoryInfo(Path.Combine(temp.FullName, "bin"));
+                    DirectoryInfo debug = new DirectoryInfo(Path.Combine(bin.FullName, "Debug"));
+
                     // Delete everything under Temp\Bin
-                    if (Directory.Exists(Path.Combine(Project.TempDirectory, "bin")))
-                        Directory.Delete(Path.Combine(Project.TempDirectory, "bin"), true);
-                    Directory.CreateDirectory(Path.Combine(Project.TempDirectory, "bin"));
+                    if (bin.Exists)
+                        Directory.Delete(bin.FullName, true);
+                    bin.Create();
 
                     // Compile the Projects
-                    Project.Compile(Project.Assembly_Proj, new DirectoryInfo(Path.Combine(Project.TempDirectory, "bin", "Debug")));
-                    Project.Compile(Project.Editor_Assembly_Proj, new DirectoryInfo(Path.Combine(Project.TempDirectory, "bin", "Debug")));
+                    Project.Compile(active, active.Assembly_Proj.FullName, debug);
+                    Project.Compile(active, active.Editor_Assembly_Proj.FullName, debug);
 
                     // Reload the External Assemblies
-                    AssemblyManager.LoadExternalAssembly(Project.Editor_Assembly_DLL, true);
-                    AssemblyManager.LoadExternalAssembly(Project.Assembly_DLL, true);
+                    AssemblyManager.LoadExternalAssembly(active.Editor_Assembly_DLL.FullName, true);
+                    AssemblyManager.LoadExternalAssembly(active.Assembly_DLL.FullName, true);
                 }
                 catch (Exception e)
                 {

@@ -61,7 +61,7 @@ namespace Prowl.Editor
 
         public static void CreateAsset(Type type)
         {
-            EditorGuiManager.Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+            EditorGuiManager.Directory ??= Project.Active.AssetDirectory;
             var obj = Activator.CreateInstance(type);
             FileInfo file = new FileInfo(EditorGuiManager.Directory + $"/New {type.Name}.scriptobj");
             while (File.Exists(file.FullName))

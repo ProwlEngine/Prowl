@@ -40,8 +40,8 @@ namespace Prowl.Editor.Preferences
         public bool AntiAliasing = true;
 
         [Text("File Editor:")]
-        public string fileEditor = "";
-        public string fileEditorArgs = "";
+        public string fileEditor = ""; // code
+        public string fileEditorArgs = ""; // "${ProjectDirectory}" -g "${File}":${Line}:${Character}
     }
 
     [FilePath("EditorStyle.pref", FilePathAttribute.Location.EditorPreference)]
