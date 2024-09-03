@@ -107,7 +107,9 @@ namespace Prowl.Runtime
                 UniformMember member = uniform.members[i];
 
                 if (state._values.TryGetValue(member.name, out byte[] value))
+                {
                     Buffer.BlockCopy(value, 0, tempBuffer, (int)member.bufferOffsetInBytes, (int)member.size);
+                }
             }
 
             list.UpdateBuffer(buffer, 0, tempBuffer);

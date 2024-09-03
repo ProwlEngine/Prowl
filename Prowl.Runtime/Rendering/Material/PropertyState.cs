@@ -74,10 +74,13 @@ namespace Prowl.Runtime
 
         private unsafe void WriteData<T>(string property, T newData) where T : unmanaged
         {
-            if (!_values.TryGetValue(property, out byte[] value))
-                return;
-
             int tSize = sizeof(T);
+
+            if (!_values.TryGetValue(property, out byte[] value))
+            {
+                value = new byte[tSize];
+                _values[property] = value;
+            }
 
             // If the previous value was larger than a vector4, and the new value isn't
             // the array size will be downgraded to save on memory footprint.
@@ -91,7 +94,7 @@ namespace Prowl.Runtime
         }
 
 
-        private unsafe T InterpretAs<T>(string property) where T : unmanaged
+        public unsafe T InterpretAs<T>(string property) where T : unmanaged
         {
             if (!_values.TryGetValue(property, out byte[] value))
                 return default;
