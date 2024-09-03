@@ -76,13 +76,23 @@ namespace Prowl.Runtime
             return list;
         }
 
-        public static void SubmitCommandBuffer(CommandBuffer commandBuffer, bool awaitComplete = false)
+        public static void SubmitCommandBuffer(CommandBuffer commandBuffer, bool awaitComplete = false, ulong timeout = ulong.MaxValue)
         {
             commandBuffer.Clear();
 
             try
             {
-                SubmitCommandList(commandBuffer._commandList, awaitComplete);
+                if (awaitComplete)
+                {
+                    Fence fence = Factory.CreateFence(false);
+                    Device.SubmitCommands(commandBuffer._commandList, fence);
+                    Device.WaitForFence(fence, timeout);
+                    fence.Dispose();
+
+                    return;
+                }
+
+                Device.SubmitCommands(commandBuffer._commandList);
             }
             catch (Exception ex)
             {

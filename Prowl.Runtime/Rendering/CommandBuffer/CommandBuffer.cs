@@ -35,6 +35,27 @@ namespace Prowl.Runtime
             set => _commandList.Name = value;
         }
 
+
+        private void ResetState()
+        {
+            _activeFramebuffer = null;
+            _keywordState = KeywordState.Default;
+
+            _bufferProperties.Clear();
+            _activeDrawData = null;
+
+            _pipelineDescription = default;
+
+            _fill = PolygonFillMode.Solid;
+            _topology = PrimitiveTopology.TriangleList;
+            _scissor = false;
+
+            _graphicsPipeline = null;
+            _pipelineResources = null;
+            _actualActivePipeline = null;
+        }
+
+
         public CommandBuffer() : this("New Command Buffer")
         { }
 
@@ -42,11 +63,9 @@ namespace Prowl.Runtime
         {
             _commandList = Graphics.Factory.CreateCommandList();
 
-            _keywordState = KeywordState.Default;
             _bufferProperties = new();
-            _fill = PolygonFillMode.Solid;
-            _topology = PrimitiveTopology.TriangleList;
-            _scissor = false;
+
+            ResetState();
 
             Name = name;
 
@@ -57,12 +76,6 @@ namespace Prowl.Runtime
         {
             _activeFramebuffer = framebuffer;
             _pipelineDescription.output = _activeFramebuffer.OutputDescription;
-
-            if (_pipelineDescription.pass != null && _pipelineDescription.variant != null)
-            {
-                _graphicsPipeline = GraphicsPipelineCache.GetPipeline(_pipelineDescription);
-                _pipelineResources = _graphicsPipeline.CreateResources();
-            }
 
             _commandList.SetFramebuffer(framebuffer);
         }
@@ -233,11 +246,11 @@ namespace Prowl.Runtime
         {
             GraphicsPipeline newPipeline = GraphicsPipelineCache.GetPipeline(_pipelineDescription);
 
-            if (newPipeline == _graphicsPipeline)
-                return;
-
-            _graphicsPipeline = newPipeline;
-            _pipelineResources = _graphicsPipeline.CreateResources();
+            if (newPipeline != _graphicsPipeline)
+            {
+                _graphicsPipeline = newPipeline;
+                _pipelineResources = _graphicsPipeline.CreateResources();
+            }
 
             UpdateActualPipeline();
         }
@@ -252,11 +265,10 @@ namespace Prowl.Runtime
 
         internal void BeginRecording()
         {
-            if (_isRecording)
-                return;
+            if (!_isRecording)
+                _commandList.Begin();
 
             _isRecording = true;
-            _commandList.Begin();
         }
 
 
@@ -266,6 +278,8 @@ namespace Prowl.Runtime
                 _commandList.End();
 
             _isRecording = false;
+
+            ResetState();
         }
 
 

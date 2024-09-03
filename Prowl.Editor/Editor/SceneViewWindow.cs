@@ -125,6 +125,7 @@ public class SceneViewWindow : EditorWindow
         if (SceneViewPreferences.Instance.GridType != GridType.None)
         {
             gridMesh ??= Mesh.GetFullscreenQuad();
+
             gridMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Grid.shader"));
 
             (Vector3, Vector3) planeInfo = SceneViewPreferences.Instance.GridType switch
@@ -135,6 +136,9 @@ public class SceneViewWindow : EditorWindow
             };
 
             Matrix4x4.Invert(data.View * data.Projection, out Matrix4x4 invertedMVP);
+
+            // For InternalErrorShader if our grid shader does not compile correctly.
+            buffer.SetMatrix("Mat_MVP", System.Numerics.Matrix4x4.Identity);
 
             buffer.SetMatrix("MvpInverse", invertedMVP.ToFloat());
 
