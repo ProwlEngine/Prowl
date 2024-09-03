@@ -2,19 +2,22 @@
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
 
-internal class Program {
+internal class Program
+{
 
     public static DirectoryInfo Data => new DirectoryInfo(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "GameData"));
 
     public static FileInfo AssemblyDLL => new FileInfo(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "net8.0", "CSharp.dll"));
 
-    public static int Main(string[] args) {
+    public static int Main(string[] args)
+    {
 
         Application.isPlaying = true;
         Application.DataPath = Data.FullName;
 
 
-        Application.Initialize += () => {
+        Application.Initialize += () =>
+        {
 
             Physics.Initialize();
 
@@ -31,24 +34,25 @@ internal class Program {
             }
         };
 
-        Application.Update += () => {
+        Application.Update += () =>
+        {
             SceneManager.Update();
         };
 
-        Application.Render += () => {
-            Graphics.StartFrame();
-
+        Application.Render += () =>
+        {
             SceneManager.Draw();
 
             Graphics.EndFrame();
         };
 
-        Application.Quitting += () => {
+        Application.Quitting += () =>
+        {
         };
 
         Application.Run("Prowl Editor", 1920, 1080, new StandaloneAssetProvider(), false);
 
         return 0;
     }
-    
+
 }
