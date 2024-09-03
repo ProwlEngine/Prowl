@@ -44,19 +44,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Veldrid.MetalBindings", "Ex
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Veldrid.OpenGLBindings", "External\Prowl.Veldrid\src\Veldrid.OpenGLBindings\Veldrid.OpenGLBindings.csproj", "{E56A5A04-717A-4F86-9131-CB2DCF140AC6}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Veldrid.RenderDoc", "External\Prowl.Veldrid\src\Veldrid.RenderDoc\Veldrid.RenderDoc.csproj", "{295F92EF-0DC6-4DD2-9A60-AF47D46BBE84}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Veldrid.SDL2", "External\Prowl.Veldrid\src\Veldrid.SDL2\Veldrid.SDL2.csproj", "{46AB68EB-2169-4331-AA61-6AAF8B0A3265}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Veldrid.StartupUtilities", "External\Prowl.Veldrid\src\Veldrid.StartupUtilities\Veldrid.StartupUtilities.csproj", "{254969BF-FADA-4DEA-B6EC-4B0E222BFFE4}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Veldrid.Tests", "External\Prowl.Veldrid\src\Veldrid.Tests\Veldrid.Tests.csproj", "{D0A902AA-3B72-4955-B13F-777A7B817733}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Veldrid.Tests.Android", "External\Prowl.Veldrid\src\Veldrid.Tests.Android\Veldrid.Tests.Android.csproj", "{14E89FE7-A586-4A69-A1A4-B880D64E4184}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Veldrid.Utilities", "External\Prowl.Veldrid\src\Veldrid.Utilities\Veldrid.Utilities.csproj", "{02CAD39C-11F9-469F-8412-75A1617A4200}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Veldrid.VirtualReality", "External\Prowl.Veldrid\src\Veldrid.VirtualReality\Veldrid.VirtualReality.csproj", "{AA2920ED-64FE-4652-B46F-853537791175}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
