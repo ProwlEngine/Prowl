@@ -1,6 +1,7 @@
-﻿using Prowl.Runtime.GUI.Graphics;
-using System;
+﻿using System;
 using System.Collections.Generic;
+
+using Prowl.Runtime.GUI.Graphics;
 
 namespace Prowl.Runtime.GUI
 {

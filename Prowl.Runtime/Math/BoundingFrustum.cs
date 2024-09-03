@@ -355,7 +355,7 @@ namespace Prowl.Runtime
             double f = Vector3.Dot(a.normal, cross);
             f *= -1.0f;
 
-            cross = Vector3.Cross(b.normal, c.normal );
+            cross = Vector3.Cross(b.normal, c.normal);
             v1 = cross * a.distance;
             //v1 = (a.D * (Vector3.Cross(b.Normal, c.Normal)));
 

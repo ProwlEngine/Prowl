@@ -1,7 +1,8 @@
-﻿using Prowl.Editor.Preferences;
+﻿using System.Reflection;
+
+using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using System.Reflection;
 
 namespace Prowl.Editor.PropertyDrawers
 {

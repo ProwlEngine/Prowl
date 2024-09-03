@@ -1,5 +1,6 @@
-﻿using Silk.NET.OpenAL;
-using System;
+﻿using System;
+
+using Silk.NET.OpenAL;
 
 namespace Prowl.Runtime.Audio.OpenAL
 {

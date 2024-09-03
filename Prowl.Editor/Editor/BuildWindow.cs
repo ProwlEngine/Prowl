@@ -1,11 +1,12 @@
-﻿using Prowl.Editor.Build;
+﻿using System.Reflection;
+
+using Prowl.Editor.Build;
 using Prowl.Editor.Preferences;
 using Prowl.Editor.ProjectSettings;
 using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using System.Reflection;
 
 namespace Prowl.Editor
 {
@@ -66,9 +67,9 @@ namespace Prowl.Editor
                 ProjectBuilder? builder = builders[i];
                 using (gui.Node("Player", i).ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize * 2).Enter())
                 {
-                    if(gui.IsNodePressed())
+                    if (gui.IsNodePressed())
                         selectedBuilder = builders.IndexOf(builder);
-                    else if(gui.IsNodeHovered())
+                    else if (gui.IsNodeHovered())
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
                     // Name types are formatted as "Desktop_Player" -> "Desktop"

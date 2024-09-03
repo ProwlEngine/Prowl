@@ -5,6 +5,7 @@ using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.SceneManagement;
+
 using static Prowl.Editor.EditorGUI;
 
 namespace Prowl.Editor;
@@ -62,10 +63,10 @@ public class GameWindow : EditorWindow
         RenderTarget?.Dispose();
 
         RenderTarget = new RenderTexture(
-            (uint)GeneralPreferences.Instance.CurrentWidth, 
-            (uint)GeneralPreferences.Instance.CurrentHeight, 
-            [ Veldrid.PixelFormat.R8_G8_B8_A8_UNorm ], 
-            Veldrid.PixelFormat.D24_UNorm_S8_UInt, 
+            (uint)GeneralPreferences.Instance.CurrentWidth,
+            (uint)GeneralPreferences.Instance.CurrentHeight,
+            [Veldrid.PixelFormat.R8_G8_B8_A8_UNorm],
+            Veldrid.PixelFormat.D24_UNorm_S8_UInt,
             true);
 
         hasFrame = false;
@@ -75,7 +76,7 @@ public class GameWindow : EditorWindow
     {
         if (!Project.HasProject) return;
 
-        if(IsFocused)
+        if (IsFocused)
             LastFocused = new WeakReference(this);
         InputHandler.EarlyUpdate();
 
@@ -159,7 +160,7 @@ public class GameWindow : EditorWindow
             // Letter box the image into the render size
             gui.Draw2D.DrawImage(RenderTarget.ColorBuffers[0], innerRect.Position, innerRect.Size, Color.white, true);
 
-            if(IsFocused || LastFocused.Target == this)
+            if (IsFocused || LastFocused.Target == this)
             {
                 FocusedPosition = innerRect.Position;
             }

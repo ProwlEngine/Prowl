@@ -7,15 +7,18 @@ namespace Prowl.Runtime
         #region Properties
 
         #region Position
-        public Vector3 position {
-            get {
+        public Vector3 position
+        {
+            get
+            {
 
                 if (parent != null)
                     return MakeSafe(parent.localToWorldMatrix.MultiplyPoint(m_LocalPosition));
                 else
                     return MakeSafe(m_LocalPosition);
             }
-            set {
+            set
+            {
                 Vector3 newPosition = value;
                 Transform p = parent;
                 if (p != null)
@@ -26,9 +29,11 @@ namespace Prowl.Runtime
             }
         }
 
-        public Vector3 localPosition {
+        public Vector3 localPosition
+        {
             get => MakeSafe(m_LocalPosition);
-            set {
+            set
+            {
                 if (m_LocalPosition != value)
                 {
                     m_LocalPosition = MakeSafe(value);
@@ -39,8 +44,10 @@ namespace Prowl.Runtime
         #endregion
 
         #region Rotation
-        public Quaternion rotation {
-            get {
+        public Quaternion rotation
+        {
+            get
+            {
                 Quaternion worldRot = m_LocalRotation;
                 Transform p = parent;
                 while (p != null)
@@ -50,7 +57,8 @@ namespace Prowl.Runtime
                 }
                 return MakeSafe(worldRot);
             }
-            set {
+            set
+            {
                 if (parent != null)
                     localRotation = MakeSafe(Quaternion.NormalizeSafe(Quaternion.Inverse(parent.rotation) * value));
                 else
@@ -59,9 +67,11 @@ namespace Prowl.Runtime
             }
         }
 
-        public Quaternion localRotation {
+        public Quaternion localRotation
+        {
             get => MakeSafe(m_LocalRotation);
-            set {
+            set
+            {
 
                 if (m_LocalRotation != value)
                 {
@@ -71,17 +81,21 @@ namespace Prowl.Runtime
             }
         }
 
-        public Vector3 eulerAngles {
+        public Vector3 eulerAngles
+        {
             get => MakeSafe(rotation.eulerAngles);
-            set {
+            set
+            {
                 rotation = MakeSafe(Quaternion.Euler(value));
                 _version++;
             }
         }
 
-        public Vector3 localEulerAngles {
+        public Vector3 localEulerAngles
+        {
             get => MakeSafe(m_LocalRotation.eulerAngles);
-            set {
+            set
+            {
                 m_LocalRotation.eulerAngles = MakeSafe(value);
                 _version++;
             }
@@ -90,9 +104,11 @@ namespace Prowl.Runtime
 
         #region Scale
 
-        public Vector3 localScale {
+        public Vector3 localScale
+        {
             get => MakeSafe(m_LocalScale);
-            set {
+            set
+            {
                 if (m_LocalScale != value)
                 {
                     m_LocalScale = MakeSafe(value);
@@ -101,8 +117,10 @@ namespace Prowl.Runtime
             }
         }
 
-        public Vector3 lossyScale {
-            get {
+        public Vector3 lossyScale
+        {
+            get
+            {
                 Vector3 scale = localScale;
                 Transform p = parent;
                 while (p != null)
@@ -121,21 +139,25 @@ namespace Prowl.Runtime
         public Vector3 forward { get => rotation * Vector3.forward; } // TODO: Setter
 
         public Matrix4x4 worldToLocalMatrix => localToWorldMatrix.Invert();
-        public Matrix4x4 localToWorldMatrix {
-            get {
+        public Matrix4x4 localToWorldMatrix
+        {
+            get
+            {
                 Matrix4x4 t = Matrix4x4.TRS(m_LocalPosition, m_LocalRotation, m_LocalScale);
                 return parent != null ? t * parent.localToWorldMatrix : t;
             }
         }
 
-        public Transform parent {
+        public Transform parent
+        {
             get => gameObject?.parent?.Transform;
             set => gameObject?.SetParent(value.gameObject, true);
         }
 
         // https://forum.unity.com/threads/transform-haschanged-would-be-better-if-replaced-by-a-version-number.700004/
         // Replacement for hasChanged
-        public uint version {
+        public uint version
+        {
             get => _version;
             set => _version = value;
         }
@@ -202,17 +224,17 @@ namespace Prowl.Runtime
             return null;
         }
 
-        public static string GetPath(Transform target, Transform root) 
-        { 
-            string path = target.gameObject.Name; 
-            while (target.parent != null) 
+        public static string GetPath(Transform target, Transform root)
+        {
+            string path = target.gameObject.Name;
+            while (target.parent != null)
             {
-                target = target.parent; 
-                path = target.gameObject.Name + "/" + path; 
-                if(target == root)
+                target = target.parent;
+                path = target.gameObject.Name + "/" + path;
+                if (target == root)
                     break;
-            } 
-            return path; 
+            }
+            return path;
         }
 
         public void Translate(Vector3 translation, Transform? relativeTo = null)
@@ -274,7 +296,7 @@ namespace Prowl.Runtime
         public Quaternion InverseTransformRotation(Quaternion worldRotation) => Quaternion.Inverse(rotation) * worldRotation;
 
         public Vector3 TransformDirection(Vector3 inDirection) => rotation * inDirection;
-        public Vector3 InverseTransformDirection(Vector3 inDirection) => Quaternion.Inverse(rotation) *  inDirection;
+        public Vector3 InverseTransformDirection(Vector3 inDirection) => Quaternion.Inverse(rotation) * inDirection;
 
         public Vector3 TransformVector(Vector3 inVector)
         {

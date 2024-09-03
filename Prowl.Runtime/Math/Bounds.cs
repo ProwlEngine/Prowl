@@ -425,13 +425,13 @@ namespace Prowl.Runtime
             // Get the vertices of the OBB in local space
             Vector3[] localVertices = new Vector3[8];
             localVertices[0] = new Vector3(-extents.x, -extents.y, -extents.z);
-            localVertices[1] = new Vector3( extents.x, -extents.y, -extents.z);
-            localVertices[2] = new Vector3(-extents.x,  extents.y, -extents.z);
-            localVertices[3] = new Vector3( extents.x,  extents.y, -extents.z);
-            localVertices[4] = new Vector3(-extents.x, -extents.y,  extents.z);
-            localVertices[5] = new Vector3( extents.x, -extents.y,  extents.z);
-            localVertices[6] = new Vector3(-extents.x,  extents.y,  extents.z);
-            localVertices[7] = new Vector3( extents.x,  extents.y,  extents.z);
+            localVertices[1] = new Vector3(extents.x, -extents.y, -extents.z);
+            localVertices[2] = new Vector3(-extents.x, extents.y, -extents.z);
+            localVertices[3] = new Vector3(extents.x, extents.y, -extents.z);
+            localVertices[4] = new Vector3(-extents.x, -extents.y, extents.z);
+            localVertices[5] = new Vector3(extents.x, -extents.y, extents.z);
+            localVertices[6] = new Vector3(-extents.x, extents.y, extents.z);
+            localVertices[7] = new Vector3(extents.x, extents.y, extents.z);
 
             // Transform the vertices to world space
             Vector3[] worldVertices = new Vector3[8];

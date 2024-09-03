@@ -95,7 +95,8 @@ namespace Prowl.Runtime.Utils
 
         private static int GetPrecedence(string op) => op switch { "+" or "-" => 1, "*" or "/" => 2, "^" => 3, _ => 0 };
 
-        private static double ApplyOperator(string op, double l, double r) => op switch {
+        private static double ApplyOperator(string op, double l, double r) => op switch
+        {
             "+" => l + r,
             "-" => l - r,
             "*" => l * r,

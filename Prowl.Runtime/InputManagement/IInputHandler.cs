@@ -7,7 +7,7 @@ namespace Prowl.Runtime
     {
         string Clipboard { get; set; }
         bool IsAnyKeyDown { get; }
-        
+
         IReadOnlyList<char> InputString { get; set; }
 
         Vector2 MouseDelta { get; }

@@ -1,6 +1,7 @@
-﻿using Prowl.Runtime.GUI.Graphics;
-using System;
+﻿using System;
 using System.Collections.Generic;
+
+using Prowl.Runtime.GUI.Graphics;
 
 namespace Prowl.Runtime.GUI
 {
@@ -126,7 +127,8 @@ namespace Prowl.Runtime.GUI
 
         public static Color32 GizmoColor(TransformGizmo gizmo, bool focused, GizmoDirection direction)
         {
-            var col = direction switch {
+            var col = direction switch
+            {
                 GizmoDirection.X => new Color32(226, 55, 56, 255),
                 GizmoDirection.Y => new Color32(94, 234, 141, 255),
                 GizmoDirection.Z => new Color32(39, 117, 255, 255),
@@ -143,7 +145,8 @@ namespace Prowl.Runtime.GUI
 
         public static Vector3 GizmoLocalNormal(TransformGizmo gizmo, GizmoDirection direction)
         {
-            return direction switch {
+            return direction switch
+            {
                 GizmoDirection.X => Vector3.right,
                 GizmoDirection.Y => Vector3.up,
                 GizmoDirection.Z => Vector3.forward,
@@ -209,7 +212,8 @@ namespace Prowl.Runtime.GUI
 
             var picked = dist <= gizmo.FocusDistance;
 
-            return new PickResult {
+            return new PickResult
+            {
                 SubGizmoPoint = subGizmoPoint,
                 T = rayT,
                 Picked = picked
@@ -224,7 +228,8 @@ namespace Prowl.Runtime.GUI
             var rayPoint = ray.origin + ray.direction * t;
             var picked = distFromOrigin <= PlaneSize(gizmo);
 
-            return new PickResult {
+            return new PickResult
+            {
                 SubGizmoPoint = rayPoint,
                 T = t,
                 Picked = picked
@@ -235,10 +240,11 @@ namespace Prowl.Runtime.GUI
         {
             var (t, distFromGizmoOrigin) = RayToPlaneOrigin(-gizmo.ViewForward, gizmo.Translation, ray.origin, ray.direction);
             var hitPos = ray.origin + ray.direction * t;
-            var picked = filled ? distFromGizmoOrigin <= radius + gizmo.FocusDistance 
+            var picked = filled ? distFromGizmoOrigin <= radius + gizmo.FocusDistance
                                 : Math.Abs(distFromGizmoOrigin - radius) <= radius + gizmo.FocusDistance;
 
-            return new PickResult {
+            return new PickResult
+            {
                 SubGizmoPoint = hitPos,
                 T = t,
                 Picked = picked
@@ -348,7 +354,8 @@ namespace Prowl.Runtime.GUI
             }
         }
 
-        public static bool ArrowModesOverlapping(TransformGizmoMode mode, TransformGizmoMode gizmoModes){
+        public static bool ArrowModesOverlapping(TransformGizmoMode mode, TransformGizmoMode gizmoModes)
+        {
             return (mode == TransformGizmoMode.TranslateX && gizmoModes.HasFlag(TransformGizmoMode.ScaleX))
                 || (mode == TransformGizmoMode.TranslateY && gizmoModes.HasFlag(TransformGizmoMode.ScaleY))
                 || (mode == TransformGizmoMode.TranslateZ && gizmoModes.HasFlag(TransformGizmoMode.ScaleZ))
@@ -382,7 +389,7 @@ namespace Prowl.Runtime.GUI
 
                 length = length * 0.2 + width;
             }
-            return (start, 
+            return (start,
                     start + direction * length,
                     length);
 
@@ -405,7 +412,8 @@ namespace Prowl.Runtime.GUI
             var sd = n;
             var td = n;
 
-            if (n < 1e-8) {
+            if (n < 1e-8)
+            {
                 sn = 0.0;
                 sd = 1.0;
                 tn = e;
@@ -415,24 +423,29 @@ namespace Prowl.Runtime.GUI
             {
                 sn = dd * e - lb * d;
                 tn = la * e - dd * d;
-                if (sn < 0.0) {
+                if (sn < 0.0)
+                {
                     sn = 0.0;
                     tn = e;
                     td = lb;
                 }
-                else if (sn > sd) {
+                else if (sn > sd)
+                {
                     sn = sd;
                     tn = e + dd;
                     td = lb;
                 }
             }
 
-            if (tn < 0.0) {
+            if (tn < 0.0)
+            {
                 tn = 0.0;
-                if (-d < 0.0) {
+                if (-d < 0.0)
+                {
                     sn = 0.0;
                 }
-                else if( -d > la) {
+                else if (-d > la)
+                {
                     sn = sd;
                 }
                 else
@@ -441,13 +454,18 @@ namespace Prowl.Runtime.GUI
                     sd = la;
                 }
             }
-            else if (tn > td) {
+            else if (tn > td)
+            {
                 tn = td;
-                if ((-d + dd) < 0.0) {
+                if ((-d + dd) < 0.0)
+                {
                     sn = 0.0;
-                } else if ((-d + dd) > la) {
+                }
+                else if ((-d + dd) > la)
+                {
                     sn = sd;
-                } else
+                }
+                else
                 {
                     sn = -d + dd;
                     sd = la;

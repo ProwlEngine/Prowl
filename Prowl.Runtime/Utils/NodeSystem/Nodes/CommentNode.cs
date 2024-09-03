@@ -1,5 +1,6 @@
-﻿using Prowl.Runtime.NodeSystem;
-using System.Diagnostics;
+﻿using System.Diagnostics;
+
+using Prowl.Runtime.NodeSystem;
 
 namespace Prowl.Runtime.NodeSystem
 {

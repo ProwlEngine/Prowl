@@ -8,7 +8,7 @@ public static class GlobalSelectHandler
     public static event Action<object>? OnGlobalSelectObject;
     public static event Action<object>? OnGlobalDeselectObject;
     public static void Select(object obj) => OnGlobalSelectObject?.Invoke(obj);
-    public static void Deselect(object obj) =>  OnGlobalDeselectObject?.Invoke(obj);
+    public static void Deselect(object obj) => OnGlobalDeselectObject?.Invoke(obj);
 }
 
 
@@ -43,8 +43,10 @@ public class SelectHandler<T> where T : class
     public void StartFrame()
     {
         // Clear dead references
-        for (int i = 0; i < selected.Count; i++) {
-            if (CheckIsDestroyed.Invoke(selected[i])) {
+        for (int i = 0; i < selected.Count; i++)
+        {
+            if (CheckIsDestroyed.Invoke(selected[i]))
+            {
                 selected.RemoveAt(i);
                 i--;
             }
@@ -54,7 +56,8 @@ public class SelectHandler<T> where T : class
         previousFrameSelectables = selectables;
         selectables = new();
 
-        if (lastSelectedIndex == -1 && selected.Count > 0) {
+        if (lastSelectedIndex == -1 && selected.Count > 0)
+        {
             SetSelectedIndex((T)selected[0]);
         }
     }
@@ -74,18 +77,20 @@ public class SelectHandler<T> where T : class
     {
         Clear();
         selectedThisFrame = true;
-        for (int i = 0; i < objs.Length; i++) {
+        for (int i = 0; i < objs.Length; i++)
+        {
             selected.Add(objs[i]);
             OnSelectObject?.Invoke(objs[i]);
             GlobalSelectHandler.Select(objs[i]);
         }
-        if(objs.Length > 0)
+        if (objs.Length > 0)
             SetSelectedIndex(objs[0]);
     }
 
     public bool IsSelected(T obj)
     {
-        for (int i = 0; i < selected.Count; i++) {
+        for (int i = 0; i < selected.Count; i++)
+        {
             if (Equals.Invoke(selected[i], obj))
                 return true;
         }
@@ -95,7 +100,8 @@ public class SelectHandler<T> where T : class
     public void Foreach(Action<T> value)
     {
         var copy = new List<T>(selected);
-        copy.ForEach((weak) => {
+        copy.ForEach((weak) =>
+        {
             value?.Invoke((T)weak);
         });
     }
@@ -139,23 +145,30 @@ public class SelectHandler<T> where T : class
     public void Select(T obj, bool additively = false)
     {
         selectedThisFrame = true;
-        if (additively || Input.GetKey(Key.LeftControl)) {
+        if (additively || Input.GetKey(Key.LeftControl))
+        {
             // Additive
-            if (IsSelected(obj)) {
-                for (int i = 0; i < selected.Count; i++) {
-                    if (Equals.Invoke(selected[i], obj)) {
+            if (IsSelected(obj))
+            {
+                for (int i = 0; i < selected.Count; i++)
+                {
+                    if (Equals.Invoke(selected[i], obj))
+                    {
                         selected.RemoveAt(i);
                         break;
                     }
                 }
                 OnDeselectObject?.Invoke(obj);
                 GlobalSelectHandler.Deselect(obj);
-            } else {
+            }
+            else
+            {
                 selected.Add(obj);
                 OnSelectObject?.Invoke(obj);
                 GlobalSelectHandler.Select(obj);
             }
-        } else SetSelection(obj);
+        }
+        else SetSelection(obj);
 
         SetSelectedIndex(obj);
     }
@@ -164,8 +177,10 @@ public class SelectHandler<T> where T : class
     {
         if (previousFrameSelectables == null) return;
         // if sorted has this value using reference equals, set lastSelectedIndex to the index of it
-        for (int i = 0; i < previousFrameSelectables.Count; i++) {
-            if (Equals.Invoke(previousFrameSelectables.Values[i], entity)) {
+        for (int i = 0; i < previousFrameSelectables.Count; i++)
+        {
+            if (Equals.Invoke(previousFrameSelectables.Values[i], entity))
+            {
                 lastSelectedIndex = previousFrameSelectables.Keys[i];
                 break;
             }
@@ -174,7 +189,8 @@ public class SelectHandler<T> where T : class
 
     public void Clear()
     {
-        foreach (var item in selected) {
+        foreach (var item in selected)
+        {
             OnDeselectObject?.Invoke(item);
             GlobalSelectHandler.Deselect(item);
         }

@@ -42,11 +42,13 @@ namespace Prowl.Editor
         private DockNode m_Leaf;
         private Vector2 m_DockPosition;
 
-        public DockNode Leaf {
+        public DockNode Leaf
+        {
             get => m_Leaf;
             internal set => m_Leaf = value;
         }
-        public Rect Rect {
+        public Rect Rect
+        {
             get;
             private set;
         }
@@ -149,7 +151,7 @@ namespace Prowl.Editor
                                 {
                                     updatedTotal = total;
                                 }
-                                
+
                                 double left = 0;
                                 for (int i = 0; i < Leaf.LeafWindows.Count; i++)
                                 {

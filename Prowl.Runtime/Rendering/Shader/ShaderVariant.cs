@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using Prowl.Runtime.Utils;
-using Veldrid;
 using System.Linq;
+
+using Prowl.Runtime.Utils;
+
+using Veldrid;
 
 namespace Prowl.Runtime
 {

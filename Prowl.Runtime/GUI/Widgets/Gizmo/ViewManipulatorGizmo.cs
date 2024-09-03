@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+
 using Prowl.Runtime.GUI.Graphics;
 
 namespace Prowl.Runtime.GUI.Widgets.Gizmo
@@ -41,7 +42,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
             newCamForward = camForward;
             isOrthographic = _orthographic;
             if (_gui == null) return false;
-            
+
             var width = _gizmoRect.width;
             var height = _gizmoRect.height;
             using (_gui.Node("ViewManipulator").TopLeft(Offset.Percentage(1f, -width - 5), 5).Scale(width, height).Enter())
@@ -90,7 +91,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                         var hovCol = Color.white;
                         hovCol.a = 0.25f;
                         _gui.Draw2D.DrawCircleFilled(rect.Center, (float)rect.width / 2, hovCol, 48);
-                        
+
                         if (_gui.IsPointerClick(MouseButton.Left))
                         {
                             // Toggle Perspective / Orthographic

@@ -38,7 +38,7 @@ namespace Prowl.Runtime.GUI
         {
             if (Type == LayoutValueType.Percent)
                 return (Value * parentValue) + PixelOffset;
-            else if(isLerp)
+            else if (isLerp)
             {
                 Size a = new(Value, PixelOffset, Type);
                 Size b = new(_lerpValue, _lerpPixelOffset, _lerpType);

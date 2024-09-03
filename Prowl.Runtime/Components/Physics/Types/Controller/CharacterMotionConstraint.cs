@@ -1,10 +1,13 @@
-﻿using BepuUtilities;
-using BepuPhysics;
+﻿using System;
 using System.Numerics;
-using System;
 using System.Runtime.CompilerServices;
+
+using BepuPhysics;
 using BepuPhysics.Constraints;
+
+using BepuUtilities;
 using BepuUtilities.Memory;
+
 using static BepuUtilities.GatherScatter;
 
 namespace Prowl.Runtime.Controller

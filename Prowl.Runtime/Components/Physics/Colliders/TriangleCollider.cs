@@ -1,6 +1,9 @@
 ﻿using BepuPhysics.Collidables;
+
 using BepuUtilities.Memory;
+
 using Prowl.Icons;
+
 using NRigidPose = BepuPhysics.RigidPose;
 
 namespace Prowl.Runtime;

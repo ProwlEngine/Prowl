@@ -1,7 +1,9 @@
-﻿using Prowl.Editor.Assets;
+﻿using System.Reflection;
+
+using Prowl.Editor.Assets;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
-using System.Reflection;
+
 using static Prowl.Editor.MenuItem;
 
 namespace Prowl.Editor

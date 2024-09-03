@@ -39,9 +39,12 @@ namespace Prowl.Runtime
 
         public double sqrMagnitude { get { return x * x + y * y + z * z; } }
 
-        public double this[int index] {
-            get {
-                switch (index) {
+        public double this[int index]
+        {
+            get
+            {
+                switch (index)
+                {
                     case 0: return x;
                     case 1: return y;
                     case 2: return z;
@@ -50,8 +53,10 @@ namespace Prowl.Runtime
                 }
             }
 
-            set {
-                switch (index) {
+            set
+            {
+                switch (index)
+                {
                     case 0: x = value; break;
                     case 1: y = value; break;
                     case 2: z = value; break;
@@ -192,12 +197,12 @@ namespace Prowl.Runtime
         public static double Distance(Vector3 value1, Vector3 value2)
         {
             double dx = value1.x - value2.x;
-                double dy = value1.y - value2.y;
-                double dz = value1.z - value2.z;
+            double dy = value1.y - value2.y;
+            double dz = value1.z - value2.z;
 
-                double ls = dx * dx + dy * dy + dz * dz;
+            double ls = dx * dx + dy * dy + dz * dz;
 
-                return (double)global::System.Math.Sqrt((double)ls);
+            return (double)global::System.Math.Sqrt((double)ls);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -230,7 +235,8 @@ namespace Prowl.Runtime
             Vector3 output = target + (change + temp) * exp;
 
             // Prevent overshooting
-            if (Dot(originalTo - current, output - originalTo) > 0) {
+            if (Dot(originalTo - current, output - originalTo) > 0)
+            {
                 output = originalTo;
                 currentVelocity = (output - originalTo) / deltaTime;
             }
@@ -243,8 +249,8 @@ namespace Prowl.Runtime
         public static Vector3 Normalize(Vector3 value)
         {
             double ls = value.x * value.x + value.y * value.y + value.z * value.z;
-                double length = (double)global::System.Math.Sqrt(ls);
-                return new Vector3(value.x / length, value.y / length, value.z / length);
+            double length = (double)global::System.Math.Sqrt(ls);
+            return new Vector3(value.x / length, value.y / length, value.z / length);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -280,10 +286,10 @@ namespace Prowl.Runtime
         public static Vector3 Reflect(Vector3 vector, Vector3 normal)
         {
             double dot = vector.x * normal.x + vector.y * normal.y + vector.z * normal.z;
-                double tempX = normal.x * dot * 2;
-                double tempY = normal.y * dot * 2;
-                double tempZ = normal.z * dot * 2;
-                return new Vector3(vector.x - tempX, vector.y - tempY, vector.z - tempZ);
+            double tempX = normal.x * dot * 2;
+            double tempY = normal.y * dot * 2;
+            double tempZ = normal.z * dot * 2;
+            return new Vector3(vector.x - tempX, vector.y - tempY, vector.z - tempZ);
         }
 
         /// <summary>

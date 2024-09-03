@@ -32,8 +32,10 @@ namespace Prowl.Runtime
 
         #region Public Instance Properties
 
-        public int this[int index] {
-            get {
+        public int this[int index]
+        {
+            get
+            {
                 switch (index)
                 {
                     case 0: return x;
@@ -45,7 +47,8 @@ namespace Prowl.Runtime
                 }
             }
 
-            set {
+            set
+            {
                 switch (index)
                 {
                     case 0: x = value; break;
@@ -145,7 +148,7 @@ namespace Prowl.Runtime
 
             return sb.ToString();
         }
-        
+
         public bool IsFinate() => MathD.IsValid(x) && MathD.IsValid(y) && MathD.IsValid(z) && MathD.IsValid(w);
         #endregion Public Instance Methods
 

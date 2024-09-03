@@ -1,11 +1,11 @@
 ﻿namespace Prowl.Runtime.Audio
 {
-    public enum BufferAudioFormat 
-    { 
-        Mono8, 
+    public enum BufferAudioFormat
+    {
+        Mono8,
         Mono16,
         MonoF,
-        Stereo8, 
+        Stereo8,
         Stereo16,
         StereoF
     }

@@ -30,9 +30,12 @@ namespace Prowl.Runtime
         /// </summary>
         public double w;
 
-        public double this[int index] {
-            get {
-                switch (index) {
+        public double this[int index]
+        {
+            get
+            {
+                switch (index)
+                {
                     case 0: return x;
                     case 1: return y;
                     case 2: return z;
@@ -42,8 +45,10 @@ namespace Prowl.Runtime
                 }
             }
 
-            set {
-                switch (index) {
+            set
+            {
+                switch (index)
+                {
                     case 0: x = value; break;
                     case 1: y = value; break;
                     case 2: z = value; break;

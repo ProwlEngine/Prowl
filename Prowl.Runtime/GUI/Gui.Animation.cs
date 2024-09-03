@@ -1,5 +1,6 @@
-﻿using Prowl.Runtime.Utils;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+
+using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime.GUI
 {
@@ -43,15 +44,15 @@ namespace Prowl.Runtime.GUI
         private Dictionary<ulong, BoolAnimation> _boolAnimations = [];
 
         /// <inheritdoc cref="AnimateBool(ulong, bool, float, EaseType)"/>
-        public float AnimateBool(bool state, float durationIn, float durationOut, EaseType easeIn, EaseType easeOut) 
+        public float AnimateBool(bool state, float durationIn, float durationOut, EaseType easeIn, EaseType easeOut)
             => AnimateBool(GetNextID(), state, state ? durationOut : durationIn, state ? easeOut : easeIn);
-        public float AnimateBool(bool state, float durationIn, float durationOut, EaseType type) 
+        public float AnimateBool(bool state, float durationIn, float durationOut, EaseType type)
             => AnimateBool(GetNextID(), state, state ? durationOut : durationIn, type);
         /// <inheritdoc cref="AnimateBool(ulong, bool, float, EaseType)"/>
-        public float AnimateBool(bool state, float duration, EaseType easeIn, EaseType easeOut) 
+        public float AnimateBool(bool state, float duration, EaseType easeIn, EaseType easeOut)
             => AnimateBool(GetNextID(), state, duration, state ? easeOut : easeIn);
         /// <inheritdoc cref="AnimateBool(ulong, bool, float, EaseType)"/>
-        public float AnimateBool(bool state, float duration, EaseType ease) 
+        public float AnimateBool(bool state, float duration, EaseType ease)
             => AnimateBool(GetNextID(), state, duration, ease);
 
         /// <summary>
@@ -66,7 +67,7 @@ namespace Prowl.Runtime.GUI
         public float AnimateBool(ulong animId, bool state, float duration, EaseType type)
         {
             BoolAnimation anim;
-            if(_boolAnimations.TryGetValue(animId, out anim))
+            if (_boolAnimations.TryGetValue(animId, out anim))
             {
                 anim.CurrentValue = state;
                 anim.Duration = duration;
@@ -74,7 +75,8 @@ namespace Prowl.Runtime.GUI
             }
             else
             {
-                anim = new BoolAnimation {
+                anim = new BoolAnimation
+                {
                     CurrentValue = state,
                     Duration = duration,
                     EaseType = type,
@@ -111,7 +113,8 @@ namespace Prowl.Runtime.GUI
 
         static double GetEase(double time, EaseType type)
         {
-            return type switch {
+            return type switch
+            {
                 EaseType.Linear => Linear(time),
                 EaseType.SineIn => SineIn(time),
                 EaseType.SineOut => SineOut(time),

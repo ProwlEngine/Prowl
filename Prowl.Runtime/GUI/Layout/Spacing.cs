@@ -39,6 +39,11 @@
                    s1.Top != s2.Top ||
                    s1.Bottom != s2.Bottom;
         }
+
+        public override bool Equals(object obj)
+        {
+            throw new System.NotImplementedException();
+        }
     }
 
 }

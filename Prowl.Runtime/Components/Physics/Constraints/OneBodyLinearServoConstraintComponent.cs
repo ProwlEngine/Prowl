@@ -17,9 +17,11 @@ public sealed class OneBodyLinearServoConstraintComponent : OneBodyConstraintCom
     [SerializeField, HideInInspector] private float _springDampingRatio = 5;
 
     [ShowInInspector]
-    public Vector3 LocalOffset {
+    public Vector3 LocalOffset
+    {
         get => _localOffset;
-        set {
+        set
+        {
             _localOffset = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -40,55 +42,70 @@ public sealed class OneBodyLinearServoConstraintComponent : OneBodyConstraintCom
     }
 
     [ShowInInspector]
-    public float ServoMaximumSpeed {
-        get {
+    public float ServoMaximumSpeed
+    {
+        get
+        {
             return _servoMaximumSpeed;
         }
-        set {
+        set
+        {
             _servoMaximumSpeed = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float ServoBaseSpeed {
-        get {
+    public float ServoBaseSpeed
+    {
+        get
+        {
             return _servoBaseSpeed;
         }
-        set {
+        set
+        {
             _servoBaseSpeed = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float ServoMaximumForce {
-        get {
+    public float ServoMaximumForce
+    {
+        get
+        {
             return _servoMaximumForce;
         }
-        set {
+        set
+        {
             _servoMaximumForce = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringFrequency {
-        get {
+    public float SpringFrequency
+    {
+        get
+        {
             return _springFrequency;
         }
-        set {
+        set
+        {
             _springFrequency = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringDampingRatio {
-        get {
+    public float SpringDampingRatio
+    {
+        get
+        {
             return _springDampingRatio;
         }
-        set {
+        set
+        {
             _springDampingRatio = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -96,15 +113,18 @@ public sealed class OneBodyLinearServoConstraintComponent : OneBodyConstraintCom
 
     internal override OneBodyLinearServo CreateConstraint()
     {
-        return new OneBodyLinearServo {
+        return new OneBodyLinearServo
+        {
             LocalOffset = LocalOffset,
             Target = Target,
-            ServoSettings = new ServoSettings {
+            ServoSettings = new ServoSettings
+            {
                 MaximumSpeed = ServoMaximumSpeed,
                 BaseSpeed = ServoBaseSpeed,
                 MaximumForce = ServoMaximumForce
             },
-            SpringSettings = new SpringSettings {
+            SpringSettings = new SpringSettings
+            {
                 Frequency = SpringFrequency,
                 DampingRatio = SpringDampingRatio
             }

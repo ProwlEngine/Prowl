@@ -1,7 +1,9 @@
 ﻿using System.Runtime.CompilerServices;
+
 using BepuPhysics;
 using BepuPhysics.Collidables;
 using BepuPhysics.CollisionDetection;
+
 using Prowl.Runtime.Contacts;
 
 namespace Prowl.Runtime;

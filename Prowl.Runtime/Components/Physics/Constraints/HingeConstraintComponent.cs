@@ -99,7 +99,8 @@ public sealed class HingeConstraintComponent : TwoBodyConstraintComponent<Hinge>
 
     internal override Hinge CreateConstraint()
     {
-        return new Hinge {
+        return new Hinge
+        {
             LocalOffsetA = _localOffsetA,
             LocalHingeAxisA = _localHingeAxisA,
             LocalOffsetB = _localOffsetB,

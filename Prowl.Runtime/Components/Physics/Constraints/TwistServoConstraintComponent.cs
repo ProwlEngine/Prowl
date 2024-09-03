@@ -57,55 +57,70 @@ public sealed class TwistServoConstraintComponent : TwoBodyConstraintComponent<T
     }
 
     [ShowInInspector]
-    public float ServoMaximumSpeed {
-        get {
+    public float ServoMaximumSpeed
+    {
+        get
+        {
             return _servoMaximumSpeed;
         }
-        set {
+        set
+        {
             _servoMaximumSpeed = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float ServoBaseSpeed {
-        get {
+    public float ServoBaseSpeed
+    {
+        get
+        {
             return _servoBaseSpeed;
         }
-        set {
+        set
+        {
             _servoBaseSpeed = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float ServoMaximumForce {
-        get {
+    public float ServoMaximumForce
+    {
+        get
+        {
             return _servoMaximumForce;
         }
-        set {
+        set
+        {
             _servoMaximumForce = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringFrequency {
-        get {
+    public float SpringFrequency
+    {
+        get
+        {
             return _springFrequency;
         }
-        set {
+        set
+        {
             _springFrequency = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringDampingRatio {
-        get {
+    public float SpringDampingRatio
+    {
+        get
+        {
             return _springDampingRatio;
         }
-        set {
+        set
+        {
             _springDampingRatio = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -113,11 +128,13 @@ public sealed class TwistServoConstraintComponent : TwoBodyConstraintComponent<T
 
     internal override TwistServo CreateConstraint()
     {
-        return new TwistServo {
+        return new TwistServo
+        {
             LocalBasisA = _localBasisA,
             LocalBasisB = _localBasisB,
             TargetAngle = _targetAngle,
-            ServoSettings = new ServoSettings {
+            ServoSettings = new ServoSettings
+            {
                 MaximumSpeed = _servoMaximumSpeed,
                 BaseSpeed = _servoBaseSpeed,
                 MaximumForce = _servoMaximumForce

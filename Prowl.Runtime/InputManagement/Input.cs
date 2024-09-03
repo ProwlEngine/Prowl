@@ -1,6 +1,7 @@
-﻿using Prowl.Runtime;
-using System;
+﻿using System;
 using System.Collections.Generic;
+
+using Prowl.Runtime;
 
 namespace Prowl.Runtime;
 
@@ -12,13 +13,13 @@ public class Input
     public static void PushHandler(IInputHandler handler) => Handlers.Push(handler);
     public static void PopHandler() => Handlers.Pop();
 
-    public static bool CursorVisible 
+    public static bool CursorVisible
     {
         get => Current.CursorVisible;
         set => Current.CursorVisible = value;
     }
 
-    public static bool CursorLocked 
+    public static bool CursorLocked
     {
         get => Current.CursorLocked;
         set => Current.CursorLocked = value;

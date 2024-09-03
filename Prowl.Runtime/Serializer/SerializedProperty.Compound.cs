@@ -15,7 +15,7 @@ namespace Prowl.Runtime
             {
                 if (TagType != PropertyType.Compound)
                     throw new InvalidOperationException("Cannot set tag on non-compound tag");
-                else if(tagName == null)
+                else if (tagName == null)
                     throw new ArgumentNullException("tagName");
                 else if (value == null)
                     throw new ArgumentNullException("value");
@@ -176,7 +176,7 @@ namespace Prowl.Runtime
                 {
                     if (tag.TagType == PropertyType.Compound)
                     {
-                        if(applyTag.Value.TagType == PropertyType.Compound)
+                        if (applyTag.Value.TagType == PropertyType.Compound)
                             tag.Apply(applyTag.Value);
                         else
                             throw new InvalidOperationException("Cannot apply a non-compound tag to a compound tag");

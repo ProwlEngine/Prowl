@@ -1,6 +1,7 @@
-﻿using Prowl.Icons;
+﻿using System;
+
+using Prowl.Icons;
 using Prowl.Runtime.RenderPipelines;
-using System;
 
 namespace Prowl.Runtime;
 

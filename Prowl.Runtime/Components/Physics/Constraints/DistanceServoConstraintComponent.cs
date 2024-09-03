@@ -18,18 +18,22 @@ public sealed class DistanceServoConstraintComponent : TwoBodyConstraintComponen
     [SerializeField, HideInInspector] private float _springDampingRatio = 5;
 
     [ShowInInspector]
-    public Vector3 LocalOffsetA {
+    public Vector3 LocalOffsetA
+    {
         get => _localOffsetA;
-        set {
+        set
+        {
             _localOffsetA = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public Vector3 LocalOffsetB {
+    public Vector3 LocalOffsetB
+    {
         get => _localOffsetB;
-        set {
+        set
+        {
             _localOffsetB = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -50,55 +54,70 @@ public sealed class DistanceServoConstraintComponent : TwoBodyConstraintComponen
     }
 
     [ShowInInspector]
-    public float ServoMaximumSpeed {
-        get {
+    public float ServoMaximumSpeed
+    {
+        get
+        {
             return _servoMaximumSpeed;
         }
-        set {
+        set
+        {
             _servoMaximumSpeed = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float ServoBaseSpeed {
-        get {
+    public float ServoBaseSpeed
+    {
+        get
+        {
             return _servoBaseSpeed;
         }
-        set {
+        set
+        {
             _servoBaseSpeed = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float ServoMaximumForce {
-        get {
+    public float ServoMaximumForce
+    {
+        get
+        {
             return _servoMaximumForce;
         }
-        set {
+        set
+        {
             _servoMaximumForce = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringFrequency {
-        get {
+    public float SpringFrequency
+    {
+        get
+        {
             return _springFrequency;
         }
-        set {
+        set
+        {
             _springFrequency = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringDampingRatio {
-        get {
+    public float SpringDampingRatio
+    {
+        get
+        {
             return _springDampingRatio;
         }
-        set {
+        set
+        {
             _springDampingRatio = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -106,16 +125,19 @@ public sealed class DistanceServoConstraintComponent : TwoBodyConstraintComponen
 
     internal override DistanceServo CreateConstraint()
     {
-        return new DistanceServo {
+        return new DistanceServo
+        {
             LocalOffsetA = LocalOffsetA,
             LocalOffsetB = LocalOffsetB,
             TargetDistance = TargetDistance,
-            ServoSettings = new ServoSettings {
+            ServoSettings = new ServoSettings
+            {
                 MaximumSpeed = ServoMaximumSpeed,
                 BaseSpeed = ServoBaseSpeed,
                 MaximumForce = ServoMaximumForce
             },
-            SpringSettings = new SpringSettings {
+            SpringSettings = new SpringSettings
+            {
                 Frequency = SpringFrequency,
                 DampingRatio = SpringDampingRatio
             }

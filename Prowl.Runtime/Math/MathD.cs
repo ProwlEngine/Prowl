@@ -435,15 +435,18 @@ namespace Prowl.Runtime
             double normalizedX = angle.x % 360;
             double normalizedY = angle.y % 360;
             double normalizedZ = angle.z % 360;
-            if (normalizedX < 0) {
+            if (normalizedX < 0)
+            {
                 normalizedX += 360;
             }
 
-            if (normalizedY < 0) {
+            if (normalizedY < 0)
+            {
                 normalizedY += 360;
             }
 
-            if (normalizedZ < 0) {
+            if (normalizedZ < 0)
+            {
                 normalizedZ += 360;
             }
 

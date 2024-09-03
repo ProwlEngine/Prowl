@@ -1,6 +1,9 @@
 ﻿using BepuPhysics.Collidables;
+
 using BepuUtilities.Memory;
+
 using Prowl.Icons;
+
 using NRigidPose = BepuPhysics.RigidPose;
 
 namespace Prowl.Runtime;
@@ -33,14 +36,17 @@ public sealed class CylinderCollider : Collider
         }
     }
 
-    public float WorldRadius {
-        get {
+    public float WorldRadius
+    {
+        get
+        {
             var scale = this.Transform.lossyScale;
             return _length * (float)MathD.Max(scale.x, scale.z);
         }
     }
 
-    public float WorldLength {
+    public float WorldLength
+    {
         get => _length * (float)this.Transform.lossyScale.y;
     }
 

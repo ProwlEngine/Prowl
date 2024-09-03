@@ -1,9 +1,10 @@
-﻿using Prowl.Runtime;
-using Prowl.Runtime.Utils;
-using Veldrid;
-
-using System.Text;
+﻿using System.Text;
 using System.Text.RegularExpressions;
+
+using Prowl.Runtime;
+using Prowl.Runtime.Utils;
+
+using Veldrid;
 
 namespace Prowl.Editor.Utilities
 {

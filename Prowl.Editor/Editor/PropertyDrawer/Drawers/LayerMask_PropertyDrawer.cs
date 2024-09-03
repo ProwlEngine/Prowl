@@ -1,9 +1,10 @@
-﻿using Prowl.Editor.Preferences;
+﻿using System.Text;
+
+using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
-using System.Text;
 
 namespace Prowl.Editor.PropertyDrawers
 {

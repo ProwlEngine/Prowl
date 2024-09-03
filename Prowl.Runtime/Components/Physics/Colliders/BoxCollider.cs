@@ -1,6 +1,8 @@
 ﻿using BepuPhysics;
 using BepuPhysics.Collidables;
+
 using BepuUtilities.Memory;
+
 using Prowl.Icons;
 
 namespace Prowl.Runtime;
@@ -21,8 +23,10 @@ public sealed class BoxCollider : Collider
         }
     }
 
-    public Vector3 WorldSize {
-        get {
+    public Vector3 WorldSize
+    {
+        get
+        {
             return _size * this.Transform.lossyScale;
         }
     }

@@ -1,7 +1,9 @@
-﻿using Prowl.Runtime.Audio;
-using Silk.NET.OpenAL;
-using System;
+﻿using System;
 using System.Linq;
+
+using Prowl.Runtime.Audio;
+
+using Silk.NET.OpenAL;
 
 namespace Prowl.Runtime
 {
@@ -25,7 +27,8 @@ namespace Prowl.Runtime
                 bitsPerSample = 16; // Update bits per sample to 16
             }
 
-            return new AudioClip {
+            return new AudioClip
+            {
                 Name = name,
                 Data = data,
                 Format = MapFormat(numChannels, bitsPerSample),
@@ -34,7 +37,8 @@ namespace Prowl.Runtime
             };
         }
 
-        public static BufferAudioFormat MapFormat(int numChannels, int bitsPerSample) => bitsPerSample switch {
+        public static BufferAudioFormat MapFormat(int numChannels, int bitsPerSample) => bitsPerSample switch
+        {
             8 => numChannels == 1 ? BufferAudioFormat.Mono8 : BufferAudioFormat.Stereo8,
             16 => numChannels == 1 ? BufferAudioFormat.Mono16 : BufferAudioFormat.Stereo16,
             32 => numChannels == 1 ? BufferAudioFormat.MonoF : BufferAudioFormat.StereoF,

@@ -32,5 +32,5 @@ public abstract class FourBodyConstraintComponent<T> : ConstraintComponent<T> wh
         set => this[3] = value;
     }
 
-    public FourBodyConstraintComponent() : base(4){ }
+    public FourBodyConstraintComponent() : base(4) { }
 }

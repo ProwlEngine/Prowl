@@ -4,7 +4,8 @@ using Prowl.Runtime.SceneManagement;
 
 namespace Prowl.Editor;
 
-public static class PlayMode {
+public static class PlayMode
+{
     public enum Mode { Editing, Playing, Paused, }
 
     public static Mode Current { get; private set; }
@@ -12,7 +13,8 @@ public static class PlayMode {
 
     public static TimeData GameTime = new();
 
-    public static void Start() {
+    public static void Start()
+    {
 
         SceneManager.StoreScene();
 
@@ -29,16 +31,19 @@ public static class PlayMode {
                 EditorGuiManager.FocusWindow(GameWindow.LastFocused.Target as EditorWindow);
         }
     }
-    
-    public static void Pause() {
+
+    public static void Pause()
+    {
         Current = Mode.Paused;
     }
-    
-    public static void Resume() {
+
+    public static void Resume()
+    {
         Current = Mode.Playing;
     }
-    
-    public static void Stop() {
+
+    public static void Stop()
+    {
         Current = Mode.Editing;
         SceneManager.Clear();
 

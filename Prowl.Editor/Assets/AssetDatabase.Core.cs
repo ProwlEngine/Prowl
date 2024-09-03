@@ -1,5 +1,6 @@
 ﻿using Prowl.Runtime;
 using Prowl.Runtime.Utils;
+
 using Debug = Prowl.Runtime.Debug;
 
 namespace Prowl.Editor.Assets
@@ -49,7 +50,7 @@ namespace Prowl.Editor.Assets
                 if (!lastFocused || RefreshTimer > 5f)
                     Update();
             }
-            
+
             lastFocused = Screen.IsFocused;
         }
 

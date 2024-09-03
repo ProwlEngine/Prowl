@@ -24,9 +24,9 @@
             if (!File.Exists(source.FullName)) return false;
 
             // Destination already exists
-            if (File.Exists(destination))  return false; 
+            if (File.Exists(destination)) return false;
 
-            if (source.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase)) 
+            if (source.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase))
                 return false;
 
             // Move Asset file & meta file if it exists
@@ -57,7 +57,7 @@
             if (!Directory.Exists(source.FullName)) return false;
 
             // Destination already exists
-            if (Directory.Exists(destination)) return false; 
+            if (Directory.Exists(destination)) return false;
 
             // Move folder
             source.MoveTo(destination);
@@ -147,7 +147,7 @@
             ArgumentNullException.ThrowIfNull(source);
 
             // Just deleting the files should be enough for the AssetDatabase to pick it up
-            if(Directory.Exists(source.FullName))
+            if (Directory.Exists(source.FullName))
                 source.Delete();
             Update();
             return true;

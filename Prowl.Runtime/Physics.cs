@@ -1,19 +1,22 @@
-﻿using BepuPhysics;
+﻿using System;
+using System.Collections.Generic;
+using System.Numerics;
+using System.Runtime.CompilerServices;
+
+using BepuPhysics;
 using BepuPhysics.Collidables;
 using BepuPhysics.CollisionDetection;
 using BepuPhysics.Constraints;
+
 using BepuUtilities;
 using BepuUtilities.Memory;
+
 using Prowl.Runtime;
 using Prowl.Runtime.Contacts;
 using Prowl.Runtime.Controller;
 using Prowl.Runtime.Raycast;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
-using System;
-using System.Collections.Generic;
-using System.Numerics;
-using System.Runtime.CompilerServices;
 
 namespace Prowl.Runtime
 {

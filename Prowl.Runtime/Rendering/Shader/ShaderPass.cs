@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using Prowl.Runtime.Utils;
-using Veldrid;
 using System.Linq;
+
+using Prowl.Runtime.Utils;
+
+using Veldrid;
 
 namespace Prowl.Runtime
 {
@@ -99,16 +101,16 @@ namespace Prowl.Runtime
 
         private ShaderPass() { }
 
-        public ShaderPass(string name, ShaderPassDescription description, ShaderVariant[] variants) 
+        public ShaderPass(string name, ShaderPassDescription description, ShaderVariant[] variants)
         {
             this._name = name;
 
-            this._tags = description.Tags ?? new();     
+            this._tags = description.Tags ?? new();
             this._blend = description.BlendState ?? BlendStateDescription.SingleOverrideBlend;
             this._depthStencilState = description.DepthStencilState ?? DepthStencilStateDescription.DepthOnlyLessEqual;
             this._cullMode = description.CullingMode ?? FaceCullMode.Back;
-            this._depthClipEnabled = description.DepthClipEnabled ?? true;       
-            this._keywords = description.Keywords ?? new() { { string.Empty, [ string.Empty ] } };
+            this._depthClipEnabled = description.DepthClipEnabled ?? true;
+            this._keywords = description.Keywords ?? new() { { string.Empty, [string.Empty] } };
 
             this._variants = new();
 
@@ -123,7 +125,7 @@ namespace Prowl.Runtime
             => _variants.TryGetValue(keywordID ?? KeywordState.Empty, out variant);
 
         public bool HasTag(string tag, string? tagValue = null)
-        {   
+        {
             if (_tags.TryGetValue(tag, out string value))
                 return tagValue == null || value == tagValue;
 
@@ -146,14 +148,14 @@ namespace Prowl.Runtime
             return combinedKey;
         }
 
-    
+
         [SerializeField, HideInInspector]
         private string[] _serializedKeywordKeys;
 
         [SerializeField, HideInInspector]
         private string[][] _serializedKeywordValues;
 
-        
+
         [SerializeField, HideInInspector]
         private ShaderVariant[] _serializedVariants;
 

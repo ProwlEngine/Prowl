@@ -1,4 +1,5 @@
 ﻿using System;
+
 using static Prowl.Runtime.GUI.ScaleSubGizmo;
 using static Prowl.Runtime.GUI.TransformGizmo;
 
@@ -98,7 +99,8 @@ namespace Prowl.Runtime.GUI
 
             var normal = GizmoUtils.GizmoNormal(_gizmo, _params.Direction);
 
-            return new GizmoResult {
+            return new GizmoResult
+            {
                 RotationAxis = normal,
                 RotationDelta = -angleDelta,
                 TotalRotation = _state.CurrentDelta,
@@ -281,7 +283,8 @@ namespace Prowl.Runtime.GUI
 
         private Vector3 Tangent()
         {
-            var tangent = _params.Direction switch {
+            var tangent = _params.Direction switch
+            {
                 GizmoDirection.X or GizmoDirection.Y => Vector3.forward,
                 GizmoDirection.Z => -Vector3.up,
                 GizmoDirection.View => -_gizmo.ViewRight,
@@ -310,7 +313,7 @@ namespace Prowl.Runtime.GUI
             public GizmoDirection Direction;
             public TransformKind TransformKind;
         }
-    
+
         public struct ScaleState
         {
             public double StartDelta;
@@ -318,7 +321,7 @@ namespace Prowl.Runtime.GUI
             public Vector3 Scale;
             public Vector3 ScaleDelta;
         }
-    
+
         private ScaleParams _params;
         private ScaleState _state;
         private TransformGizmo _gizmo;
@@ -330,12 +333,12 @@ namespace Prowl.Runtime.GUI
             _params = parameters;
             _state = new ScaleState();
         }
-    
+
         public void SetFocused(bool focused)
         {
             this.focused = focused;
         }
-    
+
         public bool Pick(Ray ray, Vector2 screenPos, out double t)
         {
             if (_params.Mode == TransformGizmoMode.ScaleUniform)
@@ -365,7 +368,7 @@ namespace Prowl.Runtime.GUI
                     pickResult = GizmoUtils.PickArrow(_gizmo, ray, _params.Direction, _params.Mode);
                     break;
             }
-    
+
             var startDelta = DistanceFromOrigin2D(_gizmo, screenPos);
             _state.StartDelta = startDelta.HasValue ? startDelta.Value : 0;
             _state.StartScale = _gizmo.Scale;
@@ -375,7 +378,7 @@ namespace Prowl.Runtime.GUI
             t = pickResult.T;
             return pickResult.Picked;
         }
-    
+
         public GizmoResult? Update(Ray ray, Vector2 screenPos)
         {
             var delta = DistanceFromOrigin2D(_gizmo, screenPos);
@@ -383,14 +386,14 @@ namespace Prowl.Runtime.GUI
                 return null;
 
             delta /= _state.StartDelta;
-    
+
             //if (_gizmo.Snapping)
             //{
             //    delta = GizmoUtils.RoundToInterval(delta.Value, _gizmo.SnapDistance);
             //}
-    
+
             delta = Math.Max(delta.Value, 1e-4) - 1.0;
-    
+
             Vector3 direction;
             switch (_params.TransformKind)
             {
@@ -408,12 +411,12 @@ namespace Prowl.Runtime.GUI
                     direction = Vector3.zero;
                     break;
             }
-    
+
             var scale = Vector3.one + (direction * delta.Value);
             _state.ScaleDelta = Vector3.one + (scale - _state.Scale);
             _state.Scale = scale;
 
-    
+
             return new GizmoResult { Scale = scale, StartScale = _state.StartScale, ScaleDelta = _state.ScaleDelta };
         }
 
@@ -562,7 +565,8 @@ namespace Prowl.Runtime.GUI
             _state.LastPoint = newPoint;
             _state.CurrentDelta = newDelta;
 
-            return new GizmoResult {
+            return new GizmoResult
+            {
                 TranslationDelta = translationDelta,
                 TotalTranslation = totalTranslation
             };

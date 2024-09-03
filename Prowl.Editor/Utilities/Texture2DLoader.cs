@@ -1,8 +1,10 @@
-﻿using SixLabors.ImageSharp;
+﻿using Prowl.Runtime;
+
+using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.PixelFormats;
-using Prowl.Runtime;
+using SixLabors.ImageSharp.Processing;
+
 using Veldrid;
 
 namespace Prowl.Editor
@@ -51,7 +53,7 @@ namespace Prowl.Editor
         {
             if (image == null)
                 throw new ArgumentNullException(nameof(image));
-            
+
             image.Mutate(x => x.Flip(FlipMode.Vertical));
 
             PixelFormat format = FormatForPixelType<TPixel>();
@@ -110,7 +112,7 @@ namespace Prowl.Editor
         /// <typeparam name="TPixel">The pixel format to use.</typeparam>
         public static Texture2D FromFile<TPixel>(string file, bool generateMipmaps = false) where TPixel : unmanaged, IPixel<TPixel>
         {
-            if(Path.GetExtension(file).Equals(".dds", StringComparison.OrdinalIgnoreCase))
+            if (Path.GetExtension(file).Equals(".dds", StringComparison.OrdinalIgnoreCase))
             {
                 var texture = SixLabors.ImageSharp.Textures.Texture.Load(file, out var format);
                 if (texture is SixLabors.ImageSharp.Textures.TextureFormats.FlatTexture flat)

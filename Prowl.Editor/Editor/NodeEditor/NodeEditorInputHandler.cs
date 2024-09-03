@@ -1,4 +1,5 @@
 ﻿using Prowl.Runtime;
+
 using Veldrid;
 
 namespace Prowl.Editor;
@@ -13,7 +14,7 @@ public class NodeEditorInputHandler : DefaultInputHandler
 
 
     protected override Vector2Int GetActualMousePosition(InputSnapshot snapshot)
-    {   
+    {
         return base.GetActualMousePosition(snapshot) - position;
     }
 

@@ -43,7 +43,8 @@ namespace Prowl.Editor.Assets
                 var tag = StringTagConverter.ReadFromFile((target as MetaFile).AssetPath);
                 Material mat = Serializer.Deserialize<Material>(tag);
 
-                MaterialEditor editor = new MaterialEditor(mat, () => {
+                MaterialEditor editor = new MaterialEditor(mat, () =>
+                {
                     StringTagConverter.WriteToFile(Serializer.Serialize(mat), (target as MetaFile).AssetPath);
                     AssetDatabase.Reimport((target as MetaFile).AssetPath);
                 });

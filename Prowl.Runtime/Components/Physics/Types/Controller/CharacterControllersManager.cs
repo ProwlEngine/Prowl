@@ -1,12 +1,14 @@
-﻿using BepuPhysics;
+﻿using System;
+using System.Runtime.CompilerServices;
+using System.Threading;
+
+using BepuPhysics;
 using BepuPhysics.Collidables;
 using BepuPhysics.CollisionDetection;
+
 using BepuUtilities;
 using BepuUtilities.Collections;
 using BepuUtilities.Memory;
-using System;
-using System.Runtime.CompilerServices;
-using System.Threading;
 
 namespace Prowl.Runtime.Controller
 {
@@ -592,7 +594,8 @@ namespace Prowl.Runtime.Controller
                         if (supportCandidate.Support.Mobility != CollidableMobility.Static)
                         {
                             //The character is supported by a body.
-                            var motionConstraint = new DynamicCharacterMotionConstraint {
+                            var motionConstraint = new DynamicCharacterMotionConstraint
+                            {
                                 MaximumHorizontalForce = character.MaximumHorizontalForce,
                                 MaximumVerticalForce = character.MaximumVerticalForce,
                                 OffsetFromCharacterToSupportPoint = supportCandidate.OffsetFromCharacter,
@@ -617,7 +620,8 @@ namespace Prowl.Runtime.Controller
                         else
                         {
                             //The character is supported by a static.
-                            var motionConstraint = new StaticCharacterMotionConstraint {
+                            var motionConstraint = new StaticCharacterMotionConstraint
+                            {
                                 MaximumHorizontalForce = character.MaximumHorizontalForce,
                                 MaximumVerticalForce = character.MaximumVerticalForce,
                                 OffsetFromCharacterToSupportPoint = supportCandidate.OffsetFromCharacter,

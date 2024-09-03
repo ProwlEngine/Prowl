@@ -1,6 +1,7 @@
-﻿using Prowl.Runtime;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Reflection;
+
+using Prowl.Runtime;
 
 namespace Prowl.Editor.Assets
 {
@@ -211,7 +212,7 @@ namespace Prowl.Editor.Assets
             {
                 var names = meta.assetNames;
                 var types = meta.assetTypes;
-                if(names.Length != types.Length)
+                if (names.Length != types.Length)
                 {
                     Runtime.Debug.LogWarning($"Meta file {meta.guid} has mismatched names and types at path {AssetDatabase.GetRelativePath(meta.AssetPath.FullName)}");
                     continue;
@@ -230,8 +231,8 @@ namespace Prowl.Editor.Assets
 
         public static Type GetTypeOfAsset(Guid guid, ushort fileID)
         {
-            if(assetGuidToMeta.TryGetValue(guid, out var meta))
-                if(meta.assetTypes.Length > fileID)
+            if (assetGuidToMeta.TryGetValue(guid, out var meta))
+                if (meta.assetTypes.Length > fileID)
                     return RuntimeUtils.FindType(meta.assetTypes[fileID]);
             return null;
         }
@@ -249,7 +250,8 @@ namespace Prowl.Editor.Assets
                 SubAssetCache[] result = new SubAssetCache[meta.assetNames.Length];
                 for (int i = 0; i < meta.assetNames.Length; i++)
                 {
-                    result[i] = new SubAssetCache {
+                    result[i] = new SubAssetCache
+                    {
                         name = meta.assetNames[i],
                         type = RuntimeUtils.FindType(meta.assetTypes[i])
                     };

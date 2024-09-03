@@ -1,6 +1,7 @@
-﻿using Prowl.Icons;
+﻿using System;
+
+using Prowl.Icons;
 using Prowl.Runtime.Audio;
-using System;
 
 namespace Prowl.Runtime
 {

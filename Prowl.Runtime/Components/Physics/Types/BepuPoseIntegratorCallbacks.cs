@@ -1,6 +1,8 @@
-﻿using BepuPhysics;
+﻿using System.Numerics;
+
+using BepuPhysics;
+
 using BepuUtilities;
-using System.Numerics;
 
 
 namespace Prowl.Runtime;

@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+
 using Veldrid;
 
 namespace Prowl.Runtime
-{  
+{
     public interface IGeometryDrawData
     {
         public void SetDrawData(CommandList commandList, GraphicsPipeline pipeline);

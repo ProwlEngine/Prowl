@@ -1,6 +1,8 @@
-﻿using BepuPhysics;
+﻿using System;
+
+using BepuPhysics;
+
 using Prowl.Icons;
-using System;
 
 namespace Prowl.Runtime;
 
@@ -19,8 +21,9 @@ public sealed class CharacterController : Rigidbody
     [ShowInInspector]
     public Vector2 TargetVelocity { get; set; } = Vector2.zero;
     public bool IsGrounded { get; private set; } = false;
-    
-    public override bool Kinematic {
+
+    public override bool Kinematic
+    {
         get => false;
         set => Debug.LogWarning("CharacterController cannot be kinematic");
     }

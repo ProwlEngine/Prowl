@@ -1,16 +1,19 @@
-﻿using DotRecast.Core.Numerics;
+﻿using System.Collections.Generic;
+
+using DotRecast.Core.Numerics;
 using DotRecast.Detour;
 using DotRecast.Detour.Crowd;
-using System.Collections.Generic;
 
 namespace Prowl.Runtime;
 
 public class NavMeshAgent : MonoBehaviour
 {
     [ShowInInspector]
-    public NavMeshSurface Surface {
+    public NavMeshSurface Surface
+    {
         get => surface;
-        set {
+        set
+        {
             if (InternalAgent != null)
                 surface?.UnregisterAgent(this);
             surface = value;
@@ -101,7 +104,7 @@ public class NavMeshAgent : MonoBehaviour
 
     public override void OnDisable()
     {
-        if(InternalAgent != null && surface != null)
+        if (InternalAgent != null && surface != null)
             surface.UnregisterAgent(this);
     }
 
@@ -109,7 +112,7 @@ public class NavMeshAgent : MonoBehaviour
     {
         if (InternalAgent == null)
         {
-            if(surface != null && surface.IsReady)
+            if (surface != null && surface.IsReady)
                 surface.RegisterAgent(this);
         }
         else

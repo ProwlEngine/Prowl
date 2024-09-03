@@ -1,5 +1,6 @@
-﻿using Prowl.Icons;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+
+using Prowl.Icons;
 
 namespace Prowl.Runtime.Components.Testings;
 

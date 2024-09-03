@@ -24,9 +24,9 @@ namespace Prowl.Runtime
     /// <summary> Defines the different tangent types to be calculated for <see cref="KeyFrame"/> points in a <see cref="AnimationCurve"/>. </summary>
 	public enum CurveTangent
     {
-		Flat,
-		Linear,
-		Smooth
+        Flat,
+        Linear,
+        Smooth
     }
 
     public class AnimationCurve : ISerializable
@@ -420,7 +420,7 @@ namespace Prowl.Runtime
         public int CompareTo(KeyFrame other) => this.Position.CompareTo(other.Position);
         public bool Equals(KeyFrame other) => (this == other);
         public override bool Equals(object obj) => (obj as KeyFrame) != null && Equals((KeyFrame)obj);
-        public override int GetHashCode() => 
+        public override int GetHashCode() =>
                 this.Position.GetHashCode() ^ this.Value.GetHashCode() ^ this.TangentIn.GetHashCode() ^
                 this.TangentOut.GetHashCode() ^ this.Continuity.GetHashCode();
 
@@ -440,9 +440,11 @@ namespace Prowl.Runtime
 
         #region Properties
 
-        public KeyFrame this[int index] {
+        public KeyFrame this[int index]
+        {
             get { return _keys[index]; }
-            set {
+            set
+            {
                 if (value == null)
                     throw new ArgumentNullException();
 

@@ -1,4 +1,5 @@
 ﻿using System;
+
 using T = System.AttributeTargets;
 
 namespace Prowl.Runtime
@@ -45,8 +46,8 @@ namespace Prowl.Runtime
     }
 
     [AttributeUsage(T.Method, AllowMultiple = false)]
-    public class GUIButtonAttribute(string text) : Attribute 
-    { 
+    public class GUIButtonAttribute(string text) : Attribute
+    {
         public string buttonText = text;
     }
 

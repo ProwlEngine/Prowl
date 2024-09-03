@@ -1,3 +1,5 @@
+using System.Reflection;
+
 using Prowl.Editor.Assets;
 using Prowl.Editor.Docking;
 using Prowl.Editor.Preferences;
@@ -6,8 +8,6 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.SceneManagement;
-
-using System.Reflection;
 
 namespace Prowl.Editor;
 

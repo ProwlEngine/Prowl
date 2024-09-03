@@ -1,4 +1,5 @@
 using System;
+
 using Veldrid;
 
 namespace Prowl.Runtime
@@ -25,8 +26,8 @@ namespace Prowl.Runtime
 
 
         public unsafe void SetData<T>(Span<T> data, uint offset) where T : unmanaged
-        {    
+        {
             Graphics.Device.UpdateBuffer(Buffer, offset, data);
         }
-    } 
+    }
 }

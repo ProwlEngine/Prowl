@@ -26,7 +26,8 @@ namespace Prowl.Editor
         public HierarchyWindow() : base()
         {
             Title = FontAwesome6.FolderTree + " Hierarchy";
-            SelectHandler.OnSelectObject += (obj) => {
+            SelectHandler.OnSelectObject += (obj) =>
+            {
                 // Reset ping timer on selection changed
                 pingTimer = 0;
                 pingedGO = null;
@@ -85,7 +86,7 @@ namespace Prowl.Editor
                 if (!SelectHandler.SelectedThisFrame && dropInteract.TakeFocus())
                     SelectHandler.Clear();
 
-                if(IsFocused)
+                if (IsFocused)
                     if (Hotkeys.IsHotkeyDown("Duplicate", new() { Key = Key.D, Ctrl = true }))
                         DuplicateSelected();
 
@@ -113,7 +114,7 @@ namespace Prowl.Editor
                     {
                         var instanceID = gui.GetGlobalStorage<int>("RightClickGameObject");
                         GameObject? go = null;
-                        if(instanceID != -1)
+                        if (instanceID != -1)
                             go = EngineObject.FindObjectByID<GameObject>(instanceID);
                         DrawContextMenu(go, popupHolder);
                     }
@@ -129,7 +130,7 @@ namespace Prowl.Editor
             if (EditorGUI.StyledButton("New GameObject"))
             {
                 var go = new GameObject("New GameObject");
-                if(parent != null)
+                if (parent != null)
                     go.SetParent(parent);
                 go.Transform.localPosition = Vector3.zero;
                 SelectHandler.SetSelection(new WeakReference(go));
@@ -163,7 +164,8 @@ namespace Prowl.Editor
 
                 if (SelectHandler.Count > 1 && EditorGUI.StyledButton("Delete All"))
                 {
-                    SelectHandler.Foreach((go) => {
+                    SelectHandler.Foreach((go) =>
+                    {
                         (go.Target as GameObject).Destroy();
                     });
                     SelectHandler.Clear();
@@ -172,7 +174,8 @@ namespace Prowl.Editor
 
                 if (SelectHandler.Count > 0 && EditorGUI.StyledButton("Align With View"))
                 {
-                    SelectHandler.Foreach((go) => {
+                    SelectHandler.Foreach((go) =>
+                    {
                         Camera cam = SceneViewWindow.LastFocusedCamera;
                         (go.Target as GameObject).Transform.position = cam.GameObject.Transform.position;
                         (go.Target as GameObject).Transform.rotation = cam.GameObject.Transform.rotation;
@@ -256,7 +259,7 @@ namespace Prowl.Editor
                 if (isPrefab || isPartOfPrefab || !entity.enabledInHierarchy)
                 {
                     var lineColor = (isPrefab ? EditorStylePrefs.Orange : EditorStylePrefs.Yellow);
-                    if(!entity.enabledInHierarchy)
+                    if (!entity.enabledInHierarchy)
                         lineColor = EditorStylePrefs.Instance.Warning;
                     gui.Draw2D.DrawLine(new Vector2(rect.x + entryHeight + 1, rect.y - 1), new Vector2(rect.x + entryHeight + 1, rect.y + entryHeight - 1), lineColor, 3);
                 }
@@ -357,7 +360,8 @@ namespace Prowl.Editor
         public static void DuplicateSelected()
         {
             var newGO = new List<WeakReference>();
-            SelectHandler.Foreach((go) => {
+            SelectHandler.Foreach((go) =>
+            {
                 // Duplicating, Easiest way to duplicate is to Serialize then Deserialize
                 var serialized = Serializer.Serialize(go.Target);
                 var deserialized = Serializer.Deserialize<GameObject>(serialized);

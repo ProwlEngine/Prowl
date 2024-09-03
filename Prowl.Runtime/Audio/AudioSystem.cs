@@ -1,7 +1,8 @@
-﻿using Prowl.Runtime.Audio.Null;
-using Prowl.Runtime.Audio.OpenAL;
-using System;
+﻿using System;
 using System.Collections.Generic;
+
+using Prowl.Runtime.Audio.Null;
+using Prowl.Runtime.Audio.OpenAL;
 
 namespace Prowl.Runtime.Audio
 {

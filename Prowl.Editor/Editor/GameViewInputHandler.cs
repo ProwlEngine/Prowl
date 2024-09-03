@@ -1,4 +1,5 @@
 ﻿using Prowl.Editor;
+
 using Veldrid;
 using Veldrid.Sdl2;
 
@@ -11,13 +12,13 @@ public class GameViewInputHandler : DefaultInputHandler
 
 
     public GameViewInputHandler(GameWindow window) : base()
-    {   
+    {
         _window = window;
     }
 
 
     protected override Vector2Int GetActualMousePosition(InputSnapshot snapshot)
-    {   
+    {
         return base.GetActualMousePosition(snapshot) - new Vector2Int((int)GameWindow.FocusedPosition.x, (int)GameWindow.FocusedPosition.y);
     }
 

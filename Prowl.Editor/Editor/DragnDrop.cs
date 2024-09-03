@@ -64,7 +64,7 @@ namespace Prowl.Editor
 
         public static bool Drop(out object? payload, Type type, string tag = "")
         {
-            if(Gui.ActiveGUI.PreviousInteractable == null)
+            if (Gui.ActiveGUI.PreviousInteractable == null)
                 throw new System.Exception("No Previous Interactable");
 
             payload = default;

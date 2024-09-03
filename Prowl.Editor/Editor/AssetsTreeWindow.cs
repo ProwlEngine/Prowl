@@ -220,8 +220,8 @@ namespace Prowl.Editor
             EditorGuiManager.Directory = directory;
             EditorGuiManager.fromAssetBrowser = fromAssetBrowser;
             var assetsPath = MenuItem.GetMenuPath("Assets");
-            foreach(var child in assetsPath.Children)
-                if(child.Path.Equals("Create", StringComparison.OrdinalIgnoreCase))
+            foreach (var child in assetsPath.Children)
+                if (child.Path.Equals("Create", StringComparison.OrdinalIgnoreCase))
                     return MenuItem.DrawMenu(child, false, 1);
             return false;
         }
@@ -353,9 +353,9 @@ namespace Prowl.Editor
                         if (DragnDrop.Drop<FileSystemInfo>(out var systeminfo))
                         {
                             string target = Path.Combine(subDirectory.FullName, systeminfo.Name);
-                            if(systeminfo is FileInfo file)
+                            if (systeminfo is FileInfo file)
                                 AssetDatabase.Move(file, target);
-                            else if(systeminfo is DirectoryInfo dir)
+                            else if (systeminfo is DirectoryInfo dir)
                                 AssetDatabase.Move(dir, target);
                         }
                     }
@@ -477,7 +477,7 @@ namespace Prowl.Editor
                             AssetDatabase.Rename(subFile, name);
                             RenamingEntry = null;
                         }
-                        
+
 
                         justStartedRename = false;
                     }
@@ -554,7 +554,7 @@ namespace Prowl.Editor
             // Skip handling Sub Assets
             if (fileID != 0) return;
 
-            if(index != -1)
+            if (index != -1)
                 SelectHandler.AddSelectableAtIndex(index, entry);
             if (interact.TakeFocus(true))
                 SelectHandler.Select(index, entry);
@@ -642,9 +642,9 @@ namespace Prowl.Editor
                 case Type t when t == typeof(MonoScript):
                     return EditorStylePrefs.Blue;
                 default:
-                {
-                    return EditorStylePrefs.RandomPastelColor(type.GetHashCode());
-                }
+                    {
+                        return EditorStylePrefs.RandomPastelColor(type.GetHashCode());
+                    }
             }
         }
 

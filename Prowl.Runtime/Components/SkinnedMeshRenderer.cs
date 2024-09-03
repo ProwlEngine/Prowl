@@ -1,5 +1,7 @@
-﻿using Prowl.Icons;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+
+using Prowl.Icons;
+
 using Material = Prowl.Runtime.Material;
 using Mesh = Prowl.Runtime.Mesh;
 
@@ -37,7 +39,7 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
 
     public override void Update()
     {
-        #warning Veldrid change
+#warning Veldrid change
         /*
         var mat = GameObject.GlobalCamRelative;
         int camID = Camera.Current.InstanceID;

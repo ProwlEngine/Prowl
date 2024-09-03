@@ -1,7 +1,8 @@
 using System;
-using Veldrid;
-using System.Text;
 using System.Linq;
+using System.Text;
+
+using Veldrid;
 
 namespace Prowl.Runtime
 {

@@ -1,10 +1,11 @@
-﻿using Prowl.Editor.Preferences;
+﻿using System.Reflection;
+
+using Prowl.Editor.Preferences;
 using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Utils;
-using System.Reflection;
 
 namespace Prowl.Editor.PropertyDrawers
 {
@@ -72,7 +73,7 @@ namespace Prowl.Editor.PropertyDrawers
                 {
                     using (gui.Node("Creator", index).MaxWidth(ItemSize).Height(ItemSize).Layout(LayoutType.Row).Enter())
                     {
-                        if(gui.IsNodePressed())
+                        if (gui.IsNodePressed())
                         {
                             propertyValue = Activator.CreateInstance(propertyType);
                             changed = true;

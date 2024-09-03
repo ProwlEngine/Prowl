@@ -93,7 +93,7 @@ namespace Prowl.Runtime
                     result.Append(' ');  // Add space
                     result.Append(label[i]);  // Append the current uppercase character
                 }
-                else if(label[i] == '_')
+                else if (label[i] == '_')
                 {
                     continue;
                 }

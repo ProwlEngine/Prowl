@@ -1,8 +1,10 @@
-﻿using Prowl.Icons;
+﻿using System.Reflection;
+
+using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Utils;
-using System.Reflection;
+
 using static BepuPhysics.Collidables.CompoundBuilder;
 
 namespace Prowl.Editor
@@ -90,7 +92,7 @@ namespace Prowl.Editor
                     if (child == null)
                     {
                         // Only place the Method at the leaf node
-                        child = new MenuPath(path[i], i == path.Length-1 ? value.Method : null);
+                        child = new MenuPath(path[i], i == path.Length - 1 ? value.Method : null);
                         node.Children.Add(child);
                     }
                     node = child;

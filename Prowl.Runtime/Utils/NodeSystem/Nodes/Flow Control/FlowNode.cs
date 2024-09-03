@@ -24,7 +24,7 @@
 
     public abstract class InFlowNode : FlowNode
     {
-        [Input(ShowBackingValue.Never, ConnectionType.Override, TypeConstraint.Strict, true), SerializeIgnore] 
+        [Input(ShowBackingValue.Never, ConnectionType.Override, TypeConstraint.Strict, true), SerializeIgnore]
         public FlowNode From;
     }
 
@@ -32,7 +32,7 @@
     {
         [Output(ConnectionType.Override, TypeConstraint.Strict, true), SerializeIgnore]
         public FlowNode To;
-        [Input(ShowBackingValue.Never, ConnectionType.Override, TypeConstraint.Strict, true), SerializeIgnore] 
+        [Input(ShowBackingValue.Never, ConnectionType.Override, TypeConstraint.Strict, true), SerializeIgnore]
         public FlowNode From;
     }
 

@@ -1,6 +1,7 @@
-﻿using BepuPhysics;
+﻿using System;
+
+using BepuPhysics;
 using BepuPhysics.Constraints;
-using System;
 
 namespace Prowl.Runtime;
 
@@ -24,7 +25,7 @@ public abstract class ConstraintComponentBase : MonoBehaviour
 
     public override void OnEnable()
     {
-        if(UntypedConstraintData == null)
+        if (UntypedConstraintData == null)
             CreateProcessorData();
         //UntypedConstraintData.RebuildConstraint();
     }

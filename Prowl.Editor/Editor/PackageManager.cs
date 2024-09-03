@@ -1,11 +1,13 @@
-﻿using NuGet.Protocol.Core.Types;
+﻿using System.Net;
+using System.Text;
+
+using NuGet.Protocol.Core.Types;
+
 using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using System.Net;
-using System.Text;
 
 namespace Prowl.Editor
 {
@@ -102,7 +104,7 @@ namespace Prowl.Editor
                 var update = gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f), EditorStylePrefs.Instance.ItemSize);
 
                 gui.Draw2D.DrawText("Include Prerelease", gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(35, 50), Color.white * 0.9f);
-                if(gui.Checkbox("prerelease", ref PackageManagerPreferences.Instance.IncludePrerelease, 0, 0, out _))
+                if (gui.Checkbox("prerelease", ref PackageManagerPreferences.Instance.IncludePrerelease, 0, 0, out _))
                 {
                     PackageManagerPreferences.Instance.Save();
                     update = true;
@@ -236,7 +238,7 @@ namespace Prowl.Editor
 
                 EditorGUI.TextSimple(sb.ToString());
 
-                if(EditorGUI.StyledButton("Project Website"))
+                if (EditorGUI.StyledButton("Project Website"))
                     System.Diagnostics.Process.Start("explorer", package_ProjectURL.ToString());
 
                 if (EditorGUI.StyledButton("License"))
@@ -312,7 +314,7 @@ namespace Prowl.Editor
             if (string.IsNullOrWhiteSpace(url?.ToString()))
                 return null;
 
-                try
+            try
             {
                 WebClient wc = new WebClient();
                 byte[] bytes = await wc.DownloadDataTaskAsync(url);
@@ -399,7 +401,7 @@ namespace Prowl.Editor
 
                 if (_metadata.DependencySets.ToList().Count > 0)
                     foreach (var dependency in _metadata.DependencySets.FirstOrDefault().Packages)
-                        package_Dependencies.Add(( dependency.Id, dependency.VersionRange.ToString()));
+                        package_Dependencies.Add((dependency.Id, dependency.VersionRange.ToString()));
             }
             else
             {

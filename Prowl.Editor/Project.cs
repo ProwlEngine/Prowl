@@ -1,8 +1,9 @@
+using System.Diagnostics;
+using System.Reflection;
+
 using Prowl.Editor.Assets;
 using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
-using System.Diagnostics;
-using System.Reflection;
 
 namespace Prowl.Editor;
 
@@ -153,7 +154,8 @@ public static class Project
 
         // Compile the Project Assembly using 'dotnet build'
         BoundedLog($"Compiling external assembly in {csprojPath}...");
-        ProcessStartInfo processInfo = new() {
+        ProcessStartInfo processInfo = new()
+        {
             WorkingDirectory = Path.GetDirectoryName(csprojPath),
             CreateNoWindow = true,
             UseShellExecute = false,
@@ -172,7 +174,8 @@ public static class Project
         }
 
         Process process = Process.Start(processInfo) ?? throw new Exception();
-        process.OutputDataReceived += (sender, dataArgs) => {
+        process.OutputDataReceived += (sender, dataArgs) =>
+        {
             string? data = dataArgs.Data;
 
             if (data is null)
@@ -188,7 +191,8 @@ public static class Project
 
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
-        process.ErrorDataReceived += (sender, dataArgs) => {
+        process.ErrorDataReceived += (sender, dataArgs) =>
+        {
             if (dataArgs.Data is not null)
                 Runtime.Debug.LogError(dataArgs.Data);
         };
@@ -230,9 +234,9 @@ public static class Project
         if (!HasProject) throw new Exception("No Project Loaded, Cannot generate CS Project Files!");
 
         Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-        Assembly gameEngineAssembly = loadedAssemblies.FirstOrDefault(assembly => assembly.GetName().Name == "Prowl.Runtime") 
+        Assembly gameEngineAssembly = loadedAssemblies.FirstOrDefault(assembly => assembly.GetName().Name == "Prowl.Runtime")
             ?? throw new Exception("Failed to find Prowl.Runtime Assembly!");
-        Assembly gameEditorAssembly = loadedAssemblies.FirstOrDefault(assembly => assembly.GetName().Name == "Prowl.Editor") 
+        Assembly gameEditorAssembly = loadedAssemblies.FirstOrDefault(assembly => assembly.GetName().Name == "Prowl.Editor")
             ?? throw new Exception("Failed to find Prowl.Editor Assembly!");
 
         // Get all references by Prowl.Runtime
@@ -243,7 +247,7 @@ public static class Project
         IEnumerable<string> nonEditorScripts = Directory.GetFiles(ProjectAssetDirectory, "*.cs", SearchOption.AllDirectories)
         .Where(csFile => !string.Equals(Path.GetFileName(Path.GetDirectoryName(csFile)), "Editor", StringComparison.OrdinalIgnoreCase));
 
-        string propertyGroupTemplate = 
+        string propertyGroupTemplate =
             @$"<PropertyGroup>
                 <TargetFramework>net8.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
@@ -257,13 +261,13 @@ public static class Project
                 <OutputPath>{output.FullName}</OutputPath>
             </PropertyGroup>";
 
-        string referencesXML = string.Join("\n", references.Select(assembly => 
+        string referencesXML = string.Join("\n", references.Select(assembly =>
                 $"<Reference Include=\"{assembly.GetName().Name}\">" +
                     $"<HintPath>{assembly.Location}</HintPath>" +
                     "<Private>false</Private>" +
                 "</Reference>"));
 
-        string gameproj = 
+        string gameproj =
             @$"<Project Sdk=""Microsoft.NET.Sdk"">
                 {propertyGroupTemplate}
                 <ItemGroup>
@@ -285,7 +289,7 @@ public static class Project
         IEnumerable<string> editorScripts = Directory.GetDirectories(ProjectAssetDirectory, "Editor", SearchOption.AllDirectories)
         .SelectMany(editorFolder => Directory.GetFiles(editorFolder, "*.cs"));
 
-        string editorproj = 
+        string editorproj =
             @$"<Project Sdk=""Microsoft.NET.Sdk"">
                 {propertyGroupTemplate}
                 <ItemGroup>

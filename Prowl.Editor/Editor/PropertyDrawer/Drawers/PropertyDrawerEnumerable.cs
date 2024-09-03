@@ -59,7 +59,7 @@ namespace Prowl.Editor.PropertyDrawers
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
                 ulong drawerID = gui.CurrentNode.ID;
 
-                if(drawerID == selectedDrawer)
+                if (drawerID == selectedDrawer)
                     selectedElement = MathD.Clamp(selectedElement, -1, GetCount(list));
 
                 gui.TextNode("H_Text", RuntimeUtils.Prettify(label)).ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize).IgnoreLayout();
@@ -208,7 +208,7 @@ namespace Prowl.Editor.PropertyDrawers
                 }
             }
 
-            if(changed)
+            if (changed)
                 propertyValue = list;
 
             return changed;

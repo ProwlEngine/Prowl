@@ -1,7 +1,8 @@
-﻿using Prowl.Runtime.Utils;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+
+using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime;
 
@@ -26,26 +27,51 @@ public class TagLayerManager : ScriptableSingleton<TagLayerManager>
             "TransparentFX",
             "Ignore Raycast",
             "Water",
-            "", "", "", "", "", "", "", "", "", "",
-            "", "", "", "", "", "", "", "", "", "",
-            "", "", "", "", "", "", "", "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
         ];
 
-    public static string GetTag(byte index) 
-    { 
+    public static string GetTag(byte index)
+    {
         if (index < 0 || index >= Instance.tags.Count)
             return "Untagged";
-        return Instance.tags[index]; 
+        return Instance.tags[index];
     }
 
-    public static string GetLayer(byte index) 
+    public static string GetLayer(byte index)
     {
         if (index < 0 || index >= Instance.layers.Length)
             throw new System.ArgumentOutOfRangeException(nameof(index), index, "Layer index is out of range.");
         return Instance.layers[index];
     }
 
-    public static byte GetTagIndex(string tag) 
+    public static byte GetTagIndex(string tag)
     {
         int index = Instance.tags.IndexOf(tag);
         return (byte)(index == -1 ? 0 : index);

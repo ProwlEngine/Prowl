@@ -1,8 +1,9 @@
-﻿using BepuPhysics;
+﻿using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+
+using BepuPhysics;
 using BepuPhysics.Collidables;
 using BepuPhysics.Trees;
-using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 
 namespace Prowl.Runtime.Raycast;
 

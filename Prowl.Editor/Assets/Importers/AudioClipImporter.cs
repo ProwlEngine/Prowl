@@ -1,9 +1,10 @@
-﻿using Prowl.Editor.Preferences;
+﻿using System.Buffers.Binary;
+
+using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.Audio;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Utils;
-using System.Buffers.Binary;
 
 namespace Prowl.Editor.Assets.Importers
 {
@@ -12,7 +13,8 @@ namespace Prowl.Editor.Assets.Importers
     {
         public override void Import(SerializedAsset ctx, FileInfo assetPath)
         {
-            ctx.SetMainObject(assetPath.Extension.ToLower() switch {
+            ctx.SetMainObject(assetPath.Extension.ToLower() switch
+            {
                 ".wav" => LoadWav(assetPath),
                 ".wave" => LoadWav(assetPath),
                 _ => throw new InvalidOperationException("Unsupported audio format: " + assetPath.Extension.ToLower()),
@@ -159,7 +161,7 @@ namespace Prowl.Editor.Assets.Importers
                 }
 
                 // Play
-                if(preview != null && preview.IsPlaying)
+                if (preview != null && preview.IsPlaying)
                 {
                     using (gui.Node("StopBtn").ExpandWidth().Height(ItemSize).Enter())
                     {

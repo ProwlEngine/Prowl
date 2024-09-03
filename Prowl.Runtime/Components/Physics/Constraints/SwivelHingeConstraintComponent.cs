@@ -72,22 +72,28 @@ public sealed class SwivelHingeConstraintComponent : TwoBodyConstraintComponent<
 
 
     [ShowInInspector]
-    public float SpringFrequency {
-        get {
+    public float SpringFrequency
+    {
+        get
+        {
             return _springFrequency;
         }
-        set {
+        set
+        {
             _springFrequency = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringDampingRatio {
-        get {
+    public float SpringDampingRatio
+    {
+        get
+        {
             return _springDampingRatio;
         }
-        set {
+        set
+        {
             _springDampingRatio = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -95,7 +101,8 @@ public sealed class SwivelHingeConstraintComponent : TwoBodyConstraintComponent<
 
     internal override SwivelHinge CreateConstraint()
     {
-        return new SwivelHinge {
+        return new SwivelHinge
+        {
             LocalOffsetA = LocalOffsetA,
             LocalSwivelAxisA = LocalSwivelAxisA,
             LocalOffsetB = LocalOffsetB,

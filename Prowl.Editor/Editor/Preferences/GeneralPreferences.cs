@@ -1,6 +1,7 @@
-﻿using Prowl.Runtime;
+﻿using System.Diagnostics;
+
+using Prowl.Runtime;
 using Prowl.Runtime.Utils;
-using System.Diagnostics;
 
 namespace Prowl.Editor.Preferences
 {
@@ -46,17 +47,17 @@ namespace Prowl.Editor.Preferences
     public class EditorStylePrefs : ScriptableSingleton<EditorStylePrefs>
     {
         [Text("Colors:")]
-        public double Disabled      = 0.7;
-        public Color LesserText     = new(110, 110, 120);
-        public Color Background     = new(15, 15, 18);
-        public Color WindowBGOne    = new(31, 33, 40);
-        public Color WindowBGTwo    = new Color(25, 27, 32);
-        public Color Borders        = new(49, 52, 66);
-        public Color Hovering       = new Color(255, 255, 255) * 0.8f;
-        public Color Highlighted    = Indigo;
-        public Color Ping           = Yellow;
-        public Color DropHighlight  = Orange;
-        public Color Warning        = Red;
+        public double Disabled = 0.7;
+        public Color LesserText = new(110, 110, 120);
+        public Color Background = new(15, 15, 18);
+        public Color WindowBGOne = new(31, 33, 40);
+        public Color WindowBGTwo = new Color(25, 27, 32);
+        public Color Borders = new(49, 52, 66);
+        public Color Hovering = new Color(255, 255, 255) * 0.8f;
+        public Color Highlighted = Indigo;
+        public Color Ping = Yellow;
+        public Color DropHighlight = Orange;
+        public Color Warning = Red;
 
         [Text("Sizing:")]
         public double Scale = 1;

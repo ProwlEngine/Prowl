@@ -10,33 +10,42 @@ public sealed class OneBodyAngularMotorConstraintComponent : OneBodyConstraintCo
     [SerializeField, HideInInspector] private float _motorSoftness = 0.02f;
     [SerializeField, HideInInspector] private float _motorMaximumForce = 10000000;
 
-    public Vector3 TargetVelocity {
-        get {
+    public Vector3 TargetVelocity
+    {
+        get
+        {
             return _targetVelocity;
         }
-        set {
+        set
+        {
             _targetVelocity = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float MotorSoftness {
-        get {
+    public float MotorSoftness
+    {
+        get
+        {
             return _motorSoftness;
         }
-        set {
+        set
+        {
             _motorSoftness = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float MotorMaximumForce {
-        get {
+    public float MotorMaximumForce
+    {
+        get
+        {
             return _motorMaximumForce;
         }
-        set {
+        set
+        {
             _motorMaximumForce = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -44,7 +53,8 @@ public sealed class OneBodyAngularMotorConstraintComponent : OneBodyConstraintCo
 
     internal override OneBodyAngularMotor CreateConstraint()
     {
-        return new() {
+        return new()
+        {
             TargetVelocity = _targetVelocity,
             Settings = new MotorSettings(_motorMaximumForce, _motorSoftness)
         };

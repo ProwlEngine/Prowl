@@ -52,8 +52,8 @@ namespace Prowl.Runtime.GUI
 
         public static Offset Lerp(Offset a, Offset b, double t)
         {
-            if(a.isLerp) throw new System.Exception("Cannot lerp a lerp");
-            if(b.isLerp) throw new System.Exception("Cannot lerp a lerp");
+            if (a.isLerp) throw new System.Exception("Cannot lerp a lerp");
+            if (b.isLerp) throw new System.Exception("Cannot lerp a lerp");
 
             Offset lerped = a;
             lerped.isLerp = true;

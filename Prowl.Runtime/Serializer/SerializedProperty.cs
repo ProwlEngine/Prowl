@@ -58,8 +58,8 @@ namespace Prowl.Runtime
         public SerializedProperty(string i) { _value = i; TagType = PropertyType.String; }
         public SerializedProperty(byte[] i) { _value = i; TagType = PropertyType.ByteArray; }
         public SerializedProperty(bool i) { _value = i; TagType = PropertyType.Bool; }
-        public SerializedProperty(PropertyType type, object? value) 
-        { 
+        public SerializedProperty(PropertyType type, object? value)
+        {
             TagType = type;
             if (type == PropertyType.List && value == null)
                 _value = new List<SerializedProperty>();
@@ -137,8 +137,10 @@ namespace Prowl.Runtime
         /// Gets the number of tags in this tag.
         /// Returns 0 for all tags except Compound and List.
         /// </summary>
-        public int Count {
-            get {
+        public int Count
+        {
+            get
+            {
                 if (TagType == PropertyType.Compound) return ((Dictionary<string, SerializedProperty>)Value!).Count;
                 else if (TagType == PropertyType.List) return ((List<SerializedProperty>)Value!).Count;
                 else return 0;
@@ -170,7 +172,8 @@ namespace Prowl.Runtime
         {
             if (_value == value) return;
             var old = _value;
-            _value = TagType switch {
+            _value = TagType switch
+            {
                 PropertyType.Byte => (byte)value,
                 PropertyType.sByte => (sbyte)value,
                 PropertyType.Short => (short)value,
@@ -244,9 +247,12 @@ namespace Prowl.Runtime
         /// Returns exact value for StringTag, and stringified (using InvariantCulture) value for ByteTag, DoubleTag, FloatTag, IntTag, LongTag, and ShortTag.
         /// Not supported by CompoundTag, ListTag, ByteArrayTag, FloatArrayTag, or IntArrayTag. </summary>
         /// <exception cref="InvalidCastException"> When used on an unsupported tag. </exception>
-        public string StringValue {
-            get {
-                return TagType switch {
+        public string StringValue
+        {
+            get
+            {
+                return TagType switch
+                {
                     PropertyType.String => (string)Value!,
                     PropertyType.Byte => ((byte)Value!).ToString(CultureInfo.InvariantCulture),
                     PropertyType.Double => ((double)Value!).ToString(CultureInfo.InvariantCulture),

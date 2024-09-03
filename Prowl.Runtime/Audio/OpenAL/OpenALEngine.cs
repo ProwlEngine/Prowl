@@ -1,5 +1,6 @@
-﻿using Silk.NET.OpenAL;
-using System;
+﻿using System;
+
+using Silk.NET.OpenAL;
 
 namespace Prowl.Runtime.Audio.OpenAL
 {
@@ -45,7 +46,8 @@ namespace Prowl.Runtime.Audio.OpenAL
 
         public override void SetListenerOrientation(Vector3 forward, Vector3 up)
         {
-            unsafe {
+            unsafe
+            {
                 float* orientationPtr = stackalloc float[6];
 
                 orientationPtr[0] = (float)forward.x;

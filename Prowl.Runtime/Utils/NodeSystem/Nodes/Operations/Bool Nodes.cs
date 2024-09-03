@@ -11,7 +11,7 @@ namespace Prowl.Runtime.NodeSystem
         [Input] public bool A;
         [Input] public bool B;
 
-        [Output, SerializeIgnore] public bool And; 
+        [Output, SerializeIgnore] public bool And;
 
         public override object GetValue(NodePort port) => GetInputValue("A", A) && GetInputValue("B", B);
     }
@@ -25,7 +25,7 @@ namespace Prowl.Runtime.NodeSystem
         [Input] public bool A;
         [Input] public bool B;
 
-        [Output, SerializeIgnore] public bool Or; 
+        [Output, SerializeIgnore] public bool Or;
 
         public override object GetValue(NodePort port) => GetInputValue("A", A) || GetInputValue("B", B);
     }
@@ -38,7 +38,7 @@ namespace Prowl.Runtime.NodeSystem
 
         [Input] public bool A;
 
-        [Output, SerializeIgnore] public bool Inverted; 
+        [Output, SerializeIgnore] public bool Inverted;
 
         public override object GetValue(NodePort port) => !GetInputValue("A", A);
     }

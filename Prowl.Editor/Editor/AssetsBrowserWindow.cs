@@ -1,10 +1,11 @@
-﻿using Prowl.Editor.Assets;
+﻿using System.Reflection;
+
+using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Graphics;
-using System.Reflection;
 
 namespace Prowl.Editor
 {
@@ -50,7 +51,7 @@ namespace Prowl.Editor
 
         public void Invalidate()
         {
-            if(CurDirectoryNode == null)
+            if (CurDirectoryNode == null)
                 CurDirectoryNode = AssetDatabase.GetRootFolderCache(2).RootNode;
 
             // Ensure we always have a valid Directory, if the current one is deleted move to its parent
@@ -65,7 +66,8 @@ namespace Prowl.Editor
             if (Locked)
                 return;
 
-            string path = to switch {
+            string path = to switch
+            {
                 DirectoryInfo dir => dir.FullName,
                 FileInfo file => file.Directory.FullName,
                 _ => CurDirectoryNode.Directory.FullName
@@ -210,7 +212,8 @@ namespace Prowl.Editor
                 {
                     if (go.AssetID == Guid.Empty)
                     {
-                        var prefab = new Prefab {
+                        var prefab = new Prefab
+                        {
                             GameObject = Serializer.Serialize(go),
                             Name = go.Name
                         };
@@ -412,7 +415,7 @@ namespace Prowl.Editor
                 _pingTimer -= Time.deltaTimeF;
                 if (_pingTimer > PingDuration - 1f)
                 {
-                    if(AssetDatabase.PathToCachedNode(_pingedFile.Directory.FullName, out var node))
+                    if (AssetDatabase.PathToCachedNode(_pingedFile.Directory.FullName, out var node))
                         CurDirectoryNode = node;
                     //ScrollToItem();
                 }

@@ -15,7 +15,7 @@
 
         public override void Execute(NodePort input)
         {
-            if(input.fieldName == nameof(Reset))
+            if (input.fieldName == nameof(Reset))
                 completed = false;
 
             if (!completed)

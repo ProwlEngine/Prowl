@@ -93,7 +93,7 @@ namespace Prowl.Runtime
 
         public static void DestroyImmediate(EngineObject obj)
         {
-            if(obj.IsDestroyed) throw new Exception(obj.Name + " is already destroyed.");
+            if (obj.IsDestroyed) throw new Exception(obj.Name + " is already destroyed.");
             obj.IsDestroyed = true;
             obj.Dispose();
         }
@@ -119,7 +119,7 @@ namespace Prowl.Runtime
             // Some objects might have a readonly name (like components) in that case it should remain the same, so if name is different set it
             newObj.Name = obj.Name;
             // Need to make sure to set GUID to empty so the engine knows this isn't the original Asset file
-            if(!keepAssetID) newObj.AssetID = Guid.Empty;
+            if (!keepAssetID) newObj.AssetID = Guid.Empty;
             return newObj;
         }
 
@@ -178,5 +178,5 @@ namespace Prowl.Runtime
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool Null(this EngineObject obj) => obj == null || obj.IsDestroyed;
-    } 
+    }
 }

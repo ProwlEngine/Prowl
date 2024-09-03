@@ -48,7 +48,7 @@ namespace Prowl.Runtime.Utils
         private bool HandleQuotedString(char quoteChar)
         {
             InputPosition++;
-            
+
             while (InputPosition < Input.Length)
             {
                 if (Input.Span[InputPosition] == quoteChar)
@@ -62,7 +62,7 @@ namespace Prowl.Runtime.Utils
                 {
                     if (InputPosition + 1 >= Input.Length)
                         throw new InvalidDataException($"Reached end of input while reading an escape sequence in a quoted string starting at position {TokenPosition}.");
-                    
+
                     InputPosition++;
                 }
 
@@ -112,32 +112,32 @@ namespace Prowl.Runtime.Utils
                     {
                         case '\\':
                             s[len++] = '\\';
-                        break;
+                            break;
 
                         case 't':
                             s[len++] = '\t';
-                        break;
+                            break;
 
                         case 'n':
                             s[len++] = '\n';
-                        break;
+                            break;
 
                         case 'r':
                             s[len++] = '\r';
-                        break;
+                            break;
 
                         default:
                             if (token[1] == quote)
                                 s[len++] = quote;
                             else
                                 throw new InvalidDataException($"Invalid escape sequence in string \"{original}\" at position {TokenPosition}");
-                        break;
+                            break;
                     }
 
                     token = token[2..];
                     continue;
                 }
-                
+
                 s[len++] = token[0];
                 token = token[1..];
             }
@@ -171,8 +171,8 @@ namespace Prowl.Runtime.Utils
                         Func<char, bool> isSymbol,
                         TTokenType defaultTokenType,
                         TTokenType noneTokenType,
-                        Func<char, bool>? isWhitespace = null, 
-                        Func<char, bool>? isQuote = null) :                 
+                        Func<char, bool>? isWhitespace = null,
+                        Func<char, bool>? isQuote = null) :
         base(input, isWhitespace, isQuote)
         {
             _symbolHandlers = symbolHandlers;
@@ -186,8 +186,8 @@ namespace Prowl.Runtime.Utils
                         Func<char, bool> isSymbol,
                         TTokenType defaultTokenType,
                         TTokenType noneTokenType,
-                        Func<char, bool>? isWhitespace = null, 
-                        Func<char, bool>? isQuote = null) : 
+                        Func<char, bool>? isWhitespace = null,
+                        Func<char, bool>? isQuote = null) :
         base(input, isWhitespace, isQuote)
         {
             _symbolHandlers = new(symbolHandlers.Select((x) => new KeyValuePair<char, Func<Tokenizer, TTokenType>>(x.Key, (y) => x.Value())));
@@ -245,7 +245,7 @@ namespace Prowl.Runtime.Utils
                 {
                     if (InputPosition + 1 >= Input.Length)
                         throw new InvalidDataException($"Reached end of input while reading an escape sequence in a quoted string starting at position {TokenPosition}.");
-                    
+
                     InputPosition++;
                 }
 

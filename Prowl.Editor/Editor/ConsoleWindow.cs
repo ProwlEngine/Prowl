@@ -34,7 +34,7 @@ namespace Prowl.Editor
             gui.CurrentNode.Layout(LayoutType.Column);
             gui.CurrentNode.ScaleChildren();
 
-            using(gui.Node("Header").Width(Size.Percentage(1f)).MaxHeight(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.Row).Enter())
+            using (gui.Node("Header").Width(Size.Percentage(1f)).MaxHeight(EditorStylePrefs.Instance.ItemSize).Layout(LayoutType.Row).Enter())
             {
                 if (EditorGUI.StyledButton(FontAwesome6.TrashCan + "  Clear", 75, EditorStylePrefs.Instance.ItemSize, false, null, null, 0, tooltip: "Clear all logs"))
                 {
@@ -112,7 +112,8 @@ namespace Prowl.Editor
                 Gui.ActiveGUI.Draw2D.DrawText(Font.DefaultFont, Message, 20, position, color, wrapWidth);
             }
 
-            private static System.Numerics.Vector4 ToColor(LogSeverity logSeverity) => logSeverity switch {
+            private static System.Numerics.Vector4 ToColor(LogSeverity logSeverity) => logSeverity switch
+            {
                 LogSeverity.Normal => new System.Numerics.Vector4(1, 1, 1, 1),
                 LogSeverity.Success => new System.Numerics.Vector4(0, 1, 0, 1),
                 LogSeverity.Warning => new System.Numerics.Vector4(1, 1, 0, 1),

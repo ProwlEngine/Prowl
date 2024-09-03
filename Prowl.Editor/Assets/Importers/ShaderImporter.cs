@@ -1,6 +1,6 @@
-﻿using Prowl.Runtime;
+﻿using Prowl.Editor.Utilities;
+using Prowl.Runtime;
 using Prowl.Runtime.Utils;
-using Prowl.Editor.Utilities;
 
 namespace Prowl.Editor.Assets
 {

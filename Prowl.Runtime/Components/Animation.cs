@@ -1,6 +1,7 @@
-﻿using Prowl.Icons;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
+
+using Prowl.Icons;
 
 namespace Prowl.Runtime
 {
@@ -19,7 +20,7 @@ namespace Prowl.Runtime
         private List<Transform> transforms = [];
 
         public override void OnEnable()
-        {            
+        {
             // Assign DefaultClip to the first clip if it's not set
             if (!DefaultClip.IsAvailable && Clips.Count > 0)
                 DefaultClip = Clips[0];
@@ -175,7 +176,7 @@ namespace Prowl.Runtime
 
         public void AddClip(AnimationClip clip)
         {
-            if(_stateDictionary.ContainsKey(clip.Name))
+            if (_stateDictionary.ContainsKey(clip.Name))
                 return;
             _states.Add(new AnimationState(clip.Name, clip));
             _stateDictionary[clip.Name] = _states[_states.Count - 1];

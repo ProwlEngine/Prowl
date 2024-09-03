@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+
 using Veldrid;
 
 namespace Prowl.Runtime
-{  
+{
     public enum MeshResource
     {
         Position = 0,
@@ -29,11 +30,13 @@ namespace Prowl.Runtime
         public Bounds bounds { get; internal set; }
 
         /// <summary> The format of the indices for this mesh </summary>
-        public IndexFormat IndexFormat {
+        public IndexFormat IndexFormat
+        {
             get => indexFormat;
-            set {
+            set
+            {
                 if (isWritable == false || indexFormat == value) return;
-                
+
                 changed = true;
                 indexFormat = value;
 
@@ -45,9 +48,11 @@ namespace Prowl.Runtime
         }
 
         /// <summary> The mesh's primitive type </summary>
-        public PrimitiveTopology MeshTopology {
+        public PrimitiveTopology MeshTopology
+        {
             get => meshTopology;
-            set {
+            set
+            {
                 if (isWritable == false) return;
                 changed = true;
                 meshTopology = value;
@@ -59,9 +64,11 @@ namespace Prowl.Runtime
         /// Getting depends on isReadable.
         /// Note: When setting, if the vertex count is different than previous, it'll reset all other vertex data fields.
         /// </summary>
-        public System.Numerics.Vector3[] Vertices {
+        public System.Numerics.Vector3[] Vertices
+        {
             get => vertices ?? [];
-            set {
+            set
+            {
                 if (isWritable == false)
                     return;
                 var needsReset = vertices == null || vertices.Length != value.Length;
@@ -79,47 +86,56 @@ namespace Prowl.Runtime
             }
         }
 
-        public System.Numerics.Vector3[] Normals {
+        public System.Numerics.Vector3[] Normals
+        {
             get => ReadVertexData(normals ?? []);
             set => WriteVertexData(ref normals, value, value.Length);
         }
 
-        public System.Numerics.Vector3[] Tangents {
+        public System.Numerics.Vector3[] Tangents
+        {
             get => ReadVertexData(tangents ?? []);
             set => WriteVertexData(ref tangents, value, value.Length);
         }
 
-        public Color32[] Colors {
+        public Color32[] Colors
+        {
             get => ReadVertexData(colors ?? []);
             set => WriteVertexData(ref colors, value, value.Length);
         }
 
-        public System.Numerics.Vector2[] UV {
+        public System.Numerics.Vector2[] UV
+        {
             get => ReadVertexData(uv ?? []);
             set => WriteVertexData(ref uv, value, value.Length);
         }
 
-        public System.Numerics.Vector2[] UV2 {
+        public System.Numerics.Vector2[] UV2
+        {
             get => ReadVertexData(uv2 ?? []);
             set => WriteVertexData(ref uv2, value, value.Length);
         }
 
-        public uint[] Indices32 {
+        public uint[] Indices32
+        {
             get => ReadVertexData(indices32 ?? []);
             set => WriteVertexData(ref indices32, value, value.Length, false);
         }
 
-        public ushort[] Indices16 {
+        public ushort[] Indices16
+        {
             get => ReadVertexData(indices16 ?? []);
             set => WriteVertexData(ref indices16, value, value.Length, false);
         }
 
-        public System.Numerics.Vector4[] BoneIndices {
+        public System.Numerics.Vector4[] BoneIndices
+        {
             get => ReadVertexData(boneIndices ?? []);
             set => WriteVertexData(ref boneIndices, value, value.Length);
         }
 
-        public System.Numerics.Vector4[] BoneWeights {
+        public System.Numerics.Vector4[] BoneWeights
+        {
             get => ReadVertexData(boneWeights ?? []);
             set => WriteVertexData(ref boneWeights, value, value.Length);
         }
@@ -148,10 +164,10 @@ namespace Prowl.Runtime
         Color32[]? colors;
         System.Numerics.Vector2[]? uv;
         System.Numerics.Vector2[]? uv2;
-        
+
         uint[]? indices32;
         ushort[]? indices16;
-        
+
         System.Numerics.Vector4[]? boneIndices;
         System.Numerics.Vector4[]? boneWeights;
 
@@ -160,7 +176,7 @@ namespace Prowl.Runtime
 
 
         DeviceBuffer vertexBuffer;
-        DeviceBuffer indexBuffer; 
+        DeviceBuffer indexBuffer;
 
         public int UVStart { get; private set; }
         public int UV2Start { get; private set; }
@@ -257,7 +273,7 @@ namespace Prowl.Runtime
             CommandList list = Graphics.GetCommandList();
 
             list.UpdateBuffer(vertexBuffer, 0, vertices);
-            
+
             if (HasUV)
                 list.UpdateBuffer(vertexBuffer, (uint)UVStart, uv);
 
@@ -292,7 +308,7 @@ namespace Prowl.Runtime
 
             Graphics.SubmitCommandList(list, false);
         }
-        
+
         public void SetDrawData(CommandList commandList, GraphicsPipeline pipeline)
         {
             Upload();
@@ -452,7 +468,7 @@ namespace Prowl.Runtime
         {
             if (fullScreenQuad != null) return fullScreenQuad;
             Mesh mesh = new Mesh();
-            
+
             mesh.Vertices = [
                 new System.Numerics.Vector3(-1, -1, 0),
                 new System.Numerics.Vector3(1, -1, 0),
@@ -691,7 +707,7 @@ namespace Prowl.Runtime
             Mesh mesh = new Mesh();
             mesh.Vertices = [a, b, c];
             mesh.IndexFormat = IndexFormat.UInt16;
-            mesh.Indices16 = [ 0, 1, 2 ];
+            mesh.Indices16 = [0, 1, 2];
             mesh.RecalculateBounds();
             mesh.RecalculateNormals();
             mesh.RecalculateTangents();
@@ -904,7 +920,7 @@ namespace Prowl.Runtime
                 if (boneIndexCount > 0)
                 {
                     boneIndices = new System.Numerics.Vector4[boneIndexCount];
-                    for(int i = 0; i < boneIndexCount; i++)
+                    for (int i = 0; i < boneIndexCount; i++)
                     {
                         //boneIndices[i] = new Color32(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
                         boneIndices[i] = new System.Numerics.Vector4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
@@ -925,7 +941,8 @@ namespace Prowl.Runtime
                     bindPoses = new System.Numerics.Matrix4x4[bindPosesCount];
                     for (int i = 0; i < bindPosesCount; i++)
                     {
-                        bindPoses[i] = new System.Numerics.Matrix4x4() {
+                        bindPoses[i] = new System.Numerics.Matrix4x4()
+                        {
                             M11 = reader.ReadSingle(),
                             M12 = reader.ReadSingle(),
                             M13 = reader.ReadSingle(),

@@ -111,7 +111,7 @@ namespace Prowl.Runtime
             var tag = DictionaryToTag(value, ctx);
             if (tag != null) return tag;
 
-            if(value is IList iList)
+            if (value is IList iList)
                 return IListToTag(iList, ctx);
 
             return SerializeObject(value, ctx);
@@ -250,7 +250,7 @@ namespace Prowl.Runtime
                 if (targetType.IsEnum)
                     if (value.TagType == PropertyType.Int)
                         return Enum.ToObject(targetType, value.IntValue);
-                
+
                 if (targetType == typeof(DateTime))
                     if (value.TagType == PropertyType.Long)
                         return DateTime.FromBinary(value.LongValue);
@@ -316,7 +316,7 @@ namespace Prowl.Runtime
         private static object? DeserializeObject(SerializedProperty compound, SerializationContext ctx)
         {
             SerializedProperty? id = compound.Get("$id");
-            if(id != null)
+            if (id != null)
                 if (ctx.idToObject.TryGetValue(id.IntValue, out object? existingObj))
                     return existingObj;
 

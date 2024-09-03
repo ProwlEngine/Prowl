@@ -69,7 +69,8 @@ public sealed class WeldConstraintComponent : TwoBodyConstraintComponent<Weld>
 
     internal override Weld CreateConstraint()
     {
-        return new Weld {
+        return new Weld
+        {
             LocalOffset = _localOffset,
             LocalOrientation = _localOrientation,
             SpringSettings = new SpringSettings(_springFrequency, _springDampingRatio)

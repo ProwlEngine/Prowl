@@ -1,7 +1,9 @@
-﻿using Prowl.Runtime.Audio;
+﻿using System;
+
+using Prowl.Runtime.Audio;
 using Prowl.Runtime.SceneManagement;
+
 using Veldrid;
-using System;
 
 namespace Prowl.Runtime;
 

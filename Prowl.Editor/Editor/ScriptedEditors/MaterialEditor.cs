@@ -1,9 +1,10 @@
-﻿using Prowl.Editor.Assets;
+﻿using System;
+
+using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using System;
 
 namespace Prowl.Editor.ScriptedEditors
 {

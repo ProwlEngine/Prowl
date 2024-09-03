@@ -15,7 +15,7 @@ namespace Prowl.Runtime.GUI.Graphics
             int cur = list.Count;
             if (sz < cur)
                 list.RemoveRange(sz, cur - sz);
-            
+
             else if (sz > cur)
             {
                 if (sz > list.Capacity)

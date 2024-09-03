@@ -1,7 +1,8 @@
-﻿using Prowl.Runtime.SceneManagement;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
+
+using Prowl.Runtime.SceneManagement;
 
 namespace Prowl.Runtime.Utils
 {
@@ -85,7 +86,7 @@ namespace Prowl.Runtime.Utils
             catch (Exception e)
             {
                 SceneManager.AllowGameObjectConstruction = prev; // Restore state
-                throw e;
+                throw;
             }
         }
 

@@ -1,6 +1,7 @@
-﻿using Silk.NET.OpenAL;
+﻿using System;
 using System.Numerics;
-using System;
+
+using Silk.NET.OpenAL;
 
 namespace Prowl.Runtime.Audio.OpenAL
 {
@@ -15,22 +16,28 @@ namespace Prowl.Runtime.Audio.OpenAL
 
         public uint ID { get; }
 
-        public override float Gain {
-            get {
+        public override float Gain
+        {
+            get
+            {
                 OpenALEngine.al.GetSourceProperty(ID, SourceFloat.Gain, out var gain);
                 return gain;
             }
-            set {
+            set
+            {
                 OpenALEngine.al.SetSourceProperty(ID, SourceFloat.Gain, value);
             }
         }
 
-        public override float Pitch {
-            get {
+        public override float Pitch
+        {
+            get
+            {
                 OpenALEngine.al.GetSourceProperty(ID, SourceFloat.Pitch, out var pitch);
                 return pitch;
             }
-            set {
+            set
+            {
                 if (value < 0.5 || value > 2.0f)
                     throw new ArgumentOutOfRangeException("Pitch must be between 0.5 and 2.0.");
 
@@ -38,43 +45,55 @@ namespace Prowl.Runtime.Audio.OpenAL
             }
         }
 
-        public override float MaxDistance {
-            get {
+        public override float MaxDistance
+        {
+            get
+            {
                 OpenALEngine.al.GetSourceProperty(ID, SourceFloat.ReferenceDistance, out var maxDistance);
                 return maxDistance;
             }
-            set {
+            set
+            {
                 OpenALEngine.al.SetSourceProperty(ID, SourceFloat.MaxDistance, value);
             }
         }
 
-        public override bool Looping {
-            get {
+        public override bool Looping
+        {
+            get
+            {
                 OpenALEngine.al.GetSourceProperty(ID, SourceBoolean.Looping, out var looping);
                 return looping;
             }
-            set {
+            set
+            {
                 OpenALEngine.al.SetSourceProperty(ID, SourceBoolean.Looping, value);
             }
         }
 
-        public override Vector3 Position {
-            get {
+        public override Vector3 Position
+        {
+            get
+            {
                 OpenALEngine.al.GetSourceProperty(ID, SourceVector3.Position, out var vec3);
                 return new Vector3(vec3.X, vec3.Y, vec3.Z);
             }
-            set {
+            set
+            {
                 System.Numerics.Vector3 vec3 = value;
                 OpenALEngine.al.SetSourceProperty(ID, SourceVector3.Position, ref vec3);
             }
         }
 
-        public override Vector3 Direction {
-            get {
+        public override Vector3 Direction
+        {
+            get
+            {
                 OpenALEngine.al.GetSourceProperty(ID, SourceVector3.Direction, out var vec3);
                 return new Vector3(vec3.X, vec3.Y, vec3.Z);
             }
-            set {
+            set
+            {
                 System.Numerics.Vector3 vec3 = value;
                 OpenALEngine.al.SetSourceProperty(ID, SourceVector3.Direction, ref vec3);
             }
@@ -114,8 +133,10 @@ namespace Prowl.Runtime.Audio.OpenAL
             }
         }
 
-        public override bool IsPlaying {
-            get {
+        public override bool IsPlaying
+        {
+            get
+            {
                 OpenALEngine.al.GetSourceProperty(ID, GetSourceInteger.SourceState, out var state);
                 return state == (int)SourceState.Playing;
             }

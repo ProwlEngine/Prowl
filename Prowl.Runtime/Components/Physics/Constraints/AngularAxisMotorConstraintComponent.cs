@@ -11,32 +11,37 @@ public sealed class AngularAxisMotorConstraintComponent : TwoBodyConstraintCompo
     [SerializeField, HideInInspector] private float _motorMaximumForce = 1000;
 
     [ShowInInspector]
-    public Vector3 LocalAxisA {
+    public Vector3 LocalAxisA
+    {
         get { return _localAxisA; }
         set { _localAxisA = value; ConstraintData?.TryUpdateDescription(); }
     }
 
     [ShowInInspector]
-    public float TargetVelocity {
+    public float TargetVelocity
+    {
         get { return _targetVelocity; }
         set { _targetVelocity = value; ConstraintData?.TryUpdateDescription(); }
     }
 
     [ShowInInspector]
-    public float MotorSoftness {
+    public float MotorSoftness
+    {
         get { return _motorSoftness; }
         set { _motorSoftness = value; ConstraintData?.TryUpdateDescription(); }
     }
 
     [ShowInInspector]
-    public float MotorMaximumForce {
+    public float MotorMaximumForce
+    {
         get { return _motorMaximumForce; }
         set { _motorMaximumForce = value; ConstraintData?.TryUpdateDescription(); }
     }
 
     internal override AngularAxisMotor CreateConstraint()
     {
-        return new AngularAxisMotor {
+        return new AngularAxisMotor
+        {
             LocalAxisA = _localAxisA,
             TargetVelocity = _targetVelocity,
             Settings = new MotorSettings(_motorMaximumForce, _motorSoftness)

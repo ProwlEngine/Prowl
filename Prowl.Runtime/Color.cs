@@ -45,7 +45,7 @@ namespace Prowl.Runtime
                     3 => a,
                     _ => throw new IndexOutOfRangeException("Invalid Color index!")
                 };
-                
+
             }
             set
             {
@@ -192,5 +192,10 @@ namespace Prowl.Runtime
         }
 
         public override string ToString() => string.Format("RGBA({0}, {1}, {2}, {3})", new object[] { r, g, b, a });
+
+        public override int GetHashCode()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

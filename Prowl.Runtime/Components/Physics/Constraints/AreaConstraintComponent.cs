@@ -26,22 +26,28 @@ public sealed class AreaConstraintComponent : ThreeBodyConstraintComponent<AreaC
     }
 
     [ShowInInspector]
-    public float SpringFrequency {
-        get {
+    public float SpringFrequency
+    {
+        get
+        {
             return _springFrequency;
         }
-        set {
+        set
+        {
             _springFrequency = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringDampingRatio {
-        get {
+    public float SpringDampingRatio
+    {
+        get
+        {
             return _springDampingRatio;
         }
-        set {
+        set
+        {
             _springDampingRatio = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -49,7 +55,8 @@ public sealed class AreaConstraintComponent : ThreeBodyConstraintComponent<AreaC
 
     internal override AreaConstraint CreateConstraint()
     {
-        return new() {
+        return new()
+        {
             TargetScaledArea = _targetScaledArea,
             SpringSettings = new SpringSettings(_springFrequency, _springDampingRatio)
         };

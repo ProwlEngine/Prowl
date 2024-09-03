@@ -1,9 +1,12 @@
 ﻿using Assimp;
+
 using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Utils;
+
 using static Prowl.Runtime.AnimationClip;
+
 using Material = Prowl.Runtime.Material;
 using Mesh = Prowl.Runtime.Mesh;
 using Node = Assimp.Node;
@@ -338,7 +341,7 @@ namespace Prowl.Editor.Assets
                     for (var i = 0; i < normals.Length; i++)
                     {
                         normals[i] = new System.Numerics.Vector3(m.Normals[i].X, m.Normals[i].Y, m.Normals[i].Z);
-                        if(InvertNormals)
+                        if (InvertNormals)
                             normals[i] = -normals[i];
                     }
                     mesh.Normals = normals;
@@ -379,7 +382,7 @@ namespace Prowl.Editor.Assets
                 //if(mesh.IndexFormat == Veldrid.IndexFormat.UInt16)
                 //    mesh.Indices16 = m.GetShortIndices().Cast<ushort>().ToArray();
                 //else
-                    mesh.Indices32 = m.GetUnsignedIndices();
+                mesh.Indices32 = m.GetUnsignedIndices();
 
                 //if(!m.HasTangentBasis)
                 //    mesh.RecalculateTangents();
@@ -670,13 +673,13 @@ namespace Prowl.Editor.Assets
 
             using (gui.Node("Tabs").Width(Size.Percentage(1f)).MaxHeight(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
             {
-                if(EditorGUI.StyledButton("Meshes"))
+                if (EditorGUI.StyledButton("Meshes"))
                     selectedTab = 0;
-                if(EditorGUI.StyledButton("Materials"))
+                if (EditorGUI.StyledButton("Materials"))
                     selectedTab = 1;
-                if(EditorGUI.StyledButton("Scene"))
+                if (EditorGUI.StyledButton("Scene"))
                     selectedTab = 2;
-                if(EditorGUI.StyledButton("Animations"))
+                if (EditorGUI.StyledButton("Animations"))
                     selectedTab = 3;
             }
 
@@ -771,7 +774,7 @@ namespace Prowl.Editor.Assets
             using (gui.Node("MaterialList").ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Enter())
             {
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
-                for (int i=0; i<materials.Count(); i++)
+                for (int i = 0; i < materials.Count(); i++)
                 {
                     gui.TextNode("mat" + i, materials.ElementAt(i).Name).ExpandWidth().Height(ItemSize);
                 }
@@ -794,7 +797,7 @@ namespace Prowl.Editor.Assets
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
                 for (int i = 0; i < animations.Count(); i++)
                 {
-                    if (EditorGUI.StyledButton(i + ": " +  animations.ElementAt(i).Name))
+                    if (EditorGUI.StyledButton(i + ": " + animations.ElementAt(i).Name))
                     {
                         selectedAnim = i + 1;
                     }

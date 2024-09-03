@@ -25,5 +25,5 @@ public abstract class ThreeBodyConstraintComponent<T> : ConstraintComponent<T> w
         set => this[2] = value;
     }
 
-    public ThreeBodyConstraintComponent() : base(3){ }
+    public ThreeBodyConstraintComponent() : base(3) { }
 }

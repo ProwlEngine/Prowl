@@ -11,5 +11,5 @@ public abstract class OneBodyConstraintComponent<T> : ConstraintComponent<T> whe
         set => this[0] = value;
     }
 
-    public OneBodyConstraintComponent() : base(1){ }
+    public OneBodyConstraintComponent() : base(1) { }
 }

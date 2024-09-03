@@ -14,60 +14,75 @@ public sealed class TwistMotorConstraintComponent : TwoBodyConstraintComponent<T
     [SerializeField, HideInInspector] private float _motorMaximumForce = 1000;
 
     [ShowInInspector]
-    public Vector3 LocalOffsetA {
+    public Vector3 LocalOffsetA
+    {
         get => _localOffsetA;
-        set {
+        set
+        {
             _localOffsetA = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public Vector3 LocalOffsetB {
+    public Vector3 LocalOffsetB
+    {
         get => _localOffsetB;
-        set {
+        set
+        {
             _localOffsetB = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public Vector3 LocalAxis {
+    public Vector3 LocalAxis
+    {
         get => _localAxis;
-        set {
+        set
+        {
             _localAxis = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float TargetVelocity {
-        get {
+    public float TargetVelocity
+    {
+        get
+        {
             return _targetVelocity;
         }
-        set {
+        set
+        {
             _targetVelocity = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float MotorSoftness {
-        get {
+    public float MotorSoftness
+    {
+        get
+        {
             return _motorSoftness;
         }
-        set {
+        set
+        {
             _motorSoftness = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float MotorMaximumForce {
-        get {
+    public float MotorMaximumForce
+    {
+        get
+        {
             return _motorMaximumForce;
         }
-        set {
+        set
+        {
             _motorMaximumForce = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -75,7 +90,8 @@ public sealed class TwistMotorConstraintComponent : TwoBodyConstraintComponent<T
 
     internal override TwistMotor CreateConstraint()
     {
-        return new() {
+        return new()
+        {
             LocalAxisA = _localAxis,
             LocalAxisB = _localAxis,
             TargetVelocity = _targetVelocity,

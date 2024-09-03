@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
-using Veldrid;
-using System.Linq;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Text.RegularExpressions;
+
+using Veldrid;
 
 
 namespace Prowl.Runtime

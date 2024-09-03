@@ -12,42 +12,53 @@ public sealed class OneBodyLinearMotorConstraintComponent : OneBodyConstraintCom
     [SerializeField, HideInInspector] private float _motorMaximumForce = 1000;
 
     [ShowInInspector]
-    public Vector3 LocalOffset {
+    public Vector3 LocalOffset
+    {
         get => _localOffset;
-        set {
+        set
+        {
             _localOffset = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public Vector3 TargetVelocity {
-        get {
+    public Vector3 TargetVelocity
+    {
+        get
+        {
             return _targetVelocity;
         }
-        set {
+        set
+        {
             _targetVelocity = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float MotorSoftness {
-        get {
+    public float MotorSoftness
+    {
+        get
+        {
             return _motorSoftness;
         }
-        set {
+        set
+        {
             _motorSoftness = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float MotorMaximumForce {
-        get {
+    public float MotorMaximumForce
+    {
+        get
+        {
             return _motorMaximumForce;
         }
-        set {
+        set
+        {
             _motorMaximumForce = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -55,7 +66,8 @@ public sealed class OneBodyLinearMotorConstraintComponent : OneBodyConstraintCom
 
     internal override OneBodyLinearMotor CreateConstraint()
     {
-        return new() {
+        return new()
+        {
             LocalOffset = _localOffset,
             TargetVelocity = _targetVelocity,
             Settings = new MotorSettings(_motorMaximumForce, _motorSoftness)

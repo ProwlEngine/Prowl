@@ -1,5 +1,6 @@
-﻿using Prowl.Runtime.Utils;
-using System;
+﻿using System;
+
+using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime
 {

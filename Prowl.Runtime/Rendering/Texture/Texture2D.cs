@@ -1,5 +1,6 @@
-using Veldrid;
 using System;
+
+using Veldrid;
 
 namespace Prowl.Runtime
 {
@@ -14,16 +15,28 @@ namespace Prowl.Runtime
         /// <summary>The height of this <see cref="Texture2D"/>.</summary>
         public uint Height => InternalTexture.Height;
 
-        public static Texture2D EmptyWhite = CreateDefaultTex(1, 1, [ Color.white ]);
+        public static Texture2D EmptyWhite = CreateDefaultTex(1, 1, [Color.white]);
 
-        public static Texture2D Empty = CreateDefaultTex(1, 1, [ Color.clear ]);
-        public static Texture2D EmptyRW = CreateDefaultTex(1, 1, [ Color.black ], TextureUsage.Storage);
+        public static Texture2D Empty = CreateDefaultTex(1, 1, [Color.clear]);
+        public static Texture2D EmptyRW = CreateDefaultTex(1, 1, [Color.black], TextureUsage.Storage);
 
         public static Texture2D Checker => CreateDefaultTex(4, 4, [
-            Color.white, Color.gray, Color.white, Color.black,
-            Color.gray, Color.white, Color.gray, Color.white,
-            Color.white, Color.gray, Color.white, Color.gray,
-            Color.gray, Color.white, Color.gray, Color.white
+            Color.white,
+            Color.gray,
+            Color.white,
+            Color.black,
+            Color.gray,
+            Color.white,
+            Color.gray,
+            Color.white,
+            Color.white,
+            Color.gray,
+            Color.white,
+            Color.gray,
+            Color.gray,
+            Color.white,
+            Color.gray,
+            Color.white
         ]);
 
 
@@ -54,16 +67,17 @@ namespace Prowl.Runtime
             TextureUsage usage = TextureUsage.Sampled,
             TextureSampleCount sampleCount = TextureSampleCount.Count1
         ) : base(new()
-            {
-                Width = width,
-                Height = height,
-                MipLevels = mipLevels,
-                Format = format,
-                Usage = usage,
-                Type = TextureType.Texture2D,
-                SampleCount = sampleCount,
-            }
-        ) { }
+        {
+            Width = width,
+            Height = height,
+            MipLevels = mipLevels,
+            Format = format,
+            Usage = usage,
+            Type = TextureType.Texture2D,
+            SampleCount = sampleCount,
+        }
+        )
+        { }
 
         public Texture2D(Veldrid.Texture resource) : base(resource, TextureType.Texture2D)
         { }

@@ -1,7 +1,9 @@
-﻿using BepuPhysics;
+﻿using System;
+
+using BepuPhysics;
 using BepuPhysics.Collidables;
+
 using Prowl.Icons;
-using System;
 
 namespace Prowl.Runtime
 {
@@ -22,9 +24,11 @@ namespace Prowl.Runtime
         private uint _transformVersion = 1;
 
         [ShowInInspector]
-        public virtual bool Kinematic {
+        public virtual bool Kinematic
+        {
             get => _kinematic;
-            set {
+            set
+            {
                 if (_kinematic == value)
                     return;
 
@@ -36,9 +40,11 @@ namespace Prowl.Runtime
             }
         }
 
-        public float SleepThreshold {
+        public float SleepThreshold
+        {
             get => _sleepThreshold;
-            set {
+            set
+            {
                 if (_sleepThreshold == value)
                     return;
 
@@ -50,9 +56,11 @@ namespace Prowl.Runtime
             }
         }
 
-        public byte MinimumTimestepCountUnderThreshold {
+        public byte MinimumTimestepCountUnderThreshold
+        {
             get => _minimumTimestepCountUnderThreshold;
-            set {
+            set
+            {
                 if (_minimumTimestepCountUnderThreshold == value)
                     return;
 
@@ -65,7 +73,8 @@ namespace Prowl.Runtime
         }
 
         [ShowInInspector]
-        public InterpolationMode InterpolationMode {
+        public InterpolationMode InterpolationMode
+        {
             get => _interpolationMode;
             set => _interpolationMode = value;
         }
@@ -74,13 +83,16 @@ namespace Prowl.Runtime
         /// Shortcut to <see cref="ContinuousDetection"/>.<see cref="ContinuousDetection.Mode"/>
         /// </summary>
         [ShowInInspector]
-        public ContinuousDetectionMode ContinuousDetectionMode {
+        public ContinuousDetectionMode ContinuousDetectionMode
+        {
             get => _continuous.Mode;
-            set {
+            set
+            {
                 if (_continuous.Mode == value)
                     return;
 
-                _continuous = value switch {
+                _continuous = value switch
+                {
                     ContinuousDetectionMode.Discrete => ContinuousDetection.Discrete,
                     ContinuousDetectionMode.Passive => ContinuousDetection.Passive,
                     ContinuousDetectionMode.Continuous => ContinuousDetection.Continuous(),
@@ -89,67 +101,83 @@ namespace Prowl.Runtime
             }
         }
 
-        public bool Awake {
+        public bool Awake
+        {
             get => BodyReference?.Awake ?? false;
-            set {
+            set
+            {
                 if (BodyReference is { } bodyRef)
                     bodyRef.Awake = value;
             }
         }
 
-        public Vector3 LinearVelocity {
+        public Vector3 LinearVelocity
+        {
             get => BodyReference?.Velocity.Linear ?? default;
-            set {
+            set
+            {
                 if (BodyReference is { } bodyRef)
                     bodyRef.Velocity.Linear = value;
             }
         }
 
-        public Vector3 AngularVelocity {
+        public Vector3 AngularVelocity
+        {
             get => BodyReference?.Velocity.Angular ?? default;
-            set {
+            set
+            {
                 if (BodyReference is { } bodyRef)
                     bodyRef.Velocity.Angular = value;
             }
         }
 
-        public Vector3 Position {
+        public Vector3 Position
+        {
             get => BodyReference?.Pose.Position ?? default;
-            set {
+            set
+            {
                 if (BodyReference is { } bodyRef)
                     bodyRef.Pose.Position = value;
             }
         }
 
-        public Quaternion Orientation {
+        public Quaternion Orientation
+        {
             get => BodyReference?.Pose.Orientation ?? Quaternion.identity;
-            set {
+            set
+            {
                 if (BodyReference is { } bodyRef)
                     bodyRef.Pose.Orientation = value;
             }
         }
 
-        public BodyInertia BodyInertia {
+        public BodyInertia BodyInertia
+        {
             get => BodyReference?.LocalInertia ?? default;
-            set {
+            set
+            {
                 if (BodyReference is { } bodyRef)
                     bodyRef.LocalInertia = value;
             }
         }
 
         [ShowInInspector]
-        public float SpeculativeMargin {
+        public float SpeculativeMargin
+        {
             get => BodyReference?.Collidable.SpeculativeMargin ?? default;
-            set {
+            set
+            {
                 if (BodyReference is { } bodyRef)
                     bodyRef.Collidable.SpeculativeMargin = value;
             }
         }
 
         [ShowInInspector]
-        public ContinuousDetection ContinuousDetection {
+        public ContinuousDetection ContinuousDetection
+        {
             get => _continuous;
-            set {
+            set
+            {
                 _continuous = value;
                 if (BodyReference is { } bodyRef)
                     bodyRef.Collidable.Continuity = _continuous;

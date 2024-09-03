@@ -1,6 +1,9 @@
 ﻿using BepuPhysics.Collidables;
+
 using BepuUtilities.Memory;
+
 using Prowl.Icons;
+
 using NRigidPose = BepuPhysics.RigidPose;
 
 namespace Prowl.Runtime;
@@ -11,16 +14,20 @@ public sealed class SphereCollider : Collider
     [SerializeField, HideInInspector] private float _radius = 0.5f;
 
     [ShowInInspector]
-    public float Radius {
+    public float Radius
+    {
         get => _radius;
-        set {
+        set
+        {
             _radius = value;
             Container?.ReAttach();
         }
     }
 
-    public float WorldRadius {
-        get {
+    public float WorldRadius
+    {
+        get
+        {
             var worldScale = this.Transform.lossyScale;
             return _radius * (float)MathD.Max(worldScale.x, worldScale.y, worldScale.z);
         }

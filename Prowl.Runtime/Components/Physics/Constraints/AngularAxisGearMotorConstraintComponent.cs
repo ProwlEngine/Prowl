@@ -11,32 +11,37 @@ public sealed class AngularAxisGearMotorConstraintComponent : TwoBodyConstraintC
     [SerializeField, HideInInspector] private float _motorMaximumForce = 1000;
 
     [ShowInInspector]
-    public Vector3 LocalAxisA {
+    public Vector3 LocalAxisA
+    {
         get { return _localAxisA; }
         set { _localAxisA = value; ConstraintData?.TryUpdateDescription(); }
     }
 
     [ShowInInspector]
-    public float VelocityScale {
+    public float VelocityScale
+    {
         get { return _velocityScale; }
         set { _velocityScale = value; ConstraintData?.TryUpdateDescription(); }
     }
 
     [ShowInInspector]
-    public float MotorSoftness {
+    public float MotorSoftness
+    {
         get { return _motorSoftness; }
         set { _motorSoftness = value; ConstraintData?.TryUpdateDescription(); }
     }
 
     [ShowInInspector]
-    public float MotorMaximumForce {
+    public float MotorMaximumForce
+    {
         get { return _motorMaximumForce; }
         set { _motorMaximumForce = value; ConstraintData?.TryUpdateDescription(); }
     }
 
     internal override AngularAxisGearMotor CreateConstraint()
     {
-        return new AngularAxisGearMotor {
+        return new AngularAxisGearMotor
+        {
             LocalAxisA = _localAxisA,
             VelocityScale = _velocityScale,
             Settings = new MotorSettings(_motorMaximumForce, _motorSoftness)

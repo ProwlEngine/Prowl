@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 using System.Text;
+
 using static Prowl.Runtime.GUI.TextEdit.StbTextEdit;
 
 namespace Prowl.Runtime.GUI.TextEdit
@@ -24,9 +25,9 @@ namespace Prowl.Runtime.GUI.TextEdit
 
         public float GetWidth(int index)
         {
-            var c = Text[index]; 
-            if (c == '\n') 
-                return -1f; 
+            var c = Text[index];
+            if (c == '\n')
+                return -1f;
             return font.GetCharAdvance(c) * (fontSize / (float)font.FontSize);
         }
 
@@ -352,7 +353,7 @@ namespace Prowl.Runtime.GUI.TextEdit
 
         public static void Key(StbTextEditState state, ControlKeys key)
         {
-            retry:
+        retry:
             switch (key)
             {
                 case ControlKeys.InsertMode:
@@ -436,87 +437,87 @@ namespace Prowl.Runtime.GUI.TextEdit
                     break;
                 case ControlKeys.Down:
                 case ControlKeys.Down | ControlKeys.Shift:
-                {
-                    var sel = (key & ControlKeys.Shift) != 0;
-                    if (state.SingleLine)
                     {
-                        key = ControlKeys.Right | (key & ControlKeys.Shift);
-                        goto retry;
-                    }
-
-                    if (sel)
-                        PrepareSelectionAtCursor(state);
-                    else if (state.SelectStart != state.SelectEnd)
-                        MoveToLast(state);
-                    Clamp(state);
-                    var find = new FindState();
-                    FindCharPosition(state, ref find, state.CursorIndex, state.SingleLine);
-                    if (find.length != 0)
-                    {
-                        var goal_x = state.HasPreferredX ? state.PreferredX : find.x;
-                        var start = find.first_char + find.length;
-                        state.CursorIndex = start;
-                        var row = state.LayoutRow(state.CursorIndex);
-                        float x = row.x0;
-                        for (var i = 0; i < row.num_chars; ++i)
+                        var sel = (key & ControlKeys.Shift) != 0;
+                        if (state.SingleLine)
                         {
-                            var dx = (float)1;
-                            x += dx;
-                            if (x > goal_x)
-                                break;
-                            ++state.CursorIndex;
+                            key = ControlKeys.Right | (key & ControlKeys.Shift);
+                            goto retry;
                         }
 
-                        Clamp(state);
-                        state.HasPreferredX = true;
-                        state.PreferredX = goal_x;
                         if (sel)
-                            state.SelectEnd = state.CursorIndex;
-                    }
+                            PrepareSelectionAtCursor(state);
+                        else if (state.SelectStart != state.SelectEnd)
+                            MoveToLast(state);
+                        Clamp(state);
+                        var find = new FindState();
+                        FindCharPosition(state, ref find, state.CursorIndex, state.SingleLine);
+                        if (find.length != 0)
+                        {
+                            var goal_x = state.HasPreferredX ? state.PreferredX : find.x;
+                            var start = find.first_char + find.length;
+                            state.CursorIndex = start;
+                            var row = state.LayoutRow(state.CursorIndex);
+                            float x = row.x0;
+                            for (var i = 0; i < row.num_chars; ++i)
+                            {
+                                var dx = (float)1;
+                                x += dx;
+                                if (x > goal_x)
+                                    break;
+                                ++state.CursorIndex;
+                            }
 
-                    break;
-                }
+                            Clamp(state);
+                            state.HasPreferredX = true;
+                            state.PreferredX = goal_x;
+                            if (sel)
+                                state.SelectEnd = state.CursorIndex;
+                        }
+
+                        break;
+                    }
                 case ControlKeys.Up:
                 case ControlKeys.Up | ControlKeys.Shift:
-                {
-                    var sel = (key & ControlKeys.Shift) != 0;
-                    if (state.SingleLine)
                     {
-                        key = ControlKeys.Left | (key & ControlKeys.Shift);
-                        goto retry;
-                    }
-
-                    if (sel)
-                        PrepareSelectionAtCursor(state);
-                    else if (state.SelectStart != state.SelectEnd)
-                        MoveToFirst(state);
-                    Clamp(state);
-                    var find = new FindState();
-                    FindCharPosition(state, ref find, state.CursorIndex, state.SingleLine);
-                    if (find.prev_first != find.first_char)
-                    {
-                        var goal_x = state.HasPreferredX ? state.PreferredX : find.x;
-                        state.CursorIndex = find.prev_first;
-                        var row = state.LayoutRow(state.CursorIndex);
-                        float x = row.x0;
-                        for (int i = 0; i < row.num_chars; ++i)
+                        var sel = (key & ControlKeys.Shift) != 0;
+                        if (state.SingleLine)
                         {
-                            var dx = (float)1;
-                            x += dx;
-                            if (x > goal_x)
-                                break;
-                            ++state.CursorIndex;
+                            key = ControlKeys.Left | (key & ControlKeys.Shift);
+                            goto retry;
                         }
 
-                        Clamp(state);
-                        state.HasPreferredX = true;
-                        state.PreferredX = goal_x;
                         if (sel)
-                            state.SelectEnd = state.CursorIndex;
-                    }
+                            PrepareSelectionAtCursor(state);
+                        else if (state.SelectStart != state.SelectEnd)
+                            MoveToFirst(state);
+                        Clamp(state);
+                        var find = new FindState();
+                        FindCharPosition(state, ref find, state.CursorIndex, state.SingleLine);
+                        if (find.prev_first != find.first_char)
+                        {
+                            var goal_x = state.HasPreferredX ? state.PreferredX : find.x;
+                            state.CursorIndex = find.prev_first;
+                            var row = state.LayoutRow(state.CursorIndex);
+                            float x = row.x0;
+                            for (int i = 0; i < row.num_chars; ++i)
+                            {
+                                var dx = (float)1;
+                                x += dx;
+                                if (x > goal_x)
+                                    break;
+                                ++state.CursorIndex;
+                            }
 
-                    break;
-                }
+                            Clamp(state);
+                            state.HasPreferredX = true;
+                            state.PreferredX = goal_x;
+                            if (sel)
+                                state.SelectEnd = state.CursorIndex;
+                        }
+
+                        break;
+                    }
                 case ControlKeys.Delete:
                 case ControlKeys.Delete | ControlKeys.Shift:
                     if (state.SelectStart != state.SelectEnd)
@@ -580,18 +581,18 @@ namespace Prowl.Runtime.GUI.TextEdit
                     state.HasPreferredX = false;
                     break;
                 case ControlKeys.LineEnd:
-                {
-                    var n = state.Length;
-                    Clamp(state);
-                    MoveToFirst(state);
-                    if (state.SingleLine)
-                        state.CursorIndex = n;
-                    else
-                        while (state.CursorIndex < n && state.Text[state.CursorIndex] != '\n')
-                            ++state.CursorIndex;
-                    state.HasPreferredX = false;
-                    break;
-                }
+                    {
+                        var n = state.Length;
+                        Clamp(state);
+                        MoveToFirst(state);
+                        if (state.SingleLine)
+                            state.CursorIndex = n;
+                        else
+                            while (state.CursorIndex < n && state.Text[state.CursorIndex] != '\n')
+                                ++state.CursorIndex;
+                        state.HasPreferredX = false;
+                        break;
+                    }
                 case ControlKeys.LineStart | ControlKeys.Shift:
                     Clamp(state);
                     PrepareSelectionAtCursor(state);
@@ -604,19 +605,19 @@ namespace Prowl.Runtime.GUI.TextEdit
                     state.HasPreferredX = false;
                     break;
                 case ControlKeys.LineEnd | ControlKeys.Shift:
-                {
-                    var n = state.Length;
-                    Clamp(state);
-                    PrepareSelectionAtCursor(state);
-                    if (state.SingleLine)
-                        state.CursorIndex = n;
-                    else
-                        while (state.CursorIndex < n && state.Text[state.CursorIndex] != '\n')
-                            ++state.CursorIndex;
-                    state.SelectEnd = state.CursorIndex;
-                    state.HasPreferredX = false;
-                    break;
-                }
+                    {
+                        var n = state.Length;
+                        Clamp(state);
+                        PrepareSelectionAtCursor(state);
+                        if (state.SingleLine)
+                            state.CursorIndex = n;
+                        else
+                            while (state.CursorIndex < n && state.Text[state.CursorIndex] != '\n')
+                                ++state.CursorIndex;
+                        state.SelectEnd = state.CursorIndex;
+                        state.HasPreferredX = false;
+                        break;
+                    }
             }
         }
 

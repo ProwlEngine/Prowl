@@ -1,4 +1,7 @@
-﻿using NuGet.Common;
+﻿using System.IO.Compression;
+using System.Text;
+
+using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Frameworks;
 using NuGet.Packaging;
@@ -8,11 +11,10 @@ using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 using NuGet.Resolver;
 using NuGet.Versioning;
+
 using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
-using System.IO.Compression;
-using System.Text;
 
 namespace Prowl.Editor.Assets
 {
@@ -283,10 +285,10 @@ namespace Prowl.Editor.Assets
                 var available = new HashSet<SourcePackageDependencyInfo>(PackageIdentityComparer.Default);
                 await GetPackageDependencies(new(packageId, NuGetVersion.Parse(version)), nuGetFramework, cache, NugetLogger.Instance, repositories, available);
 
-                PackageResolverContext resolverContext = new(DependencyBehavior.Lowest, [ packageId ], [], [], [], available, srp.GetRepositories().Select(s => s.PackageSource), NugetLogger.Instance);
+                PackageResolverContext resolverContext = new(DependencyBehavior.Lowest, [packageId], [], [], [], available, srp.GetRepositories().Select(s => s.PackageSource), NugetLogger.Instance);
 
                 PackageResolver resolver = new();
- 
+
                 var packagesToInstall = resolver.Resolve(resolverContext, CancellationToken.None).Select(p => available.Single(x => PackageIdentityComparer.Default.Equals(x, p)));
 
                 PackagePathResolver packagePathResolver = new(Project.ProjectPackagesDirectory);
