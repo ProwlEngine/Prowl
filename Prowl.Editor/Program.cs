@@ -10,75 +10,6 @@ namespace Prowl.Editor;
 
 public static class Program
 {
-    static string myFunkyShader =
-"""
-Shader "Funky"
-
-Global
-{
-    GLOBALINCLUDE
-
-    ENDGLOBAL
-}
-
-Pass "DaPass"
-{
-	Blend Override
-
-    // Stencil state
-    DepthStencil
-    {
-        // Depth write
-        DepthWrite On
-
-        // Comparison kind
-        DepthTest LessEqual
-    }
-
-    // Rasterizer culling mode
-    Cull None
-
-	SHADERPROGRAM
-
-        #pragma vertex vert
-        #pragma fragment frag
-
-        struct attributes
-        {
-            float4 pos : POSITION;
-            float4 col : COLOR;
-        };
-
-        struct v2f
-        {
-            float4 pos : SV_POSITION;
-            float4 col : COLOR;
-        };
-
-        float4 SomeColor;
-        float4x4 SomeMatrix;
-
-
-        v2f vert(attributes input)
-        {
-            v2f output = (v2f)0;
-
-            output.pos = mul(SomeMatrix, input.pos);
-            output.col = input.col * SomeColor;
-
-            return output;
-        }
-
-
-        float4 frag(v2f input) : SV_TARGET
-        {
-            return input.col / SomeColor;
-        }
-	ENDPROGRAM
-}
-
-""";
-
     public static event Action? OnDrawEditor;
     public static event Action? OnUpdateEditor;
 
@@ -88,12 +19,6 @@ Pass "DaPass"
     private static bool CreatedDefaultWindows = false;
     public static int Main(string[] args)
     {
-        //Shader shader = Utilities.ShaderParser.ParseShader(myFunkyShader);
-        //
-        //Console.WriteLine(shader.GetStringRepresentation());
-        //
-        //return 0;
-
         // set global Culture to invariant
         Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
         Application.Initialize += () =>
@@ -156,9 +81,9 @@ Pass "DaPass"
                     Screen.FramesPerSecond = 0;
                 }
 
-                if (Hotkeys.IsHotkeyDown("SaveSceneAs", new() { Key = Runtime.Key.S, Ctrl = true, Shift = true }))
+                if (Hotkeys.IsHotkeyDown("SaveSceneAs", new() { Key = Key.S, Ctrl = true, Shift = true }))
                     EditorGuiManager.SaveSceneAs();
-                else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Runtime.Key.S, Ctrl = true }))
+                else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Key.S, Ctrl = true }))
                     EditorGuiManager.SaveScene();
 
                 Application.isPlaying = PlayMode.Current == PlayMode.Mode.Playing;
