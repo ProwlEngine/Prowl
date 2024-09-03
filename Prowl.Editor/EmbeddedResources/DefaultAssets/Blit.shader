@@ -5,46 +5,40 @@ Pass "Blit"
     // Rasterizer culling mode
     Cull None
 
-	Inputs
-	{
-		VertexInput 
-        {
-            Position // Input location 0
-            UV0 // Input location 1
-        }
-        
-        // Set 0
-        Set
-        {
-			SampledTexture _Texture
-        }
-	}
+	SHADERPROGRAM
+		#pragma vertex Vertex
+        #pragma fragment Fragment
 
-	PROGRAM VERTEX
-		layout(location = 0) in vec3 vertexPosition;
-		layout(location = 1) in vec2 vertexTexCoord;
-		
-		layout(location = 0) out vec2 TexCoords;
-		
-		void main() 
+		struct Attributes
 		{
-			gl_Position = vec4(vertexPosition, 1.0);
-			
-			TexCoords = vertexTexCoord;
-		}
-	ENDPROGRAM
+			float3 position : POSITION;
+			float2 uv : TEXCOORD0;
+		};
 
-	PROGRAM FRAGMENT	
-		layout(location = 0) in vec2 TexCoords;
-		layout(location = 0) out vec4 OutputColor;
-
-		layout(set = 0, binding = 0) uniform texture2D _Texture;
-		layout(set = 0, binding = 1) uniform sampler _TextureSampler;
-
-		void main()
+		struct Varyings
 		{
-			vec3 baseColor = texture(sampler2D(_Texture, _TextureSampler), TexCoords).rgb;
-			OutputColor = vec4(baseColor, 1.0);
-		}
+			float3 position : SV_POSITION;
+			float2 uv : TEXCOORD0;
+		};
+		
+		Texture2D<float4> _MainTexture;
+		SamplerState sampler_MainTexture;
+
+        Varyings Vertex(Attributes input)
+        {
+			Varyings output = (Varyings)0;
+
+			output.position = input.position;
+			output.uv = input.uv;
+
+            return output;
+        }
+
+        float4 Fragment(Varyings input) : SV_TARGET
+        {
+			float3 baseColor = _MainTexture.Sample(sampler_MainTexture, input.uv).rgb;
+
+            return float4(baseColor, 1.0);
+        }
 	ENDPROGRAM
 }
