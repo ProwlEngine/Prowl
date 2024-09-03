@@ -19,15 +19,12 @@ Pass "Grid"
     {
         // Depth write
         DepthWrite Off
-
-        // Comparison kind
-        DepthTest Off
     }
 
     // Rasterizer culling mode
     Cull None
 
-	HLSLPROGRAM
+	SHADERPROGRAM
         #pragma vertex Vertex
         #pragma fragment Fragment
 
@@ -73,7 +70,7 @@ Pass "Grid"
 
 
 		// https://bgolus.medium.com/the-best-darn-grid-shader-yet-727f9278b9d8
-        float PristineGrid(float2 uv, float2 lineWidth)
+        float pristineGrid(float2 uv, float2 lineWidth)
         {
             lineWidth = saturate(lineWidth);
 
@@ -82,19 +79,19 @@ Pass "Grid"
 
             bool2 invertLine = lineWidth > 0.5;
 
-            float2 targetWidth = invertLine ? 1.0 - lineWidth : lineWidth;
+            float2 targetWidth = select(invertLine, 1.0 - lineWidth, lineWidth);
             float2 drawWidth = clamp(targetWidth, uvDeriv, 0.5);
 
             float2 lineAA = max(uvDeriv, 0.000001) * 1.5;
             float2 gridUV = abs(frac(uv) * 2.0 - 1.0);
 
-            gridUV = invertLine ? gridUV : 1.0 - gridUV;
+            gridUV = select(invertLine, gridUV, 1.0 - gridUV);
 
             float2 grid2 = smoothstep(drawWidth + lineAA, drawWidth - lineAA, gridUV);
 
             grid2 *= saturate(targetWidth / drawWidth);
             grid2 = lerp(grid2, targetWidth, saturate(uvDeriv * 2.0 - 1.0));
-            grid2 = invertLine ? 1.0 - grid2 : grid2;
+            grid2 = select(invertLine, 1.0 - grid2, grid2);
 
             return lerp(grid2.x, 1.0, grid2.y);
         }
@@ -102,6 +99,7 @@ Pass "Grid"
 
 		float Grid(float3 ro, float scale, float3 rd, float lineWidth, out float d)
 		{
+            d = 0.0;
 			ro /= scale;
 
 			float ndotd = dot(-PlaneNormal, rd);
@@ -119,7 +117,7 @@ Pass "Grid"
 			float u = dot(hit, PlaneRight);
 			float v = dot(hit, PlaneUp);
 
-			return pristineGrid(vec2(u, v), vec2(lineWidth * LineWidth));
+			return pristineGrid(float2(u, v), (float2)lineWidth * LineWidth);
 		}
 
 
@@ -128,13 +126,13 @@ Pass "Grid"
 			float d = 0.0;
 			float bd = 0.0;
 
-			float sg = Grid(CameraPosition, PrimaryGridSize, normalize(Position), 0.02, d);
-			float bg = Grid(CameraPosition, SecondaryGridSize, normalize(Position), 0.02, bd);
+			float sg = Grid(CameraPosition, PrimaryGridSize, normalize(input.wpos), 0.02, d);
+			float bg = Grid(CameraPosition, SecondaryGridSize, normalize(input.wpos), 0.02, bd);
 
-			float4 OutputColor = vec4(GridColor.xyz, sg);
-			OutputColor += vec4(GridColor.xyz, bg * 0.5);
+			float4 OutputColor = float4(GridColor.xyz, sg);
+			OutputColor += float4(GridColor.xyz, bg * 0.5);
 
             return OutputColor;
 		}
-	ENDHLSL
+	ENDPROGRAM
 }
