@@ -12,7 +12,7 @@
         https://www.myget.org/F/sixlabors/api/v3/index.json;
       </RestoreAdditionalProjectSources>
     </PropertyGroup>
-  
+
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
     <OutputPath>../Build/Editor/Debug/</OutputPath>
   </PropertyGroup>
@@ -45,7 +45,7 @@
 
     <ItemGroup>
         <PackageReference Include="AssimpNet" Version="5.0.0-beta1" />
-        <PackageReference Include="DirectXShaderCompiler.NET" Version="1.0.0" />
+        <PackageReference Include="DirectXShaderCompiler.NET" Version="1.1.0" />
         <PackageReference Include="NuGet.Protocol" Version="6.10.1" />
         <PackageReference Include="NuGet.Resolver" Version="6.10.1" />
         <PackageReference Include="NuGet.Versioning" Version="6.10.1" />
@@ -62,5 +62,5 @@
     <ItemGroup>
       <Folder Include="Editor\PackageManager\" />
     </ItemGroup>
-    
+
 </Project>

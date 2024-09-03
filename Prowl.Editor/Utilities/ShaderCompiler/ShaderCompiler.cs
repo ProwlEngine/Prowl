@@ -46,8 +46,21 @@ namespace Prowl.Editor.Utilities
 
                 CompilationResult result = DirectXShaderCompiler.NET.ShaderCompiler.Compile(code, options, NoInclude);
 
-                if (result.compilationErrors != null)
-                    throw new Exception($"Compilation errors encountered:\n\n{result.compilationErrors}");
+                foreach (var res in result.messages)
+                {
+                    if (res.severity == CompilationMessage.MessageSeverity.Error)
+                    {
+                        throw new Exception($"Error compiling shader {res.filename} (at line: {res.line}, column: {res.column}): \n{res.message}");
+                    }
+                    else if (res.severity == CompilationMessage.MessageSeverity.Warning)
+                    {
+                        Debug.LogWarning($"Warning while compiling shader {res.filename} (at line: {res.line}, column: {res.column}): \n{res.message}");
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"{res.message}");
+                    }
+                }
 
                 compiledSPIRV[i] = result.objectBytes;
             }
