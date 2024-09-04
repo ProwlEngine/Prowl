@@ -287,7 +287,3 @@ __pycache__/
 *.btm.cs
 *.odx.cs
 *.xsd.cs
-
-
-# Prowl Projects (not sure why but on my Windows computer it creates a new project in the codebase?)
-/Prowl
