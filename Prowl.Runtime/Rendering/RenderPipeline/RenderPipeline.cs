@@ -15,6 +15,12 @@ namespace Prowl.Runtime.RenderPipelines
         public Matrix4x4 View;
         public Matrix4x4 Projection;
 
+        public bool IsSceneViewCamera;
+        public bool DisplayGrid;
+        public Matrix4x4 GridMatrix;
+        public Color GridColor;
+        public Vector3 GridSizes;
+
 
         public void InitializeFromCamera(Camera camera, Vector2 targetScale)
         {

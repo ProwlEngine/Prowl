@@ -21,11 +21,14 @@ Pass "InternalError"
         #pragma vertex Vertex
         #pragma fragment Fragment
 
-        float4x4 Mat_MVP;
+        cbuffer _PerDraw
+        {
+            float4x4 _Matrix_MVP;
+        }
 
         float4 Vertex(float3 position : POSITION) : SV_POSITION
         {
-            return mul(Mat_MVP, float4(position, 1.0));
+            return mul(_Matrix_MVP, float4(position, 1.0));
         }
 
         float4 Fragment() : SV_TARGET

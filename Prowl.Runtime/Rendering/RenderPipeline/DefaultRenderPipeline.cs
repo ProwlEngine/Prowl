@@ -7,10 +7,18 @@ namespace Prowl.Runtime.RenderPipelines
 {
     public class DefaultRenderPipeline : RenderPipeline
     {
+        private static Mesh s_gridMesh;
+        private static Material s_gridMaterial;
+        private static Material s_defaultMaterial;
+
         public static DefaultRenderPipeline Default = new();
 
         public override void Render(Framebuffer target, Camera camera, in RenderingData data)
         {
+            s_gridMesh ??= Mesh.CreateQuad(Vector2.one);
+            s_gridMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Grid.shader"));
+            s_defaultMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/DefaultUnlit.shader"));
+
             CommandBuffer buffer = CommandBufferPool.Get("Rendering Command Buffer");
 
             buffer.SetRenderTarget(target);
@@ -28,21 +36,47 @@ namespace Prowl.Runtime.RenderPipelines
 
                 foreach (IRenderable renderable in batch.renderables)
                 {
-                    // if (CullRenderable(renderable, frustum))
-                    //     continue;
+                    //if (CullRenderable(renderable, frustum))
+                    //    continue;
 
                     renderable.GetRenderingData(out PropertyBlock properties, out IGeometryDrawData drawData, out Matrix4x4 model);
 
                     buffer.ApplyPropertyState(properties);
 
                     buffer.SetColor("_MainColor", Color.white);
-                    buffer.SetMatrix("_Matrix_MVP", Matrix4x4.Identity.ToFloat());
+                    buffer.SetMatrix("_Matrix_MVP", model.ToFloat() * floatVP);
 
                     buffer.UpdateBuffer("_PerDraw");
 
-                    buffer.SetDrawData(Mesh.GetFullscreenQuad());
-                    buffer.DrawIndexed((uint)Mesh.GetFullscreenQuad().IndexCount, 0, 1, 0, 0);
+                    buffer.SetDrawData(drawData);
+                    buffer.DrawIndexed((uint)drawData.IndexCount, 0, 1, 0, 0);
                 }
+            }
+
+
+            if (data.DisplayGrid)
+            {
+                const float gridScale = 1000;
+
+                Matrix4x4 grid = Matrix4x4.CreateScale(gridScale);
+
+                grid *= data.GridMatrix;
+
+                Matrix4x4 MV = grid * data.View;
+                Matrix4x4 MVP = grid * data.View * data.Projection;
+
+                buffer.SetMatrix("_Matrix_MV", MV.ToFloat());
+                buffer.SetMatrix("_Matrix_MVP", MVP.ToFloat());
+
+                buffer.SetColor("_GridColor", data.GridColor);
+                buffer.SetFloat("_LineWidth", (float)data.GridSizes.z);
+                buffer.SetFloat("_PrimaryGridSize", 1 / (float)data.GridSizes.x * gridScale * 2);
+                buffer.SetFloat("_SecondaryGridSize", 1 / (float)data.GridSizes.y * gridScale * 2);
+                buffer.SetFloat("_Falloff", 15.0f);
+                buffer.SetFloat("_MaxDist", System.Math.Min(camera.FarClip, gridScale));
+
+                buffer.SetMaterial(s_gridMaterial, 0);
+                buffer.DrawSingle(s_gridMesh);
             }
 
             Graphics.SubmitCommandBuffer(buffer);

@@ -64,29 +64,17 @@ namespace Prowl.Runtime
                         break;
 
                     case ResourceKind.TextureReadOnly:
-                        Texture texture = state._values.GetValueOrDefault(SliceSampler(uniform.name), default).texture.Value.Res ?? Texture2D.EmptyWhite;
-
-                        if (!texture.Usage.HasFlag(TextureUsage.Sampled))
-                            texture = Texture2D.EmptyWhite;
-
+                        Texture texture = GetTexture(uniform.name, state, TextureUsage.Sampled, Texture2D.EmptyWhite);
                         UpdateResource(texture.TextureView, uniform.binding, ref recreateResourceSet);
                         break;
 
                     case ResourceKind.TextureReadWrite:
-                        Texture rwtexture = state._values.GetValueOrDefault(SliceSampler(uniform.name), default).texture.Value.Res ?? Texture2D.EmptyRW;
-
-                        if (!rwtexture.Usage.HasFlag(TextureUsage.Storage))
-                            rwtexture = Texture2D.EmptyRW;
-
+                        Texture rwtexture = GetTexture(uniform.name, state, TextureUsage.Storage, Texture2D.EmptyRW);
                         UpdateResource(rwtexture.TextureView, uniform.binding, ref recreateResourceSet);
                         break;
 
                     case ResourceKind.Sampler:
-                        Texture stexture = state._values.GetValueOrDefault(SliceSampler(uniform.name), default).texture.Value.Res ?? Texture2D.EmptyWhite;
-
-                        if (!stexture.Usage.HasFlag(TextureUsage.Sampled))
-                            stexture = Texture2D.EmptyWhite;
-
+                        Texture stexture = GetTexture(SliceSampler((uniform.name)), state, TextureUsage.Sampled, Texture2D.EmptyWhite);
                         UpdateResource(stexture.Sampler.InternalSampler, uniform.binding, ref recreateResourceSet);
                         break;
                 }
@@ -99,6 +87,19 @@ namespace Prowl.Runtime
             }
 
             list.SetGraphicsResourceSet(0, resources);
+        }
+
+
+        private Texture GetTexture(string name, PropertyState state, TextureUsage usage, Texture defaultTex)
+        {
+            AssetRef<Texture> textureRes = state._values.GetValueOrDefault(name, default).texture ?? defaultTex;
+
+            Texture texture = textureRes.Res ?? defaultTex;
+
+            if (!texture.Usage.HasFlag(usage))
+                return defaultTex;
+
+            return texture;
         }
 
 

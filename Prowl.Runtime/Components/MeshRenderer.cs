@@ -12,8 +12,6 @@ namespace Prowl.Runtime;
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Shapes}  Mesh Renderer")]
 public class MeshRenderer : MonoBehaviour, ISerializable, IRenderable
 {
-    private static Material s_defaultUnlit;
-
     public AssetRef<Mesh> Mesh;
     public AssetRef<Material> Material;
     public Color MainColor = Color.white;
@@ -21,10 +19,6 @@ public class MeshRenderer : MonoBehaviour, ISerializable, IRenderable
 
     public override void Update()
     {
-        s_defaultUnlit ??= new Material(Application.AssetProvider.LoadAsset<Shader>($"Defaults/DefaultUnlit.shader").Res);
-
-        Material.Res = s_defaultUnlit;
-
         if (!Mesh.IsAvailable) return;
         if (!Material.IsAvailable) return;
 

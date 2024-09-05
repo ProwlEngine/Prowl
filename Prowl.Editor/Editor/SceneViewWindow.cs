@@ -96,13 +96,35 @@ public class SceneViewWindow : EditorWindow
 
         SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
 
-        CommandBuffer buffer = CommandBufferPool.Get("Scene View Buffer");
-
-        buffer.SetRenderTarget(RenderTarget!);
-
         RenderingData data = new RenderingData();
 
         data.InitializeFromCamera(Cam, new Vector2(RenderTarget.Width, RenderTarget.Height));
+        data.IsSceneViewCamera = true;
+
+        if (SceneViewPreferences.Instance.GridType != GridType.None)
+        {
+            data.DisplayGrid = true;
+            data.IsSceneViewCamera = true;
+
+            data.GridColor = SceneViewPreferences.Instance.GridColor;
+            data.GridSizes.z = SceneViewPreferences.Instance.LineWidth;
+            data.GridSizes.x = SceneViewPreferences.Instance.PrimaryGridSize;
+            data.GridSizes.y = SceneViewPreferences.Instance.SecondaryGridSize;
+
+            double gX = Math.Round(Cam.Transform.position.x / data.GridSizes.y) * data.GridSizes.y;
+            double gY = Math.Round(Cam.Transform.position.y / data.GridSizes.y) * data.GridSizes.y;
+            double gZ = Math.Round(Cam.Transform.position.z / data.GridSizes.y) * data.GridSizes.y;
+
+            data.GridMatrix = SceneViewPreferences.Instance.GridType switch
+            {
+                GridType.XZ => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Vector3.right, Vector3.forward) *
+                    Matrix4x4.CreateTranslation(new Vector3(gX, 0, gZ)),
+                GridType.XY => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Vector3.forward, Vector3.up) *
+                    Matrix4x4.CreateTranslation(new Vector3(gX, gY, 0)),
+                GridType.YZ => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Vector3.up, Vector3.right) *
+                    Matrix4x4.CreateTranslation(new Vector3(0, gY, gZ)),
+            };
+        }
 
         RenderPipeline pipeline = Cam.Pipeline.Res ?? DefaultRenderPipeline.Default;
 
@@ -111,7 +133,6 @@ public class SceneViewWindow : EditorWindow
         Vector2 imagePos = gui.CurrentNode.LayoutData.Rect.Position;
         Vector2 imageSize = gui.CurrentNode.LayoutData.Rect.Size;
         gui.Draw2D.DrawImage(RenderTarget!.ColorBuffers[0], imagePos, imageSize, Color.white);
-
 
         foreach (GameObject activeGO in SceneManager.AllGameObjects)
         {
@@ -127,46 +148,6 @@ public class SceneViewWindow : EditorWindow
                 }
             }
         }
-
-
-        if (SceneViewPreferences.Instance.GridType != GridType.None)
-        {
-            gridMesh ??= Mesh.GetFullscreenQuad();
-
-            gridMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Grid.shader"));
-
-            (Vector3, Vector3) planeInfo = SceneViewPreferences.Instance.GridType switch
-            {
-                GridType.XZ => (Vector3.up, Vector3.right),
-                GridType.XY => (Vector3.forward, Vector3.up),
-                GridType.YZ => (Vector3.right, Vector3.forward),
-            };
-
-            Matrix4x4.Invert(data.View * data.Projection, out Matrix4x4 invertedMVP);
-
-            // For InternalErrorShader if our grid shader does not compile correctly.
-            buffer.SetMatrix("Mat_MVP", System.Numerics.Matrix4x4.Identity);
-
-            buffer.SetMatrix("MvpInverse", invertedMVP.ToFloat());
-
-            buffer.SetVector("CameraPosition", Cam.Transform.position);
-            buffer.SetVector("PlaneNormal", planeInfo.Item1);
-            buffer.SetVector("PlaneRight", planeInfo.Item2);
-            buffer.SetVector("PlaneUp", Vector3.Cross(planeInfo.Item1, planeInfo.Item2));
-            buffer.SetColor("GridColor", SceneViewPreferences.Instance.GridColor);
-            buffer.SetFloat("LineWidth", SceneViewPreferences.Instance.LineWidth);
-            buffer.SetFloat("PrimaryGridSize", SceneViewPreferences.Instance.PrimaryGridSize);
-            buffer.SetFloat("SecondaryGridSize", SceneViewPreferences.Instance.SecondaryGridSize);
-
-            buffer.SetMaterial(gridMat, 0);
-            buffer.DrawSingle(gridMesh);
-        }
-
-
-        Graphics.SubmitCommandBuffer(buffer);
-
-        CommandBufferPool.Release(buffer);
-
 
         List<WeakReference> selectedWeaks = HierarchyWindow.SelectHandler.Selected;
         var selectedGOs = new List<GameObject>();

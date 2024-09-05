@@ -32,7 +32,7 @@ namespace Prowl.Editor.Assets
         public bool CullEmpty = false;
         public bool OptimizeGraph = false;
         public bool OptimizeMeshes = false;
-        public bool FlipWindingOrder = true;
+        public bool FlipWindingOrder = false;
         public bool WeldVertices = false;
         public bool InvertNormals = false;
         public bool GlobalScale = false;
