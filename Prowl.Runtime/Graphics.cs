@@ -140,7 +140,7 @@ namespace Prowl.Runtime
 
         internal static void Dispose()
         {
-            GraphicsPipelineCache.Dispose();
+            ShaderPipelineCache.Dispose();
             GUI.Graphics.UIDrawListRenderer.Dispose();
 
             Device.Dispose();
