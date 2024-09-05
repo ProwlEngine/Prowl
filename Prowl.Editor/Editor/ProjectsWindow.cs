@@ -74,9 +74,9 @@ namespace Prowl.Editor
 
             using (gui.Node("List").Width(565).Height(345).Left(25).Top(80).Layout(LayoutType.Column).Spacing(5).Clip().Scroll().Enter())
             {
-                for (int i = 0; i < ProjectCache.ProjectsCount; i++)
+                for (int i = 0; i < ProjectCache.Instance.ProjectsCount; i++)
                 {
-                    Project? project = ProjectCache.GetProject(i);
+                    Project? project = ProjectCache.Instance.GetProject(i);
 
                     if (project == null)
                         continue;

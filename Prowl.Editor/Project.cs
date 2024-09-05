@@ -43,6 +43,22 @@ public class Project
 
     #region Public Methods
 
+
+    internal void Refresh()
+    {
+        ProjectDirectory.Refresh();
+        AssetDirectory.Refresh();
+        LibraryDirectory.Refresh();
+        DefaultsDirectory.Refresh();
+        PackagesDirectory.Refresh();
+        TempDirectory.Refresh();
+
+        Assembly_Proj.Refresh();
+        Assembly_DLL.Refresh();
+        Editor_Assembly_Proj.Refresh();
+        Editor_Assembly_DLL.Refresh();
+    }
+
     private DirectoryInfo GetSubdirectory(string subdirectoryPath)
     {
         return new DirectoryInfo(Path.Combine(ProjectPath, subdirectoryPath));
@@ -117,7 +133,7 @@ public class Project
     {
         Project project = new Project(projectPath);
 
-        ProjectCache.AddProject(project);
+        ProjectCache.Instance.AddProject(project);
 
         if (project.Exists)
         {
