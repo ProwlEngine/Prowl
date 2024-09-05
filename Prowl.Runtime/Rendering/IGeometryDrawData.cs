@@ -7,7 +7,7 @@ namespace Prowl.Runtime
 {
     public interface IGeometryDrawData
     {
-        public void SetDrawData(CommandList commandList, GraphicsPipeline pipeline);
+        public void SetDrawData(CommandList commandList, ShaderPipeline pipeline);
 
         public int IndexCount { get; }
 

@@ -15,10 +15,10 @@ namespace Prowl.Runtime
 
 
         [HideInInspector]
-        public StageInput[] VertexInputs;
+        public VertexInput[] VertexInputs;
 
         [HideInInspector]
-        public Uniform[] Uniforms;
+        public ShaderUniform[] Uniforms;
 
         [NonSerialized]
         public ShaderStages[] UniformStages;

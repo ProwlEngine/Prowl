@@ -6,17 +6,17 @@ using System.Collections.Generic;
 
 namespace Prowl.Runtime
 {
-    public static class GraphicsPipelineCache
+    public static class ShaderPipelineCache
     {
-        private static Dictionary<GraphicsPipelineDescription, GraphicsPipeline> pipelineCache = new();
+        private static Dictionary<ShaderPipelineDescription, ShaderPipeline> pipelineCache = new();
 
 
-        internal static GraphicsPipeline GetPipeline(in GraphicsPipelineDescription description)
+        internal static ShaderPipeline GetPipeline(in ShaderPipelineDescription description)
         {
-            if (pipelineCache.TryGetValue(description, out GraphicsPipeline pipeline))
+            if (pipelineCache.TryGetValue(description, out ShaderPipeline pipeline))
                 return pipeline;
 
-            pipeline = new GraphicsPipeline(description);
+            pipeline = new ShaderPipeline(description);
 
             pipelineCache.Add(description, pipeline);
 

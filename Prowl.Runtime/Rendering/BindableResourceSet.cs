@@ -12,7 +12,7 @@ namespace Prowl.Runtime
 {
     public class BindableResourceSet : IDisposable
     {
-        public GraphicsPipeline Pipeline { get; private set; }
+        public ShaderPipeline Pipeline { get; private set; }
 
         public ResourceSetDescription description;
         private ResourceSet resources;
@@ -21,7 +21,7 @@ namespace Prowl.Runtime
         private byte[][] intermediateBuffers;
 
 
-        public BindableResourceSet(GraphicsPipeline pipeline, ResourceSetDescription description, DeviceBuffer[] buffers, byte[][] intermediate)
+        public BindableResourceSet(ShaderPipeline pipeline, ResourceSetDescription description, DeviceBuffer[] buffers, byte[][] intermediate)
         {
             this.Pipeline = pipeline;
             this.description = description;
@@ -36,7 +36,7 @@ namespace Prowl.Runtime
 
             for (int i = 0; i < Pipeline.Uniforms.Length; i++)
             {
-                Uniform uniform = Pipeline.Uniforms[i];
+                ShaderUniform uniform = Pipeline.Uniforms[i];
 
                 switch (uniform.kind)
                 {
@@ -101,17 +101,20 @@ namespace Prowl.Runtime
             if (!Pipeline.GetBuffer(ID, out ushort uniformIndex, out ushort bufferIndex))
                 return false;
 
-            Uniform uniform = Pipeline.Uniforms[uniformIndex];
+            ShaderUniform uniform = Pipeline.Uniforms[uniformIndex];
             DeviceBuffer buffer = uniformBuffers[bufferIndex];
             byte[] tempBuffer = intermediateBuffers[bufferIndex];
 
             for (int i = 0; i < uniform.members.Length; i++)
             {
-                UniformMember member = uniform.members[i];
+                ShaderUniformMember member = uniform.members[i];
 
                 if (state._values.TryGetValue(member.name, out byte[] value))
                 {
-                    Buffer.BlockCopy(value, 0, tempBuffer, (int)member.bufferOffsetInBytes, (int)member.size);
+                    if ((ValueType)value[0] != member.type)
+                        continue;
+
+                    Buffer.BlockCopy(value, 1, tempBuffer, (int)member.bufferOffsetInBytes, Math.Min((int)member.size, value.Length));
                 }
             }
 

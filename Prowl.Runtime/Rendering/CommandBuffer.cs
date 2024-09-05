@@ -18,13 +18,13 @@ namespace Prowl.Runtime
         private PropertyState _bufferProperties;
         private IGeometryDrawData _activeDrawData;
 
-        private GraphicsPipelineDescription _pipelineDescription;
+        private ShaderPipelineDescription _pipelineDescription;
 
         private PolygonFillMode _fill;
         private PrimitiveTopology _topology;
         private bool _scissor;
 
-        private GraphicsPipeline _graphicsPipeline;
+        private ShaderPipeline _graphicsPipeline;
         private BindableResourceSet _pipelineResources;
         private Pipeline _actualActivePipeline;
 
@@ -244,7 +244,7 @@ namespace Prowl.Runtime
 
         internal void UpdatePipeline()
         {
-            GraphicsPipeline newPipeline = GraphicsPipelineCache.GetPipeline(_pipelineDescription);
+            ShaderPipeline newPipeline = ShaderPipelineCache.GetPipeline(_pipelineDescription);
 
             if (newPipeline != _graphicsPipeline)
             {

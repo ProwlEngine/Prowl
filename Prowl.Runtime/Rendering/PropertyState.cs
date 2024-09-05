@@ -56,13 +56,13 @@ namespace Prowl.Runtime
         }
 
 
-        public void SetColor(string name, Color value) => WriteData(name, value);
-        public void SetVector(string name, Vector2F value) => WriteData(name, value);
-        public void SetVector(string name, Vector3F value) => WriteData(name, value);
-        public void SetVector(string name, Vector4F value) => WriteData(name, value);
-        public void SetFloat(string name, float value) => WriteData(name, value);
-        public void SetInt(string name, int value) => WriteData(name, value);
-        public void SetMatrix(string name, Matrix4x4F value) => WriteData(name, value);
+        public void SetColor(string name, Color value) => WriteData(name, value, ValueType.Float);
+        public void SetVector(string name, Vector2F value) => WriteData(name, value, ValueType.Float);
+        public void SetVector(string name, Vector3F value) => WriteData(name, value, ValueType.Float);
+        public void SetVector(string name, Vector4F value) => WriteData(name, value, ValueType.Float);
+        public void SetFloat(string name, float value) => WriteData(name, value, ValueType.Float);
+        public void SetInt(string name, int value) => WriteData(name, value, ValueType.Int);
+        public void SetMatrix(string name, Matrix4x4F value) => WriteData(name, value, ValueType.Float);
         public void SetTexture(string name, AssetRef<Texture> value) => _textures[name] = value;
         public void SetBuffer(string name, GraphicsBuffer value) => _buffers[name] = value;
 
@@ -75,13 +75,13 @@ namespace Prowl.Runtime
         }
 
 
-        private unsafe void WriteData<T>(string property, T newData) where T : unmanaged
+        private unsafe void WriteData<T>(string property, T newData, ValueType type) where T : unmanaged
         {
             int tSize = sizeof(T);
 
             if (!_values.TryGetValue(property, out byte[] value))
             {
-                value = new byte[tSize];
+                value = new byte[tSize + 1];
                 _values[property] = value;
             }
 
@@ -89,11 +89,13 @@ namespace Prowl.Runtime
             // the array size will be downgraded to save on memory footprint.
             if (value.Length < tSize || (tSize < 16 && value.Length != tSize))
             {
-                value = new byte[tSize];
+                value = new byte[tSize + 1];
                 _values[property] = value;
             }
 
-            MemoryMarshal.Write(value, newData);
+            value[0] = (byte)type;
+
+            MemoryMarshal.Write(new Span<byte>(value, 1, value.Length - 1), newData);
         }
 
 

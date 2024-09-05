@@ -312,7 +312,7 @@ namespace Prowl.Runtime
             Graphics.SubmitCommandList(list, false);
         }
 
-        public void SetDrawData(CommandList commandList, GraphicsPipeline pipeline)
+        public void SetDrawData(CommandList commandList, ShaderPipeline pipeline)
         {
             Upload();
 

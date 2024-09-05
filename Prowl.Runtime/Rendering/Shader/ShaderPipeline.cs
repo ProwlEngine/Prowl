@@ -10,7 +10,7 @@ using Veldrid;
 
 namespace Prowl.Runtime
 {
-    public struct GraphicsPipelineDescription : IEquatable<GraphicsPipelineDescription>
+    public struct ShaderPipelineDescription : IEquatable<ShaderPipelineDescription>
     {
         public ShaderPass pass;
         public ShaderVariant variant;
@@ -24,13 +24,13 @@ namespace Prowl.Runtime
 
         public override bool Equals([NotNullWhen(true)] object? obj)
         {
-            if (obj is not GraphicsPipelineDescription other)
+            if (obj is not ShaderPipelineDescription other)
                 return false;
 
             return Equals(other);
         }
 
-        public bool Equals(GraphicsPipelineDescription other)
+        public bool Equals(ShaderPipelineDescription other)
         {
             return
                 pass == other.pass &&
@@ -39,7 +39,7 @@ namespace Prowl.Runtime
         }
     }
 
-    public sealed partial class GraphicsPipeline : IDisposable
+    public sealed partial class ShaderPipeline : IDisposable
     {
         public static readonly FrontFace FrontFace = FrontFace.Clockwise;
 
@@ -53,7 +53,7 @@ namespace Prowl.Runtime
 
         private byte bufferCount;
 
-        public Uniform[] Uniforms => shader.Uniforms;
+        public ShaderUniform[] Uniforms => shader.Uniforms;
 
         private Veldrid.GraphicsPipelineDescription description;
 
@@ -78,7 +78,7 @@ namespace Prowl.Runtime
         }
 
 
-        public GraphicsPipeline(GraphicsPipelineDescription description)
+        public ShaderPipeline(ShaderPipelineDescription description)
         {
             this.shader = description.variant;
 
@@ -96,7 +96,7 @@ namespace Prowl.Runtime
 
             for (int inputIndex = 0; inputIndex < vertexLayouts.Length; inputIndex++)
             {
-                StageInput input = shader.VertexInputs[inputIndex];
+                VertexInput input = shader.VertexInputs[inputIndex];
 
                 // Add in_var_ to match reflected name in SPIRV-Cross generated GLSL.
                 vertexLayouts[inputIndex] = new VertexLayoutDescription(
@@ -123,7 +123,7 @@ namespace Prowl.Runtime
 
             for (ushort uniformIndex = 0; uniformIndex < Uniforms.Length; uniformIndex++)
             {
-                Uniform uniform = Uniforms[uniformIndex];
+                ShaderUniform uniform = Uniforms[uniformIndex];
                 ShaderStages stages = shader.UniformStages[uniformIndex];
 
                 layoutDescription.Elements[uniformIndex] =
@@ -159,7 +159,7 @@ namespace Prowl.Runtime
         }
 
 
-        private static BindableResource GetBindableResource(Uniform uniform, out DeviceBuffer? buffer)
+        private static BindableResource GetBindableResource(ShaderUniform uniform, out DeviceBuffer? buffer)
         {
             buffer = null;
 

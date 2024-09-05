@@ -9,15 +9,7 @@ using Veldrid;
 
 namespace Prowl.Runtime
 {
-    public enum UniformType
-    {
-        Texture,
-        Sampler,
-        StorageBuffer,
-        ConstantBuffer,
-    }
-
-    public enum ValueType
+    public enum ValueType : byte
     {
         None = 0,
         Float,
@@ -25,7 +17,7 @@ namespace Prowl.Runtime
         UInt
     }
 
-    public struct UniformMember
+    public struct ShaderUniformMember
     {
         public string name;
 
@@ -40,7 +32,7 @@ namespace Prowl.Runtime
         public ValueType type;
     }
 
-    public class Uniform
+    public class ShaderUniform
     {
         private static string CleanseName(string rawName)
         {
@@ -53,12 +45,12 @@ namespace Prowl.Runtime
 
         public uint size;
 
-        public UniformMember[] members;
+        public ShaderUniformMember[] members;
 
 
-        private Uniform() { }
+        private ShaderUniform() { }
 
-        public Uniform(string rawName, uint binding, ResourceKind kind)
+        public ShaderUniform(string rawName, uint binding, ResourceKind kind)
         {
             this.kind = kind;
             this.name = CleanseName(rawName);
@@ -67,7 +59,7 @@ namespace Prowl.Runtime
         }
 
 
-        public Uniform(string rawName, uint binding, uint size, UniformMember[] members)
+        public ShaderUniform(string rawName, uint binding, uint size, ShaderUniformMember[] members)
         {
             this.kind = ResourceKind.UniformBuffer;
             this.name = CleanseName(rawName);
@@ -111,7 +103,7 @@ namespace Prowl.Runtime
         }
 
 
-        public bool IsEqual(Uniform other)
+        public bool IsEqual(ShaderUniform other)
         {
             if (kind != other.kind)
                 return false;

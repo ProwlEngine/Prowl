@@ -9,7 +9,7 @@ using Veldrid;
 
 namespace Prowl.Runtime
 {
-    public struct ShaderPassDescription()
+    public struct ShaderPassDescription
     {
         public Dictionary<string, string>? Tags;
         public BlendStateDescription? BlendState;
