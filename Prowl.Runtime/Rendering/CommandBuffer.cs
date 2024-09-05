@@ -106,7 +106,9 @@ namespace Prowl.Runtime
 
         public void SetMaterial(Material material, int pass = 0)
         {
+            _bufferProperties.ApplyOverride(material.Properties);
             SetPass(material.Shader.Res.GetPass(pass));
+            BindResources();
         }
 
         public void DrawSingle(IGeometryDrawData drawData, int indexCount = -1, uint indexOffset = 0)
@@ -144,6 +146,7 @@ namespace Prowl.Runtime
         {
             _pipelineDescription.pass = pass;
             _pipelineDescription.variant = _pipelineDescription.pass.GetVariant(_keywordState);
+
             UpdatePipeline();
         }
 
@@ -152,6 +155,9 @@ namespace Prowl.Runtime
             UpdatePipeline();
             _pipelineResources.Bind(_commandList, _bufferProperties);
         }
+
+        public void ApplyPropertyState(PropertyState state)
+            => _bufferProperties.ApplyOverride(state);
 
         public void UpdateBuffer(string name)
             => _pipelineResources.UpdateBuffer(_commandList, name, _bufferProperties);

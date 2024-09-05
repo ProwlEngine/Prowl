@@ -6,6 +6,7 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Widgets.Gizmo;
+using Prowl.Runtime.RenderPipelines;
 using Prowl.Runtime.SceneManagement;
 
 namespace Prowl.Editor;
@@ -80,12 +81,12 @@ public class SceneViewWindow : EditorWindow
         gui.CurrentNode.Padding(5);
 
         Vector2 renderSize = gui.CurrentNode.LayoutData.Rect.Size;
-        if (renderSize.x == 0 || renderSize.y == 0) return;
+
+        if (renderSize.x == 0 || renderSize.y == 0)
+            return;
 
         if (RenderTarget == null || (int)renderSize.x != RenderTarget.Width || (int)renderSize.y != RenderTarget.Height)
             RefreshRenderTexture((int)renderSize.x, (int)renderSize.y);
-
-        Camera.CameraData data = Cam.GetData(renderSize);
 
         WindowCenter = gui.CurrentNode.LayoutData.Rect.Center;
 
@@ -98,16 +99,20 @@ public class SceneViewWindow : EditorWindow
         CommandBuffer buffer = CommandBufferPool.Get("Scene View Buffer");
 
         buffer.SetRenderTarget(RenderTarget!);
-        buffer.ClearRenderTarget(true, true, Color.black);
 
-        // RenderingContext context = new RenderingContext("Main", Graphics.Renderables, RenderTarget);
-        // Graphics.Render([data], context);
+        RenderingData data = new RenderingData();
+
+        data.InitializeFromCamera(Cam, new Vector2(RenderTarget.Width, RenderTarget.Height));
+
+        RenderPipeline pipeline = Cam.Pipeline.Res ?? DefaultRenderPipeline.Default;
+
+        pipeline.Render(RenderTarget, Cam, data);
 
         Vector2 imagePos = gui.CurrentNode.LayoutData.Rect.Position;
         Vector2 imageSize = gui.CurrentNode.LayoutData.Rect.Size;
         gui.Draw2D.DrawImage(RenderTarget!.ColorBuffers[0], imagePos, imageSize, Color.white);
 
-        // TODO: Camera rendering clears Gizmos untill the rendering overhaul, so gizmos will Flicker here
+
         foreach (GameObject activeGO in SceneManager.AllGameObjects)
         {
             if (activeGO.enabledInHierarchy)

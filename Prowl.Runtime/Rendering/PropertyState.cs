@@ -14,10 +14,14 @@ namespace Prowl.Runtime
 {
     public class PropertyState
     {
+        public bool IsEmpty => _values.Count == 0 && _textures.Count == 0 && _buffers.Count == 0;
+
         [SerializeField] internal Dictionary<string, byte[]> _values;
         [SerializeField] internal Dictionary<string, AssetRef<Texture>> _textures;
 
         internal Dictionary<string, GraphicsBuffer?> _buffers;
+
+
 
         public PropertyState()
         {

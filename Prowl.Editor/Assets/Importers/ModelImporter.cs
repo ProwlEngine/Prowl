@@ -237,7 +237,7 @@ namespace Prowl.Editor.Assets
         {
             foreach (var m in scene.Materials)
             {
-                Material mat = new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/TestShader.shader"));
+                Material mat = new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/DefaultUnlit.shader"));
                 string? name = m.HasName ? m.Name : null;
 
                 // Albedo

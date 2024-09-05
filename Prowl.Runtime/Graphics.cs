@@ -65,6 +65,7 @@ namespace Prowl.Runtime
         {
             Device.SwapBuffers();
             RenderTexture.UpdatePool();
+            RenderPipelines.RenderPipeline.ClearRenderables();
         }
 
         public static CommandList GetCommandList()
