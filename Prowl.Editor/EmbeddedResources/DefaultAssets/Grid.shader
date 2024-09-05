@@ -24,7 +24,7 @@ Pass "Grid"
     // Rasterizer culling mode
     Cull None
 
-	SHADERPROGRAM
+	HLSLPROGRAM
         #pragma vertex Vertex
         #pragma fragment Fragment
 
@@ -130,9 +130,11 @@ Pass "Grid"
 			float bg = Grid(CameraPosition, SecondaryGridSize, normalize(input.wpos), 0.02, bd);
 
 			float4 OutputColor = float4(GridColor.xyz, sg);
-			OutputColor += float4(GridColor.xyz, bg * 0.5);
+			OutputColor += float4(GridColor.xyz, bg);
+
+            OutputColor.w *= GridColor.w;
 
             return OutputColor;
 		}
-	ENDPROGRAM
+	ENDHLSL
 }

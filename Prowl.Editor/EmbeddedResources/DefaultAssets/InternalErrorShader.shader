@@ -17,7 +17,7 @@ Pass "InternalError"
     // Rasterizer culling mode
     Cull None
 
-    SHADERPROGRAM
+    HLSLPROGRAM
         #pragma vertex Vertex
         #pragma fragment Fragment
 
@@ -32,5 +32,5 @@ Pass "InternalError"
         {
             return float4(1.0, 0.0, 1.0, 1.0);
         }
-	ENDPROGRAM
+	ENDHLSL
 }

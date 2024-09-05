@@ -214,10 +214,10 @@ namespace Prowl.Editor.Utilities
                         parsedGlobal.Description.CullingMode = EnumParse<FaceCullMode>(tokenizer.Token.ToString(), "Cull");
                         break;
 
-                    case "GLOBALINCLUDE":
-                        EnsureUndef(parsedGlobal.Program, "'GLOBALINCLUDE' in Global block");
+                    case "HLSLINCLUDE":
+                        EnsureUndef(parsedGlobal.Program, "'HLSLINCLUDE' in Global block");
 
-                        SliceTo(tokenizer, "ENDGLOBAL");
+                        SliceTo(tokenizer, "ENDHLSL");
                         parsedGlobal.Program = tokenizer.Token.ToString();
                         break;
                 }
@@ -271,9 +271,9 @@ namespace Prowl.Editor.Utilities
                         pass.Description.Keywords = ParseKeywords(tokenizer);
                         break;
 
-                    case "SHADERPROGRAM":
-                        EnsureUndef(pass.Program, "'SHADERPROGRAM' in pass");
-                        SliceTo(tokenizer, "ENDPROGRAM");
+                    case "HLSLPROGRAM":
+                        EnsureUndef(pass.Program, "'HLSLPROGRAM' in pass");
+                        SliceTo(tokenizer, "ENDHLSL");
                         pass.Program = tokenizer.Token.ToString();
                         break;
                 }

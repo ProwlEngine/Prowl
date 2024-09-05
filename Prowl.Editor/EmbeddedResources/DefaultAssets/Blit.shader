@@ -5,7 +5,7 @@ Pass "Blit"
     // Rasterizer culling mode
     Cull None
 
-	SHADERPROGRAM
+	HLSLPROGRAM
 		#pragma vertex Vertex
         #pragma fragment Fragment
 
@@ -17,18 +17,20 @@ Pass "Blit"
 
 		struct Varyings
 		{
-			float3 position : SV_POSITION;
+			float4 position : SV_POSITION;
 			float2 uv : TEXCOORD0;
 		};
-		
+
+
 		Texture2D<float4> _MainTexture;
 		SamplerState sampler_MainTexture;
+
 
         Varyings Vertex(Attributes input)
         {
 			Varyings output = (Varyings)0;
 
-			output.position = input.position;
+			output.position = float4(input.position.xyz, 1.0);
 			output.uv = input.uv;
 
             return output;
@@ -40,5 +42,5 @@ Pass "Blit"
 
             return float4(baseColor, 1.0);
         }
-	ENDPROGRAM
+	ENDHLSL
 }

@@ -4,7 +4,7 @@
   "version": 1,
   "guid": "2f7a7ab0-8bc8-43b8-983d-0b2181865259",
   "assetNames": [
-    "Default/TestShader"
+    "Default/Unlit"
   ],
   "assetTypes": [
     "Prowl.Runtime.Shader"
