@@ -10,10 +10,10 @@ public class PointLight : Light
 {
     public float radius = 4.0f;
 
-    public override Camera.CameraData? GetCameraData(int res)
-    {
-        return null;
-    }
+    //public override Camera.CameraData? GetCameraData(int res)
+    //{
+    //    return null;
+    //}
 
     public override GPULight GetGPULight(int res)
     {

@@ -33,11 +33,11 @@ public class SpotLight : Light
         };
     }
 
-    public override Camera.CameraData? GetCameraData(int res)
-    {
-        var forward = Transform.forward;
-        var proj = Matrix4x4.CreatePerspectiveFieldOfView(MathD.ToRad(90), 1f, 0.01f, distance);
-        var view = Matrix4x4.CreateLookToLeftHanded(Transform.position, -forward, Transform.up);
-        return new Camera.CameraData(0, Transform.position, view, proj, MathD.ToRad(90), 0.01f, distance, true, Color.clear, new(0, 0, res, res), 1f, LayerMask.Everything, null);
-    }
+    //public override Camera.CameraData? GetCameraData(int res)
+    //{
+    //    var forward = Transform.forward;
+    //    var proj = Matrix4x4.CreatePerspectiveFieldOfView(MathD.ToRad(90), 1f, 0.01f, distance);
+    //    var view = Matrix4x4.CreateLookToLeftHanded(Transform.position, -forward, Transform.up);
+    //    return new Camera.CameraData(0, Transform.position, view, proj, MathD.ToRad(90), 0.01f, distance, true, Color.clear, new(0, 0, res, res), 1f, LayerMask.Everything, null);
+    //}
 }

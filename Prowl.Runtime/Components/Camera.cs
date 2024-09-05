@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+
 using Prowl.Icons;
 using Prowl.Runtime.RenderPipelines;
 
@@ -10,28 +12,6 @@ namespace Prowl.Runtime;
 [ExecuteAlways]
 public class Camera : MonoBehaviour
 {
-    public struct CameraData(int order, Vector3 position, Matrix4x4 view, Matrix4x4 projection, float fieldOfView, float nearClip, float farClip, bool doClear, Color clearColor, Rect viewrect, float renderScale, LayerMask layerMask, AssetRef<RenderTexture> target)
-    {
-        public int RenderOrder = -order;
-        public Vector3 Position = position;
-        public Matrix4x4 View = view;
-        public Matrix4x4 Projection = projection;
-        public float FieldOfView = fieldOfView;
-        public float NearClip = nearClip, FarClip = farClip;
-        public bool DoClear = doClear;
-        public Color ClearColor = clearColor;
-        public float RenderScale = renderScale;
-        public LayerMask LayerMask = layerMask;
-        public Rect Viewrect = viewrect;
-
-        public AssetRef<RenderTexture> Target = target;
-
-        public BoundingFrustum GetFrustrum(float width, float height)
-        {
-            return new BoundingFrustum(View * Projection);
-        }
-    }
-
     public LayerMask LayerMask = LayerMask.Everything;
 
     public bool DoClear = true;
@@ -48,8 +28,10 @@ public class Camera : MonoBehaviour
     public enum ProjectionType { Perspective, Orthographic }
     public ProjectionType projectionType = ProjectionType.Perspective;
 
+
     public AssetRef<RenderTexture> Target;
-    public AssetRef<RenderPipeline<CameraData>> Pipeline;
+    public AssetRef<RenderPipeline> Pipeline;
+
 
     public Ray ScreenPointToRay(Vector2 screenPoint, Vector2 screenScale)
     {
@@ -63,11 +45,8 @@ public class Camera : MonoBehaviour
         Vector4 nearPointNDC = new Vector4(ndc.x, ndc.y, 0.0f, 1.0f);
         Vector4 farPointNDC = new Vector4(ndc.x, ndc.y, 1.0f, 1.0f);
 
-        // Get the view and projection matrices
-        var data = GetData(screenScale);
-
         // Calculate the inverse view-projection matrix
-        Matrix4x4 viewProjectionMatrix = data.View * data.Projection;
+        Matrix4x4 viewProjectionMatrix = GetViewMatrix() * GetProjectionMatrix(screenScale);
         Matrix4x4.Invert(viewProjectionMatrix, out Matrix4x4 inverseViewProjectionMatrix);
 
         // Unproject the near and far points to world space
@@ -85,15 +64,18 @@ public class Camera : MonoBehaviour
         return new Ray(rayOrigin, rayDirection);
     }
 
-    public CameraData GetData(Vector2 resolution)
-    {
-        Matrix4x4 viewMatrix = Matrix4x4.CreateLookToLeftHanded(Transform.position, Transform.forward, Transform.up);
-        Matrix4x4 projectionMatrix;
-        if (projectionType == ProjectionType.Orthographic)
-            projectionMatrix = Matrix4x4.CreateOrthographic(OrthographicSize, OrthographicSize, NearClip, FarClip);
-        else
-            projectionMatrix = System.Numerics.Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(FieldOfView.ToRad(), (float)(resolution.x / resolution.y), NearClip, FarClip).ToDouble();
 
-        return new CameraData(DrawOrder, Transform.position, viewMatrix, projectionMatrix, FieldOfView, NearClip, FarClip, DoClear, ClearColor, Viewrect, RenderScale, LayerMask, Target);
+    public Matrix4x4 GetViewMatrix()
+    {
+        return Matrix4x4.CreateLookToLeftHanded(Transform.position, Transform.forward, Transform.up);
+    }
+
+
+    public Matrix4x4 GetProjectionMatrix(Vector2 resolution)
+    {
+        if (projectionType == ProjectionType.Orthographic)
+            return Matrix4x4.CreateOrthographic(OrthographicSize, OrthographicSize, NearClip, FarClip);
+
+        return System.Numerics.Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(FieldOfView.ToRad(), (float)(resolution.x / resolution.y), NearClip, FarClip).ToDouble();
     }
 }

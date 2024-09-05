@@ -156,17 +156,17 @@ public static class SceneManager
         if (Cameras.Count == 0)
             return false;
 
-        foreach (Camera? cam in Cameras)
-        {
-            Veldrid.Framebuffer t = cam.Target.Res ?? target ?? Graphics.ScreenTarget;
-
-            uint width = t.Width;
-            uint height = t.Height;
-
-            Camera.CameraData data = cam.GetData(new Vector2(width, height));
-
-            cam.Pipeline.Res.Render(t, data);
-        }
+        //foreach (Camera? cam in Cameras)
+        //{
+        //    Veldrid.Framebuffer t = cam.Target.Res ?? target ?? Graphics.ScreenTarget;
+        //
+        //    uint width = t.Width;
+        //    uint height = t.Height;
+        //
+        //    Camera.CameraData data = cam.GetData(new Vector2(width, height));
+        //
+        //    cam.Pipeline.Res.Render(t, data);
+        //}
 
         return true;
     }

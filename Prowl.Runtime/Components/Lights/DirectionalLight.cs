@@ -52,12 +52,12 @@ public class DirectionalLight : Light
         };
     }
 
-    public override Camera.CameraData? GetCameraData(int res)
-    {
-        var forward = Transform.forward;
-        var proj = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, -1000f, 1000f);
-        //var proj = Matrix4x4.CreatePerspectiveFieldOfView(MathD.ToRad(80), 1f, shadowRadius, 100f);
-        var view = Matrix4x4.CreateLookToLeftHanded(Transform.position, -forward, Transform.up);
-        return new Camera.CameraData(0, Transform.position, view, proj, shadowDistance, 0, 10f, true, Color.clear, new(0, 0, res, res), 1f, LayerMask.Everything, null);
-    }
+    //public override Camera.CameraData? GetCameraData(int res)
+    //{
+    //    var forward = Transform.forward;
+    //    var proj = Matrix4x4.CreateOrthographic(shadowDistance, shadowDistance, -1000f, 1000f);
+    //    //var proj = Matrix4x4.CreatePerspectiveFieldOfView(MathD.ToRad(80), 1f, shadowRadius, 100f);
+    //    var view = Matrix4x4.CreateLookToLeftHanded(Transform.position, -forward, Transform.up);
+    //    return new Camera.CameraData(0, Transform.position, view, proj, shadowDistance, 0, 10f, true, Color.clear, new(0, 0, res, res), 1f, LayerMask.Everything, null);
+    //}
 }

@@ -21,7 +21,7 @@ public abstract class Light : MonoBehaviour
     public override void OnDisable() => Lights.Remove(this);
 
     public abstract GPULight GetGPULight(int res);
-    public abstract Camera.CameraData? GetCameraData(int res);
+    //public abstract Camera.CameraData? GetCameraData(int res);
 
     [StructLayout(LayoutKind.Sequential)]
     public struct GPULight
