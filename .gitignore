@@ -54,7 +54,10 @@ artifacts/
 *_p.c
 *_i.h
 *.ilk
-*.meta
+
+# If a meta file is in the editor, it's (probably) needed, so don't ignore it.
+# *.meta
+
 *.obj
 *.pch
 *.pdb
