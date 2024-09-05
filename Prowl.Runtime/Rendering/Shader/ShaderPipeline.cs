@@ -103,14 +103,6 @@ namespace Prowl.Runtime
                     new VertexElementDescription("in_var_" + input.semantic, input.format, VertexElementSemantic.TextureCoordinate));
 
                 semanticLookup[input.semantic] = (uint)inputIndex;
-
-                // If the last char of the semantic is a single '0', add a non-indexed version of the semantic to the lookup.
-                if (input.semantic.Length >= 2 &&
-                    input.semantic[input.semantic.Length - 1] == '0' &&
-                    !char.IsNumber(input.semantic[input.semantic.Length - 2]))
-                {
-                    semanticLookup[input.semantic.Substring(0, input.semantic.Length - 1)] = (uint)inputIndex;
-                }
             }
 
             this.shaderSet = new ShaderSetDescription(vertexLayouts, shaders);
