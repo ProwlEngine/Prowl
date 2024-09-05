@@ -126,7 +126,7 @@ namespace Prowl.Runtime
                 ShaderUniform uniform = Uniforms[uniformIndex];
                 ShaderStages stages = shader.UniformStages[uniformIndex];
 
-                layoutDescription.Elements[uniformIndex] =
+                layoutDescription.Elements[uniform.binding] =
                     new ResourceLayoutElementDescription(uniform.name, uniform.kind, stages);
 
                 if (uniform.kind != ResourceKind.UniformBuffer)
@@ -193,7 +193,7 @@ namespace Prowl.Runtime
 
             for (int i = 0, b = 0; i < Uniforms.Length; i++)
             {
-                boundResources[i] = GetBindableResource(Uniforms[i], out DeviceBuffer? buffer);
+                boundResources[Uniforms[i].binding] = GetBindableResource(Uniforms[i], out DeviceBuffer? buffer);
 
                 if (buffer != null)
                 {

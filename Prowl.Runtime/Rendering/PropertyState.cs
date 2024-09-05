@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 using Matrix4x4F = System.Numerics.Matrix4x4;
@@ -12,12 +13,46 @@ using Vector4F = System.Numerics.Vector4;
 
 namespace Prowl.Runtime
 {
+    public struct Property
+    {
+        public AssetRef<Texture>? texture;
+
+        public ValueType type;
+        public byte width;
+        public byte height;
+        public int arraySize;
+
+        public byte[] data;
+
+
+        public void CopyTo(ref Property property)
+        {
+            property.texture = texture;
+
+            property.type = type;
+            property.arraySize = arraySize;
+            property.width = width;
+            property.height = height;
+
+            if ((data == null) != (property.data == null))
+                property.data = null;
+
+            if (data != null)
+            {
+                if (property.data == null || property.data.Length != data.Length)
+                    property.data = new byte[data.Length];
+
+                Buffer.BlockCopy(data, 0, property.data, 0, data.Length);
+            }
+        }
+    }
+
     public class PropertyState
     {
-        public bool IsEmpty => _values.Count == 0 && _textures.Count == 0 && _buffers.Count == 0;
 
-        [SerializeField] internal Dictionary<string, byte[]> _values;
-        [SerializeField] internal Dictionary<string, AssetRef<Texture>> _textures;
+        public bool IsEmpty => _values.Count == 0 && _buffers.Count == 0;
+
+        [SerializeField] internal Dictionary<string, Property> _values;
 
         internal Dictionary<string, GraphicsBuffer?> _buffers;
 
@@ -26,14 +61,12 @@ namespace Prowl.Runtime
         public PropertyState()
         {
             _values = new();
-            _textures = new();
             _buffers = new();
         }
 
         public PropertyState(PropertyState clone)
         {
             _values = new(clone._values);
-            _textures = new(clone._textures);
             _buffers = new(clone._buffers);
         }
 
@@ -41,77 +74,94 @@ namespace Prowl.Runtime
         {
             foreach (var pair in overrideState._values)
             {
-                byte[] value = _values.GetValueOrDefault(pair.Key, new byte[pair.Value.Length]);
+                Property prop = _values.GetValueOrDefault(pair.Key, default);
 
-                if (value.Length != pair.Value.Length)
-                {
-                    value = new byte[pair.Value.Length];
-                    _values[pair.Key] = value;
-                }
+                pair.Value.CopyTo(ref prop);
 
-                Buffer.BlockCopy(pair.Value, 0, value, 0, value.Length);
+                _values[pair.Key] = prop;
             }
-
-            foreach (var pair in overrideState._textures)
-                _textures[pair.Key] = pair.Value;
 
             foreach (var pair in overrideState._buffers)
                 _buffers[pair.Key] = pair.Value;
         }
 
 
-        public void SetColor(string name, Color value) => WriteData(name, value, ValueType.Float);
-        public void SetVector(string name, Vector2F value) => WriteData(name, value, ValueType.Float);
-        public void SetVector(string name, Vector3F value) => WriteData(name, value, ValueType.Float);
-        public void SetVector(string name, Vector4F value) => WriteData(name, value, ValueType.Float);
-        public void SetFloat(string name, float value) => WriteData(name, value, ValueType.Float);
-        public void SetInt(string name, int value) => WriteData(name, value, ValueType.Int);
-        public void SetMatrix(string name, Matrix4x4F value) => WriteData(name, value, ValueType.Float);
-        public void SetTexture(string name, AssetRef<Texture> value) => _textures[name] = value;
+        public void SetColor(string name, Color value) => WriteData(name, value, ValueType.Float, 4, 1);
+        public void SetVector(string name, Vector2F value) => WriteData(name, value, ValueType.Float, 2, 1);
+        public void SetVector(string name, Vector3F value) => WriteData(name, value, ValueType.Float, 3, 1);
+        public void SetVector(string name, Vector4F value) => WriteData(name, value, ValueType.Float, 4, 1);
+        public void SetFloat(string name, float value) => WriteData(name, value, ValueType.Float, 1, 1);
+        public void SetInt(string name, int value) => WriteData(name, value, ValueType.Int, 1, 1);
+        public void SetMatrix(string name, Matrix4x4F value) => WriteData(name, value, ValueType.Float, 4, 4);
+        public void SetTexture(string name, AssetRef<Texture> value) => _values[name] = new Property { texture = value };
         public void SetBuffer(string name, GraphicsBuffer value) => _buffers[name] = value;
+
+        public void SetIntArray(string name, int[] values) => WriteData(name, values, ValueType.Int, 1, 1);
+        public void SetFloatArray(string name, float[] values) => WriteData(name, values, ValueType.Float, 1, 1);
+        public void SetVectorArray(string name, Vector2F[] values) => WriteData(name, values, ValueType.Float, 2, 1);
+        public void SetVectorArray(string name, Vector3F[] values) => WriteData(name, values, ValueType.Float, 3, 1);
+        public void SetVectorArray(string name, Vector4F[] values) => WriteData(name, values, ValueType.Float, 4, 1);
+        public void SetColorArray(string name, Color[] values) => WriteData(name, values, ValueType.Float, 4, 1);
+        public void SetMatrixArray(string name, Matrix4x4F[] values) => WriteData(name, values, ValueType.Float, 4, 4);
 
 
         public void Clear()
         {
             _values.Clear();
-            _textures.Clear();
             _buffers.Clear();
         }
 
 
-        private unsafe void WriteData<T>(string property, T newData, ValueType type) where T : unmanaged
+        private unsafe void WriteData<T>(string name, T newData, ValueType type, int width, int height) where T : unmanaged
         {
             int tSize = sizeof(T);
 
-            if (!_values.TryGetValue(property, out byte[] value))
-            {
-                value = new byte[tSize + 1];
-                _values[property] = value;
-            }
+            Property property = _values.GetValueOrDefault(name, default);
+
+            property.type = type;
+            property.arraySize = 0;
+            property.width = (byte)width;
+            property.height = (byte)height;
+            property.texture = null;
 
             // If the previous value was larger than a vector4, and the new value isn't
             // the array size will be downgraded to save on memory footprint.
-            if (value.Length < tSize || (tSize < 16 && value.Length != tSize))
+            if (property.data == null || property.data.Length < tSize || (tSize < 16 && property.data.Length != tSize))
             {
-                value = new byte[tSize + 1];
-                _values[property] = value;
+                property.data = new byte[tSize];
+
+                _values[name] = property;
             }
 
-            value[0] = (byte)type;
-
-            MemoryMarshal.Write(new Span<byte>(value, 1, value.Length - 1), newData);
+            MemoryMarshal.Write(new Span<byte>(property.data), newData);
         }
 
 
-        public unsafe T InterpretAs<T>(string property) where T : unmanaged
+        private unsafe void WriteData<T>(string name, T[] newData, ValueType type, int width, int height) where T : unmanaged
         {
-            if (!_values.TryGetValue(property, out byte[] value))
-                return default;
+            int tSize = sizeof(T) * newData.Length;
 
-            if (value.Length < sizeof(T))
-                return default;
+            Property property = _values.GetValueOrDefault(name, default);
 
-            return MemoryMarshal.Read<T>(value);
+            property.type = type;
+            property.arraySize = 0;
+            property.width = (byte)width;
+            property.height = (byte)height;
+            property.texture = null;
+
+            // If the previous value was larger than a vector4, and the new value isn't
+            // the array size will be downgraded to save on memory footprint.
+            if (property.data == null || property.data.Length < tSize || (tSize < 16 && property.data.Length != tSize))
+            {
+                property.data = new byte[tSize];
+
+                _values[name] = property;
+            }
+
+
+            fixed (T* dataPtr = newData)
+            fixed (byte* valuePtr = property.data)
+                Buffer.MemoryCopy(dataPtr, valuePtr, property.data.Length, tSize);
         }
     }
 }

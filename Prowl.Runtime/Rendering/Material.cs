@@ -40,7 +40,14 @@ namespace Prowl.Runtime
         public void SetTexture(string name, AssetRef<Texture> value) => Properties.SetTexture(name, value);
 
 
-        //public void SetMatrices(string name, System.Numerics.Matrix4x4[] value) { }
+        public void SetFloatArray(string name, float[] values) => Properties.SetFloatArray(name, values);
+        public void SetIntArray(string name, int[] values) => Properties.SetIntArray(name, values);
+        public void SetVectorArray(string name, Vector2F[] values) => Properties.SetVectorArray(name, values);
+        public void SetVectorArray(string name, Vector3F[] values) => Properties.SetVectorArray(name, values);
+        public void SetVectorArray(string name, Vector4F[] values) => Properties.SetVectorArray(name, values);
+        public void SetColorArray(string name, Color[] values) => Properties.SetColorArray(name, values);
+        public void SetMatrixArray(string name, Matrix4x4F[] values) => Properties.SetMatrixArray(name, values);
+
 
         //public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
         //{

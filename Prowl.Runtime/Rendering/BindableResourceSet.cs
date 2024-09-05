@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 using Veldrid;
@@ -45,33 +46,48 @@ namespace Prowl.Runtime
                         break;
 
                     case ResourceKind.StructuredBufferReadOnly:
-                        if (state._buffers.TryGetValue(uniform.name, out GraphicsBuffer buffer))
-                            if (buffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadOnly))
-                                UpdateResource(buffer.Buffer, uniform.binding, ref recreateResourceSet);
+                        GraphicsBuffer buffer = state._buffers.GetValueOrDefault(uniform.name, null) ?? GraphicsBuffer.Empty;
+
+                        if (!buffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadOnly))
+                            buffer = GraphicsBuffer.EmptyRW;
+
+                        UpdateResource(buffer.Buffer, uniform.binding, ref recreateResourceSet);
                         break;
 
                     case ResourceKind.StructuredBufferReadWrite:
-                        if (state._buffers.TryGetValue(uniform.name, out GraphicsBuffer rwbuffer))
-                            if (rwbuffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadWrite))
-                                UpdateResource(rwbuffer.Buffer, uniform.binding, ref recreateResourceSet);
+                        GraphicsBuffer rwbuffer = state._buffers.GetValueOrDefault(uniform.name, null) ?? GraphicsBuffer.EmptyRW;
+
+                        if (!rwbuffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadWrite))
+                            rwbuffer = GraphicsBuffer.EmptyRW;
+
+                        UpdateResource(rwbuffer.Buffer, uniform.binding, ref recreateResourceSet);
                         break;
 
                     case ResourceKind.TextureReadOnly:
-                        if (state._textures.TryGetValue(uniform.name, out AssetRef<Texture> texture))
-                            if (texture.Res.Usage.HasFlag(TextureUsage.Sampled))
-                                UpdateResource(texture.Res.TextureView, uniform.binding, ref recreateResourceSet);
+                        Texture texture = state._values.GetValueOrDefault(SliceSampler(uniform.name), default).texture.Value.Res ?? Texture2D.EmptyWhite;
+
+                        if (!texture.Usage.HasFlag(TextureUsage.Sampled))
+                            texture = Texture2D.EmptyWhite;
+
+                        UpdateResource(texture.TextureView, uniform.binding, ref recreateResourceSet);
                         break;
 
                     case ResourceKind.TextureReadWrite:
-                        if (state._textures.TryGetValue(uniform.name, out AssetRef<Texture> rwtexture))
-                            if (rwtexture.Res.Usage.HasFlag(TextureUsage.Storage))
-                                UpdateResource(rwtexture.Res.TextureView, uniform.binding, ref recreateResourceSet);
+                        Texture rwtexture = state._values.GetValueOrDefault(SliceSampler(uniform.name), default).texture.Value.Res ?? Texture2D.EmptyRW;
+
+                        if (!rwtexture.Usage.HasFlag(TextureUsage.Storage))
+                            rwtexture = Texture2D.EmptyRW;
+
+                        UpdateResource(rwtexture.TextureView, uniform.binding, ref recreateResourceSet);
                         break;
 
                     case ResourceKind.Sampler:
-                        if (state._textures.TryGetValue(SliceSampler(uniform.name), out AssetRef<Texture> stexture))
-                            if (stexture.Res.Usage.HasFlag(TextureUsage.Sampled))
-                                UpdateResource(stexture.Res.Sampler.InternalSampler, uniform.binding, ref recreateResourceSet);
+                        Texture stexture = state._values.GetValueOrDefault(SliceSampler(uniform.name), default).texture.Value.Res ?? Texture2D.EmptyWhite;
+
+                        if (!stexture.Usage.HasFlag(TextureUsage.Sampled))
+                            stexture = Texture2D.EmptyWhite;
+
+                        UpdateResource(stexture.Sampler.InternalSampler, uniform.binding, ref recreateResourceSet);
                         break;
                 }
             }
@@ -109,12 +125,25 @@ namespace Prowl.Runtime
             {
                 ShaderUniformMember member = uniform.members[i];
 
-                if (state._values.TryGetValue(member.name, out byte[] value))
+                if (state._values.TryGetValue(member.name, out Property value))
                 {
-                    if ((ValueType)value[0] != member.type)
+                    if (value.type != member.type || value.texture != null)
                         continue;
 
-                    Buffer.BlockCopy(value, 1, tempBuffer, (int)member.bufferOffsetInBytes, Math.Min((int)member.size, value.Length));
+                    if (member.arrayStride <= 0)
+                    {
+                        Buffer.BlockCopy(value.data, 0, tempBuffer, (int)member.bufferOffsetInBytes, Math.Min((int)member.size, value.data.Length));
+                        continue;
+                    }
+
+                    uint destStride = member.arrayStride;
+                    uint srcStride = Math.Min(destStride, (uint)value.width * value.height);
+                    uint destLength = member.size / member.arrayStride;
+
+                    for (int j = 0; j < Math.Min(destLength, value.arraySize); i++)
+                    {
+                        Buffer.BlockCopy(value.data, (int)(j * srcStride), tempBuffer, (int)(member.bufferOffsetInBytes + (j * destStride)), (int)srcStride);
+                    }
                 }
             }
 
@@ -128,7 +157,7 @@ namespace Prowl.Runtime
         {
             const string prefix = "sampler";
 
-            if (name.StartsWith(prefix))
+            if (name.StartsWith(prefix, StringComparison.Ordinal))
                 return name.Substring(prefix.Length);
 
             return name;
