@@ -18,8 +18,8 @@ namespace Prowl.Editor.Utilities
 {
     public struct ReflectedResourceInfo
     {
-        public StageInput[] vertexInputs;
-        public Uniform[] uniforms;
+        public VertexInput[] vertexInputs;
+        public ShaderUniform[] uniforms;
         public ShaderStages[] stages;
     }
 
@@ -27,9 +27,9 @@ namespace Prowl.Editor.Utilities
     {
         public static ReflectedResourceInfo Reflect(Context context, ShaderDescription[] compiledSPIRV)
         {
-            StageInput[] vertexInputs = [];
+            VertexInput[] vertexInputs = [];
 
-            List<Uniform> uniforms = [];
+            List<ShaderUniform> uniforms = [];
             List<ShaderStages> stages = [];
 
             for (int i = 0; i < compiledSPIRV.Length; i++)
@@ -145,7 +145,7 @@ namespace Prowl.Editor.Utilities
         }
 
 
-        private static void MergeUniforms(List<Uniform> uniforms, List<ShaderStages> stages, Uniform[] other, ShaderStages stage)
+        private static void MergeUniforms(List<ShaderUniform> uniforms, List<ShaderStages> stages, ShaderUniform[] other, ShaderStages stage)
         {
             foreach (var ub in other)
             {
