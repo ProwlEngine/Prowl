@@ -76,7 +76,10 @@ namespace Prowl.Editor
             {
                 for (int i = 0; i < ProjectCache.ProjectsCount; i++)
                 {
-                    Project project = ProjectCache.GetProject(i);
+                    Project? project = ProjectCache.GetProject(i);
+
+                    if (project == null)
+                        continue;
 
                     if (string.IsNullOrEmpty(_searchText) || project.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
                         DisplayProject(project);

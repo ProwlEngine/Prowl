@@ -35,10 +35,20 @@ public static class ProjectCache
         SaveProjectPaths();
     }
 
-    public static Project GetProject(int index)
+    public static Project? GetProject(int index)
     {
         UpdateProjectPaths();
-        return s_projectCache[index];
+
+        Project project = s_projectCache[index];
+
+        if (!project.Exists)
+        {
+            s_projectCache.RemoveAt(index);
+            SaveProjectPaths();
+            return null;
+        }
+
+        return project;
     }
 
     public static void RemoveProject(Project project)
