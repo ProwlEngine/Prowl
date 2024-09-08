@@ -438,8 +438,11 @@ namespace Prowl.Editor.Utilities
                     case "DepthTest":
                         ExpectToken(tokenizer, ShaderToken.Identifier);
 
-                        depthStencil.DepthTestEnabled = true;
-                        depthStencil.DepthComparison = EnumParse<ComparisonKind>(tokenizer.Token, "DepthTest");
+                        if (tokenizer.Token.Equals("Off", StringComparison.OrdinalIgnoreCase))
+                            depthStencil.DepthTestEnabled = false;
+                        else
+                            depthStencil.DepthComparison = EnumParse<ComparisonKind>(tokenizer.Token, "DepthTest", "Off");
+
                         break;
 
                     case "Ref":
@@ -643,12 +646,15 @@ namespace Prowl.Editor.Utilities
         }
 
 
-        private static T EnumParse<T>(ReadOnlySpan<char> text, string fieldName) where T : struct, Enum
+        private static T EnumParse<T>(ReadOnlySpan<char> text, string fieldName, params string[] extraValues) where T : struct, Enum
         {
             if (Enum.TryParse(text, true, out T value))
                 return value;
 
-            throw new InvalidOperationException($"Error parsing {fieldName}. Possible values: [{string.Join(", ", Enum.GetNames<T>())}]");
+            List<string> values = new(Enum.GetNames<T>());
+            values.AddRange(extraValues);
+
+            throw new InvalidOperationException($"Error parsing {fieldName}. Possible values: [{string.Join(", ", extraValues)}]");
         }
 
 
