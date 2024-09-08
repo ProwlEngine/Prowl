@@ -1,5 +1,7 @@
-﻿using System.Collections.Generic;
-using Prowl.Runtime.GUI.Graphics;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Collections.Generic;
 
 namespace Prowl.Runtime.GUI.Widgets.Gizmo
 {
@@ -41,7 +43,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
             newCamForward = camForward;
             isOrthographic = _orthographic;
             if (_gui == null) return false;
-            
+
             var width = _gizmoRect.width;
             var height = _gizmoRect.height;
             using (_gui.Node("ViewManipulator").TopLeft(Offset.Percentage(1f, -width - 5), 5).Scale(width, height).Enter())
@@ -90,7 +92,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                         var hovCol = Color.white;
                         hovCol.a = 0.25f;
                         _gui.Draw2D.DrawCircleFilled(rect.Center, (float)rect.width / 2, hovCol, 48);
-                        
+
                         if (_gui.IsPointerClick(MouseButton.Left))
                         {
                             // Toggle Perspective / Orthographic

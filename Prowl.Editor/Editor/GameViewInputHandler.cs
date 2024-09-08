@@ -1,6 +1,9 @@
-﻿using Prowl.Editor;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Editor;
+
 using Veldrid;
-using Veldrid.Sdl2;
 
 namespace Prowl.Runtime;
 
@@ -11,13 +14,13 @@ public class GameViewInputHandler : DefaultInputHandler
 
 
     public GameViewInputHandler(GameWindow window) : base()
-    {   
+    {
         _window = window;
     }
 
 
     protected override Vector2Int GetActualMousePosition(InputSnapshot snapshot)
-    {   
+    {
         return base.GetActualMousePosition(snapshot) - new Vector2Int((int)GameWindow.FocusedPosition.x, (int)GameWindow.FocusedPosition.y);
     }
 

@@ -18,13 +18,16 @@ Pass "Grid"
     DepthStencil
     {
         // Depth write
-        DepthWrite Off
+        DepthWrite On
+
+        // Comparison kind
+        DepthTest LessEqual
     }
 
     // Rasterizer culling mode
     Cull None
 
-	SHADERPROGRAM
+	HLSLPROGRAM
         #pragma vertex Vertex
         #pragma fragment Fragment
 
@@ -39,30 +42,27 @@ Pass "Grid"
         struct Varyings
         {
             float4 pos : SV_POSITION;
-            float3 wpos : POSITION;
+            float3 vpos : POSITION;
             float2 uv : TEXCOORD0;
         };
 
+        float4x4 _Matrix_MVP;
+        float4x4 _Matrix_MV;
 
-        float4x4 MvpInverse;
-        float3 CameraPosition;
-        float4 GridColor;
-
-		float3 PlaneNormal;
-		float3 PlaneRight;
-		float3 PlaneUp;
-
-		float PrimaryGridSize;
-		float LineWidth;
-		float SecondaryGridSize;
+        float4 _GridColor;
+		float _PrimaryGridSize;
+		float _LineWidth;
+		float _SecondaryGridSize;
+        float _Falloff;
+        float _MaxDist;
 
 
         Varyings Vertex(Attributes input)
         {
             Varyings output = (Varyings)0;
 
-            output.pos = float4(input.pos, 1.0);
-            output.wpos = mul(MvpInverse, float4(input.pos.xy, 1.0, 1.0)).xyz;
+            output.pos = mul(_Matrix_MVP, float4(input.pos, 1.0));
+            output.vpos = mul(_Matrix_MV, float4(input.pos, 1.0)).xyz;
             output.uv = input.uv;
 
             return output;
@@ -70,16 +70,16 @@ Pass "Grid"
 
 
 		// https://bgolus.medium.com/the-best-darn-grid-shader-yet-727f9278b9d8
-        float pristineGrid(float2 uv, float2 lineWidth)
+        float pristineGrid(float2 uv, float2 _lineWidth)
         {
-            lineWidth = saturate(lineWidth);
+            _lineWidth = saturate(_lineWidth);
 
             float4 uvDDXY = float4(ddx(uv), ddy(uv));
             float2 uvDeriv = float2(length(uvDDXY.xz), length(uvDDXY.yw));
 
-            bool2 invertLine = lineWidth > 0.5;
+            bool2 invertLine = _lineWidth > 0.5;
 
-            float2 targetWidth = select(invertLine, 1.0 - lineWidth, lineWidth);
+            float2 targetWidth = select(invertLine, 1.0 - _lineWidth, _lineWidth);
             float2 drawWidth = clamp(targetWidth, uvDeriv, 0.5);
 
             float2 lineAA = max(uvDeriv, 0.000001) * 1.5;
@@ -97,42 +97,17 @@ Pass "Grid"
         }
 
 
-		float Grid(float3 ro, float scale, float3 rd, float lineWidth, out float d)
-		{
-            d = 0.0;
-			ro /= scale;
-
-			float ndotd = dot(-PlaneNormal, rd);
-
-			if (ndotd == 0.0)
-			    return 0.0;
-
-			d = dot(PlaneNormal, ro) / ndotd;
-
-			if (d <= 0.0)
-			    return 0.0;
-
-			float3 hit = ro + rd * d;
-
-			float u = dot(hit, PlaneRight);
-			float v = dot(hit, PlaneUp);
-
-			return pristineGrid(float2(u, v), (float2)lineWidth * LineWidth);
-		}
-
-
 		float4 Fragment(Varyings input) : SV_TARGET
 		{
-			float d = 0.0;
-			float bd = 0.0;
+			float sg = pristineGrid(input.uv * _PrimaryGridSize, (float2)_LineWidth);
+			float bg = pristineGrid(input.uv * _SecondaryGridSize, (float2)_LineWidth);
 
-			float sg = Grid(CameraPosition, PrimaryGridSize, normalize(input.wpos), 0.02, d);
-			float bg = Grid(CameraPosition, SecondaryGridSize, normalize(input.wpos), 0.02, bd);
+			float4 output = float4(_GridColor.xyz, max(sg, bg));
 
-			float4 OutputColor = float4(GridColor.xyz, sg);
-			OutputColor += float4(GridColor.xyz, bg * 0.5);
+            output.w *= _GridColor.w;
+            output.w *= 1 - pow((length(input.vpos) / _MaxDist), _Falloff);
 
-            return OutputColor;
+            return output;
 		}
-	ENDPROGRAM
+	ENDHLSL
 }

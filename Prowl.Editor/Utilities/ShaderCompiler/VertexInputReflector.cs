@@ -1,4 +1,6 @@
-using System.Diagnostics.CodeAnalysis;
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Text.RegularExpressions;
 
 using Prowl.Runtime;
@@ -16,9 +18,9 @@ namespace Prowl.Editor.Utilities
 
         public delegate bool SemanticFormatter(string semantic, out VertexElementFormat format);
 
-        public static StageInput[] GetStageInputs(Reflector reflector, Resources resources, SemanticFormatter formatter)
+        public static VertexInput[] GetStageInputs(Reflector reflector, Resources resources, SemanticFormatter formatter)
         {
-            StageInput[] inputLocations = new StageInput[resources.StageInputs.Length];
+            VertexInput[] inputLocations = new VertexInput[resources.StageInputs.Length];
 
             for (int i = 0; i < resources.StageInputs.Length; i++)
             {
@@ -26,7 +28,7 @@ namespace Prowl.Editor.Utilities
 
                 var typeInfo = reflector.GetTypeHandle(resource.type_id);
 
-                if (!ParseSemantic(resource.name, formatter, out StageInput input))
+                if (!ParseSemantic(resource.name, formatter, out VertexInput input))
                     throw new Exception($"Unknown semantic: {input.semantic}");
 
                 if (!reflector.HasDecoration(resource.id, Decoration.Location))
@@ -46,7 +48,7 @@ namespace Prowl.Editor.Utilities
         [GeneratedRegex(@"\d+$")]
         private static partial Regex TrailingInteger();
 
-        private static bool ParseSemantic(string name, SemanticFormatter formatter, out StageInput input)
+        private static bool ParseSemantic(string name, SemanticFormatter formatter, out VertexInput input)
         {
             string semantic = name.Substring(name.LastIndexOf('.') + 1);
 
@@ -54,12 +56,12 @@ namespace Prowl.Editor.Utilities
             if (!TrailingInteger().IsMatch(semantic))
                 semantic += "0";
 
-            input = new StageInput(semantic, VertexElementFormat.Float1);
+            input = new VertexInput(semantic, VertexElementFormat.Float1);
 
             if (!formatter.Invoke(semantic, out VertexElementFormat format))
                 return false;
 
-            input = new StageInput(semantic, format);
+            input = new VertexInput(semantic, format);
 
             return true;
         }

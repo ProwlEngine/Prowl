@@ -1,5 +1,9 @@
-﻿using Prowl.Runtime.Utils;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Collections.Generic;
+
+using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime.GUI
 {
@@ -43,21 +47,21 @@ namespace Prowl.Runtime.GUI
         private Dictionary<ulong, BoolAnimation> _boolAnimations = [];
 
         /// <inheritdoc cref="AnimateBool(ulong, bool, float, EaseType)"/>
-        public float AnimateBool(bool state, float durationIn, float durationOut, EaseType easeIn, EaseType easeOut) 
+        public float AnimateBool(bool state, float durationIn, float durationOut, EaseType easeIn, EaseType easeOut)
             => AnimateBool(GetNextID(), state, state ? durationOut : durationIn, state ? easeOut : easeIn);
-        public float AnimateBool(bool state, float durationIn, float durationOut, EaseType type) 
+        public float AnimateBool(bool state, float durationIn, float durationOut, EaseType type)
             => AnimateBool(GetNextID(), state, state ? durationOut : durationIn, type);
         /// <inheritdoc cref="AnimateBool(ulong, bool, float, EaseType)"/>
-        public float AnimateBool(bool state, float duration, EaseType easeIn, EaseType easeOut) 
+        public float AnimateBool(bool state, float duration, EaseType easeIn, EaseType easeOut)
             => AnimateBool(GetNextID(), state, duration, state ? easeOut : easeIn);
         /// <inheritdoc cref="AnimateBool(ulong, bool, float, EaseType)"/>
-        public float AnimateBool(bool state, float duration, EaseType ease) 
+        public float AnimateBool(bool state, float duration, EaseType ease)
             => AnimateBool(GetNextID(), state, duration, ease);
 
         /// <summary>
         /// Create and animate a bool value over time
         /// This is useful for creating animations based on bool values
-        /// 
+        ///
         /// An ID will be assigned based on the current Node and the next available ID
         /// You can manually assign an ID if you want it to persist across nodes
         /// </summary>
@@ -66,7 +70,7 @@ namespace Prowl.Runtime.GUI
         public float AnimateBool(ulong animId, bool state, float duration, EaseType type)
         {
             BoolAnimation anim;
-            if(_boolAnimations.TryGetValue(animId, out anim))
+            if (_boolAnimations.TryGetValue(animId, out anim))
             {
                 anim.CurrentValue = state;
                 anim.Duration = duration;
@@ -74,7 +78,8 @@ namespace Prowl.Runtime.GUI
             }
             else
             {
-                anim = new BoolAnimation {
+                anim = new BoolAnimation
+                {
                     CurrentValue = state,
                     Duration = duration,
                     EaseType = type,
@@ -111,7 +116,8 @@ namespace Prowl.Runtime.GUI
 
         static double GetEase(double time, EaseType type)
         {
-            return type switch {
+            return type switch
+            {
                 EaseType.Linear => Linear(time),
                 EaseType.SineIn => SineIn(time),
                 EaseType.SineOut => SineOut(time),

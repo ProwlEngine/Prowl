@@ -1,4 +1,6 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Collections.Generic;
 
 namespace Prowl.Runtime.GUI.Graphics
@@ -15,7 +17,7 @@ namespace Prowl.Runtime.GUI.Graphics
             int cur = list.Count;
             if (sz < cur)
                 list.RemoveRange(sz, cur - sz);
-            
+
             else if (sz > cur)
             {
                 if (sz > list.Capacity)

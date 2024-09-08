@@ -1,6 +1,5 @@
-// Licensed to the .NET Foundation under one or more agreements.
-// The .NET Foundation licenses this file to you under the MIT license.
-// See the LICENSE file in the project root for more information.
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 using System.Globalization;
@@ -66,9 +65,12 @@ namespace Prowl.Runtime
 
         public Vector3 xyz => new Vector3(x, y, z);
 
-        public double this[int index] {
-            get {
-                switch (index) {
+        public double this[int index]
+        {
+            get
+            {
+                switch (index)
+                {
                     case 0: return x;
                     case 1: return y;
                     case 2: return z;
@@ -78,8 +80,10 @@ namespace Prowl.Runtime
                 }
             }
 
-            set {
-                switch (index) {
+            set
+            {
+                switch (index)
+                {
                     case 0: x = value; break;
                     case 1: y = value; break;
                     case 2: z = value; break;
@@ -180,7 +184,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Returns a String representing this Vector4 instance, using the specified format to format individual elements 
+        /// Returns a String representing this Vector4 instance, using the specified format to format individual elements
         /// and the given IFormatProvider.
         /// </summary>
         /// <param name="format">The format of individual elements.</param>
@@ -229,13 +233,13 @@ namespace Prowl.Runtime
         public static double Distance(Vector4 value1, Vector4 value2)
         {
             double dx = value1.x - value2.x;
-                double dy = value1.y - value2.y;
-                double dz = value1.z - value2.z;
-                double dw = value1.w - value2.w;
+            double dy = value1.y - value2.y;
+            double dz = value1.z - value2.z;
+            double dw = value1.w - value2.w;
 
-                double ls = dx * dx + dy * dy + dz * dz + dw * dw;
+            double ls = dx * dx + dy * dy + dz * dz + dw * dw;
 
-                return (double)Math.Sqrt((double)ls);
+            return (double)Math.Sqrt((double)ls);
         }
 
         /// <summary>
@@ -248,11 +252,11 @@ namespace Prowl.Runtime
         public static double DistanceSquared(Vector4 value1, Vector4 value2)
         {
             double dx = value1.x - value2.x;
-                double dy = value1.y - value2.y;
-                double dz = value1.z - value2.z;
-                double dw = value1.w - value2.w;
+            double dy = value1.y - value2.y;
+            double dz = value1.z - value2.z;
+            double dw = value1.w - value2.w;
 
-                return dx * dx + dy * dy + dz * dz + dw * dw;
+            return dx * dx + dy * dy + dz * dz + dw * dw;
         }
 
         /// <summary>
@@ -264,13 +268,13 @@ namespace Prowl.Runtime
         public static Vector4 Normalize(Vector4 vector)
         {
             double ls = vector.x * vector.x + vector.y * vector.y + vector.z * vector.z + vector.w * vector.w;
-                double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
+            double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
 
-                return new Vector4(
-                    vector.x * invNorm,
-                    vector.y * invNorm,
-                    vector.z * invNorm,
-                    vector.w * invNorm);
+            return new Vector4(
+                vector.x * invNorm,
+                vector.y * invNorm,
+                vector.z * invNorm,
+                vector.w * invNorm);
         }
 
         /// <summary>

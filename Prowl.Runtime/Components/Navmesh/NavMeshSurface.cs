@@ -1,4 +1,12 @@
-﻿using DotRecast.Core;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading.Tasks;
+
 using DotRecast.Core.Numerics;
 using DotRecast.Detour;
 using DotRecast.Detour.Crowd;
@@ -6,11 +14,6 @@ using DotRecast.Recast;
 using DotRecast.Recast.Toolset;
 using DotRecast.Recast.Toolset.Builder;
 using DotRecast.Recast.Toolset.Geom;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Threading.Tasks;
 
 namespace Prowl.Runtime
 {
@@ -29,8 +32,10 @@ namespace Prowl.Runtime
 
         public BuildSettings navSettings = new();
 
-        public DtNavMeshQuery? Query {
-            get {
+        public DtNavMeshQuery? Query
+        {
+            get
+            {
                 if (navMesh == null) return null;
                 _query ??= new DtNavMeshQuery(navMesh);
                 return _query;
@@ -98,7 +103,7 @@ namespace Prowl.Runtime
             //    MoveAllToTarget(randomPt, false);
             //}
         }
-        
+
         private DtNavMesh CreateNavMesh(RcNavMeshBuildSettings _navSettings, SceneMeshData input)
         {
             try
@@ -189,10 +194,10 @@ namespace Prowl.Runtime
 
                 return navMesh;
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 Debug.LogError(e.ToString());
-                throw e;
+                throw;
             }
         }
 
@@ -282,7 +287,7 @@ namespace Prowl.Runtime
 
             if (debug_bounds != default)
             {
-                #warning Veldrid change
+#warning Veldrid change
                 /*
                 Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
                 Gizmos.Color = Color.blue;
@@ -298,7 +303,7 @@ namespace Prowl.Runtime
                     {
                         for (int k = 0; k < debug_polygons[i][j].Length; k++)
                         {
-                            #warning Veldrid change
+#warning Veldrid change
                             /*
                             Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
                             Gizmos.DrawPolygon([debug_polygons[i][j][k], debug_polygons[i][j][(k + 1) % debug_polygons[i][j].Length]]);
@@ -341,7 +346,7 @@ namespace Prowl.Runtime
                 }
             }
 
-            navMesh =  CreateNavMesh(navSettings.ToRC(), colliderData);
+            navMesh = CreateNavMesh(navSettings.ToRC(), colliderData);
 
             CacheDebugData();
         }
@@ -419,24 +424,24 @@ namespace Prowl.Runtime
             public void Append(Collider collider)
             {
                 Mesh mesh = null;
-                if(collider is SphereCollider sph)
+                if (collider is SphereCollider sph)
                 {
                     mesh = Mesh.CreateSphere(sph.WorldRadius, 8, 8);
                 }
-                else if(collider is BoxCollider box)
+                else if (collider is BoxCollider box)
                 {
                     mesh = Mesh.CreateCube(box.Size);
                 }
-                else if(collider is CylinderCollider cylinder)
+                else if (collider is CylinderCollider cylinder)
                 {
                     mesh = Mesh.CreateCylinder(cylinder.Radius, cylinder.Length, 8);
                 }
-                else if(collider is CapsuleCollider capsule)
+                else if (collider is CapsuleCollider capsule)
                 {
 #warning TODO: We need to implement a capsule mesh generator - cylinder sorta works for now
                     mesh = Mesh.CreateCylinder(capsule.Radius, capsule.Length, 8);
                 }
-                else if(collider is TriangleCollider triangle)
+                else if (collider is TriangleCollider triangle)
                 {
                     mesh = Mesh.CreateTriangle(triangle.A, triangle.B, triangle.C);
                 }
@@ -496,7 +501,8 @@ namespace Prowl.Runtime
 
             public RcNavMeshBuildSettings ToRC()
             {
-                return new RcNavMeshBuildSettings {
+                return new RcNavMeshBuildSettings
+                {
                     cellSize = cellSize,
                     cellHeight = cellHeight,
                     agentHeight = agentHeight,

@@ -1,4 +1,7 @@
-﻿using BepuPhysics.Constraints;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics.Constraints;
 
 namespace Prowl.Runtime;
 
@@ -13,7 +16,8 @@ public sealed class AngularSwivelHingeConstraintComponent : TwoBodyConstraintCom
     [SerializeField, HideInInspector] private float _springDampingRatio = 5;
 
     [ShowInInspector]
-    public Vector3 LocalSwivelAxisA {
+    public Vector3 LocalSwivelAxisA
+    {
         get
         {
             return _localSwivelAxisA;
@@ -26,33 +30,42 @@ public sealed class AngularSwivelHingeConstraintComponent : TwoBodyConstraintCom
     }
 
     [ShowInInspector]
-    public Vector3 LocalHingeAxisB {
-        get {
+    public Vector3 LocalHingeAxisB
+    {
+        get
+        {
             return _localHingeAxisB;
         }
-        set {
+        set
+        {
             _localHingeAxisB = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringFrequency {
-        get {
+    public float SpringFrequency
+    {
+        get
+        {
             return _springFrequency;
         }
-        set {
+        set
+        {
             _springFrequency = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringDampingRatio {
-        get {
+    public float SpringDampingRatio
+    {
+        get
+        {
             return _springDampingRatio;
         }
-        set {
+        set
+        {
             _springDampingRatio = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -60,7 +73,8 @@ public sealed class AngularSwivelHingeConstraintComponent : TwoBodyConstraintCom
 
     internal override AngularSwivelHinge CreateConstraint()
     {
-        return new AngularSwivelHinge {
+        return new AngularSwivelHinge
+        {
             SpringSettings = new SpringSettings(_springFrequency, _springDampingRatio),
             LocalSwivelAxisA = _localSwivelAxisA,
             LocalHingeAxisB = _localHingeAxisB

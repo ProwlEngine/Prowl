@@ -1,4 +1,7 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 
 namespace Prowl.Runtime.GUI
 {
@@ -9,7 +12,7 @@ namespace Prowl.Runtime.GUI
 
         public event Action<Vector2> OnPointerPosSet;
         public event Action<bool> OnCursorVisibilitySet;
-        
+
         internal bool[] KeyCurState = new bool[KeyValues.Length];
         internal bool[] KeyPreState = new bool[KeyValues.Length];
 

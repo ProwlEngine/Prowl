@@ -1,6 +1,10 @@
-﻿using BepuPhysics;
-using BepuPhysics.Constraints;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
+
+using BepuPhysics;
+using BepuPhysics.Constraints;
 
 namespace Prowl.Runtime;
 
@@ -24,7 +28,7 @@ public abstract class ConstraintComponentBase : MonoBehaviour
 
     public override void OnEnable()
     {
-        if(UntypedConstraintData == null)
+        if (UntypedConstraintData == null)
             CreateProcessorData();
         //UntypedConstraintData.RebuildConstraint();
     }

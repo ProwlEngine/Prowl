@@ -1,19 +1,28 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+
+using Matrix4x4F = System.Numerics.Matrix4x4;
 using Vector2F = System.Numerics.Vector2;
 using Vector3F = System.Numerics.Vector3;
 using Vector4F = System.Numerics.Vector4;
-using Matrix4x4F = System.Numerics.Matrix4x4;
 
 namespace Prowl.Runtime
 {
     public sealed class Material : EngineObject
     {
-        public KeywordState LocalKeywords;
         public AssetRef<Shader> Shader;
         public PropertyState Properties;
 
-        internal Material() : base("New Material") { }
+        [NonSerialized]
+        public KeywordState LocalKeywords;
+
+        internal Material() : base("New Material")
+        {
+            Properties = new();
+            LocalKeywords = KeywordState.Default;
+        }
 
         public Material(AssetRef<Shader> shader, PropertyState? properties = null, KeywordState? keywords = null) : base("New Material")
         {
@@ -37,7 +46,14 @@ namespace Prowl.Runtime
         public void SetTexture(string name, AssetRef<Texture> value) => Properties.SetTexture(name, value);
 
 
-        //public void SetMatrices(string name, System.Numerics.Matrix4x4[] value) { }
+        public void SetFloatArray(string name, float[] values) => Properties.SetFloatArray(name, values);
+        public void SetIntArray(string name, int[] values) => Properties.SetIntArray(name, values);
+        public void SetVectorArray(string name, Vector2F[] values) => Properties.SetVectorArray(name, values);
+        public void SetVectorArray(string name, Vector3F[] values) => Properties.SetVectorArray(name, values);
+        public void SetVectorArray(string name, Vector4F[] values) => Properties.SetVectorArray(name, values);
+        public void SetColorArray(string name, Color[] values) => Properties.SetColorArray(name, values);
+        public void SetMatrixArray(string name, Matrix4x4F[] values) => Properties.SetMatrixArray(name, values);
+
 
         //public CompoundTag Serialize(string tagName, TagSerializer.SerializationContext ctx)
         //{

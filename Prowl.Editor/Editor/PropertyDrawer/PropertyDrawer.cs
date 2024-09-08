@@ -1,10 +1,14 @@
-﻿using Prowl.Editor.Preferences;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Reflection;
+
+using Prowl.Editor.Preferences;
 using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Utils;
-using System.Reflection;
 
 namespace Prowl.Editor.PropertyDrawers
 {
@@ -72,7 +76,7 @@ namespace Prowl.Editor.PropertyDrawers
                 {
                     using (gui.Node("Creator", index).MaxWidth(ItemSize).Height(ItemSize).Layout(LayoutType.Row).Enter())
                     {
-                        if(gui.IsNodePressed())
+                        if (gui.IsNodePressed())
                         {
                             propertyValue = Activator.CreateInstance(propertyType);
                             changed = true;

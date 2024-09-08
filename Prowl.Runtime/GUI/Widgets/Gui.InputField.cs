@@ -1,8 +1,9 @@
-﻿using Prowl.Runtime.GUI.Graphics;
-using Prowl.Runtime.GUI.TextEdit;
-using Veldrid;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
-using System.Collections.Generic;
+
+using Prowl.Runtime.GUI.TextEdit;
 
 namespace Prowl.Runtime.GUI
 {
@@ -26,8 +27,8 @@ namespace Prowl.Runtime.GUI
             NoHorizontalScroll = 1 << 8,
         }
 
-        public struct WidgetStyle 
-        { 
+        public struct WidgetStyle
+        {
             public Color TextColor;
             public Color ActiveColor;
             public Color HoveredColor;
@@ -60,7 +61,7 @@ namespace Prowl.Runtime.GUI
             var g = Gui.ActiveGUI;
             bool multiline = ((flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline);
             Size h = (multiline ? style.FontSize * 8 : style.ItemSize);
-            if(height != null) h = height.Value;
+            if (height != null) h = height.Value;
             using (g.Node(ID).Left(x).Top(y).Width(width).Height(h).Padding(5).Enter())
             {
                 Interactable interact = g.GetInteractable();
@@ -88,8 +89,8 @@ namespace Prowl.Runtime.GUI
                         stb = null;
                     }
 
-                        //OnProcess(style, interact, ref value, maxLength, flags | InputFieldFlags.OnlyDisplay);
-                        var font = style.Font.IsAvailable ? style.Font.Res : Font.DefaultFont;
+                    //OnProcess(style, interact, ref value, maxLength, flags | InputFieldFlags.OnlyDisplay);
+                    var font = style.Font.IsAvailable ? style.Font.Res : Font.DefaultFont;
                     var fontsize = style.FontSize;
                     var render_pos = new Vector2(g.CurrentNode.LayoutData.InnerRect.x, g.CurrentNode.LayoutData.InnerRect.y);
                     // Center text vertically
@@ -366,7 +367,7 @@ namespace Prowl.Runtime.GUI
                     {
                         OnTextInput(stb, "\t", MaxLength, Flags);
                     }
-                   //else Focus Next Focusable Interactable
+                    //else Focus Next Focusable Interactable
                     break;
                 case Key.A when Ctrl && !NoSelection:
                     stb.SelectStart = 0;
@@ -383,24 +384,24 @@ namespace Prowl.Runtime.GUI
                 case Key.C when Ctrl && !NoSelection:
                     int selectStart = Math.Min(stb.SelectStart, stb.SelectEnd);
                     int selectEnd = Math.Max(stb.SelectStart, stb.SelectEnd);
-                
+
                     if (selectStart < selectEnd)
                     {
                         Input.Clipboard = stb.Text.Substring(selectStart, selectEnd - selectStart);
                     }
-                
+
                     break;
                 case Key.X when Ctrl && !NoSelection:
                     selectStart = Math.Min(stb.SelectStart, stb.SelectEnd);
                     selectEnd = Math.Max(stb.SelectStart, stb.SelectEnd);
-                
+
                     if (selectStart < selectEnd)
                     {
                         Input.Clipboard = stb.Text.Substring(selectStart, selectEnd - selectStart);
                         if (IsEditable)
                             StbTextEdit.Cut(stb);
                     }
-                
+
                     break;
                 case Key.V when Ctrl && IsEditable:
                     OnTextInput(stb, Input.Clipboard, MaxLength, Flags);

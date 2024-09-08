@@ -1,6 +1,11 @@
-﻿using BepuPhysics;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics;
 using BepuPhysics.Collidables;
+
 using BepuUtilities.Memory;
+
 using Prowl.Icons;
 
 namespace Prowl.Runtime;
@@ -21,8 +26,10 @@ public sealed class BoxCollider : Collider
         }
     }
 
-    public Vector3 WorldSize {
-        get {
+    public Vector3 WorldSize
+    {
+        get
+        {
             return _size * this.Transform.lossyScale;
         }
     }

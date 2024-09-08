@@ -1,13 +1,17 @@
-using Veldrid.Sdl2;
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Collections.Generic;
-using Veldrid;
 using System.Text;
+
+using Veldrid;
+using Veldrid.Sdl2;
 
 namespace Prowl.Runtime;
 
 public class DefaultInputHandler : IInputHandler, IDisposable
-{   
+{
     public static readonly Key[] KeyValues = Enum.GetValues<Key>();
     public static readonly MouseButton[] MouseValues = Enum.GetValues<MouseButton>();
 
@@ -41,17 +45,17 @@ public class DefaultInputHandler : IInputHandler, IDisposable
     public virtual IReadOnlyList<char> InputString { get; set; }
 
 
-    public virtual string Clipboard 
+    public virtual string Clipboard
     {
         get => Sdl2Native.SDL_GetClipboardText();
         set => Sdl2Native.SDL_SetClipboardText(value);
     }
 
     public Vector2Int PrevMousePosition => _prevMousePos;
-    public Vector2Int MousePosition 
+    public Vector2Int MousePosition
     {
         get => _currentMousePos;
-        set 
+        set
         {
             _prevMousePos = value;
             _currentMousePos = value;
@@ -69,14 +73,15 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
 
     public DefaultInputHandler()
-    {   
+    {
         var snapshot = Screen.LatestInputSnapshot;
 
-        InputString = [ ];
+        InputString = [];
 
-        Screen.InternalWindow.MouseWheel += (mouseWheelEvent) => { 
+        Screen.InternalWindow.MouseWheel += (mouseWheelEvent) =>
+        {
             _receivedDeltaEvent = true;
-            _mouseWheelDelta = mouseWheelEvent.WheelDelta.Y; 
+            _mouseWheelDelta = mouseWheelEvent.WheelDelta.Y;
         };
 
         _prevMousePos = GetActualMousePosition(snapshot);
@@ -136,9 +141,9 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         {
             Screen.InternalWindow.CursorVisible = true;
             Locked = false;
-            
+
             SetActualMousePosition(_currentMousePos);
-        } 
+        }
         else if (GetMouseButton(MouseButton.Left)) // If the user (likely) wants to return to the window, re-apply locking and visibility state.
         {
             Screen.InternalWindow.CursorVisible = CursorVisible;
@@ -152,7 +157,7 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
             return;
         }
-        
+
         Vector2Int center = Screen.Position + (Screen.Size / new Vector2Int(2, 2));
         Vector2Int centerDelta = mousePosition - center;
 
@@ -212,13 +217,13 @@ public class DefaultInputHandler : IInputHandler, IDisposable
 
             newButtonState[button] = state;
             buttonState[button] = state;
-            
+
             if (CanUpdateState())
                 OnMouseEvent?.Invoke(button, MousePosition.x, MousePosition.y, mouseEvent.Down, false);
         }
     }
 
-    
+
     public bool GetKey(Key key) => CanUpdateState() && keyState[key] == InputState.Pressed;
     public bool GetKeyDown(Key key) => CanUpdateState() && newKeyState[key] == InputState.Pressed;
     public bool GetKeyUp(Key key) => CanUpdateState() && newKeyState[key] == InputState.Released;

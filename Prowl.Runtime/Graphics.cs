@@ -1,7 +1,7 @@
-﻿using Prowl.Runtime.RenderPipelines;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
@@ -65,6 +65,7 @@ namespace Prowl.Runtime
         {
             Device.SwapBuffers();
             RenderTexture.UpdatePool();
+            RenderPipelines.RenderPipeline.ClearRenderables();
         }
 
         public static CommandList GetCommandList()
@@ -140,7 +141,7 @@ namespace Prowl.Runtime
 
         internal static void Dispose()
         {
-            GraphicsPipelineCache.Dispose();
+            ShaderPipelineCache.Dispose();
             GUI.Graphics.UIDrawListRenderer.Dispose();
 
             Device.Dispose();

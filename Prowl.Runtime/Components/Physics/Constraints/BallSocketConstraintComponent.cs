@@ -1,4 +1,7 @@
-﻿using BepuPhysics.Constraints;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics.Constraints;
 
 namespace Prowl.Runtime;
 
@@ -12,40 +15,50 @@ public sealed class BallSocketConstraintComponent : TwoBodyConstraintComponent<B
     [SerializeField, HideInInspector] private float _springDampingRatio = 5;
 
     [ShowInInspector]
-    public Vector3 LocalOffsetA {
+    public Vector3 LocalOffsetA
+    {
         get => _localOffsetA;
-        set {
+        set
+        {
             _localOffsetA = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public Vector3 LocalOffsetB {
+    public Vector3 LocalOffsetB
+    {
         get => _localOffsetB;
-        set {
+        set
+        {
             _localOffsetB = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringFrequency {
-        get {
+    public float SpringFrequency
+    {
+        get
+        {
             return _springFrequency;
         }
-        set {
+        set
+        {
             _springFrequency = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringDampingRatio {
-        get {
+    public float SpringDampingRatio
+    {
+        get
+        {
             return _springDampingRatio;
         }
-        set {
+        set
+        {
             _springDampingRatio = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -53,7 +66,8 @@ public sealed class BallSocketConstraintComponent : TwoBodyConstraintComponent<B
 
     internal override BallSocket CreateConstraint()
     {
-        return new BallSocket {
+        return new BallSocket
+        {
             LocalOffsetA = _localOffsetA,
             LocalOffsetB = _localOffsetB,
             SpringSettings = new SpringSettings(_springFrequency, _springDampingRatio)

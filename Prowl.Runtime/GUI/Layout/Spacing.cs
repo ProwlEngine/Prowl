@@ -1,4 +1,7 @@
-﻿namespace Prowl.Runtime.GUI
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+namespace Prowl.Runtime.GUI
 {
     public struct Spacing
     {
@@ -38,6 +41,11 @@
                    s1.Right != s2.Right ||
                    s1.Top != s2.Top ||
                    s1.Bottom != s2.Bottom;
+        }
+
+        public override bool Equals(object obj)
+        {
+            throw new System.NotImplementedException();
         }
     }
 

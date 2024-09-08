@@ -1,4 +1,7 @@
-﻿#region License
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+#region License
 /*
 MIT License
 Copyright © 2006 The Mono.Xna Team
@@ -355,7 +358,7 @@ namespace Prowl.Runtime
             double f = Vector3.Dot(a.normal, cross);
             f *= -1.0f;
 
-            cross = Vector3.Cross(b.normal, c.normal );
+            cross = Vector3.Cross(b.normal, c.normal);
             v1 = cross * a.distance;
             //v1 = (a.D * (Vector3.Cross(b.Normal, c.Normal)));
 

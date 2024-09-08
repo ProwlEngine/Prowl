@@ -1,4 +1,7 @@
-﻿using BepuPhysics.Constraints;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics.Constraints;
 
 namespace Prowl.Runtime;
 
@@ -69,7 +72,8 @@ public sealed class WeldConstraintComponent : TwoBodyConstraintComponent<Weld>
 
     internal override Weld CreateConstraint()
     {
-        return new Weld {
+        return new Weld
+        {
             LocalOffset = _localOffset,
             LocalOrientation = _localOrientation,
             SpringSettings = new SpringSettings(_springFrequency, _springDampingRatio)

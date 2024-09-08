@@ -1,7 +1,11 @@
-﻿using Prowl.Runtime.NodeSystem;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Linq;
 using System.Reflection;
+
+using Prowl.Runtime.NodeSystem;
 
 namespace Prowl.Runtime.Utils.NodeSystem.Nodes
 {
@@ -37,7 +41,7 @@ namespace Prowl.Runtime.Utils.NodeSystem.Nodes
         {
             ArgumentNullException.ThrowIfNull(method_info, nameof(method_info));
 
-            if(method_info.GetParameters().Any(p => p.IsIn))
+            if (method_info.GetParameters().Any(p => p.IsIn))
                 throw new ArgumentException("ReflectedNode does not support methods with 'in' parameters");
 
             cached_method = method_info;
@@ -61,7 +65,7 @@ namespace Prowl.Runtime.Utils.NodeSystem.Nodes
                 //if (parameter.IsOut)
                 //    AddDynamicOutput(method_info.ReturnType, ConnectionType.Multiple, TypeConstraint.None, RuntimeUtils.Prettify(parameter.Name));
                 //else
-                    AddDynamicInput(parameter.ParameterType, ConnectionType.Override, TypeConstraint.AssignableTo, RuntimeUtils.Prettify(parameter.Name));
+                AddDynamicInput(parameter.ParameterType, ConnectionType.Override, TypeConstraint.AssignableTo, RuntimeUtils.Prettify(parameter.Name));
             }
 
             // Calculate width

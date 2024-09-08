@@ -1,9 +1,13 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using System.Collections.Generic;
-using Veldrid;
 using System.Runtime.InteropServices;
+
+using Veldrid;
 
 namespace Prowl.Runtime.GUI.Graphics
 {

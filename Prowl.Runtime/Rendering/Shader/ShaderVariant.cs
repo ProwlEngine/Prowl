@@ -1,9 +1,10 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using Prowl.Runtime.Utils;
-using Veldrid;
 using System.Linq;
+
+using Veldrid;
 
 namespace Prowl.Runtime
 {
@@ -14,10 +15,10 @@ namespace Prowl.Runtime
 
 
         [HideInInspector]
-        public StageInput[] VertexInputs;
+        public VertexInput[] VertexInputs;
 
         [HideInInspector]
-        public Uniform[] Uniforms;
+        public ShaderUniform[] Uniforms;
 
         [NonSerialized]
         public ShaderStages[] UniformStages;

@@ -1,12 +1,17 @@
-﻿using BepuPhysics;
-using BepuPhysics.Collidables;
-using BepuPhysics.CollisionDetection;
-using BepuUtilities;
-using BepuUtilities.Collections;
-using BepuUtilities.Memory;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
+using BepuPhysics;
+using BepuPhysics.Collidables;
+using BepuPhysics.CollisionDetection;
+
+using BepuUtilities;
+using BepuUtilities.Collections;
+using BepuUtilities.Memory;
 
 namespace Prowl.Runtime.Contacts;
 

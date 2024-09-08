@@ -1,4 +1,7 @@
-﻿using Prowl.Editor.Preferences;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
@@ -78,12 +81,12 @@ public class SceneViewWindow : EditorWindow
         gui.CurrentNode.Padding(5);
 
         Vector2 renderSize = gui.CurrentNode.LayoutData.Rect.Size;
-        if (renderSize.x == 0 || renderSize.y == 0) return;
+
+        if (renderSize.x == 0 || renderSize.y == 0)
+            return;
 
         if (RenderTarget == null || (int)renderSize.x != RenderTarget.Width || (int)renderSize.y != RenderTarget.Height)
             RefreshRenderTexture((int)renderSize.x, (int)renderSize.y);
-
-        Camera.CameraData data = Cam.GetData(renderSize);
 
         WindowCenter = gui.CurrentNode.LayoutData.Rect.Center;
 
@@ -93,19 +96,45 @@ public class SceneViewWindow : EditorWindow
 
         SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
 
-        CommandBuffer buffer = CommandBufferPool.Get("Scene View Buffer");
+        RenderingData data = new RenderingData
+        {
+            TargetResolution = new Vector2(RenderTarget.Width, RenderTarget.Height),
+            IsSceneViewCamera = true,
+        };
 
-        buffer.SetRenderTarget(RenderTarget!);
-        buffer.ClearRenderTarget(true, true, Color.black);
+        if (SceneViewPreferences.Instance.GridType != GridType.None)
+        {
+            data.DisplayGrid = true;
+            data.IsSceneViewCamera = true;
 
-        // RenderingContext context = new RenderingContext("Main", Graphics.Renderables, RenderTarget);
-        // Graphics.Render([data], context);
+            data.GridColor = SceneViewPreferences.Instance.GridColor;
+            data.GridSizes.z = SceneViewPreferences.Instance.LineWidth;
+            data.GridSizes.x = SceneViewPreferences.Instance.PrimaryGridSize;
+            data.GridSizes.y = SceneViewPreferences.Instance.SecondaryGridSize;
+
+            double gX = Math.Round(Cam.Transform.position.x / data.GridSizes.y) * data.GridSizes.y;
+            double gY = Math.Round(Cam.Transform.position.y / data.GridSizes.y) * data.GridSizes.y;
+            double gZ = Math.Round(Cam.Transform.position.z / data.GridSizes.y) * data.GridSizes.y;
+
+            data.GridMatrix = SceneViewPreferences.Instance.GridType switch
+            {
+                GridType.XZ => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Vector3.right, Vector3.forward) *
+                    Matrix4x4.CreateTranslation(new Vector3(gX, 0, gZ)),
+                GridType.XY => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Vector3.forward, Vector3.up) *
+                    Matrix4x4.CreateTranslation(new Vector3(gX, gY, 0)),
+                GridType.YZ => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Vector3.up, Vector3.right) *
+                    Matrix4x4.CreateTranslation(new Vector3(0, gY, gZ)),
+            };
+        }
+
+        RenderPipeline pipeline = Cam.Pipeline.Res ?? DefaultRenderPipeline.Default;
+
+        pipeline.Render(RenderTarget, Cam, data);
 
         Vector2 imagePos = gui.CurrentNode.LayoutData.Rect.Position;
         Vector2 imageSize = gui.CurrentNode.LayoutData.Rect.Size;
         gui.Draw2D.DrawImage(RenderTarget!.ColorBuffers[0], imagePos, imageSize, Color.white);
 
-        // TODO: Camera rendering clears Gizmos untill the rendering overhaul, so gizmos will Flicker here
         foreach (GameObject activeGO in SceneManager.AllGameObjects)
         {
             if (activeGO.enabledInHierarchy)
@@ -121,46 +150,6 @@ public class SceneViewWindow : EditorWindow
             }
         }
 
-
-        if (SceneViewPreferences.Instance.GridType != GridType.None)
-        {
-            gridMesh ??= Mesh.GetFullscreenQuad();
-
-            gridMat ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Grid.shader"));
-
-            (Vector3, Vector3) planeInfo = SceneViewPreferences.Instance.GridType switch
-            {
-                GridType.XZ => (Vector3.up, Vector3.right),
-                GridType.XY => (Vector3.forward, Vector3.up),
-                GridType.YZ => (Vector3.right, Vector3.forward),
-            };
-
-            Matrix4x4.Invert(data.View * data.Projection, out Matrix4x4 invertedMVP);
-
-            // For InternalErrorShader if our grid shader does not compile correctly.
-            buffer.SetMatrix("Mat_MVP", System.Numerics.Matrix4x4.Identity);
-
-            buffer.SetMatrix("MvpInverse", invertedMVP.ToFloat());
-
-            buffer.SetVector("CameraPosition", Cam.Transform.position);
-            buffer.SetVector("PlaneNormal", planeInfo.Item1);
-            buffer.SetVector("PlaneRight", planeInfo.Item2);
-            buffer.SetVector("PlaneUp", Vector3.Cross(planeInfo.Item1, planeInfo.Item2));
-            buffer.SetColor("GridColor", SceneViewPreferences.Instance.GridColor);
-            buffer.SetFloat("LineWidth", SceneViewPreferences.Instance.LineWidth);
-            buffer.SetFloat("PrimaryGridSize", SceneViewPreferences.Instance.PrimaryGridSize);
-            buffer.SetFloat("SecondaryGridSize", SceneViewPreferences.Instance.SecondaryGridSize);
-
-            buffer.SetMaterial(gridMat, 0);
-            buffer.DrawSingle(gridMesh);
-        }
-
-
-        Graphics.SubmitCommandBuffer(buffer);
-
-        CommandBufferPool.Release(buffer);
-
-
         List<WeakReference> selectedWeaks = HierarchyWindow.SelectHandler.Selected;
         var selectedGOs = new List<GameObject>();
         foreach (WeakReference weak in selectedWeaks)
@@ -170,7 +159,7 @@ public class SceneViewWindow : EditorWindow
         Ray mouseRay = Cam.ScreenPointToRay(gui.PointerPos - imagePos, new Vector2(RenderTarget.Width, RenderTarget.Height));
 
         bool blockPicking = gui.IsBlockedByInteractable(gui.PointerPos);
-        HandleGizmos(selectedGOs, mouseRay, data.View, data.Projection, blockPicking);
+        HandleGizmos(selectedGOs, mouseRay, Cam.GetViewMatrix(), Cam.GetProjectionMatrix(new Vector2(RenderTarget.Width, RenderTarget.Height)), blockPicking);
 
         Rect rect = gui.CurrentNode.LayoutData.Rect;
         rect.width = 100;

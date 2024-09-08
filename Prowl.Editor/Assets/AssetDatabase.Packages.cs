@@ -1,4 +1,10 @@
-﻿using NuGet.Common;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.IO.Compression;
+using System.Text;
+
+using NuGet.Common;
 using NuGet.Configuration;
 using NuGet.Frameworks;
 using NuGet.Packaging;
@@ -8,11 +14,10 @@ using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 using NuGet.Resolver;
 using NuGet.Versioning;
+
 using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
-using System.IO.Compression;
-using System.Text;
 
 namespace Prowl.Editor.Assets
 {
@@ -115,7 +120,7 @@ namespace Prowl.Editor.Assets
             FileDialogContext imFileDialogInfo = new()
             {
                 title = "Export Package",
-                directoryPath = new DirectoryInfo(Project.ProjectDirectory),
+                directoryPath = Project.Active.ProjectDirectory,
                 fileName = "New Package.prowlpackage",
                 type = FileDialogType.SaveFile,
                 OnComplete = (path) =>
@@ -153,7 +158,7 @@ namespace Prowl.Editor.Assets
 
             // Extract the package
             using Stream source = packageFile.OpenRead();
-            ZipFile.ExtractToDirectory(packageFile.FullName, Project.ProjectPackagesDirectory);
+            ZipFile.ExtractToDirectory(packageFile.FullName, Project.Active.PackagesDirectory.FullName);
 
 #warning TODO: Handle if we already have the asset in our asset database (just dont import it)
 
@@ -172,7 +177,7 @@ namespace Prowl.Editor.Assets
         internal static async void LoadPackages()
         {
             // Load Packages.txt
-            string packagesPath = Path.Combine(Project.ProjectPackagesDirectory, "Packages.txt");
+            string packagesPath = Path.Combine(Project.Active.PackagesDirectory.FullName, "Packages.txt");
             if (File.Exists(packagesPath))
             {
                 string[] lines = File.ReadAllText(packagesPath).Split(';');
@@ -194,7 +199,7 @@ namespace Prowl.Editor.Assets
             // Validate Packages
             foreach (var pair in DesiredPackages)
             {
-                var dependency = (await AssetDatabase.GetPackageMetadata(pair.Key, Project.ProjectPackagesDirectory, PackageManagerPreferences.Instance.IncludePrerelease))
+                var dependency = (await AssetDatabase.GetPackageMetadata(pair.Key, Project.Active.PackagesDirectory.FullName, PackageManagerPreferences.Instance.IncludePrerelease))
                     .Where(x => x.Identity.Version.ToString() == pair.Value).FirstOrDefault();
                 if (dependency == null)
                 {
@@ -223,7 +228,7 @@ namespace Prowl.Editor.Assets
             {
                 sb.AppendLine($"{pair.Key}={pair.Value};");
             }
-            File.WriteAllText(Path.Combine(Project.ProjectPackagesDirectory, "Packages.txt"), sb.ToString());
+            File.WriteAllText(Path.Combine(Project.Active.PackagesDirectory.FullName, "Packages.txt"), sb.ToString());
         }
 
         public static async Task<List<NuGetVersion>> GetPackageVersions(string packageId, string source, bool includePrerelease)
@@ -283,13 +288,13 @@ namespace Prowl.Editor.Assets
                 var available = new HashSet<SourcePackageDependencyInfo>(PackageIdentityComparer.Default);
                 await GetPackageDependencies(new(packageId, NuGetVersion.Parse(version)), nuGetFramework, cache, NugetLogger.Instance, repositories, available);
 
-                PackageResolverContext resolverContext = new(DependencyBehavior.Lowest, [ packageId ], [], [], [], available, srp.GetRepositories().Select(s => s.PackageSource), NugetLogger.Instance);
+                PackageResolverContext resolverContext = new(DependencyBehavior.Lowest, [packageId], [], [], [], available, srp.GetRepositories().Select(s => s.PackageSource), NugetLogger.Instance);
 
                 PackageResolver resolver = new();
- 
+
                 var packagesToInstall = resolver.Resolve(resolverContext, CancellationToken.None).Select(p => available.Single(x => PackageIdentityComparer.Default.Equals(x, p)));
 
-                PackagePathResolver packagePathResolver = new(Project.ProjectPackagesDirectory);
+                PackagePathResolver packagePathResolver = new(Project.Active.PackagesDirectory.FullName);
                 PackageExtractionContext packageExtractionContext = new(PackageSaveMode.Defaultv3, XmlDocFileSaveMode.None, ClientPolicyContext.GetClientPolicy(settings, NugetLogger.Instance), NugetLogger.Instance);
 
                 FrameworkReducer frameworkReducer = new();
@@ -308,7 +313,7 @@ namespace Prowl.Editor.Assets
 
                     DesiredPackages[packageToInstall.Id] = packageToInstall.Version.ToString();
 
-                    var metaData = (await GetPackageMetadata(packageId, Project.ProjectPackagesDirectory, PackageManagerPreferences.Instance.IncludePrerelease)).Where(x => x.Identity.Version.ToString() == packageToInstall.Version.ToString()).FirstOrDefault();
+                    var metaData = (await GetPackageMetadata(packageId, Project.Active.PackagesDirectory.FullName, PackageManagerPreferences.Instance.IncludePrerelease)).Where(x => x.Identity.Version.ToString() == packageToInstall.Version.ToString()).FirstOrDefault();
 
                     Packages.RemoveAll(x => x.Identity.Id == packageId);
                     Packages.Add(metaData);
@@ -326,7 +331,7 @@ namespace Prowl.Editor.Assets
             ArgumentNullException.ThrowIfNull(version, nameof(version));
 
             // Simply delete the folder & remove from the list
-            var packageDirectory = Path.Combine(Project.ProjectPackagesDirectory, $"{packageId}.{version}");
+            var packageDirectory = Path.Combine(Project.Active.PackagesDirectory.FullName, $"{packageId}.{version}");
             if (Directory.Exists(packageDirectory))
                 Directory.Delete(packageDirectory, true);
 

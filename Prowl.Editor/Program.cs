@@ -1,84 +1,16 @@
-﻿using Prowl.Editor.Assets;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
 
-using System.Text.RegularExpressions;
-
 namespace Prowl.Editor;
 
 public static class Program
 {
-    static string myFunkyShader =
-"""
-Shader "Funky"
-
-Global
-{
-    GLOBALINCLUDE
-
-    ENDGLOBAL
-}
-
-Pass "DaPass"
-{
-	Blend Override
-
-    // Stencil state
-    DepthStencil
-    {
-        // Depth write
-        DepthWrite On
-
-        // Comparison kind
-        DepthTest LessEqual
-    }
-
-    // Rasterizer culling mode
-    Cull None
-
-	SHADERPROGRAM
-
-        #pragma vertex vert
-        #pragma fragment frag
-
-        struct attributes
-        {
-            float4 pos : POSITION;
-            float4 col : COLOR;
-        };
-
-        struct v2f
-        {
-            float4 pos : SV_POSITION;
-            float4 col : COLOR;
-        };
-
-        float4 SomeColor;
-        float4x4 SomeMatrix;
-
-
-        v2f vert(attributes input)
-        {
-            v2f output = (v2f)0;
-
-            output.pos = mul(SomeMatrix, input.pos);
-            output.col = input.col * SomeColor;
-
-            return output;
-        }
-
-
-        float4 frag(v2f input) : SV_TARGET
-        {
-            return input.col / SomeColor;
-        }
-	ENDPROGRAM
-}
-
-""";
-
     public static event Action? OnDrawEditor;
     public static event Action? OnUpdateEditor;
 
@@ -88,12 +20,6 @@ Pass "DaPass"
     private static bool CreatedDefaultWindows = false;
     public static int Main(string[] args)
     {
-        //Shader shader = Utilities.ShaderParser.ParseShader(myFunkyShader);
-        //
-        //Console.WriteLine(shader.GetStringRepresentation());
-        //
-        //return 0;
-
         // set global Culture to invariant
         Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
         Application.Initialize += () =>
@@ -143,7 +69,7 @@ Pass "DaPass"
                     // new AssetSelectorWindow(typeof(Texture2D), (guid, fileid) => {  });
                 }
 
-                Application.DataPath = Project.ProjectDirectory;
+                Application.DataPath = Project.Active.ProjectPath;
 
                 if (GeneralPreferences.Instance.LockFPS)
                 {
@@ -156,9 +82,9 @@ Pass "DaPass"
                     Screen.FramesPerSecond = 0;
                 }
 
-                if (Hotkeys.IsHotkeyDown("SaveSceneAs", new() { Key = Runtime.Key.S, Ctrl = true, Shift = true }))
+                if (Hotkeys.IsHotkeyDown("SaveSceneAs", new() { Key = Key.S, Ctrl = true, Shift = true }))
                     EditorGuiManager.SaveSceneAs();
-                else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Runtime.Key.S, Ctrl = true }))
+                else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Key.S, Ctrl = true }))
                     EditorGuiManager.SaveScene();
 
                 Application.isPlaying = PlayMode.Current == PlayMode.Mode.Playing;
@@ -218,18 +144,24 @@ Pass "DaPass"
                     // Unload External Assemblies
                     AssemblyManager.Unload();
 
+                    Project active = Project.Active;
+
+                    DirectoryInfo temp = active.TempDirectory;
+                    DirectoryInfo bin = new DirectoryInfo(Path.Combine(temp.FullName, "bin"));
+                    DirectoryInfo debug = new DirectoryInfo(Path.Combine(bin.FullName, "Debug"));
+
                     // Delete everything under Temp\Bin
-                    if (Directory.Exists(Path.Combine(Project.TempDirectory, "bin")))
-                        Directory.Delete(Path.Combine(Project.TempDirectory, "bin"), true);
-                    Directory.CreateDirectory(Path.Combine(Project.TempDirectory, "bin"));
+                    if (bin.Exists)
+                        Directory.Delete(bin.FullName, true);
+                    bin.Create();
 
                     // Compile the Projects
-                    Project.Compile(Project.Assembly_Proj, new DirectoryInfo(Path.Combine(Project.TempDirectory, "bin", "Debug")));
-                    Project.Compile(Project.Editor_Assembly_Proj, new DirectoryInfo(Path.Combine(Project.TempDirectory, "bin", "Debug")));
+                    Project.Compile(active, active.Assembly_Proj.FullName, debug);
+                    Project.Compile(active, active.Editor_Assembly_Proj.FullName, debug);
 
                     // Reload the External Assemblies
-                    AssemblyManager.LoadExternalAssembly(Project.Editor_Assembly_DLL, true);
-                    AssemblyManager.LoadExternalAssembly(Project.Assembly_DLL, true);
+                    AssemblyManager.LoadExternalAssembly(active.Editor_Assembly_DLL.FullName, true);
+                    AssemblyManager.LoadExternalAssembly(active.Assembly_DLL.FullName, true);
                 }
                 catch (Exception e)
                 {

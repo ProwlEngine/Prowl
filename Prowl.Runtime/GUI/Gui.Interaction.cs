@@ -1,6 +1,9 @@
-﻿using Prowl.Runtime.GUI.Layout;
-using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Collections.Generic;
+
+using Prowl.Runtime.GUI.Layout;
 
 namespace Prowl.Runtime.GUI
 {
@@ -74,7 +77,7 @@ namespace Prowl.Runtime.GUI
         /// Block all interactables in the given rect below this ZIndex/Node
         /// Usefull for Popups/Windows when you want to prevent interaction with things below/behind it
         /// </summary>
-        public void BlockInteractables(Rect rect) 
+        public void BlockInteractables(Rect rect)
             => _blockers.Add((GetNextInteractableLayer(CurrentZIndex), rect));
 
         /// <summary>
@@ -127,8 +130,8 @@ namespace Prowl.Runtime.GUI
                 zIndex = CurrentZIndex + (count / 1000.0);
             }
 
-                // Check if there is any interactable with a higher ZIndex that intersects the current position
-                bool isObstructed = false;
+            // Check if there is any interactable with a higher ZIndex that intersects the current position
+            bool isObstructed = false;
             foreach (var interactable in _oldinteractables.Values)
             {
                 if (interactable._id != ignoreID && interactable.zIndex > zIndex && interactable._rect.Contains(pos))

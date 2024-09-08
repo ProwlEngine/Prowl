@@ -1,4 +1,7 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -54,7 +57,7 @@ namespace Prowl.Runtime.NodeSystem
                     if (!nodes.Where(n => n.GetType() == type).Any())
                         AddNode(type);
 
-                OnValidate();
+            OnValidate();
             foreach (var node in nodes)
                 node.OnValidate();
         }
@@ -64,7 +67,7 @@ namespace Prowl.Runtime.NodeSystem
         {
             return AddNode(typeof(T)) as T;
         }
-        
+
         /// <summary> Add a node to the graph by type </summary>
         public virtual Node AddNode(Type type)
         {
@@ -85,12 +88,12 @@ namespace Prowl.Runtime.NodeSystem
             node.OnEnable();
             return node;
         }
-        
+
         public T GetNode<T>() where T : Node
         {
             return nodes.Where(n => n.GetType() == typeof(T)).FirstOrDefault() as T;
         }
-        
+
         public IEnumerable<T> GetNodes<T>() where T : Node
         {
             return nodes.Where(n => n.GetType() == typeof(T)).Cast<T>();
@@ -112,7 +115,7 @@ namespace Prowl.Runtime.NodeSystem
             nodes.Add(node);
             return node;
         }
-        
+
         /// <summary> Safely remove a node and all its connections </summary>
         /// <param name="node"> The node to remove </param>
         public virtual void RemoveNode(Node node)
@@ -131,13 +134,13 @@ namespace Prowl.Runtime.NodeSystem
             node.ClearConnections();
             nodes.Remove(node);
         }
-        
+
         /// <summary> Remove all nodes and connections from the graph </summary>
         public virtual void Clear()
         {
             nodes.Clear();
         }
-        
+
         /// <summary> Create a new deep copy of this graph </summary>
         public virtual NodeGraph Copy()
         {
@@ -152,7 +155,7 @@ namespace Prowl.Runtime.NodeSystem
                 node.graph = graph;
                 graph.nodes[i] = node;
             }
-        
+
             // Redirect all connections
             for (int i = 0; i < graph.nodes.Count; i++)
             {
@@ -162,7 +165,7 @@ namespace Prowl.Runtime.NodeSystem
                     port.Redirect(nodes, graph.nodes);
                 }
             }
-        
+
             return graph;
         }
 

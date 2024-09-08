@@ -1,11 +1,16 @@
-﻿using BepuPhysics;
-using BepuPhysics.Collidables;
-using BepuUtilities.Memory;
-using Prowl.Runtime;
-using Prowl.Runtime.Contacts;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
+using BepuPhysics;
+using BepuPhysics.Collidables;
+
+using BepuUtilities.Memory;
+
+using Prowl.Runtime.Contacts;
 
 namespace Prowl.Runtime
 {
@@ -19,14 +24,17 @@ namespace Prowl.Runtime
         public enum BodyType { Small, Big }
         public BodyType Type;
         private IContactEventHandler? _trigger;
-        
+
         protected TypedIndex ShapeIndex { get; private set; }
 
-        public IContactEventHandler? ContactEventHandler {
-            get {
+        public IContactEventHandler? ContactEventHandler
+        {
+            get
+            {
                 return _trigger;
             }
-            set {
+            set
+            {
                 if (IsContactHandlerRegistered())
                     UnregisterContactHandler();
 
@@ -37,39 +45,49 @@ namespace Prowl.Runtime
         }
 
         [ShowInInspector]
-        public float SpringFrequency {
-            get {
+        public float SpringFrequency
+        {
+            get
+            {
                 return _springFrequency;
             }
-            set {
+            set
+            {
                 _springFrequency = value;
                 TryUpdateMaterialProperties();
             }
         }
 
         [ShowInInspector]
-        public float SpringDampingRatio {
-            get {
+        public float SpringDampingRatio
+        {
+            get
+            {
                 return _springDampingRatio;
             }
-            set {
+            set
+            {
                 _springDampingRatio = value;
                 TryUpdateMaterialProperties();
             }
         }
 
         [ShowInInspector]
-        public float FrictionCoefficient {
+        public float FrictionCoefficient
+        {
             get => _frictionCoefficient;
-            set {
+            set
+            {
                 _frictionCoefficient = value;
                 TryUpdateMaterialProperties();
             }
         }
 
-        public float MaximumRecoveryVelocity {
+        public float MaximumRecoveryVelocity
+        {
             get => _maximumRecoveryVelocity;
-            set {
+            set
+            {
                 _maximumRecoveryVelocity = value;
                 TryUpdateMaterialProperties();
             }
@@ -137,7 +155,7 @@ namespace Prowl.Runtime
             {
                 foreach (var collider in colliders)
                 {
-                    if(collider.Container != null && collider.Container != this)
+                    if (collider.Container != null && collider.Container != this)
                     {
                         Debug.LogError("Collider is already attached to another container! Do you have a rigidbody as a child of another rigidbody?");
                         throw new InvalidOperationException("Collider is already attached to another container!");
@@ -145,7 +163,7 @@ namespace Prowl.Runtime
 
                     Vector3 localTranslation = Vector3.zero;
                     Quaternion localRotation = Quaternion.identity;
-                    if(collider.Transform != this.Transform)
+                    if (collider.Transform != this.Transform)
                     {
                         localTranslation = collider.Transform.localPosition;
                         localRotation = collider.Transform.localRotation;

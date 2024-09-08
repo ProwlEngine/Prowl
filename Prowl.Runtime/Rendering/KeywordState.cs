@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -11,9 +14,9 @@ namespace Prowl.Runtime
     /// </summary>
     public class KeywordState : ISerializationCallbackReceiver, IEquatable<KeywordState>
     {
-        public static KeywordState Empty = new([new("", "")]);
+        public static KeywordState Empty => new([new("", "")]);
 
-        public static KeywordState Default = new(
+        public static KeywordState Default => new(
             [
                 new("UV_STARTS_AT_TOP", Graphics.Device?.IsUvOriginTopLeft ?? false ? "1" : "0"),
                 new("DEPTH_ZERO_TO_ONE", Graphics.Device?.IsDepthRangeZeroToOne ?? false ? "1" : "0"),

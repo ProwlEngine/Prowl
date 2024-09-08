@@ -1,4 +1,7 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 
 namespace Prowl.Runtime
 {
@@ -23,8 +26,10 @@ namespace Prowl.Runtime
         public static int Range(int min, int max) => System.Random.Shared.Next(min, max);
 
         /// <summary> Returns a random point on the unit circle </summary>
-        public static Vector2 OnUnitCircle {
-            get {
+        public static Vector2 OnUnitCircle
+        {
+            get
+            {
                 double angle = (double)(Value * 6.283185307179586476925286766559);
                 return Vector2.Normalize(new Vector2(Math.Cos(angle), Math.Sin(angle)));
             }
@@ -37,8 +42,10 @@ namespace Prowl.Runtime
         public static Vector2 InUnitSquare => new(Value, Value);
 
         /// <summary> Returns a random point on the unit sphere </summary>
-        public static Vector3 OnUnitSphere {
-            get {
+        public static Vector3 OnUnitSphere
+        {
+            get
+            {
                 double a = (double)(Value * 6.283185307179586476925286766559);
                 double b = (double)(Value * Math.PI);
                 double sinB = Math.Sin(b);
@@ -62,9 +69,12 @@ namespace Prowl.Runtime
         public static bool Boolean => Value > 0.5f;
 
         /// <summary> Returns a random uniformly distributed color </summary>
-        public static Color Color {
-            get {
-                unchecked {
+        public static Color Color
+        {
+            get
+            {
+                unchecked
+                {
                     uint val = (uint)System.Random.Shared.Next();
                     return new Color32((byte)(val & 255), (byte)((val >> 8) & 255), (byte)((val >> 16) & 255), (byte)(System.Random.Shared.Next() & 255));
                 }
@@ -72,9 +82,12 @@ namespace Prowl.Runtime
         }
 
         /// <summary> Returns a random uniformly distributed color with an alpha of 1.0 </summary>
-        public static Color ColorFullAlpha {
-            get {
-                unchecked {
+        public static Color ColorFullAlpha
+        {
+            get
+            {
+                unchecked
+                {
                     uint val = (uint)System.Random.Shared.Next();
                     return new Color32((byte)(val & 255), (byte)((val >> 8) & 255), (byte)((val >> 16) & 255), 255);
                 }

@@ -1,7 +1,12 @@
-﻿using Prowl.Runtime.Audio;
-using Prowl.Runtime.SceneManagement;
-using Veldrid;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
+
+using Prowl.Runtime.Audio;
+using Prowl.Runtime.SceneManagement;
+
+using Veldrid;
 
 namespace Prowl.Runtime;
 
@@ -24,8 +29,8 @@ public static class Application
 
     private static GraphicsBackend[] preferredWindowsBackends = // Covers Windows/UWP
     [
-        GraphicsBackend.OpenGL,
         GraphicsBackend.Vulkan,
+        GraphicsBackend.OpenGL,
         GraphicsBackend.Direct3D11,
         GraphicsBackend.OpenGLES,
     ];

@@ -1,5 +1,9 @@
-﻿using Prowl.Runtime;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Runtime;
 using Prowl.Runtime.Utils;
+
 using Debug = Prowl.Runtime.Debug;
 
 namespace Prowl.Editor.Assets
@@ -14,7 +18,7 @@ namespace Prowl.Editor.Assets
     {
         #region Properties
         public static Guid LastLoadedAssetID { get; private set; } = Guid.Empty;
-        public static string TempAssetDirectory => Path.Combine(Project.ProjectDirectory, "Library/AssetDatabase");
+        public static string TempAssetDirectory => Path.Combine(Project.Active.ProjectPath, "Library/AssetDatabase");
 
         #endregion
 
@@ -49,7 +53,7 @@ namespace Prowl.Editor.Assets
                 if (!lastFocused || RefreshTimer > 5f)
                     Update();
             }
-            
+
             lastFocused = Screen.IsFocused;
         }
 
@@ -77,7 +81,7 @@ namespace Prowl.Editor.Assets
         {
             ArgumentNullException.ThrowIfNullOrEmpty(rootFolder);
 
-            var rootPath = Path.Combine(Project.ProjectDirectory, rootFolder);
+            var rootPath = Path.Combine(Project.Active.ProjectPath, rootFolder);
             var info = new DirectoryInfo(rootPath);
 
             if (!info.Exists)
@@ -326,7 +330,7 @@ namespace Prowl.Editor.Assets
         /// <returns>True if the asset was reimported successfully, false otherwise.</returns>
         public static bool Reimport(FileInfo assetFile, bool disposeExisting = true)
         {
-            Debug.Log($"Attempting to Import {Path.GetRelativePath(Project.ProjectDirectory, assetFile.FullName)}!");
+            Debug.Log($"Attempting to Import {Path.GetRelativePath(Project.Active.ProjectPath, assetFile.FullName)}!");
             ArgumentNullException.ThrowIfNull(assetFile);
 
             // Dispose if we already have it

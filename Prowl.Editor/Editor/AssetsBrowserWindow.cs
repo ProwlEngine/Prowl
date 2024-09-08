@@ -1,10 +1,13 @@
-﻿using Prowl.Editor.Assets;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Reflection;
+
+using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.GUI.Graphics;
-using System.Reflection;
 
 namespace Prowl.Editor
 {
@@ -50,7 +53,7 @@ namespace Prowl.Editor
 
         public void Invalidate()
         {
-            if(CurDirectoryNode == null)
+            if (CurDirectoryNode == null)
                 CurDirectoryNode = AssetDatabase.GetRootFolderCache(2).RootNode;
 
             // Ensure we always have a valid Directory, if the current one is deleted move to its parent
@@ -65,7 +68,8 @@ namespace Prowl.Editor
             if (Locked)
                 return;
 
-            string path = to switch {
+            string path = to switch
+            {
                 DirectoryInfo dir => dir.FullName,
                 FileInfo file => file.Directory.FullName,
                 _ => CurDirectoryNode.Directory.FullName
@@ -131,7 +135,7 @@ namespace Prowl.Editor
                 //var pathPos = new Vector2(itemHeight + 200 + (itemPadding * 3), 7);
                 //pathPos += g.CurrentNode.LayoutData.GlobalContentPosition;
                 var pathPos = new Vector2(itemHeight + 200 + (itemPadding * 3), 0);
-                string assetPath = Path.GetRelativePath(Project.ProjectDirectory, CurDirectoryNode.Directory.FullName);
+                string assetPath = Path.GetRelativePath(Project.Active.ProjectPath, CurDirectoryNode.Directory.FullName);
                 //g.DrawText(Font.DefaultFont, assetPath, 20, pathPos, GuiStyle.Base11);
                 string[] nodes = assetPath.Split(Path.DirectorySeparatorChar);
                 double[] nodeSizes = new double[nodes.Length];
@@ -169,7 +173,7 @@ namespace Prowl.Editor
                     {
                         if (gui.IsNodePressed())
                         {
-                            string path = Project.ProjectDirectory + "/" + string.Join("/", nodes.Take(i + 1));
+                            string path = Project.Active.ProjectPath + "/" + string.Join("/", nodes.Take(i + 1));
                             if (AssetDatabase.PathToCachedNode(path, out var node))
                                 CurDirectoryNode = node;
                         }
@@ -210,7 +214,8 @@ namespace Prowl.Editor
                 {
                     if (go.AssetID == Guid.Empty)
                     {
-                        var prefab = new Prefab {
+                        var prefab = new Prefab
+                        {
                             GameObject = Serializer.Serialize(go),
                             Name = go.Name
                         };
@@ -412,7 +417,7 @@ namespace Prowl.Editor
                 _pingTimer -= Time.deltaTimeF;
                 if (_pingTimer > PingDuration - 1f)
                 {
-                    if(AssetDatabase.PathToCachedNode(_pingedFile.Directory.FullName, out var node))
+                    if (AssetDatabase.PathToCachedNode(_pingedFile.Directory.FullName, out var node))
                         CurDirectoryNode = node;
                     //ScrollToItem();
                 }

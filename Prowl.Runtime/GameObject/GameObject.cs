@@ -1,8 +1,12 @@
-﻿using Prowl.Runtime.SceneManagement;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+
+using Prowl.Runtime.SceneManagement;
 
 namespace Prowl.Runtime;
 
@@ -49,7 +53,8 @@ public class GameObject : EngineObject, ISerializable
     public HideFlags hideFlags = HideFlags.None;
 
     /// <summary> Gets whether or not this gameobject is enabled explicitly </summary>
-    public bool enabled {
+    public bool enabled
+    {
         get { return _enabled; }
         set { if (value != _enabled) { SetEnabled(value); } }
     }
@@ -58,13 +63,15 @@ public class GameObject : EngineObject, ISerializable
     public bool enabledInHierarchy => _enabledInHierarchy;
 
     /// <summary> The Tag of this GameObject </summary>
-    public string tag {
+    public string tag
+    {
         get => TagLayerManager.GetTag(tagIndex);
         set => tagIndex = TagLayerManager.GetTagIndex(value);
     }
 
     /// <summary> The Layer of this GameObject </summary>
-    public string layer {
+    public string layer
+    {
         get => TagLayerManager.GetLayer(layerIndex);
         set => layerIndex = TagLayerManager.GetLayerIndex(value);
     }
@@ -79,8 +86,10 @@ public class GameObject : EngineObject, ISerializable
 
     public bool IsPrefab => AssetID != Guid.Empty;
 
-    public bool IsPartOfPrefab {
-        get {
+    public bool IsPartOfPrefab
+    {
+        get
+        {
             GameObject? parent = this;
             while (parent != null)
             {
@@ -95,8 +104,10 @@ public class GameObject : EngineObject, ISerializable
 
     #endregion
 
-    public Transform Transform {
-        get {
+    public Transform Transform
+    {
+        get
+        {
             _transform.gameObject = this; // ensure gameobject is this
             return _transform;
         }
@@ -379,7 +390,7 @@ public class GameObject : EngineObject, ISerializable
 
     public MonoBehaviour? GetComponent(Type type)
     {
-        if (type == null) return null; 
+        if (type == null) return null;
         if (_componentCache.TryGetValue(type, out var components))
             return components.First();
         else
@@ -427,7 +438,8 @@ public class GameObject : EngineObject, ISerializable
         if (componentType == null) return null;
         // First check the current Object
         MonoBehaviour component;
-        if (includeSelf && enabledInHierarchy) {
+        if (includeSelf && enabledInHierarchy)
+        {
             component = GetComponent(componentType);
             if (component != null)
                 return component;
@@ -455,8 +467,9 @@ public class GameObject : EngineObject, ISerializable
                 yield return component;
         // Now check all parents
         GameObject parent = this;
-        while ((parent = parent.parent) != null) {
-            if(parent.enabledInHierarchy || includeInactive)
+        while ((parent = parent.parent) != null)
+        {
+            if (parent.enabledInHierarchy || includeInactive)
                 foreach (var component in parent.GetComponents(type))
                     yield return component;
         }
@@ -469,7 +482,8 @@ public class GameObject : EngineObject, ISerializable
         if (componentType == null) return null;
         // First check the current Object
         MonoBehaviour component;
-        if (includeSelf && enabledInHierarchy) {
+        if (includeSelf && enabledInHierarchy)
+        {
             component = GetComponent(componentType);
             if (component != null)
                 return component;
@@ -532,7 +546,7 @@ public class GameObject : EngineObject, ISerializable
         return clone;
     }
     public static GameObject Instantiate(GameObject original, GameObject? parent, Vector3 position, Quaternion rotation) => Instantiate(original, position, rotation, parent);
-    public static GameObject Instantiate(GameObject original, Vector3 position, Quaternion rotation, GameObject? parent) 
+    public static GameObject Instantiate(GameObject original, Vector3 position, Quaternion rotation, GameObject? parent)
     {
         GameObject clone = (GameObject)EngineObject.Instantiate(original, false);
         clone.Transform.position = position;
@@ -545,7 +559,7 @@ public class GameObject : EngineObject, ISerializable
     {
         // Internal_DestroyCommitted removes the child from the parent
         // Hense why we do a while loop on the first element instead of a foreach/for
-        while(children.Count > 0)
+        while (children.Count > 0)
             children[0].Dispose();
 
         foreach (var component in _components)
@@ -564,7 +578,7 @@ public class GameObject : EngineObject, ISerializable
     {
         _enabled = state;
         HierarchyStateChanged();
-	}
+    }
 
     private void HierarchyStateChanged()
     {
@@ -576,9 +590,9 @@ public class GameObject : EngineObject, ISerializable
                 component.HierarchyStateChanged();
         }
 
-		foreach (var child in children)
-			child.HierarchyStateChanged();
-	}
+        foreach (var child in children)
+            child.HierarchyStateChanged();
+    }
 
     private bool IsParentEnabled() => parent == null || parent.enabledInHierarchy;
 
@@ -622,7 +636,7 @@ public class GameObject : EngineObject, ISerializable
         if (AssetID != Guid.Empty)
         {
             compoundTag.Add("AssetID", new SerializedProperty(AssetID.ToString()));
-            if(FileID != 0)
+            if (FileID != 0)
                 compoundTag.Add("FileID", new SerializedProperty(FileID));
         }
 

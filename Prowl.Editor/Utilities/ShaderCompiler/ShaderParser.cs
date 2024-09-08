@@ -1,9 +1,13 @@
-﻿using Prowl.Runtime;
-using Prowl.Runtime.Utils;
-using Veldrid;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Text;
 using System.Text.RegularExpressions;
+
+using Prowl.Runtime;
+using Prowl.Runtime.Utils;
+
+using Veldrid;
 
 namespace Prowl.Editor.Utilities
 {
@@ -210,10 +214,10 @@ namespace Prowl.Editor.Utilities
                         parsedGlobal.Description.CullingMode = EnumParse<FaceCullMode>(tokenizer.Token.ToString(), "Cull");
                         break;
 
-                    case "GLOBALINCLUDE":
-                        EnsureUndef(parsedGlobal.Program, "'GLOBALINCLUDE' in Global block");
+                    case "HLSLINCLUDE":
+                        EnsureUndef(parsedGlobal.Program, "'HLSLINCLUDE' in Global block");
 
-                        SliceTo(tokenizer, "ENDGLOBAL");
+                        SliceTo(tokenizer, "ENDHLSL");
                         parsedGlobal.Program = tokenizer.Token.ToString();
                         break;
                 }
@@ -267,9 +271,9 @@ namespace Prowl.Editor.Utilities
                         pass.Description.Keywords = ParseKeywords(tokenizer);
                         break;
 
-                    case "SHADERPROGRAM":
-                        EnsureUndef(pass.Program, "'SHADERPROGRAM' in pass");
-                        SliceTo(tokenizer, "ENDPROGRAM");
+                    case "HLSLPROGRAM":
+                        EnsureUndef(pass.Program, "'HLSLPROGRAM' in pass");
+                        SliceTo(tokenizer, "ENDHLSL");
                         pass.Program = tokenizer.Token.ToString();
                         break;
                 }
@@ -434,8 +438,11 @@ namespace Prowl.Editor.Utilities
                     case "DepthTest":
                         ExpectToken(tokenizer, ShaderToken.Identifier);
 
-                        depthStencil.DepthTestEnabled = true;
-                        depthStencil.DepthComparison = EnumParse<ComparisonKind>(tokenizer.Token, "DepthTest");
+                        if (tokenizer.Token.Equals("Off", StringComparison.OrdinalIgnoreCase))
+                            depthStencil.DepthTestEnabled = false;
+                        else
+                            depthStencil.DepthComparison = EnumParse<ComparisonKind>(tokenizer.Token, "DepthTest", "Off");
+
                         break;
 
                     case "Ref":
@@ -639,12 +646,15 @@ namespace Prowl.Editor.Utilities
         }
 
 
-        private static T EnumParse<T>(ReadOnlySpan<char> text, string fieldName) where T : struct, Enum
+        private static T EnumParse<T>(ReadOnlySpan<char> text, string fieldName, params string[] extraValues) where T : struct, Enum
         {
             if (Enum.TryParse(text, true, out T value))
                 return value;
 
-            throw new InvalidOperationException($"Error parsing {fieldName}. Possible values: [{string.Join(", ", Enum.GetNames<T>())}]");
+            List<string> values = new(Enum.GetNames<T>());
+            values.AddRange(extraValues);
+
+            throw new InvalidOperationException($"Error parsing {fieldName}. Possible values: [{string.Join(", ", extraValues)}]");
         }
 
 

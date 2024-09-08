@@ -1,12 +1,16 @@
-﻿using Prowl.Icons;
-using Prowl.Runtime.GUI.Layout;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
+
+using Prowl.Icons;
+using Prowl.Runtime.GUI.Layout;
 
 namespace Prowl.Runtime.GUI
 {
     public partial class Gui
     {
-        
+
         public LayoutNode TextNode(string id, string text, Font? font = null)
         {
             using (Node("#_Text_" + id).Enter())
@@ -96,8 +100,8 @@ namespace Prowl.Runtime.GUI
             {
                 Interactable interact = GetInteractable();
 
-                    var col = ActiveID == interact.ID ? style.ActiveColor :
-                              HoveredID == interact.ID ? style.HoveredColor : style.BGColor;
+                var col = ActiveID == interact.ID ? style.ActiveColor :
+                          HoveredID == interact.ID ? style.HoveredColor : style.BGColor;
 
                 Draw2D.DrawRectFilled(CurrentNode.LayoutData.Rect, col, style.Roundness);
                 Draw2D.DrawRect(CurrentNode.LayoutData.Rect, style.BorderColor, style.BorderThickness, style.Roundness);
@@ -118,7 +122,8 @@ namespace Prowl.Runtime.GUI
             }
         }
 
-        public enum TooltipAlign {
+        public enum TooltipAlign
+        {
             TopLeft,
             TopMiddle,
             TopRight,
@@ -131,7 +136,7 @@ namespace Prowl.Runtime.GUI
 
         public void Tooltip(string tip, Vector2? topleft = null, float wrapWidth = -1, TooltipAlign align = TooltipAlign.TopRight)
         {
-            if(PreviousInteractableIsHovered() && tip != "")
+            if (PreviousInteractableIsHovered() && tip != "")
             {
                 var oldZ = ActiveGUI.CurrentZIndex;
                 ActiveGUI.SetZIndex(500000);
@@ -143,53 +148,60 @@ namespace Prowl.Runtime.GUI
                 var size = Font.DefaultFont.CalcTextSize(tip, 0, wrapWidth) + padding * 2 - new Vector2(0, 5);
                 var offset = new Vector2(0);
 
-                switch(align){
+                switch (align)
+                {
                     case TooltipAlign.TopLeft:
                         offset = new Vector2(-size.x - margin.x, -size.y - margin.y);
-                    break;
+                        break;
                     case TooltipAlign.TopMiddle:
                         offset = new Vector2(-size.x / 2 + margin.x, -size.y - margin.y);
-                    break;
+                        break;
                     case TooltipAlign.TopRight:
                         offset = new Vector2(margin.x, -size.y - margin.y);
-                    break;
+                        break;
                     case TooltipAlign.Right:
                         offset = new Vector2(margin.x, -size.y / 2);
-                    break;
+                        break;
                     case TooltipAlign.Left:
                         offset = new Vector2(-size.x - margin.x, -size.y / 2);
-                    break;
+                        break;
                     case TooltipAlign.BottomLeft:
                         offset = new Vector2(-size.x - margin.x, margin.y);
-                    break;
+                        break;
                     case TooltipAlign.BottomMiddle:
                         offset = new Vector2(-size.x / 2, margin.y);
-                    break;
+                        break;
                     case TooltipAlign.BottomRight:
                         offset = new Vector2(margin.x, margin.y);
-                    break;
+                        break;
                 }
 
                 // Checks if the tooltip is outside the window, and keeps it aligned inside the window.
-                if(pos.x > Screen.InternalWindow.Width / 2){
-                    if(pos.x < Screen.InternalWindow.Width - offset.x - size.x)
+                if (pos.x > Screen.InternalWindow.Width / 2)
+                {
+                    if (pos.x < Screen.InternalWindow.Width - offset.x - size.x)
                         pos += new Vector2(offset.x, 0);
                     else
                         pos -= new Vector2(margin.x + pos.x + size.x - Screen.InternalWindow.Width, 0);
-                }else{
-                    if(pos.x < MathD.Abs(offset.x) + margin.x)
+                }
+                else
+                {
+                    if (pos.x < MathD.Abs(offset.x) + margin.x)
                         pos = new Vector2(margin.x, pos.y);
                     else
                         pos += new Vector2(offset.x, 0);
                 }
 
-                if(pos.y > Screen.InternalWindow.Width / 2){
-                    if(pos.y < Screen.InternalWindow.Height - offset.y - size.y)
+                if (pos.y > Screen.InternalWindow.Width / 2)
+                {
+                    if (pos.y < Screen.InternalWindow.Height - offset.y - size.y)
                         pos += new Vector2(0, offset.y);
                     else
                         pos -= new Vector2(0, size.y + offset.y);
-                }else{
-                    if(pos.y < MathD.Abs(offset.y) + margin.y)
+                }
+                else
+                {
+                    if (pos.y < MathD.Abs(offset.y) + margin.y)
                         pos = new Vector2(pos.x, pos.y + margin.y);
                     else
                         pos += new Vector2(0, offset.y);
@@ -253,7 +265,7 @@ namespace Prowl.Runtime.GUI
                         if ((IsPointerClick(MouseButton.Left) || IsPointerClick(MouseButton.Middle) || IsPointerClick(MouseButton.Right)) &&
                             !IsPointerMoving &&
                             !node.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Popup
-                            //!parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
+                                                                          //!parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
                             !IsBlockedByInteractable(PointerPos, 50000 + nextPopupIndex)) // Not blocked by any interactables above this popup
                         {
                             ClosePopup(parentNode);
@@ -290,7 +302,7 @@ namespace Prowl.Runtime.GUI
             style.Roundness = 8f;
             style.BorderThickness = 1f;
             var changed = InputField(ID, ref searchText, 32, enterReturnsTrue ? InputFieldFlags.EnterReturnsTrue : InputFieldFlags.None, x, y, width, height, style);
-            if(string.IsNullOrWhiteSpace(searchText) && !g.PreviousInteractableIsFocus())
+            if (string.IsNullOrWhiteSpace(searchText) && !g.PreviousInteractableIsFocus())
             {
                 var pos = g.PreviousNode.LayoutData.InnerRect.Position + new Vector2(8, 3);
                 // Center text vertically

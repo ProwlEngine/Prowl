@@ -1,5 +1,9 @@
-﻿using Silk.NET.OpenAL;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
+
+using Silk.NET.OpenAL;
 
 namespace Prowl.Runtime.Audio.OpenAL
 {
@@ -45,7 +49,8 @@ namespace Prowl.Runtime.Audio.OpenAL
 
         public override void SetListenerOrientation(Vector3 forward, Vector3 up)
         {
-            unsafe {
+            unsafe
+            {
                 float* orientationPtr = stackalloc float[6];
 
                 orientationPtr[0] = (float)forward.x;

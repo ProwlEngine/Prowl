@@ -1,5 +1,9 @@
-using Veldrid;
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
+
+using Veldrid;
 
 namespace Prowl.Runtime
 {
@@ -29,8 +33,8 @@ namespace Prowl.Runtime
         private SamplerDescription _internalDescription;
 
         /// <summary>The internal <see cref="Sampler"/> representation.</summary>
-        internal Sampler InternalSampler 
-        { 
+        internal Sampler InternalSampler
+        {
             get
             {
                 RecreateInternalSampler();
@@ -107,7 +111,7 @@ namespace Prowl.Runtime
             this.MaximumAnisotropy = other.MaximumAnisotropy;
             this.MaximumLod = other.MaximumLod;
             this.MinimumLod = other.MinimumLod;
-        }   
+        }
 
         public void SetWrapMode(SamplerAxis axis, TextureWrapMode mode)
         {
@@ -135,7 +139,7 @@ namespace Prowl.Runtime
 
             // Ugly nested if-else chain. Unfortunately the only other options are enum parsing or a nastier, more verbose chain.
             if (minFilter == FilterType.Linear)
-            {   
+            {
                 if (magFilter == FilterType.Linear)
                 {
                     if (mipFilter == FilterType.Linear)
@@ -178,10 +182,10 @@ namespace Prowl.Runtime
 
         private static bool CompareDescriptions(in SamplerDescription desc1, in SamplerDescription desc2)
         {
-            return desc1.AddressModeU == desc2.AddressModeU && 
-                desc1.AddressModeV == desc2.AddressModeV && 
+            return desc1.AddressModeU == desc2.AddressModeU &&
+                desc1.AddressModeV == desc2.AddressModeV &&
                 desc1.AddressModeW == desc2.AddressModeW &&
-                desc1.BorderColor == desc2.BorderColor && 
+                desc1.BorderColor == desc2.BorderColor &&
                 desc1.ComparisonKind == desc2.ComparisonKind &&
                 desc1.Filter == desc2.Filter &&
                 desc1.LodBias == desc2.LodBias &&

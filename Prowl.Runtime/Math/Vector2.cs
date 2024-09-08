@@ -1,6 +1,5 @@
-// Licensed to the .NET Foundation under one or more agreements.
-// The .NET Foundation licenses this file to you under the MIT license.
-// See the LICENSE file in the project root for more information.
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 using System.Globalization;
@@ -35,9 +34,12 @@ namespace Prowl.Runtime
 
         public double sqrMagnitude { get { return x * x + y * y; } }
 
-        public double this[int index] {
-            get {
-                switch (index) {
+        public double this[int index]
+        {
+            get
+            {
+                switch (index)
+                {
                     case 0: return x;
                     case 1: return y;
                     default:
@@ -45,8 +47,10 @@ namespace Prowl.Runtime
                 }
             }
 
-            set {
-                switch (index) {
+            set
+            {
+                switch (index)
+                {
                     case 0: x = value; break;
                     case 1: y = value; break;
                     default:
@@ -128,7 +132,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Returns a String representing this Vector2 instance, using the specified format to format individual elements 
+        /// Returns a String representing this Vector2 instance, using the specified format to format individual elements
         /// and the given IFormatProvider.
         /// </summary>
         /// <param name="format">The format of individual elements.</param>
@@ -146,7 +150,7 @@ namespace Prowl.Runtime
             sb.Append('>');
             return sb.ToString();
         }
-        
+
         public bool IsFinate() => MathD.IsValid(x) && MathD.IsValid(y);
         #endregion Public Instance Methods
 
@@ -177,11 +181,11 @@ namespace Prowl.Runtime
         public static double Distance(Vector2 value1, Vector2 value2)
         {
             double dx = value1.x - value2.x;
-                double dy = value1.y - value2.y;
+            double dy = value1.y - value2.y;
 
-                double ls = dx * dx + dy * dy;
+            double ls = dx * dx + dy * dy;
 
-                return (double)Math.Sqrt((double)ls);
+            return (double)Math.Sqrt((double)ls);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -202,11 +206,11 @@ namespace Prowl.Runtime
         public static Vector2 Normalize(Vector2 value)
         {
             double ls = value.x * value.x + value.y * value.y;
-                double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
+            double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
 
-                return new Vector2(
-                    value.x * invNorm,
-                    value.y * invNorm);
+            return new Vector2(
+                value.x * invNorm,
+                value.y * invNorm);
         }
 
         /// <summary>
@@ -231,9 +235,9 @@ namespace Prowl.Runtime
         {
             double dot = vector.x * normal.x + vector.y * normal.y;
 
-                return new Vector2(
-                    vector.x - 2.0 * dot * normal.x,
-                    vector.y - 2.0 * dot * normal.y);
+            return new Vector2(
+                vector.x - 2.0 * dot * normal.x,
+                vector.y - 2.0 * dot * normal.y);
         }
 
         /// <summary>
@@ -370,7 +374,7 @@ namespace Prowl.Runtime
         /// Returns a vector whose elements are the absolute values of each of the source vector's elements.
         /// </summary>
         /// <param name="value">The source vector.</param>
-        /// <returns>The absolute value vector.</returns>        
+        /// <returns>The absolute value vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector2 Abs(Vector2 value)
         {

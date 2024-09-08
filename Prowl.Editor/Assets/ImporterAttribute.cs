@@ -1,6 +1,10 @@
-﻿using Prowl.Runtime;
-using Prowl.Runtime.Utils;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Reflection;
+
+using Prowl.Runtime;
+using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Assets
 {
@@ -40,7 +44,7 @@ namespace Prowl.Editor.Assets
                             // Check if has more then 1 '.'
                             if (ext.Count(x => x == '.') > 1) throw new Exception($"Extension {ext} is formatted incorrectly on importer: {type.Name}");
 
-                            if(extToImporter.TryGetValue(ext, out var oldType))
+                            if (extToImporter.TryGetValue(ext, out var oldType))
                                 Debug.LogError($"Asset Importer Overwritten. {ext} extension already in use by: {oldType.Name}, being overwritten by: {type.Name}");
                             extToImporter[ext] = type;
                             extToIcon[ext] = attribute.FileIcon;
@@ -78,7 +82,7 @@ namespace Prowl.Editor.Assets
 
         public static string GetIconForExtension(string extension)
         {
-            if(extToIcon.TryGetValue(extension, out var fileIcon))
+            if (extToIcon.TryGetValue(extension, out var fileIcon))
                 return fileIcon;
             return "FileIcon.png";
         }

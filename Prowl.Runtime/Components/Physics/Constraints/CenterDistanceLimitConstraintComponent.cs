@@ -1,4 +1,7 @@
-﻿using BepuPhysics.Constraints;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics.Constraints;
 
 namespace Prowl.Runtime;
 
@@ -34,22 +37,28 @@ public sealed class CenterDistanceLimitConstraintComponent : TwoBodyConstraintCo
     }
 
     [ShowInInspector]
-    public float SpringFrequency {
-        get {
+    public float SpringFrequency
+    {
+        get
+        {
             return _springFrequency;
         }
-        set {
+        set
+        {
             _springFrequency = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringDampingRatio {
-        get {
+    public float SpringDampingRatio
+    {
+        get
+        {
             return _springDampingRatio;
         }
-        set {
+        set
+        {
             _springDampingRatio = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -57,7 +66,8 @@ public sealed class CenterDistanceLimitConstraintComponent : TwoBodyConstraintCo
 
     internal override CenterDistanceLimit CreateConstraint()
     {
-        return new CenterDistanceLimit {
+        return new CenterDistanceLimit
+        {
             MinimumDistance = _minimumDistance,
             MaximumDistance = _maximumDistance,
             SpringSettings = new SpringSettings(_springFrequency, _springDampingRatio)

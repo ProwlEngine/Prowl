@@ -1,4 +1,7 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -246,7 +249,8 @@ namespace Prowl.Runtime
 
         private static SerializedProperty ReadTag(StringTagTokenizer parser)
         {
-            return parser.TokenType switch {
+            return parser.TokenType switch
+            {
                 TextTokenType.BeginCompound => ReadCompoundTag(parser),
                 TextTokenType.BeginList => ReadListTag(parser),
                 TextTokenType.BeginArray => ReadArrayTag(parser),
@@ -320,7 +324,8 @@ namespace Prowl.Runtime
 
         private static SerializedProperty ReadArrayTag(StringTagTokenizer parser)
         {
-            return parser.Token[1] switch {
+            return parser.Token[1] switch
+            {
                 'B' => ReadByteArrayTag(parser),
                 _ => throw new InvalidDataException($"Invalid array type \"{parser.Token[1]}\" at position {parser.TokenPosition}")
             };
@@ -378,7 +383,8 @@ namespace Prowl.Runtime
             static T ParsePrimitive<T>(StringTagTokenizer parser) where T : unmanaged
                 => (T)Convert.ChangeType(new string(parser.Token[..^1]), typeof(T));
 
-            return parser.Token[^1] switch {
+            return parser.Token[^1] switch
+            {
                 'B' => new SerializedProperty(ParsePrimitive<byte>(parser)),
                 'N' => new SerializedProperty(ParsePrimitive<sbyte>(parser)),
                 'S' => new SerializedProperty(ParsePrimitive<short>(parser)),

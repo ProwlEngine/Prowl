@@ -1,6 +1,8 @@
-﻿using Prowl.Runtime;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Runtime;
 using Prowl.Runtime.Utils;
-using System.Diagnostics;
 
 namespace Prowl.Editor.Preferences
 {
@@ -38,25 +40,25 @@ namespace Prowl.Editor.Preferences
         public bool AntiAliasing = true;
 
         [Text("File Editor:")]
-        public string fileEditor = "";
-        public string fileEditorArgs = "";
+        public string fileEditor = ""; // code
+        public string fileEditorArgs = ""; // "${ProjectDirectory}" -g "${File}":${Line}:${Character}
     }
 
     [FilePath("EditorStyle.pref", FilePathAttribute.Location.EditorPreference)]
     public class EditorStylePrefs : ScriptableSingleton<EditorStylePrefs>
     {
         [Text("Colors:")]
-        public double Disabled      = 0.7;
-        public Color LesserText     = new(110, 110, 120);
-        public Color Background     = new(15, 15, 18);
-        public Color WindowBGOne    = new(31, 33, 40);
-        public Color WindowBGTwo    = new Color(25, 27, 32);
-        public Color Borders        = new(49, 52, 66);
-        public Color Hovering       = new Color(255, 255, 255) * 0.8f;
-        public Color Highlighted    = Indigo;
-        public Color Ping           = Yellow;
-        public Color DropHighlight  = Orange;
-        public Color Warning        = Red;
+        public double Disabled = 0.7;
+        public Color LesserText = new(110, 110, 120);
+        public Color Background = new(15, 15, 18);
+        public Color WindowBGOne = new(31, 33, 40);
+        public Color WindowBGTwo = new Color(25, 27, 32);
+        public Color Borders = new(49, 52, 66);
+        public Color Hovering = new Color(255, 255, 255) * 0.8f;
+        public Color Highlighted = Indigo;
+        public Color Ping = Yellow;
+        public Color DropHighlight = Orange;
+        public Color Warning = Red;
 
         [Text("Sizing:")]
         public double Scale = 1;
@@ -78,7 +80,7 @@ namespace Prowl.Editor.Preferences
         public NoodleStroke NoodleStrokeType = NoodleStroke.Basic;
         public double NoodleStrokeWidth = 4;
 
-        // Base Colors 
+        // Base Colors
         public static Color Black => new(0, 0, 0, 255);
         public static Color Base4 => new(100, 100, 110);
         public static Color Base5 => new(139, 139, 147);

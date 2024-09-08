@@ -1,14 +1,18 @@
-﻿using Prowl.Editor.Assets;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Reflection;
+
+using Prowl.Editor.Assets;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
-using System.Reflection;
 
 namespace Prowl.Editor.Build
 {
     public class Desktop_Player : ProjectBuilder
     {
-        public enum Target 
-        { 
+        public enum Target
+        {
             [Text("Win x64")] win_x64,
             [Text("Win ARM x64")] win_arm64,
             [Text("Win x86")] win_x86,
@@ -47,14 +51,14 @@ namespace Prowl.Editor.Build
 
 
             BoundedLog($"Compiling project assembly to {output.FullName}...");
-            if (!Project.Compile(Project.Assembly_Proj, output, configuration == Configuration.Release))
+            if (!Project.Compile(Project.Active, Project.Active.Assembly_Proj.FullName, output, configuration == Configuration.Release))
             {
                 Debug.LogError($"Failed to compile Project assembly!");
                 return;
             }
 
             BoundedLog($"Exporting and Packing assets to {BuildDataPath}...");
-            if(assetPacking == AssetPacking.All)
+            if (assetPacking == AssetPacking.All)
             {
                 AssetDatabase.ExportAllBuildPackages(new DirectoryInfo(BuildDataPath));
             }
@@ -121,7 +125,7 @@ namespace Prowl.Editor.Build
                 File.Copy(file, file.Replace(playerPath, output.FullName), true);
 
             // Strip files we dont need for our target
-            if(target != Target.Universal)
+            if (target != Target.Universal)
                 CleanupRuntimes(output);
 
             Runtime.Debug.Log("**********************************************************************************************************************");

@@ -1,4 +1,7 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 
 namespace Prowl.Runtime
 {
@@ -58,7 +61,8 @@ namespace Prowl.Runtime
         /// <summary>
         /// The Asset index inside the asset file. 0 is the Main Asset
         /// </summary>
-        public ushort FileID {
+        public ushort FileID
+        {
             get => fileID;
             set => fileID = value;
         }
@@ -120,7 +124,7 @@ namespace Prowl.Runtime
         public Type InstanceType => typeof(T);
 
         /// <summary>
-        /// Creates a ContentRef pointing to the <see cref="Resource"/> at the specified id / using 
+        /// Creates a ContentRef pointing to the <see cref="Resource"/> at the specified id / using
         /// the specified alias.
         /// </summary>
         /// <param name="id"></param>
@@ -132,7 +136,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Creates a ContentRef pointing to the <see cref="Resource"/> at the specified id / using 
+        /// Creates a ContentRef pointing to the <see cref="Resource"/> at the specified id / using
         /// the specified alias.
         /// </summary>
         /// <param name="id"></param>
@@ -168,7 +172,7 @@ namespace Prowl.Runtime
 
         /// <summary>
         /// Loads the associated content as if it was accessed now.
-        /// You don't usually need to call this method. It is invoked implicitly by trying to 
+        /// You don't usually need to call this method. It is invoked implicitly by trying to
         /// access the <see cref="AssetRef{T}"/>.
         /// </summary>
         public void EnsureLoaded()
@@ -290,9 +294,9 @@ namespace Prowl.Runtime
         {
             SerializedProperty compoundTag = SerializedProperty.NewCompound();
             compoundTag.Add("AssetID", new SerializedProperty(assetID.ToString()));
-            if(assetID != Guid.Empty)
+            if (assetID != Guid.Empty)
                 ctx.AddDependency(assetID);
-            if(fileID != 0)
+            if (fileID != 0)
                 compoundTag.Add("FileID", new SerializedProperty(fileID));
             if (IsRuntimeResource)
                 compoundTag.Add("Instance", Serializer.Serialize(instance, ctx));

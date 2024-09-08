@@ -1,7 +1,11 @@
-﻿using Prowl.Runtime.SceneManagement;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Collections.Generic;
 using System.IO;
+
+using Prowl.Runtime.SceneManagement;
 
 namespace Prowl.Runtime.Utils
 {
@@ -85,7 +89,7 @@ namespace Prowl.Runtime.Utils
             catch (Exception e)
             {
                 SceneManager.AllowGameObjectConstruction = prev; // Restore state
-                throw e;
+                throw;
             }
         }
 

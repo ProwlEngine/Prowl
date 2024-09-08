@@ -1,7 +1,12 @@
-﻿using Prowl.Editor.Assets;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Reflection;
+
+using Prowl.Editor.Assets;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
-using System.Reflection;
+
 using static Prowl.Editor.MenuItem;
 
 namespace Prowl.Editor
@@ -56,7 +61,7 @@ namespace Prowl.Editor
 
         public static void CreateAsset(Type type)
         {
-            EditorGuiManager.Directory ??= new DirectoryInfo(Project.ProjectAssetDirectory);
+            EditorGuiManager.Directory ??= Project.Active.AssetDirectory;
             var obj = Activator.CreateInstance(type);
             FileInfo file = new FileInfo(EditorGuiManager.Directory + $"/New {type.Name}.scriptobj");
             while (File.Exists(file.FullName))

@@ -1,4 +1,7 @@
-﻿using BepuPhysics.Constraints;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics.Constraints;
 
 namespace Prowl.Runtime;
 
@@ -14,27 +17,33 @@ public sealed class LinearAxisMotorConstraintComponent : TwoBodyConstraintCompon
     [SerializeField, HideInInspector] private float _motorMaximumForce = 1000;
 
     [ShowInInspector]
-    public Vector3 LocalOffsetA {
+    public Vector3 LocalOffsetA
+    {
         get => _localOffsetA;
-        set {
+        set
+        {
             _localOffsetA = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public Vector3 LocalOffsetB {
+    public Vector3 LocalOffsetB
+    {
         get => _localOffsetB;
-        set {
+        set
+        {
             _localOffsetB = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public Vector3 LocalAxis {
+    public Vector3 LocalAxis
+    {
         get => _localAxis;
-        set {
+        set
+        {
             _localAxis = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -84,7 +93,8 @@ public sealed class LinearAxisMotorConstraintComponent : TwoBodyConstraintCompon
 
     internal override LinearAxisMotor CreateConstraint()
     {
-        return new LinearAxisMotor {
+        return new LinearAxisMotor
+        {
             LocalOffsetA = _localOffsetA,
             LocalOffsetB = _localOffsetB,
             LocalAxis = _localAxis,

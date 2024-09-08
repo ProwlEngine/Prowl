@@ -1,4 +1,7 @@
-﻿namespace Prowl.Runtime.NodeSystem
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+namespace Prowl.Runtime.NodeSystem
 {
     [Node("Flow Control/Do Once")]
     public class DoOnceNode : InOutFlowNode
@@ -15,7 +18,7 @@
 
         public override void Execute(NodePort input)
         {
-            if(input.fieldName == nameof(Reset))
+            if (input.fieldName == nameof(Reset))
                 completed = false;
 
             if (!completed)

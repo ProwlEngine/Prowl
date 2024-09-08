@@ -1,8 +1,12 @@
-﻿using Prowl.Runtime.Utils;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+
+using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime;
 
@@ -32,9 +36,11 @@ public abstract class MonoBehaviour : EngineObject
 
     public string Tag => _go.tag;
 
-    public bool Enabled {
+    public bool Enabled
+    {
         get { return _enabled; }
-        set {
+        set
+        {
             if (value != _enabled)
             {
                 _enabled = value;
@@ -227,8 +233,10 @@ public abstract class MonoBehaviour : EngineObject
             Enumerator = routine;
         }
 
-        internal bool CanRun {
-            get {
+        internal bool CanRun
+        {
+            get
+            {
                 object current = Enumerator.Current;
 
                 if (current is Coroutine)

@@ -1,3 +1,6 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using Prowl.Runtime;
 
 using SPIRVCross.NET;
@@ -10,18 +13,18 @@ namespace Prowl.Editor.Utilities
 {
     public static partial class UniformReflector
     {
-        public static Uniform[] GetUniforms(Reflector reflector, Resources resources)
+        public static ShaderUniform[] GetUniforms(Reflector reflector, Resources resources)
         {
-            List<Uniform> uniforms = new();
+            List<ShaderUniform> uniforms = new();
 
             foreach (var res in resources.StorageImages)
-                uniforms.Add(new Uniform(GetName(reflector, res.id), GetBinding(reflector, res.id), ResourceKind.TextureReadWrite));
+                uniforms.Add(new ShaderUniform(GetName(reflector, res.id), GetBinding(reflector, res.id), ResourceKind.TextureReadWrite));
 
             foreach (var res in resources.SeparateImages)
-                uniforms.Add(new Uniform(GetName(reflector, res.id), GetBinding(reflector, res.id), ResourceKind.TextureReadOnly));
+                uniforms.Add(new ShaderUniform(GetName(reflector, res.id), GetBinding(reflector, res.id), ResourceKind.TextureReadOnly));
 
             foreach (var res in resources.SeparateSamplers)
-                uniforms.Add(new Uniform(GetName(reflector, res.id), GetBinding(reflector, res.id), ResourceKind.Sampler));
+                uniforms.Add(new ShaderUniform(GetName(reflector, res.id), GetBinding(reflector, res.id), ResourceKind.Sampler));
 
             foreach (var res in resources.StorageBuffers)
                 uniforms.Add(CreateStorageBuffer(reflector, res));
@@ -39,25 +42,25 @@ namespace Prowl.Editor.Utilities
             return uniforms.ToArray();
         }
 
-        static Uniform CreateStorageBuffer(Reflector reflector, ReflectedResource bufferResource)
+        static ShaderUniform CreateStorageBuffer(Reflector reflector, ReflectedResource bufferResource)
         {
             uint binding = GetBinding(reflector, bufferResource.id);
 
             var decoratedType = reflector.GetTypeHandle(bufferResource.type_id);
 
             if (reflector.HasDecoration(bufferResource.id, Decoration.NonWritable))
-                return new Uniform(bufferResource.name, binding, ResourceKind.StructuredBufferReadOnly);
+                return new ShaderUniform(bufferResource.name, binding, ResourceKind.StructuredBufferReadOnly);
 
             string name = GetName(reflector, bufferResource.id);
 
-            return new Uniform(name, binding, ResourceKind.StructuredBufferReadWrite);
+            return new ShaderUniform(name, binding, ResourceKind.StructuredBufferReadWrite);
         }
 
-        static Uniform CreateConstantBuffer(Reflector reflector, ReflectedResource bufferResource)
+        static ShaderUniform CreateConstantBuffer(Reflector reflector, ReflectedResource bufferResource)
         {
             uint binding = GetBinding(reflector, bufferResource.id);
 
-            List<UniformMember> members = new();
+            List<ShaderUniformMember> members = new();
 
             var decoratedType = reflector.GetTypeHandle(bufferResource.type_id);
             var baseType = reflector.GetTypeHandle(decoratedType.BaseTypeID);
@@ -75,7 +78,7 @@ namespace Prowl.Editor.Utilities
                 if (!IsPrimitiveType(type.BaseType))
                     continue;
 
-                UniformMember member;
+                ShaderUniformMember member;
 
                 member.name = reflector.GetMemberName(baseType.BaseTypeID, i);
                 member.bufferOffsetInBytes = reflector.StructMemberOffset(baseType, i);
@@ -118,7 +121,7 @@ namespace Prowl.Editor.Utilities
 
             string name = GetName(reflector, bufferResource.id);
 
-            return new Uniform(name, binding, size, members.ToArray());
+            return new ShaderUniform(name, binding, size, members.ToArray());
         }
 
 

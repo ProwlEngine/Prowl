@@ -1,6 +1,5 @@
-// Licensed to the .NET Foundation under one or more agreements.
-// The .NET Foundation licenses this file to you under the MIT license.
-// See the LICENSE file in the project root for more information.
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 using System.Globalization;
@@ -30,9 +29,12 @@ namespace Prowl.Runtime
 
         #region Public Instance Properties
 
-        public int this[int index] {
-            get {
-                switch (index) {
+        public int this[int index]
+        {
+            get
+            {
+                switch (index)
+                {
                     case 0: return x;
                     case 1: return y;
                     default:
@@ -40,8 +42,10 @@ namespace Prowl.Runtime
                 }
             }
 
-            set {
-                switch (index) {
+            set
+            {
+                switch (index)
+                {
                     case 0: x = value; break;
                     case 1: y = value; break;
                     default:
@@ -109,7 +113,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Returns a String representing this Vector2Int instance, using the specified format to format individual elements 
+        /// Returns a String representing this Vector2Int instance, using the specified format to format individual elements
         /// and the given IFormatProvider.
         /// </summary>
         /// <param name="format">The format of individual elements.</param>
@@ -127,7 +131,7 @@ namespace Prowl.Runtime
             sb.Append('>');
             return sb.ToString();
         }
-        
+
         public bool IsFinate() => MathD.IsValid(x) && MathD.IsValid(y);
         #endregion Public Instance Methods
 
@@ -206,7 +210,7 @@ namespace Prowl.Runtime
         /// Returns a vector whose elements are the absolute values of each of the source vector's elements.
         /// </summary>
         /// <param name="value">The source vector.</param>
-        /// <returns>The absolute value vector.</returns>        
+        /// <returns>The absolute value vector.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector2Int Abs(Vector2Int value)
         {

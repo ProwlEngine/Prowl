@@ -1,8 +1,10 @@
-﻿using Prowl.Editor.Preferences;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.GUI.Graphics;
 
 namespace Prowl.Editor
 {
@@ -50,7 +52,7 @@ namespace Prowl.Editor
         protected override bool IsDockable => false;
         protected override bool LockSize => true;
         protected override bool TitleBar => false;
-        
+
         string _path = "";
         bool pastFirstFrame = false;
 
@@ -107,7 +109,7 @@ namespace Prowl.Editor
                         using (gui.Node("BackBtn").ExpandHeight().Left(left).Width(ItemSize).Enter())
                         {
                             var hovered = gui.IsNodeHovered();
-                            if(_BackStack.Count > 0)
+                            if (_BackStack.Count > 0)
                                 hovered = !hovered;
                             gui.Draw2D.DrawText(FontAwesome6.ChevronLeft, 20, gui.CurrentNode.LayoutData.InnerRect,
                                 hovered ? EditorStylePrefs.Instance.Hovering : EditorStylePrefs.Instance.LesserText);
@@ -170,7 +172,7 @@ namespace Prowl.Editor
                                     DrawSortLabel("Name", FileDialogSortBy.Name);
                                 }
 
-                                DrawEntries(false, f => 
+                                DrawEntries(false, f =>
                                 {
                                     if (f is DirectoryInfo)
                                         return FontAwesome6.Folder + f.Name;
@@ -264,7 +266,7 @@ namespace Prowl.Editor
                 Color bg = gui.IsNodeHovered() ? EditorStylePrefs.Instance.Hovering : Color.white;
                 gui.Draw2D.DrawText(name, gui.CurrentNode.LayoutData.InnerRect, bg);
 
-                if(gui.IsNodePressed())
+                if (gui.IsNodePressed())
                 {
                     _BackStack.Push(Dialog.directoryPath);
                     Dialog.directoryPath = new DirectoryInfo(path);
@@ -277,7 +279,7 @@ namespace Prowl.Editor
         {
             if (gui.IsNodePressed())
             {
-                if(sortBy != sortMode)
+                if (sortBy != sortMode)
                     sortBy = sortMode;
                 else
                     sortDown = !sortDown;
@@ -287,7 +289,7 @@ namespace Prowl.Editor
 
         private void DrawSortLabel(string text, FileDialogSortBy sortMode)
         {
-            if(sortBy == sortMode)
+            if (sortBy == sortMode)
             {
                 gui.Draw2D.DrawText(text + " " + (sortDown ? FontAwesome6.ChevronDown : FontAwesome6.ChevronUp), gui.CurrentNode.LayoutData.Rect, gui.IsNodeHovered() ? EditorStylePrefs.Instance.Hovering : EditorStylePrefs.Instance.LesserText);
             }
@@ -326,9 +328,9 @@ namespace Prowl.Editor
                         }
                     }
 
-                    if(Dialog.resultPath == directory.FullName)
+                    if (Dialog.resultPath == directory.FullName)
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
-                    else if(hoveringPath == directory.FullName)
+                    else if (hoveringPath == directory.FullName)
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering * 0.6f);
 
                     bool hovered = gui.IsNodeHovered() || hoveringPath == directory.FullName || Dialog.resultPath == directory.FullName;
@@ -394,7 +396,7 @@ namespace Prowl.Editor
                 // megabyte
                 return length / 1000000f + "mb";
             }
-            
+
             // gigabyte
             return length / 1000000000f + "gb";
         }

@@ -1,11 +1,15 @@
-﻿using Prowl.Editor.Build;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Reflection;
+
+using Prowl.Editor.Build;
 using Prowl.Editor.Preferences;
 using Prowl.Editor.ProjectSettings;
 using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using System.Reflection;
 
 namespace Prowl.Editor
 {
@@ -66,9 +70,9 @@ namespace Prowl.Editor
                 ProjectBuilder? builder = builders[i];
                 using (gui.Node("Player", i).ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize * 2).Enter())
                 {
-                    if(gui.IsNodePressed())
+                    if (gui.IsNodePressed())
                         selectedBuilder = builders.IndexOf(builder);
-                    else if(gui.IsNodeHovered())
+                    else if (gui.IsNodeHovered())
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
                     // Name types are formatted as "Desktop_Player" -> "Desktop"
@@ -95,7 +99,7 @@ namespace Prowl.Editor
             using (gui.Node("Butt's").ExpandWidth().Height(75).Enter())
             {
                 gui.InputField("CreateInput", ref buildName, 0x100, Gui.InputFieldFlags.None, 0, 15, 400, null, EditorGUI.GetInputStyle());
-                string path = Path.Combine(Project.ProjectDirectory, "Builds", buildName);
+                string path = Path.Combine(Project.Active.ProjectPath, "Builds", buildName);
                 string displayPath = path;
                 if (displayPath.Length > 55)
                     displayPath = string.Concat("...", path.AsSpan(path.Length - 55));

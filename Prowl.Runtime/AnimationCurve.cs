@@ -1,7 +1,9 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace Prowl.Runtime
 {
@@ -24,9 +26,9 @@ namespace Prowl.Runtime
     /// <summary> Defines the different tangent types to be calculated for <see cref="KeyFrame"/> points in a <see cref="AnimationCurve"/>. </summary>
 	public enum CurveTangent
     {
-		Flat,
-		Linear,
-		Smooth
+        Flat,
+        Linear,
+        Smooth
     }
 
     public class AnimationCurve : ISerializable
@@ -113,7 +115,7 @@ namespace Prowl.Runtime
                         return (GetCurvePosition(virtualPos) + cycle * (last.Value - first.Value));
 
                     case CurveLoopType.Oscillate:
-                        //go back on curve from end and target start 
+                        //go back on curve from end and target start
                         // start-> end / end -> start
                         cycle = GetNumberOfCycle(position);
                         if (0 == cycle % 2.0)//if pair
@@ -149,7 +151,7 @@ namespace Prowl.Runtime
                         return (GetCurvePosition(virtualPos) + cycle * (last.Value - first.Value));
 
                     case CurveLoopType.Oscillate:
-                        //go back on curve from end and target start 
+                        //go back on curve from end and target start
                         // start-> end / end -> start
                         cycle = GetNumberOfCycle(position);
                         //virtualPos = position - (cycle * (last.Position - first.Position));
@@ -293,7 +295,7 @@ namespace Prowl.Runtime
                     double ts = t * t;
                     double tss = ts * t;
                     //After a lot of search on internet I have found all about spline function
-                    // and Bezier (phi'sss ancient) but finally use Hermite curve 
+                    // and Bezier (phi'sss ancient) but finally use Hermite curve
                     //http://en.wikipedia.org/wiki/Cubic_Hermite_spline
                     //P(t) = (2*t^3 - 3t^2 + 1)*P0 + (t^3 - 2t^2 + t)m0 + (-2t^3 + 3t^2)P1 + (t^3-t^2)m1
                     //with P0.value = prev.value , m0 = prev.tangentOut, P1= next.value, m1 = next.TangentIn
@@ -420,7 +422,7 @@ namespace Prowl.Runtime
         public int CompareTo(KeyFrame other) => this.Position.CompareTo(other.Position);
         public bool Equals(KeyFrame other) => (this == other);
         public override bool Equals(object obj) => (obj as KeyFrame) != null && Equals((KeyFrame)obj);
-        public override int GetHashCode() => 
+        public override int GetHashCode() =>
                 this.Position.GetHashCode() ^ this.Value.GetHashCode() ^ this.TangentIn.GetHashCode() ^
                 this.TangentOut.GetHashCode() ^ this.Continuity.GetHashCode();
 
@@ -440,9 +442,11 @@ namespace Prowl.Runtime
 
         #region Properties
 
-        public KeyFrame this[int index] {
+        public KeyFrame this[int index]
+        {
             get { return _keys[index]; }
-            set {
+            set
+            {
                 if (value == null)
                     throw new ArgumentNullException();
 

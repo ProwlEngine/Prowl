@@ -10,10 +10,10 @@ struct PS_INPUT
     float2 uv  : TEXCOORD0;
 };
 
-[[vk::binding(1, 0)]]
+[[vk::binding(0, 1)]]
 Texture2D FontTexture : register(t0);
 
-[[vk::binding(0, 1)]]
+[[vk::binding(1, 0)]]
 sampler FontSampler : register(s0);
 
 float4 FS(PS_INPUT input) : SV_Target

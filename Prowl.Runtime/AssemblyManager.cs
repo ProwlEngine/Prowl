@@ -1,4 +1,6 @@
-using Prowl.Runtime.Utils;
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -7,31 +9,38 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
 
-namespace Prowl.Runtime; 
+using Prowl.Runtime.Utils;
 
-public static class AssemblyManager {
-    
+namespace Prowl.Runtime;
+
+public static class AssemblyManager
+{
+
     private static ExternalAssemblyLoadContext1? _externalAssemblyLoadContext;
     private static List<(WeakReference lifetimeDependency, MulticastDelegate @delegate)> _unloadLifetimeDelegates = new();
     private static List<Func<bool>> _unloadDelegates = new();
-    
-    public static IEnumerable<Assembly> ExternalAssemblies {
-        get {
-            if(_externalAssemblyLoadContext is null)
+
+    public static IEnumerable<Assembly> ExternalAssemblies
+    {
+        get
+        {
+            if (_externalAssemblyLoadContext is null)
                 yield break;
-            foreach(Assembly assembly in _externalAssemblyLoadContext.Assemblies) {
+            foreach (Assembly assembly in _externalAssemblyLoadContext.Assemblies)
+            {
                 yield return assembly;
             }
         }
     }
-    
+
     public static void Initialize()
     {
         OnAssemblyUnloadAttribute.FindAll();
         OnAssemblyLoadAttribute.FindAll();
     }
 
-    public static void LoadExternalAssembly(string assemblyPath, bool isDependency) {
+    public static void LoadExternalAssembly(string assemblyPath, bool isDependency)
+    {
         try
         {
             _externalAssemblyLoadContext ??= new ExternalAssemblyLoadContext1();
@@ -40,15 +49,16 @@ public static class AssemblyManager {
                 _externalAssemblyLoadContext.AddDependency(assemblyPath);
             Debug.LogSuccess($"Successfully loaded external assembly from {assemblyPath}");
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
             Debug.LogError($"Failed to load External Assembly: {assemblyPath} Exception: " + ex.Message);
         }
     }
-    
+
     [MethodImpl(MethodImplOptions.NoInlining)]
-    public static void Unload() {
-        if(_externalAssemblyLoadContext is null)
+    public static void Unload()
+    {
+        if (_externalAssemblyLoadContext is null)
             return;
 
         OnAssemblyUnloadAttribute.Invoke();
@@ -56,12 +66,14 @@ public static class AssemblyManager {
         ClearTypeDescriptorCache();
 
         InvokeUnloadDelegate();
-        
+
         UnloadInternal(out WeakReference externalAssemblyLoadContextRef);
-        
+
         const int MAX_GC_ATTEMPTS = 10;
-        for(int i = 0; externalAssemblyLoadContextRef.IsAlive; i++) {
-            if(i >= MAX_GC_ATTEMPTS) {
+        for (int i = 0; externalAssemblyLoadContextRef.IsAlive; i++)
+        {
+            if (i >= MAX_GC_ATTEMPTS)
+            {
                 Debug.LogError($"Failed to unload external assemblies!");
                 _externalAssemblyLoadContext = externalAssemblyLoadContextRef.Target as ExternalAssemblyLoadContext1;
                 return;
@@ -70,13 +82,15 @@ public static class AssemblyManager {
             GC.Collect();
             GC.WaitForPendingFinalizers();
         }
-        
+
         Debug.LogSuccess($"Successfully unloaded external assemblies!");
     }
-    
+
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void UnloadInternal(out WeakReference externalAssemblyLoadContextRef) {
-        foreach(Assembly assembly in ExternalAssemblies) {
+    private static void UnloadInternal(out WeakReference externalAssemblyLoadContextRef)
+    {
+        foreach (Assembly assembly in ExternalAssemblies)
+        {
             Debug.Log($"Unloading external assembly from: '{assembly.Location}'...");
         }
 
@@ -86,29 +100,34 @@ public static class AssemblyManager {
         externalAssemblyLoadContextRef = new WeakReference(_externalAssemblyLoadContext);
         _externalAssemblyLoadContext = null;
     }
-    
-    public static void AddUnloadTask(Func<bool> @delegate) {
+
+    public static void AddUnloadTask(Func<bool> @delegate)
+    {
         _unloadDelegates.Add(@delegate);
     }
-    
-    public static void AddUnloadTaskWithLifetime<T>(T lifetimeDependency, Func<T, bool> @delegate) {
+
+    public static void AddUnloadTaskWithLifetime<T>(T lifetimeDependency, Func<T, bool> @delegate)
+    {
         _unloadLifetimeDelegates.Add((new WeakReference(lifetimeDependency), @delegate));
     }
-    
-    private static void InvokeUnloadDelegate() {
-        foreach((WeakReference lifetimeDependency, MulticastDelegate @delegate) in _unloadLifetimeDelegates) {
-            if(!lifetimeDependency.IsAlive)
+
+    private static void InvokeUnloadDelegate()
+    {
+        foreach ((WeakReference lifetimeDependency, MulticastDelegate @delegate) in _unloadLifetimeDelegates)
+        {
+            if (!lifetimeDependency.IsAlive)
                 continue;
-            
-            bool result = (bool) @delegate.DynamicInvoke(new object?[] { lifetimeDependency.Target })!;
-            if(!result)
+
+            bool result = (bool)@delegate.DynamicInvoke(new object?[] { lifetimeDependency.Target })!;
+            if (!result)
                 Debug.LogError("some unload delegate returned with failure");
         }
         _unloadLifetimeDelegates = new();
-        
-        foreach(Func<bool> @delegate in _unloadDelegates) {
+
+        foreach (Func<bool> @delegate in _unloadDelegates)
+        {
             bool result = @delegate.Invoke();
-            if(!result)
+            if (!result)
                 Debug.LogError("some unload delegate returned with failure");
         }
         _unloadDelegates = new();
@@ -138,30 +157,36 @@ public static class AssemblyManager {
         //clearCacheMethod?.Invoke(null, new object?[] { null });
     }
 
-    public static void Dispose() {
+    public static void Dispose()
+    {
         UnloadInternal(out WeakReference _);
     }
-    
-    private class ExternalAssemblyLoadContext1 : AssemblyLoadContext {
-        
+
+    private class ExternalAssemblyLoadContext1 : AssemblyLoadContext
+    {
+
         private readonly List<AssemblyDependencyResolver> _assemblyDependencyResolvers;
-        
-        public ExternalAssemblyLoadContext1() : base(true) {
+
+        public ExternalAssemblyLoadContext1() : base(true)
+        {
             _assemblyDependencyResolvers = new List<AssemblyDependencyResolver>();
         }
-        
-        public void AddDependency(string assemblyPath) {
+
+        public void AddDependency(string assemblyPath)
+        {
             _assemblyDependencyResolvers.Add(new AssemblyDependencyResolver(assemblyPath));
         }
-        
-        protected override Assembly? Load(AssemblyName assemblyName) {
-            foreach(AssemblyDependencyResolver assemblyDependencyResolver in _assemblyDependencyResolvers) {
-                if(assemblyDependencyResolver.ResolveAssemblyToPath(assemblyName) is {} resolvedAssemblyPath)
+
+        protected override Assembly? Load(AssemblyName assemblyName)
+        {
+            foreach (AssemblyDependencyResolver assemblyDependencyResolver in _assemblyDependencyResolvers)
+            {
+                if (assemblyDependencyResolver.ResolveAssemblyToPath(assemblyName) is { } resolvedAssemblyPath)
                     return LoadFromAssemblyPath(resolvedAssemblyPath);
             }
             return null;
         }
-        
+
     }
-    
+
 }

@@ -1,4 +1,7 @@
-﻿using Prowl.Editor.Preferences;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Editor.Preferences;
 using Prowl.Editor.ScriptedEditors;
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
@@ -22,7 +25,7 @@ namespace Prowl.Editor.Assets
             catch
             {
                 // something went wrong, lets just create a new material and save it
-                mat = new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Standard.shader"));
+                mat = new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/DefaultUnlit.shader"));
                 string json = StringTagConverter.Write(Serializer.Serialize(mat));
                 File.WriteAllText(assetPath.FullName, json);
             }
@@ -43,7 +46,8 @@ namespace Prowl.Editor.Assets
                 var tag = StringTagConverter.ReadFromFile((target as MetaFile).AssetPath);
                 Material mat = Serializer.Deserialize<Material>(tag);
 
-                MaterialEditor editor = new MaterialEditor(mat, () => {
+                MaterialEditor editor = new MaterialEditor(mat, () =>
+                {
                     StringTagConverter.WriteToFile(Serializer.Serialize(mat), (target as MetaFile).AssetPath);
                     AssetDatabase.Reimport((target as MetaFile).AssetPath);
                 });

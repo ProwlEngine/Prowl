@@ -1,13 +1,17 @@
-﻿using Prowl.Editor.Assets;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Reflection;
+
+using Prowl.Editor.Assets;
 using Prowl.Editor.Preferences;
 using Prowl.Editor.Utilities;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.GUI.Graphics;
 using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.Utils;
-using System.Reflection;
+
 using static Prowl.Editor.EditorGUI;
 using static Prowl.Runtime.GUI.Gui;
 
@@ -230,7 +234,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                             using (node.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                             {
                                 var instanceID = gui.GetGlobalStorage<int>("RightClickComp");
-                                if(instanceID == comp.InstanceID)
+                                if (instanceID == comp.InstanceID)
                                     HandleComponentContextMenu(go, comp, popupHolder, ref toDelete);
                             }
                         }
@@ -338,7 +342,8 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
         private void HandleUnusedEditors(HashSet<int> editorsNeeded)
         {
             foreach (var key in compEditors.Keys)
-                if (!editorsNeeded.Contains(key)) {
+                if (!editorsNeeded.Contains(key))
+                {
                     compEditors[key].OnDisable();
                     compEditors.Remove(key);
                 }
@@ -367,26 +372,30 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             if (closePopup)
                 Gui.ActiveGUI.ClosePopup(popupHolder);
         }
-        
+
         private void DrawMenuItems(MenuItemInfo menuItem, GameObject go)
         {
             bool foundName = false;
             bool hasSearch = string.IsNullOrEmpty(_searchText) == false;
-            foreach (var item in menuItem.Children) {
-                if (hasSearch && (item.Name.Contains(_searchText, StringComparison.CurrentCultureIgnoreCase) == false || item.Type == null)) {
+            foreach (var item in menuItem.Children)
+            {
+                if (hasSearch && (item.Name.Contains(_searchText, StringComparison.CurrentCultureIgnoreCase) == false || item.Type == null))
+                {
                     DrawMenuItems(item, go);
                     if (hasSearch && item.Name.Equals(_searchText, StringComparison.CurrentCultureIgnoreCase))
                         foundName = true;
                     continue;
                 }
-        
-                if (item.Type != null) 
+
+                if (item.Type != null)
                 {
 
                     if (EditorGUI.StyledButton(item.Name))
                         go.AddComponent(item.Type).OnValidate();
 
-                } else {
+                }
+                else
+                {
 
                     if (EditorGUI.StyledButton(item.Name))
                         Gui.ActiveGUI.OpenPopup(item.Name + "Popup", Gui.ActiveGUI.PreviousNode.LayoutData.Rect.TopRight);
@@ -418,18 +427,19 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     }
                 }
             }
-        
+
             if (PlayMode.Current != PlayMode.Mode.Editing) return; // Cannot create scripts during playmode
-             
+
             // is first and found no component and were searching, lets create a new script
             if (hasSearch && !foundName && menuItem == rootMenuItem)
             {
                 if (EditorGUI.StyledButton("Create Script " + _searchText))
                 {
-                    FileInfo file = new FileInfo(Project.ProjectAssetDirectory + $"/{_searchText}.cs");
+                    FileInfo file = new FileInfo(Path.Combine(Project.Active!.AssetDirectory.FullName, $"/{_searchText}.cs"));
                     if (File.Exists(file.FullName))
                         return;
-                    using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
+
+                    using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt")!;
                     using StreamReader reader = new StreamReader(stream);
                     string script = reader.ReadToEnd();
                     script = script.Replace("%SCRIPTNAME%", EditorUtils.FilterAlpha(_searchText));
@@ -437,82 +447,86 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                     AssetDatabase.Ping(file);
                     // Trigger an update so the script get imported which will recompile all scripts
                     AssetDatabase.Update();
-        
+
                     Type? type = Type.GetType($"{EditorUtils.FilterAlpha(_searchText)}, CSharp, Version=1.0.0.0, Culture=neutral");
-                    if(type != null && type.IsAssignableTo(typeof(MonoBehaviour)))
+                    if (type != null && type.IsAssignableTo(typeof(MonoBehaviour)))
                         go.AddComponent(type).OnValidate();
                 }
             }
         }
-        
+
         private MenuItemInfo GetAddComponentMenuItems()
         {
             var componentTypes = AppDomain.CurrentDomain.GetAssemblies()
                 .SelectMany(assembly => assembly.GetTypes())
                 .Where(type => type.IsSubclassOf(typeof(MonoBehaviour)) && !type.IsAbstract)
                 .ToArray();
-        
-            var items = componentTypes.Select(type => {
+
+            var items = componentTypes.Select(type =>
+            {
                 string Name = type.Name;
                 var addToMenuAttribute = type.GetCustomAttribute<AddComponentMenuAttribute>();
                 if (addToMenuAttribute != null)
                     Name = addToMenuAttribute.Path;
                 return (Name, type);
             }).ToArray();
-        
-        
+
+
             // Create a root MenuItemInfo object to serve as the starting point of the tree
             MenuItemInfo root = new MenuItemInfo { Name = "Root" };
-        
-            foreach (var (path, type) in items) {
+
+            foreach (var (path, type) in items)
+            {
                 string[] parts = path.Split('/');
-        
+
                 // If first part is 'Hidden' then skip this component
                 if (parts[0] == "Hidden") continue;
-        
+
                 MenuItemInfo currentNode = root;
-        
+
                 for (int i = 0; i < parts.Length - 1; i++)  // Skip the last part
                 {
                     string part = parts[i];
                     MenuItemInfo childNode = currentNode.Children.Find(c => c.Name == part);
-        
-                    if (childNode == null) {
+
+                    if (childNode == null)
+                    {
                         childNode = new MenuItemInfo { Name = part };
                         currentNode.Children.Add(childNode);
                     }
-        
+
                     currentNode = childNode;
                 }
-        
-                MenuItemInfo leafNode = new MenuItemInfo {
+
+                MenuItemInfo leafNode = new MenuItemInfo
+                {
                     Name = parts[^1],  // Get the last part
                     Type = type
                 };
-        
+
                 currentNode.Children.Add(leafNode);
             }
-        
+
             SortChildren(root);
             return root;
         }
-        
+
         private void SortChildren(MenuItemInfo node)
         {
             node.Children.Sort((x, y) => x.Type == null ? -1 : 1);
-        
+
             foreach (var child in node.Children)
                 SortChildren(child);
         }
-        
+
         private class MenuItemInfo
         {
             public string Name;
             public Type Type;
             public List<MenuItemInfo> Children = new();
-        
+
             public MenuItemInfo() { }
-        
+
             public MenuItemInfo(Type type)
             {
                 Type = type;

@@ -1,4 +1,8 @@
-﻿using Prowl.Runtime;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Runtime;
+
 using Veldrid;
 
 namespace Prowl.Editor;
@@ -13,7 +17,7 @@ public class NodeEditorInputHandler : DefaultInputHandler
 
 
     protected override Vector2Int GetActualMousePosition(InputSnapshot snapshot)
-    {   
+    {
         return base.GetActualMousePosition(snapshot) - position;
     }
 

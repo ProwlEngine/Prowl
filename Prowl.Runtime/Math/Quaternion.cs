@@ -1,6 +1,5 @@
-// Licensed to the .NET Foundation under one or more agreements.
-// The .NET Foundation licenses this file to you under the MIT license.
-// See the LICENSE file in the project root for more information.
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 using System.Globalization;
@@ -8,7 +7,7 @@ using System.Globalization;
 namespace Prowl.Runtime
 {
     /// <summary>
-    /// A structure encapsulating a four-dimensional vector (x,y,z,w), 
+    /// A structure encapsulating a four-dimensional vector (x,y,z,w),
     /// which is used to efficiently rotate an object about the (x,y,z) vector by the angle theta, where w = cos(theta/2).
     /// </summary>
     public struct Quaternion : IEquatable<Quaternion>
@@ -30,9 +29,12 @@ namespace Prowl.Runtime
         /// </summary>
         public double w;
 
-        public double this[int index] {
-            get {
-                switch (index) {
+        public double this[int index]
+        {
+            get
+            {
+                switch (index)
+                {
                     case 0: return x;
                     case 1: return y;
                     case 2: return z;
@@ -42,8 +44,10 @@ namespace Prowl.Runtime
                 }
             }
 
-            set {
-                switch (index) {
+            set
+            {
+                switch (index)
+                {
                     case 0: x = value; break;
                     case 1: y = value; break;
                     case 2: z = value; break;
@@ -57,7 +61,7 @@ namespace Prowl.Runtime
         public Vector3 eulerAngles { get => this.GetRotation().ToDeg().NormalizeEulerAngleDegrees(); set => this = value.NormalizeEulerAngleDegrees().ToRad().GetQuaternion(); }
 
         /// <summary>
-        /// Returns a Quaternion representing no rotation. 
+        /// Returns a Quaternion representing no rotation.
         /// </summary>
         public static Quaternion identity => new(0, 0, 0, 1);
 

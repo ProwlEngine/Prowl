@@ -1,6 +1,7 @@
-﻿using Prowl.Runtime;
+﻿using System.IO.Compression;
+
+using Prowl.Runtime;
 using Prowl.Runtime.Utils;
-using System.IO.Compression;
 
 public class StandaloneAssetProvider : IAssetProvider
 {
@@ -11,7 +12,8 @@ public class StandaloneAssetProvider : IAssetProvider
         int packageIndex = 0;
         FileInfo firstPackage = new FileInfo(Path.Combine(Program.Data.FullName, $"Data{packageIndex++}.prowl"));
         List<AssetBundle> packages = new();
-        while (File.Exists(firstPackage.FullName)) {
+        while (File.Exists(firstPackage.FullName))
+        {
             packages.Add(new AssetBundle(firstPackage.OpenRead(), ZipArchiveMode.Read));
             firstPackage = new FileInfo(Path.Combine(Program.Data.FullName, $"Data{packageIndex++}.prowl"));
         }
@@ -29,7 +31,8 @@ public class StandaloneAssetProvider : IAssetProvider
             return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID - 1]);
 
         foreach (AssetBundle package in packages)
-            if (package.TryGetAsset(relativeAssetPath, out var asset)) {
+            if (package.TryGetAsset(relativeAssetPath, out var asset))
+            {
                 _loaded[guid] = asset;
                 return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID - 1]);
             }
@@ -42,7 +45,8 @@ public class StandaloneAssetProvider : IAssetProvider
             return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID - 1]);
 
         foreach (AssetBundle package in packages)
-            if (package.TryGetAsset(guid, out var asset)) {
+            if (package.TryGetAsset(guid, out var asset))
+            {
                 _loaded[guid] = asset;
                 return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID - 1]);
             }

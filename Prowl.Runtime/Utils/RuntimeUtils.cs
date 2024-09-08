@@ -1,11 +1,13 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace Prowl.Runtime
 {
@@ -93,7 +95,7 @@ namespace Prowl.Runtime
                     result.Append(' ');  // Add space
                     result.Append(label[i]);  // Append the current uppercase character
                 }
-                else if(label[i] == '_')
+                else if (label[i] == '_')
                 {
                     continue;
                 }

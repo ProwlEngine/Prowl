@@ -1,10 +1,19 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Collections.Generic;
 using System.IO;
+
 using Veldrid;
 
+using Vector2F = System.Numerics.Vector2;
+using Vector3F = System.Numerics.Vector3;
+using Vector4F = System.Numerics.Vector4;
+using Matrix4x4F = System.Numerics.Matrix4x4;
+
 namespace Prowl.Runtime
-{  
+{
     public enum MeshResource
     {
         Position = 0,
@@ -29,11 +38,13 @@ namespace Prowl.Runtime
         public Bounds bounds { get; internal set; }
 
         /// <summary> The format of the indices for this mesh </summary>
-        public IndexFormat IndexFormat {
+        public IndexFormat IndexFormat
+        {
             get => indexFormat;
-            set {
+            set
+            {
                 if (isWritable == false || indexFormat == value) return;
-                
+
                 changed = true;
                 indexFormat = value;
 
@@ -45,9 +56,11 @@ namespace Prowl.Runtime
         }
 
         /// <summary> The mesh's primitive type </summary>
-        public PrimitiveTopology MeshTopology {
+        public PrimitiveTopology MeshTopology
+        {
             get => meshTopology;
-            set {
+            set
+            {
                 if (isWritable == false) return;
                 changed = true;
                 meshTopology = value;
@@ -59,9 +72,11 @@ namespace Prowl.Runtime
         /// Getting depends on isReadable.
         /// Note: When setting, if the vertex count is different than previous, it'll reset all other vertex data fields.
         /// </summary>
-        public System.Numerics.Vector3[] Vertices {
+        public Vector3F[] Vertices
+        {
             get => vertices ?? [];
-            set {
+            set
+            {
                 if (isWritable == false)
                     return;
                 var needsReset = vertices == null || vertices.Length != value.Length;
@@ -79,47 +94,56 @@ namespace Prowl.Runtime
             }
         }
 
-        public System.Numerics.Vector3[] Normals {
+        public Vector3F[] Normals
+        {
             get => ReadVertexData(normals ?? []);
             set => WriteVertexData(ref normals, value, value.Length);
         }
 
-        public System.Numerics.Vector3[] Tangents {
+        public Vector3F[] Tangents
+        {
             get => ReadVertexData(tangents ?? []);
             set => WriteVertexData(ref tangents, value, value.Length);
         }
 
-        public Color32[] Colors {
+        public Color32[] Colors
+        {
             get => ReadVertexData(colors ?? []);
             set => WriteVertexData(ref colors, value, value.Length);
         }
 
-        public System.Numerics.Vector2[] UV {
+        public Vector2F[] UV
+        {
             get => ReadVertexData(uv ?? []);
             set => WriteVertexData(ref uv, value, value.Length);
         }
 
-        public System.Numerics.Vector2[] UV2 {
+        public Vector2F[] UV2
+        {
             get => ReadVertexData(uv2 ?? []);
             set => WriteVertexData(ref uv2, value, value.Length);
         }
 
-        public uint[] Indices32 {
+        public uint[] Indices32
+        {
             get => ReadVertexData(indices32 ?? []);
             set => WriteVertexData(ref indices32, value, value.Length, false);
         }
 
-        public ushort[] Indices16 {
+        public ushort[] Indices16
+        {
             get => ReadVertexData(indices16 ?? []);
             set => WriteVertexData(ref indices16, value, value.Length, false);
         }
 
-        public System.Numerics.Vector4[] BoneIndices {
+        public Vector4F[] BoneIndices
+        {
             get => ReadVertexData(boneIndices ?? []);
             set => WriteVertexData(ref boneIndices, value, value.Length);
         }
 
-        public System.Numerics.Vector4[] BoneWeights {
+        public Vector4F[] BoneWeights
+        {
             get => ReadVertexData(boneWeights ?? []);
             set => WriteVertexData(ref boneWeights, value, value.Length);
         }
@@ -139,28 +163,28 @@ namespace Prowl.Runtime
         public bool HasBoneIndices => (boneIndices?.Length ?? 0) > 0;
         public bool HasBoneWeights => (boneWeights?.Length ?? 0) > 0;
 
-        public System.Numerics.Matrix4x4[]? bindPoses;
+        public Matrix4x4F[]? bindPoses;
 
         bool changed = true;
-        System.Numerics.Vector3[]? vertices;
-        System.Numerics.Vector3[]? normals;
-        System.Numerics.Vector3[]? tangents;
+        Vector3F[]? vertices;
+        Vector3F[]? normals;
+        Vector3F[]? tangents;
         Color32[]? colors;
-        System.Numerics.Vector2[]? uv;
-        System.Numerics.Vector2[]? uv2;
-        
+        Vector2F[]? uv;
+        Vector2F[]? uv2;
+
         uint[]? indices32;
         ushort[]? indices16;
-        
-        System.Numerics.Vector4[]? boneIndices;
-        System.Numerics.Vector4[]? boneWeights;
+
+        Vector4F[]? boneIndices;
+        Vector4F[]? boneWeights;
 
         IndexFormat indexFormat = IndexFormat.UInt16;
         PrimitiveTopology meshTopology = PrimitiveTopology.TriangleList;
 
 
         DeviceBuffer vertexBuffer;
-        DeviceBuffer indexBuffer; 
+        DeviceBuffer indexBuffer;
 
         public int UVStart { get; private set; }
         public int UV2Start { get; private set; }
@@ -257,7 +281,7 @@ namespace Prowl.Runtime
             CommandList list = Graphics.GetCommandList();
 
             list.UpdateBuffer(vertexBuffer, 0, vertices);
-            
+
             if (HasUV)
                 list.UpdateBuffer(vertexBuffer, (uint)UVStart, uv);
 
@@ -292,8 +316,8 @@ namespace Prowl.Runtime
 
             Graphics.SubmitCommandList(list, false);
         }
-        
-        public void SetDrawData(CommandList commandList, GraphicsPipeline pipeline)
+
+        public void SetDrawData(CommandList commandList, ShaderPipeline pipeline)
         {
             Upload();
 
@@ -334,8 +358,8 @@ namespace Prowl.Runtime
             if (vertices.Length < 1)
                 throw new ArgumentException();
 
-            var minVec = System.Numerics.Vector3.One * 99999f;
-            var maxVec = System.Numerics.Vector3.One * -99999f;
+            var minVec = Vector3F.One * 99999f;
+            var maxVec = Vector3F.One * -99999f;
             foreach (var ptVector in vertices)
             {
                 minVec.X = (minVec.X < ptVector.X) ? minVec.X : ptVector.X;
@@ -355,7 +379,7 @@ namespace Prowl.Runtime
             if (vertices == null || vertices.Length < 3) return;
             if (indices32 == null || indices32.Length < 3) return;
 
-            var normals = new System.Numerics.Vector3[vertices.Length];
+            var normals = new Vector3F[vertices.Length];
 
             for (int i = 0; i < indices32.Length; i += 3)
             {
@@ -363,7 +387,7 @@ namespace Prowl.Runtime
                 uint bi = indices32[i + 1];
                 uint ci = indices32[i + 2];
 
-                System.Numerics.Vector3 n = System.Numerics.Vector3.Normalize(System.Numerics.Vector3.Cross(
+                Vector3F n = Vector3F.Normalize(Vector3F.Cross(
                     vertices[bi] - vertices[ai],
                     vertices[ci] - vertices[ai]
                 ));
@@ -374,7 +398,7 @@ namespace Prowl.Runtime
             }
 
             for (int i = 0; i < vertices.Length; i++)
-                normals[i] = -System.Numerics.Vector3.Normalize(normals[i]);
+                normals[i] = -Vector3F.Normalize(normals[i]);
 
             Normals = normals;
         }
@@ -385,7 +409,7 @@ namespace Prowl.Runtime
             if (indices32 == null || indices32.Length < 3) return;
             if (uv == null) return;
 
-            var tangents = new System.Numerics.Vector3[vertices.Length];
+            var tangents = new Vector3F[vertices.Length];
 
             for (int i = 0; i < indices32.Length; i += 3)
             {
@@ -393,15 +417,15 @@ namespace Prowl.Runtime
                 uint bi = indices32[i + 1];
                 uint ci = indices32[i + 2];
 
-                System.Numerics.Vector3 edge1 = vertices[bi] - vertices[ai];
-                System.Numerics.Vector3 edge2 = vertices[ci] - vertices[ai];
+                Vector3F edge1 = vertices[bi] - vertices[ai];
+                Vector3F edge2 = vertices[ci] - vertices[ai];
 
-                System.Numerics.Vector2 deltaUV1 = uv[bi] - uv[ai];
-                System.Numerics.Vector2 deltaUV2 = uv[ci] - uv[ai];
+                Vector2F deltaUV1 = uv[bi] - uv[ai];
+                Vector2F deltaUV2 = uv[ci] - uv[ai];
 
                 float f = 1.0f / (deltaUV1.X * deltaUV2.Y - deltaUV2.X * deltaUV1.Y);
 
-                System.Numerics.Vector3 tangent;
+                Vector3F tangent;
                 tangent.X = f * (deltaUV2.Y * edge1.X - deltaUV1.Y * edge2.X);
                 tangent.Y = f * (deltaUV2.Y * edge1.Y - deltaUV1.Y * edge2.Y);
                 tangent.Z = f * (deltaUV2.Y * edge1.Z - deltaUV1.Y * edge2.Z);
@@ -412,7 +436,7 @@ namespace Prowl.Runtime
             }
 
             for (int i = 0; i < vertices.Length; i++)
-                tangents[i] = System.Numerics.Vector3.Normalize(tangents[i]);
+                tangents[i] = Vector3F.Normalize(tangents[i]);
 
             Tangents = tangents;
         }
@@ -447,30 +471,30 @@ namespace Prowl.Runtime
             indexBuffer = null;
         }
 
-        private static Mesh fullScreenQuad;
-        public static Mesh GetFullscreenQuad()
+        public static Mesh CreateQuad(Vector2 scale)
         {
-            if (fullScreenQuad != null) return fullScreenQuad;
             Mesh mesh = new Mesh();
-            
+
+            float x = (float)scale.x;
+            float y = (float)scale.y;
+
             mesh.Vertices = [
-                new System.Numerics.Vector3(-1, -1, 0),
-                new System.Numerics.Vector3(1, -1, 0),
-                new System.Numerics.Vector3(-1, 1, 0),
-                new System.Numerics.Vector3(1, 1, 0),
+                new Vector3F(-x, -y, 0),
+                new Vector3F(x, -y, 0),
+                new Vector3F(-x, y, 0),
+                new Vector3F(x, y, 0),
             ];
 
             mesh.UV = [
-                new System.Numerics.Vector2(0, 0),
-                new System.Numerics.Vector2(1, 0),
-                new System.Numerics.Vector2(0, 1),
-                new System.Numerics.Vector2(1, 1),
+                new Vector2F(0, 0),
+                new Vector2F(1, 0),
+                new Vector2F(0, 1),
+                new Vector2F(1, 1),
             ];
 
             mesh.IndexFormat = IndexFormat.UInt16;
             mesh.Indices16 = [0, 2, 1, 2, 3, 1];
 
-            fullScreenQuad = mesh;
             return mesh;
         }
 
@@ -478,8 +502,8 @@ namespace Prowl.Runtime
         {
             Mesh mesh = new Mesh();
 
-            List<System.Numerics.Vector3> vertices = new List<System.Numerics.Vector3>();
-            List<System.Numerics.Vector2> uvs = new List<System.Numerics.Vector2>();
+            List<Vector3F> vertices = new List<Vector3F>();
+            List<Vector2F> uvs = new List<Vector2F>();
             List<ushort> indices = new List<ushort>();
 
             for (int i = 0; i <= rings; i++)
@@ -496,8 +520,8 @@ namespace Prowl.Runtime
                     float y = MathF.Cos(phi);
                     float z = MathF.Sin(phi) * MathF.Sin(theta);
 
-                    vertices.Add(new System.Numerics.Vector3(x, y, z) * radius);
-                    uvs.Add(new System.Numerics.Vector2(u, v));
+                    vertices.Add(new Vector3F(x, y, z) * radius);
+                    uvs.Add(new Vector2F(u, v));
                 }
             }
 
@@ -537,28 +561,28 @@ namespace Prowl.Runtime
             float y = (float)size.y / 2f;
             float z = (float)size.z / 2f;
 
-            System.Numerics.Vector3[] vertices =
+            Vector3F[] vertices =
             {
                 // Front face
                 new(-x, -y, z), new(x, -y, z), new(x, y, z), new(-x, y, z),
-                
+
                 // Back face
                 new(-x, -y, -z), new(x, -y, -z), new(x, y, -z), new(-x, y, -z),
-                
+
                 // Left face
                 new(-x, -y, -z), new(-x, y, -z), new(-x, y, z), new(-x, -y, z),
-                
+
                 // Right face
                 new(x, -y, z), new(x, y, z), new(x, y, -z), new(x, -y, -z),
-                
+
                 // Top face
                 new(-x, y, z), new(x, y, z), new(x, y, -z), new(-x, y, -z),
-                
+
                 // Bottom face
                 new(-x, -y, -z), new(x, -y, -z), new(x, -y, z), new(-x, -y, z)
             };
 
-            System.Numerics.Vector2[] uvs =
+            Vector2F[] uvs =
             {
                 // Front face
                 new(0, 0), new(1, 0), new(1, 1), new(0, 1),
@@ -601,8 +625,8 @@ namespace Prowl.Runtime
 #warning TODO: Test, This hasent been tested like at all just assumed it will work
             Mesh mesh = new Mesh();
 
-            List<System.Numerics.Vector3> vertices = new List<System.Numerics.Vector3>();
-            List<System.Numerics.Vector2> uvs = new List<System.Numerics.Vector2>();
+            List<Vector3F> vertices = new List<Vector3F>();
+            List<Vector2F> uvs = new List<Vector2F>();
             List<ushort> indices = new List<ushort>();
 
             float halfLength = length / 2.0f;
@@ -615,19 +639,19 @@ namespace Prowl.Runtime
                 float z = radius * MathF.Sin(angle);
 
                 // Top circle
-                vertices.Add(new System.Numerics.Vector3(x, halfLength, z));
-                uvs.Add(new System.Numerics.Vector2((float)i / sliceCount, 1));
+                vertices.Add(new Vector3F(x, halfLength, z));
+                uvs.Add(new Vector2F((float)i / sliceCount, 1));
 
                 // Bottom circle
-                vertices.Add(new System.Numerics.Vector3(x, -halfLength, z));
-                uvs.Add(new System.Numerics.Vector2((float)i / sliceCount, 0));
+                vertices.Add(new Vector3F(x, -halfLength, z));
+                uvs.Add(new Vector2F((float)i / sliceCount, 0));
             }
 
             // Add the center vertices for the top and bottom circles
-            vertices.Add(new System.Numerics.Vector3(0, halfLength, 0));
-            uvs.Add(new System.Numerics.Vector2(0.5f, 1));
-            vertices.Add(new System.Numerics.Vector3(0, -halfLength, 0));
-            uvs.Add(new System.Numerics.Vector2(0.5f, 0));
+            vertices.Add(new Vector3F(0, halfLength, 0));
+            uvs.Add(new Vector2F(0.5f, 1));
+            vertices.Add(new Vector3F(0, -halfLength, 0));
+            uvs.Add(new Vector2F(0.5f, 0));
 
             int topCenterIndex = vertices.Count - 2;
             int bottomCenterIndex = vertices.Count - 1;
@@ -691,7 +715,7 @@ namespace Prowl.Runtime
             Mesh mesh = new Mesh();
             mesh.Vertices = [a, b, c];
             mesh.IndexFormat = IndexFormat.UInt16;
-            mesh.Indices16 = [ 0, 1, 2 ];
+            mesh.Indices16 = [0, 1, 2];
             mesh.RecalculateBounds();
             mesh.RecalculateNormals();
             mesh.RecalculateTangents();
@@ -848,24 +872,24 @@ namespace Prowl.Runtime
                 meshTopology = (PrimitiveTopology)reader.ReadByte();
 
                 var vertexCount = reader.ReadInt32();
-                vertices = new System.Numerics.Vector3[vertexCount];
+                vertices = new Vector3F[vertexCount];
                 for (int i = 0; i < vertexCount; i++)
-                    vertices[i] = new System.Numerics.Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                    vertices[i] = new Vector3F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
 
                 var normalCount = reader.ReadInt32();
                 if (normalCount > 0)
                 {
-                    normals = new System.Numerics.Vector3[normalCount];
+                    normals = new Vector3F[normalCount];
                     for (int i = 0; i < normalCount; i++)
-                        normals[i] = new System.Numerics.Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                        normals[i] = new Vector3F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
                 }
 
                 var tangentCount = reader.ReadInt32();
                 if (tangentCount > 0)
                 {
-                    tangents = new System.Numerics.Vector3[tangentCount];
+                    tangents = new Vector3F[tangentCount];
                     for (int i = 0; i < tangentCount; i++)
-                        tangents[i] = new System.Numerics.Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                        tangents[i] = new Vector3F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
                 }
 
                 var colorCount = reader.ReadInt32();
@@ -879,17 +903,17 @@ namespace Prowl.Runtime
                 var uvCount = reader.ReadInt32();
                 if (uvCount > 0)
                 {
-                    uv = new System.Numerics.Vector2[uvCount];
+                    uv = new Vector2F[uvCount];
                     for (int i = 0; i < uvCount; i++)
-                        uv[i] = new System.Numerics.Vector2(reader.ReadSingle(), reader.ReadSingle());
+                        uv[i] = new Vector2F(reader.ReadSingle(), reader.ReadSingle());
                 }
 
                 var uv2Count = reader.ReadInt32();
                 if (uv2Count > 0)
                 {
-                    uv2 = new System.Numerics.Vector2[uv2Count];
+                    uv2 = new Vector2F[uv2Count];
                     for (int i = 0; i < uv2Count; i++)
-                        uv2[i] = new System.Numerics.Vector2(reader.ReadSingle(), reader.ReadSingle());
+                        uv2[i] = new Vector2F(reader.ReadSingle(), reader.ReadSingle());
                 }
 
                 var indexCount = reader.ReadInt32();
@@ -903,29 +927,30 @@ namespace Prowl.Runtime
                 var boneIndexCount = reader.ReadInt32();
                 if (boneIndexCount > 0)
                 {
-                    boneIndices = new System.Numerics.Vector4[boneIndexCount];
-                    for(int i = 0; i < boneIndexCount; i++)
+                    boneIndices = new Vector4F[boneIndexCount];
+                    for (int i = 0; i < boneIndexCount; i++)
                     {
                         //boneIndices[i] = new Color32(reader.ReadByte(), reader.ReadByte(), reader.ReadByte(), reader.ReadByte());
-                        boneIndices[i] = new System.Numerics.Vector4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                        boneIndices[i] = new Vector4F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
                     }
                 }
 
                 var boneWeightCount = reader.ReadInt32();
                 if (boneWeightCount > 0)
                 {
-                    boneWeights = new System.Numerics.Vector4[boneWeightCount];
+                    boneWeights = new Vector4F[boneWeightCount];
                     for (int i = 0; i < boneWeightCount; i++)
-                        boneWeights[i] = new System.Numerics.Vector4(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
+                        boneWeights[i] = new Vector4F(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
                 }
 
                 var bindPosesCount = reader.ReadInt32();
                 if (bindPosesCount > 0)
                 {
-                    bindPoses = new System.Numerics.Matrix4x4[bindPosesCount];
+                    bindPoses = new Matrix4x4F[bindPosesCount];
                     for (int i = 0; i < bindPosesCount; i++)
                     {
-                        bindPoses[i] = new System.Numerics.Matrix4x4() {
+                        bindPoses[i] = new Matrix4x4F()
+                        {
                             M11 = reader.ReadSingle(),
                             M12 = reader.ReadSingle(),
                             M13 = reader.ReadSingle(),

@@ -1,4 +1,5 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 namespace Prowl.Runtime.GUI
 {
@@ -52,8 +53,8 @@ namespace Prowl.Runtime.GUI
 
         public static Offset Lerp(Offset a, Offset b, double t)
         {
-            if(a.isLerp) throw new System.Exception("Cannot lerp a lerp");
-            if(b.isLerp) throw new System.Exception("Cannot lerp a lerp");
+            if (a.isLerp) throw new System.Exception("Cannot lerp a lerp");
+            if (b.isLerp) throw new System.Exception("Cannot lerp a lerp");
 
             Offset lerped = a;
             lerped.isLerp = true;

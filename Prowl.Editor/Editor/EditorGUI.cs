@@ -1,11 +1,16 @@
-﻿using Prowl.Editor.Preferences;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Reflection;
+using System.Runtime.CompilerServices;
+
+using Prowl.Editor.Preferences;
 using Prowl.Editor.PropertyDrawers;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
 using Prowl.Runtime.Utils;
-using System.Reflection;
-using System.Runtime.CompilerServices;
+
 using static Prowl.Runtime.GUI.Gui;
 
 namespace Prowl.Editor
@@ -89,11 +94,11 @@ namespace Prowl.Editor
             var g = ActiveGUI;
             using (g.Node(label).Width(width).Height(height).Enter())
             {
-                if(border)
+                if (border)
                     g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 1, roundness.Value);
-                if(bgcolor != null)
+                if (bgcolor != null)
                     g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, bgcolor.Value, roundness.Value);
-                
+
                 if (g.IsNodePressed())
                 {
                     g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, roundness.Value);
@@ -181,7 +186,7 @@ namespace Prowl.Editor
         public static WidgetStyle VectorXStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { TextColor = EditorStylePrefs.Red, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
         public static WidgetStyle VectorYStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { TextColor = EditorStylePrefs.Emerald, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
         public static WidgetStyle VectorZStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { TextColor = EditorStylePrefs.Blue, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
-         
+
         public static WidgetStyle InputFieldStyle => new WidgetStyle((float)EditorStylePrefs.Instance.ItemSize) { TextColor = EditorStylePrefs.Emerald, BGColor = EditorStylePrefs.Instance.WindowBGOne, BorderColor = EditorStylePrefs.Instance.Borders, BorderThickness = 1, Roundness = (float)EditorStylePrefs.Instance.ButtonRoundness };
 
 
@@ -312,7 +317,7 @@ namespace Prowl.Editor
                 HandleEndAttributes(imGuiAttributes);
 
                 // Update the value
-                if(propChange)
+                if (propChange)
                     field.SetValue(target, fieldValue);
 
                 changed |= propChange;

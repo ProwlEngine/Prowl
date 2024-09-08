@@ -1,9 +1,8 @@
-﻿using Prowl.Editor.Assets;
-using Prowl.Editor.Preferences;
-using Prowl.Icons;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Editor.Assets;
 using Prowl.Runtime;
-using Prowl.Runtime.GUI;
-using System;
 
 namespace Prowl.Editor.ScriptedEditors
 {

@@ -1,5 +1,9 @@
-﻿using System.Collections.Generic;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+
 using BepuPhysics;
 using BepuPhysics.Collidables;
 
@@ -29,7 +33,7 @@ internal struct OverlapCollectionHandler : ISweepHitHandler
         return true;
     }
 
-    public void OnHit(ref float maximumT, float t, System.Numerics.Vector3 hitLocation, System.Numerics.Vector3 hitNormal, CollidableReference collidable){ }
+    public void OnHit(ref float maximumT, float t, System.Numerics.Vector3 hitLocation, System.Numerics.Vector3 hitNormal, CollidableReference collidable) { }
 
     public void OnHitAtZeroT(ref float maximumT, CollidableReference collidable)
     {
@@ -63,7 +67,7 @@ internal struct OverlapArrayHandler : ISweepHitHandler
         return true;
     }
 
-    public void OnHit(ref float maximumT, float t, System.Numerics.Vector3 hitLocation, System.Numerics.Vector3 hitNormal, CollidableReference collidable){ }
+    public void OnHit(ref float maximumT, float t, System.Numerics.Vector3 hitLocation, System.Numerics.Vector3 hitNormal, CollidableReference collidable) { }
 
     public void OnHitAtZeroT(ref float maximumT, CollidableReference collidable)
     {
@@ -100,7 +104,7 @@ internal struct OverlapAnyHandler : ISweepHitHandler
         return true;
     }
 
-    public void OnHit(ref float maximumT, float t, System.Numerics.Vector3 hitLocation, System.Numerics.Vector3 hitNormal, CollidableReference collidable){ }
+    public void OnHit(ref float maximumT, float t, System.Numerics.Vector3 hitLocation, System.Numerics.Vector3 hitNormal, CollidableReference collidable) { }
 
     public void OnHitAtZeroT(ref float maximumT, CollidableReference collidable)
     {

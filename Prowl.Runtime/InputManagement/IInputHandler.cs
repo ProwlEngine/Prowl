@@ -1,4 +1,7 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Collections.Generic;
 
 namespace Prowl.Runtime
@@ -7,7 +10,7 @@ namespace Prowl.Runtime
     {
         string Clipboard { get; set; }
         bool IsAnyKeyDown { get; }
-        
+
         IReadOnlyList<char> InputString { get; set; }
 
         Vector2 MouseDelta { get; }

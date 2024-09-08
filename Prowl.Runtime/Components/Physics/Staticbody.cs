@@ -1,7 +1,10 @@
-﻿using BepuPhysics;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics;
 using BepuPhysics.Collidables;
+
 using Prowl.Icons;
-using System;
 
 namespace Prowl.Runtime
 {
@@ -17,26 +20,32 @@ namespace Prowl.Runtime
 
         private uint _transformVersion = 1;
 
-        public Vector3 Position {
+        public Vector3 Position
+        {
             get => StaticReference?.Pose.Position ?? default;
-            set {
+            set
+            {
                 if (StaticReference is { } bodyRef)
                     bodyRef.Pose.Position = value;
             }
         }
 
-        public Quaternion Orientation {
+        public Quaternion Orientation
+        {
             get => StaticReference?.Pose.Orientation ?? Quaternion.identity;
-            set {
+            set
+            {
                 if (StaticReference is { } bodyRef)
                     bodyRef.Pose.Orientation = value;
             }
         }
 
         [ShowInInspector]
-        public ContinuousDetection ContinuousDetection {
+        public ContinuousDetection ContinuousDetection
+        {
             get => StaticReference?.Continuity ?? default;
-            set {
+            set
+            {
                 if (StaticReference is { } bodyRef)
                     bodyRef.Continuity = value;
             }

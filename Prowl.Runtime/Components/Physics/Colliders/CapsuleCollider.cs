@@ -1,6 +1,12 @@
-﻿using BepuPhysics.Collidables;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics.Collidables;
+
 using BepuUtilities.Memory;
+
 using Prowl.Icons;
+
 using NRigidPose = BepuPhysics.RigidPose;
 
 namespace Prowl.Runtime;
@@ -35,7 +41,8 @@ public sealed class CapsuleCollider : Collider
 
     public float WorldRadius
     {
-        get {
+        get
+        {
             var scale = this.Transform.lossyScale;
             return _length * (float)MathD.Max(scale.x, scale.z);
         }

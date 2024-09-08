@@ -1,5 +1,7 @@
-﻿using System;
-using System.Numerics;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Runtime.InteropServices;
 
 namespace Prowl.Runtime
@@ -45,7 +47,7 @@ namespace Prowl.Runtime
                     3 => a,
                     _ => throw new IndexOutOfRangeException("Invalid Color index!")
                 };
-                
+
             }
             set
             {
@@ -192,5 +194,10 @@ namespace Prowl.Runtime
         }
 
         public override string ToString() => string.Format("RGBA({0}, {1}, {2}, {3})", new object[] { r, g, b, a });
+
+        public override int GetHashCode()
+        {
+            throw new NotImplementedException();
+        }
     }
 }

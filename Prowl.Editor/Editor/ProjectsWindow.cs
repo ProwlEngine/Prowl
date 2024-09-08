@@ -1,15 +1,20 @@
-﻿using Prowl.Editor.Preferences;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.GUI.Graphics;
 
 namespace Prowl.Editor
 {
     public class ProjectsWindow : EditorWindow
     {
+        private static string s_documentsPath = Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Projects");
         public static bool WindowDrawnThisFrame = false;
-        public string SelectedProject = "";
+
+        public Project? SelectedProject = null;
+
         private string _searchText = "";
         private string createName = "";
         private string[] tabNames = [FontAwesome6.RectangleList + "  Projects", FontAwesome6.PuzzlePiece + "  Create", FontAwesome6.BookOpen + "  Learn", FontAwesome6.DoorOpen + "  Quit"];
@@ -69,18 +74,21 @@ namespace Prowl.Editor
 
             using (gui.Node("List").Width(565).Height(345).Left(25).Top(80).Layout(LayoutType.Column).Spacing(5).Clip().Scroll().Enter())
             {
-                Directory.CreateDirectory(Project.Projects_Directory);
-                var folders = new DirectoryInfo(Project.Projects_Directory).EnumerateDirectories();
-                folders = folders.OrderByDescending((x) => x.LastWriteTimeUtc);
+                for (int i = 0; i < ProjectCache.Instance.ProjectsCount; i++)
+                {
+                    Project? project = ProjectCache.Instance.GetProject(i);
 
-                foreach (var projectFolder in folders)
-                    if (string.IsNullOrEmpty(_searchText) || projectFolder.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
-                        DisplayProject(projectFolder.Name);
+                    if (project == null)
+                        continue;
+
+                    if (string.IsNullOrEmpty(_searchText) || project.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+                        DisplayProject(project);
+                }
             }
 
             using (gui.Node("OpenBtn").TopLeft(Offset.Percentage(1f, -162), Offset.Percentage(1f, -60)).Scale(162, 60).Enter())
             {
-                if (!string.IsNullOrEmpty(SelectedProject))
+                if (SelectedProject != null)
                 {
                     if (gui.IsNodePressed())
                     {
@@ -88,8 +96,8 @@ namespace Prowl.Editor
                         isOpened = false;
                     }
 
-                    var col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
-                              gui.IsNodeHovered() ? EditorStylePrefs.Instance.Highlighted * 0.8f : EditorStylePrefs.Instance.Highlighted;
+                    Color col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
+                                gui.IsNodeHovered() ? EditorStylePrefs.Instance.Highlighted * 0.8f : EditorStylePrefs.Instance.Highlighted;
 
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, col, (float)EditorStylePrefs.Instance.WindowRoundness, 4);
                     gui.Draw2D.DrawText("Open", gui.CurrentNode.LayoutData.Rect);
@@ -101,25 +109,26 @@ namespace Prowl.Editor
                 }
             }
         }
-        private void DisplayProject(string name)
+        private void DisplayProject(Project project)
         {
-            var proj = Project.GetPath(name);
-            using (gui.Node(name).Height(48).Width(Size.Percentage(1f, -17)).Margin(5).Enter())
+            using (gui.Node(project.Name).Height(48).Width(Size.Percentage(1f, -17)).Margin(5).Enter())
             {
                 var rect = gui.CurrentNode.LayoutData.Rect;
-                gui.Draw2D.DrawText(Font.DefaultFont, name, 20, rect.Position + new Vector2(8, 5), Color.white);
-                string path = proj.FullName;
-                // Cut of the path if it's too long
+                gui.Draw2D.DrawText(Font.DefaultFont, project.Name, 20, rect.Position + new Vector2(8, 5), Color.white);
+                string path = project.ProjectPath;
+
+                // Cut off the path if it's too long
                 if (path.Length > 48)
                     path = string.Concat("...", path.AsSpan(path.Length - 48));
+
                 gui.Draw2D.DrawText(Font.DefaultFont, path, 20, rect.Position + new Vector2(8, 22), Color.white * 0.5f);
 
-                gui.Draw2D.DrawText(Font.DefaultFont, GetFormattedLastModifiedTime(proj.LastWriteTime), 20, rect.Position + new Vector2(rect.width - 125, 14), Color.white * 0.5f);
+                gui.Draw2D.DrawText(Font.DefaultFont, GetFormattedLastModifiedTime(project.ProjectDirectory.LastAccessTime), 20, rect.Position + new Vector2(rect.width - 125, 14), Color.white * 0.5f);
 
                 var interact = gui.GetInteractable();
-                if (interact.TakeFocus() || SelectedProject == name)
+                if (interact.TakeFocus() || SelectedProject == project)
                 {
-                    SelectedProject = name;
+                    SelectedProject = project;
                     gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.Rect, new(0.7f, 0.7f, 0.7f, 1f), 1, 2);
                 }
                 else if (interact.IsHovered())
@@ -130,7 +139,6 @@ namespace Prowl.Editor
                 //    isOpened = false;
                 //}
             }
-
         }
 
         private string GetFormattedLastModifiedTime(DateTime lastModified)
@@ -159,21 +167,23 @@ namespace Prowl.Editor
             Vector2 shadowC = new(rect.x, rect.y + rect.height);
             gui.Draw2D.DrawVerticalBlackGradient(shadowB, shadowC, 20, 0.25f);
 
+            if (string.IsNullOrWhiteSpace(createName))
+                createName = s_documentsPath;
+
             gui.InputField("CreateInput", ref createName, 0x100, Gui.InputFieldFlags.None, 30, 450, 340, null, EditorGUI.GetInputStyle());
-            string path = Project.GetPath(createName).FullName;
-            if (path.Length > 48)
-                path = string.Concat("...", path.AsSpan(path.Length - 48));
-            gui.Draw2D.DrawText(Font.DefaultFont, path, 20, rect.Position + new Vector2(30, 480), Color.white * 0.5f);
+
+            gui.Draw2D.DrawText(Font.DefaultFont, createName, 20, rect.Position + new Vector2(30, 480), Color.white * 0.5f);
 
             using (gui.Node("CreateBtn").TopLeft(Offset.Percentage(1f, -172), Offset.Percentage(1f, -77)).Scale(172, 77).Enter())
             {
-                if (!string.IsNullOrEmpty(createName))
+                if (!string.IsNullOrEmpty(createName) && Directory.Exists(Path.GetDirectoryName(createName)))
                 {
                     if (gui.IsNodePressed())
                     {
-                        Project.CreateNew(createName);
+                        Project.CreateNew(new DirectoryInfo(createName));
                         currentTab = 0;
                     }
+
                     var col = gui.IsNodeActive() ? EditorStylePrefs.Instance.Highlighted :
                               gui.IsNodeHovered() ? EditorStylePrefs.Instance.Highlighted * 0.8f : EditorStylePrefs.Instance.Highlighted;
 

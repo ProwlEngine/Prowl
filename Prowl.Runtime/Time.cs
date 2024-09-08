@@ -1,4 +1,8 @@
-﻿using System.Collections.Generic;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Collections.Generic;
+
 using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace Prowl.Runtime;
@@ -43,7 +47,8 @@ public class TimeData
     }
 }
 
-public static class Time {
+public static class Time
+{
 
     public static Stack<TimeData> TimeStack { get; } = new();
 
@@ -62,17 +67,20 @@ public static class Time {
 
     public static long frameCount => CurrentTime.frameCount;
 
-    public static double timeScale {
+    public static double timeScale
+    {
         get => CurrentTime.timeScale;
         set => CurrentTime.timeScale = value;
     }
 
-    public static float timeScaleF {
+    public static float timeScaleF
+    {
         get => (float)timeScale;
         set => timeScale = value;
     }
 
-    public static double timeSmoothFactor {
+    public static double timeSmoothFactor
+    {
         get => CurrentTime.timeSmoothFactor;
         set => CurrentTime.timeSmoothFactor = value;
     }

@@ -1,4 +1,7 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Collections;
 using System.Collections.Generic;
 
@@ -9,17 +12,17 @@ using System.Collections.Generic;
 namespace Prowl.Runtime
 {
     /// <summary>
-    /// A MultiValueDictionary can be viewed as a <see cref="IDictionary" /> that allows multiple 
-    /// values for any given unique key. While the MultiValueDictionary API is 
+    /// A MultiValueDictionary can be viewed as a <see cref="IDictionary" /> that allows multiple
+    /// values for any given unique key. While the MultiValueDictionary API is
     /// mostly the same as that of a regular <see cref="IDictionary" />, there is a distinction
     /// in that getting the value for a key returns a <see cref="IReadOnlyCollection{TValue}" /> of values
-    /// rather than a single value associated with that key. Additionally, 
+    /// rather than a single value associated with that key. Additionally,
     /// there is functionality to allow adding or removing more than a single
-    /// value at once. 
-    /// 
+    /// value at once.
+    ///
     /// The MultiValueDictionary can also be viewed as a IReadOnlyDictionary&lt;TKey,IReadOnlyCollection&lt;TValue&gt;t&gt;
     /// where the <see cref="IReadOnlyCollection{TValue}" /> is abstracted from the view of the programmer.
-    /// 
+    ///
     /// For a read-only MultiValueDictionary, see <see cref="System.Linq.ILookup{TKey, TValue}" />.
     /// </summary>
     /// <typeparam name="TKey">The type of the key.</typeparam>
@@ -57,7 +60,7 @@ namespace Prowl.Runtime
         ======================================================================*/
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> 
+        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
         /// class that is empty, has the default initial capacity, and uses the default
         /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>.
         /// </summary>
@@ -67,7 +70,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class that is 
+        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class that is
         /// empty, has the specified initial capacity, and uses the default <see cref="IEqualityComparer{TKey}"/>
         /// for <typeparamref name="TKey"/>.
         /// </summary>
@@ -81,8 +84,8 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class 
-        /// that is empty, has the default initial capacity, and uses the 
+        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class
+        /// that is empty, has the default initial capacity, and uses the
         /// specified <see cref="IEqualityComparer{TKey}" />.
         /// </summary>
         /// <param name="comparer">Specified comparer to use for the <typeparamref name="TKey"/>s</param>
@@ -93,8 +96,8 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class 
-        /// that is empty, has the specified initial capacity, and uses the 
+        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class
+        /// that is empty, has the specified initial capacity, and uses the
         /// specified <see cref="IEqualityComparer{TKey}" />.
         /// </summary>
         /// <param name="capacity">Initial number of keys that the <see cref="MultiValueDictionary{TKey, TValue}" /> will allocate space for</param>
@@ -109,8 +112,8 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class that contains 
-        /// elements copied from the specified IEnumerable&lt;KeyValuePair&lt;TKey, IReadOnlyCollection&lt;TValue&gt;&gt;&gt; and uses the 
+        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class that contains
+        /// elements copied from the specified IEnumerable&lt;KeyValuePair&lt;TKey, IReadOnlyCollection&lt;TValue&gt;&gt;&gt; and uses the
         /// default <see cref="IEqualityComparer{TKey}" /> for the <typeparamref name="TKey"/> type.
         /// </summary>
         /// <param name="enumerable">IEnumerable to copy elements into this from</param>
@@ -120,8 +123,8 @@ namespace Prowl.Runtime
         { }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class that contains 
-        /// elements copied from the specified IEnumerable&lt;KeyValuePair&lt;TKey, IReadOnlyCollection&lt;TValue&gt;&gt;&gt; and uses the 
+        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class that contains
+        /// elements copied from the specified IEnumerable&lt;KeyValuePair&lt;TKey, IReadOnlyCollection&lt;TValue&gt;&gt;&gt; and uses the
         /// specified <see cref="IEqualityComparer{TKey}" />.
         /// </summary>
         /// <param name="enumerable">IEnumerable to copy elements into this from</param>
@@ -146,9 +149,9 @@ namespace Prowl.Runtime
         ======================================================================*/
 
         /// <summary>
-        /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> 
+        /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
         /// class that is empty, has the default initial capacity, and uses the default
-        /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The 
+        /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The
         /// internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
         /// class as its collection type.
         /// </summary>
@@ -178,9 +181,9 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> 
+        /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
         /// class that is empty, has the specified initial capacity, and uses the default
-        /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The 
+        /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The
         /// internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
         /// class as its collection type.
         /// </summary>
@@ -214,9 +217,9 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> 
+        /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
         /// class that is empty, has the default initial capacity, and uses the specified
-        /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The 
+        /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The
         /// internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
         /// class as its collection type.
         /// </summary>
@@ -248,9 +251,9 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> 
+        /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
         /// class that is empty, has the specified initial capacity, and uses the specified
-        /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The 
+        /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The
         /// internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
         /// class as its collection type.
         /// </summary>
@@ -286,7 +289,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class that contains 
+        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class that contains
         /// elements copied from the specified IEnumerable&lt;KeyValuePair&lt;TKey, IReadOnlyCollection&lt;TValue&gt;&gt;&gt;
         /// and uses the default <see cref="IEqualityComparer{TKey}" /> for the <typeparamref name="TKey"/> type.
         /// The internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
@@ -325,7 +328,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class that contains 
+        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class that contains
         /// elements copied from the specified IEnumerable&lt;KeyValuePair&lt;TKey, IReadOnlyCollection&lt;TValue&gt;&gt;&gt;
         /// and uses the specified <see cref="IEqualityComparer{TKey}" /> for the <typeparamref name="TKey"/> type.
         /// The internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
@@ -373,9 +376,9 @@ namespace Prowl.Runtime
         ======================================================================*/
 
         /// <summary>
-        /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> 
+        /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
         /// class that is empty, has the default initial capacity, and uses the default
-        /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The 
+        /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The
         /// internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
         /// class as its collection type.
         /// </summary>
@@ -407,9 +410,9 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> 
+        /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
         /// class that is empty, has the specified initial capacity, and uses the default
-        /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The 
+        /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The
         /// internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
         /// class as its collection type.
         /// </summary>
@@ -419,7 +422,7 @@ namespace Prowl.Runtime
         /// </typeparam>
         /// <param name="capacity">Initial number of keys that the <see cref="MultiValueDictionary{TKey, TValue}" /> will allocate space for</param>
         /// <param name="collectionFactory">A function to create a new <see cref="ICollection{TValue}"/> to use
-        /// in the internal dictionary store of this <see cref="MultiValueDictionary{TKey, TValue}" />.</param> 
+        /// in the internal dictionary store of this <see cref="MultiValueDictionary{TKey, TValue}" />.</param>
         /// <returns>A new <see cref="MultiValueDictionary{TKey, TValue}" /> with the specified
         /// parameters.</returns>
         /// <exception cref="ArgumentOutOfRangeException">Capacity must be >= 0</exception>
@@ -445,9 +448,9 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> 
+        /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
         /// class that is empty, has the default initial capacity, and uses the specified
-        /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The 
+        /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The
         /// internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
         /// class as its collection type.
         /// </summary>
@@ -457,7 +460,7 @@ namespace Prowl.Runtime
         /// </typeparam>
         /// <param name="comparer">Specified comparer to use for the <typeparamref name="TKey"/>s</param>
         /// <param name="collectionFactory">A function to create a new <see cref="ICollection{TValue}"/> to use
-        /// in the internal dictionary store of this <see cref="MultiValueDictionary{TKey, TValue}" />.</param> 
+        /// in the internal dictionary store of this <see cref="MultiValueDictionary{TKey, TValue}" />.</param>
         /// <exception cref="InvalidOperationException"><paramref name="collectionFactory"/> must create collections with
         /// IsReadOnly set to true by default.</exception>
         /// <returns>A new <see cref="MultiValueDictionary{TKey, TValue}" /> with the specified
@@ -481,9 +484,9 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> 
+        /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
         /// class that is empty, has the specified initial capacity, and uses the specified
-        /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The 
+        /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The
         /// internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
         /// class as its collection type.
         /// </summary>
@@ -494,7 +497,7 @@ namespace Prowl.Runtime
         /// <param name="capacity">Initial number of keys that the <see cref="MultiValueDictionary{TKey, TValue}" /> will allocate space for</param>
         /// <param name="comparer">Specified comparer to use for the <typeparamref name="TKey"/>s</param>
         /// <param name="collectionFactory">A function to create a new <see cref="ICollection{TValue}"/> to use
-        /// in the internal dictionary store of this <see cref="MultiValueDictionary{TKey, TValue}" />.</param> 
+        /// in the internal dictionary store of this <see cref="MultiValueDictionary{TKey, TValue}" />.</param>
         /// <returns>A new <see cref="MultiValueDictionary{TKey, TValue}" /> with the specified
         /// parameters.</returns>
         /// <exception cref="InvalidOperationException"><paramref name="collectionFactory"/> must create collections with
@@ -521,7 +524,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class that contains 
+        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class that contains
         /// elements copied from the specified IEnumerable&lt;KeyValuePair&lt;TKey, IReadOnlyCollection&lt;TValue&gt;&gt;&gt;
         /// and uses the default <see cref="IEqualityComparer{TKey}" /> for the <typeparamref name="TKey"/> type.
         /// The internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
@@ -533,7 +536,7 @@ namespace Prowl.Runtime
         /// </typeparam>
         /// <param name="enumerable">IEnumerable to copy elements into this from</param>
         /// <param name="collectionFactory">A function to create a new <see cref="ICollection{TValue}"/> to use
-        /// in the internal dictionary store of this <see cref="MultiValueDictionary{TKey, TValue}" />.</param> 
+        /// in the internal dictionary store of this <see cref="MultiValueDictionary{TKey, TValue}" />.</param>
         /// <returns>A new <see cref="MultiValueDictionary{TKey, TValue}" /> with the specified
         /// parameters.</returns>
         /// <exception cref="InvalidOperationException"><paramref name="collectionFactory"/> must create collections with
@@ -562,7 +565,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class that contains 
+        /// Initializes a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" /> class that contains
         /// elements copied from the specified IEnumerable&lt;KeyValuePair&lt;TKey, IReadOnlyCollection&lt;TValue&gt;&gt;&gt;
         /// and uses the specified <see cref="IEqualityComparer{TKey}" /> for the <typeparamref name="TKey"/> type.
         /// The internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
@@ -575,7 +578,7 @@ namespace Prowl.Runtime
         /// <param name="enumerable">IEnumerable to copy elements into this from</param>
         /// <param name="comparer">Specified comparer to use for the <typeparamref name="TKey"/>s</param>
         /// <param name="collectionFactory">A function to create a new <see cref="ICollection{TValue}"/> to use
-        /// in the internal dictionary store of this <see cref="MultiValueDictionary{TKey, TValue}" />.</param> 
+        /// in the internal dictionary store of this <see cref="MultiValueDictionary{TKey, TValue}" />.</param>
         /// <returns>A new <see cref="MultiValueDictionary{TKey, TValue}" /> with the specified
         /// parameters.</returns>
         /// <exception cref="InvalidOperationException"><paramref name="collectionFactory"/> must create collections with
@@ -691,16 +694,16 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Removes the first instance (if any) of the given <typeparamref name="TKey"/>-<typeparamref name="TValue"/> 
-        /// pair from this <see cref="MultiValueDictionary{TKey,TValue}"/>. 
+        /// Removes the first instance (if any) of the given <typeparamref name="TKey"/>-<typeparamref name="TValue"/>
+        /// pair from this <see cref="MultiValueDictionary{TKey,TValue}"/>.
         /// </summary>
         /// <param name="key">The <typeparamref name="TKey"/> of the element to remove</param>
         /// <param name="value">The <typeparamref name="TValue"/> of the element to remove</param>
         /// <exception cref="ArgumentNullException"><paramref name="key"/> must be non-null</exception>
         /// <returns><c>true</c> if the removal was successful; otherwise <c>false</c></returns>
         /// <remarks>
-        /// If the <typeparamref name="TValue"/> being removed is the last one associated with its <typeparamref name="TKey"/>, then that 
-        /// <typeparamref name="TKey"/> will be removed from the <see cref="MultiValueDictionary{TKey,TValue}"/> and its 
+        /// If the <typeparamref name="TValue"/> being removed is the last one associated with its <typeparamref name="TKey"/>, then that
+        /// <typeparamref name="TKey"/> will be removed from the <see cref="MultiValueDictionary{TKey,TValue}"/> and its
         /// associated <see cref="IReadOnlyCollection{TValue}"/> will be freed as if a call to <see cref="Remove(TKey)"/>
         /// had been made.
         /// </remarks>
@@ -720,7 +723,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Determines if the given <typeparamref name="TKey"/>-<typeparamref name="TValue"/> 
+        /// Determines if the given <typeparamref name="TKey"/>-<typeparamref name="TValue"/>
         /// pair exists within this <see cref="MultiValueDictionary{TKey,TValue}"/>.
         /// </summary>
         /// <param name="key">The <typeparamref name="TKey"/> of the element.</param>
@@ -739,7 +742,7 @@ namespace Prowl.Runtime
         /// Determines if the given <typeparamref name="TValue"/> exists within this <see cref="MultiValueDictionary{TKey,TValue}"/>.
         /// </summary>
         /// <param name="value">A <typeparamref name="TValue"/> to search the <see cref="MultiValueDictionary{TKey,TValue}"/> for</param>
-        /// <returns><c>true</c> if the <see cref="MultiValueDictionary{TKey,TValue}"/> contains the <paramref name="value"/>; otherwise <c>false</c></returns>      
+        /// <returns><c>true</c> if the <see cref="MultiValueDictionary{TKey,TValue}"/> contains the <paramref name="value"/>; otherwise <c>false</c></returns>
         public bool ContainsValue(TValue value)
         {
             foreach (InnerCollectionView sublist in _dictionary.Values)
@@ -749,7 +752,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Removes every <typeparamref name="TKey"/> and <typeparamref name="TValue"/> from this 
+        /// Removes every <typeparamref name="TKey"/> and <typeparamref name="TValue"/> from this
         /// <see cref="MultiValueDictionary{TKey,TValue}"/>.
         /// </summary>
         public void Clear()
@@ -788,8 +791,8 @@ namespace Prowl.Runtime
         /// has one or more associated <typeparamref name="TValue"/>.
         /// </summary>
         /// <value>
-        /// An <see cref="IEnumerable{TKey}"/> containing each <typeparamref name="TKey"/> 
-        /// in this <see cref="MultiValueDictionary{TKey,TValue}"/> that has one or more associated 
+        /// An <see cref="IEnumerable{TKey}"/> containing each <typeparamref name="TKey"/>
+        /// in this <see cref="MultiValueDictionary{TKey,TValue}"/> that has one or more associated
         /// <typeparamref name="TValue"/>.
         /// </value>
         public IEnumerable<TKey> Keys => _dictionary.Keys;
@@ -804,7 +807,7 @@ namespace Prowl.Runtime
         /// <typeparamref name="TKey"/> if it is found; otherwise contains the default value of <typeparamref name="TValue"/>.
         /// </param>
         /// <returns>
-        /// <c>true</c> if the <see cref="MultiValueDictionary{TKey,TValue}"/> contains an element with the specified 
+        /// <c>true</c> if the <see cref="MultiValueDictionary{TKey,TValue}"/> contains an element with the specified
         /// <typeparamref name="TKey"/>; otherwise, <c>false</c>.
         /// </returns>
         /// <exception cref="ArgumentNullException"><paramref name="key"/> must be non-null</exception>
@@ -821,28 +824,28 @@ namespace Prowl.Runtime
         /// <summary>
         /// Gets an enumerable of <see cref="IReadOnlyCollection{TValue}"/> from this <see cref="MultiValueDictionary{TKey,TValue}"/>,
         /// where each <see cref="IReadOnlyCollection{TValue}" /> is the collection of every <typeparamref name="TValue"/> associated
-        /// with a <typeparamref name="TKey"/> present in the <see cref="MultiValueDictionary{TKey,TValue}"/>. 
+        /// with a <typeparamref name="TKey"/> present in the <see cref="MultiValueDictionary{TKey,TValue}"/>.
         /// </summary>
-        /// <value>An IEnumerable of each <see cref="IReadOnlyCollection{TValue}"/> in this 
+        /// <value>An IEnumerable of each <see cref="IReadOnlyCollection{TValue}"/> in this
         /// <see cref="MultiValueDictionary{TKey,TValue}"/></value>
         public IEnumerable<IReadOnlyCollection<TValue>> Values => _dictionary.Values;
 
         /// <summary>
-        /// Get every <typeparamref name="TValue"/> associated with the given <typeparamref name="TKey"/>. If 
-        /// <paramref name="key"/> is not found in this <see cref="MultiValueDictionary{TKey,TValue}"/>, will 
+        /// Get every <typeparamref name="TValue"/> associated with the given <typeparamref name="TKey"/>. If
+        /// <paramref name="key"/> is not found in this <see cref="MultiValueDictionary{TKey,TValue}"/>, will
         /// throw a <see cref="KeyNotFoundException"/>.
         /// </summary>
         /// <param name="key">The <typeparamref name="TKey"/> of the elements to retrieve.</param>
         /// <exception cref="ArgumentNullException"><paramref name="key"/> must be non-null</exception>
-        /// <exception cref="KeyNotFoundException"><paramref name="key"/> does not have any associated 
+        /// <exception cref="KeyNotFoundException"><paramref name="key"/> does not have any associated
         /// <typeparamref name="TValue"/>s in this <see cref="MultiValueDictionary{TKey,TValue}"/>.</exception>
         /// <value>
         /// An <see cref="IReadOnlyCollection{TValue}"/> containing every <typeparamref name="TValue"/>
         /// associated with <paramref name="key"/>.
         /// </value>
         /// <remarks>
-        /// Note that the <see cref="IReadOnlyCollection{TValue}"/> returned will change alongside any changes 
-        /// to the <see cref="MultiValueDictionary{TKey,TValue}"/> 
+        /// Note that the <see cref="IReadOnlyCollection{TValue}"/> returned will change alongside any changes
+        /// to the <see cref="MultiValueDictionary{TKey,TValue}"/>
         /// </remarks>
         public IReadOnlyCollection<TValue> this[TKey key]
         {

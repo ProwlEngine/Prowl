@@ -1,4 +1,7 @@
-﻿namespace Prowl.Runtime.NodeSystem
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+namespace Prowl.Runtime.NodeSystem
 {
     public abstract class FlowNode : Node
     {
@@ -24,7 +27,7 @@
 
     public abstract class InFlowNode : FlowNode
     {
-        [Input(ShowBackingValue.Never, ConnectionType.Override, TypeConstraint.Strict, true), SerializeIgnore] 
+        [Input(ShowBackingValue.Never, ConnectionType.Override, TypeConstraint.Strict, true), SerializeIgnore]
         public FlowNode From;
     }
 
@@ -32,7 +35,7 @@
     {
         [Output(ConnectionType.Override, TypeConstraint.Strict, true), SerializeIgnore]
         public FlowNode To;
-        [Input(ShowBackingValue.Never, ConnectionType.Override, TypeConstraint.Strict, true), SerializeIgnore] 
+        [Input(ShowBackingValue.Never, ConnectionType.Override, TypeConstraint.Strict, true), SerializeIgnore]
         public FlowNode From;
     }
 

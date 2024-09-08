@@ -1,9 +1,11 @@
-﻿using Prowl.Editor.Docking;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Editor.Docking;
 using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-using Prowl.Runtime.GUI.Graphics;
 
 namespace Prowl.Editor
 {
@@ -42,11 +44,13 @@ namespace Prowl.Editor
         private DockNode m_Leaf;
         private Vector2 m_DockPosition;
 
-        public DockNode Leaf {
+        public DockNode Leaf
+        {
             get => m_Leaf;
             internal set => m_Leaf = value;
         }
-        public Rect Rect {
+        public Rect Rect
+        {
             get;
             private set;
         }
@@ -149,7 +153,7 @@ namespace Prowl.Editor
                                 {
                                     updatedTotal = total;
                                 }
-                                
+
                                 double left = 0;
                                 for (int i = 0; i < Leaf.LeafWindows.Count; i++)
                                 {

@@ -1,4 +1,5 @@
-﻿using Prowl.Runtime.NodeSystem;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 namespace Prowl.Runtime.NodeSystem
 {
@@ -11,7 +12,7 @@ namespace Prowl.Runtime.NodeSystem
         [Input] public bool A;
         [Input] public bool B;
 
-        [Output, SerializeIgnore] public bool And; 
+        [Output, SerializeIgnore] public bool And;
 
         public override object GetValue(NodePort port) => GetInputValue("A", A) && GetInputValue("B", B);
     }
@@ -25,7 +26,7 @@ namespace Prowl.Runtime.NodeSystem
         [Input] public bool A;
         [Input] public bool B;
 
-        [Output, SerializeIgnore] public bool Or; 
+        [Output, SerializeIgnore] public bool Or;
 
         public override object GetValue(NodePort port) => GetInputValue("A", A) || GetInputValue("B", B);
     }
@@ -38,7 +39,7 @@ namespace Prowl.Runtime.NodeSystem
 
         [Input] public bool A;
 
-        [Output, SerializeIgnore] public bool Inverted; 
+        [Output, SerializeIgnore] public bool Inverted;
 
         public override object GetValue(NodePort port) => !GetInputValue("A", A);
     }

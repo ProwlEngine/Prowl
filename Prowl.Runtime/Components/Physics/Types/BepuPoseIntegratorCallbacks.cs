@@ -1,6 +1,11 @@
-﻿using BepuPhysics;
-using BepuUtilities;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Numerics;
+
+using BepuPhysics;
+
+using BepuUtilities;
 
 
 namespace Prowl.Runtime;
@@ -33,7 +38,7 @@ internal struct BepuPoseIntegratorCallbacks : IPoseIntegratorCallbacks
     /// <summary>
     /// Gets whether the integrator should use substepping for unconstrained bodies when using a substepping solver.
     /// If true, unconstrained bodies will be integrated with the same number of substeps as the constrained bodies in the solver.
-    /// If false, unconstrained bodies use a single step of length equal to the dt provided to Simulation.Timestep. 
+    /// If false, unconstrained bodies use a single step of length equal to the dt provided to Simulation.Timestep.
     /// </summary>
     public readonly bool AllowSubstepsForUnconstrainedBodies => false;
 
@@ -58,7 +63,7 @@ internal struct BepuPoseIntegratorCallbacks : IPoseIntegratorCallbacks
     /// Callback invoked ahead of dispatches that may call into <see cref="IntegrateVelocity"/>.
     /// It may be called more than once with different values over a frame. For example, when performing bounding box prediction, velocity is integrated with a full frame time step duration.
     /// During substepped solves, integration is split into substepCount steps, each with fullFrameDuration / substepCount duration.
-    /// The final integration pass for unconstrained bodies may be either fullFrameDuration or fullFrameDuration / substepCount, depending on the value of AllowSubstepsForUnconstrainedBodies. 
+    /// The final integration pass for unconstrained bodies may be either fullFrameDuration or fullFrameDuration / substepCount, depending on the value of AllowSubstepsForUnconstrainedBodies.
     /// </summary>
     /// <param name="dt">Current integration time step duration.</param>
     /// <remarks>This is typically used for precomputing anything expensive that will be used across velocity integration.</remarks>

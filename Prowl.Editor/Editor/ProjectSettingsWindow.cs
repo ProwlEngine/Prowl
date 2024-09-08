@@ -1,10 +1,13 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Reflection;
+
 using Prowl.Editor.Preferences;
 using Prowl.Editor.ProjectSettings;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
-
-using System.Reflection;
 
 using static Prowl.Editor.EditorGUI;
 

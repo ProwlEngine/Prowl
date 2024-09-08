@@ -1,7 +1,5 @@
-﻿using Prowl.Icons;
-using Prowl.Runtime.GUI.Graphics;
-
-using StbTrueTypeSharp;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 using System.Collections.Generic;
@@ -9,9 +7,12 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 
-using Veldrid;
+using Prowl.Icons;
+using Prowl.Runtime.GUI.Graphics;
 
-using static Prowl.Runtime.GUI.Graphics.UIDrawList;
+using StbTrueTypeSharp;
+
+using Veldrid;
 
 namespace Prowl.Runtime
 {
@@ -83,7 +84,7 @@ namespace Prowl.Runtime
             double line_width = 0.0f;
 
             int s = text_begin;
-            while (s < text_end)
+            while (s < Math.Min(text.Length, text_end))
             {
                 char c = text[s++];
                 if (c == '\n')

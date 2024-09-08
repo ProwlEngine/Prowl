@@ -1,4 +1,7 @@
-﻿using Prowl.Runtime;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.Utils;
 
@@ -19,7 +22,7 @@ namespace Prowl.Editor.Assets
 
         public override void Import(SerializedAsset ctx, FileInfo assetPath)
         {
-            // Load the Texture into a TextureData Object and serialize to Asset Folder 
+            // Load the Texture into a TextureData Object and serialize to Asset Folder
             Texture2D texture = Texture2DLoader.FromFile(assetPath.FullName, generateMipmaps);
 
             texture.Name = Path.GetFileNameWithoutExtension(assetPath.Name);

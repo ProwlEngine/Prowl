@@ -1,4 +1,7 @@
-﻿using BepuPhysics.Constraints;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics.Constraints;
 
 namespace Prowl.Runtime;
 
@@ -61,22 +64,28 @@ public sealed class SwingLimitConstraintComponent : TwoBodyConstraintComponent<S
     }
 
     [ShowInInspector]
-    public float SpringFrequency {
-        get {
+    public float SpringFrequency
+    {
+        get
+        {
             return _springFrequency;
         }
-        set {
+        set
+        {
             _springFrequency = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringDampingRatio {
-        get {
+    public float SpringDampingRatio
+    {
+        get
+        {
             return _springDampingRatio;
         }
-        set {
+        set
+        {
             _springDampingRatio = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -84,7 +93,8 @@ public sealed class SwingLimitConstraintComponent : TwoBodyConstraintComponent<S
 
     internal override SwingLimit CreateConstraint()
     {
-        return new SwingLimit {
+        return new SwingLimit
+        {
             AxisLocalA = AxisLocalA,
             AxisLocalB = AxisLocalB,
             MinimumDot = MinimumDot,

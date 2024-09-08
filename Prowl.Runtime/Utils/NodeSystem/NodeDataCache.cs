@@ -1,11 +1,11 @@
-﻿using Prowl.Runtime.NodeSystem;
-using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
-using System.Xml.Linq;
+
+using Prowl.Runtime.NodeSystem;
 
 namespace Prowl.Runtime.Utils.NodeSystem
 {
@@ -156,7 +156,8 @@ namespace Prowl.Runtime.Utils.NodeSystem
             if (backingPortInfo == null) return false;
 
             object[] attribs = backingPortInfo.GetCustomAttributes(true);
-            return attribs.Any(x => {
+            return attribs.Any(x =>
+            {
                 Node.InputAttribute inputAttribute = x as Node.InputAttribute;
                 Node.OutputAttribute outputAttribute = x as Node.OutputAttribute;
                 return inputAttribute != null && inputAttribute.dynamicPortList ||

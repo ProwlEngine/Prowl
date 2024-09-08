@@ -1,10 +1,14 @@
-using Veldrid;
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
+
+using Veldrid;
 
 namespace Prowl.Runtime
 {
     /// <summary>
-    /// General texture format and validation utilities 
+    /// General texture format and validation utilities
     /// </summary>
     public static class TextureUtility
     {

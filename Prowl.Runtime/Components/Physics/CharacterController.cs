@@ -1,6 +1,11 @@
-﻿using BepuPhysics;
-using Prowl.Icons;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
+
+using BepuPhysics;
+
+using Prowl.Icons;
 
 namespace Prowl.Runtime;
 
@@ -19,8 +24,9 @@ public sealed class CharacterController : Rigidbody
     [ShowInInspector]
     public Vector2 TargetVelocity { get; set; } = Vector2.zero;
     public bool IsGrounded { get; private set; } = false;
-    
-    public override bool Kinematic {
+
+    public override bool Kinematic
+    {
         get => false;
         set => Debug.LogWarning("CharacterController cannot be kinematic");
     }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 namespace Prowl.Runtime.GUI
 {
@@ -38,7 +39,7 @@ namespace Prowl.Runtime.GUI
         {
             if (Type == LayoutValueType.Percent)
                 return (Value * parentValue) + PixelOffset;
-            else if(isLerp)
+            else if (isLerp)
             {
                 Size a = new(Value, PixelOffset, Type);
                 Size b = new(_lerpValue, _lerpPixelOffset, _lerpType);

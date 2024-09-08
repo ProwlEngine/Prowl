@@ -1,4 +1,7 @@
-﻿using Prowl.Editor.Preferences;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 using Prowl.Runtime.GUI.Layout;
@@ -81,7 +84,7 @@ namespace Prowl.Editor.Assets
                 if (gui.IsNodePressed())
                 {
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted, (float)EditorStylePrefs.Instance.ButtonRoundness);
-                    if(popupHolder != null)
+                    if (popupHolder != null)
                         gui.ClosePopup(popupHolder);
                     return true;
                 }
@@ -142,7 +145,7 @@ namespace Prowl.Editor.Assets
                 if (gui.IsNodeHovered())
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
-                if(gui.IsNodePressed())
+                if (gui.IsNodePressed())
                     gui.OpenPopup("AddRangePopup");
 
                 if (gui.BeginPopup("AddRangePopup", out var popupNode))

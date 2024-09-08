@@ -1,4 +1,6 @@
-﻿using Prowl.Runtime;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
 using System.Collections.Generic;
 
@@ -12,13 +14,13 @@ public class Input
     public static void PushHandler(IInputHandler handler) => Handlers.Push(handler);
     public static void PopHandler() => Handlers.Pop();
 
-    public static bool CursorVisible 
+    public static bool CursorVisible
     {
         get => Current.CursorVisible;
         set => Current.CursorVisible = value;
     }
 
-    public static bool CursorLocked 
+    public static bool CursorLocked
     {
         get => Current.CursorLocked;
         set => Current.CursorLocked = value;

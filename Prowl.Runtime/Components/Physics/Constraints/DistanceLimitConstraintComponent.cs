@@ -1,4 +1,7 @@
-﻿using BepuPhysics.Constraints;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics.Constraints;
 
 namespace Prowl.Runtime;
 
@@ -15,18 +18,22 @@ public sealed class DistanceLimitConstraintComponent : TwoBodyConstraintComponen
     [SerializeField, HideInInspector] private float _springDampingRatio = 5;
 
     [ShowInInspector]
-    public Vector3 LocalOffsetA {
+    public Vector3 LocalOffsetA
+    {
         get => _localOffsetA;
-        set {
+        set
+        {
             _localOffsetA = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public Vector3 LocalOffsetB {
+    public Vector3 LocalOffsetB
+    {
         get => _localOffsetB;
-        set {
+        set
+        {
             _localOffsetB = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -34,40 +41,50 @@ public sealed class DistanceLimitConstraintComponent : TwoBodyConstraintComponen
 
 
     [ShowInInspector]
-    public float MinimumAngle {
+    public float MinimumAngle
+    {
         get { return _minimumDistance; }
-        set {
+        set
+        {
             _minimumDistance = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float MaximumAngle {
+    public float MaximumAngle
+    {
         get { return _maximumDistance; }
-        set {
+        set
+        {
             _maximumDistance = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringFrequency {
-        get {
+    public float SpringFrequency
+    {
+        get
+        {
             return _springFrequency;
         }
-        set {
+        set
+        {
             _springFrequency = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringDampingRatio {
-        get {
+    public float SpringDampingRatio
+    {
+        get
+        {
             return _springDampingRatio;
         }
-        set {
+        set
+        {
             _springDampingRatio = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -75,7 +92,8 @@ public sealed class DistanceLimitConstraintComponent : TwoBodyConstraintComponen
 
     internal override DistanceLimit CreateConstraint()
     {
-        return new DistanceLimit {
+        return new DistanceLimit
+        {
             LocalOffsetA = _localOffsetA,
             LocalOffsetB = _localOffsetB,
             MinimumDistance = _minimumDistance,

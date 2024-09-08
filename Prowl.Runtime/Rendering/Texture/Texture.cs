@@ -1,5 +1,10 @@
-using Veldrid;
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
+
+using Veldrid;
+
 using static Prowl.Runtime.TextureUtility;
 
 namespace Prowl.Runtime
@@ -45,16 +50,16 @@ namespace Prowl.Runtime
         internal Veldrid.Texture InternalTexture { get; private set; }
 
         /// <inheritdoc cref="Veldrid.TextureView"/>
-        internal Veldrid.TextureView TextureView { get; private set; } 
+        internal Veldrid.TextureView TextureView { get; private set; }
 
 
         private Veldrid.Texture stagingTexture = null;
-        
 
-        
+
+
         internal Texture() : base("New Texture") { }
 
-        internal Texture(TextureDescription description) : base("New Texture") 
+        internal Texture(TextureDescription description) : base("New Texture")
         {
             RecreateInternalTexture(description);
         }
@@ -130,7 +135,7 @@ namespace Prowl.Runtime
                 Format = description.Format,
                 Target = InternalTexture
             };
-            
+
             if (description.Usage.HasFlag(TextureUsage.Sampled) || description.Usage.HasFlag(TextureUsage.Storage))
                 TextureView = Graphics.Factory.CreateTextureView(in viewDescription);
             else
@@ -157,7 +162,7 @@ namespace Prowl.Runtime
                 Format = resource.Format,
                 Target = InternalTexture
             };
-            
+
             if (resource.Usage.HasFlag(TextureUsage.Sampled) || resource.Usage.HasFlag(TextureUsage.Storage))
                 TextureView = Graphics.Factory.CreateTextureView(in viewDescription);
             else
@@ -235,7 +240,7 @@ namespace Prowl.Runtime
             Graphics.Device.Unmap(stagingTexture, subresource);
         }
 
-        // Ensure that a CPU-accessible staging texture matching the internal one exists   
+        // Ensure that a CPU-accessible staging texture matching the internal one exists
         // If the internal texture is already a staging texture, uses itself.
         private void EnsureStagingTexture()
         {
@@ -310,7 +315,7 @@ namespace Prowl.Runtime
         {
             if (obj is not Texture texture)
                 return false;
-            
+
             return Equals(texture, true);
         }
 
@@ -330,7 +335,7 @@ namespace Prowl.Runtime
                 (compareMS && other.InternalTexture.SampleCount != InternalTexture.SampleCount)
             )
                 return true;
-            
+
             return false;
         }
 

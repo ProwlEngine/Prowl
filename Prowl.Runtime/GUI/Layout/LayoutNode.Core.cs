@@ -1,4 +1,7 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -23,9 +26,11 @@ namespace Prowl.Runtime.GUI.Layout
             public readonly Rect Rect => new(GlobalPosition, new(Scale.x, Scale.y));
             public readonly Rect OuterRect => new(GlobalPosition - Margins.TopLeft, new(Scale.x + Margins.Horizontal, Scale.y + Margins.Vertical));
 
-            public readonly Vector2 GlobalPosition {
-                get {
-                    if(_node == null)
+            public readonly Vector2 GlobalPosition
+            {
+                get
+                {
+                    if (_node == null)
                         return Vector2.zero;
                     Vector2 globalPosition = _node.Parent != null ? _node.Parent.LayoutData.GlobalContentPosition + Position + Margins.TopLeft : Position;
                     if (_node.Parent != null && !_node._ignore)
@@ -55,22 +60,27 @@ namespace Prowl.Runtime.GUI.Layout
         }
 
         public bool HasLayoutData => _data._node == this;
-        public PostLayoutData LayoutData {
-            get {
+        public PostLayoutData LayoutData
+        {
+            get
+            {
                 return _data;
             }
-            internal set {
+            internal set
+            {
                 _data = value;
             }
         }
 
         public Gui Gui { get; private set; }
         public LayoutNode Parent { get; internal set; }
-        public double VScroll {
+        public double VScroll
+        {
             get => _data.VScroll;
             set => _data.VScroll = value;
         }
-        public double HScroll {
+        public double HScroll
+        {
             get => _data.HScroll;
             set => _data.HScroll = value;
         }
@@ -157,7 +167,7 @@ namespace Prowl.Runtime.GUI.Layout
         public void UpdateScaleCache()
         {
             // Then Margin/Paddings (They rely on Scale)
-            if(_positionRelativeTo != null)
+            if (_positionRelativeTo != null)
             {
                 double x = _positionRelativeTo._data.Scale.x;
                 double y = _positionRelativeTo._data.Scale.y;
@@ -192,7 +202,7 @@ namespace Prowl.Runtime.GUI.Layout
                     Math.Min(_height.ToPixels(height) - _data.Margins.Vertical, maxH)
                 );
 
-                _data.MaxScale = new( maxW, maxH);
+                _data.MaxScale = new(maxW, maxH);
             }
             else
             {
@@ -204,7 +214,7 @@ namespace Prowl.Runtime.GUI.Layout
                     Math.Min(_height.ToPixels(0) - _data.Margins.Vertical, maxH)
                 );
 
-                _data.MaxScale = new( maxW, maxH);
+                _data.MaxScale = new(maxW, maxH);
             }
         }
 
@@ -289,7 +299,8 @@ namespace Prowl.Runtime.GUI.Layout
                     if (child._ignore) continue;
                     _data.ContentRect = Rect.CombineRect(_data.ContentRect, child._data.OuterRect);
                 }
-            } else _data.ContentRect = new Rect();
+            }
+            else _data.ContentRect = new Rect();
 
 
             ApplyFitContent();
@@ -463,15 +474,15 @@ namespace Prowl.Runtime.GUI.Layout
                     }
                     break;
                 case LayoutType.Row:
-                        foreach (var child in Children)
-                        {
-                            if (child._ignore) continue;
-                            if (_layoutX) child._positionX = x;
-                            if (_layoutY) child._positionY = 0;
-                            x += child._data.Margins.Horizontal + child._data.Scale.x;
-                            x += _layoutXSpacing.ToPixels(_data.GlobalContentWidth);
-                            child.UpdatePositionCache();
-                        }
+                    foreach (var child in Children)
+                    {
+                        if (child._ignore) continue;
+                        if (_layoutX) child._positionX = x;
+                        if (_layoutY) child._positionY = 0;
+                        x += child._data.Margins.Horizontal + child._data.Scale.x;
+                        x += _layoutXSpacing.ToPixels(_data.GlobalContentWidth);
+                        child.UpdatePositionCache();
+                    }
                     break;
                 case LayoutType.RowReversed:
                     x = _data.GlobalContentWidth;
@@ -492,9 +503,9 @@ namespace Prowl.Runtime.GUI.Layout
                 case LayoutType.GridReversed:
 
                     List<LayoutNode> gridChildren = Children.Where(c => !c._ignore).ToList();
-                    if(_layout == LayoutType.GridReversed)
+                    if (_layout == LayoutType.GridReversed)
                         gridChildren.Reverse();
-                        
+
                     double maxY = 0;
                     foreach (var child in gridChildren)
                     {
@@ -526,7 +537,7 @@ namespace Prowl.Runtime.GUI.Layout
 
             if (_fitContentX)
                 _width = MathD.Lerp(0, _data.ContentRect.width + _data.Paddings.Horizontal, _fitContentXPerc);
-            if (_fitContentY)           
+            if (_fitContentY)
                 _height = MathD.Lerp(0, _data.ContentRect.height + _data.Paddings.Vertical, _fitContentYPerc);
             UpdateCache();
         }

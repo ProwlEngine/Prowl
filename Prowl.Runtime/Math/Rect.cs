@@ -1,4 +1,7 @@
-﻿#region License
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+#region License
 /*
 MIT License
 Copyright © 2006 The Mono.Xna Team
@@ -28,8 +31,6 @@ SOFTWARE.
 */
 #endregion License
 
-using System;
-
 namespace Prowl.Runtime
 {
     public struct Rect
@@ -37,33 +38,41 @@ namespace Prowl.Runtime
         public Vector2 Min;    // Upper-left
         public Vector2 Max;    // Lower-right
 
-        public static Rect Empty {
-            get {
+        public static Rect Empty
+        {
+            get
+            {
                 return Rect.CreateFromMinMax(
                     new Vector2(double.MaxValue, double.MaxValue),
                     new Vector2(double.MinValue, double.MinValue));
             }
         }
-        public static Rect Zero {
-            get {
+        public static Rect Zero
+        {
+            get
+            {
                 return new Rect(
                     new Vector2(0, 0),
                     new Vector2(0, 0));
             }
         }
 
-        public double x {
+        public double x
+        {
             readonly get => Min.x;
-            set {
+            set
+            {
                 double width = Max.x - Min.x;
                 Min.x = value;
                 Max.x = value + width;
             }
         }
 
-        public double y {
+        public double y
+        {
             readonly get => Min.y;
-            set {
+            set
+            {
                 double height = Max.y - Min.y;
                 Min.y = value;
                 Max.y = value + height;
@@ -80,12 +89,14 @@ namespace Prowl.Runtime
         }
         public readonly Vector2 Center => new((Min.x + Max.x) / 2, (Min.y + Max.y) / 2);
 
-        public double width {
+        public double width
+        {
             readonly get => Max.x - Min.x;
             set => Max.x = Min.x + value;
         }
 
-        public double height {
+        public double height
+        {
             readonly get => Max.y - Min.y;
             set => Max.y = Min.y + value;
         }

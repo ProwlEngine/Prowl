@@ -1,4 +1,7 @@
-﻿using BepuPhysics.Constraints;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using BepuPhysics.Constraints;
 
 namespace Prowl.Runtime;
 
@@ -31,55 +34,70 @@ public sealed class AngularServoConstraintComponent : TwoBodyConstraintComponent
     }
 
     [ShowInInspector]
-    public float ServoMaximumSpeed {
-        get {
+    public float ServoMaximumSpeed
+    {
+        get
+        {
             return _servoMaximumSpeed;
         }
-        set {
+        set
+        {
             _servoMaximumSpeed = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float ServoBaseSpeed {
-        get {
+    public float ServoBaseSpeed
+    {
+        get
+        {
             return _servoBaseSpeed;
         }
-        set {
+        set
+        {
             _servoBaseSpeed = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float ServoMaximumForce {
-        get {
+    public float ServoMaximumForce
+    {
+        get
+        {
             return _servoMaximumForce;
         }
-        set {
+        set
+        {
             _servoMaximumForce = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringFrequency {
-        get {
+    public float SpringFrequency
+    {
+        get
+        {
             return _springFrequency;
         }
-        set {
+        set
+        {
             _springFrequency = value;
             ConstraintData?.TryUpdateDescription();
         }
     }
 
     [ShowInInspector]
-    public float SpringDampingRatio {
-        get {
+    public float SpringDampingRatio
+    {
+        get
+        {
             return _springDampingRatio;
         }
-        set {
+        set
+        {
             _springDampingRatio = value;
             ConstraintData?.TryUpdateDescription();
         }
@@ -87,7 +105,8 @@ public sealed class AngularServoConstraintComponent : TwoBodyConstraintComponent
 
     internal override AngularServo CreateConstraint()
     {
-        return new AngularServo {
+        return new AngularServo
+        {
             TargetRelativeRotationLocalA = _targetRelativeRotationLocalA,
             ServoSettings = new ServoSettings(_servoMaximumSpeed, _servoBaseSpeed, _servoMaximumForce),
             SpringSettings = new SpringSettings(_springFrequency, _springDampingRatio)

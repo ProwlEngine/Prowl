@@ -1,4 +1,7 @@
-﻿using System;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
@@ -8,7 +11,7 @@ namespace Prowl.Runtime.Utils
     /// A simple math parser that can evaluate basic arithmetic expressions.
     /// Supports addition, subtraction, multiplication, division, and exponentiation.
     /// Also supports parentheses and variables, and applies the C operator precedence.
-    /// 
+    ///
     /// Notes:
     /// Ignores whitespace characters.
     /// Variables are case-sensitive.
@@ -95,7 +98,8 @@ namespace Prowl.Runtime.Utils
 
         private static int GetPrecedence(string op) => op switch { "+" or "-" => 1, "*" or "/" => 2, "^" => 3, _ => 0 };
 
-        private static double ApplyOperator(string op, double l, double r) => op switch {
+        private static double ApplyOperator(string op, double l, double r) => op switch
+        {
             "+" => l + r,
             "-" => l - r,
             "*" => l * r,

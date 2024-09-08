@@ -1,7 +1,7 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.CompilerServices;
 
 using Veldrid;
 
@@ -18,13 +18,13 @@ namespace Prowl.Runtime
         private PropertyState _bufferProperties;
         private IGeometryDrawData _activeDrawData;
 
-        private GraphicsPipelineDescription _pipelineDescription;
+        private ShaderPipelineDescription _pipelineDescription;
 
         private PolygonFillMode _fill;
         private PrimitiveTopology _topology;
         private bool _scissor;
 
-        private GraphicsPipeline _graphicsPipeline;
+        private ShaderPipeline _graphicsPipeline;
         private BindableResourceSet _pipelineResources;
         private Pipeline _actualActivePipeline;
 
@@ -106,7 +106,9 @@ namespace Prowl.Runtime
 
         public void SetMaterial(Material material, int pass = 0)
         {
+            _bufferProperties.ApplyOverride(material.Properties);
             SetPass(material.Shader.Res.GetPass(pass));
+            BindResources();
         }
 
         public void DrawSingle(IGeometryDrawData drawData, int indexCount = -1, uint indexOffset = 0)
@@ -144,6 +146,7 @@ namespace Prowl.Runtime
         {
             _pipelineDescription.pass = pass;
             _pipelineDescription.variant = _pipelineDescription.pass.GetVariant(_keywordState);
+
             UpdatePipeline();
         }
 
@@ -152,6 +155,9 @@ namespace Prowl.Runtime
             UpdatePipeline();
             _pipelineResources.Bind(_commandList, _bufferProperties);
         }
+
+        public void ApplyPropertyState(PropertyState state)
+            => _bufferProperties.ApplyOverride(state);
 
         public void UpdateBuffer(string name)
             => _pipelineResources.UpdateBuffer(_commandList, name, _bufferProperties);
@@ -244,7 +250,7 @@ namespace Prowl.Runtime
 
         internal void UpdatePipeline()
         {
-            GraphicsPipeline newPipeline = GraphicsPipelineCache.GetPipeline(_pipelineDescription);
+            ShaderPipeline newPipeline = ShaderPipelineCache.GetPipeline(_pipelineDescription);
 
             if (newPipeline != _graphicsPipeline)
             {

@@ -1,6 +1,5 @@
-// Licensed to the .NET Foundation under one or more agreements.
-// The .NET Foundation licenses this file to you under the MIT license.
-// See the LICENSE file in the project root for more information.
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
 using System.Globalization;
@@ -36,19 +35,23 @@ namespace Prowl.Runtime
         public double M44;
         #endregion Public Fields
 
-        public Vector4 M1 {
+        public Vector4 M1
+        {
             get => new Vector4(M11, M12, M13, M14); set { M11 = value.x; M12 = value.y; M13 = value.z; M14 = value.w; }
         }
 
-        public Vector4 M2 {
+        public Vector4 M2
+        {
             get => new Vector4(M21, M22, M23, M24); set { M21 = value.x; M22 = value.y; M23 = value.z; M24 = value.w; }
         }
 
-        public Vector4 M3 {
+        public Vector4 M3
+        {
             get => new Vector4(M31, M32, M33, M34); set { M31 = value.x; M32 = value.y; M33 = value.z; M34 = value.w; }
         }
 
-        public Vector4 M4 {
+        public Vector4 M4
+        {
             get => new Vector4(M41, M42, M43, M44); set { M41 = value.x; M42 = value.y; M43 = value.z; M44 = value.w; }
         }
 
@@ -75,23 +78,39 @@ namespace Prowl.Runtime
                        M41 == 0 && M42 == 0 && M43 == 0;
 
         // Access element at [row, column].
-        public double this[int row, int column] {
+        public double this[int row, int column]
+        {
             get => this[row + column * 4];
 
             set => this[row + column * 4] = value;
         }
 
         // Access element at sequential index (0..15 inclusive).
-        public double this[int index] {
-            get => index switch {
-                0 => M11, 1 => M21, 2 => M31, 3 => M41,
-                4 => M12, 5 => M22, 6 => M32, 7 => M42,
-                8 => M13, 9 => M23, 10 => M33, 11 => M43,
-                12 => M14, 13 => M24, 14 => M34, 15 => M44,
+        public double this[int index]
+        {
+            get => index switch
+            {
+                0 => M11,
+                1 => M21,
+                2 => M31,
+                3 => M41,
+                4 => M12,
+                5 => M22,
+                6 => M32,
+                7 => M42,
+                8 => M13,
+                9 => M23,
+                10 => M33,
+                11 => M43,
+                12 => M14,
+                13 => M24,
+                14 => M34,
+                15 => M44,
                 _ => throw new IndexOutOfRangeException("Invalid matrix index!"),
             };
 
-            set {
+            set
+            {
                 switch (index)
                 {
                     case 0: M11 = value; break;
@@ -120,9 +139,11 @@ namespace Prowl.Runtime
         /// <summary>
         /// Gets or sets the translation component of this matrix.
         /// </summary>
-        public Vector3 Translation {
+        public Vector3 Translation
+        {
             get => new Vector3(M41, M42, M43);
-            set {
+            set
+            {
                 M41 = value.x;
                 M42 = value.y;
                 M43 = value.z;
@@ -207,7 +228,7 @@ namespace Prowl.Runtime
             => Matrix4x4.CreateScale(m_LocalScale) * Matrix4x4.CreateFromQuaternion(m_LocalRotation) * Matrix4x4.CreateTranslation(m_LocalPosition);
 
         public Vector3 MultiplyPoint(Vector3 v) => Vector3.Transform(v, this);
-        
+
 
         /// <summary>
         /// Creates a spherical billboard that rotates around a specified object position.
@@ -678,7 +699,7 @@ namespace Prowl.Runtime
         }
 
         /// <summary>
-        /// Creates a perspective projection matrix based on a field of view, aspect ratio, and near and far view plane distances. 
+        /// Creates a perspective projection matrix based on a field of view, aspect ratio, and near and far view plane distances.
         /// </summary>
         /// <param name="fieldOfView">Field of view in the y direction, in radians.</param>
         /// <param name="aspectRatio">Aspect ratio, defined as view space width divided by height.</param>
@@ -891,18 +912,18 @@ namespace Prowl.Runtime
             Vector3 zaxis = Vector3.Normalize(cameraPosition - cameraTarget);
             Vector3 xaxis = Vector3.Normalize(Vector3.Cross(cameraUpVector, zaxis));
             Vector3 yaxis = Vector3.Cross(zaxis, xaxis);
-            
+
             Matrix4x4 result = new();
-            
+
             result.M1 = new Vector4(xaxis.x, yaxis.x, zaxis.x, 0.0);
             result.M2 = new Vector4(xaxis.y, yaxis.y, zaxis.y, 0.0);
             result.M3 = new Vector4(xaxis.z, yaxis.z, zaxis.z, 0.0);
-            
+
             result.M41 = -Vector3.Dot(xaxis, cameraPosition);
             result.M42 = -Vector3.Dot(yaxis, cameraPosition);
             result.M43 = -Vector3.Dot(zaxis, cameraPosition);
             result.M44 = 1.0;
-            
+
             return result;
         }
 
@@ -1076,9 +1097,9 @@ namespace Prowl.Runtime
             // a | j k l | = a ( f ( kp - lo ) - g ( jp - ln ) + h ( jo - kn ) )
             //   | n o p |
             //
-            //   | e g h |     
+            //   | e g h |
             // b | i k l | = b ( e ( kp - lo ) - g ( ip - lm ) + h ( io - km ) )
-            //   | m o p |     
+            //   | m o p |
             //
             //   | e f h |
             // c | i j l | = c ( e ( jp - ln ) - f ( ip - lm ) + h ( in - jm ) )
@@ -1129,7 +1150,7 @@ namespace Prowl.Runtime
             //                                       -1
             // If you have matrix M, inverse Matrix M   can compute
             //
-            //     -1       1      
+            //     -1       1
             //    M   = --------- A
             //            det(M)
             //

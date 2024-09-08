@@ -1,4 +1,7 @@
-﻿using Prowl.Runtime;
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Preferences
@@ -26,9 +29,9 @@ namespace Prowl.Editor.Preferences
         public float RenderResolution = 1f;
 
         [Text("Grid:")]
-        public float LineWidth = 1f;
+        public float LineWidth = 0.02f;
         public float PrimaryGridSize = 1f;
         public float SecondaryGridSize = 5f;
-        public Color GridColor = Color.white;
+        public Color GridColor = new Color(1.0f, 1.0f, 1.0f, 0.5f);
     }
 }
