@@ -29,7 +29,7 @@ namespace Prowl.Editor.Preferences
         public float RenderResolution = 1f;
 
         [Text("Grid:")]
-        public float LineWidth = 0.4f;
+        public float LineWidth = 0.02f;
         public float PrimaryGridSize = 1f;
         public float SecondaryGridSize = 5f;
         public Color GridColor = new Color(1.0f, 1.0f, 1.0f, 0.5f);
