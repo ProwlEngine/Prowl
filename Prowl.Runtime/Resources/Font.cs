@@ -84,7 +84,7 @@ namespace Prowl.Runtime
             double line_width = 0.0f;
 
             int s = text_begin;
-            while (s < text_end)
+            while (s < Math.Min(text.Length, text_end))
             {
                 char c = text[s++];
                 if (c == '\n')
