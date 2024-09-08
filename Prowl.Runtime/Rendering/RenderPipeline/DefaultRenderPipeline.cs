@@ -1,34 +1,93 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Collections.Generic;
+
 using Veldrid;
 
 namespace Prowl.Runtime.RenderPipelines
 {
     public class DefaultRenderPipeline : RenderPipeline
     {
+        const bool cameraRelative = true;
+
         private static Mesh s_gridMesh;
         private static Material s_gridMaterial;
         private static Material s_defaultMaterial;
+        private static Material s_skybox;
+        private static Mesh s_skyDome;
+
+
+        private static void ValidateDefaults()
+        {
+            s_gridMesh ??= Mesh.CreateQuad(Vector2.one);
+            s_gridMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Grid.shader"));
+            s_defaultMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/DefaultUnlit.shader"));
+            s_skybox ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/ProceduralSky.shader"));
+
+            if (s_skyDome == null)
+            {
+                GameObject skyDomeModel = Application.AssetProvider.LoadAsset<GameObject>("Defaults/SkyDome.obj").Res;
+                MeshRenderer renderer = skyDomeModel.GetComponentInChildren<MeshRenderer>(true, true);
+
+                s_skyDome = renderer.Mesh.Res;
+            }
+        }
+
 
         public static DefaultRenderPipeline Default = new();
 
         public override void Render(Framebuffer target, Camera camera, in RenderingData data)
         {
-            s_gridMesh ??= Mesh.CreateQuad(Vector2.one);
-            s_gridMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Grid.shader"));
-            s_defaultMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/DefaultUnlit.shader"));
+            ValidateDefaults();
 
             CommandBuffer buffer = CommandBufferPool.Get("Rendering Command Buffer");
 
-            buffer.SetRenderTarget(target);
-            buffer.ClearRenderTarget(camera.DoClear, camera.DoClear, camera.ClearColor);
+            bool clearColor = camera.ClearMode == CameraClearMode.ColorOnly || camera.ClearMode == CameraClearMode.DepthColor;
+            bool clearDepth = camera.ClearMode == CameraClearMode.DepthOnly || camera.ClearMode == CameraClearMode.DepthColor;
+            bool drawSkybox = camera.ClearMode == CameraClearMode.Skybox;
 
-            Matrix4x4 vp = data.View * data.Projection;
+            buffer.SetRenderTarget(target);
+            buffer.ClearRenderTarget(clearDepth || drawSkybox, clearColor || drawSkybox, camera.ClearColor);
+
+            Matrix4x4 view = camera.GetViewMatrix(!cameraRelative);
+            Vector3 cameraPosition = camera.Transform.position;
+
+            Matrix4x4 projection = camera.GetProjectionMatrix(data.TargetResolution);
+
+            Matrix4x4 vp = view * projection;
 
             // BoundingFrustum frustum = new BoundingFrustum(vp);
 
             System.Numerics.Matrix4x4 floatVP = vp.ToFloat();
+
+
+            List<IRenderableLight> lights = GetLights();
+            Vector3 sunDirection = Vector3.up;
+
+            if (lights.Count > 0)
+            {
+                IRenderableLight light0 = lights[0];
+
+                light0.GetRenderingData(out LightType type, out Vector3 facingDirection);
+
+                if (type == LightType.Directional)
+                {
+                    sunDirection = facingDirection;
+                }
+            }
+
+
+            if (drawSkybox)
+            {
+                buffer.SetMaterial(s_skybox);
+
+                buffer.SetMatrix("_Matrix_VP", (camera.GetViewMatrix(false) * projection).ToFloat());
+                buffer.SetVector("_SunDir", sunDirection);
+
+                buffer.DrawSingle(s_skyDome);
+            }
+
 
             foreach (RenderBatch batch in EnumerateBatches())
             {
@@ -40,6 +99,9 @@ namespace Prowl.Runtime.RenderPipelines
                     //    continue;
 
                     renderable.GetRenderingData(out PropertyBlock properties, out IGeometryDrawData drawData, out Matrix4x4 model);
+
+                    if (cameraRelative)
+                        model.Translation -= cameraPosition;
 
                     buffer.ApplyPropertyState(properties);
 
@@ -62,8 +124,11 @@ namespace Prowl.Runtime.RenderPipelines
 
                 grid *= data.GridMatrix;
 
-                Matrix4x4 MV = grid * data.View;
-                Matrix4x4 MVP = grid * data.View * data.Projection;
+                if (cameraRelative)
+                    grid.Translation -= cameraPosition;
+
+                Matrix4x4 MV = grid * view;
+                Matrix4x4 MVP = grid * view * projection;
 
                 buffer.SetMatrix("_Matrix_MV", MV.ToFloat());
                 buffer.SetMatrix("_Matrix_MVP", MVP.ToFloat());

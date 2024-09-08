@@ -14,4 +14,22 @@ namespace Prowl.Runtime
 
         public void GetCullingData(out bool isRenderable, out Bounds bounds);
     }
+
+
+    public enum LightType
+    {
+        Directional,
+        Spot,
+        Point
+    }
+
+
+    public interface IRenderableLight
+    {
+        public Material GetMaterial();
+
+        public void GetRenderingData(out LightType type, out Vector3 facingDirection);
+
+        public void GetCullingData(out bool isRenderable, out bool isCullable, out Bounds bounds);
+    }
 }

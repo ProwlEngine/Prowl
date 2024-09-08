@@ -96,10 +96,11 @@ public class SceneViewWindow : EditorWindow
 
         SceneViewPreferences.Instance.RenderResolution = Math.Clamp(SceneViewPreferences.Instance.RenderResolution, 0.1f, 8.0f);
 
-        RenderingData data = new RenderingData();
-
-        data.InitializeFromCamera(Cam, new Vector2(RenderTarget.Width, RenderTarget.Height));
-        data.IsSceneViewCamera = true;
+        RenderingData data = new RenderingData
+        {
+            TargetResolution = new Vector2(RenderTarget.Width, RenderTarget.Height),
+            IsSceneViewCamera = true,
+        };
 
         if (SceneViewPreferences.Instance.GridType != GridType.None)
         {
@@ -158,7 +159,7 @@ public class SceneViewWindow : EditorWindow
         Ray mouseRay = Cam.ScreenPointToRay(gui.PointerPos - imagePos, new Vector2(RenderTarget.Width, RenderTarget.Height));
 
         bool blockPicking = gui.IsBlockedByInteractable(gui.PointerPos);
-        HandleGizmos(selectedGOs, mouseRay, data.View, data.Projection, blockPicking);
+        HandleGizmos(selectedGOs, mouseRay, Cam.GetViewMatrix(), Cam.GetProjectionMatrix(new Vector2(RenderTarget.Width, RenderTarget.Height)), blockPicking);
 
         Rect rect = gui.CurrentNode.LayoutData.Rect;
         rect.width = 100;

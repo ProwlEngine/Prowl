@@ -12,21 +12,13 @@ namespace Prowl.Runtime.RenderPipelines
 {
     public struct RenderingData
     {
-        public Matrix4x4 View;
-        public Matrix4x4 Projection;
+        public required Vector2 TargetResolution;
 
         public bool IsSceneViewCamera;
         public bool DisplayGrid;
         public Matrix4x4 GridMatrix;
         public Color GridColor;
         public Vector3 GridSizes;
-
-
-        public void InitializeFromCamera(Camera camera, Vector2 targetScale)
-        {
-            View = camera.GetViewMatrix();
-            Projection = camera.GetProjectionMatrix(targetScale);
-        }
     }
 
 
@@ -40,6 +32,8 @@ namespace Prowl.Runtime.RenderPipelines
     public abstract class RenderPipeline : EngineObject
     {
         private static Dictionary<Material, List<IRenderable>> s_batchedRenderables = [];
+
+        private static List<IRenderableLight> s_lights = [];
 
 
         public static void AddRenderable(IRenderable renderable)
@@ -56,10 +50,18 @@ namespace Prowl.Runtime.RenderPipelines
         }
 
 
+        public static void AddLight(IRenderableLight light)
+        {
+            s_lights.Add(light);
+        }
+
+
         public static void ClearRenderables()
         {
             foreach (List<IRenderable> batch in s_batchedRenderables.Values)
                 batch.Clear();
+
+            s_lights.Clear();
         }
 
 
@@ -72,6 +74,12 @@ namespace Prowl.Runtime.RenderPipelines
         public static List<IRenderable> GetRenderables(Material material)
         {
             return s_batchedRenderables[material];
+        }
+
+
+        public static List<IRenderableLight> GetLights()
+        {
+            return s_lights;
         }
 
 
