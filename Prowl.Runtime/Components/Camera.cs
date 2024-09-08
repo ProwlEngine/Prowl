@@ -8,13 +8,22 @@ using Prowl.Runtime.RenderPipelines;
 
 namespace Prowl.Runtime;
 
+public enum CameraClearMode
+{
+    None,
+    DepthOnly,
+    ColorOnly,
+    DepthColor,
+    Skybox,
+}
+
 [AddComponentMenu($"{FontAwesome6.Tv}  Rendering/{FontAwesome6.Camera}  Camera")]
 [ExecuteAlways]
 public class Camera : MonoBehaviour
 {
     public LayerMask LayerMask = LayerMask.Everything;
 
-    public bool DoClear = true;
+    public CameraClearMode ClearMode = CameraClearMode.Skybox;
     public Color ClearColor = new Color(0f, 0f, 0f, 1f);
     public float FieldOfView = 60f;
     public float OrthographicSize = 0.5f;
@@ -65,9 +74,9 @@ public class Camera : MonoBehaviour
     }
 
 
-    public Matrix4x4 GetViewMatrix()
+    public Matrix4x4 GetViewMatrix(bool applyPosition = true)
     {
-        return Matrix4x4.CreateLookToLeftHanded(Transform.position, Transform.forward, Transform.up);
+        return Matrix4x4.CreateLookToLeftHanded(applyPosition ? Transform.position : Vector3.zero, Transform.forward, Transform.up);
     }
 
 
