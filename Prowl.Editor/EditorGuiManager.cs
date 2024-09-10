@@ -326,8 +326,8 @@ public static class EditorGuiManager
         FileDialogContext imFileDialogInfo = new FileDialogContext()
         {
             title = "Save As",
-            fileName = "New Scene.scene",
-            directoryPath = Project.Active.AssetDirectory,
+            resultName = "New Scene.scene",
+            parentDirectory = Project.Active.AssetDirectory,
             type = FileDialogType.SaveFile,
             OnComplete = (path) =>
             {

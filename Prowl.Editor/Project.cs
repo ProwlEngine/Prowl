@@ -92,12 +92,12 @@ public class Project
     /// <param name="project">The project to load</param>
     /// <exception cref="UnauthorizedAccessException">Throws if Project Name doesn't exist</exception>
     /// <exception cref="ArgumentNullException">Throws if projectName is null or empty</exception>
-    public static void Open(Project project)
+    public static bool Open(Project project)
     {
         if (!project.IsValid())
         {
             Runtime.Debug.LogError($"Invalid project '{project.Name}' at path '{project.ProjectPath}'. Validate that all core project directories are intact.");
-            return;
+            return false;
         }
 
         Active = project;
@@ -123,6 +123,8 @@ public class Project
         OnProjectChanged?.Invoke();
 
         AssetDatabase.LoadPackages();
+
+        return true;
     }
 
     /// <summary>
@@ -160,15 +162,9 @@ public class Project
     {
         ProjectDirectory.Refresh();
         AssetDirectory.Refresh();
-        PackagesDirectory.Refresh();
-        Assembly_Proj.Refresh();
-        Editor_Assembly_Proj.Refresh();
 
         return ProjectDirectory.Exists &&
-            AssetDirectory.Exists &&
-            PackagesDirectory.Exists &&
-            Assembly_Proj.Exists &&
-            Editor_Assembly_Proj.Exists;
+            AssetDirectory.Exists;
     }
 
 

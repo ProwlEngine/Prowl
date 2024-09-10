@@ -54,7 +54,7 @@ namespace Prowl.Editor.Preferences
         public Color WindowBGOne = new(31, 33, 40);
         public Color WindowBGTwo = new Color(25, 27, 32);
         public Color Borders = new(49, 52, 66);
-        public Color Hovering = new Color(255, 255, 255) * 0.8f;
+        public Color Hovering = Color.white * 0.8f;
         public Color Highlighted = Indigo;
         public Color Ping = Yellow;
         public Color DropHighlight = Orange;

@@ -10,7 +10,6 @@ namespace Prowl.Runtime.GUI
 {
     public partial class Gui
     {
-
         public LayoutNode TextNode(string id, string text, Font? font = null)
         {
             using (Node("#_Text_" + id).Enter())
@@ -295,19 +294,19 @@ namespace Prowl.Runtime.GUI
 
         public bool Search(string ID, ref string searchText, Offset x, Offset y, Size width, Size? height = null, WidgetStyle? inputstyle = null, bool enterReturnsTrue = true)
         {
-            var style = inputstyle ?? new(30);
+            WidgetStyle style = inputstyle ?? new(30);
             searchText ??= "";
-            var g = Runtime.GUI.Gui.ActiveGUI;
+            Gui g = ActiveGUI;
 
             style.Roundness = 8f;
             style.BorderThickness = 1f;
-            var changed = InputField(ID, ref searchText, 32, enterReturnsTrue ? InputFieldFlags.EnterReturnsTrue : InputFieldFlags.None, x, y, width, height, style);
+            bool changed = InputField(ID, ref searchText, 32, enterReturnsTrue ? InputFieldFlags.EnterReturnsTrue : InputFieldFlags.None, x, y, width, height, style);
             if (string.IsNullOrWhiteSpace(searchText) && !g.PreviousInteractableIsFocus())
             {
-                var pos = g.PreviousNode.LayoutData.InnerRect.Position + new Vector2(8, 3);
+                Vector2 pos = g.PreviousNode.LayoutData.InnerRect.Position + new Vector2(8, 3);
                 // Center text vertically
                 pos.y += (g.PreviousNode.LayoutData.InnerRect.height - style.FontSize) / 2;
-                g.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.MagnifyingGlass + "Search...", style.FontSize, pos, Color.white * 0.6f);
+                g.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.MagnifyingGlass + " Search...", style.FontSize, pos, Color.white * 0.6f);
             }
             return changed;
         }

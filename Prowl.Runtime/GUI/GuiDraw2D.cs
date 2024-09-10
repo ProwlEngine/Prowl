@@ -86,6 +86,16 @@ namespace Prowl.Runtime.GUI
             }
         }
 
+        public void DrawVerticalGradient(Vector2 top, Vector2 bottom, float right, Color a, Color b)
+        {
+            _drawList[currentZIndex].AddRectFilledMultiColor(new(top.x, top.y), new(bottom.x + right, bottom.y), a, b, b, a);
+        }
+
+        public void DrawHorizontalGradient(Vector2 left, Vector2 right, float down, Color a, Color b)
+        {
+            _drawList[currentZIndex].AddRectFilledMultiColor(new(left.x, left.y), new(right.x, right.y + down), b, b, a, a);
+        }
+
         public void DrawVerticalBlackGradient(Vector2 top, Vector2 bottom, float right, float strength)
         {
             Color col = new Color(0, 0, 0, strength);

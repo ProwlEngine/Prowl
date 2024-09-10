@@ -40,13 +40,6 @@ namespace Prowl.Editor
             Project project = _projectCache[index];
             project.Refresh();
 
-            if (!project.Exists)
-            {
-                _projectCache.RemoveAt(index);
-                Save();
-                return null;
-            }
-
             return project;
         }
 

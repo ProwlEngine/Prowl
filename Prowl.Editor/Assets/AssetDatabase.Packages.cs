@@ -120,8 +120,8 @@ namespace Prowl.Editor.Assets
             FileDialogContext imFileDialogInfo = new()
             {
                 title = "Export Package",
-                directoryPath = Project.Active.ProjectDirectory,
-                fileName = "New Package.prowlpackage",
+                parentDirectory = Project.Active.ProjectDirectory,
+                resultName = "New Package.prowlpackage",
                 type = FileDialogType.SaveFile,
                 OnComplete = (path) =>
                 {
