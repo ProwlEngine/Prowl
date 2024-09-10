@@ -1,5 +1,5 @@
 # Configuration copied from the .NET foundation
-# https://github.com/dotnet/runtime/blob/1d32e0a510d3dd48b3c8ddcdf0a86e5d4292b896/.editorconfig
+# https://github.com/dotnet/runtime/blob/main/.editorconfig
 
 # top-most EditorConfig file
 root = true
