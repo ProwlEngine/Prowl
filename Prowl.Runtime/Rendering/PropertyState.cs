@@ -54,6 +54,7 @@ namespace Prowl.Runtime
 
         [SerializeField] internal Dictionary<string, Property> _values;
 
+        internal Dictionary<string, Veldrid.Texture?> _rawTextures;
         internal Dictionary<string, GraphicsBuffer?> _buffers;
 
 
@@ -61,12 +62,14 @@ namespace Prowl.Runtime
         public PropertyState()
         {
             _values = new();
+            _rawTextures = new();
             _buffers = new();
         }
 
         public PropertyState(PropertyState clone)
         {
             _values = new(clone._values);
+            _rawTextures = new(clone._rawTextures);
             _buffers = new(clone._buffers);
         }
 
@@ -81,6 +84,9 @@ namespace Prowl.Runtime
                 _values[pair.Key] = prop;
             }
 
+            foreach (var pair in overrideState._rawTextures)
+                _rawTextures[pair.Key] = pair.Value;
+
             foreach (var pair in overrideState._buffers)
                 _buffers[pair.Key] = pair.Value;
         }
@@ -94,6 +100,7 @@ namespace Prowl.Runtime
         public void SetInt(string name, int value) => WriteData(name, value, ValueType.Int, 1, 1);
         public void SetMatrix(string name, Matrix4x4F value) => WriteData(name, value, ValueType.Float, 4, 4);
         public void SetTexture(string name, AssetRef<Texture> value) => _values[name] = new Property { texture = value };
+        public void SetRawTexture(string name, Veldrid.Texture value) => _rawTextures[name] = value;
         public void SetBuffer(string name, GraphicsBuffer value) => _buffers[name] = value;
 
         public void SetIntArray(string name, int[] values) => WriteData(name, values, ValueType.Int, 1, 1);

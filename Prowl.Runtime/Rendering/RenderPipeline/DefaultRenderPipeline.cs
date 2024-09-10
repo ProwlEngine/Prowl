@@ -144,6 +144,19 @@ namespace Prowl.Runtime.RenderPipelines
                 buffer.DrawSingle(s_gridMesh);
             }
 
+            if (target.ColorTargets != null && target.ColorTargets.Length > 0)
+            {
+                RenderTexture _temporaryRT = RenderTexture.GetTemporaryRT(target.Width, target.Height, null, [target.ColorTargets[0].Target.Format]);
+
+                buffer.SetRenderTarget(_temporaryRT);
+
+                buffer.SetTexture("_MainTexture", target.ColorTargets[0].Target);
+
+                RenderTexture.ReleaseTemporaryRT(_temporaryRT);
+
+
+            }
+
             Graphics.SubmitCommandBuffer(buffer);
 
             CommandBufferPool.Release(buffer);

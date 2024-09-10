@@ -226,6 +226,9 @@ namespace Prowl.Runtime
         public void SetTexture(string name, AssetRef<Texture> texture)
             => _bufferProperties.SetTexture(name, texture.Res);
 
+        public void SetTexture(string name, Veldrid.Texture texture)
+            => _bufferProperties.SetRawTexture(name, texture);
+
         public void SetInt(string name, int value)
             => _bufferProperties.SetInt(name, value);
 

@@ -64,18 +64,24 @@ namespace Prowl.Runtime
                         break;
 
                     case ResourceKind.TextureReadOnly:
-                        Texture texture = GetTexture(uniform.name, state, TextureUsage.Sampled, Texture2D.EmptyWhite);
-                        UpdateResource(texture.TextureView, uniform.binding, ref recreateResourceSet);
+                        Veldrid.Texture texture = GetTexture(uniform.name, state, TextureUsage.Sampled, Texture2D.EmptyWhite, out _);
+
+                        UpdateResource(texture, uniform.binding, ref recreateResourceSet);
+
                         break;
 
                     case ResourceKind.TextureReadWrite:
-                        Texture rwtexture = GetTexture(uniform.name, state, TextureUsage.Storage, Texture2D.EmptyRW);
-                        UpdateResource(rwtexture.TextureView, uniform.binding, ref recreateResourceSet);
+                        Veldrid.Texture rwtexture = GetTexture(uniform.name, state, TextureUsage.Storage, Texture2D.EmptyRW, out _);
+
+                        UpdateResource(rwtexture, uniform.binding, ref recreateResourceSet);
+
                         break;
 
                     case ResourceKind.Sampler:
-                        Texture stexture = GetTexture(SliceSampler((uniform.name)), state, TextureUsage.Sampled, Texture2D.EmptyWhite);
-                        UpdateResource(stexture.Sampler.InternalSampler, uniform.binding, ref recreateResourceSet);
+                        GetTexture(SliceSampler((uniform.name)), state, TextureUsage.Sampled, Texture2D.EmptyWhite, out Sampler sampler);
+
+                        UpdateResource(sampler, uniform.binding, ref recreateResourceSet);
+
                         break;
                 }
             }
@@ -90,14 +96,30 @@ namespace Prowl.Runtime
         }
 
 
-        private Texture GetTexture(string name, PropertyState state, TextureUsage usage, Texture defaultTex)
+        private Veldrid.Texture GetTexture(string name, PropertyState state, TextureUsage usage, Texture defaultTex, out Sampler sampler)
         {
-            AssetRef<Texture> textureRes = state._values.GetValueOrDefault(name, default).texture ?? defaultTex;
+            Veldrid.Texture texture;
 
-            Texture texture = textureRes.Res ?? defaultTex;
+            if (!state._rawTextures.TryGetValue(name, out texture))
+            {
+                if (!state._values.TryGetValue(name, out Property prop))
+                {
+                    texture = defaultTex.InternalTexture;
+                    sampler = defaultTex.Sampler.InternalSampler;
+                }
+
+                Texture tex = (prop.texture ?? defaultTex).Res ?? defaultTex;
+
+                texture = tex.InternalTexture;
+                sampler = tex.Sampler.InternalSampler;
+            }
+            else
+            {
+                sampler = defaultTex.Sampler.InternalSampler;
+            }
 
             if (!texture.Usage.HasFlag(usage))
-                return defaultTex;
+                return defaultTex.InternalTexture;
 
             return texture;
         }
