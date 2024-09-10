@@ -7,6 +7,35 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 
+namespace Prowl.Runtime.GUI
+{
+    public static class CornerRounding
+    {
+        public const int None = 0;
+
+        public const int TopLeft = 1;
+        public const int TopRight = 2;
+        public const int BottomLeft = 8;
+        public const int BottomRight = 4;
+
+        public const int Top = 3;
+        public const int Bottom = 12;
+        public const int Left = 9;
+        public const int Right = 6;
+
+        public const int BottomRightAndTopLeft = 5;
+        public const int BottomLeftAndTopRight = 10;
+
+        public const int RightAndTop = 7;
+        public const int TopAndLeft = 11;
+        public const int BottomAndLeft = 13;
+        public const int BottomAndRight = 14;
+
+        public const int All = 15;
+    }
+}
+
+
 namespace Prowl.Runtime.GUI.Graphics
 {
     public class UIDrawChannel
@@ -210,19 +239,19 @@ namespace Prowl.Runtime.GUI.Graphics
 
 
         // a: upper-left, b: lower-right
-        public void AddRect(Vector2 a, Vector2 b, Color32 col, float rounding = 0.0f, int rounding_corners = 0x0F, float thickness = 1.0f)
+        public void AddRect(Vector2 a, Vector2 b, Color32 col, float rounding = 0.0f, int corners = CornerRounding.None, float thickness = 1.0f)
         {
-            PathRect(a + new Vector2(0.5f, 0.5f), b - new Vector2(0.5f, 0.5f), rounding, rounding_corners);
+            PathRect(a + new Vector2(0.5f, 0.5f), b - new Vector2(0.5f, 0.5f), rounding, corners);
             PathStroke(col, true, thickness);
         }
 
 
         // a: upper-left, b: lower-right
-        public void AddRectFilled(Vector2 a, Vector2 b, Color32 col, float rounding = 0.0f, int rounding_corners = 0x0F)
+        public void AddRectFilled(Vector2 a, Vector2 b, Color32 col, float rounding = 0.0f, int corners = CornerRounding.None)
         {
             if (rounding > 0.0f)
             {
-                PathRect(a, b, rounding, rounding_corners);
+                PathRect(a, b, rounding, corners);
                 PathFill(col);
             }
             else
@@ -777,13 +806,14 @@ namespace Prowl.Runtime.GUI.Graphics
         }
 
 
-        public void PathRect(Vector2 a, Vector2 b, float rounding = 0.0f, int rounding_corners = 0x0F)
+        public void PathRect(Vector2 a, Vector2 b, float rounding = 0.0f, int corners = CornerRounding.None)
         {
             float r = rounding;
-            r = (float)MathD.Min(r, MathD.Abs(b.x - a.x) * ((rounding_corners & (1 | 2)) == (1 | 2) || (rounding_corners & (4 | 8)) == (4 | 8) ? 0.5f : 1.0f) - 1.0f);
-            r = (float)MathD.Min(r, MathD.Abs(b.y - a.y) * ((rounding_corners & (1 | 8)) == (1 | 8) || (rounding_corners & (2 | 4)) == (2 | 4) ? 0.5f : 1.0f) - 1.0f);
 
-            if (r <= 0.0f || rounding_corners == 0)
+            r = (float)MathD.Min(r, MathD.Abs(b.x - a.x) * ((corners & (1 | 2)) == (1 | 2) || (corners & (4 | 8)) == (4 | 8) ? 0.5f : 1.0f) - 1.0f);
+            r = (float)MathD.Min(r, MathD.Abs(b.y - a.y) * ((corners & (1 | 8)) == (1 | 8) || (corners & (2 | 4)) == (2 | 4) ? 0.5f : 1.0f) - 1.0f);
+
+            if (r <= 0.0f || corners == 0)
             {
                 PathLineTo(a);
                 PathLineTo(new Vector2(b.x, a.y));
@@ -792,10 +822,10 @@ namespace Prowl.Runtime.GUI.Graphics
             }
             else
             {
-                float r0 = (rounding_corners & 1) > 0 ? r : 0.0f;
-                float r1 = (rounding_corners & 2) > 0 ? r : 0.0f;
-                float r2 = (rounding_corners & 4) > 0 ? r : 0.0f;
-                float r3 = (rounding_corners & 8) > 0 ? r : 0.0f;
+                float r0 = (corners & 1) > 0 ? r : 0.0f;
+                float r1 = (corners & 2) > 0 ? r : 0.0f;
+                float r2 = (corners & 4) > 0 ? r : 0.0f;
+                float r3 = (corners & 8) > 0 ? r : 0.0f;
                 PathArcToFast(new Vector2(a.x + r0, a.y + r0), r0, 6, 9);
                 PathArcToFast(new Vector2(b.x - r1, a.y + r1), r1, 9, 12);
                 PathArcToFast(new Vector2(b.x - r2, b.y - r2), r2, 0, 3);

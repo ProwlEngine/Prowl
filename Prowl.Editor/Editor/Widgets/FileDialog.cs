@@ -8,8 +8,22 @@ using Prowl.Runtime.GUI;
 
 namespace Prowl.Editor
 {
-    public enum FileDialogType { OpenFile, SaveFile, Count }
-    public enum FileDialogSortBy { Name, Date, Size, Type, None }
+    public enum FileDialogType
+    {
+        OpenFolder,
+        OpenFile,
+        SaveFile,
+        Count
+    }
+
+    public enum FileDialogSortBy
+    {
+        Name,
+        Date,
+        Size,
+        Type,
+        None
+    }
 
     public class FileDialogContext
     {
@@ -18,6 +32,7 @@ namespace Prowl.Editor
 
         public string fileName;
         public DirectoryInfo directoryPath;
+
         public string resultPath;
 
         public List<FileInfo> currentFiles = [];
@@ -40,7 +55,6 @@ namespace Prowl.Editor
         public FileDialogContext Dialog;
 
         private FileDialogSortBy sortBy = FileDialogSortBy.None;
-        private FileDialogSortBy sortByPrevious = FileDialogSortBy.None;
         private bool sortDown = false;
 
         private Stack<DirectoryInfo> _BackStack = new();
@@ -78,7 +92,6 @@ namespace Prowl.Editor
 
             using (gui.Node("Root").Expand().Layout(LayoutType.Row).ScaleChildren().Padding(10).Enter())
             {
-
                 using (gui.Node("Sidebar").Layout(LayoutType.Column).ExpandHeight().MaxWidth(125).MarginRight(10).Padding(10).Enter())
                 {
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Borders, 10);
@@ -172,10 +185,11 @@ namespace Prowl.Editor
                                     DrawSortLabel("Name", FileDialogSortBy.Name);
                                 }
 
-                                DrawEntries(false, f =>
+                                DrawEntries(false, Dialog.type == FileDialogType.OpenFolder, f =>
                                 {
                                     if (f is DirectoryInfo)
                                         return FontAwesome6.Folder + f.Name;
+
                                     return FontAwesome6.File + f.Name;
                                 });
                             }
@@ -189,7 +203,7 @@ namespace Prowl.Editor
                                     DrawSortLabel("Size", FileDialogSortBy.Size);
                                 }
 
-                                DrawEntries(true, f => (f is FileInfo file) ? toMemSizeReadable(file.Length) : "");
+                                DrawEntries(true, Dialog.type == FileDialogType.OpenFolder, f => (f is FileInfo file) ? toMemSizeReadable(file.Length) : "");
                             }
 
                             using (gui.Node("DateCol").FitContentHeight().Layout(LayoutType.Column).Enter())
@@ -202,7 +216,7 @@ namespace Prowl.Editor
                                 }
 
 
-                                DrawEntries(true, f => f.LastWriteTime.ToString("dd/MM/yy HH:mm"));
+                                DrawEntries(true, Dialog.type == FileDialogType.OpenFolder, f => f.LastWriteTime.ToString("dd/MM/yy HH:mm"));
                             }
 
                             using (gui.Node("TypeCol").FitContentHeight().Layout(LayoutType.Column).Enter())
@@ -215,28 +229,35 @@ namespace Prowl.Editor
                                 }
 
 
-                                DrawEntries(true, f => f.Extension);
+                                DrawEntries(true, Dialog.type == FileDialogType.OpenFolder, f => f.Extension);
                             }
                         }
 
                         using (gui.Node("Footer").ExpandWidth().Height(ItemSize).Top(Offset.Percentage(1f, -ItemSize)).Enter())
                         {
-                            using (gui.Node("FileName").ExpandHeight().Width(Size.Percentage(1f, -100)).Enter())
+                            string name = Dialog.type == FileDialogType.OpenFolder ? "Folder" : "Filename";
+                            string prompt = Dialog.type == FileDialogType.OpenFolder || Dialog.type == FileDialogType.OpenFile ? "Open" : "Save";
+
+                            using (gui.Node("SearchName").ExpandHeight().Width(Size.Percentage(1f, -100)).Enter())
                             {
-                                gui.Search("FileName", ref Dialog.fileName, 0, 0, Size.Percentage(1f), ItemSize);
+                                gui.Search(name, ref Dialog.fileName, 0, 0, Size.Percentage(1f), ItemSize);
                             }
 
-                            using (gui.Node("SaveBtn").ExpandHeight().Left(Offset.Percentage(1f, -90)).Width(100).Enter())
+                            using (gui.Node("PromptBtn").ExpandHeight().Left(Offset.Percentage(1f, -90)).Width(100).Enter())
                             {
-                                var hovered = gui.IsNodeHovered();
+                                bool hovered = gui.IsNodeHovered();
+
                                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect,
                                     hovered ? EditorStylePrefs.Instance.Hovering : EditorStylePrefs.Instance.LesserText, (float)EditorStylePrefs.Instance.ButtonRoundness);
-                                gui.Draw2D.DrawText("Save", 20, gui.CurrentNode.LayoutData.InnerRect, Color.white);
+                                gui.Draw2D.DrawText(prompt, 20, gui.CurrentNode.LayoutData.InnerRect, Color.white);
+
                                 if (gui.IsNodePressed())
                                 {
-                                    var path = Path.Combine(Dialog.directoryPath.FullName + "/" + Dialog.fileName);
+                                    string path = Path.Combine(Dialog.directoryPath.FullName + "/" + Dialog.fileName);
+
                                     Dialog.resultPath = path;
                                     Dialog.OnComplete?.Invoke(path);
+
                                     isOpened = false;
                                 }
                             }
@@ -249,7 +270,6 @@ namespace Prowl.Editor
             // Clicked outside Window
             if (pastFirstFrame && gui.IsPointerClick(MouseButton.Left) && !gui.IsPointerHovering())
             {
-                Debug.Log("clicked outside of window");
                 isOpened = false;
                 Dialog.OnCancel?.Invoke();
             }
@@ -299,15 +319,15 @@ namespace Prowl.Editor
             }
         }
 
-        private static int hoveringIndex = -1;
-        private static string hoveringPath;
-        private static string selectedPath;
 
-        private void DrawEntries(bool center, Func<FileSystemInfo, string> name)
+        private static string hoveringPath;
+
+        private void DrawEntries(bool center, bool ignoreFiles, Func<FileSystemInfo, string> name)
         {
             double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
             int index = 0;
+
             foreach (var directory in Dialog.currentDirectories)
             {
                 using (gui.Node("name", index++).ExpandWidth().Height(ItemSize).Clip().Enter())
@@ -328,6 +348,9 @@ namespace Prowl.Editor
                         }
                     }
 
+                    if (gui.IsNodePressed())
+                        Dialog.resultPath = directory.FullName;
+
                     if (Dialog.resultPath == directory.FullName)
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
                     else if (hoveringPath == directory.FullName)
@@ -347,6 +370,10 @@ namespace Prowl.Editor
                     }
                 }
             }
+
+            if (ignoreFiles)
+                return;
+
             foreach (var file in Dialog.currentFiles)
             {
                 using (gui.Node("name", index++).ExpandWidth().Height(ItemSize).Clip().Enter())

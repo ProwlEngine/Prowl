@@ -28,13 +28,25 @@ namespace Prowl.Runtime
 
         public static Vector2Int Size
         {
-            get { return new Vector2Int(InternalWindow.Width, InternalWindow.Height); }
+            get => new Vector2Int(InternalWindow.Width, InternalWindow.Height);
             set { InternalWindow.Width = value.x; InternalWindow.Height = value.y; }
+        }
+
+        public static int Width
+        {
+            get => InternalWindow.Width;
+            set => InternalWindow.Width = value;
+        }
+
+        public static int Height
+        {
+            get => InternalWindow.Height;
+            set => InternalWindow.Height = value;
         }
 
         public static Vector2Int Position
         {
-            get { return new Vector2Int(InternalWindow.X, InternalWindow.Y); }
+            get => new Vector2Int(InternalWindow.X, InternalWindow.Y);
             set { InternalWindow.X = value.x; InternalWindow.Y = value.y; }
         }
 
@@ -42,25 +54,24 @@ namespace Prowl.Runtime
 
         public static float FramesPerSecond
         {
-            get { return InternalWindow.PollIntervalInMs / 1000.0f; }
+            get => InternalWindow.PollIntervalInMs / 1000.0f;
             set { InternalWindow.LimitPollRate = value != 0 && value != double.MaxValue; InternalWindow.PollIntervalInMs = value * 1000.0f; }
         }
 
         public static bool IsVisible
         {
-            get { return InternalWindow.Visible; }
-            set { InternalWindow.Visible = value; }
+            get => InternalWindow.Visible;
+            set => InternalWindow.Visible = value;
         }
 
-        public static nint Handle
-        {
-            get { return InternalWindow.Handle; }
-        }
+        public static nint Handle => InternalWindow.Handle;
 
-        private static bool isFocused = true;
-        public static bool IsFocused
+        public static bool IsFocused { get; private set; } = true;
+
+        public static WindowState WindowState
         {
-            get { return isFocused; }
+            get => InternalWindow.WindowState;
+            set => InternalWindow.WindowState = value;
         }
 
         public static DefaultInputHandler WindowInputHandler { get; private set; }
@@ -91,8 +102,8 @@ namespace Prowl.Runtime
 
             InternalWindow.Resized += () => Resize?.Invoke(Size);
 
-            InternalWindow.FocusGained += () => FocusChanged?.Invoke(isFocused = true);
-            InternalWindow.FocusLost += () => FocusChanged?.Invoke(isFocused = false);
+            InternalWindow.FocusGained += () => FocusChanged?.Invoke(IsFocused = true);
+            InternalWindow.FocusLost += () => FocusChanged?.Invoke(IsFocused = false);
 
             InternalWindow.Closing += Closing;
             InternalWindow.Closed += () => Environment.Exit(0);

@@ -55,7 +55,8 @@ public static class EditorGuiManager
 
     internal static void Remove(EditorWindow editorWindow)
     {
-        WindowsToRemove.Add(editorWindow);
+        if (editorWindow != null)
+            WindowsToRemove.Add(editorWindow);
     }
 
     public static DockNode DockWindowTo(EditorWindow window, DockNode? node, DockZone zone, double split = 0.5f)
@@ -96,169 +97,21 @@ public static class EditorGuiManager
             g.CurrentNode.Layout(LayoutType.Column);
             g.CurrentNode.ScaleChildren();
 
-            var padding = EditorStylePrefs.Instance.DockSpacing;
-            var padx2 = padding * 2;
-            using (g.Node("Main_Header").ExpandWidth().MaxHeight(EditorStylePrefs.Instance.ItemSize + (padding * 3)).Padding(padding * 2, padx2, padding, padx2).Enter())
-            {
-                using (g.Node("MenuBar").ExpandHeight().FitContentWidth().Layout(LayoutType.Row).Enter())
-                {
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
-                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.Borders, 2, (float)EditorStylePrefs.Instance.WindowRoundness);
+            if (Project.HasProject)
+                DrawHeaderBar(g);
 
-                    MenuItem.DrawMenuRoot("File", true, Font.DefaultFont.CalcTextSize("File", 0).x + 20);
-                    MenuItem.DrawMenuRoot("Edit", true, Font.DefaultFont.CalcTextSize("Edit", 0).x + 20);
-                    MenuItem.DrawMenuRoot("Assets", true, Font.DefaultFont.CalcTextSize("Assets", 0).x + 20);
-                    MenuItem.DrawMenuRoot("Create", true, Font.DefaultFont.CalcTextSize("Create", 0).x + 20);
-                    MenuItem.DrawMenuRoot("Windows", true, Font.DefaultFont.CalcTextSize("Windows", 0).x + 20);
-                }
-
-                using (g.Node("PlayMode").ExpandHeight().FitContentWidth().Layout(LayoutType.Row).Enter())
-                {
-                    g.CurrentNode.Left(Offset.Percentage(0.5f, -(g.CurrentNode.LayoutData.Scale.x / 2)));
-
-                    g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
-                    g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.Borders, 2, (float)EditorStylePrefs.Instance.WindowRoundness);
-
-                    switch (PlayMode.Current)
-                    {
-                        case PlayMode.Mode.Editing:
-                            if (EditorGUI.StyledButton(FontAwesome6.Play, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, tooltip: "Play"))
-                                PlayMode.Start();
-                            break;
-                        case PlayMode.Mode.Playing:
-                            if (EditorGUI.StyledButton(FontAwesome6.Pause, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, tooltip: "Pause"))
-                                PlayMode.Pause();
-                            if (EditorGUI.StyledButton(FontAwesome6.Stop, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, EditorStylePrefs.Red, tooltip: "Stop"))
-                                PlayMode.Stop();
-                            break;
-                        case PlayMode.Mode.Paused:
-                            if (EditorGUI.StyledButton(FontAwesome6.Play, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, tooltip: "Play"))
-                                PlayMode.Resume();
-                            if (EditorGUI.StyledButton(FontAwesome6.Stop, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, EditorStylePrefs.Red, tooltip: "Stop"))
-                                PlayMode.Stop();
-                            break;
-
-                    }
-                }
-            }
-
-            using (g.Node("Main_Content").ExpandWidth().Enter())
-            {
-                Container ??= new();
-                Rect rect = g.CurrentNode.LayoutData.Rect;
-                //rect.Expand(-(float)EditorStylePrefs.Instance.DockSpacing);
-                rect.Min.x += (float)EditorStylePrefs.Instance.DockSpacing;
-                //rect.Min.y += (float)EditorStylePrefs.Instance.DockSpacing;
-                rect.Max.x -= (float)EditorStylePrefs.Instance.DockSpacing;
-                rect.Max.y -= (float)EditorStylePrefs.Instance.DockSpacing;
-                //rect.Min.y = (float)EditorStylePrefs.Instance.DockSpacing; // Top needs no padding
-                Container.Update(rect);
-
-
-                if (DragSplitter != null)
-                {
-                    DragSplitter.GetSplitterBounds(out var bmins, out var bmaxs, 4);
-
-                    g.SetZIndex(11000);
-                    g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
-                    g.SetZIndex(0);
-
-                    if (!g.IsPointerDown(MouseButton.Left))
-                        DragSplitter = null;
-                }
-
-                if (DraggingWindow == null)
-                {
-                    Vector2 cursorPos = g.PointerPos;
-                    if (!g.IsPointerMoving && (g.ActiveID == 0 || g.ActiveID == null) && DragSplitter == null)
-                    {
-                        if (!Gui.IsBlockedByInteractable(cursorPos))
-                        {
-                            DockNode node = Container.Root.TraceSeparator(cursorPos.x, cursorPos.y);
-                            if (node != null)
-                            {
-                                node.GetSplitterBounds(out var bmins, out var bmaxs, 4);
-
-                                g.SetZIndex(11000);
-                                g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
-                                g.SetZIndex(0);
-
-                                if (g.IsPointerDown(MouseButton.Left))
-                                {
-                                    m_DragPos = cursorPos;
-                                    DragSplitter = node;
-                                    if (DragSplitter.Type == DockNode.NodeType.SplitVertical)
-                                        m_StartSplitPos = MathD.Lerp(DragSplitter.Mins.x, DragSplitter.Maxs.x, DragSplitter.SplitDistance);
-                                    else
-                                        m_StartSplitPos = MathD.Lerp(DragSplitter.Mins.y, DragSplitter.Maxs.y, DragSplitter.SplitDistance);
-                                }
-                            }
-                        }
-                    }
-                    else if (g.IsPointerMoving && DragSplitter != null)
-                    {
-                        Vector2 dragDelta = cursorPos - m_DragPos;
-
-                        const double minSize = 100;
-                        if (DragSplitter.Type == DockNode.NodeType.SplitVertical)
-                        {
-                            double w = DragSplitter.Maxs.x - DragSplitter.Mins.x;
-                            double split = m_StartSplitPos + dragDelta.x;
-                            split -= DragSplitter.Mins.x;
-                            split = (double)Math.Floor(split);
-                            split = Math.Clamp(split, minSize, w - minSize);
-                            split /= w;
-
-                            DragSplitter.SplitDistance = split;
-                        }
-                        else if (DragSplitter.Type == DockNode.NodeType.SplitHorizontal)
-                        {
-                            double h = DragSplitter.Maxs.y - DragSplitter.Mins.y;
-                            double split = m_StartSplitPos + dragDelta.y;
-                            split -= DragSplitter.Mins.y;
-                            split = (double)Math.Floor(split);
-                            split = Math.Clamp(split, minSize, h - minSize);
-                            split /= h;
-
-                            DragSplitter.SplitDistance = split;
-                        }
-                    }
-                }
-
-                // Focus Windows first
-                var windowList = new List<EditorWindow>(Windows);
-                for (int i = 0; i < windowList.Count; i++)
-                {
-                    EditorWindow window = windowList[i];
-                    if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(MouseButton.Left) || g.IsPointerClick(MouseButton.Right)))
-                        if (!g.IsBlockedByInteractable(g.PointerPos, window.MaxZ))
-                            FocusWindow(window);
-                }
-
-                // Draw/Update Windows
-                for (int i = 0; i < windowList.Count; i++)
-                {
-                    var window = windowList[i];
-                    if (!window.IsDocked || window.Leaf.LeafWindows[window.Leaf.WindowNum] == window)
-                    {
-                        g.SetZIndex(i * 100);
-                        g.PushID((ulong)window._id);
-                        window.ProcessFrame();
-                        g.PopID();
-                    }
-
-                }
-                g.SetZIndex(0);
-            }
+            DrawContent(g);
         }
         );
 
         foreach (var window in WindowsToRemove)
         {
             if (window.IsDocked)
+
                 Container.DetachWindow(window);
             if (FocusedWindow != null && FocusedWindow.Target == window)
                 FocusedWindow = null;
+
             Windows.Remove(window);
         }
 
@@ -268,6 +121,171 @@ public static class EditorGuiManager
 
         commandList.Dispose();
     }
+
+
+    private static void DrawHeaderBar(Gui g)
+    {
+        double padding = EditorStylePrefs.Instance.DockSpacing;
+        double padx2 = padding * 2;
+
+        using (g.Node("Main_Header").ExpandWidth().MaxHeight(EditorStylePrefs.Instance.ItemSize + (padding * 3)).Padding(padding * 2, padx2, padding, padx2).Enter())
+        {
+            using (g.Node("MenuBar").ExpandHeight().FitContentWidth().Layout(LayoutType.Row).Enter())
+            {
+                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
+                g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.Borders, 2, (float)EditorStylePrefs.Instance.WindowRoundness);
+
+                MenuItem.DrawMenuRoot("File", true, Font.DefaultFont.CalcTextSize("File", 0).x + 20);
+                MenuItem.DrawMenuRoot("Edit", true, Font.DefaultFont.CalcTextSize("Edit", 0).x + 20);
+                MenuItem.DrawMenuRoot("Assets", true, Font.DefaultFont.CalcTextSize("Assets", 0).x + 20);
+                MenuItem.DrawMenuRoot("Create", true, Font.DefaultFont.CalcTextSize("Create", 0).x + 20);
+                MenuItem.DrawMenuRoot("Windows", true, Font.DefaultFont.CalcTextSize("Windows", 0).x + 20);
+            }
+
+            using (g.Node("PlayMode").ExpandHeight().FitContentWidth().Layout(LayoutType.Row).Enter())
+            {
+                g.CurrentNode.Left(Offset.Percentage(0.5f, -(g.CurrentNode.LayoutData.Scale.x / 2)));
+
+                g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.WindowBGOne, (float)EditorStylePrefs.Instance.WindowRoundness);
+                g.Draw2D.DrawRect(g.CurrentNode.LayoutData.InnerRect, EditorStylePrefs.Instance.Borders, 2, (float)EditorStylePrefs.Instance.WindowRoundness);
+
+                switch (PlayMode.Current)
+                {
+                    case PlayMode.Mode.Editing:
+                        if (EditorGUI.StyledButton(FontAwesome6.Play, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, tooltip: "Play"))
+                            PlayMode.Start();
+                        break;
+                    case PlayMode.Mode.Playing:
+                        if (EditorGUI.StyledButton(FontAwesome6.Pause, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, tooltip: "Pause"))
+                            PlayMode.Pause();
+                        if (EditorGUI.StyledButton(FontAwesome6.Stop, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, EditorStylePrefs.Red, tooltip: "Stop"))
+                            PlayMode.Stop();
+                        break;
+                    case PlayMode.Mode.Paused:
+                        if (EditorGUI.StyledButton(FontAwesome6.Play, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, tooltip: "Play"))
+                            PlayMode.Resume();
+                        if (EditorGUI.StyledButton(FontAwesome6.Stop, EditorStylePrefs.Instance.ItemSize, EditorStylePrefs.Instance.ItemSize, false, EditorStylePrefs.Red, tooltip: "Stop"))
+                            PlayMode.Stop();
+                        break;
+
+                }
+            }
+        }
+    }
+
+
+    private static void DrawContent(Gui g)
+    {
+        using (g.Node("Main_Content").ExpandWidth().Enter())
+        {
+            Container ??= new();
+            Rect rect = g.CurrentNode.LayoutData.Rect;
+            //rect.Expand(-(float)EditorStylePrefs.Instance.DockSpacing);
+            rect.Min.x += (float)EditorStylePrefs.Instance.DockSpacing;
+            //rect.Min.y += (float)EditorStylePrefs.Instance.DockSpacing;
+            rect.Max.x -= (float)EditorStylePrefs.Instance.DockSpacing;
+            rect.Max.y -= (float)EditorStylePrefs.Instance.DockSpacing;
+            //rect.Min.y = (float)EditorStylePrefs.Instance.DockSpacing; // Top needs no padding
+            Container.Update(rect);
+
+
+            if (DragSplitter != null)
+            {
+                DragSplitter.GetSplitterBounds(out var bmins, out var bmaxs, 4);
+
+                g.SetZIndex(11000);
+                g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
+                g.SetZIndex(0);
+
+                if (!g.IsPointerDown(MouseButton.Left))
+                    DragSplitter = null;
+            }
+
+            if (DraggingWindow == null)
+            {
+                Vector2 cursorPos = g.PointerPos;
+                if (!g.IsPointerMoving && (g.ActiveID == 0 || g.ActiveID == null) && DragSplitter == null)
+                {
+                    if (!Gui.IsBlockedByInteractable(cursorPos))
+                    {
+                        DockNode node = Container.Root.TraceSeparator(cursorPos.x, cursorPos.y);
+                        if (node != null)
+                        {
+                            node.GetSplitterBounds(out var bmins, out var bmaxs, 4);
+
+                            g.SetZIndex(11000);
+                            g.Draw2D.DrawRectFilled(Rect.CreateFromMinMax(bmins, bmaxs), Color.yellow);
+                            g.SetZIndex(0);
+
+                            if (g.IsPointerDown(MouseButton.Left))
+                            {
+                                m_DragPos = cursorPos;
+                                DragSplitter = node;
+                                if (DragSplitter.Type == DockNode.NodeType.SplitVertical)
+                                    m_StartSplitPos = MathD.Lerp(DragSplitter.Mins.x, DragSplitter.Maxs.x, DragSplitter.SplitDistance);
+                                else
+                                    m_StartSplitPos = MathD.Lerp(DragSplitter.Mins.y, DragSplitter.Maxs.y, DragSplitter.SplitDistance);
+                            }
+                        }
+                    }
+                }
+                else if (g.IsPointerMoving && DragSplitter != null)
+                {
+                    Vector2 dragDelta = cursorPos - m_DragPos;
+
+                    const double minSize = 100;
+                    if (DragSplitter.Type == DockNode.NodeType.SplitVertical)
+                    {
+                        double w = DragSplitter.Maxs.x - DragSplitter.Mins.x;
+                        double split = m_StartSplitPos + dragDelta.x;
+                        split -= DragSplitter.Mins.x;
+                        split = (double)Math.Floor(split);
+                        split = Math.Clamp(split, minSize, w - minSize);
+                        split /= w;
+
+                        DragSplitter.SplitDistance = split;
+                    }
+                    else if (DragSplitter.Type == DockNode.NodeType.SplitHorizontal)
+                    {
+                        double h = DragSplitter.Maxs.y - DragSplitter.Mins.y;
+                        double split = m_StartSplitPos + dragDelta.y;
+                        split -= DragSplitter.Mins.y;
+                        split = (double)Math.Floor(split);
+                        split = Math.Clamp(split, minSize, h - minSize);
+                        split /= h;
+
+                        DragSplitter.SplitDistance = split;
+                    }
+                }
+            }
+
+            // Focus Windows first
+            var windowList = new List<EditorWindow>(Windows);
+            for (int i = 0; i < windowList.Count; i++)
+            {
+                EditorWindow window = windowList[i];
+                if (g.IsPointerHovering(window.Rect) && (g.IsPointerClick(MouseButton.Left) || g.IsPointerClick(MouseButton.Right)))
+                    if (!g.IsBlockedByInteractable(g.PointerPos, window.MaxZ))
+                        FocusWindow(window);
+            }
+
+            // Draw/Update Windows
+            for (int i = 0; i < windowList.Count; i++)
+            {
+                EditorWindow window = windowList[i];
+                if (!window.IsDocked || window.Leaf.LeafWindows[window.Leaf.WindowNum] == window)
+                {
+                    g.SetZIndex(i * 100);
+                    g.PushID((ulong)window._id);
+                    window.ProcessFrame();
+                    g.PopID();
+                }
+
+            }
+            g.SetZIndex(0);
+        }
+    }
+
 
     #region MenuBar
 

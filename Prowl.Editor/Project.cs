@@ -94,9 +94,9 @@ public class Project
     /// <exception cref="ArgumentNullException">Throws if projectName is null or empty</exception>
     public static void Open(Project project)
     {
-        if (!project.Exists)
+        if (!project.IsValid())
         {
-            Runtime.Debug.LogError($"A project with the name {project.Name} does not exists at path {project.ProjectPath}");
+            Runtime.Debug.LogError($"Invalid project '{project.Name}' at path '{project.ProjectPath}'. Validate that all core project directories are intact.");
             return;
         }
 
@@ -155,12 +155,30 @@ public class Project
         return project;
     }
 
+
+    public bool IsValid()
+    {
+        ProjectDirectory.Refresh();
+        AssetDirectory.Refresh();
+        PackagesDirectory.Refresh();
+        Assembly_Proj.Refresh();
+        Editor_Assembly_Proj.Refresh();
+
+        return ProjectDirectory.Exists &&
+            AssetDirectory.Exists &&
+            PackagesDirectory.Exists &&
+            Assembly_Proj.Exists &&
+            Editor_Assembly_Proj.Exists;
+    }
+
+
     private static void CreateTempDirectories(Project project)
     {
         project.ProjectDirectory.CreateSubdirectory(@"Assets");
         project.ProjectDirectory.CreateSubdirectory(@"Library");
         project.ProjectDirectory.CreateSubdirectory(@"Packages");
     }
+
 
     private static void CreateDefaults(Project project)
     {

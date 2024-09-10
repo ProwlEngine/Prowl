@@ -58,8 +58,8 @@ namespace Prowl.Runtime.GUI
         }
 
         /// <summary>
-        /// Push an ID onto the ID stack
-        /// Useful for when you want to use the same string ID for multiple nodes that would otherwise conflict
+        /// <para>Push an ID onto the ID stack.</para>
+        /// <para>Useful for when you want to use the same string ID for multiple nodes that would otherwise conflict.</para>
         /// Or maybe you dont have control like a List of User-Created Nodes, you PushID(Index) and PopID() when done
         /// </summary>
         /// <param name="id"></param>

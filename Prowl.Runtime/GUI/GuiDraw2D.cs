@@ -98,14 +98,14 @@ namespace Prowl.Runtime.GUI
             _drawList[currentZIndex].AddRectFilledMultiColor(new(left.x, left.y), new(right.x, right.y + down), Color.clear, Color.clear, col, col);
         }
 
-        public void DrawRect(Rect screenRect, Color color, float thickness = 1f, float roundness = 0.0f, int rounded_corners = 15)
-            => DrawRect(new(screenRect.x, screenRect.y), new(screenRect.width, screenRect.height), color, thickness, roundness, rounded_corners);
-        public void DrawRect(Vector2 topleft, Vector2 size, Color color, float thickness = 1f, float roundness = 0.0f, int rounded_corners = 15)
-            => _drawList[currentZIndex].AddRect(topleft, topleft + size, color, roundness, rounded_corners, thickness);
-        public void DrawRectFilled(Rect screenRect, Color color, float roundness = 0.0f, int rounded_corners = 15)
-            => DrawRectFilled(new(screenRect.x, screenRect.y), new(screenRect.width, screenRect.height), color, roundness, rounded_corners);
-        public void DrawRectFilled(Vector2 topleft, Vector2 size, Color color, float roundness = 0.0f, int rounded_corners = 15)
-            => _drawList[currentZIndex].AddRectFilled(topleft, topleft + size, color, roundness, rounded_corners);
+        public void DrawRect(Rect screenRect, Color color, float thickness = 1f, float roundness = 0.0f, int corners = CornerRounding.All)
+            => DrawRect(new(screenRect.x, screenRect.y), new(screenRect.width, screenRect.height), color, thickness, roundness, corners);
+        public void DrawRect(Vector2 topleft, Vector2 size, Color color, float thickness = 1f, float roundness = 0.0f, int corners = CornerRounding.All)
+            => _drawList[currentZIndex].AddRect(topleft, topleft + size, color, roundness, corners, thickness);
+        public void DrawRectFilled(Rect screenRect, Color color, float roundness = 0.0f, int corners = CornerRounding.All)
+            => DrawRectFilled(new(screenRect.x, screenRect.y), new(screenRect.width, screenRect.height), color, roundness, corners);
+        public void DrawRectFilled(Vector2 topleft, Vector2 size, Color color, float roundness = 0.0f, int corners = CornerRounding.All)
+            => _drawList[currentZIndex].AddRectFilled(topleft, topleft + size, color, roundness, corners);
         public void DrawLine(Vector2 start, Vector2 end, Color color, float thickness = 1f)
             => _drawList[currentZIndex].AddLine(start, end, color, thickness);
         public void DrawBezierLine(Vector2 start, Vector2 startControl, Vector2 end, Vector2 endControl, Color color, float thickness = 1f, int segments = 0)

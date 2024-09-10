@@ -28,8 +28,11 @@ namespace Prowl.Editor
 
         public void AddProject(Project project)
         {
-            _projectCache.Add(project);
-            Save();
+            if (!_projectCache.Exists(x => x.ProjectPath == project.ProjectPath))
+            {
+                _projectCache.Add(project);
+                Save();
+            }
         }
 
         public Project? GetProject(int index)
@@ -67,10 +70,12 @@ namespace Prowl.Editor
 
             foreach (string path in _serializedProjects)
             {
-                DirectoryInfo info = new DirectoryInfo(path);
+                Project project = new Project(new DirectoryInfo(path));
 
-                if (info.Exists)
-                    _projectCache.Add(new Project(info));
+                if (!_projectCache.Exists(x => x.ProjectPath == project.ProjectPath))
+                {
+                    _projectCache.Add(project);
+                }
             }
         }
     }
