@@ -392,8 +392,15 @@ namespace Prowl.Editor
                     SelectedProject = project;
                     gui.Draw2D.DrawRect(gui.CurrentNode.LayoutData.Rect, new(0.7f, 0.7f, 0.7f, 1f), 1, 2);
                 }
-                else if (interact.IsHovered())
+
+                if (interact.IsHovered())
                 {
+                    if (gui.IsPointerDoubleClick(MouseButton.Left))
+                    {
+                        Project.Open(project);
+                        isOpened = false;
+                    }
+
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, new(0.1f, 0.1f, 0.1f, 0.4f), 2);
                 }
 
@@ -428,7 +435,7 @@ namespace Prowl.Editor
                     gui.Draw2D.DrawText(Font.DefaultFont, GetFormattedLastModifiedTime(project.ProjectDirectory.LastAccessTime), 20, rect.Position + new Vector2(rect.width - 125, 14), Color.white * 0.5f);
                 }
 
-                using (gui.Node("RemoveProject").Scale(25).Top(6).Enter())
+                using (gui.Node("RemoveProject").Scale(20).Top(9).Enter())
                 {
                     gui.CurrentNode.IgnoreLayout();
                     gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 7.5));
@@ -445,7 +452,7 @@ namespace Prowl.Editor
                     else if (removeInteract.IsHovered())
                         gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, Color.white * 0.4f, (float)EditorStylePrefs.Instance.WindowRoundness, CornerRounding.All);
 
-                    gui.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.TrashCan, 25, gui.CurrentNode.LayoutData.Rect, Color.white);
+                    gui.Draw2D.DrawText(Font.DefaultFont, FontAwesome6.Xmark, 25, gui.CurrentNode.LayoutData.Rect, Color.white);
                 }
             }
         }

@@ -39,7 +39,6 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
 
     public override void Update()
     {
-#warning Veldrid change
         /*
         var mat = GameObject.GlobalCamRelative;
         int camID = Camera.Current.InstanceID;

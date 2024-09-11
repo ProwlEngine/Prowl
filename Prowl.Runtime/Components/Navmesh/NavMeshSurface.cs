@@ -287,7 +287,6 @@ namespace Prowl.Runtime
 
             if (debug_bounds != default)
             {
-#warning Veldrid change
                 /*
                 Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
                 Gizmos.Color = Color.blue;
@@ -303,7 +302,6 @@ namespace Prowl.Runtime
                     {
                         for (int k = 0; k < debug_polygons[i][j].Length; k++)
                         {
-#warning Veldrid change
                             /*
                             Gizmos.Matrix = GameObject.Transform.localToWorldMatrix;
                             Gizmos.DrawPolygon([debug_polygons[i][j][k], debug_polygons[i][j][(k + 1) % debug_polygons[i][j].Length]]);

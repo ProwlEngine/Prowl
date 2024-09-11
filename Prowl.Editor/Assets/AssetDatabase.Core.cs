@@ -365,13 +365,13 @@ namespace Prowl.Editor.Assets
             }
             catch (Exception e)
             {
-                Debug.LogError($"Failed to import {ToRelativePath(assetFile)}", e);
+                Debug.LogException(new Exception($"Failed to import {ToRelativePath(assetFile)}", e));
                 return false; // Import failed
             }
 
             if (!ctx.HasMain)
             {
-                Debug.LogError($"Failed to import {ToRelativePath(assetFile)}. No main object found.");
+                Debug.LogException(new Exception($"Failed to import {ToRelativePath(assetFile)}. No main object found."));
                 return false; // Import failed no Main Object
             }
 
@@ -506,7 +506,7 @@ namespace Prowl.Editor.Assets
             }
             catch (Exception e)
             {
-                Debug.LogError($"Failed to load serialized asset {serializedAssetPath.FullName}!", e);
+                Debug.LogException(new Exception($"Failed to load serialized asset {serializedAssetPath.FullName}!", e));
                 return null; // Failed file might be in use?
             }
         }

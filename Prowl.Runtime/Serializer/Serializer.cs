@@ -410,7 +410,7 @@ namespace Prowl.Runtime
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError("Failed to deserialize field", ex);
+                        Debug.LogException(new Exception("Failed to deserialize field", ex));
                     }
 
                     // Some manual casting for edge cases

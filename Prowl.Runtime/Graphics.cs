@@ -48,7 +48,7 @@ namespace Prowl.Runtime
                 Exception? exception = Marshal.GetExceptionForHR(SetProcessDpiAwareness(1));
 
                 if (exception != null)
-                    Debug.LogError("Failed to set DPI awareness", exception);
+                    Debug.LogException(new Exception("Failed to set DPI awareness", exception));
             }
 
             Screen.Resize += ResizeGraphicsResources;
@@ -97,7 +97,7 @@ namespace Prowl.Runtime
             }
             catch (Exception ex)
             {
-                Debug.LogError("Failed to execute command list", ex);
+                Debug.LogException(new Exception("Failed to execute command list", ex));
             }
         }
 

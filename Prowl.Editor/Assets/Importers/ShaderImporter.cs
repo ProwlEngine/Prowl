@@ -28,12 +28,12 @@ namespace Prowl.Editor.Assets
             {
                 if (assetPath.Name == "InternalErrorShader.shader")
                 {
-                    Debug.LogError("InternalErrorShader failed to compile. Non-compiling shaders loaded through script will cause cascading exceptions.", ex);
+                    Debug.LogException(new Exception("InternalErrorShader failed to compile. Non-compiling shaders loaded through script will cause cascading exceptions.", ex));
                     ctx.SetMainObject(null);
                     return;
                 }
 
-                Debug.LogError("Failed to compile shader", ex);
+                Debug.LogException(new Exception("Failed to compile shader", ex));
 
                 if (s_internalError == null)
                     s_internalError = Application.AssetProvider.LoadAsset<Shader>("Defaults/InternalErrorShader.shader").Res!;

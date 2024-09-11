@@ -119,9 +119,9 @@ namespace Prowl.Editor
                 }
                 else
                 {
-                    RenderRootFolder(true, AssetDatabase.GetRootFolderCache(2), EditorStylePrefs.RandomPastelColor(100)); // Assets Folder
-                    RenderRootFolder(false, AssetDatabase.GetRootFolderCache(0), EditorStylePrefs.RandomPastelColor(200)); // Defaults Folder
-                    RenderRootFolder(false, AssetDatabase.GetRootFolderCache(1), EditorStylePrefs.RandomPastelColor(500)); // Packages Folder
+                    RenderRootFolder(true, AssetDatabase.GetRootFolderCache(2), Color.white * 0.5f);//EditorStylePrefs.RandomPastelColor(100)); // Assets Folder
+                    RenderRootFolder(false, AssetDatabase.GetRootFolderCache(0), Color.white * 0.5f);//EditorStylePrefs.RandomPastelColor(200)); // Defaults Folder
+                    RenderRootFolder(false, AssetDatabase.GetRootFolderCache(1), Color.white * 0.5f);//EditorStylePrefs.RandomPastelColor(500)); // Packages Folder
                 }
 
                 if (!SelectHandler.SelectedThisFrame && dropInteract.TakeFocus())

@@ -102,10 +102,10 @@ namespace Prowl.Runtime
         }
         public readonly Vector2 Size => new(width, height);
 
-        public double Left => Min.x;
-        public double Right => Max.x;
-        public double Top => Min.y;
-        public double Bottom => Max.y;
+        public readonly double Left => Min.x;
+        public readonly double Right => Max.x;
+        public readonly double Top => Min.y;
+        public readonly double Bottom => Max.y;
         public readonly Vector2 TopLeft => new(Left, Top);
         public readonly Vector2 MiddleLeft => new(Left, (Top + Bottom) / 2);
         public readonly Vector2 TopRight => new(Right, Top);
