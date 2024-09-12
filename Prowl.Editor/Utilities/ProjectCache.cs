@@ -15,15 +15,7 @@ namespace Prowl.Editor
         [SerializeField]
         private List<string> _serializedProjects = [];
 
-
-        public int ProjectsCount
-        {
-            get
-            {
-                _projectCache ??= new();
-                return _projectCache.Count;
-            }
-        }
+        public int ProjectsCount => _projectCache.Count;
 
 
         public void AddProject(Project project)
@@ -34,6 +26,46 @@ namespace Prowl.Editor
                 Save();
             }
         }
+
+
+        // Project starring which keeps track of a sub-range of projects at the top of the array.
+        /*
+        public void StarProject(int projectIndex, bool isStarred)
+        {
+            if (projectIndex >= _starredProjects && isStarred)
+            {
+                (_projectCache[_starredProjects], _projectCache[projectIndex]) = (_projectCache[projectIndex], _projectCache[_starredProjects]);
+                _starredProjects++;
+                return;
+            }
+
+            if (projectIndex < _starredProjects && !isStarred)
+            {
+                _starredProjects--;
+            }
+
+            SortProjects();
+        }
+
+
+        private void SortProjects()
+        {
+            _projectCache.Sort(0, _starredProjects, ProjectComparer.Instance);
+            _projectCache.Sort(_starredProjects, _projectCache.Count - _starredProjects, ProjectComparer.Instance);
+        }
+
+
+        private class ProjectComparer : IComparer<Project>
+        {
+            public static ProjectComparer Instance = new();
+
+            public int Compare(Project? a, Project? b)
+            {
+                return a.ProjectDirectory.LastAccessTime.CompareTo(b.ProjectDirectory.LastAccessTime);
+            }
+        }
+        */
+
 
         public Project? GetProject(int index)
         {
