@@ -96,7 +96,9 @@ namespace Prowl.Runtime.GUI
         /// <returns></returns>
         public Interactable GetInteractable(LayoutNode target, Rect? interactArea = null)
         {
-            var rect = interactArea ?? target.LayoutData.Rect;
+            Rect rect = interactArea ?? target.LayoutData.Rect;
+
+            rect.Clip(Draw2D.PeekClip());
 
             if (_interactables.ContainsKey(target.ID))
                 return _interactables[target.ID];
@@ -312,7 +314,7 @@ namespace Prowl.Runtime.GUI
         /// Check if the Interactable is hovered and clicked on if it is, it will take focus
         /// </summary>
         /// <returns>True on the frame the Interactable took focus, Great for Buttons: if(Interactable.TakeFocus())</returns>
-        public bool TakeFocus(bool onrelease = false)
+        public bool TakeFocus(bool onrelease = false, MouseButton focusBtn = MouseButton.Left)
         {
             // Clicking on another Interactable will remove focus
             //if (_gui.FocusID == _id && _gui.HoveredID != _id && _gui.IsPointerDown(Veldrid.MouseButton.Left))
@@ -320,7 +322,7 @@ namespace Prowl.Runtime.GUI
 
             // If we are hovered and active, we are focused
             //if (_gui.HoveredID == _id && _gui.ActiveID == _id && !_gui.IsPointerDown(Veldrid.MouseButton.Left))
-            if (_gui.HoveredID == _id && _gui.ActiveID == _id && _gui.IsPointerClick(MouseButton.Left))
+            if (_gui.HoveredID == _id && _gui.ActiveID == _id && _gui.IsPointerClick(focusBtn))
             {
                 _gui.FocusID = _id;
                 return true;
