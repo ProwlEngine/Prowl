@@ -10,6 +10,7 @@ namespace Prowl.Runtime.GUI.Layout
     public partial class LayoutNode
     {
         private const double ScrollBarSize = 10;
+        private const double MinScrollBarSize = 17;
 
         public struct PostLayoutData(LayoutNode node)
         {
@@ -321,7 +322,7 @@ namespace Prowl.Runtime.GUI.Layout
                     double overflowHeight = LayoutData.ContentRect.height - LayoutData.InnerRect.height;
 
                     double scrollRatio = LayoutData.InnerRect.height / LayoutData.ContentRect.height;
-                    double scrollBarHeight = scrollRatio * scrollRect.height;
+                    double scrollBarHeight = Math.Max(MinScrollBarSize, scrollRatio * scrollRect.height);
 
                     double scrollBarY = (VScroll / overflowHeight) * (scrollRect.height - scrollBarHeight);
 
@@ -366,7 +367,7 @@ namespace Prowl.Runtime.GUI.Layout
                     double overflowHeight = LayoutData.ContentRect.width - LayoutData.InnerRect.width;
 
                     double scrollRatio = LayoutData.InnerRect.width / LayoutData.ContentRect.width;
-                    double scrollBarWidth = scrollRatio * scrollRect.width;
+                    double scrollBarWidth = Math.Max(MinScrollBarSize, scrollRatio * scrollRect.width);
 
                     double scrollBarX = (HScroll / overflowHeight) * (scrollRect.width - scrollBarWidth);
 
