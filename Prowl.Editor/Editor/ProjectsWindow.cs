@@ -267,9 +267,8 @@ namespace Prowl.Editor
 
             _dialogContext.title = "Open Existing Project";
             _dialogContext.parentDirectory = new DirectoryInfo(s_defaultPath);
-
             _dialogContext.OnComplete = onComplete;
-            _dialogContext.OnCancel += () => _dialogContext.OnComplete = (x) => { };
+            _dialogContext.OnCancel = () => _dialogContext.OnComplete = (x) => { };
 
             EditorGuiManager.Remove(_dialog);
 
