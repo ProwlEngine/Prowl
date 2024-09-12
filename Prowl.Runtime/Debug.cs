@@ -8,11 +8,11 @@ namespace Prowl.Runtime;
 
 public enum LogSeverity
 {
-    Success,
-    Normal,
-    Warning,
-    Error,
-    Exception
+    Success = 1 << 0,
+    Normal = 1 << 1,
+    Warning = 1 << 2,
+    Error = 1 << 3,
+    Exception = 1 << 4
 }
 
 public delegate void OnLog(string message, StackTrace? stackTrace, LogSeverity logSeverity);
@@ -44,7 +44,6 @@ public static class Debug
     public static void LogError(string message)
         => Log(message, ConsoleColor.Red, LogSeverity.Error);
 
-
     public static void LogSuccess(object message)
         => Log(message.ToString(), ConsoleColor.Green, LogSeverity.Success);
 
@@ -53,13 +52,13 @@ public static class Debug
         => Log(message, ConsoleColor.Green, LogSeverity.Success);
 
 
-    internal static void LogCompilerError(object message)
-        => Log(message.ToString(), ConsoleColor.Red, LogSeverity.Error);
+    public static void LogException(Exception exception)
+        => Log(exception.Message, ConsoleColor.Red, LogSeverity.Exception, new StackTrace(exception, true));
 
 
-    // NOTE : StackTrace is pretty fast on modern .NET, so it's safe to keep it on by default, since it gives useful line numbers for debugging purposes, etc.
-    // For those concerned, rendering the console text takes comparatively longer than collecting a stack trace.
-    private static void Log(string message, ConsoleColor color, LogSeverity logSeverity)
+    // NOTE : StackTrace is pretty fast on modern .NET, so it's nice to keep it on by default, since it gives useful line numbers for debugging purposes.
+    // For reference, getting a stack trace on a modern machine takes around 15 μs at a depth of 15.
+    public static void Log(string message, ConsoleColor color, LogSeverity logSeverity, StackTrace? customTrace = null)
     {
         ConsoleColor prevColor = Console.ForegroundColor;
 
@@ -67,23 +66,7 @@ public static class Debug
         Console.WriteLine(message);
         Console.ForegroundColor = prevColor;
 
-        OnLog?.Invoke(message, new StackTrace(2, true), logSeverity);
-    }
-
-
-    public static void LogException(Exception exception)
-    {
-        ConsoleColor prevColor = Console.ForegroundColor;
-
-        Console.ForegroundColor = ConsoleColor.Red;
-        Console.WriteLine(exception.ToString());
-        Console.ForegroundColor = prevColor;
-
-        StackFrame frame = new StackFrame("my/file/path", 10, 4);
-        StackTrace stack = new StackTrace(frame);
-        StackFrame myFrame = stack.GetFrame(0);
-
-        OnLog?.Invoke(exception.Message, new StackTrace(exception, true), LogSeverity.Exception);
+        OnLog?.Invoke(message, customTrace ?? new StackTrace(2, true), logSeverity);
     }
 
 
