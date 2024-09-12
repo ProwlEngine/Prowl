@@ -10,14 +10,10 @@ namespace Prowl.Editor
 {
     public class ProjectsWindow : EditorWindow
     {
-        private static readonly string s_defaultPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
-
         public Project? SelectedProject = null;
 
         private string _searchText = "";
 
-        private string _createFolder = s_defaultPath;
         private string _createName = "";
 
         private (string, Action)[] _tabs;
@@ -231,7 +227,7 @@ namespace Prowl.Editor
             {
                 Color col = Color.white * 0.4f;
 
-                bool isSelectable = _createTabOpen ? !string.IsNullOrEmpty(_createName) && Directory.Exists(_createFolder) && !Path.Exists(_createName) :
+                bool isSelectable = _createTabOpen ? !string.IsNullOrEmpty(_createName) && Directory.Exists(ProjectCache.Instance.SavedProjectsFolder) && !Path.Exists(_createName) :
                     SelectedProject != null;
 
                 string text = _createTabOpen ? "Create" : "Open";
@@ -242,7 +238,7 @@ namespace Prowl.Editor
                     {
                         if (_createTabOpen)
                         {
-                            Project.CreateNew(new DirectoryInfo(Path.Join(_createFolder, _createName)));
+                            Project.CreateNew(new DirectoryInfo(Path.Join(ProjectCache.Instance.SavedProjectsFolder, _createName)));
                             _createTabOpen = false;
                         }
                         else if (Project.Open(SelectedProject))
@@ -266,7 +262,7 @@ namespace Prowl.Editor
             _dialogContext ??= new();
 
             _dialogContext.title = "Open Existing Project";
-            _dialogContext.parentDirectory = new DirectoryInfo(s_defaultPath);
+            _dialogContext.parentDirectory = new DirectoryInfo(ProjectCache.Instance.SavedProjectsFolder);
             _dialogContext.OnComplete = onComplete;
             _dialogContext.OnCancel = () => _dialogContext.OnComplete = (x) => { };
 
@@ -341,7 +337,7 @@ namespace Prowl.Editor
                 Vector2 pos = gui.CurrentNode.LayoutData.Rect.Position;
                 pos.y += 20;
 
-                string path = _createFolder;
+                string path = ProjectCache.Instance.SavedProjectsFolder;
 
                 if (path.Length > 48)
                     path = string.Concat("...", path.AsSpan(path.Length - 48));
@@ -359,7 +355,7 @@ namespace Prowl.Editor
                     if (closeInteract.TakeFocus())
                     {
                         gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Highlighted, 5, CornerRounding.All);
-                        OpenDialog("Select Folder", (x) => _createFolder = x);
+                        OpenDialog("Select Folder", (x) => ProjectCache.Instance.SavedProjectsFolder = x);
                     }
                     else if (closeInteract.IsHovered())
                         gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Hovering, 5, CornerRounding.All);

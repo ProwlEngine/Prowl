@@ -17,6 +17,31 @@ namespace Prowl.Editor
 
         public int ProjectsCount => _projectCache.Count;
 
+        [SerializeField]
+        private string _savedProjectsFolder = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        public string SavedProjectsFolder
+        {
+            get
+            {
+                if (!Directory.Exists(_savedProjectsFolder))
+                {
+                    Save();
+                    _savedProjectsFolder = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                }
+
+                return _savedProjectsFolder;
+            }
+
+            set
+            {
+                if (!Directory.Exists(value))
+                    return;
+
+                _savedProjectsFolder = value;
+                Save();
+            }
+        }
+
 
         public void AddProject(Project project)
         {
