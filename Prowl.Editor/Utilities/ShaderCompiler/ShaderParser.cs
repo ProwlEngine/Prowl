@@ -118,7 +118,6 @@ namespace Prowl.Editor.Utilities
             }
             catch (ParseException ex)
             {
-                Debug.Log(ex.Message);
                 LogCompilationError(ex.Message, includer, tokenizer.CurrentLine, tokenizer.CurrentColumn);
                 return false;
             }
@@ -189,8 +188,6 @@ namespace Prowl.Editor.Utilities
         {
             DebugStackFrame frame = new(line, column, includer.SourceFilePath);
             DebugStackTrace trace = new(frame);
-
-            Debug.Log("Dbg: " + trace.ToString());
 
             Debug.Log("Error compiling shader: " + message, ConsoleColor.Red, LogSeverity.Error, trace);
         }
