@@ -205,17 +205,17 @@ namespace Prowl.Editor.Utilities
 
                 int line = isGlobal ? globalStartLine + message.line : programStartLine + (message.line - globalOffset);
 
-                ConsoleColor col = message.severity switch
+                (ConsoleColor col, string prefix) = message.severity switch
                 {
-                    LogSeverity.Normal => ConsoleColor.White,
-                    LogSeverity.Warning => ConsoleColor.Yellow,
-                    _ => ConsoleColor.Red,
+                    LogSeverity.Normal => (ConsoleColor.White, "Info: "),
+                    LogSeverity.Warning => (ConsoleColor.Yellow, "Warning while compiling shader: "),
+                    _ => (ConsoleColor.Red, "Error compiling shader: "),
                 };
 
                 DebugStackFrame frame = new(line, message.column, includer.SourceFilePath);
                 DebugStackTrace trace = new(frame);
 
-                Debug.Log(message.message, col, message.severity, trace);
+                Debug.Log(prefix + message.message, col, message.severity, trace);
             }
 
             return hasErrors;
@@ -760,7 +760,7 @@ namespace Prowl.Editor.Utilities
             if (Enum.TryParse(text, true, out T value))
                 return value;
 
-            List<string> values = [..Enum.GetNames<T>()];
+            List<string> values = [.. Enum.GetNames<T>()];
             values.AddRange(extraValues);
 
             throw new ParseException($"Error parsing {fieldName}. Possible values: [{string.Join(", ", values)}]");
