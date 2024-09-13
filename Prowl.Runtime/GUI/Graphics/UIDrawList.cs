@@ -390,68 +390,66 @@ namespace Prowl.Runtime.GUI.Graphics
                 PopTexture();
         }
 
+        private Vector2[] _tempNormals;
+        private Vector2[] _tempPoints;
 
-        public void AddPolyline(List<Vector2> points, int points_count, Color32 col, bool closed, float thickness)
+        public void AddPolyline(List<Vector2> points, int pointsCount, Color32 col, bool closed, float thickness)
         {
-            if (points_count < 2)
+            if (pointsCount < 2)
                 return;
 
+            if (_tempNormals == null || _tempNormals.Length < pointsCount * 5)
+            {
+                _tempNormals = new Vector2[pointsCount * 5];
+                _tempPoints = new Vector2[pointsCount * 5];
+            }
+
             Vector2 uv = Font.DefaultFont.TexUvWhitePixel;
+            int count = closed ? pointsCount : pointsCount - 1;
+            bool thickLine = thickness > 1.0f;
 
-            int count = points_count;
-            if (!closed)
-                count = points_count - 1;
-
-            bool thick_line = thickness > 1.0f;
             if (_antiAliasing)
             {
-                // Anti-aliased stroke
                 float AA_SIZE = 1.0f;
                 Color32 col_trans = new Color32(col.r, col.g, col.b, 0);
 
-                int idx_count = thick_line ? count * 18 : count * 12;
-                int vtx_count = thick_line ? points_count * 4 : points_count * 3;
+                int idx_count = thickLine ? count * 18 : count * 12;
+                int vtx_count = thickLine ? pointsCount * 4 : pointsCount * 3;
                 PrimReserve(idx_count, vtx_count);
-
-                // Temporary buffer
-                var temp_normals = new Vector2[points_count * (thick_line ? 5 : 3)];
-                var temp_points = new Vector2[points_count * (thick_line ? 5 : 3)];
 
                 for (int i1 = 0; i1 < count; i1++)
                 {
-                    int i2 = i1 + 1 == points_count ? 0 : i1 + 1;
+                    int i2 = (i1 + 1) == pointsCount ? 0 : i1 + 1;
                     Vector2 diff = points[i2] - points[i1];
-
                     double d = diff.x * diff.x + diff.y * diff.y;
                     if (d > 0.0f)
                         diff *= 1.0f / (float)Math.Sqrt(d);
 
-                    temp_normals[i1].x = diff.y;
-                    temp_normals[i1].y = -diff.x;
+                    _tempNormals[i1] = new Vector2(diff.y, -diff.x);
                 }
 
                 if (!closed)
-                    temp_normals[points_count - 1] = temp_normals[points_count - 2];
+                    _tempNormals[pointsCount - 1] = _tempNormals[pointsCount - 2];
 
-                if (!thick_line)
+                if (!thickLine)
                 {
                     if (!closed)
                     {
-                        temp_points[0] = points[0] + temp_normals[0] * AA_SIZE;
-                        temp_points[1] = points[0] - temp_normals[0] * AA_SIZE;
-                        temp_points[(points_count - 1) * 2 + 0] = points[points_count - 1] + temp_normals[points_count - 1] * AA_SIZE;
-                        temp_points[(points_count - 1) * 2 + 1] = points[points_count - 1] - temp_normals[points_count - 1] * AA_SIZE;
+                        _tempPoints[0] = points[0] + _tempNormals[0] * AA_SIZE;
+                        _tempPoints[1] = points[0] - _tempNormals[0] * AA_SIZE;
+                        _tempPoints[(pointsCount - 1) * 2 + 0] = points[pointsCount - 1] + _tempNormals[pointsCount - 1] * AA_SIZE;
+                        _tempPoints[(pointsCount - 1) * 2 + 1] = points[pointsCount - 1] - _tempNormals[pointsCount - 1] * AA_SIZE;
                     }
 
                     // FIXME-OPT: Merge the different loops, possibly remove the temporary buffer.
                     uint idx1 = _currentVertexIndex;
                     for (int i1 = 0; i1 < count; i1++)
                     {
-                        int i2 = i1 + 1 == points_count ? 0 : i1 + 1;
-                        uint idx2 = i1 + 1 == points_count ? _currentVertexIndex : idx1 + 3;
+                        int i2 = i1 + 1 == pointsCount ? 0 : i1 + 1;
+                        uint idx2 = i1 + 1 == pointsCount ? _currentVertexIndex : idx1 + 3;
 
                         // Average normals
-                        Vector2 dm = (temp_normals[i1] + temp_normals[i2]) * 0.5f;
+                        Vector2 dm = (_tempNormals[i1] + _tempNormals[i2]) * 0.5f;
                         double dmr2 = dm.x * dm.x + dm.y * dm.y;
                         if (dmr2 > 0.000001f)
                         {
@@ -460,8 +458,8 @@ namespace Prowl.Runtime.GUI.Graphics
                             dm *= scale;
                         }
                         dm *= AA_SIZE;
-                        temp_points[i2 * 2 + 0] = points[i2] + dm;
-                        temp_points[i2 * 2 + 1] = points[i2] - dm;
+                        _tempPoints[i2 * 2 + 0] = points[i2] + dm;
+                        _tempPoints[i2 * 2 + 1] = points[i2] - dm;
 
                         // Add indexes
 
@@ -475,11 +473,11 @@ namespace Prowl.Runtime.GUI.Graphics
                     }
 
                     // Add vertexes
-                    for (int i = 0; i < points_count; i++)
+                    for (int i = 0; i < pointsCount; i++)
                     {
                         _vertices[_vertexWritePos++] = new UIVertex(new(points[i], _primitiveCount), uv, col);
-                        _vertices[_vertexWritePos++] = new UIVertex(new(temp_points[i * 2 + 0], _primitiveCount), uv, col_trans);
-                        _vertices[_vertexWritePos++] = new UIVertex(new(temp_points[i * 2 + 1], _primitiveCount), uv, col_trans);
+                        _vertices[_vertexWritePos++] = new UIVertex(new(_tempPoints[i * 2 + 0], _primitiveCount), uv, col_trans);
+                        _vertices[_vertexWritePos++] = new UIVertex(new(_tempPoints[i * 2 + 1], _primitiveCount), uv, col_trans);
                     }
                 }
                 else
@@ -487,26 +485,26 @@ namespace Prowl.Runtime.GUI.Graphics
                     float half_inner_thickness = (thickness - AA_SIZE) * 0.5f;
                     if (!closed)
                     {
-                        temp_points[0] = points[0] + temp_normals[0] * (half_inner_thickness + AA_SIZE);
-                        temp_points[1] = points[0] + temp_normals[0] * half_inner_thickness;
-                        temp_points[2] = points[0] - temp_normals[0] * half_inner_thickness;
-                        temp_points[3] = points[0] - temp_normals[0] * (half_inner_thickness + AA_SIZE);
+                        _tempPoints[0] = points[0] + _tempNormals[0] * (half_inner_thickness + AA_SIZE);
+                        _tempPoints[1] = points[0] + _tempNormals[0] * half_inner_thickness;
+                        _tempPoints[2] = points[0] - _tempNormals[0] * half_inner_thickness;
+                        _tempPoints[3] = points[0] - _tempNormals[0] * (half_inner_thickness + AA_SIZE);
 
-                        temp_points[(points_count - 1) * 4 + 0] = points[points_count - 1] + temp_normals[points_count - 1] * (half_inner_thickness + AA_SIZE);
-                        temp_points[(points_count - 1) * 4 + 1] = points[points_count - 1] + temp_normals[points_count - 1] * half_inner_thickness;
-                        temp_points[(points_count - 1) * 4 + 2] = points[points_count - 1] - temp_normals[points_count - 1] * half_inner_thickness;
-                        temp_points[(points_count - 1) * 4 + 3] = points[points_count - 1] - temp_normals[points_count - 1] * (half_inner_thickness + AA_SIZE);
+                        _tempPoints[(pointsCount - 1) * 4 + 0] = points[pointsCount - 1] + _tempNormals[pointsCount - 1] * (half_inner_thickness + AA_SIZE);
+                        _tempPoints[(pointsCount - 1) * 4 + 1] = points[pointsCount - 1] + _tempNormals[pointsCount - 1] * half_inner_thickness;
+                        _tempPoints[(pointsCount - 1) * 4 + 2] = points[pointsCount - 1] - _tempNormals[pointsCount - 1] * half_inner_thickness;
+                        _tempPoints[(pointsCount - 1) * 4 + 3] = points[pointsCount - 1] - _tempNormals[pointsCount - 1] * (half_inner_thickness + AA_SIZE);
                     }
 
                     // FIXME-OPT: Merge the different loops, possibly remove the temporary buffer.
                     uint idx1 = _currentVertexIndex;
                     for (int i1 = 0; i1 < count; i1++)
                     {
-                        int i2 = i1 + 1 == points_count ? 0 : i1 + 1;
-                        uint idx2 = i1 + 1 == points_count ? _currentVertexIndex : idx1 + 4;
+                        int i2 = i1 + 1 == pointsCount ? 0 : i1 + 1;
+                        uint idx2 = i1 + 1 == pointsCount ? _currentVertexIndex : idx1 + 4;
 
                         // Average normals
-                        Vector2 dm = (temp_normals[i1] + temp_normals[i2]) * 0.5f;
+                        Vector2 dm = (_tempNormals[i1] + _tempNormals[i2]) * 0.5f;
                         double dmr2 = dm.x * dm.x + dm.y * dm.y;
                         if (dmr2 > 0.000001f)
                         {
@@ -516,10 +514,10 @@ namespace Prowl.Runtime.GUI.Graphics
                         }
                         Vector2 dm_out = dm * (half_inner_thickness + AA_SIZE);
                         Vector2 dm_in = dm * half_inner_thickness;
-                        temp_points[i2 * 4 + 0] = points[i2] + dm_out;
-                        temp_points[i2 * 4 + 1] = points[i2] + dm_in;
-                        temp_points[i2 * 4 + 2] = points[i2] - dm_in;
-                        temp_points[i2 * 4 + 3] = points[i2] - dm_out;
+                        _tempPoints[i2 * 4 + 0] = points[i2] + dm_out;
+                        _tempPoints[i2 * 4 + 1] = points[i2] + dm_in;
+                        _tempPoints[i2 * 4 + 2] = points[i2] - dm_in;
+                        _tempPoints[i2 * 4 + 3] = points[i2] - dm_out;
 
                         // Add indexes
                         _indices[_indexWritePos++] = (idx2 + 1); _indices[_indexWritePos++] = (idx1 + 1); _indices[_indexWritePos++] = (idx1 + 2);
@@ -534,12 +532,12 @@ namespace Prowl.Runtime.GUI.Graphics
                     }
 
                     // Add vertexes
-                    for (int i = 0; i < points_count; i++)
+                    for (int i = 0; i < pointsCount; i++)
                     {
-                        _vertices[_vertexWritePos++] = new UIVertex(new(temp_points[i * 4 + 0], _primitiveCount), uv, col_trans);
-                        _vertices[_vertexWritePos++] = new UIVertex(new(temp_points[i * 4 + 1], _primitiveCount), uv, col);
-                        _vertices[_vertexWritePos++] = new UIVertex(new(temp_points[i * 4 + 2], _primitiveCount), uv, col);
-                        _vertices[_vertexWritePos++] = new UIVertex(new(temp_points[i * 4 + 3], _primitiveCount), uv, col_trans);
+                        _vertices[_vertexWritePos++] = new UIVertex(new(_tempPoints[i * 4 + 0], _primitiveCount), uv, col_trans);
+                        _vertices[_vertexWritePos++] = new UIVertex(new(_tempPoints[i * 4 + 1], _primitiveCount), uv, col);
+                        _vertices[_vertexWritePos++] = new UIVertex(new(_tempPoints[i * 4 + 2], _primitiveCount), uv, col);
+                        _vertices[_vertexWritePos++] = new UIVertex(new(_tempPoints[i * 4 + 3], _primitiveCount), uv, col_trans);
                         //_VtxWritePtr += 4;
                     }
                 }
@@ -553,7 +551,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
                 for (int i1 = 0; i1 < count; i1++)
                 {
-                    int i2 = i1 + 1 == points_count ? 0 : i1 + 1;
+                    int i2 = i1 + 1 == pointsCount ? 0 : i1 + 1;
                     Vector2 p1 = points[i1];
                     Vector2 p2 = points[i2];
                     Vector2 diff = p2 - p1;
