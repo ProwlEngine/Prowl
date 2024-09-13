@@ -1,14 +1,11 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System.Diagnostics;
-
 using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 
-using Vector4F = System.Numerics.Vector4;
 using Debug = Prowl.Runtime.Debug;
 using Prowl.Editor.Assets;
 
