@@ -232,6 +232,7 @@ All contributors will be acknowledged in our [Acknowledgments](#acknowledgments)
 - [Jihad Khawaja](https://github.com/jihadkhawaja)
 - [Jasper Honkasalo](https://github.com/japsuu)
 - [Kai Angulo (k0t)](https://github.com/sinnwrig)
+- [Bruno Massa](https://github.com/brmassa)
  
 # License 📜
 
