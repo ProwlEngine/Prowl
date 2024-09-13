@@ -17,8 +17,8 @@ namespace Prowl.Editor
         private Stack<object> _BackStack = new();
         private Stack<object> _ForwardStack = new();
 
-        private object? Selected = null;
-        private bool lockSelection = false;
+        private object? Selected;
+        private bool lockSelection;
 
         (object, ScriptedEditor)? customEditor;
 

@@ -77,7 +77,7 @@ public abstract class SingletonEditorWindow : EditorWindow
 
     public abstract void RenderSideView();
 
-    private int elementCounter = 0;
+    private int elementCounter;
     protected void RenderSideViewElement<T>(T elementInstance)
     {
         Type settingType = elementInstance.GetType();

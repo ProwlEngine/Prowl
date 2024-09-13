@@ -10,15 +10,15 @@ namespace Prowl.Editor
 {
     public class ProjectsWindow : EditorWindow
     {
-        public Project? SelectedProject = null;
+        public Project? SelectedProject;
 
         private string _searchText = "";
 
         private string _createName = "";
 
         private (string, Action)[] _tabs;
-        private int _currentTab = 0;
-        private bool _createTabOpen = false;
+        private int _currentTab;
+        private bool _createTabOpen;
 
         private FileDialog _dialog;
         private FileDialogContext _dialogContext;

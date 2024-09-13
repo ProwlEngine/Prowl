@@ -22,9 +22,9 @@ public class SceneViewWindow : EditorWindow
     RenderTexture RenderTarget;
     Vector2 WindowCenter;
     Vector2 mouseUV;
-    int frames = 0;
-    double fpsTimer = 0;
-    double fps = 0;
+    int frames;
+    double fpsTimer;
+    double fps;
     double moveSpeed = 1;
     bool hasStarted = false;
     double camX, camY;

@@ -12,7 +12,7 @@ namespace Prowl.Editor.ScriptedEditors
     [CustomEditor(typeof(ScriptableObjectImporter))]
     public class ScriptableObjectEditor : ScriptedEditor
     {
-        ScriptableObject? scriptObject = null;
+        ScriptableObject? scriptObject;
 
         public override void OnInspectorGUI()
         {

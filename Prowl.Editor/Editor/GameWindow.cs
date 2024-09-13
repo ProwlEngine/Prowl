@@ -35,7 +35,7 @@ public class GameWindow : EditorWindow
 
     RenderTexture RenderTarget;
     bool previouslyPlaying = false;
-    bool hasFrame = false;
+    bool hasFrame;
 
     public static WeakReference LastFocused;
     public static Vector2 FocusedPosition;

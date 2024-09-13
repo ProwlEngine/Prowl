@@ -10,7 +10,7 @@ namespace Prowl.Editor.PropertyDrawers
 {
     public abstract class PropertyDrawerEnumerable<T> : PropertyDrawer where T : class
     {
-        public static ulong selectedDrawer = 0;
+        public static ulong selectedDrawer;
         public static int selectedElement = -1;
 
         private static int windowBG = 0;

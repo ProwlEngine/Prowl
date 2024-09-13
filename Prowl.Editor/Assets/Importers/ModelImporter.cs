@@ -23,19 +23,19 @@ namespace Prowl.Editor.Assets
     {
         public static readonly string[] Supported = { ".obj", ".blend", ".dae", ".fbx", ".gltf", ".ply", ".pmx", ".stl" };
 
-        public bool GenerateColliders = false;
+        public bool GenerateColliders;
         public bool GenerateNormals = true;
-        public bool GenerateSmoothNormals = false;
+        public bool GenerateSmoothNormals;
         public bool CalculateTangentSpace = true;
         public bool MakeLeftHanded = true;
-        public bool FlipUVs = false;
-        public bool CullEmpty = false;
-        public bool OptimizeGraph = false;
-        public bool OptimizeMeshes = false;
-        public bool FlipWindingOrder = false;
-        public bool WeldVertices = false;
-        public bool InvertNormals = false;
-        public bool GlobalScale = false;
+        public bool FlipUVs;
+        public bool CullEmpty;
+        public bool OptimizeGraph;
+        public bool OptimizeMeshes;
+        public bool FlipWindingOrder;
+        public bool WeldVertices;
+        public bool InvertNormals;
+        public bool GlobalScale;
 
         public float UnitScale = 1.0f;
 
@@ -659,10 +659,10 @@ namespace Prowl.Editor.Assets
     public class ModelEditor : ScriptedEditor
     {
 
-        int selectedAnim = 0;
-        int selectedAnimBone = 0;
+        int selectedAnim;
+        int selectedAnimBone;
 
-        int selectedTab = 0;
+        int selectedTab;
 
         public override void OnInspectorGUI()
         {

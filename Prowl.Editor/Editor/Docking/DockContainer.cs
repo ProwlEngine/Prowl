@@ -232,7 +232,7 @@ namespace Prowl.Editor.Docking
             return inside;
         }
 
-        public DockNode AttachWindow(EditorWindow window, DockNode leaf, DockZone zone, double splitDistance = 0.5f)
+        public DockNode? AttachWindow(EditorWindow window, DockNode leaf, DockZone zone, double splitDistance = 0.5f)
         {
             if (window == null)
                 return null;
@@ -303,7 +303,7 @@ namespace Prowl.Editor.Docking
             return DetachWindow(window.Leaf, index) != null;
         }
 
-        public EditorWindow DetachWindow(DockNode leaf, int index)
+        public EditorWindow? DetachWindow(DockNode leaf, int index)
         {
             // Expect leaf node
             if (leaf.Type != DockNode.NodeType.Leaf)
@@ -350,7 +350,7 @@ namespace Prowl.Editor.Docking
             return windowList;
         }
 
-        public DockNode FindParent(DockNode node)
+        public DockNode? FindParent(DockNode node)
         {
             if (node == Root)
                 return null;
