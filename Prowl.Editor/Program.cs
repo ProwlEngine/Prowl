@@ -156,8 +156,8 @@ public static class Program
                     bin.Create();
 
                     // Compile the Projects
-                    Project.Compile(active, active.Assembly_Proj.FullName, debug);
-                    Project.Compile(active, active.Editor_Assembly_Proj.FullName, debug);
+                    Project.Compile(active.Assembly_Proj.FullName, debug);
+                    Project.Compile(active.Editor_Assembly_Proj.FullName, debug);
 
                     // Reload the External Assemblies
                     AssemblyManager.LoadExternalAssembly(active.Editor_Assembly_DLL.FullName, true);

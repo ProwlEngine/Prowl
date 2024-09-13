@@ -210,7 +210,7 @@ public class Project
     /// <param name="csprojPath">Directory of the .csproj file to compile</param>
     /// <param name="isRelease">Is Release Build?</param>
     /// <returns>True if Compiling was successfull</returns>
-    public static bool Compile(Project project, string csprojPath, DirectoryInfo output, bool isRelease = false)
+    public static bool Compile(string csprojPath, DirectoryInfo output, bool isRelease = false)
     {
         if (!HasProject)
         {
@@ -220,7 +220,7 @@ public class Project
 
         // Reload CSProject Files
         BoundedLog($"Starting Project Compilation...");
-        GenerateCSProjectFiles(project, output);
+        GenerateCSProjectFiles(Active, output);
 
         // Compile the Project Assembly using 'dotnet build'
         BoundedLog($"Compiling external assembly in {csprojPath}...");
