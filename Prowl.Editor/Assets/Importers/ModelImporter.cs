@@ -484,14 +484,14 @@ namespace Prowl.Editor.Assets
 
                 foreach (var channel in anim.NodeAnimationChannels)
                 {
-                    Assimp.Node boneNode = scene.RootNode.FindNode(channel.NodeName);
+                    Node boneNode = scene.RootNode.FindNode(channel.NodeName);
 
                     var animBone = new AnimBone();
                     animBone.BoneName = boneNode.Name;
 
                     // construct full path from RootNode to this bone
                     // RootNode -> Parent -> Parent -> ... -> Parent -> Bone
-                    Assimp.Node target = boneNode;
+                    Node target = boneNode;
                     string path = target.Name;
                     //while (target.Parent != null)
                     //{
@@ -671,7 +671,7 @@ namespace Prowl.Editor.Assets
             var importer = (ModelImporter)(target as MetaFile).importer;
             var serialized = AssetDatabase.LoadAsset((target as MetaFile).AssetPath);
 
-            gui.CurrentNode.Layout(Runtime.GUI.LayoutType.Column);
+            gui.CurrentNode.Layout(LayoutType.Column);
             gui.CurrentNode.ScaleChildren();
 
             using (gui.Node("Tabs").Width(Size.Percentage(1f)).MaxHeight(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())

@@ -726,7 +726,7 @@ namespace Prowl.Runtime
                 using (MemoryStream ms = new())
                 {
                     stream.CopyTo(ms);
-                    builder.Add(ms.ToArray(), 40, [Font.CharacterRange.BasicLatin]);
+                    builder.Add(ms.ToArray(), 40, [CharacterRange.BasicLatin]);
                 }
             }
             using (Stream stream = assembly.GetManifestResourceStream($"Prowl.Runtime.EmbeddedResources.{FontAwesome6.FontIconFileNameFAR}"))
@@ -734,7 +734,7 @@ namespace Prowl.Runtime
                 using (MemoryStream ms = new())
                 {
                     stream.CopyTo(ms);
-                    builder.Add(ms.ToArray(), 40 * 2.0f / 3.0f, [new Font.CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
+                    builder.Add(ms.ToArray(), 40 * 2.0f / 3.0f, [new CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
                 }
             }
             using (Stream stream = assembly.GetManifestResourceStream($"Prowl.Runtime.EmbeddedResources.{FontAwesome6.FontIconFileNameFAS}"))
@@ -742,7 +742,7 @@ namespace Prowl.Runtime
                 using (MemoryStream ms = new())
                 {
                     stream.CopyTo(ms);
-                    builder.Add(ms.ToArray(), 40 * 2.0f / 3.0f, [new Font.CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
+                    builder.Add(ms.ToArray(), 40 * 2.0f / 3.0f, [new CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
                 }
             }
 

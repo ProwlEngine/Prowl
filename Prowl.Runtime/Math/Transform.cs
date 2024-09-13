@@ -188,14 +188,14 @@ namespace Prowl.Runtime
 
         public Transform? Find(string path)
         {
-            ArgumentNullException.ThrowIfNullOrEmpty(path, nameof(path));
+            ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
 
             var names = path.Split('/');
             var currentTransform = this;
 
             foreach (var name in names)
             {
-                ArgumentNullException.ThrowIfNullOrEmpty(path, nameof(path));
+                ArgumentException.ThrowIfNullOrEmpty(path, nameof(path));
 
                 var childTransform = FindImmediateChild(currentTransform, name);
                 if (childTransform == null)

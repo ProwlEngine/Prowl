@@ -79,7 +79,7 @@ namespace Prowl.Editor.Assets
         /// <param name="rootFolder">The path to the root folder.</param>
         public static void AddRootFolder(string rootFolder)
         {
-            ArgumentNullException.ThrowIfNullOrEmpty(rootFolder);
+            ArgumentException.ThrowIfNullOrEmpty(rootFolder);
 
             var rootPath = Path.Combine(Project.Active.ProjectPath, rootFolder);
             var info = new DirectoryInfo(rootPath);
@@ -212,7 +212,7 @@ namespace Prowl.Editor.Assets
         /// <returns>True if a reimport is needed</returns>
         static bool ProcessFile(string file, out bool metaOutdated)
         {
-            ArgumentNullException.ThrowIfNullOrEmpty(file);
+            ArgumentException.ThrowIfNullOrEmpty(file);
             var fileInfo = new FileInfo(file);
             metaOutdated = false;
 

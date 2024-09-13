@@ -58,7 +58,7 @@ namespace Prowl.Runtime.GUI
         public bool InputField(string ID, ref string value, uint maxLength, InputFieldFlags flags, Offset x, Offset y, Size width, Size? height = null, WidgetStyle? inputstyle = null, bool invisible = false)
         {
             var style = inputstyle ?? new WidgetStyle(30);
-            var g = Gui.ActiveGUI;
+            var g = ActiveGUI;
             bool multiline = ((flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline);
             Size h = (multiline ? style.FontSize * 8 : style.ItemSize);
             if (height != null) h = height.Value;
@@ -132,7 +132,7 @@ namespace Prowl.Runtime.GUI
 
         internal static bool OnProcess(WidgetStyle style, Interactable interact, ref string Text, uint MaxLength, InputFieldFlags Flags)
         {
-            var g = Gui.ActiveGUI;
+            var g = ActiveGUI;
             var font = style.Font.IsAvailable ? style.Font.Res : Font.DefaultFont;
             var fontsize = style.FontSize;
             var render_pos = new Vector2(g.CurrentNode.LayoutData.InnerRect.x, g.CurrentNode.LayoutData.InnerRect.y);
@@ -340,7 +340,7 @@ namespace Prowl.Runtime.GUI
 
         private static void HandleKeyEvent(StbTextEditState stb, uint MaxLength, InputFieldFlags Flags)
         {
-            var g = Gui.ActiveGUI;
+            var g = ActiveGUI;
             var KeyCode = g.KeyCode;
             if (KeyCode == Key.Unknown)
             {
@@ -554,7 +554,7 @@ namespace Prowl.Runtime.GUI
 
         private static void HandleMouseEvent(StbTextEditState stb)
         {
-            var g = Gui.ActiveGUI;
+            var g = ActiveGUI;
             var Pos = g.PointerPos - g.CurrentNode.LayoutData.InnerRect.Position;
             Pos.x -= 5; // Account for padding in text rendering
             Pos.x += stb.ScrollX;

@@ -6,7 +6,7 @@ using BepuPhysics.Constraints;
 namespace Prowl.Runtime;
 
 
-[AddComponentMenu($"{Prowl.Icons.FontAwesome6.HillRockslide}  Physics/{Prowl.Icons.FontAwesome6.Joint}  Constraints/{Prowl.Icons.FontAwesome6.GroupArrowsRotate}  Twist Servo")]
+[AddComponentMenu($"{Icons.FontAwesome6.HillRockslide}  Physics/{Icons.FontAwesome6.Joint}  Constraints/{Icons.FontAwesome6.GroupArrowsRotate}  Twist Servo")]
 public sealed class TwistServoConstraintComponent : TwoBodyConstraintComponent<TwistServo>
 {
     [SerializeField, HideInInspector] private Quaternion _localBasisA;

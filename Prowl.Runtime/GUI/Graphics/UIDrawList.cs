@@ -104,7 +104,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void AntiAliasing(bool antiAliasing)
         {
-            this._antiAliasing = antiAliasing;
+            _antiAliasing = antiAliasing;
         }
 
 

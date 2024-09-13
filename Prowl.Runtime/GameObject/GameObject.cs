@@ -127,7 +127,7 @@ public class GameObject : EngineObject, ISerializable
 
     public bool IsChildOf(GameObject parent)
     {
-        if (this.InstanceID == parent.InstanceID) return false; // Not a child their the same object
+        if (InstanceID == parent.InstanceID) return false; // Not a child their the same object
 
         GameObject child = this;
         while (child != null)
@@ -155,9 +155,9 @@ public class GameObject : EngineObject, ISerializable
 
         if (worldPositionStays)
         {
-            worldPosition = this.Transform.position;
-            worldRotation = this.Transform.rotation;
-            worldScale = this.Transform.GetWorldRotationAndScale();
+            worldPosition = Transform.position;
+            worldRotation = Transform.rotation;
+            worldScale = Transform.GetWorldRotationAndScale();
         }
 
         if (NewParent != _parent)
@@ -176,18 +176,18 @@ public class GameObject : EngineObject, ISerializable
         {
             if (_parent != null)
             {
-                this.Transform.localPosition = _parent.Transform.InverseTransformPoint(worldPosition);
-                this.Transform.localRotation = Quaternion.NormalizeSafe(Quaternion.Inverse(_parent.Transform.rotation) * worldRotation);
+                Transform.localPosition = _parent.Transform.InverseTransformPoint(worldPosition);
+                Transform.localRotation = Quaternion.NormalizeSafe(Quaternion.Inverse(_parent.Transform.rotation) * worldRotation);
             }
             else
             {
-                this.Transform.localPosition = worldPosition;
-                this.Transform.localRotation = Quaternion.NormalizeSafe(worldRotation);
+                Transform.localPosition = worldPosition;
+                Transform.localRotation = Quaternion.NormalizeSafe(worldRotation);
             }
 
-            this.Transform.localScale = Vector3.one;
-            Matrix4x4 inverseRS = this.Transform.GetWorldRotationAndScale().Invert() * worldScale;
-            this.Transform.localScale = new Vector3(inverseRS[0, 0], inverseRS[1, 1], inverseRS[2, 2]);
+            Transform.localScale = Vector3.one;
+            Matrix4x4 inverseRS = Transform.GetWorldRotationAndScale().Invert() * worldScale;
+            Transform.localScale = new Vector3(inverseRS[0, 0], inverseRS[1, 1], inverseRS[2, 2]);
         }
 
         HierarchyStateChanged();
@@ -233,7 +233,7 @@ public class GameObject : EngineObject, ISerializable
     /// <summary> Recursive function to check if this GameObject is a parent of another GameObject </summary>
     public bool IsParentOf(GameObject go)
     {
-        if (go.parent?.InstanceID == this.InstanceID)
+        if (go.parent?.InstanceID == InstanceID)
             return true;
 
         foreach (var child in children)

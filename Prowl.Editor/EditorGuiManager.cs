@@ -18,7 +18,7 @@ public static class EditorGuiManager
 {
     public static System.Numerics.Vector4 SelectedColor => new System.Numerics.Vector4(0.06f, 0.53f, 0.98f, 1.00f);
 
-    public static Runtime.GUI.Gui Gui;
+    public static Gui Gui;
     public static DockContainer Container;
     public static EditorWindow DraggingWindow;
     public static DockNode DragSplitter;

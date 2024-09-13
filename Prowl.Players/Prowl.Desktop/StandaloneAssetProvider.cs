@@ -17,7 +17,7 @@ public class StandaloneAssetProvider : IAssetProvider
             assetBundles.Add(new AssetBundle(firstPackage.OpenRead(), ZipArchiveMode.Read));
             firstPackage = new FileInfo(Path.Combine(Program.Data.FullName, $"Data{packageIndex++}.prowl"));
         }
-        this.packages = assetBundles.ToArray();
+        packages = assetBundles.ToArray();
     }
 
     readonly Dictionary<Guid, SerializedAsset> _loaded = [];

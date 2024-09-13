@@ -104,7 +104,7 @@ public abstract class MonoBehaviour : EngineObject
 #warning "Need to apply this to Component Deletion in Inspector, to make sure not to delete dependant Components"
         if (_go.IsComponentRequired(this, out Type dependentType))
         {
-            Debug.LogError("Can't remove " + this.GetType().Name + " because " + dependentType.Name + " depends on it");
+            Debug.LogError("Can't remove " + GetType().Name + " because " + dependentType.Name + " depends on it");
             return false;
         }
         return true;

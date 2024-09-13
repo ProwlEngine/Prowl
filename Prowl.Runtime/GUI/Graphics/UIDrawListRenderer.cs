@@ -105,7 +105,7 @@ namespace Prowl.Runtime.GUI.Graphics
                 new ResourceLayoutElementDescription("MainTexture", ResourceKind.TextureReadOnly, ShaderStages.Fragment)));
             s_textureLayout.Name = "UI Texture Layout";
 
-            Veldrid.GraphicsPipelineDescription pd = new Veldrid.GraphicsPipelineDescription(
+            GraphicsPipelineDescription pd = new GraphicsPipelineDescription(
                 BlendStateDescription.SingleAlphaBlend,
 
                 new DepthStencilStateDescription(false, false, ComparisonKind.Always),

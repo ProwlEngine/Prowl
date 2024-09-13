@@ -69,7 +69,7 @@ public class TagLayerManager : ScriptableSingleton<TagLayerManager>
     public static string GetLayer(byte index)
     {
         if (index < 0 || index >= Instance.layers.Length)
-            throw new System.ArgumentOutOfRangeException(nameof(index), index, "Layer index is out of range.");
+            throw new ArgumentOutOfRangeException(nameof(index), index, "Layer index is out of range.");
         return Instance.layers[index];
     }
 

@@ -120,7 +120,7 @@ public class NavMeshAgent : MonoBehaviour
         {
             // calculate position
             Vector3 pos = surface.Transform.TransformPoint(new(InternalAgent.npos.X, InternalAgent.npos.Y, InternalAgent.npos.Z));
-            this.Transform.position = pos;
+            Transform.position = pos;
         }
 
     }

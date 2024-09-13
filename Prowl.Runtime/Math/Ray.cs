@@ -50,7 +50,7 @@ namespace Prowl.Runtime
 
         public Ray(Vector3 position, Vector3 direction)
         {
-            this.origin = position;
+            origin = position;
             this.direction = direction;
         }
 
@@ -61,13 +61,13 @@ namespace Prowl.Runtime
 
         public override bool Equals(object? obj)
         {
-            return (obj is Ray ray) ? this.Equals(ray) : false;
+            return (obj is Ray ray) ? Equals(ray) : false;
         }
 
 
         public bool Equals(Ray other)
         {
-            return this.origin.Equals(other.origin) && this.direction.Equals(other.direction);
+            return origin.Equals(other.origin) && direction.Equals(other.direction);
         }
 
 

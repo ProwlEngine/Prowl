@@ -113,7 +113,7 @@ namespace Prowl.Runtime
         /// </summary>
         public static SerializedProperty Merge(List<SerializedProperty> allTags)
         {
-            SerializedProperty result = SerializedProperty.NewCompound();
+            SerializedProperty result = NewCompound();
             if (allTags.Count == 0) return result;
 
             var referenceTag = allTags[0];
@@ -215,7 +215,7 @@ namespace Prowl.Runtime
                 throw new InvalidOperationException("Cannot get the difference from a non-compound tag");
 
 
-            SerializedProperty result = SerializedProperty.NewCompound();
+            SerializedProperty result = NewCompound();
 
             foreach (var kvp in Tags)
             {

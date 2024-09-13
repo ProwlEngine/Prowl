@@ -140,7 +140,7 @@ namespace Prowl.Runtime
 
         bool TryGetShape(out TypedIndex index, out Vector3 centerOfMass, out BodyInertia inertia)
         {
-            List<Collider> colliders = this.GetComponentsInChildren<Collider>().ToList();
+            List<Collider> colliders = GetComponentsInChildren<Collider>().ToList();
 
             if (colliders.Count == 0)
             {
@@ -163,7 +163,7 @@ namespace Prowl.Runtime
 
                     Vector3 localTranslation = Vector3.zero;
                     Quaternion localRotation = Quaternion.identity;
-                    if (collider.Transform != this.Transform)
+                    if (collider.Transform != Transform)
                     {
                         localTranslation = collider.Transform.localPosition;
                         localRotation = collider.Transform.localRotation;

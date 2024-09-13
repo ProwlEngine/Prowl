@@ -55,7 +55,7 @@ namespace Prowl.Runtime
 
         public ShaderUniform[] Uniforms => shader.Uniforms;
 
-        private Veldrid.GraphicsPipelineDescription description;
+        private GraphicsPipelineDescription description;
 
         private static readonly int pipelineCount = 20; // 20 possible combinations (5 topologies, 2 fill modes, 2 scissor modes)
         private readonly Pipeline[] pipelines;
@@ -80,14 +80,14 @@ namespace Prowl.Runtime
 
         public ShaderPipeline(ShaderPipelineDescription description)
         {
-            this.shader = description.variant;
+            shader = description.variant;
 
             ShaderDescription[] shaderDescriptions = shader.GetProgramsForBackend();
 
             // Create shader set description
             Veldrid.Shader[] shaders = new Veldrid.Shader[shaderDescriptions.Length];
 
-            this.semanticLookup = new();
+            semanticLookup = new();
 
             for (int shaderIndex = 0; shaderIndex < shaders.Length; shaderIndex++)
                 shaders[shaderIndex] = Graphics.Factory.CreateShader(shaderDescriptions[shaderIndex]);
@@ -105,10 +105,10 @@ namespace Prowl.Runtime
                 semanticLookup[input.semantic] = (uint)inputIndex;
             }
 
-            this.shaderSet = new ShaderSetDescription(vertexLayouts, shaders);
+            shaderSet = new ShaderSetDescription(vertexLayouts, shaders);
 
             // Create resource layout and uniform lookups
-            this.bufferLookup = new();
+            bufferLookup = new();
 
             ResourceLayoutDescription layoutDescription = new ResourceLayoutDescription(
                 new ResourceLayoutElementDescription[Uniforms.Length]);
@@ -128,9 +128,9 @@ namespace Prowl.Runtime
                 bufferCount++;
             }
 
-            this.resourceLayout = Graphics.Factory.CreateResourceLayout(layoutDescription);
+            resourceLayout = Graphics.Factory.CreateResourceLayout(layoutDescription);
 
-            this.pipelines = new Pipeline[pipelineCount];
+            pipelines = new Pipeline[pipelineCount];
 
             RasterizerStateDescription rasterizerState = new(
                 description.pass.CullMode,
