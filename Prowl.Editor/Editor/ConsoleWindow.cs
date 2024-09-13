@@ -11,7 +11,10 @@ using Prowl.Editor.Assets;
 
 namespace Prowl.Editor
 {
-    public record LogMessage(string message, DebugStackTrace? trace, LogSeverity severity);
+    public record class LogMessage(string message, DebugStackTrace? trace, LogSeverity severity)
+    {
+        public int DuplicateCount;
+    }
 
     public class ConsoleWindow : EditorWindow
     {
@@ -44,6 +47,29 @@ namespace Prowl.Editor
 
         private void OnLog(string message, DebugStackTrace? stackTrace, LogSeverity logSeverity)
         {
+            if (_logMessages.Count > 0)
+            {
+                LogMessage prevMessage = _logMessages[^1];
+
+                if (prevMessage.severity == logSeverity && prevMessage.message == message)
+                {
+                    if (prevMessage.trace.stackFrames.Length == stackTrace.stackFrames.Length)
+                    {
+                        if (stackTrace.stackFrames.Length > 0)
+                        {
+                            if (prevMessage.trace.stackFrames[0] == stackTrace.stackFrames[0])
+                            {
+                                prevMessage.DuplicateCount++;
+                                return;
+                            }
+                        }
+
+                        prevMessage.DuplicateCount++;
+                        return;
+                    }
+                }
+            }
+
             _logMessages.Add(new LogMessage(message, stackTrace, logSeverity));
 
             if (_logMessages.Count > MaxLogs)
@@ -106,10 +132,10 @@ namespace Prowl.Editor
 
             using (gui.Node("LogContent").ExpandHeight().ExpandWidth().Layout(LayoutType.Row).ScaleChildren().Padding(0, 5, 5, 5).Enter())
             {
+                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
+
                 using (gui.Node("List").ExpandHeight().Layout(LayoutType.Column).Scroll(true, false).Clip().Enter())
                 {
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
-
                     double viewHeight = gui.CurrentNode.LayoutData.Rect.height;
 
                     int messageBottom = Math.Max(0, (int)Math.Floor(gui.CurrentNode.LayoutData.VScroll / MessageHeight));
@@ -128,7 +154,12 @@ namespace Prowl.Editor
 
                 using (gui.Node("Selected").ExpandHeight().Layout(LayoutType.Column).Spacing(5).Scroll().Clip().Enter())
                 {
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
+                    Rect rect = gui.CurrentNode.LayoutData.Rect;
+
+                    Vector2 top = new(rect.x, rect.y);
+                    Vector2 bottom = new(rect.x, rect.y + rect.height);
+
+                    gui.Draw2D.DrawLine(top, bottom, EditorStylePrefs.Instance.WindowBGOne, 3);
 
                     GetSeverityStyles(_selectedMessage.severity, out string icon, out Color color);
                     string selMsg = icon + " " + _selectedMessage.message;
@@ -137,16 +168,16 @@ namespace Prowl.Editor
 
                     using (gui.Node("Header").Width(msgSize.x).Height(20).Enter())
                     {
-                        Rect rect = gui.CurrentNode.LayoutData.Rect;
+                        Rect headerRect = gui.CurrentNode.LayoutData.Rect;
 
-                        Rect textRect = rect;
+                        Rect textRect = headerRect;
                         textRect.y += 5;
                         textRect.x += 5;
                         textRect.height -= 5;
                         textRect.width -= 5;
 
                         Vector2 textPos = textRect.Position;
-                        textPos.y += (rect.height / 2) - 9;
+                        textPos.y += (headerRect.height / 2) - 9;
 
                         gui.Draw2D.DrawText(Font.DefaultFont, selMsg, 20, textPos, color, textRect.width, textRect);
                     }
@@ -172,8 +203,8 @@ namespace Prowl.Editor
                                         OpenStackFrame(frame);
                                 }
 
-                                Rect rect = gui.CurrentNode.LayoutData.Rect;
-                                gui.Draw2D.DrawText(Font.DefaultFont, frameText, 19, rect.Position, col, 0, rect);
+                                Rect frameRect = gui.CurrentNode.LayoutData.Rect;
+                                gui.Draw2D.DrawText(Font.DefaultFont, frameText, 19, frameRect.Position, col, 0, frameRect);
                             }
                         }
                     }
@@ -222,7 +253,7 @@ namespace Prowl.Editor
                 else if (interact.IsHovered())
                     bgColor = EditorStylePrefs.Instance.Hovering;
                 else if (index % 2 == 1)
-                    bgColor = EditorStylePrefs.Instance.WindowBGOne * 0.7f;
+                    bgColor = EditorStylePrefs.Instance.WindowBGOne * 0.9f;
 
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, bgColor, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
@@ -244,6 +275,20 @@ namespace Prowl.Editor
                 mainRect.height = 22;
 
                 gui.Draw2D.DrawText(Font.DefaultFont, icon + " " + message.message, 20, textPos, color, 0, mainRect);
+
+                if (message.DuplicateCount > 0)
+                {
+                    using (gui.Node("DuplicateCounter", index).Scale(35, 15).Top((MessageHeight / 2) - 7.5).Enter())
+                    {
+                        gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 10));
+
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, Color.white * 0.6f, 8);
+
+                        string counter = message.DuplicateCount > 1000 ? "999+" : (message.DuplicateCount + 1).ToString();
+
+                        gui.Draw2D.DrawText(counter, 20, gui.CurrentNode.LayoutData.Rect);
+                    }
+                }
 
                 if (hasTrace)
                 {
