@@ -5,9 +5,7 @@ name: Build
 
 on:
   push:
-    branches: [ "main" ]
   pull_request:
-    branches: [ "main" ]
 
 jobs:
   build:
@@ -15,14 +13,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v3
-      with:
-        dotnet-version: 8.0.x
-        
-    - name: Restore dependencies
-      run: dotnet restore
-      
-    - name: Build
-      run: dotnet build --no-restore
+      # Clone repo and submodules
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      # Install .NET
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.x
+
+      # For caching purposes, restore dependencies in a dedicated step
+      - name: Restore dependencies
+        run: dotnet restore
+
+      # Build
+      - name: Build
+        run: dotnet build --no-restore
