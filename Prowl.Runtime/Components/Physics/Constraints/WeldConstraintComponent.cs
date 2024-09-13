@@ -5,7 +5,7 @@ using BepuPhysics.Constraints;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{Prowl.Icons.FontAwesome6.HillRockslide}  Physics/{Prowl.Icons.FontAwesome6.Joint}  Constraints/{Prowl.Icons.FontAwesome6.LocationPin}  Weld Constraint")]
+[AddComponentMenu($"{Icons.FontAwesome6.HillRockslide}  Physics/{Icons.FontAwesome6.Joint}  Constraints/{Icons.FontAwesome6.LocationPin}  Weld Constraint")]
 public sealed class WeldConstraintComponent : TwoBodyConstraintComponent<Weld>
 {
     [SerializeField, HideInInspector] private Vector3 _localOffset;

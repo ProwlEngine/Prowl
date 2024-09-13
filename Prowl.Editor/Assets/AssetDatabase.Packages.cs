@@ -99,7 +99,7 @@ namespace Prowl.Editor.Assets
                 count++;
                 if (count % 10 == 0 || count >= maxCount - 5)
                 {
-                    float percentComplete = ((float)count / (float)maxCount) * 100f;
+                    float percentComplete = (count / (float)maxCount) * 100f;
                     Debug.Log($"Exporting Assets To Stream: {count}/{maxCount} - {percentComplete}%");
                 }
             }
@@ -188,7 +188,7 @@ namespace Prowl.Editor.Assets
                     string[] nodes = line.Split('=');
                     if (nodes.Length != 2)
                     {
-                        Runtime.Debug.LogError($"Invalid Package: {line}");
+                        Debug.LogError($"Invalid Package: {line}");
                         continue;
                     }
 
@@ -199,14 +199,14 @@ namespace Prowl.Editor.Assets
             // Validate Packages
             foreach (var pair in DesiredPackages)
             {
-                var dependency = (await AssetDatabase.GetPackageMetadata(pair.Key, Project.Active.PackagesDirectory.FullName, PackageManagerPreferences.Instance.IncludePrerelease))
+                var dependency = (await GetPackageMetadata(pair.Key, Project.Active.PackagesDirectory.FullName, PackageManagerPreferences.Instance.IncludePrerelease))
                     .Where(x => x.Identity.Version.ToString() == pair.Value).FirstOrDefault();
                 if (dependency == null)
                 {
                     // The package is not installed, Lets try to install it
                     try
                     {
-                        await AssetDatabase.InstallPackage(pair.Key, pair.Value);
+                        await InstallPackage(pair.Key, pair.Value);
                     }
                     catch (Exception ex)
                     {

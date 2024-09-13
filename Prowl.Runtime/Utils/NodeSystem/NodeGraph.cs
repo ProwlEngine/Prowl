@@ -41,17 +41,17 @@ namespace Prowl.Runtime.NodeSystem
 
         /// <summary> All nodes in the graph. <para/>
         /// See: <see cref="AddNode{T}"/> </summary>
-        public List<Node> nodes = new List<Node>();
+        public List<Node> nodes = [];
 
-        public virtual (string, Type)[] NodeTypes { get; } = Array.Empty<(string, Type)>();
-        public virtual (string, Type)[] NodeReflectionTypes { get; } = Array.Empty<(string, Type)>();
+        public virtual (string, Type)[] NodeTypes { get; } = [];
+        public virtual (string, Type)[] NodeReflectionTypes { get; } = [];
         public abstract string[] NodeCategories { get; }
 
         public List<GraphParameter> parameters = [];
 
         public void Validate()
         {
-            var attrib = this.GetType().GetCustomAttribute<RequireNodeAttribute>(true);
+            var attrib = GetType().GetCustomAttribute<RequireNodeAttribute>(true);
             if (attrib != null)
                 foreach (Type type in attrib.types)
                     if (!nodes.Where(n => n.GetType() == type).Any())
@@ -121,7 +121,7 @@ namespace Prowl.Runtime.NodeSystem
         public virtual void RemoveNode(Node node)
         {
             // check if we have a RequireNode attribute
-            var attrib = this.GetType().GetCustomAttribute<RequireNodeAttribute>(true);
+            var attrib = GetType().GetCustomAttribute<RequireNodeAttribute>(true);
             if (attrib != null)
             {
                 if (attrib.Requires(node.GetType()))

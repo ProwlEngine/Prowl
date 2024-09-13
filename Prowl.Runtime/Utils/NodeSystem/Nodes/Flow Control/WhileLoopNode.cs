@@ -17,7 +17,7 @@ namespace Prowl.Runtime.NodeSystem
         public override void Execute(NodePort port)
         {
             int i = 0;
-            while (GetInputValue<bool>("Condition", Condition))
+            while (GetInputValue("Condition", Condition))
             {
                 ExecuteNext();
                 i++;

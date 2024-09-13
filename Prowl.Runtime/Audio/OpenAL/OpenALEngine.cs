@@ -7,7 +7,7 @@ using Silk.NET.OpenAL;
 
 namespace Prowl.Runtime.Audio.OpenAL
 {
-    public class OpenALEngine : AudioEngine, System.IDisposable
+    public class OpenALEngine : AudioEngine, IDisposable
     {
         public static ALContext alContext { get; private set; }
         public static AL al { get; private set; }

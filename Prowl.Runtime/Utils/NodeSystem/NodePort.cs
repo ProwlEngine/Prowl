@@ -138,7 +138,7 @@ namespace Prowl.Runtime.NodeSystem
         public NodePort(string fieldName, Type type, IO direction, Node.ConnectionType connectionType, Node.TypeConstraint typeConstraint, Node node, bool onHeader)
         {
             _fieldName = fieldName;
-            this.ValueType = type;
+            ValueType = type;
             _direction = direction;
             _node = node;
             _dynamic = true;

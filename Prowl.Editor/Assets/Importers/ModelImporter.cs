@@ -21,21 +21,21 @@ namespace Prowl.Editor.Assets
     [Importer("ModelIcon.png", typeof(GameObject), ".obj", ".blend", ".dae", ".fbx", ".gltf", ".ply", ".pmx", ".stl")]
     public class ModelImporter : ScriptedImporter
     {
-        public static readonly string[] Supported = { ".obj", ".blend", ".dae", ".fbx", ".gltf", ".ply", ".pmx", ".stl" };
+        public static readonly string[] Supported = [".obj", ".blend", ".dae", ".fbx", ".gltf", ".ply", ".pmx", ".stl"];
 
-        public bool GenerateColliders = false;
+        public bool GenerateColliders;
         public bool GenerateNormals = true;
-        public bool GenerateSmoothNormals = false;
+        public bool GenerateSmoothNormals;
         public bool CalculateTangentSpace = true;
         public bool MakeLeftHanded = true;
-        public bool FlipUVs = false;
-        public bool CullEmpty = false;
-        public bool OptimizeGraph = false;
-        public bool OptimizeMeshes = false;
-        public bool FlipWindingOrder = false;
-        public bool WeldVertices = false;
-        public bool InvertNormals = false;
-        public bool GlobalScale = false;
+        public bool FlipUVs;
+        public bool CullEmpty;
+        public bool OptimizeGraph;
+        public bool OptimizeMeshes;
+        public bool FlipWindingOrder;
+        public bool WeldVertices;
+        public bool InvertNormals;
+        public bool GlobalScale;
 
         public float UnitScale = 1.0f;
 
@@ -133,7 +133,7 @@ namespace Prowl.Editor.Assets
                 //    }
                 //}
 
-                List<AssetRef<Material>> mats = new();
+                List<AssetRef<Material>> mats = [];
                 if (scene.HasMaterials)
                     LoadMaterials(ctx, scene, parentDir, mats);
 
@@ -142,7 +142,7 @@ namespace Prowl.Editor.Assets
                 if (scene.HasAnimations)
                     anims = LoadAnimations(ctx, scene, scale);
 
-                List<MeshMaterialBinding> meshMats = new List<MeshMaterialBinding>();
+                List<MeshMaterialBinding> meshMats = [];
                 if (scene.HasMeshes)
                     LoadMeshes(ctx, assetPath, scene, scale, mats, meshMats);
 
@@ -484,14 +484,14 @@ namespace Prowl.Editor.Assets
 
                 foreach (var channel in anim.NodeAnimationChannels)
                 {
-                    Assimp.Node boneNode = scene.RootNode.FindNode(channel.NodeName);
+                    Node boneNode = scene.RootNode.FindNode(channel.NodeName);
 
                     var animBone = new AnimBone();
                     animBone.BoneName = boneNode.Name;
 
                     // construct full path from RootNode to this bone
                     // RootNode -> Parent -> Parent -> ... -> Parent -> Bone
-                    Assimp.Node target = boneNode;
+                    Node target = boneNode;
                     string path = target.Name;
                     //while (target.Parent != null)
                     //{
@@ -634,10 +634,10 @@ namespace Prowl.Editor.Assets
 
         class MeshMaterialBinding
         {
-            private string meshName;
-            private AssetRef<Mesh> mesh;
-            private Assimp.Mesh aMesh;
-            private AssetRef<Material> material;
+            private readonly string meshName;
+            private readonly AssetRef<Mesh> mesh;
+            private readonly Assimp.Mesh aMesh;
+            private readonly AssetRef<Material> material;
 
             private MeshMaterialBinding() { }
             public MeshMaterialBinding(string meshName, Assimp.Mesh aMesh, AssetRef<Mesh> mesh, AssetRef<Material> material)
@@ -659,10 +659,10 @@ namespace Prowl.Editor.Assets
     public class ModelEditor : ScriptedEditor
     {
 
-        int selectedAnim = 0;
-        int selectedAnimBone = 0;
+        int selectedAnim;
+        int selectedAnimBone;
 
-        int selectedTab = 0;
+        int selectedTab;
 
         public override void OnInspectorGUI()
         {
@@ -671,7 +671,7 @@ namespace Prowl.Editor.Assets
             var importer = (ModelImporter)(target as MetaFile).importer;
             var serialized = AssetDatabase.LoadAsset((target as MetaFile).AssetPath);
 
-            gui.CurrentNode.Layout(Runtime.GUI.LayoutType.Column);
+            gui.CurrentNode.Layout(LayoutType.Column);
             gui.CurrentNode.ScaleChildren();
 
             using (gui.Node("Tabs").Width(Size.Percentage(1f)).MaxHeight(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())

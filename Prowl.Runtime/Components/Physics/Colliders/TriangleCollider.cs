@@ -53,9 +53,9 @@ public sealed class TriangleCollider : Collider
 
     internal override void AddToCompoundBuilder(BufferPool pool, ref CompoundBuilder builder, NRigidPose localPose)
     {
-        var localA = A * this.Transform.lossyScale;
-        var localB = B * this.Transform.lossyScale;
-        var localC = C * this.Transform.lossyScale;
+        var localA = A * Transform.lossyScale;
+        var localB = B * Transform.lossyScale;
+        var localC = C * Transform.lossyScale;
         builder.Add(new Triangle(localA, localB, localC), localPose, Mass);
     }
 }

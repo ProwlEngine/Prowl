@@ -31,9 +31,9 @@ namespace Prowl.Runtime.RenderPipelines
 
     public abstract class RenderPipeline : EngineObject
     {
-        private static Dictionary<Material, List<IRenderable>> s_batchedRenderables = [];
+        private static readonly Dictionary<Material, List<IRenderable>> s_batchedRenderables = [];
 
-        private static List<IRenderableLight> s_lights = [];
+        private static readonly List<IRenderableLight> s_lights = [];
 
 
         public static void AddRenderable(IRenderable renderable)

@@ -6,7 +6,7 @@ using BepuPhysics.Constraints;
 namespace Prowl.Runtime;
 
 
-[AddComponentMenu($"{Prowl.Icons.FontAwesome6.HillRockslide}  Physics/{Prowl.Icons.FontAwesome6.Joint}  Constraints/{Prowl.Icons.FontAwesome6.ArrowsToDot}  Center Distance Limit")]
+[AddComponentMenu($"{Icons.FontAwesome6.HillRockslide}  Physics/{Icons.FontAwesome6.Joint}  Constraints/{Icons.FontAwesome6.ArrowsToDot}  Center Distance Limit")]
 public sealed class CenterDistanceLimitConstraintComponent : TwoBodyConstraintComponent<CenterDistanceLimit>
 {
     [SerializeField, HideInInspector] private float _minimumDistance = 0;

@@ -25,9 +25,9 @@ public static class Application
     public static event Action Render;
     public static event Action Quitting;
 
-    private static TimeData AppTime = new();
+    private static readonly TimeData AppTime = new();
 
-    private static GraphicsBackend[] preferredWindowsBackends = // Covers Windows/UWP
+    private static readonly GraphicsBackend[] preferredWindowsBackends = // Covers Windows/UWP
     [
         GraphicsBackend.Vulkan,
         GraphicsBackend.OpenGL,
@@ -35,14 +35,14 @@ public static class Application
         GraphicsBackend.OpenGLES,
     ];
 
-    private static GraphicsBackend[] preferredUnixBackends = // Cover Unix-like (Linux, FreeBSD, OpenBSD)
+    private static readonly GraphicsBackend[] preferredUnixBackends = // Cover Unix-like (Linux, FreeBSD, OpenBSD)
     [
         GraphicsBackend.Vulkan,
         GraphicsBackend.OpenGL,
         GraphicsBackend.OpenGLES,
     ];
 
-    private static GraphicsBackend[] preferredMacBackends = // Covers MacOS/Apple
+    private static readonly GraphicsBackend[] preferredMacBackends = // Covers MacOS/Apple
     [
         GraphicsBackend.Metal,
         GraphicsBackend.OpenGL,

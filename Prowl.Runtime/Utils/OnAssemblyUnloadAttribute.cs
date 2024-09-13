@@ -15,7 +15,7 @@ namespace Prowl.Runtime.Utils
         {
         }
 
-        private static List<MethodInfo> methodInfos = [];
+        private static readonly List<MethodInfo> methodInfos = [];
 
         public static void Invoke()
         {
@@ -51,8 +51,8 @@ namespace Prowl.Runtime.Utils
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
     public class OnAssemblyLoadAttribute(int order = 0) : Attribute
     {
-        int order = order;
-        private static List<MethodInfo> methodInfos = [];
+        readonly int order = order;
+        private static readonly List<MethodInfo> methodInfos = [];
 
         public static void Invoke()
         {

@@ -42,7 +42,7 @@ namespace Prowl.Runtime
         {
             get
             {
-                return Rect.CreateFromMinMax(
+                return CreateFromMinMax(
                     new Vector2(double.MaxValue, double.MaxValue),
                     new Vector2(double.MinValue, double.MinValue));
             }

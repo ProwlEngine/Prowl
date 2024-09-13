@@ -62,7 +62,7 @@ namespace Prowl.Runtime.NodeSystem
                 return null;
 
             MethodInfo mi = aPort.Connection.ValueType.GetMethod(MethodName, BindingFlags.Static | BindingFlags.Public);
-            return mi.Invoke(null, new object[] { GetInputValue("A", A), GetInputValue<object>("B") });
+            return mi.Invoke(null, [GetInputValue("A", A), GetInputValue<object>("B")]);
         }
     }
 

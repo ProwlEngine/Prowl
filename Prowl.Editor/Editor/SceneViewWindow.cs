@@ -16,21 +16,21 @@ public class SceneViewWindow : EditorWindow
     public static Camera LastFocusedCamera;
     private static bool LastFocusedCameraChanged;
 
-    Camera Cam;
+    readonly Camera Cam;
     Material gridMat;
     Mesh gridMesh;
     RenderTexture RenderTarget;
     Vector2 WindowCenter;
     Vector2 mouseUV;
-    int frames = 0;
-    double fpsTimer = 0;
-    double fps = 0;
+    int frames;
+    double fpsTimer;
+    double fps;
     double moveSpeed = 1;
     bool hasStarted = false;
     double camX, camY;
 
-    TransformGizmo gizmo;
-    ViewManipulatorGizmo viewManipulator;
+    readonly TransformGizmo gizmo;
+    readonly ViewManipulatorGizmo viewManipulator;
 
     public enum GridType { None, XZ, XY, YZ }
 
@@ -406,7 +406,7 @@ public class SceneViewWindow : EditorWindow
 
     private void HandleDragnDrop()
     {
-        if (DragnDrop.Drop<GameObject>(out GameObject? original))
+        if (DragnDrop.Drop(out GameObject? original))
         {
             if (original.AssetID == Guid.Empty) return;
 
@@ -422,7 +422,7 @@ public class SceneViewWindow : EditorWindow
             }
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
-        else if (DragnDrop.Drop<Prefab>(out Prefab? prefab))
+        else if (DragnDrop.Drop(out Prefab? prefab))
         {
             GameObject go = prefab.Instantiate();
             GameObject t = go;
@@ -438,11 +438,11 @@ public class SceneViewWindow : EditorWindow
 
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
-        else if (DragnDrop.Drop<Scene>(out Scene? scene))
+        else if (DragnDrop.Drop(out Scene? scene))
         {
             SceneManager.LoadScene(scene);
         }
-        else if (DragnDrop.Drop<Material>(out Material? material))
+        else if (DragnDrop.Drop(out Material? material))
         {
             SceneRaycaster.MeshHitInfo hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
 

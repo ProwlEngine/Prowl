@@ -6,7 +6,7 @@ using BepuPhysics.Constraints;
 namespace Prowl.Runtime;
 
 
-[AddComponentMenu($"{Prowl.Icons.FontAwesome6.HillRockslide}  Physics/{Prowl.Icons.FontAwesome6.Joint}  Constraints/{Prowl.Icons.FontAwesome6.LinesLeaning}  Linear Axis Limit Constraint")]
+[AddComponentMenu($"{Icons.FontAwesome6.HillRockslide}  Physics/{Icons.FontAwesome6.Joint}  Constraints/{Icons.FontAwesome6.LinesLeaning}  Linear Axis Limit Constraint")]
 public sealed class LinearAxisLimitConstraintComponent : TwoBodyConstraintComponent<LinearAxisLimit>
 {
     [SerializeField, HideInInspector] private Vector3 _localOffsetA;

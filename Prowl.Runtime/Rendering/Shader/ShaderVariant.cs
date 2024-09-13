@@ -11,7 +11,7 @@ namespace Prowl.Runtime
     public sealed class ShaderVariant : ISerializationCallbackReceiver
     {
         [SerializeField, HideInInspector]
-        private KeywordState variantKeywords;
+        private readonly KeywordState variantKeywords;
 
 
         [HideInInspector]
@@ -47,7 +47,7 @@ namespace Prowl.Runtime
 
         public ShaderVariant(KeywordState keywords)
         {
-            this.variantKeywords = keywords;
+            variantKeywords = keywords;
         }
 
         public ShaderDescription[] GetProgramsForBackend()

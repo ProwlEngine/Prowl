@@ -372,7 +372,7 @@ namespace Prowl.Editor
                         break;
 
                     case GuiAttribType.Separator:
-                        EditorGUI.Separator(1, id.GetHashCode());
+                        Separator(1, id.GetHashCode());
                         break;
 
                 }

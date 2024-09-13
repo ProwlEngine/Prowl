@@ -61,8 +61,8 @@ namespace Prowl.Editor
 
         private FileDialogSortBy _sortBy = FileDialogSortBy.None;
 
-        private bool _sortDown = false;
-        private Stack<DirectoryInfo> _backStack = new();
+        private bool _sortDown;
+        private readonly Stack<DirectoryInfo> _backStack = new();
 
         protected override bool Center { get; } = true;
         protected override double Width { get; } = 512 + (512 / 2);
@@ -73,7 +73,7 @@ namespace Prowl.Editor
         protected override bool TitleBar => false;
 
         private string _path = "";
-        private bool _pastFirstFrame = false;
+        private bool _pastFirstFrame;
 
 
         public FileDialog(FileDialogContext dialogInfo) : base()

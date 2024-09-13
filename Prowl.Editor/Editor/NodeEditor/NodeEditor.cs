@@ -65,7 +65,7 @@ namespace Prowl.Editor
         protected NodeGraph nodegraph;
         protected SelectHandler<WeakReference> SelectHandler;
 
-        public void SetGraph(NodeGraph graph) => this.nodegraph = graph;
+        public void SetGraph(NodeGraph graph) => nodegraph = graph;
         public void SetEditor(NodeEditor editor) => this.editor = editor;
         public void SetSelectHandler(SelectHandler<WeakReference> handler) => SelectHandler = handler;
 
@@ -147,7 +147,7 @@ namespace Prowl.Editor
                     using (g.Node("Fields").ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Padding(5).Enter())
                     {
                         // Draw Fields
-                        List<MemberInfo> members = new();
+                        List<MemberInfo> members = [];
                         foreach (var field in node.GetSerializableFields())
                         {
                             if (field.GetCustomAttribute<InputAttribute>(true) != null) continue;
@@ -478,8 +478,8 @@ namespace Prowl.Editor
     [NodeEditor(typeof(CommentNode))]
     public class CommentNodeEditor : DefaultNodeEditor
     {
-        private bool isRenamingHeader = false;
-        private bool isRenamingDesc = false;
+        private bool isRenamingHeader;
+        private bool isRenamingDesc;
 
         public override bool DrawNode(int index, Gui g, Node node)
         {
@@ -562,27 +562,27 @@ namespace Prowl.Editor
         public bool IsDragging => draggingPort != null || dragSelectionStart != null;
         public bool IsDraggingPort => draggingPort != null;
 
-        private NodeGraph graph;
-        private NodeEditorInputHandler inputHandler;
-        private Gui gui;
+        private readonly NodeGraph graph;
+        private readonly NodeEditorInputHandler inputHandler;
+        private readonly Gui gui;
 
         private Vector2 topleft;
         private double zoom = 1.0f;
         private double targetzoom = 1.0f;
-        private bool hasChanged = false;
+        private bool hasChanged;
 
         private RenderTexture RenderTarget;
 
-        internal NodePort? draggingPort = null;
-        internal List<Vector2> reroutePoints = new();
+        internal NodePort? draggingPort;
+        internal List<Vector2> reroutePoints = [];
 
-        internal Vector2? dragSelectionStart = null;
+        internal Vector2? dragSelectionStart;
         internal Rect dragSelection;
 
         private string _searchText = string.Empty;
         private static NodeMenuItemInfo rootMenuItem;
 
-        private SelectHandler<WeakReference> SelectHandler = new((item) => !item.IsAlive, (a, b) => ReferenceEquals(a.Target, b.Target));
+        private readonly SelectHandler<WeakReference> SelectHandler = new((item) => !item.IsAlive, (a, b) => ReferenceEquals(a.Target, b.Target));
 
         private readonly Dictionary<int, ScriptedNodeEditor> customEditors = [];
 
@@ -750,7 +750,7 @@ namespace Prowl.Editor
         {
             int index = 0;
             var safeNodes = graph.nodes.ToArray();
-            List<int> unusedKeys = new(customEditors.Keys);
+            List<int> unusedKeys = [..customEditors.Keys];
             foreach (var node in safeNodes)
             {
                 var key = node.GetHashCode();
@@ -904,7 +904,7 @@ namespace Prowl.Editor
                                 draw++;
                                 if (draw >= 2) draw = -2;
                                 if (draw < 0) continue;
-                                if (draw == 0) bezierPrevious = CalculateBezierPoint(point_a, tangent_a, tangent_b, point_b, (j - 1f) / (float)division);
+                                if (draw == 0) bezierPrevious = CalculateBezierPoint(point_a, tangent_a, tangent_b, point_b, (j - 1f) / division);
                             }
                             Vector2 bezierNext = CalculateBezierPoint(point_a, tangent_a, tangent_b, point_b, j / (float)division);
                             gui.Draw2D.DrawLine(bezierPrevious, bezierNext, color, thickness);
@@ -1233,8 +1233,8 @@ namespace Prowl.Editor
         {
             public string Name;
             public Type Type;
-            public MethodInfo Method;
-            public List<NodeMenuItemInfo> Children = new();
+            public readonly MethodInfo Method;
+            public readonly List<NodeMenuItemInfo> Children = [];
 
             public NodeMenuItemInfo() { }
 

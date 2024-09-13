@@ -13,16 +13,15 @@ namespace Prowl.Runtime;
 public class TagLayerManager : ScriptableSingleton<TagLayerManager>
 {
     public List<string> tags =
-        new List<string>
-        {
-            "Untagged",
-            "Main Camera",
-            "Player",
-            "Editor Only",
-            "Re-spawn",
-            "Finish",
-            "Game Controller",
-        };
+    [
+        "Untagged",
+        "Main Camera",
+        "Player",
+        "Editor Only",
+        "Re-spawn",
+        "Finish",
+        "Game Controller"
+    ];
 
     public string[] layers =
         [
@@ -70,7 +69,7 @@ public class TagLayerManager : ScriptableSingleton<TagLayerManager>
     public static string GetLayer(byte index)
     {
         if (index < 0 || index >= Instance.layers.Length)
-            throw new System.ArgumentOutOfRangeException(nameof(index), index, "Layer index is out of range.");
+            throw new ArgumentOutOfRangeException(nameof(index), index, "Layer index is out of range.");
         return Instance.layers[index];
     }
 

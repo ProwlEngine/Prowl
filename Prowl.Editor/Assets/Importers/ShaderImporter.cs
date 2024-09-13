@@ -12,7 +12,7 @@ namespace Prowl.Editor.Assets
     {
         private static Shader s_internalError;
 
-        public static readonly string[] Supported = { ".shader" };
+        public static readonly string[] Supported = [".shader"];
 
         public override void Import(SerializedAsset ctx, FileInfo assetPath)
         {

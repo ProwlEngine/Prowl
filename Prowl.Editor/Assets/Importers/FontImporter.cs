@@ -12,7 +12,7 @@ namespace Prowl.Editor.Assets
     [Importer("FileIcon.png", typeof(Font), ".ttf")]
     public class FontImporter : ScriptedImporter
     {
-        public List<Font.CharacterRange> characterRanges = new() { Font.CharacterRange.BasicLatin };
+        public List<Font.CharacterRange> characterRanges = [Font.CharacterRange.BasicLatin];
         public float fontSize = 20;
         public int width = 1024;
         public int height = 1024;
@@ -28,7 +28,7 @@ namespace Prowl.Editor.Assets
     public class FontEditor : ScriptedEditor
     {
         static int start, end;
-        private int numberOfProperties = 0;
+        private readonly int numberOfProperties = 0;
         public void InputFloat(string name, ref float val)
         {
             double ItemSize = EditorStylePrefs.Instance.ItemSize;
@@ -71,7 +71,7 @@ namespace Prowl.Editor.Assets
             }
         }
 
-        public bool QuickButton(string label, LayoutNode popupHolder)
+        public bool QuickButton(string label, LayoutNode? popupHolder)
         {
             double ItemSize = EditorStylePrefs.Instance.ItemSize;
 

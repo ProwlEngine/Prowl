@@ -21,8 +21,8 @@ public static class GlobalSelectHandler
 /// <typeparam name="T">The Type you want to select, Must be of type 'Class'</typeparam>
 public class SelectHandler<T> where T : class
 {
-    bool selectedThisFrame = false;
-    List<T> selected = new();
+    bool selectedThisFrame;
+    readonly List<T> selected = new();
     SortedList<int, T> previousFrameSelectables;
     SortedList<int, T> selectables = new();
     int lastSelectedIndex = -1;
@@ -34,8 +34,8 @@ public class SelectHandler<T> where T : class
     public event Action<T>? OnSelectObject;
     public event Action<T>? OnDeselectObject;
 
-    private Func<T, bool> CheckIsDestroyed;
-    private Func<T, T, bool> Equals;
+    private readonly Func<T, bool> CheckIsDestroyed;
+    private readonly Func<T, T, bool> Equals;
 
     public SelectHandler(Func<T, bool> checkIsDestroyed, Func<T, T, bool> equals)
     {

@@ -17,7 +17,7 @@ public static class Program
     public static bool IsReloadingExternalAssemblies { get; private set; }
     public static void RegisterReloadOfExternalAssemblies() => IsReloadingExternalAssemblies = true;
 
-    private static bool CreatedDefaultWindows = false;
+    private static bool CreatedDefaultWindows;
     public static int Main(string[] args)
     {
         // set global Culture to invariant

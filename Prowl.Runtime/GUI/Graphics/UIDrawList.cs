@@ -73,12 +73,12 @@ namespace Prowl.Runtime.GUI.Graphics
         private uint _currentVertexIndex; // == _vertices.Count
         private int _vertexWritePos; // point within _vertices after each add command (to avoid using the ImVector<> operators too much)
         private int _indexWritePos; // point within _indices after each add command (to avoid using the ImVector<> operators too much)
-        private List<Vector4> _clipRectStack;
-        private List<Texture2D> _textureStack;
-        private List<Vector2> _buildingPath; // current path building
-        private int _currentChannel; // current channel number (0)
-        private int _activeChannels; // number of active channels (1+)
-        private List<UIDrawChannel> _channels; // draw channels for columns API (not resized down so _channelsCount may be smaller than _channels.Count)
+        private readonly List<Vector4> _clipRectStack;
+        private readonly List<Texture2D> _textureStack;
+        private readonly List<Vector2> _buildingPath;   // current path building
+        private int _currentChannel;                    // current channel number (0)
+        private int _activeChannels;                    // number of active channels (1+)
+        private readonly List<UIDrawChannel> _channels; // draw channels for columns API (not resized down so _channelsCount may be smaller than _channels.Count)
         private int _primitiveCount = -10000;
 
         private bool _antiAliasing;
@@ -104,7 +104,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void AntiAliasing(bool antiAliasing)
         {
-            this._antiAliasing = antiAliasing;
+            _antiAliasing = antiAliasing;
         }
 
 
@@ -374,7 +374,7 @@ namespace Prowl.Runtime.GUI.Graphics
         {
             Vector2 uv0 = _uv0 ?? new Vector2(0, 0);
             Vector2 uv1 = _uv1 ?? new Vector2(1, 1);
-            Color32 col = _col ?? (Color32)Color.white;
+            Color32 col = _col ?? Color.white;
 
             // FIXME-OPT: This is wasting draw calls.
             bool push_texture_id = _textureStack.Count == 0 || user_texture_id != GetCurrentTexture();
@@ -463,10 +463,10 @@ namespace Prowl.Runtime.GUI.Graphics
 
                         // Add indexes
 
-                        _indices[_indexWritePos++] = (uint)(idx2 + 0); _indices[_indexWritePos++] = (uint)(idx1 + 0); _indices[_indexWritePos++] = (uint)(idx1 + 2);
-                        _indices[_indexWritePos++] = (uint)(idx1 + 2); _indices[_indexWritePos++] = (uint)(idx2 + 2); _indices[_indexWritePos++] = (uint)(idx2 + 0);
-                        _indices[_indexWritePos++] = (uint)(idx2 + 1); _indices[_indexWritePos++] = (uint)(idx1 + 1); _indices[_indexWritePos++] = (uint)(idx1 + 0);
-                        _indices[_indexWritePos++] = (uint)(idx1 + 0); _indices[_indexWritePos++] = (uint)(idx2 + 0); _indices[_indexWritePos++] = (uint)(idx2 + 1);
+                        _indices[_indexWritePos++] = idx2 + 0; _indices[_indexWritePos++] = idx1 + 0; _indices[_indexWritePos++] = idx1 + 2;
+                        _indices[_indexWritePos++] = idx1 + 2; _indices[_indexWritePos++] = idx2 + 2; _indices[_indexWritePos++] = idx2 + 0;
+                        _indices[_indexWritePos++] = idx2 + 1; _indices[_indexWritePos++] = idx1 + 1; _indices[_indexWritePos++] = idx1 + 0;
+                        _indices[_indexWritePos++] = idx1 + 0; _indices[_indexWritePos++] = idx2 + 0; _indices[_indexWritePos++] = idx2 + 1;
                         //_IdxWritePtr += 12;
 
                         idx1 = idx2;
@@ -569,8 +569,8 @@ namespace Prowl.Runtime.GUI.Graphics
                     _vertices[_vertexWritePos++] = new UIVertex(new Vector3(p1.x - dy, p1.y + dx, _primitiveCount), uv, col);
                     //_VtxWritePtr += 4;
 
-                    _indices[_indexWritePos++] = (uint)_currentVertexIndex; _indices[_indexWritePos++] = (uint)(_currentVertexIndex + 1); _indices[_indexWritePos++] = (uint)(_currentVertexIndex + 2);
-                    _indices[_indexWritePos++] = (uint)_currentVertexIndex; _indices[_indexWritePos++] = (uint)(_currentVertexIndex + 2); _indices[_indexWritePos++] = (uint)(_currentVertexIndex + 3);
+                    _indices[_indexWritePos++] = _currentVertexIndex; _indices[_indexWritePos++] = _currentVertexIndex + 1; _indices[_indexWritePos++] = _currentVertexIndex + 2;
+                    _indices[_indexWritePos++] = _currentVertexIndex; _indices[_indexWritePos++] = _currentVertexIndex + 2; _indices[_indexWritePos++] = _currentVertexIndex + 3;
                     //_IdxWritePtr += 6;
                     _currentVertexIndex += 4;
                 }
@@ -602,7 +602,7 @@ namespace Prowl.Runtime.GUI.Graphics
                 uint vtx_outer_idx = _currentVertexIndex + 1;
                 for (int i = 2; i < points_count; i++)
                 {
-                    _indices[_indexWritePos++] = (uint)vtx_inner_idx;
+                    _indices[_indexWritePos++] = vtx_inner_idx;
                     _indices[_indexWritePos++] = (uint)(vtx_inner_idx + (i - 1 << 1));
                     _indices[_indexWritePos++] = (uint)(vtx_inner_idx + (i << 1));
                 }
@@ -660,7 +660,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
                 for (uint i = 2u; i < points_count; i++)
                 {
-                    _indices[_indexWritePos++] = (uint)_currentVertexIndex; _indices[_indexWritePos++] = (uint)(_currentVertexIndex + i - 1u); _indices[_indexWritePos++] = (uint)(_currentVertexIndex + i);
+                    _indices[_indexWritePos++] = _currentVertexIndex; _indices[_indexWritePos++] = _currentVertexIndex + i - 1u; _indices[_indexWritePos++] = _currentVertexIndex + i;
                 }
                 _currentVertexIndex += (uint)vtx_count;
             }
@@ -994,7 +994,7 @@ namespace Prowl.Runtime.GUI.Graphics
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void AddVerts(UIVertex a, UIVertex b, UIVertex c, UIVertex d)
         {
-            uint idx = (uint)_currentVertexIndex;
+            uint idx = _currentVertexIndex;
             _indices[_indexWritePos + 0] = idx; _indices[_indexWritePos + 1] = idx + 1; _indices[_indexWritePos + 2] = idx + 2;
             _indices[_indexWritePos + 3] = idx; _indices[_indexWritePos + 4] = idx + 2; _indices[_indexWritePos + 5] = idx + 3;
 

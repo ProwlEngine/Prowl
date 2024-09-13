@@ -17,10 +17,10 @@ namespace Prowl.Runtime
         public bool PlayAutomatically = true;
         public double Speed = 1.0;
 
-        private List<AnimationState> _states = new List<AnimationState>();
-        private Dictionary<string, AnimationState> _stateDictionary = new Dictionary<string, AnimationState>();
+        private readonly List<AnimationState> _states = new List<AnimationState>();
+        private readonly Dictionary<string, AnimationState> _stateDictionary = new Dictionary<string, AnimationState>();
 
-        private List<Transform> transforms = [];
+        private readonly List<Transform> transforms = [];
 
         public override void OnEnable()
         {
@@ -187,7 +187,7 @@ namespace Prowl.Runtime
             // Find all bone names used by the clip
             foreach (var bone in clip.Bones)
             {
-                var t = this.GameObject.Transform.DeepFind(bone.BoneName);
+                var t = GameObject.Transform.DeepFind(bone.BoneName);
                 if (t == null)
                     continue;
                 if (!transforms.Contains(t))

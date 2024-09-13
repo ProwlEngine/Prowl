@@ -67,9 +67,9 @@ namespace Prowl.Runtime
         /// <returns>The hash code.</returns>
         public override int GetHashCode()
         {
-            int hash = this.x.GetHashCode();
-            hash = HashCode.Combine(hash, this.y.GetHashCode());
-            hash = HashCode.Combine(hash, this.z.GetHashCode());
+            int hash = x.GetHashCode();
+            hash = HashCode.Combine(hash, y.GetHashCode());
+            hash = HashCode.Combine(hash, z.GetHashCode());
             return hash;
         }
 
@@ -93,7 +93,7 @@ namespace Prowl.Runtime
         /// <returns>True if the other Vector3Int is equal to this instance; False otherwise.</returns>
         public bool Equals(Vector3Int other)
         {
-            return this.x == other.x && this.y == other.y && this.z == other.z;
+            return x == other.x && y == other.y && z == other.z;
         }
 
 
@@ -128,13 +128,13 @@ namespace Prowl.Runtime
             StringBuilder sb = new StringBuilder();
             string separator = NumberFormatInfo.GetInstance(formatProvider).NumberGroupSeparator;
             sb.Append('<');
-            sb.Append(this.x.ToString(format, formatProvider));
+            sb.Append(x.ToString(format, formatProvider));
             sb.Append(separator);
             sb.Append(' ');
-            sb.Append(this.y.ToString(format, formatProvider));
+            sb.Append(y.ToString(format, formatProvider));
             sb.Append(separator);
             sb.Append(' ');
-            sb.Append(this.z.ToString(format, formatProvider));
+            sb.Append(z.ToString(format, formatProvider));
             sb.Append('>');
             return sb.ToString();
         }
@@ -161,7 +161,7 @@ namespace Prowl.Runtime
 
             double ls = dx * dx + dy * dy + dz * dz;
 
-            return (double)Math.Sqrt((double)ls);
+            return Math.Sqrt(ls);
         }
 
         /// <summary>

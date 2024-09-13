@@ -636,7 +636,7 @@ namespace Prowl.Runtime
                 if (fontInfo == null)
                     throw new Exception("Failed to init font.");
 
-                var scaleFactor = StbTrueType.stbtt_ScaleForPixelHeight(fontInfo, (float)fontsize);
+                var scaleFactor = StbTrueType.stbtt_ScaleForPixelHeight(fontInfo, fontsize);
 
                 int ascent, descent, lineGap;
                 StbTrueType.stbtt_GetFontVMetrics(fontInfo, &ascent, &descent, &lineGap);
@@ -649,7 +649,7 @@ namespace Prowl.Runtime
                     var cd = new StbTrueType.stbtt_packedchar[range.End - range.Start + 1];
                     fixed (StbTrueType.stbtt_packedchar* chardataPtr = cd)
                     {
-                        StbTrueType.stbtt_PackFontRange(_context, fontInfo.data, 0, (float)fontsize,
+                        StbTrueType.stbtt_PackFontRange(_context, fontInfo.data, 0, fontsize,
                             range.Start,
                             range.End - range.Start + 1,
                             chardataPtr);
@@ -726,7 +726,7 @@ namespace Prowl.Runtime
                 using (MemoryStream ms = new())
                 {
                     stream.CopyTo(ms);
-                    builder.Add(ms.ToArray(), 40, [Font.CharacterRange.BasicLatin]);
+                    builder.Add(ms.ToArray(), 40, [CharacterRange.BasicLatin]);
                 }
             }
             using (Stream stream = assembly.GetManifestResourceStream($"Prowl.Runtime.EmbeddedResources.{FontAwesome6.FontIconFileNameFAR}"))
@@ -734,7 +734,7 @@ namespace Prowl.Runtime
                 using (MemoryStream ms = new())
                 {
                     stream.CopyTo(ms);
-                    builder.Add(ms.ToArray(), 40 * 2.0f / 3.0f, [new Font.CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
+                    builder.Add(ms.ToArray(), 40 * 2.0f / 3.0f, [new CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
                 }
             }
             using (Stream stream = assembly.GetManifestResourceStream($"Prowl.Runtime.EmbeddedResources.{FontAwesome6.FontIconFileNameFAS}"))
@@ -742,7 +742,7 @@ namespace Prowl.Runtime
                 using (MemoryStream ms = new())
                 {
                     stream.CopyTo(ms);
-                    builder.Add(ms.ToArray(), 40 * 2.0f / 3.0f, [new Font.CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
+                    builder.Add(ms.ToArray(), 40 * 2.0f / 3.0f, [new CharacterRange(FontAwesome6.IconMin, FontAwesome6.IconMax)]);
                 }
             }
 

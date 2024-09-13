@@ -10,7 +10,7 @@ namespace Prowl.Runtime;
 
 public abstract class ConstraintComponentBase : MonoBehaviour
 {
-    [SerializeField, HideInInspector] private Rigidbody?[] _bodies;
+    [SerializeField, HideInInspector] private readonly Rigidbody?[] _bodies;
 
     public ReadOnlySpan<Rigidbody?> Bodies => _bodies;
 

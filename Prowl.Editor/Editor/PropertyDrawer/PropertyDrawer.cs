@@ -17,9 +17,9 @@ namespace Prowl.Editor.PropertyDrawers
     {
         public Type TargetType { get; private set; } = type;
 
-        private static Dictionary<Type, PropertyDrawer> knownDrawers = [];
+        private static readonly Dictionary<Type, PropertyDrawer> knownDrawers = [];
 
-        private static Dictionary<Type, PropertyDrawer?> cachedDrawers = [];
+        private static readonly Dictionary<Type, PropertyDrawer?> cachedDrawers = [];
 
         private static List<Type> implementationTypes = [];
 
@@ -105,7 +105,7 @@ namespace Prowl.Editor.PropertyDrawers
 
                     gui.TextNode("H_Text", RuntimeUtils.Prettify(label)).ExpandWidth().Height(ItemSize).IgnoreLayout();
 
-                    bool enumexpanded = gui.GetNodeStorage<bool>("enumexpanded", false);
+                    bool enumexpanded = gui.GetNodeStorage("enumexpanded", false);
                     using (gui.Node("EnumExpandBtn").TopLeft(5, 0).Scale(ItemSize).Enter())
                     {
                         if (gui.IsNodePressed())

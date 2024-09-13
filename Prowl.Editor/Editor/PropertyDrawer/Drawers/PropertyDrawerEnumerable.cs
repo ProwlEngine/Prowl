@@ -10,7 +10,7 @@ namespace Prowl.Editor.PropertyDrawers
 {
     public abstract class PropertyDrawerEnumerable<T> : PropertyDrawer where T : class
     {
-        public static ulong selectedDrawer = 0;
+        public static ulong selectedDrawer;
         public static int selectedElement = -1;
 
         private static int windowBG = 0;
@@ -67,7 +67,7 @@ namespace Prowl.Editor.PropertyDrawers
 
                 gui.TextNode("H_Text", RuntimeUtils.Prettify(label)).ExpandWidth().Height(EditorStylePrefs.Instance.ItemSize).IgnoreLayout();
 
-                bool enumexpanded = gui.GetNodeStorage<bool>("enumexpanded", false);
+                bool enumexpanded = gui.GetNodeStorage("enumexpanded", false);
                 using (gui.Node("EnumExpandBtn").TopLeft(5, 0).Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                 {
                     if (gui.IsNodePressed())

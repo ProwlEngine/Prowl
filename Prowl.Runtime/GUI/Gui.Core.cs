@@ -30,10 +30,10 @@ namespace Prowl.Runtime.GUI
         internal ulong frameCount = 0;
         internal readonly List<LayoutNode> ScollableNodes = new();
 
-        private Dictionary<ulong, LayoutNode.PostLayoutData> _previousLayoutData;
+        private readonly Dictionary<ulong, LayoutNode.PostLayoutData> _previousLayoutData;
         private LayoutNode rootNode;
         private Dictionary<ulong, ulong> _computedNodeHashes;
-        private HashSet<ulong> _createdNodes;
+        private readonly HashSet<ulong> _createdNodes;
         private double uiScale = 1;
         private double lastUIScale = -1;
 
@@ -154,7 +154,7 @@ namespace Prowl.Runtime.GUI
 
         public LayoutNode Node(string stringID, [CallerLineNumber] int intID = 0) => Node(CurrentNode, stringID, intID);
 
-        private Dictionary<ulong, uint> nodeCountPerLine = [];
+        private readonly Dictionary<ulong, uint> nodeCountPerLine = [];
         public LayoutNode Node(LayoutNode parent, string stringID, [CallerLineNumber] int intID = 0)
         {
             ulong storageHash = (ulong)HashCode.Combine(parent.ID, IDStack.Peek(), stringID, intID);

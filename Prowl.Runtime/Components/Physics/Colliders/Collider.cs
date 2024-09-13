@@ -30,16 +30,16 @@ public abstract class Collider : MonoBehaviour
     public override void OnEnable()
     {
         base.OnEnable();
-        _transformVersion = this.Transform.version;
+        _transformVersion = Transform.version;
     }
 
     public override void LateUpdate()
     {
-        if (this.Transform.version != _transformVersion)
+        if (Transform.version != _transformVersion)
         {
-            if (Container.Transform != this.Transform)
+            if (Container.Transform != Transform)
                 Container?.ReAttach();
-            _transformVersion = this.Transform.version;
+            _transformVersion = Transform.version;
         }
     }
 

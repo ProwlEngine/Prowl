@@ -75,7 +75,7 @@ namespace Prowl.Runtime
             this.r = r;
             this.g = g;
             this.b = b;
-            this.a = 1f;
+            a = 1f;
         }
 
         public Color(byte r, byte g, byte b, byte a)
@@ -91,7 +91,7 @@ namespace Prowl.Runtime
             this.r = r / 255f;
             this.g = g / 255f;
             this.b = b / 255f;
-            this.a = 1f;
+            a = 1f;
         }
 
         public uint GetUInt() => ((Color32)this).GetUInt();

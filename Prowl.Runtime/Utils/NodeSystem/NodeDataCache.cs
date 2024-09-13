@@ -41,7 +41,7 @@ namespace Prowl.Runtime.Utils.NodeSystem
             Dictionary<string, string> formerlySerializedAs = null;
             if (formerlySerializedAsCache != null) formerlySerializedAsCache.TryGetValue(nodeType, out formerlySerializedAs);
 
-            List<NodePort> dynamicListPorts = new List<NodePort>();
+            List<NodePort> dynamicListPorts = [];
 
             Dictionary<string, NodePort> staticPorts;
             if (!portDataCache.TryGetValue(nodeType, out staticPorts))
@@ -170,8 +170,8 @@ namespace Prowl.Runtime.Utils.NodeSystem
         {
             portDataCache = new PortDataCache();
             System.Type baseType = typeof(Node);
-            List<System.Type> nodeTypes = new List<System.Type>();
-            System.Reflection.Assembly[] assemblies = System.AppDomain.CurrentDomain.GetAssemblies();
+            List<System.Type> nodeTypes = [];
+            Assembly[] assemblies = System.AppDomain.CurrentDomain.GetAssemblies();
 
             // Loop through assemblies and add node types to list
             foreach (Assembly assembly in assemblies)
@@ -204,7 +204,8 @@ namespace Prowl.Runtime.Utils.NodeSystem
 
         public static List<FieldInfo> GetNodeFields(System.Type nodeType)
         {
-            List<System.Reflection.FieldInfo> fieldInfo = new List<System.Reflection.FieldInfo>(nodeType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance));
+            List<FieldInfo> fieldInfo =
+                [..nodeType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)];
 
             // GetFields doesnt return inherited private fields, so walk through base types and pick those up
             System.Type tempType = nodeType;
@@ -226,7 +227,7 @@ namespace Prowl.Runtime.Utils.NodeSystem
 
         private static void CachePorts(System.Type nodeType)
         {
-            List<System.Reflection.FieldInfo> fieldInfo = GetNodeFields(nodeType);
+            List<FieldInfo> fieldInfo = GetNodeFields(nodeType);
 
             for (int i = 0; i < fieldInfo.Count; i++)
             {

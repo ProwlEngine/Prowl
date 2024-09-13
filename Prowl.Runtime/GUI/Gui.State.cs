@@ -12,7 +12,7 @@ namespace Prowl.Runtime.GUI
     {
         public int CurrentZIndex => CurrentNode.ZIndex;
 
-        private static Dictionary<ulong, Hashtable> _storage = [];
+        private static readonly Dictionary<ulong, Hashtable> _storage = [];
 
         /// <summary>
         /// Set the ZIndex for the current node
@@ -32,7 +32,7 @@ namespace Prowl.Runtime.GUI
         public void SetGlobalStorage<T>(string key, T value) where T : unmanaged => SetNodeStorage(rootNode, key, value);
 
         /// <summary> Get a value from the current node's storage </summary>
-        public T GetNodeStorage<T>(string key, T defaultValue = default) where T : unmanaged => GetNodeStorage<T>(CurrentNode, key, defaultValue);
+        public T GetNodeStorage<T>(string key, T defaultValue = default) where T : unmanaged => GetNodeStorage(CurrentNode, key, defaultValue);
 
         /// <summary> Get a value from the current node's storage </summary>
         public T GetNodeStorage<T>(LayoutNode node, string key, T defaultValue = default) where T : unmanaged

@@ -86,7 +86,7 @@ namespace Prowl.Runtime.Utils
                 SceneManager.AllowGameObjectConstruction = prev; // Restore state
                 return obj;
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 SceneManager.AllowGameObjectConstruction = prev; // Restore state
                 throw;
@@ -108,7 +108,7 @@ namespace Prowl.Runtime.Utils
         {
             if (obj == null) throw new Exception("Asset cannot be null");
             if (SubAssets.Contains(obj)) throw new Exception("Asset already contains this object: " + obj);
-            obj.FileID = (ushort)0;
+            obj.FileID = 0;
             Main = obj;
         }
 

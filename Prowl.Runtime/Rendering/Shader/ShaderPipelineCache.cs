@@ -8,7 +8,7 @@ namespace Prowl.Runtime
 {
     public static class ShaderPipelineCache
     {
-        private static Dictionary<ShaderPipelineDescription, ShaderPipeline> pipelineCache = new();
+        private static readonly Dictionary<ShaderPipelineDescription, ShaderPipeline> pipelineCache = new();
 
 
         internal static ShaderPipeline GetPipeline(in ShaderPipelineDescription description)

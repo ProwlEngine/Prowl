@@ -192,7 +192,7 @@ namespace Prowl.Runtime
         public override void OnEnable()
         {
             base.OnEnable();
-            _transformVersion = this.Transform.version;
+            _transformVersion = Transform.version;
         }
 
         public void ApplyImpulse(Vector3 impulse, Vector3 impulseOffset)
@@ -271,14 +271,14 @@ namespace Prowl.Runtime
 
         public void SyncTransform()
         {
-            if (this.Transform.version != _transformVersion)
+            if (Transform.version != _transformVersion)
             {
-                Position = this.Transform.position;
-                Orientation = this.Transform.rotation;
+                Position = Transform.position;
+                Orientation = Transform.rotation;
                 LinearVelocity = Vector3.zero;
                 AngularVelocity = Vector3.zero;
                 Awake = true;
-                _transformVersion = this.Transform.version;
+                _transformVersion = Transform.version;
             }
         }
 

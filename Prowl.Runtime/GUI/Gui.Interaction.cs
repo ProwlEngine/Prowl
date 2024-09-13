@@ -18,9 +18,9 @@ namespace Prowl.Runtime.GUI
 
         private Dictionary<ulong, Interactable> _oldinteractables = [];
         private List<(double, Rect)> _oldblockers = [];
-        private Dictionary<ulong, Interactable> _interactables = [];
-        private List<(double, Rect)> _blockers = [];
-        private Dictionary<int, int> _zInteractableCounter = [];
+        private readonly Dictionary<ulong, Interactable> _interactables = [];
+        private readonly List<(double, Rect)> _blockers = [];
+        private readonly Dictionary<int, int> _zInteractableCounter = [];
 
 
         private void StartInteractionFrame()
@@ -44,7 +44,7 @@ namespace Prowl.Runtime.GUI
             _oldinteractables.Clear();
             _oldblockers.Clear();
             _oldinteractables = new(_interactables);
-            _oldblockers = new(_blockers);
+            _oldblockers = [.._blockers];
             _interactables.Clear();
             _blockers.Clear();
             _zInteractableCounter.Clear();
@@ -125,7 +125,7 @@ namespace Prowl.Runtime.GUI
         {
             if (zIndex == -1)
             {
-                if (!_zInteractableCounter.TryGetValue((int)CurrentZIndex, out int count))
+                if (!_zInteractableCounter.TryGetValue(CurrentZIndex, out int count))
                     count = 0;
 
                 // ZIndex.count - supports up to 1k interactables per Z Index
@@ -266,7 +266,7 @@ namespace Prowl.Runtime.GUI
         public Rect Rect => _rect;
         public double ZIndex => zIndex;
 
-        private Gui _gui;
+        private readonly Gui _gui;
         internal ulong _id;
         internal Rect _rect;
         internal double zIndex;

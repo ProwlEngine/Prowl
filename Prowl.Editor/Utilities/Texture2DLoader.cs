@@ -16,7 +16,7 @@ namespace Prowl.Editor
         #region ImageMagick integration
 
 
-        private static Dictionary<Type, PixelFormat> formatLookup = new()
+        private static readonly Dictionary<Type, PixelFormat> formatLookup = new()
         {
             { typeof(A8),               PixelFormat.R8_UNorm                },
             { typeof(Bgra32),           PixelFormat.B8_G8_R8_A8_UNorm       },
@@ -53,8 +53,7 @@ namespace Prowl.Editor
         /// <typeparam name="TPixel">The pixel format to use.</typeparam>
         public static Texture2D FromImage<TPixel>(Image<TPixel> image, bool generateMipmaps = false) where TPixel : unmanaged, IPixel<TPixel>
         {
-            if (image == null)
-                throw new ArgumentNullException(nameof(image));
+            ArgumentNullException.ThrowIfNull(image);
 
             image.Mutate(x => x.Flip(FlipMode.Vertical));
 

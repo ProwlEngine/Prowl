@@ -338,7 +338,7 @@ namespace Prowl.Runtime.GUI.Layout
                             Gui.layoutDirty = true;
                         }
                     }
-                    else if (interact.IsHovered()) Gui.Draw2D.DrawRectFilled(barRect, style.HoveredColor, (float)style.Roundness);
+                    else if (interact.IsHovered()) Gui.Draw2D.DrawRectFilled(barRect, style.HoveredColor, style.Roundness);
                     else Gui.Draw2D.DrawRectFilled(barRect, style.BGColor * 1.8f, style.Roundness);
 
                     if (Gui.IsPointerHovering(LayoutData.InnerRect) && Gui.PointerWheel != 0)
@@ -383,7 +383,7 @@ namespace Prowl.Runtime.GUI.Layout
                             Gui.layoutDirty = true;
                         }
                     }
-                    else if (interact.IsHovered()) Gui.Draw2D.DrawRectFilled(barRect, style.HoveredColor, (float)style.Roundness);
+                    else if (interact.IsHovered()) Gui.Draw2D.DrawRectFilled(barRect, style.HoveredColor, style.Roundness);
                     else Gui.Draw2D.DrawRectFilled(barRect, style.BGColor * 1.8f, style.Roundness);
 
                     //if (Gui.IsPointerHovering(LayoutData.InnerRect) && Gui.PointerWheel != 0)
@@ -547,20 +547,20 @@ namespace Prowl.Runtime.GUI.Layout
         {
             ulong hash = 17;
             hash = hash * 23 + ID;
-            hash = hash * 23 + (ulong)_positionX.GetHashCode64();
-            hash = hash * 23 + (ulong)_positionY.GetHashCode64();
-            hash = hash * 23 + (ulong)_width.GetHashCode64();
-            hash = hash * 23 + (ulong)_height.GetHashCode64();
-            hash = hash * 23 + (ulong)_maxWidth.GetHashCode64();
-            hash = hash * 23 + (ulong)_maxHeight.GetHashCode64();
-            hash = hash * 23 + (ulong)_marginLeft.GetHashCode64();
-            hash = hash * 23 + (ulong)_marginRight.GetHashCode64();
-            hash = hash * 23 + (ulong)_marginTop.GetHashCode64();
-            hash = hash * 23 + (ulong)_marginBottom.GetHashCode64();
-            hash = hash * 23 + (ulong)_paddingLeft.GetHashCode64();
-            hash = hash * 23 + (ulong)_paddingRight.GetHashCode64();
-            hash = hash * 23 + (ulong)_paddingTop.GetHashCode64();
-            hash = hash * 23 + (ulong)_paddingBottom.GetHashCode64();
+            hash = hash * 23 + _positionX.GetHashCode64();
+            hash = hash * 23 + _positionY.GetHashCode64();
+            hash = hash * 23 + _width.GetHashCode64();
+            hash = hash * 23 + _height.GetHashCode64();
+            hash = hash * 23 + _maxWidth.GetHashCode64();
+            hash = hash * 23 + _maxHeight.GetHashCode64();
+            hash = hash * 23 + _marginLeft.GetHashCode64();
+            hash = hash * 23 + _marginRight.GetHashCode64();
+            hash = hash * 23 + _marginTop.GetHashCode64();
+            hash = hash * 23 + _marginBottom.GetHashCode64();
+            hash = hash * 23 + _paddingLeft.GetHashCode64();
+            hash = hash * 23 + _paddingRight.GetHashCode64();
+            hash = hash * 23 + _paddingTop.GetHashCode64();
+            hash = hash * 23 + _paddingBottom.GetHashCode64();
             hash = hash * 23 + (ulong)_ignore.GetHashCode();
             hash = hash * 23 + (ulong)_fitContentX.GetHashCode();
             hash = hash * 23 + (ulong)_fitContentXPerc.GetHashCode();

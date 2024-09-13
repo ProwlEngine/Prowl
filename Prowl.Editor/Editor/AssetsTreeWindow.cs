@@ -19,10 +19,10 @@ namespace Prowl.Editor
         private readonly List<FileInfo> _found = new();
 
         public readonly static SelectHandler<FileSystemInfo> SelectHandler = new((item) => !item.Exists, (a, b) => a.FullName.Equals(b.FullName, StringComparison.OrdinalIgnoreCase));
-        internal static string? RenamingEntry = null;
+        internal static string? RenamingEntry;
 
-        private int _treeCounter = 0;
-        private static bool justStartedRename = false;
+        private int _treeCounter;
+        private static bool justStartedRename;
 
         public AssetsTreeWindow() : base()
         {
@@ -285,7 +285,7 @@ namespace Prowl.Editor
                         AssetDatabase.Move(dir, target);
                 }
 
-                expanded = gui.GetNodeStorage<bool>(root.RootDirectoryPath, defaultOpen);
+                expanded = gui.GetNodeStorage(root.RootDirectoryPath, defaultOpen);
                 using (gui.Node("ExpandBtn").TopLeft(5, 0).Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                 {
                     if (gui.IsNodePressed())
@@ -362,7 +362,7 @@ namespace Prowl.Editor
                         }
                     }
 
-                    expanded = gui.GetNodeStorage<bool>(gui.CurrentNode.Parent, subDirectory.FullName, false);
+                    expanded = gui.GetNodeStorage(gui.CurrentNode.Parent, subDirectory.FullName, false);
                     using (gui.Node("ExpandBtn").TopLeft(5, 0).Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                     {
                         if (gui.IsNodePressed())
@@ -442,7 +442,7 @@ namespace Prowl.Editor
 
                     if (subFileNode.SubAssets.Length > 1)
                     {
-                        expanded = gui.GetNodeStorage<bool>(gui.CurrentNode.Parent, subFile.FullName, false);
+                        expanded = gui.GetNodeStorage(gui.CurrentNode.Parent, subFile.FullName, false);
                         using (gui.Node("ExpandBtn").TopLeft(Offset.Percentage(1f, -EditorStylePrefs.Instance.ItemSize), 0).Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                         {
                             if (gui.IsNodePressed())
@@ -571,7 +571,7 @@ namespace Prowl.Editor
             if (entryNode.AssetID != Guid.Empty && interact.IsHovered() && Gui.ActiveGUI.IsPointerDoubleClick(MouseButton.Left))
             {
                 if (entry.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase))
-                    SceneManager.LoadScene(new AssetRef<Runtime.Scene>(entryNode.AssetID));
+                    SceneManager.LoadScene(new AssetRef<Scene>(entryNode.AssetID));
                 else
                     AssetDatabase.OpenPath(entry);
             }

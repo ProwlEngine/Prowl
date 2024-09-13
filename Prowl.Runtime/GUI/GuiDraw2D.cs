@@ -16,9 +16,9 @@ namespace Prowl.Runtime.GUI
 
         private int currentZIndex => _gui.CurrentZIndex;
 
-        private Gui _gui;
+        private readonly Gui _gui;
         private bool _AntiAliasing;
-        List<UIDrawList> drawListsOrdered = new();
+        readonly List<UIDrawList> drawListsOrdered = new();
 
         public GuiDraw2D(Gui gui, bool antiAliasing)
         {

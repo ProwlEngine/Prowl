@@ -30,7 +30,7 @@ public sealed class BoxCollider : Collider
     {
         get
         {
-            return _size * this.Transform.lossyScale;
+            return _size * Transform.lossyScale;
         }
     }
 
