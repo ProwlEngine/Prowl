@@ -117,7 +117,7 @@ public static class EditorGuiManager
 
         WindowsToRemove.Clear();
 
-        Graphics.SubmitCommandList(commandList, false);
+        Graphics.SubmitCommandList(commandList);
 
         commandList.Dispose();
     }
