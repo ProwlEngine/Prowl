@@ -64,6 +64,9 @@ namespace Prowl.Runtime
         public static void EndFrame()
         {
             Device.SwapBuffers();
+
+            Device.WaitForIdle();
+
             RenderTexture.UpdatePool();
             RenderPipelines.RenderPipeline.ClearRenderables();
         }
