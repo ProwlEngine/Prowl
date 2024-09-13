@@ -59,10 +59,12 @@ namespace Prowl.Runtime
         /// </summary>
         public AnimationCurve()
         {
-            this.Keys = [];
+            this.Keys =
+            [
+                new KeyFrame(0, 0),
+                new KeyFrame(1, 1)
+            ];
             // Add Default keys
-            this.Keys.Add(new KeyFrame(0, 0));
-            this.Keys.Add(new KeyFrame(1, 1));
             SmoothTangents(CurveTangent.Smooth);
         }
 
@@ -474,7 +476,7 @@ namespace Prowl.Runtime
         #region Constructors
 
         /// <summary> Creates a new instance of <see cref="CurveKeyCollection"/> class. </summary>
-        public CurveKeyCollection() => _keys = new List<KeyFrame>();
+        public CurveKeyCollection() => _keys = [];
 
         #endregion
 

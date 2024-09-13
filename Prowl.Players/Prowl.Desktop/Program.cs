@@ -34,10 +34,7 @@ internal class Program
             }
         };
 
-        Application.Update += () =>
-        {
-            SceneManager.Update();
-        };
+        Application.Update += SceneManager.Update;
 
         Application.Render += () =>
         {

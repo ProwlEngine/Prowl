@@ -109,10 +109,12 @@ namespace Prowl.Runtime.GUI
                 Vector2 direction = (arrowEnd - arrowStart).normalized;
                 Vector2 cross = new Vector2(-direction.y, direction.x) * stroke.Thickness / 2.0f;
 
-                List<Vector2> points = new List<Vector2>();
-                points.Add(arrowStart - cross);
-                points.Add(arrowStart + cross);
-                points.Add(arrowEnd);
+                List<Vector2> points =
+                [
+                    arrowStart - cross,
+                    arrowStart + cross,
+                    arrowEnd
+                ];
 
                 _gui.Draw2D.DrawList.AddConvexPolyFilled(points, 3, stroke.Color);
             }
@@ -243,8 +245,9 @@ namespace Prowl.Runtime.GUI
         }
 
         // Define the eight corners of the cube
-        static readonly Vector3[] cubeCorners = {
-                new Vector3(-0.5, -0.5, -0.5), // Bottom-back-left
+        static readonly Vector3[] cubeCorners =
+        [
+            new Vector3(-0.5, -0.5, -0.5), // Bottom-back-left
                 new Vector3(0.5,  -0.5, -0.5),  // Bottom-back-right
                 new Vector3(0.5,  -0.5, 0.5),   // Bottom-front-right
                 new Vector3(-0.5, -0.5, 0.5),  // Bottom-front-left
@@ -252,14 +255,15 @@ namespace Prowl.Runtime.GUI
                 new Vector3(0.5,  0.5,  -0.5),   // Top-back-right
                 new Vector3(0.5,  0.5,  0.5),    // Top-front-right
                 new Vector3(-0.5, 0.5,  0.5)    // Top-front-left
-            };
+        ];
 
         // Define the cube edges
-        int[] cubeEdges = {
-                0, 1, 1, 2, 2, 3, 3, 0, // Bottom face
+        int[] cubeEdges =
+        [
+            0, 1, 1, 2, 2, 3, 3, 0, // Bottom face
                 4, 5, 5, 6, 6, 7, 7, 4, // Top face
                 0, 4, 1, 5, 2, 6, 3, 7  // Vertical edges
-            };
+        ];
 
         public void Cube(double size, Stroke3D stroke)
         {
@@ -339,13 +343,13 @@ namespace Prowl.Runtime.GUI
             double halfSize = size / 2.0;
 
             // Define the four corners of the quad
-            Vector3[] quadCorners = new Vector3[]
-            {
+            Vector3[] quadCorners =
+            [
                 new Vector3((float)-halfSize, 0.0f, (float)-halfSize), // Bottom-left
                 new Vector3((float)halfSize, 0.0f, (float)-halfSize),  // Bottom-right
                 new Vector3((float)halfSize, 0.0f, (float)halfSize),   // Top-right
                 new Vector3((float)-halfSize, 0.0f, (float)halfSize)   // Top-left
-            };
+            ];
 
             // Convert to screen coordinates and add to the points buffer
             foreach (var corner in quadCorners)

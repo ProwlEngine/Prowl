@@ -44,7 +44,7 @@ namespace Prowl.Runtime.GUI
             _oldinteractables.Clear();
             _oldblockers.Clear();
             _oldinteractables = new(_interactables);
-            _oldblockers = new(_blockers);
+            _oldblockers = [.._blockers];
             _interactables.Clear();
             _blockers.Clear();
             _zInteractableCounter.Clear();

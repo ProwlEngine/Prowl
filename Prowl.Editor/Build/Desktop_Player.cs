@@ -64,7 +64,7 @@ namespace Prowl.Editor.Build
             }
             else
             {
-                HashSet<Guid> assets = new();
+                HashSet<Guid> assets = [];
                 foreach (var scene in scenes)
                     AssetDatabase.GetDependenciesDeep(scene.AssetID, ref assets);
 
@@ -102,7 +102,7 @@ namespace Prowl.Editor.Build
 
                         // Invoke the CopyTo method
                         string? test = BuildDataPath;
-                        copyTo.Invoke(null, new object[] { test });
+                        copyTo.Invoke(null, [test]);
                     }
 
 

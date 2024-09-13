@@ -52,7 +52,7 @@ namespace Prowl.Runtime
         public static IEnumerable<FieldInfo> GetAllFields(Type? t)
         {
             if (t == null)
-                return Enumerable.Empty<FieldInfo>();
+                return [];
 
             BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic |
                                  BindingFlags.Instance | BindingFlags.DeclaredOnly;
@@ -119,7 +119,7 @@ namespace Prowl.Runtime
 
         public static List<Type> FindTypesImplementing(Type propertyType)
         {
-            List<Type> types = new List<Type>();
+            List<Type> types = [];
             foreach (Assembly asm in AppDomain.CurrentDomain.GetAssemblies())
             {
                 foreach (Type type in asm.GetTypes())

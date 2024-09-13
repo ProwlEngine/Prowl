@@ -24,7 +24,7 @@ namespace Prowl.Editor.Assets
                 File = file;
 
                 AssetID = Guid.Empty;
-                SubAssets = Array.Empty<AssetDatabase.SubAssetCache>();
+                SubAssets = [];
                 if (AssetDatabase.TryGetGuid(file, out var guid))
                 {
                     AssetID = guid;

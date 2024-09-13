@@ -74,7 +74,7 @@ namespace Prowl.Editor.Utilities
 
             List<ShaderProperty> properties = [];
             ParsedPass? globalDefaults = null;
-            List<ParsedPass> parsedPasses = new();
+            List<ParsedPass> parsedPasses = [];
 
             string? fallback = null;
 
@@ -168,7 +168,7 @@ namespace Prowl.Editor.Utilities
                 args.shaderModel = shaderModel ?? (6, 0);
                 args.sourceCode = sourceCode;
 
-                List<CompilationMessage> compilerMessages = new();
+                List<CompilationMessage> compilerMessages = [];
 
                 ShaderVariant[] variants = ShaderCompiler.GenerateVariants(args, includer, compilerMessages);
 
@@ -236,7 +236,7 @@ namespace Prowl.Editor.Utilities
 
         private static List<ShaderProperty> ParseProperties(Tokenizer<ShaderToken> tokenizer)
         {
-            List<ShaderProperty> properties = new();
+            List<ShaderProperty> properties = [];
 
             ExpectToken(tokenizer, ShaderToken.OpenCurlBrace);
 
@@ -613,7 +613,7 @@ namespace Prowl.Editor.Utilities
             {
                 string name = tokenizer.Token.ToString();
 
-                HashSet<string> values = new();
+                HashSet<string> values = [];
 
                 ExpectToken(tokenizer, ShaderToken.OpenSquareBrace);
 
@@ -629,7 +629,7 @@ namespace Prowl.Editor.Utilities
 
         private static bool ParseProgramInfo(string program, out EntryPoint[]? entrypoints, out (int, int)? shaderModel, out CompilationMessage? message)
         {
-            List<EntryPoint> entrypointsList = new();
+            List<EntryPoint> entrypointsList = [];
             entrypoints = null;
             shaderModel = null;
             message = null;
@@ -763,7 +763,7 @@ namespace Prowl.Editor.Utilities
             if (Enum.TryParse(text, true, out T value))
                 return value;
 
-            List<string> values = new(Enum.GetNames<T>());
+            List<string> values = [..Enum.GetNames<T>()];
             values.AddRange(extraValues);
 
             throw new ParseException($"Error parsing {fieldName}. Possible values: [{string.Join(", ", values)}]");
