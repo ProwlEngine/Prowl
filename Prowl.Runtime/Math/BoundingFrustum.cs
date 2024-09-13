@@ -216,8 +216,8 @@ namespace Prowl.Runtime
 
         public void GetCorners(Vector3[] corners)
         {
-            if (corners == null) throw new ArgumentNullException("corners");
-            if (corners.Length < CornerCount) throw new ArgumentOutOfRangeException("corners");
+            if (corners == null) throw new ArgumentNullException(nameof(corners));
+            if (corners.Length < CornerCount) throw new ArgumentOutOfRangeException(nameof(corners));
 
             this.corners.CopyTo(corners, 0);
         }

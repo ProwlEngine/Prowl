@@ -489,7 +489,7 @@ namespace Prowl.Runtime
         public void Add(KeyFrame item)
         {
             if (item == null)
-                throw new ArgumentNullException("item");
+                throw new ArgumentNullException(nameof(item));
 
             if (_keys.Count == 0)
             {

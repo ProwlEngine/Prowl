@@ -19,9 +19,9 @@ namespace Prowl.Runtime
                 if (TagType != PropertyType.Compound)
                     throw new InvalidOperationException("Cannot set tag on non-compound tag");
                 else if (tagName == null)
-                    throw new ArgumentNullException("tagName");
+                    throw new ArgumentNullException(nameof(tagName));
                 else if (value == null)
-                    throw new ArgumentNullException("value");
+                    throw new ArgumentNullException(nameof(value));
                 Tags[tagName] = value;
                 value.Parent = this;
             }

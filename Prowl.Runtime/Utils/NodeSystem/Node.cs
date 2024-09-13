@@ -157,7 +157,7 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> Remove an dynamic port from the node </summary>
         public void RemoveDynamicPort(NodePort port)
         {
-            if (port == null) throw new ArgumentNullException("port");
+            if (port == null) throw new ArgumentNullException(nameof(port));
             else if (port.IsStatic) throw new ArgumentException("cannot remove static port");
             port.ClearConnections();
             ports.Remove(port.fieldName);

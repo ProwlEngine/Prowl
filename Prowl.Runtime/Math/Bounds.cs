@@ -281,11 +281,11 @@ namespace Prowl.Runtime
         {
             if (corners == null)
             {
-                throw new ArgumentNullException("corners");
+                throw new ArgumentNullException(nameof(corners));
             }
             if (corners.Length < 8)
             {
-                throw new ArgumentOutOfRangeException("corners", "Not Enought Corners");
+                throw new ArgumentOutOfRangeException(nameof(corners), "Not Enought Corners");
             }
             corners[0].x = min.x;
             corners[0].y = max.y;
