@@ -33,7 +33,7 @@ namespace Prowl.Editor
         public static bool Peek(out object? payload, Type type, string tag = "")
         {
             if (Gui.ActiveGUI.PreviousInteractable == null)
-                throw new System.Exception("No Previous Interactable");
+                throw new Exception("No Previous Interactable");
 
             payload = default;
             if (draggedObject == null) return false;
@@ -67,7 +67,7 @@ namespace Prowl.Editor
         public static bool Drop(out object? payload, Type type, string tag = "")
         {
             if (Gui.ActiveGUI.PreviousInteractable == null)
-                throw new System.Exception("No Previous Interactable");
+                throw new Exception("No Previous Interactable");
 
             payload = default;
             if (draggedObject == null) return false;
@@ -109,7 +109,7 @@ namespace Prowl.Editor
         public static bool Drag(string tag = "", params object[] objs)
         {
             if (Gui.ActiveGUI.PreviousInteractable == null)
-                throw new System.Exception("No Previous Interactable");
+                throw new Exception("No Previous Interactable");
 
             if (OnBeginDrag(out var node))
             {
@@ -130,7 +130,7 @@ namespace Prowl.Editor
         public static bool OnBeginDrag(out LayoutNode? node)
         {
             if (Gui.ActiveGUI.PreviousInteractable == null)
-                throw new System.Exception("No Previous Interactable");
+                throw new Exception("No Previous Interactable");
 
             if (Gui.ActiveGUI.DragDrop_Source(out node))
                 return true;

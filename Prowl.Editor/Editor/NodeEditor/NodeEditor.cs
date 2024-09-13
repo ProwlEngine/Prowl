@@ -65,7 +65,7 @@ namespace Prowl.Editor
         protected NodeGraph nodegraph;
         protected SelectHandler<WeakReference> SelectHandler;
 
-        public void SetGraph(NodeGraph graph) => this.nodegraph = graph;
+        public void SetGraph(NodeGraph graph) => nodegraph = graph;
         public void SetEditor(NodeEditor editor) => this.editor = editor;
         public void SetSelectHandler(SelectHandler<WeakReference> handler) => SelectHandler = handler;
 

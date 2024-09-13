@@ -24,10 +24,10 @@ namespace Prowl.Runtime
 
         public BindableResourceSet(ShaderPipeline pipeline, ResourceSetDescription description, DeviceBuffer[] buffers, byte[][] intermediate)
         {
-            this.Pipeline = pipeline;
+            Pipeline = pipeline;
             this.description = description;
-            this.uniformBuffers = buffers;
-            this.intermediateBuffers = buffers.Select(x => new byte[x.SizeInBytes]).ToArray();
+            uniformBuffers = buffers;
+            intermediateBuffers = buffers.Select(x => new byte[x.SizeInBytes]).ToArray();
         }
 
 

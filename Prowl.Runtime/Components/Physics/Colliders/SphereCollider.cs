@@ -31,7 +31,7 @@ public sealed class SphereCollider : Collider
     {
         get
         {
-            var worldScale = this.Transform.lossyScale;
+            var worldScale = Transform.lossyScale;
             return _radius * (float)MathD.Max(worldScale.x, worldScale.y, worldScale.z);
         }
     }

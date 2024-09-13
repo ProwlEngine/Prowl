@@ -115,7 +115,7 @@ namespace Prowl.Runtime
         {
             double mag = q.Magnitude();
             if (mag < MathD.Epsilon)
-                return Quaternion.identity;
+                return identity;
             else
                 return q / mag;
         }

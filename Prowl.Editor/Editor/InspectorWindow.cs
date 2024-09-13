@@ -57,10 +57,10 @@ namespace Prowl.Editor
         {
             double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
-            gui.CurrentNode.Layout(Runtime.GUI.LayoutType.Column);
+            gui.CurrentNode.Layout(LayoutType.Column);
             gui.CurrentNode.ScaleChildren();
 
-            using (gui.Node("Header").ExpandWidth().MaxHeight(ItemSize).Layout(Runtime.GUI.LayoutType.Row).Padding(0, 10, 10, 10).Enter())
+            using (gui.Node("Header").ExpandWidth().MaxHeight(ItemSize).Layout(LayoutType.Row).Padding(0, 10, 10, 10).Enter())
             {
                 ForwardBackButtons();
 

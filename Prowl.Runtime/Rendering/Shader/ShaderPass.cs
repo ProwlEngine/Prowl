@@ -103,19 +103,19 @@ namespace Prowl.Runtime
 
         public ShaderPass(string name, ShaderPassDescription description, ShaderVariant[] variants)
         {
-            this._name = name;
+            _name = name;
 
-            this._tags = description.Tags ?? new();
-            this._blend = description.BlendState ?? BlendStateDescription.SingleOverrideBlend;
-            this._depthStencilState = description.DepthStencilState ?? DepthStencilStateDescription.DepthOnlyLessEqual;
-            this._cullMode = description.CullingMode ?? FaceCullMode.Back;
-            this._depthClipEnabled = description.DepthClipEnabled ?? true;
-            this._keywords = description.Keywords ?? new() { { string.Empty, [string.Empty] } };
+            _tags = description.Tags ?? new();
+            _blend = description.BlendState ?? BlendStateDescription.SingleOverrideBlend;
+            _depthStencilState = description.DepthStencilState ?? DepthStencilStateDescription.DepthOnlyLessEqual;
+            _cullMode = description.CullingMode ?? FaceCullMode.Back;
+            _depthClipEnabled = description.DepthClipEnabled ?? true;
+            _keywords = description.Keywords ?? new() { { string.Empty, [string.Empty] } };
 
-            this._variants = new();
+            _variants = new();
 
             foreach (var variant in variants)
-                this._variants[variant.VariantKeywords] = variant;
+                _variants[variant.VariantKeywords] = variant;
         }
 
         public ShaderVariant GetVariant(KeywordState? keywordID = null)

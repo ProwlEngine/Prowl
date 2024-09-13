@@ -96,7 +96,7 @@ namespace Prowl.Editor.Build
                         MethodInfo copyTo = type.BaseType.GetMethod("CopyTo", BindingFlags.Static | BindingFlags.NonPublic);
                         if (copyTo is null)
                         {
-                            Runtime.Debug.LogError($"Failed to find CopyTo method for {type.Name}");
+                            Debug.LogError($"Failed to find CopyTo method for {type.Name}");
                             continue;
                         }
 
@@ -128,8 +128,8 @@ namespace Prowl.Editor.Build
             if (target != Target.Universal)
                 CleanupRuntimes(output);
 
-            Runtime.Debug.Log("**********************************************************************************************************************");
-            Runtime.Debug.Log($"Successfully built project!");
+            Debug.Log("**********************************************************************************************************************");
+            Debug.Log($"Successfully built project!");
 
             // Open the Build folder
             AssetDatabase.OpenPath(output);

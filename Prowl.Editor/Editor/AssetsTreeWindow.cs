@@ -571,7 +571,7 @@ namespace Prowl.Editor
             if (entryNode.AssetID != Guid.Empty && interact.IsHovered() && Gui.ActiveGUI.IsPointerDoubleClick(MouseButton.Left))
             {
                 if (entry.Extension.Equals(".scene", StringComparison.OrdinalIgnoreCase))
-                    SceneManager.LoadScene(new AssetRef<Runtime.Scene>(entryNode.AssetID));
+                    SceneManager.LoadScene(new AssetRef<Scene>(entryNode.AssetID));
                 else
                     AssetDatabase.OpenPath(entry);
             }

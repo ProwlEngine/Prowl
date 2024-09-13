@@ -14,17 +14,17 @@ namespace Prowl.Runtime
 
         public override void OnEnable()
         {
-            lastPos = this.GameObject.Transform.position;
+            lastPos = GameObject.Transform.position;
             AudioSystem.RegisterListener(this);
         }
         public override void OnDisable() => AudioSystem.UnregisterListener(this);
         public override void Update()
         {
-            if (_lastVersion != this.GameObject.Transform.version)
+            if (_lastVersion != GameObject.Transform.version)
             {
-                AudioSystem.ListenerTransformChanged(this.GameObject.Transform, lastPos);
-                lastPos = this.GameObject.Transform.position;
-                _lastVersion = this.GameObject.Transform.version;
+                AudioSystem.ListenerTransformChanged(GameObject.Transform, lastPos);
+                lastPos = GameObject.Transform.position;
+                _lastVersion = GameObject.Transform.version;
             }
         }
     }

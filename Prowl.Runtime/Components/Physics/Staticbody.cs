@@ -54,7 +54,7 @@ namespace Prowl.Runtime
         public override void OnEnable()
         {
             base.OnEnable();
-            _transformVersion = this.Transform.version;
+            _transformVersion = Transform.version;
         }
 
         protected override ref PhysicsMaterial MaterialProperties => ref Physics.CollidableMaterials[StaticReference!.Value.Handle];
@@ -97,11 +97,11 @@ namespace Prowl.Runtime
 
         public void SyncTransform()
         {
-            if (this.Transform.version != _transformVersion)
+            if (Transform.version != _transformVersion)
             {
-                Position = this.Transform.position;
-                Orientation = this.Transform.rotation;
-                _transformVersion = this.Transform.version;
+                Position = Transform.position;
+                Orientation = Transform.rotation;
+                _transformVersion = Transform.version;
             }
         }
 

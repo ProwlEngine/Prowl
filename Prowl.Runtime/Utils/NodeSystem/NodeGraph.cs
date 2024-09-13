@@ -51,7 +51,7 @@ namespace Prowl.Runtime.NodeSystem
 
         public void Validate()
         {
-            var attrib = this.GetType().GetCustomAttribute<RequireNodeAttribute>(true);
+            var attrib = GetType().GetCustomAttribute<RequireNodeAttribute>(true);
             if (attrib != null)
                 foreach (Type type in attrib.types)
                     if (!nodes.Where(n => n.GetType() == type).Any())
@@ -121,7 +121,7 @@ namespace Prowl.Runtime.NodeSystem
         public virtual void RemoveNode(Node node)
         {
             // check if we have a RequireNode attribute
-            var attrib = this.GetType().GetCustomAttribute<RequireNodeAttribute>(true);
+            var attrib = GetType().GetCustomAttribute<RequireNodeAttribute>(true);
             if (attrib != null)
             {
                 if (attrib.Requires(node.GetType()))

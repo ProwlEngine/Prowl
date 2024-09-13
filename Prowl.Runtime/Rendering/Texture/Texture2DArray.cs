@@ -113,11 +113,11 @@ namespace Prowl.Runtime
             {
                 Width = width,
                 Height = height,
-                MipLevels = this.MipLevels,
+                MipLevels = MipLevels,
                 ArrayLayers = layers,
-                Format = this.Format,
-                Usage = this.Usage,
-                Type = this.Type,
+                Format = Format,
+                Usage = Usage,
+                Type = Type,
             });
         }
 

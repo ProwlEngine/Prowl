@@ -60,9 +60,9 @@ namespace Prowl.Runtime
         #endregion Public Fields
 
         #region Public Properties
-        public Vector3 center { get { return (this.min + this.max) * 0.5f; } set { var s = this.size * 0.5f; this.min = value - s; this.max = value + s; } }
-        public Vector3 extents { get { return (this.max - this.min) * 0.5f; } set { var c = this.center; this.min = c - value; this.max = c + value; } }
-        public Vector3 size { get { return this.max - this.min; } set { var c = this.center; var s = value * 0.5f; this.min = c - s; this.max = c + s; } }
+        public Vector3 center { get { return (min + max) * 0.5f; } set { var s = size * 0.5f; min = value - s; max = value + s; } }
+        public Vector3 extents { get { return (max - min) * 0.5f; } set { var c = center; min = c - value; max = c + value; } }
+        public Vector3 size { get { return max - min; } set { var c = center; var s = value * 0.5f; min = c - s; max = c + s; } }
         #endregion
 
 
@@ -119,7 +119,7 @@ namespace Prowl.Runtime
             // First we check if frustum is in box
             for (i = 0; i < corners.Length; i++)
             {
-                this.Contains(ref corners[i], out contained);
+                Contains(ref corners[i], out contained);
                 if (contained == ContainmentType.Disjoint)
                     break;
             }
@@ -137,7 +137,7 @@ namespace Prowl.Runtime
             i++;
             for (; i < corners.Length; i++)
             {
-                this.Contains(ref corners[i], out contained);
+                Contains(ref corners[i], out contained);
                 if (contained != ContainmentType.Contains)
                     return ContainmentType.Intersects;
 
@@ -150,28 +150,28 @@ namespace Prowl.Runtime
         public ContainmentType Contains(Vector3 point)
         {
             ContainmentType result;
-            this.Contains(ref point, out result);
+            Contains(ref point, out result);
             return result;
         }
 
         public void Contains(ref Vector3 point, out ContainmentType result)
         {
             //first we get if point is out of box
-            if (point.x < this.min.x
-                || point.x > this.max.x
-                || point.y < this.min.y
-                || point.y > this.max.y
-                || point.z < this.min.z
-                || point.z > this.max.z)
+            if (point.x < min.x
+                || point.x > max.x
+                || point.y < min.y
+                || point.y > max.y
+                || point.z < min.z
+                || point.z > max.z)
             {
                 result = ContainmentType.Disjoint;
             }//or if point is on box because coordonate of point is lesser or equal
-            else if (point.x == this.min.x
-                || point.x == this.max.x
-                || point.y == this.min.y
-                || point.y == this.max.y
-                || point.z == this.min.z
-                || point.z == this.max.z)
+            else if (point.x == min.x
+                || point.x == max.x
+                || point.y == min.y
+                || point.y == max.y
+                || point.z == min.z
+                || point.z == max.z)
                 result = ContainmentType.Intersects;
             else
                 result = ContainmentType.Contains;
@@ -254,26 +254,26 @@ namespace Prowl.Runtime
 
         public bool Equals(Bounds other)
         {
-            return (this.min == other.min) && (this.max == other.max);
+            return (min == other.min) && (max == other.max);
         }
 
         public override bool Equals(object? obj)
         {
-            return (obj is Bounds bounds) ? this.Equals(bounds) : false;
+            return (obj is Bounds bounds) ? Equals(bounds) : false;
         }
 
         public Vector3[] GetCorners()
         {
             return
             [
-                new Vector3(this.min.x, this.max.y, this.max.z),
-                new Vector3(this.max.x, this.max.y, this.max.z),
-                new Vector3(this.max.x, this.min.y, this.max.z),
-                new Vector3(this.min.x, this.min.y, this.max.z),
-                new Vector3(this.min.x, this.max.y, this.min.z),
-                new Vector3(this.max.x, this.max.y, this.min.z),
-                new Vector3(this.max.x, this.min.y, this.min.z),
-                new Vector3(this.min.x, this.min.y, this.min.z)
+                new Vector3(min.x, max.y, max.z),
+                new Vector3(max.x, max.y, max.z),
+                new Vector3(max.x, min.y, max.z),
+                new Vector3(min.x, min.y, max.z),
+                new Vector3(min.x, max.y, min.z),
+                new Vector3(max.x, max.y, min.z),
+                new Vector3(max.x, min.y, min.z),
+                new Vector3(min.x, min.y, min.z)
             ];
         }
 
@@ -287,35 +287,35 @@ namespace Prowl.Runtime
             {
                 throw new ArgumentOutOfRangeException("corners", "Not Enought Corners");
             }
-            corners[0].x = this.min.x;
-            corners[0].y = this.max.y;
-            corners[0].z = this.max.z;
-            corners[1].x = this.max.x;
-            corners[1].y = this.max.y;
-            corners[1].z = this.max.z;
-            corners[2].x = this.max.x;
-            corners[2].y = this.min.y;
-            corners[2].z = this.max.z;
-            corners[3].x = this.min.x;
-            corners[3].y = this.min.y;
-            corners[3].z = this.max.z;
-            corners[4].x = this.min.x;
-            corners[4].y = this.max.y;
-            corners[4].z = this.min.z;
-            corners[5].x = this.max.x;
-            corners[5].y = this.max.y;
-            corners[5].z = this.min.z;
-            corners[6].x = this.max.x;
-            corners[6].y = this.min.y;
-            corners[6].z = this.min.z;
-            corners[7].x = this.min.x;
-            corners[7].y = this.min.y;
-            corners[7].z = this.min.z;
+            corners[0].x = min.x;
+            corners[0].y = max.y;
+            corners[0].z = max.z;
+            corners[1].x = max.x;
+            corners[1].y = max.y;
+            corners[1].z = max.z;
+            corners[2].x = max.x;
+            corners[2].y = min.y;
+            corners[2].z = max.z;
+            corners[3].x = min.x;
+            corners[3].y = min.y;
+            corners[3].z = max.z;
+            corners[4].x = min.x;
+            corners[4].y = max.y;
+            corners[4].z = min.z;
+            corners[5].x = max.x;
+            corners[5].y = max.y;
+            corners[5].z = min.z;
+            corners[6].x = max.x;
+            corners[6].y = min.y;
+            corners[6].z = min.z;
+            corners[7].x = min.x;
+            corners[7].y = min.y;
+            corners[7].z = min.z;
         }
 
         public override int GetHashCode()
         {
-            return this.min.GetHashCode() + this.max.GetHashCode();
+            return min.GetHashCode() + max.GetHashCode();
         }
 
         public bool Intersects(Bounds box)
@@ -327,15 +327,15 @@ namespace Prowl.Runtime
 
         public void Intersects(ref Bounds box, out bool result)
         {
-            if ((this.max.x >= box.min.x) && (this.min.x <= box.max.x))
+            if ((max.x >= box.min.x) && (min.x <= box.max.x))
             {
-                if ((this.max.y < box.min.y) || (this.min.y > box.max.y))
+                if ((max.y < box.min.y) || (min.y > box.max.y))
                 {
                     result = false;
                     return;
                 }
 
-                result = (this.max.z >= box.min.z) && (this.min.z <= box.max.z);
+                result = (max.z >= box.min.z) && (min.z <= box.max.z);
                 return;
             }
 
@@ -473,15 +473,15 @@ namespace Prowl.Runtime
             get
             {
                 return string.Concat(
-                    "Min( ", this.min.ToString(), " )  \r\n",
-                    "Max( ", this.max.ToString(), " )"
+                    "Min( ", min.ToString(), " )  \r\n",
+                    "Max( ", max.ToString(), " )"
                     );
             }
         }
 
         public override string ToString()
         {
-            return "{{Min:" + this.min.ToString() + " Max:" + this.max.ToString() + "}}";
+            return "{{Min:" + min.ToString() + " Max:" + max.ToString() + "}}";
         }
 
         #endregion Public Methods

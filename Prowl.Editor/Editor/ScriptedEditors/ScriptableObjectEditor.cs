@@ -25,7 +25,7 @@ namespace Prowl.Editor.ScriptedEditors
                 scriptObject ??= Serializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile((target as MetaFile).AssetPath));
 
                 object t = scriptObject;
-                changed |= PropertyGrid("CompPropertyGrid", ref t, TargetFields.Serializable | EditorGUI.TargetFields.Properties, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground);
+                changed |= PropertyGrid("CompPropertyGrid", ref t, TargetFields.Serializable | TargetFields.Properties, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground);
 
                 // Draw any Buttons
                 //changed |= EditorGui.HandleAttributeButtons(scriptObject);
@@ -37,7 +37,7 @@ namespace Prowl.Editor.ScriptedEditors
                     AssetDatabase.Reimport((target as MetaFile).AssetPath);
                 }
             }
-            catch (System.Exception e)
+            catch (Exception e)
             {
                 double ItemSize = EditorStylePrefs.Instance.ItemSize;
                 gui.Node("DummyForText").ExpandWidth().Height(ItemSize * 10);

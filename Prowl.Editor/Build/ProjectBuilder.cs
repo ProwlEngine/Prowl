@@ -31,7 +31,7 @@ namespace Prowl.Editor.Build
             {
                 Build(scenes, output);
             }
-            catch (System.Exception e)
+            catch (Exception e)
             {
                 Debug.LogError($"Failed to build project: {e.Message}");
             }

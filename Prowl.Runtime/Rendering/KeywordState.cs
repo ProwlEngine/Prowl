@@ -56,9 +56,9 @@ namespace Prowl.Runtime
 
         public KeywordState(KeywordState other)
         {
-            this._hash = other._hash;
-            this._hasValidHash = other._hasValidHash;
-            this._keyValuePairs = new(other._keyValuePairs);
+            _hash = other._hash;
+            _hasValidHash = other._hasValidHash;
+            _keyValuePairs = new(other._keyValuePairs);
         }
 
         public static KeywordState Combine(KeywordState source, KeywordState add)

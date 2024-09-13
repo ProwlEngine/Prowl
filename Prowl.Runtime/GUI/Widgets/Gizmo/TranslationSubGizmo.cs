@@ -556,7 +556,7 @@ namespace Prowl.Runtime.GUI
             var translationDelta = newPoint - _state.LastPoint;
             var totalTranslation = newPoint - _state.StartPoint;
 
-            if (_gizmo.Orientation == TransformGizmo.GizmoOrientation.Local)
+            if (_gizmo.Orientation == GizmoOrientation.Local)
             {
                 //var inverseRotation = Quaternion.Inverse(_gizmo.Rotation);
                 //translationDelta = Vector4.Transform(new Vector4(translationDelta, 0), inverseRotation).xyz;

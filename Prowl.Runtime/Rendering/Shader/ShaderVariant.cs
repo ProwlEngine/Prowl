@@ -47,7 +47,7 @@ namespace Prowl.Runtime
 
         public ShaderVariant(KeywordState keywords)
         {
-            this.variantKeywords = keywords;
+            variantKeywords = keywords;
         }
 
         public ShaderDescription[] GetProgramsForBackend()

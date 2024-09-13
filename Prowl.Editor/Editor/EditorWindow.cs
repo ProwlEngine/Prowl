@@ -25,7 +25,7 @@ namespace Prowl.Editor
         protected virtual double Padding { get; } = 8;
 
         protected bool isOpened = true;
-        protected Runtime.GUI.Gui gui => Runtime.GUI.Gui.ActiveGUI;
+        protected Gui gui => Gui.ActiveGUI;
 
         private double _width, _height;
         public double _x, _y;
@@ -76,7 +76,7 @@ namespace Prowl.Editor
             }
             catch (Exception e)
             {
-                Runtime.Debug.LogError("Error in UpdateWindow: " + e.Message + "\n" + e.StackTrace);
+                Debug.LogError("Error in UpdateWindow: " + e.Message + "\n" + e.StackTrace);
             }
 
             try
@@ -254,7 +254,7 @@ namespace Prowl.Editor
             }
             catch (Exception e)
             {
-                Runtime.Debug.LogError("Error in EditorWindow: " + e.Message + "\n" + e.StackTrace);
+                Debug.LogError("Error in EditorWindow: " + e.Message + "\n" + e.StackTrace);
             }
 
             MaxZ = gui.GetCurrentInteractableZLayer();

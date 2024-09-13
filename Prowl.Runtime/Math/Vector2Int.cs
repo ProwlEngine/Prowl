@@ -64,8 +64,8 @@ namespace Prowl.Runtime
         /// <returns>The hash code.</returns>
         public override int GetHashCode()
         {
-            int hash = this.x.GetHashCode();
-            hash = HashCode.Combine(hash, this.y.GetHashCode());
+            int hash = x.GetHashCode();
+            hash = HashCode.Combine(hash, y.GetHashCode());
             return hash;
         }
 
@@ -89,7 +89,7 @@ namespace Prowl.Runtime
         /// <returns>True if the other Vector2Int is equal to this instance; False otherwise.</returns>
         public bool Equals(Vector2Int other)
         {
-            return this.x == other.x && this.y == other.y;
+            return x == other.x && y == other.y;
         }
 
 
@@ -124,10 +124,10 @@ namespace Prowl.Runtime
             StringBuilder sb = new StringBuilder();
             string separator = NumberFormatInfo.GetInstance(formatProvider).NumberGroupSeparator;
             sb.Append('<');
-            sb.Append(this.x.ToString(format, formatProvider));
+            sb.Append(x.ToString(format, formatProvider));
             sb.Append(separator);
             sb.Append(' ');
-            sb.Append(this.y.ToString(format, formatProvider));
+            sb.Append(y.ToString(format, formatProvider));
             sb.Append('>');
             return sb.ToString();
         }

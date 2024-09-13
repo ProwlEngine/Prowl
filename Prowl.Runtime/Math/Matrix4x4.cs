@@ -158,10 +158,10 @@ namespace Prowl.Runtime
                          double m31, double m32, double m33, double m34,
                          double m41, double m42, double m43, double m44)
         {
-            this.M1 = new(m11, m12, m13, m14);
-            this.M2 = new(m21, m22, m23, m24);
-            this.M3 = new(m31, m32, m33, m34);
-            this.M4 = new(m41, m42, m43, m44);
+            M1 = new(m11, m12, m13, m14);
+            M2 = new(m21, m22, m23, m24);
+            M3 = new(m31, m32, m33, m34);
+            M4 = new(m41, m42, m43, m44);
         }
 
         public Matrix4x4(Vector4 row1, Vector4 row2, Vector4 row3, Vector4 row4)
@@ -225,7 +225,7 @@ namespace Prowl.Runtime
         }
 
         public static Matrix4x4 TRS(Vector3 m_LocalPosition, Quaternion m_LocalRotation, Vector3 m_LocalScale)
-            => Matrix4x4.CreateScale(m_LocalScale) * Matrix4x4.CreateFromQuaternion(m_LocalRotation) * Matrix4x4.CreateTranslation(m_LocalPosition);
+            => CreateScale(m_LocalScale) * CreateFromQuaternion(m_LocalRotation) * CreateTranslation(m_LocalPosition);
 
         public Vector3 MultiplyPoint(Vector3 v) => Vector3.Transform(v, this);
 
@@ -999,7 +999,7 @@ namespace Prowl.Runtime
         {
             Quaternion q = Quaternion.CreateFromYawPitchRoll(yaw, pitch, roll);
 
-            return Matrix4x4.CreateFromQuaternion(q);
+            return CreateFromQuaternion(q);
         }
 
         /// <summary>
@@ -1346,7 +1346,7 @@ namespace Prowl.Runtime
                     VectorBasis vectorBasis;
                     Vector3** pVectorBasis = (Vector3**)&vectorBasis;
 
-                    Matrix4x4 matTemp = Matrix4x4.Identity;
+                    Matrix4x4 matTemp = Identity;
                     CanonicalBasis canonicalBasis = new CanonicalBasis();
                     Vector3* pCanonicalBasis = &canonicalBasis.Row0;
 

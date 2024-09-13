@@ -187,7 +187,7 @@ namespace Prowl.Runtime
             // Find all bone names used by the clip
             foreach (var bone in clip.Bones)
             {
-                var t = this.GameObject.Transform.DeepFind(bone.BoneName);
+                var t = GameObject.Transform.DeepFind(bone.BoneName);
                 if (t == null)
                     continue;
                 if (!transforms.Contains(t))

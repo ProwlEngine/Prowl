@@ -224,7 +224,7 @@ namespace Prowl.Editor.Assets
                 var types = meta.assetTypes;
                 if (names.Length != types.Length)
                 {
-                    Runtime.Debug.LogWarning($"Meta file {meta.guid} has mismatched names and types at path {AssetDatabase.GetRelativePath(meta.AssetPath.FullName)}");
+                    Runtime.Debug.LogWarning($"Meta file {meta.guid} has mismatched names and types at path {GetRelativePath(meta.AssetPath.FullName)}");
                     continue;
                 }
                 for (ushort i = 0; i < types.Length; i++)
