@@ -49,7 +49,7 @@
         <PackageReference Include="NuGet.Protocol" Version="6.11.0" />
         <PackageReference Include="NuGet.Resolver" Version="6.11.0" />
         <PackageReference Include="NuGet.Versioning" Version="6.11.0" />
-        <PackageReference Include="SixLabors.ImageSharp" Version="3.1.5" />
+        <PackageReference Include="SixLabors.ImageSharp" Version="2.1.9" />
         <PackageReference Include="SixLabors.ImageSharp.Textures" Version="0.0.0-alpha.0.140" />
         <PackageReference Include="SPIRV-Cross.NET" Version="1.0.1" />
     </ItemGroup>
