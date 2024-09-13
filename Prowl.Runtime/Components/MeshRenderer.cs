@@ -3,9 +3,6 @@
 
 using Prowl.Icons;
 
-using Material = Prowl.Runtime.Material;
-using Mesh = Prowl.Runtime.Mesh;
-
 namespace Prowl.Runtime;
 
 [ExecuteAlways]
