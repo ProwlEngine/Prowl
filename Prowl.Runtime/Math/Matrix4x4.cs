@@ -255,7 +255,7 @@ namespace Prowl.Runtime
             }
             else
             {
-                zaxis = zaxis * (1.0 / (double)Math.Sqrt(norm));
+                zaxis = zaxis * (1.0 / Math.Sqrt(norm));
             }
 
             Vector3 xaxis = Vector3.Normalize(Vector3.Cross(cameraUpVector, zaxis));
@@ -281,7 +281,7 @@ namespace Prowl.Runtime
         public static Matrix4x4 CreateConstrainedBillboard(Vector3 objectPosition, Vector3 cameraPosition, Vector3 rotateAxis, Vector3 cameraForwardVector, Vector3 objectForwardVector)
         {
             const double epsilon = 1e-4;
-            const double minAngle = 1.0 - (0.1 * ((double)Math.PI / 180.0)); // 0.1 degrees
+            const double minAngle = 1.0 - (0.1 * (Math.PI / 180.0)); // 0.1 degrees
 
             // Treat the case when object and camera positions are too close.
             Vector3 faceDir = new Vector3(
@@ -297,7 +297,7 @@ namespace Prowl.Runtime
             }
             else
             {
-                faceDir = faceDir * ((1.0 / (double)Math.Sqrt(norm)));
+                faceDir = faceDir * ((1.0 / Math.Sqrt(norm)));
             }
 
             Vector3 yaxis = rotateAxis;
@@ -493,8 +493,8 @@ namespace Prowl.Runtime
         {
             Matrix4x4 result = new();
 
-            double c = (double)Math.Cos(radians);
-            double s = (double)Math.Sin(radians);
+            double c = Math.Cos(radians);
+            double s = Math.Sin(radians);
 
             // [  1  0  0  0 ]
             // [  0  c  s  0 ]
@@ -518,8 +518,8 @@ namespace Prowl.Runtime
         {
             Matrix4x4 result = new();
 
-            double c = (double)Math.Cos(radians);
-            double s = (double)Math.Sin(radians);
+            double c = Math.Cos(radians);
+            double s = Math.Sin(radians);
 
             double y = centerPoint.y * (1 - c) + centerPoint.z * s;
             double z = centerPoint.z * (1 - c) - centerPoint.y * s;
@@ -545,8 +545,8 @@ namespace Prowl.Runtime
         {
             Matrix4x4 result = new();
 
-            double c = (double)Math.Cos(radians);
-            double s = (double)Math.Sin(radians);
+            double c = Math.Cos(radians);
+            double s = Math.Sin(radians);
 
             // [  c  0 -s  0 ]
             // [  0  1  0  0 ]
@@ -570,8 +570,8 @@ namespace Prowl.Runtime
         {
             Matrix4x4 result = new();
 
-            double c = (double)Math.Cos(radians);
-            double s = (double)Math.Sin(radians);
+            double c = Math.Cos(radians);
+            double s = Math.Sin(radians);
 
             double x = centerPoint.x * (1 - c) - centerPoint.z * s;
             double z = centerPoint.z * (1 - c) + centerPoint.x * s;
@@ -597,8 +597,8 @@ namespace Prowl.Runtime
         {
             Matrix4x4 result = new();
 
-            double c = (double)Math.Cos(radians);
-            double s = (double)Math.Sin(radians);
+            double c = Math.Cos(radians);
+            double s = Math.Sin(radians);
 
             // [  c  s  0  0 ]
             // [ -s  c  0  0 ]
@@ -622,8 +622,8 @@ namespace Prowl.Runtime
         {
             Matrix4x4 result = new();
 
-            double c = (double)Math.Cos(radians);
-            double s = (double)Math.Sin(radians);
+            double c = Math.Cos(radians);
+            double s = Math.Sin(radians);
 
             double x = centerPoint.x * (1 - c) + centerPoint.y * s;
             double y = centerPoint.y * (1 - c) - centerPoint.x * s;
@@ -674,7 +674,7 @@ namespace Prowl.Runtime
             //     [ zx-cosa*zx-sina*y zy-cosa*zy+sina*x   zz+cosa*(1-zz)  ]
             //
             double x = axis.x, y = axis.y, z = axis.z;
-            double sa = (double)Math.Sin(angle), ca = (double)Math.Cos(angle);
+            double sa = Math.Sin(angle), ca = Math.Cos(angle);
             double xx = x * x, yy = y * y, zz = z * z;
             double xy = x * y, xz = x * z, yz = y * z;
 
@@ -720,7 +720,7 @@ namespace Prowl.Runtime
             if (nearPlaneDistance >= farPlaneDistance)
                 throw new ArgumentOutOfRangeException(nameof(nearPlaneDistance));
 
-            double yScale = 1.0 / (double)Math.Tan(fieldOfView * 0.5);
+            double yScale = 1.0 / Math.Tan(fieldOfView * 0.5);
             double xScale = yScale / aspectRatio;
 
             Matrix4x4 result;
@@ -1436,9 +1436,9 @@ namespace Prowl.Runtime
                         uint cc;
                         double fAbsX, fAbsY, fAbsZ;
 
-                        fAbsX = (double)Math.Abs(pVectorBasis[a]->x);
-                        fAbsY = (double)Math.Abs(pVectorBasis[a]->y);
-                        fAbsZ = (double)Math.Abs(pVectorBasis[a]->z);
+                        fAbsX = Math.Abs(pVectorBasis[a]->x);
+                        fAbsY = Math.Abs(pVectorBasis[a]->y);
+                        fAbsZ = Math.Abs(pVectorBasis[a]->z);
 
                         #region Ranking
                         if (fAbsX < fAbsY)

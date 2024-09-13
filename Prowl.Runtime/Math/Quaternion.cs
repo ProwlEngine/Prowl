@@ -102,7 +102,7 @@ namespace Prowl.Runtime
         public double Magnitude()
         {
             double ls = x * x + y * y + z * z + w * w;
-            return (double)Math.Sqrt((double)ls);
+            return Math.Sqrt(ls);
         }
 
         /// <summary>
@@ -131,7 +131,7 @@ namespace Prowl.Runtime
 
             double ls = value.x * value.x + value.y * value.y + value.z * value.z + value.w * value.w;
 
-            double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
+            double invNorm = 1.0 / Math.Sqrt(ls);
 
             ans.x = value.x * invNorm;
             ans.y = value.y * invNorm;
@@ -198,8 +198,8 @@ namespace Prowl.Runtime
             Quaternion ans;
 
             double halfAngle = angle * 0.5;
-            double s = (double)Math.Sin(halfAngle);
-            double c = (double)Math.Cos(halfAngle);
+            double s = Math.Sin(halfAngle);
+            double c = Math.Cos(halfAngle);
 
             ans.x = axis.x * s;
             ans.y = axis.y * s;
@@ -223,16 +223,16 @@ namespace Prowl.Runtime
             double sr, cr, sp, cp, sy, cy;
 
             double halfRoll = roll * 0.5;
-            sr = (double)Math.Sin(halfRoll);
-            cr = (double)Math.Cos(halfRoll);
+            sr = Math.Sin(halfRoll);
+            cr = Math.Cos(halfRoll);
 
             double halfPitch = pitch * 0.5;
-            sp = (double)Math.Sin(halfPitch);
-            cp = (double)Math.Cos(halfPitch);
+            sp = Math.Sin(halfPitch);
+            cp = Math.Cos(halfPitch);
 
             double halfYaw = yaw * 0.5;
-            sy = (double)Math.Sin(halfYaw);
-            cy = (double)Math.Cos(halfYaw);
+            sy = Math.Sin(halfYaw);
+            cy = Math.Cos(halfYaw);
 
             Quaternion result;
 
@@ -257,7 +257,7 @@ namespace Prowl.Runtime
 
             if (trace > 0.0)
             {
-                double s = (double)Math.Sqrt(trace + 1.0);
+                double s = Math.Sqrt(trace + 1.0);
                 q.w = s * 0.5;
                 s = 0.5 / s;
                 q.x = (matrix.M23 - matrix.M32) * s;
@@ -268,7 +268,7 @@ namespace Prowl.Runtime
             {
                 if (matrix.M11 >= matrix.M22 && matrix.M11 >= matrix.M33)
                 {
-                    double s = (double)Math.Sqrt(1.0 + matrix.M11 - matrix.M22 - matrix.M33);
+                    double s = Math.Sqrt(1.0 + matrix.M11 - matrix.M22 - matrix.M33);
                     double invS = 0.5 / s;
                     q.x = 0.5 * s;
                     q.y = (matrix.M12 + matrix.M21) * invS;
@@ -277,7 +277,7 @@ namespace Prowl.Runtime
                 }
                 else if (matrix.M22 > matrix.M33)
                 {
-                    double s = (double)Math.Sqrt(1.0 + matrix.M22 - matrix.M11 - matrix.M33);
+                    double s = Math.Sqrt(1.0 + matrix.M22 - matrix.M11 - matrix.M33);
                     double invS = 0.5 / s;
                     q.x = (matrix.M21 + matrix.M12) * invS;
                     q.y = 0.5 * s;
@@ -286,7 +286,7 @@ namespace Prowl.Runtime
                 }
                 else
                 {
-                    double s = (double)Math.Sqrt(1.0 + matrix.M33 - matrix.M11 - matrix.M22);
+                    double s = Math.Sqrt(1.0 + matrix.M33 - matrix.M11 - matrix.M22);
                     double invS = 0.5 / s;
                     q.x = (matrix.M31 + matrix.M13) * invS;
                     q.y = (matrix.M32 + matrix.M23) * invS;
@@ -346,13 +346,13 @@ namespace Prowl.Runtime
             }
             else
             {
-                double omega = (double)Math.Acos(cosOmega);
-                double invSinOmega = (double)(1 / Math.Sin(omega));
+                double omega = Math.Acos(cosOmega);
+                double invSinOmega = 1 / Math.Sin(omega);
 
-                s1 = (double)Math.Sin((1.0 - t) * omega) * invSinOmega;
+                s1 = Math.Sin((1.0 - t) * omega) * invSinOmega;
                 s2 = (flip)
-                    ? (double)-Math.Sin(t * omega) * invSinOmega
-                    : (double)Math.Sin(t * omega) * invSinOmega;
+                    ? -Math.Sin(t * omega) * invSinOmega
+                    : Math.Sin(t * omega) * invSinOmega;
             }
 
             Quaternion ans;
@@ -399,7 +399,7 @@ namespace Prowl.Runtime
 
             // Normalize it.
             double ls = r.x * r.x + r.y * r.y + r.z * r.z + r.w * r.w;
-            double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
+            double invNorm = 1.0 / Math.Sqrt(ls);
 
             r.x *= invNorm;
             r.y *= invNorm;

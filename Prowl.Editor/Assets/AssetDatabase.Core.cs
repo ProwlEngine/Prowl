@@ -443,7 +443,7 @@ namespace Prowl.Editor.Assets
                     asset = (T)serialized.SubAssets[fileID - 1];
                 }
                 asset.AssetID = assetGuid;
-                asset.FileID = (ushort)fileID;
+                asset.FileID = fileID;
                 return asset;
             }
             catch (Exception e)

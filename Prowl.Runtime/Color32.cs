@@ -30,7 +30,7 @@ namespace Prowl.Runtime
         internal uint GetUInt()
         {
             uint @out;
-            @out = (uint)r;
+            @out = r;
             @out |= (uint)g << 8;
             @out |= (uint)b << 16;
             @out |= (uint)a << 24;
@@ -44,7 +44,7 @@ namespace Prowl.Runtime
 
         public static implicit operator Color(Color32 v)
         {
-            return new Color((float)v.r / 255f, (float)v.g / 255f, (float)v.b / 255f, (float)v.a / 255f);
+            return new Color(v.r / 255f, v.g / 255f, v.b / 255f, v.a / 255f);
         }
 
         public override readonly string ToString() => string.Format("RGBA({0}, {1}, {2}, {3})", new object[] { r, g, b, a });

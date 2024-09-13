@@ -99,7 +99,7 @@ namespace Prowl.Editor.Assets
                 count++;
                 if (count % 10 == 0 || count >= maxCount - 5)
                 {
-                    float percentComplete = ((float)count / (float)maxCount) * 100f;
+                    float percentComplete = (count / (float)maxCount) * 100f;
                     Debug.Log($"Exporting Assets To Stream: {count}/{maxCount} - {percentComplete}%");
                 }
             }

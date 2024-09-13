@@ -894,7 +894,7 @@ namespace Prowl.Runtime.GUI.TextEdit
                         num = 999 - redo_char_point;
 
                         Array.Copy(undo_char, redo_char_point - n, undo_char, redo_char_point, num);
-                        for (i = (int)redo_point; i < k; ++i)
+                        for (i = redo_point; i < k; ++i)
                             if (undo_rec[i].char_storage >= 0)
                                 undo_rec[i].char_storage += n;
                     }

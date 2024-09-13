@@ -115,7 +115,7 @@ namespace Prowl.Editor.Docking
 
             if (Type == NodeType.SplitVertical)
             {
-                double d = (double)Math.Floor(SplitDistance * w);
+                double d = Math.Floor(SplitDistance * w);
 
                 // Left
                 Child[0].UpdateRecursive(x, y, d, h);
@@ -127,7 +127,7 @@ namespace Prowl.Editor.Docking
 
             if (Type == NodeType.SplitHorizontal)
             {
-                double d = (double)Math.Floor(SplitDistance * h);
+                double d = Math.Floor(SplitDistance * h);
 
                 // Top
                 Child[0].UpdateRecursive(x, y, w, d);

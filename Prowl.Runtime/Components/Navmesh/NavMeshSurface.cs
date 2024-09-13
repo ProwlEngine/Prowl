@@ -118,9 +118,9 @@ namespace Prowl.Runtime
 
                     for (int j = 0; j < shape.Indices16.Length; j += 3)
                     {
-                        indices.Add(verts.Count + (int)shape.Indices16[j + 0]);
-                        indices.Add(verts.Count + (int)shape.Indices16[j + 1]);
-                        indices.Add(verts.Count + (int)shape.Indices16[j + 2]);
+                        indices.Add(verts.Count + shape.Indices16[j + 0]);
+                        indices.Add(verts.Count + shape.Indices16[j + 1]);
+                        indices.Add(verts.Count + shape.Indices16[j + 2]);
                     }
 
                     var transform = input.transformsOut[i];

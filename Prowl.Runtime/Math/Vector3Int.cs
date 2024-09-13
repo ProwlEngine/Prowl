@@ -161,7 +161,7 @@ namespace Prowl.Runtime
 
             double ls = dx * dx + dy * dy + dz * dz;
 
-            return (double)Math.Sqrt((double)ls);
+            return Math.Sqrt(ls);
         }
 
         /// <summary>
