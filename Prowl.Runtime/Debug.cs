@@ -26,7 +26,10 @@ public record DebugStackFrame(int line, int column, string? fileName = null, Met
 {
     public override string ToString()
     {
-        return $"In {methodBase.DeclaringType.Name}.{methodBase.Name} at {fileName}:{line}:{column}";
+        if (methodBase != null)
+            return $"In {methodBase.DeclaringType.Name}.{methodBase.Name} at {fileName}:{line}:{column}";
+        else
+            return $"At {fileName}:{line}:{column}";
     }
 }
 

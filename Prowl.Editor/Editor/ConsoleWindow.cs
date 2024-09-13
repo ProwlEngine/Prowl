@@ -129,8 +129,9 @@ namespace Prowl.Editor
                 {
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
 
+                    Vector2 msgSize = Font.DefaultFont.CalcTextSize(_selectedMessage.message, 0);
 
-                    using (gui.Node("Header").Width(_selectedMessage.message.Length * 10).Height(30).Enter())
+                    using (gui.Node("Header").Width(msgSize.x).Height(30).Enter())
                     {
                         GetSeverityStyles(_selectedMessage.severity, out string icon, out Color color);
 
@@ -157,8 +158,9 @@ namespace Prowl.Editor
                         {
                             DebugStackFrame frame = _selectedMessage.trace.stackFrames[i];
                             string frameText = frame.ToString();
+                            Vector2 frameSize = Font.DefaultFont.CalcTextSize(frameText, 0);
 
-                            using (gui.Node("StackFrame", i).Margin(0, 0, 0, 5).Width(frameText.Length * 8).Height(15).Enter())
+                            using (gui.Node("StackFrame", i).Margin(0, 0, 0, 5).Width(frameSize.x).Height(15).Enter())
                             {
                                 Interactable interact = gui.GetInteractable();
                                 Color col = Color.white * 0.65f;
