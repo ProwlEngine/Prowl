@@ -67,6 +67,8 @@ namespace Prowl.Editor
                 Color disabled = Color.white * 0.45f;
                 Color enabled = Color.white;
 
+                gui.Node("Padding").Width(gui.CurrentNode.LayoutData.Rect.width - (75 + (30 * 4)));
+
                 void DrawMessageButton(string text, ref bool value, string tooltip)
                 {
                     Color color = value ? enabled : disabled;
@@ -109,6 +111,8 @@ namespace Prowl.Editor
             {
                 using (gui.Node("List").ExpandHeight().Layout(LayoutType.Column).Scroll(true, false).Clip().Enter())
                 {
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
+
                     double viewHeight = gui.CurrentNode.LayoutData.Rect.height;
 
                     int messageBottom = Math.Max(0, (int)Math.Floor(gui.CurrentNode.LayoutData.VScroll / MessageHeight));
@@ -129,27 +133,25 @@ namespace Prowl.Editor
                 {
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
 
-                    Vector2 msgSize = Font.DefaultFont.CalcTextSize(_selectedMessage.message, 0);
+                    GetSeverityStyles(_selectedMessage.severity, out string icon, out Color color);
+                    string selMsg = icon + " " + _selectedMessage.message;
 
-                    using (gui.Node("Header").Width(msgSize.x).Height(30).Enter())
+                    Vector2 msgSize = Font.DefaultFont.CalcTextSize(selMsg, font_size: 22, 0);
+
+                    using (gui.Node("Header").Width(msgSize.x).Height(20).Enter())
                     {
-                        GetSeverityStyles(_selectedMessage.severity, out string icon, out Color color);
-
                         Rect rect = gui.CurrentNode.LayoutData.Rect;
 
-                        Rect iconRect = rect;
-                        iconRect.width = iconRect.height;
-
-                        gui.Draw2D.DrawText(icon, 30, iconRect, color);
-
                         Rect textRect = rect;
-                        textRect.x += iconRect.width;
-                        textRect.width -= iconRect.width;
+                        textRect.y += 5;
+                        textRect.x += 5;
+                        textRect.height -= 5;
+                        textRect.width -= 5;
 
                         Vector2 textPos = textRect.Position;
                         textPos.y += (rect.height / 2) - 9;
 
-                        gui.Draw2D.DrawText(Font.DefaultFont, _selectedMessage.message, 23, textPos, color, textRect.width, textRect);
+                        gui.Draw2D.DrawText(Font.DefaultFont, selMsg, 20, textPos, color, textRect.width, textRect);
                     }
 
                     if (_selectedMessage.trace != null && _selectedMessage.trace.stackFrames.Length != 0)
@@ -158,7 +160,7 @@ namespace Prowl.Editor
                         {
                             DebugStackFrame frame = _selectedMessage.trace.stackFrames[i];
                             string frameText = frame.ToString();
-                            Vector2 frameSize = Font.DefaultFont.CalcTextSize(frameText, 0);
+                            Vector2 frameSize = Font.DefaultFont.CalcTextSize(frameText, font_size: 21, 0);
 
                             using (gui.Node("StackFrame", i).Margin(0, 0, 0, 5).Width(frameSize.x).Height(15).Enter())
                             {
@@ -169,7 +171,7 @@ namespace Prowl.Editor
                                 {
                                     col = EditorStylePrefs.Instance.Highlighted * 0.7f;
 
-                                    if (gui.IsPointerDoubleClick())
+                                    if (gui.IsPointerClick())
                                         OpenStackFrame(frame);
                                 }
 
@@ -179,7 +181,7 @@ namespace Prowl.Editor
                         }
                     }
 
-                    using (gui.Node("CloseBtn").IgnoreLayout().Scale(30).Top(10).Enter())
+                    using (gui.Node("CloseBtn").IgnoreLayout().Scale(18).Top(10).Enter())
                     {
                         gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 10));
 
@@ -197,7 +199,7 @@ namespace Prowl.Editor
                             gui.Draw2D.DrawRectFilled(closeRect, EditorStylePrefs.Instance.Hovering, 5, CornerRounding.All);
 
                         closeRect.y += 1;
-                        gui.Draw2D.DrawText(FontAwesome6.Xmark, 30, closeRect);
+                        gui.Draw2D.DrawText(FontAwesome6.Xmark, 23, closeRect);
                     }
 
                 }
@@ -216,7 +218,7 @@ namespace Prowl.Editor
                 if (interact.TakeFocus())
                     _selectedMessage = message;
 
-                Color bgColor = EditorStylePrefs.Instance.WindowBGOne * 0.9f;
+                Color bgColor = Color.clear;
 
                 if (interact.IsFocused())
                     bgColor = EditorStylePrefs.Instance.Highlighted * 0.7f;
@@ -231,27 +233,26 @@ namespace Prowl.Editor
 
                 Rect rect = gui.CurrentNode.LayoutData.Rect;
 
-                Rect iconRect = rect;
-                iconRect.width = iconRect.height;
-
-                gui.Draw2D.DrawText(icon, 30, iconRect, color);
-
                 Rect textRect = rect;
-                textRect.x += iconRect.width;
-                textRect.width -= iconRect.width;
+
+                textRect.x += 7.5;
 
                 bool hasTrace = message.trace != null && message.trace.stackFrames.Length > 0;
 
                 Vector2 textPos = textRect.Position;
                 textPos.y += (rect.height / 2) - (7.5 + (hasTrace ? 5 : 0));
 
-                gui.Draw2D.DrawText(Font.DefaultFont, message.message, 20, textPos, color, 0, textRect);
+                Rect mainRect = textRect;
+                mainRect.y = textPos.y;
+                mainRect.height = 22;
+
+                gui.Draw2D.DrawText(Font.DefaultFont, icon + " " + message.message, 20, textPos, color, 0, mainRect);
 
                 if (hasTrace)
                 {
                     textPos.y += 15;
 
-                    DebugStackFrame frame = message.trace.stackFrames[message.trace.stackFrames.Length - 1];
+                    DebugStackFrame frame = message.trace.stackFrames[0];
 
                     string frameText = frame.ToString();
 
