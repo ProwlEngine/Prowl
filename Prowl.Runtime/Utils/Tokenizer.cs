@@ -15,6 +15,8 @@ namespace Prowl.Runtime.Utils
         public ReadOnlySpan<char> Token => TokenMemory.Span;
         public int TokenPosition { get; set; }
         public int InputPosition { get; set; }
+        public int CurrentLine { get; set; } = 1;
+        public int CurrentColumn { get; set; }
 
         public Func<char, bool> IsWhitespace;
         public Func<char, bool> IsQuote;
@@ -26,10 +28,22 @@ namespace Prowl.Runtime.Utils
             IsQuote = isQuote ?? DefaultQuoteHandler;
         }
 
+        public virtual void IncrementInputPosition()
+        {
+            InputPosition++;
+            CurrentColumn++;
+
+            if (InputPosition < Input.Length && Input.Span[InputPosition] == '\n')
+            {
+                CurrentLine++;
+                CurrentColumn = 0;
+            }
+        }
+
         public virtual bool MoveNext()
         {
             while (InputPosition < Input.Length && IsWhitespace.Invoke(Input.Span[InputPosition]))
-                InputPosition++;
+                IncrementInputPosition();
 
             if (InputPosition >= Input.Length)
             {
@@ -50,13 +64,13 @@ namespace Prowl.Runtime.Utils
 
         private bool HandleQuotedString(char quoteChar)
         {
-            InputPosition++;
+            IncrementInputPosition();
 
             while (InputPosition < Input.Length)
             {
                 if (Input.Span[InputPosition] == quoteChar)
                 {
-                    InputPosition++;
+                    IncrementInputPosition();
                     TokenMemory = Input.Slice(TokenPosition, InputPosition - TokenPosition);
                     return true;
                 }
@@ -66,10 +80,10 @@ namespace Prowl.Runtime.Utils
                     if (InputPosition + 1 >= Input.Length)
                         throw new InvalidDataException($"Reached end of input while reading an escape sequence in a quoted string starting at position {TokenPosition}.");
 
-                    InputPosition++;
+                    IncrementInputPosition();
                 }
 
-                InputPosition++;
+                IncrementInputPosition();
             }
 
             throw new InvalidDataException($"Reached end of input while reading a quoted string starting at position {TokenPosition}.");
@@ -77,11 +91,11 @@ namespace Prowl.Runtime.Utils
 
         private bool HandleToken()
         {
-            InputPosition++;
+            IncrementInputPosition();
             while (InputPosition < Input.Length
                    && !IsWhitespace.Invoke(Input.Span[InputPosition])
                    && !IsQuote.Invoke(Input.Span[InputPosition]))
-                InputPosition++;
+                IncrementInputPosition();
 
             TokenMemory = Input.Slice(TokenPosition, InputPosition - TokenPosition);
             return true;
@@ -202,7 +216,7 @@ namespace Prowl.Runtime.Utils
         public override bool MoveNext()
         {
             while (InputPosition < Input.Length && IsWhitespace.Invoke(Input.Span[InputPosition]))
-                InputPosition++;
+                IncrementInputPosition();
 
             if (InputPosition >= Input.Length)
             {
@@ -233,13 +247,13 @@ namespace Prowl.Runtime.Utils
         private bool HandleQuotedString(char quoteChar)
         {
             TokenType = _defaultTokenType;
-            InputPosition++;
+            IncrementInputPosition();
 
             while (InputPosition < Input.Length)
             {
                 if (Input.Span[InputPosition] == quoteChar)
                 {
-                    InputPosition++;
+                    IncrementInputPosition();
                     TokenMemory = Input.Slice(TokenPosition, InputPosition - TokenPosition);
                     return true;
                 }
@@ -249,10 +263,10 @@ namespace Prowl.Runtime.Utils
                     if (InputPosition + 1 >= Input.Length)
                         throw new InvalidDataException($"Reached end of input while reading an escape sequence in a quoted string starting at position {TokenPosition}.");
 
-                    InputPosition++;
+                    IncrementInputPosition();
                 }
 
-                InputPosition++;
+                IncrementInputPosition();
             }
 
             throw new InvalidDataException($"Reached end of input while reading a quoted string starting at position {TokenPosition}.");
@@ -261,13 +275,13 @@ namespace Prowl.Runtime.Utils
         private bool HandleDefaultToken()
         {
             TokenType = _defaultTokenType;
-            InputPosition++;
+            IncrementInputPosition();
 
             while (InputPosition < Input.Length
                    && !_isSymbol(Input.Span[InputPosition])
                    && !IsWhitespace.Invoke(Input.Span[InputPosition])
                    && !IsQuote.Invoke(Input.Span[InputPosition]))
-                InputPosition++;
+                IncrementInputPosition();
 
             TokenMemory = Input.Slice(TokenPosition, InputPosition - TokenPosition);
             return true;
