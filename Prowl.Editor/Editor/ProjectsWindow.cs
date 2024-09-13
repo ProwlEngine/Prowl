@@ -50,39 +50,16 @@ namespace Prowl.Editor
             if (Project.HasProject)
                 isOpened = false;
 
-            using (gui.Node("TopBar").ExpandWidth().MaxHeight(50).Enter())
-            {
-                using (gui.Node("Name").Scale(150, 50).Enter())
-                {
-                    Rect rect = gui.CurrentNode.LayoutData.Rect;
-                    gui.Draw2D.DrawText(Font.DefaultFont, "Prowl", 40, rect, Color.white);
-                }
-
-                using (gui.Node("Settings").Scale(30).Top(10).Enter())
-                {
-                    gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 10));
-
-                    Interactable interact = gui.GetInteractable();
-
-                    Rect rect = gui.CurrentNode.LayoutData.Rect;
-
-                    if (interact.TakeFocus())
-                    {
-                        gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Highlighted, 5, CornerRounding.All);
-                        Debug.Log("Opened editor settings");
-                    }
-                    else if (interact.IsHovered())
-                        gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.Hovering, 5, CornerRounding.All);
-
-                    rect.y += 1; // Gear icon is offset upwards by a single pixel in the font, so we apply a teeny tiny offset to align it.
-                    gui.Draw2D.DrawText(FontAwesome6.Gear, 30, rect);
-                }
-            }
-
             using (gui.Node("Content").ExpandWidth().Layout(LayoutType.Row).ScaleChildren().Enter())
             {
                 using (gui.Node("Side").ExpandHeight().MaxWidth(150).Layout(LayoutType.Column).Spacing(5).Enter())
                 {
+                    using (gui.Node("Name").Scale(150, 50).Enter())
+                    {
+                        Rect rect = gui.CurrentNode.LayoutData.Rect;
+                        gui.Draw2D.DrawText(Font.DefaultFont, "Prowl", 40, rect, Color.white);
+                    }
+
                     DrawSidePanel();
                 }
 
@@ -121,18 +98,15 @@ namespace Prowl.Editor
             gui.Draw2D.DrawVerticalBlackGradient(shadowA, shadowB, 20, 0.25f);
 
 
-            using (gui.Node("TopBar").ExpandWidth().MaxHeight(40).Enter())
+            using (gui.Node("TopBar").Top(50).ExpandWidth().MaxHeight(40).Enter())
             {
-                using (gui.Node("Search").TopLeft(30, 10).Scale(150, 30).Enter())
-                {
-                    gui.InputField("SearchInput", ref _searchText, 0x100, Gui.InputFieldFlags.None, 0, 0, 150, null, EditorGUI.GetInputStyle());
-                }
+                gui.Search("SearchInput", ref _searchText, 30, 10, 150, null, EditorGUI.GetInputStyle());
 
                 if (!_createTabOpen)
                 {
                     using (gui.Node("Add").Top(7.5).Scale(75, 30).Enter())
                     {
-                        gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 87.5));
+                        gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 110));
 
                         Interactable interact = gui.GetInteractable();
 
@@ -154,7 +128,7 @@ namespace Prowl.Editor
 
                     using (gui.Node("Create").Top(7.5).Scale(75, 30).Enter())
                     {
-                        gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 7.5));
+                        gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 30));
 
                         Interactable interact = gui.GetInteractable();
 
@@ -174,7 +148,7 @@ namespace Prowl.Editor
 
             double height = gui.CurrentNode.LayoutData.Rect.height;
 
-            using (gui.Node("Projects").ExpandWidth().Height(height - 60).Enter())
+            using (gui.Node("Projects").Top(50).ExpandWidth(-7.5).Height(height - 60).Enter())
             {
                 double width = gui.CurrentNode.LayoutData.Rect.width;
 
