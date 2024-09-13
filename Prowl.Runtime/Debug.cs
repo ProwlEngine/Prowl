@@ -2,7 +2,10 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Reflection;
+using System.Text;
 
 namespace Prowl.Runtime;
 
@@ -15,7 +18,46 @@ public enum LogSeverity
     Exception = 1 << 4
 }
 
-public delegate void OnLog(string message, StackTrace? stackTrace, LogSeverity logSeverity);
+
+public delegate void OnLog(string message, DebugStackTrace? stackTrace, LogSeverity logSeverity);
+
+
+public record DebugStackFrame(int line, int column, string? fileName = null, MethodBase? methodBase = null)
+{
+    public override string ToString()
+    {
+        return $"In {methodBase.DeclaringType.Name}.{methodBase.Name} at {fileName}:{line}:{column}";
+    }
+}
+
+
+public record DebugStackTrace(params DebugStackFrame[] stackFrames)
+{
+    public static explicit operator DebugStackTrace(StackTrace stackTrace)
+    {
+        DebugStackFrame[] stackFrames = new DebugStackFrame[stackTrace.FrameCount];
+
+        for (int i = 0; i < stackFrames.Length; i++)
+        {
+            StackFrame srcFrame = stackTrace.GetFrame(i);
+            stackFrames[i] = new DebugStackFrame(srcFrame.GetFileLineNumber(), srcFrame.GetFileColumnNumber(), srcFrame.GetFileName(), srcFrame.GetMethod());
+        }
+
+        return new DebugStackTrace(stackFrames);
+    }
+
+
+    public override string ToString()
+    {
+        StringBuilder sb = new();
+
+        for (int i = 0; i < stackFrames.Length; i++)
+            sb.AppendLine($"\t{stackFrames[i]}");
+
+        return sb.ToString();
+    }
+}
+
 
 public static class Debug
 {
@@ -53,20 +95,46 @@ public static class Debug
 
 
     public static void LogException(Exception exception)
-        => Log(exception.Message, ConsoleColor.Red, LogSeverity.Exception, new StackTrace(exception, true));
+    {
+        ConsoleColor prevColor = Console.ForegroundColor;
+
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine(exception.Message);
+
+        if (exception.InnerException != null)
+            Console.WriteLine(exception.InnerException.Message);
+
+        DebugStackTrace trace = (DebugStackTrace)new StackTrace(exception.InnerException ?? exception, true);
+
+        Console.WriteLine(trace.ToString());
+
+        Console.ForegroundColor = prevColor;
+
+        OnLog?.Invoke(exception.Message + "\n" + exception.InnerException.Message, trace, LogSeverity.Exception);
+    }
 
 
     // NOTE : StackTrace is pretty fast on modern .NET, so it's nice to keep it on by default, since it gives useful line numbers for debugging purposes.
     // For reference, getting a stack trace on a modern machine takes around 15 μs at a depth of 15.
-    public static void Log(string message, ConsoleColor color, LogSeverity logSeverity, StackTrace? customTrace = null)
+    public static void Log(string message, ConsoleColor color, LogSeverity logSeverity, DebugStackTrace? customTrace = null)
     {
         ConsoleColor prevColor = Console.ForegroundColor;
 
         Console.ForegroundColor = color;
         Console.WriteLine(message);
-        Console.ForegroundColor = prevColor;
 
-        OnLog?.Invoke(message, customTrace ?? new StackTrace(2, true), logSeverity);
+        if (customTrace != null)
+        {
+            Console.WriteLine(customTrace.ToString());
+            OnLog?.Invoke(message, customTrace, logSeverity);
+        }
+        else
+        {
+            StackTrace trace = new StackTrace(2, true);
+            OnLog?.Invoke(message, (DebugStackTrace)trace, logSeverity);
+        }
+
+        Console.ForegroundColor = prevColor;
     }
 
 
