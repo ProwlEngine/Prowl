@@ -285,7 +285,7 @@ namespace Prowl.Editor
                         AssetDatabase.Move(dir, target);
                 }
 
-                expanded = gui.GetNodeStorage<bool>(root.RootDirectoryPath, defaultOpen);
+                expanded = gui.GetNodeStorage(root.RootDirectoryPath, defaultOpen);
                 using (gui.Node("ExpandBtn").TopLeft(5, 0).Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                 {
                     if (gui.IsNodePressed())
@@ -362,7 +362,7 @@ namespace Prowl.Editor
                         }
                     }
 
-                    expanded = gui.GetNodeStorage<bool>(gui.CurrentNode.Parent, subDirectory.FullName, false);
+                    expanded = gui.GetNodeStorage(gui.CurrentNode.Parent, subDirectory.FullName, false);
                     using (gui.Node("ExpandBtn").TopLeft(5, 0).Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                     {
                         if (gui.IsNodePressed())
@@ -442,7 +442,7 @@ namespace Prowl.Editor
 
                     if (subFileNode.SubAssets.Length > 1)
                     {
-                        expanded = gui.GetNodeStorage<bool>(gui.CurrentNode.Parent, subFile.FullName, false);
+                        expanded = gui.GetNodeStorage(gui.CurrentNode.Parent, subFile.FullName, false);
                         using (gui.Node("ExpandBtn").TopLeft(Offset.Percentage(1f, -EditorStylePrefs.Instance.ItemSize), 0).Scale(EditorStylePrefs.Instance.ItemSize).Enter())
                         {
                             if (gui.IsNodePressed())
