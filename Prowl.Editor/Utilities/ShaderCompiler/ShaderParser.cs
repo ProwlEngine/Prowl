@@ -1,6 +1,7 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -8,6 +9,8 @@ using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
 using Veldrid;
+
+using Debug = Prowl.Runtime.Debug;
 
 namespace Prowl.Editor.Utilities
 {
@@ -62,11 +65,13 @@ namespace Prowl.Editor.Utilities
         }
 
 
-        public static Runtime.Shader ParseShader(string input)
+        public static bool ParseShader(string input, FileIncluder includer, out Runtime.Shader? shader)
         {
+            shader = null;
+
             Tokenizer<ShaderToken> tokenizer = CreateTokenizer(input);
 
-            string name;
+            string name = "";
 
             List<ShaderProperty> properties = [];
             ParsedPass? globalDefaults = null;
@@ -74,40 +79,54 @@ namespace Prowl.Editor.Utilities
 
             string? fallback = null;
 
-            tokenizer.MoveNext();
-            if (tokenizer.Token.ToString() != "Shader")
-                throw new InvalidOperationException($"Expected top-level 'Shader' declaration, found {tokenizer.Token}");
-
-            tokenizer.MoveNext(); // Move to string
-            name = tokenizer.ParseQuotedStringValue();
-
-            while (tokenizer.MoveNext())
+            try
             {
-                switch (tokenizer.Token.ToString())
+                tokenizer.MoveNext();
+                if (tokenizer.Token.ToString() != "Shader")
+                    throw new ParseException($"Expected top-level 'Shader' declaration, found '{tokenizer.Token}'");
+
+                tokenizer.MoveNext(); // Move to string
+                name = tokenizer.ParseQuotedStringValue();
+
+                while (tokenizer.MoveNext())
                 {
-                    case "Properties":
-                        EnsureUndef(properties, "Properties block");
-                        properties = ParseProperties(tokenizer);
-                        break;
+                    switch (tokenizer.Token.ToString())
+                    {
+                        case "Properties":
+                            EnsureUndef(properties, "Properties block");
+                            properties = ParseProperties(tokenizer);
+                            break;
 
-                    case "Global":
-                        EnsureUndef(globalDefaults, "Global block");
-                        globalDefaults = ParseGlobal(tokenizer);
-                        break;
+                        case "Global":
+                            EnsureUndef(globalDefaults, "Global block");
+                            globalDefaults = ParseGlobal(tokenizer);
+                            break;
 
-                    case "Pass":
-                        parsedPasses.Add(ParsePass(tokenizer));
-                        break;
+                        case "Pass":
+                            parsedPasses.Add(ParsePass(tokenizer));
+                            break;
 
-                    case "Fallback":
-                        tokenizer.MoveNext(); // Move to string
-                        fallback = tokenizer.ParseQuotedStringValue();
-                        break;
+                        case "Fallback":
+                            tokenizer.MoveNext(); // Move to string
+                            fallback = tokenizer.ParseQuotedStringValue();
+                            break;
+
+                        default:
+                            throw new ParseException($"Unknown shader token: {tokenizer.Token}");
+                    }
                 }
+            }
+            catch (ParseException ex)
+            {
+                Debug.Log(ex.Message);
+                LogCompilationError(ex.Message, includer, tokenizer.CurrentLine, tokenizer.CurrentColumn);
+                return false;
             }
 
             ShaderPass[] passes = new ShaderPass[parsedPasses.Count];
 
+            int globalLen = globalDefaults != null && globalDefaults.Program != null ? globalDefaults.Program.Length : 0;
+            int globalPos = globalDefaults != null && globalDefaults.Program != null ? globalDefaults.ProgramStartLine : 0;
 
             for (int i = 0; i < passes.Length; i++)
             {
@@ -126,20 +145,84 @@ namespace Prowl.Editor.Utilities
 
                 string sourceCode = sourceBuilder.ToString();
 
-                ParseProgramInfo(sourceCode, out EntryPoint[] entrypoints, out (int, int)? shaderModel);
+                if (!ParseProgramInfo(sourceCode, out EntryPoint[]? entrypoints, out (int, int)? shaderModel, out CompilationMessage? message))
+                {
+                    LogCompilationError(message.Value.message, includer, message.Value.line, message.Value.column);
+                    return false;
+                }
 
                 if (!Array.Exists(entrypoints, x => x.Stage == ShaderStages.Vertex))
-                    throw new InvalidOperationException("Pass program does not contain a vertex stage.");
+                {
+                    LogCompilationError($"Pass {i} does not contain a vertex stage", includer, parsedPass.Line, 0);
+                    return false;
+                }
 
                 if (!Array.Exists(entrypoints, x => x.Stage == ShaderStages.Fragment))
-                    throw new InvalidOperationException("Pass program does not contain a fragment stage.");
+                {
+                    LogCompilationError($"Pass {i} does not contain a fragment stage.", includer, parsedPass.Line, 0);
+                    return false;
+                }
 
-                ShaderVariant[] variants = ShaderCompiler.GenerateVariants(sourceCode, entrypoints, shaderModel ?? (6, 0), passDesc.Keywords);
+                ShaderCreationArgs args;
+                args.entryPoints = entrypoints;
+                args.combinations = passDesc.Keywords ?? new() { { "", [""] } };
+                args.shaderModel = shaderModel ?? (6, 0);
+                args.sourceCode = sourceCode;
+
+                List<CompilationMessage> compilerMessages = new();
+
+                ShaderVariant[] variants = ShaderCompiler.GenerateVariants(args, includer, compilerMessages);
+
+                if (LogCompilationMessages(compilerMessages, includer, parsedPass.ProgramStartLine, globalLen, globalPos))
+                    return false;
 
                 passes[i] = new ShaderPass(parsedPass.Name, passDesc, variants);
             }
 
-            return new Runtime.Shader(name, properties.ToArray(), passes);
+            shader = new Runtime.Shader(name, [.. properties], passes);
+
+            return true;
+        }
+
+
+        private static void LogCompilationError(string message, FileIncluder includer, int line, int column)
+        {
+            DebugStackFrame frame = new(line, column, includer.SourceFilePath);
+            DebugStackTrace trace = new(frame);
+
+            Debug.Log("Dbg: " + trace.ToString());
+
+            Debug.Log("Error compiling shader: " + message, ConsoleColor.Red, LogSeverity.Error, trace);
+        }
+
+
+        private static bool LogCompilationMessages(List<CompilationMessage> messages, FileIncluder includer, int programStartLine, int globalOffset, int globalStartLine)
+        {
+            bool hasErrors = false;
+
+            foreach (CompilationMessage message in messages)
+            {
+                if (message.severity == LogSeverity.Error || message.severity == LogSeverity.Exception)
+                    hasErrors = true;
+
+                bool isGlobal = message.line - globalOffset < 0;
+
+                int line = isGlobal ? globalStartLine + message.line : programStartLine + (message.line - globalOffset);
+
+                ConsoleColor col = message.severity switch
+                {
+                    LogSeverity.Normal => ConsoleColor.White,
+                    LogSeverity.Warning => ConsoleColor.Yellow,
+                    _ => ConsoleColor.Red,
+                };
+
+                DebugStackFrame frame = new(line, message.column, includer.SourceFilePath);
+                DebugStackTrace trace = new(frame);
+
+                Debug.Log(message.message, col, message.severity, trace);
+            }
+
+            return hasErrors;
         }
 
 
@@ -172,7 +255,7 @@ namespace Prowl.Editor.Utilities
 
                 ExpectToken(tokenizer, ShaderToken.Comma);
                 ExpectToken(tokenizer, ShaderToken.Identifier);
-                property.PropertyType = Enum.Parse<ShaderPropertyType>(tokenizer.Token.ToString(), true);
+                property.PropertyType = EnumParse<ShaderPropertyType>(tokenizer.Token.ToString(), "property type");
 
                 ExpectToken(tokenizer, ShaderToken.CloseParen);
 
@@ -215,11 +298,15 @@ namespace Prowl.Editor.Utilities
                         break;
 
                     case "HLSLINCLUDE":
+                        parsedGlobal.ProgramStartLine = tokenizer.CurrentLine;
                         EnsureUndef(parsedGlobal.Program, "'HLSLINCLUDE' in Global block");
 
                         SliceTo(tokenizer, "ENDHLSL");
                         parsedGlobal.Program = tokenizer.Token.ToString();
                         break;
+
+                    default:
+                        throw new ParseException($"Unknown global token: {tokenizer.Token}");
                 }
             }
 
@@ -231,6 +318,8 @@ namespace Prowl.Editor.Utilities
         {
             var pass = new ParsedPass();
 
+            pass.Line = tokenizer.CurrentLine;
+
             if (tokenizer.MoveNext() && tokenizer.TokenType == ShaderToken.Identifier)
             {
                 pass.Name = tokenizer.ParseQuotedStringValue();
@@ -238,7 +327,7 @@ namespace Prowl.Editor.Utilities
             }
             else if (tokenizer.TokenType != ShaderToken.OpenCurlBrace)
             {
-                throw new InvalidOperationException($"Expected {ShaderToken.OpenCurlBrace} or {ShaderToken.Identifier}, but got {tokenizer.TokenType}");
+                throw new ParseException($"Expected {ShaderToken.OpenCurlBrace} or {ShaderToken.Identifier}, but got {tokenizer.TokenType}");
             }
 
             while (tokenizer.MoveNext() && tokenizer.TokenType != ShaderToken.CloseCurlBrace)
@@ -263,7 +352,7 @@ namespace Prowl.Editor.Utilities
                     case "Cull":
                         EnsureUndef(pass.Description.CullingMode, "'Cull' in pass");
                         ExpectToken(tokenizer, ShaderToken.Identifier);
-                        pass.Description.CullingMode = Enum.Parse<FaceCullMode>(tokenizer.Token.ToString(), true);
+                        pass.Description.CullingMode = EnumParse<FaceCullMode>(tokenizer.Token.ToString(), "Cull");
                         break;
 
                     case "Features":
@@ -272,15 +361,19 @@ namespace Prowl.Editor.Utilities
                         break;
 
                     case "HLSLPROGRAM":
+                        pass.ProgramStartLine = tokenizer.CurrentLine;
                         EnsureUndef(pass.Program, "'HLSLPROGRAM' in pass");
                         SliceTo(tokenizer, "ENDHLSL");
                         pass.Program = tokenizer.Token.ToString();
                         break;
+
+                    default:
+                        throw new ParseException($"Unknown pass token: {tokenizer.Token}");
                 }
             }
 
             if (pass.Program == null)
-                throw new InvalidOperationException("Pass does not contain a program");
+                throw new ParseException("Pass does not contain a program");
 
             return pass;
         }
@@ -313,7 +406,7 @@ namespace Prowl.Editor.Utilities
                 if (tokenizer.TokenType == ShaderToken.CloseCurlBrace)
                     break;
 
-                throw new InvalidOperationException($"Expected comma or closing brace, but got {tokenizer.TokenType}");
+                throw new ParseException($"Expected comma or closing brace, but got {tokenizer.TokenType}");
             }
 
             return tags;
@@ -336,7 +429,7 @@ namespace Prowl.Editor.Utilities
                 else if (preset.Equals("Override", StringComparison.OrdinalIgnoreCase))
                     blend = BlendAttachmentDescription.OverrideBlend;
                 else
-                    throw new InvalidOperationException("Unknown blend preset: " + preset);
+                    throw new ParseException("Unknown blend preset: " + preset);
 
                 return blend;
             }
@@ -395,12 +488,12 @@ namespace Prowl.Editor.Utilities
                             if (mask.Contains('A')) blend.ColorWriteMask |= ColorWriteMask.Alpha;
 
                             if (blend.ColorWriteMask == 0)
-                                throw new InvalidOperationException("Invalid color write mask: " + mask);
+                                throw new ParseException("Invalid color write mask: " + mask);
                         }
                         break;
 
                     default:
-                        throw new InvalidOperationException($"Unknown blend key: {key}");
+                        throw new ParseException($"Unknown blend key: {key}");
                 }
             }
 
@@ -419,7 +512,7 @@ namespace Prowl.Editor.Utilities
                     "DepthLessEqual" => DepthStencilStateDescription.DepthOnlyLessEqual,
                     "DepthGreaterEqualRead" => DepthStencilStateDescription.DepthOnlyGreaterEqualRead,
                     "DepthLessEqualRead" => DepthStencilStateDescription.DepthOnlyLessEqualRead,
-                    _ => throw new InvalidOperationException($"Unknown blend preset: {tokenizer.Token}"),
+                    _ => throw new ParseException($"Unknown blend preset: {tokenizer.Token}"),
                 };
             }
 
@@ -504,7 +597,7 @@ namespace Prowl.Editor.Utilities
                         break;
 
                     default:
-                        throw new InvalidOperationException($"Unknown depth stencil key: {tokenizer.Token}");
+                        throw new ParseException($"Unknown depth stencil key: {tokenizer.Token}");
                 }
             }
 
@@ -535,24 +628,28 @@ namespace Prowl.Editor.Utilities
         }
 
 
-        private static void ParseProgramInfo(string program, out EntryPoint[] entrypoints, out (int, int)? shaderModel)
+        private static bool ParseProgramInfo(string program, out EntryPoint[]? entrypoints, out (int, int)? shaderModel, out CompilationMessage? message)
         {
             List<EntryPoint> entrypointsList = new();
+            entrypoints = null;
             shaderModel = null;
+            message = null;
 
             void AddEntrypoint(ShaderStages stage, string name, string idType)
             {
                 if (!entrypointsList.Exists(x => x.Stage == stage))
                     entrypointsList.Add(new EntryPoint(stage, name));
                 else
-                    throw new InvalidOperationException($"Duplicate entrypoints defined for {idType}.");
+                    throw new ParseException($"Duplicate entrypoints defined for {idType}.");
             }
 
-            using StringReader sr = new StringReader(program);
+            using StringReader sr = new(program);
 
             string? line;
+            int lineNumber = 0;
             while ((line = sr.ReadLine()) != null)
             {
+                lineNumber++;
                 string[] linesSplit = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
 
                 if (linesSplit.Length < 3)
@@ -561,55 +658,71 @@ namespace Prowl.Editor.Utilities
                 if (linesSplit[0] != "#pragma")
                     continue;
 
-                switch (linesSplit[1])
+                try
                 {
-                    case "vertex":
-                        AddEntrypoint(ShaderStages.Vertex, linesSplit[2], "vertex");
-                        break;
+                    switch (linesSplit[1])
+                    {
+                        case "vertex":
+                            AddEntrypoint(ShaderStages.Vertex, linesSplit[2], "vertex");
+                            break;
 
-                    case "geometry":
-                        AddEntrypoint(ShaderStages.Geometry, linesSplit[2], "geometry");
-                        break;
+                        case "geometry":
+                            AddEntrypoint(ShaderStages.Geometry, linesSplit[2], "geometry");
+                            break;
 
-                    case "tesscontrol":
-                        AddEntrypoint(ShaderStages.TessellationControl, linesSplit[2], "tesscontrol");
-                        break;
+                        case "tesscontrol":
+                            AddEntrypoint(ShaderStages.TessellationControl, linesSplit[2], "tesscontrol");
+                            break;
 
-                    case "tessevaluation":
-                        AddEntrypoint(ShaderStages.TessellationEvaluation, linesSplit[2], "tessevaluation");
-                        break;
+                        case "tessevaluation":
+                            AddEntrypoint(ShaderStages.TessellationEvaluation, linesSplit[2], "tessevaluation");
+                            break;
 
-                    case "fragment":
-                        AddEntrypoint(ShaderStages.Fragment, linesSplit[2], "fragment");
-                        break;
+                        case "fragment":
+                            AddEntrypoint(ShaderStages.Fragment, linesSplit[2], "fragment");
+                            break;
 
-                    case "target":
-                        if (shaderModel != null)
-                            throw new InvalidOperationException($"Duplicate shader model targets defined.");
+                        case "target":
+                            if (shaderModel != null)
+                                throw new ParseException($"Duplicate shader model targets defined.");
 
-                        try
-                        {
-                            int major = (int)char.GetNumericValue(linesSplit[2][0]);
+                            try
+                            {
+                                int major = (int)char.GetNumericValue(linesSplit[2][0]);
 
-                            if (linesSplit[2][1] != '.')
-                                throw new Exception();
+                                if (linesSplit[2][1] != '.')
+                                    throw new Exception();
 
-                            int minor = (int)char.GetNumericValue(linesSplit[2][2]);
+                                int minor = (int)char.GetNumericValue(linesSplit[2][2]);
 
-                            if (major < 0 || minor < 0)
-                                throw new Exception();
+                                if (major < 0 || minor < 0)
+                                    throw new Exception();
 
-                            shaderModel = (major, minor);
-                        }
-                        catch
-                        {
-                            throw new InvalidOperationException($"Invalid shader model: {linesSplit[2]}");
-                        }
-                        break;
+                                shaderModel = (major, minor);
+                            }
+                            catch
+                            {
+                                throw new ParseException($"Invalid shader model: {linesSplit[2]}");
+                            }
+                            break;
+                    }
+                }
+                catch (ParseException ex)
+                {
+                    message = new()
+                    {
+                        severity = LogSeverity.Error,
+                        line = lineNumber,
+                        column = line.IndexOf("#pragma") + 7,
+                        message = ex.Message
+                    };
+
+                    return false;
                 }
             }
 
-            entrypoints = entrypointsList.ToArray();
+            entrypoints = [.. entrypointsList];
+            return true;
         }
 
 
@@ -618,7 +731,7 @@ namespace Prowl.Editor.Utilities
             tokenizer.MoveNext();
 
             if (tokenizer.TokenType != expectedType)
-                throw new InvalidOperationException($"Expected {expectedType}, but got {tokenizer.TokenType}");
+                throw new ParseException($"Expected {expectedType}, but got {tokenizer.TokenType}");
         }
 
 
@@ -642,7 +755,7 @@ namespace Prowl.Editor.Utilities
         private static void EnsureUndef(object? value, string property)
         {
             if (value != null)
-                throw new InvalidOperationException($"Redefinition of {property}");
+                throw new ParseException($"Redefinition of {property}");
         }
 
 
@@ -654,7 +767,7 @@ namespace Prowl.Editor.Utilities
             List<string> values = new(Enum.GetNames<T>());
             values.AddRange(extraValues);
 
-            throw new InvalidOperationException($"Error parsing {fieldName}. Possible values: [{string.Join(", ", extraValues)}]");
+            throw new ParseException($"Error parsing {fieldName}. Possible values: [{string.Join(", ", values)}]");
         }
 
 
@@ -663,7 +776,7 @@ namespace Prowl.Editor.Utilities
             if (byte.TryParse(text, out byte value))
                 return value;
 
-            throw new InvalidOperationException($"Error parsing {fieldName}.");
+            throw new ParseException($"Error parsing {fieldName}.");
         }
 
 
@@ -682,8 +795,11 @@ namespace Prowl.Editor.Utilities
 
     public class ParsedPass
     {
+        public int Line;
         public string Name = "";
         public ShaderPassDescription Description;
+
+        public int ProgramStartLine;
         public string? Program = null;
     }
 
@@ -691,5 +807,11 @@ namespace Prowl.Editor.Utilities
     {
         public ShaderStages Stage = stages;
         public string Name = name;
+    }
+
+
+    internal class ParseException : Exception
+    {
+        public ParseException(string message) : base(message) { }
     }
 }

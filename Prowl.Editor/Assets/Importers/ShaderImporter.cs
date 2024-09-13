@@ -18,22 +18,18 @@ namespace Prowl.Editor.Assets
         {
             string shaderScript = File.ReadAllText(assetPath.FullName);
 
-            Shader? shader;
+            string relPath = AssetDatabase.GetRelativePath(assetPath.FullName);
+            relPath = relPath.Substring(relPath.IndexOf(Path.DirectorySeparatorChar));
 
-            try
-            {
-                shader = ShaderParser.ParseShader(shaderScript);
-            }
-            catch (Exception ex)
+            FileIncluder includer = new FileIncluder(relPath, [Project.Active.AssetDirectory, Project.Active.DefaultsDirectory, Project.Active.PackagesDirectory]);
+
+            if (!ShaderParser.ParseShader(shaderScript, includer, out Shader? shader))
             {
                 if (assetPath.Name == "InternalErrorShader.shader")
                 {
-                    Debug.LogException(new Exception("InternalErrorShader failed to compile. Non-compiling shaders loaded through script will cause cascading exceptions.", ex));
-                    ctx.SetMainObject(null);
+                    Debug.LogError("InternalErrorShader failed to compile. Non-compiling shaders loaded through script will cause cascading exceptions.");
                     return;
                 }
-
-                Debug.LogException(new Exception("Failed to compile shader", ex));
 
                 if (s_internalError == null)
                     s_internalError = Application.AssetProvider.LoadAsset<Shader>("Defaults/InternalErrorShader.shader").Res!;

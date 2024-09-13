@@ -9,10 +9,54 @@ using SPIRVCross.NET;
 
 using Veldrid;
 
+using DXCSeverity = DirectXShaderCompiler.NET.CompilationMessage.MessageSeverity;
+
 #pragma warning disable
 
 namespace Prowl.Editor.Utilities
 {
+    public struct ShaderCreationArgs
+    {
+        public string sourceCode;
+        public EntryPoint[] entryPoints;
+        public (int, int) shaderModel;
+        public Dictionary<string, HashSet<string>> combinations;
+    }
+
+
+    public struct CompilationMessage
+    {
+        public LogSeverity severity;
+        public string filename;
+
+        public string entrypoint;
+        public KeywordState? keywords;
+
+        public int line;
+        public int column;
+        public string message;
+
+        public static CompilationMessage FromDXC(DirectXShaderCompiler.NET.CompilationMessage dxcMessage)
+        {
+            CompilationMessage message = new();
+
+            message.severity = dxcMessage.severity switch
+            {
+                DXCSeverity.Info => LogSeverity.Normal,
+                DXCSeverity.Warning => LogSeverity.Warning,
+                DXCSeverity.Error => LogSeverity.Error,
+            };
+
+            message.filename = dxcMessage.filename;
+            message.line = dxcMessage.line;
+            message.column = dxcMessage.column;
+            message.message = dxcMessage.message;
+
+            return message;
+        }
+    }
+
+
     public static partial class ShaderCompiler
     {
         private static ShaderType StageToType(ShaderStages stages)
@@ -28,17 +72,17 @@ namespace Prowl.Editor.Utilities
         }
 
 
-        public static ShaderDescription[] Compile(string code, EntryPoint[] entrypoints, (int, int) model, KeywordState keywords)
+        public static ShaderDescription[] Compile(ShaderCreationArgs args, KeywordState keywords, FileIncluder includer, List<CompilationMessage> messages)
         {
-            byte[][] compiledSPIRV = new byte[entrypoints.Length][];
+            byte[][] compiledSPIRV = new byte[args.entryPoints.Length][];
 
-            for (int i = 0; i < entrypoints.Length; i++)
+            for (int i = 0; i < args.entryPoints.Length; i++)
             {
-                DirectXShaderCompiler.NET.CompilerOptions options = new(StageToType(entrypoints[i].Stage).ToProfile(model.Item1, model.Item2));
+                DirectXShaderCompiler.NET.CompilerOptions options = new(StageToType(args.entryPoints[i].Stage).ToProfile(args.shaderModel.Item1, args.shaderModel.Item2));
 
                 options.generateAsSpirV = true;
                 options.useOpenGLMemoryLayout = true;
-                options.entryPoint = entrypoints[i].Name;
+                options.entryPoint = args.entryPoints[i].Name;
                 options.entrypointName = "main"; // Ensure 'main' entrypoint for OpenGL compatibility.
 
                 foreach (var keyword in keywords.KeyValuePairs)
@@ -47,51 +91,43 @@ namespace Prowl.Editor.Utilities
                         options.SetMacro(keyword.Key, keyword.Value);
                 }
 
-                CompilationResult result = DirectXShaderCompiler.NET.ShaderCompiler.Compile(code, options, NoInclude);
+                CompilationResult result = DirectXShaderCompiler.NET.ShaderCompiler.Compile(args.sourceCode, options, includer.Include);
 
-                foreach (var res in result.messages)
+                for (int j = 0; j < result.messages.Length; j++)
                 {
-                    if (res.severity == CompilationMessage.MessageSeverity.Error)
-                    {
-                        throw new Exception($"Error compiling shader {res.filename} (at line: {res.line}, column: {res.column}): \n{res.message}");
-                    }
-                    else if (res.severity == CompilationMessage.MessageSeverity.Warning)
-                    {
-                        Debug.LogWarning($"Warning while compiling shader {res.filename} (at line: {res.line}, column: {res.column}): \n{res.message}");
-                    }
-                    else
-                    {
-                        Debug.LogWarning($"{res.message}");
-                    }
+                    if (result.messages[j].filename.Contains("hlsl.hlsl"))
+                        result.messages[j].filename = includer.SourceFile;
+
+                    CompilationMessage msg = CompilationMessage.FromDXC(result.messages[j]);
+
+                    msg.entrypoint = args.entryPoints[i].Name;
+                    msg.keywords = keywords;
+
+                    messages.Add(msg);
                 }
 
                 compiledSPIRV[i] = result.objectBytes;
             }
 
-            return compiledSPIRV.Zip(entrypoints, (x, y) => new ShaderDescription(y.Stage, x, "main")).ToArray();
+            return compiledSPIRV.Zip(args.entryPoints, (x, y) => new ShaderDescription(y.Stage, x, "main")).ToArray();
         }
 
 
-        // Fills the dictionary with every possible permutation for the given definitions, initializing values with the generator function
-        public static ShaderVariant[] GenerateVariants(
-            string sourceCode,
-            EntryPoint[] entryPoints,
-            (int, int) shaderModel,
-            Dictionary<string, HashSet<string>> keywords)
+        public static ShaderVariant[] GenerateVariants(ShaderCreationArgs args, FileIncluder includer, List<CompilationMessage> messages)
         {
-            List<ShaderVariant> variants = new();
-
-            List<KeyValuePair<string, HashSet<string>>> combinations = (keywords ?? new() { { "", [""] } }).ToList();
+            List<KeyValuePair<string, HashSet<string>>> combinations = new(args.combinations);
+            List<ShaderVariant> variantList = new();
             List<KeyValuePair<string, string>> combination = new(combinations.Count);
 
             using Context ctx = new Context();
 
             void GenerateRecursive(int depth)
             {
+                messages = null;
+
                 if (depth == combinations.Count) // Reached the end for this permutation, add a result.
                 {
-                    variants.Add(GenerateVariant(ctx, sourceCode, entryPoints, shaderModel, new(combination)));
-
+                    variantList.Add(GenerateVariant(ctx, args, new(combination), includer, messages));
                     return;
                 }
 
@@ -99,24 +135,30 @@ namespace Prowl.Editor.Utilities
                 foreach (var value in pair.Value) // Go down a level for every value
                 {
                     combination.Add(new(pair.Key, value));
+
                     GenerateRecursive(depth + 1);
+
                     combination.RemoveAt(combination.Count - 1); // Go up once we're done
                 }
             }
 
             GenerateRecursive(0);
 
-            return variants.ToArray();
+            return variantList.ToArray();
         }
 
 
-        public static ShaderVariant GenerateVariant(Context ctx, string source, EntryPoint[] entryPoints, (int, int) shaderModel, KeywordState state)
+        public static ShaderVariant GenerateVariant(Context ctx, ShaderCreationArgs args, KeywordState state, FileIncluder includer, List<CompilationMessage> messages)
         {
-            ShaderVariant variant = new ShaderVariant(state);
+            ShaderDescription[] compiledSPIRV = Compile(args, state, includer, messages);
 
-            ShaderDescription[] compiledSPIRV = Compile(source, entryPoints, shaderModel, state);
+            foreach (ShaderDescription desc in compiledSPIRV)
+                if (desc.ShaderBytes == null)
+                    return null;
 
             ReflectedResourceInfo info = Reflect(ctx, compiledSPIRV);
+
+            ShaderVariant variant = new ShaderVariant(state);
 
             variant.Uniforms = info.uniforms;
             variant.UniformStages = info.stages;
@@ -126,15 +168,10 @@ namespace Prowl.Editor.Utilities
             variant.OpenGLShaders = CrossCompile(ctx, GraphicsBackend.OpenGL, compiledSPIRV);
             variant.OpenGLESShaders = CrossCompile(ctx, GraphicsBackend.OpenGLES, compiledSPIRV);
             variant.MetalShaders = CrossCompile(ctx, GraphicsBackend.Metal, compiledSPIRV);
+
             variant.VulkanShaders = compiledSPIRV;
 
             return variant;
-        }
-
-
-        static string NoInclude(string file)
-        {
-            return $"// Including {file}";
         }
     }
 }

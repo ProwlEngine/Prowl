@@ -14,7 +14,7 @@ using Prowl.Editor.Assets;
 
 namespace Prowl.Editor
 {
-    public record LogMessage(string message, StackTrace? trace, LogSeverity severity);
+    public record LogMessage(string message, DebugStackTrace? trace, LogSeverity severity);
 
     public class ConsoleWindow : EditorWindow
     {
@@ -45,7 +45,7 @@ namespace Prowl.Editor
         }
 
 
-        private void OnLog(string message, StackTrace? stackTrace, LogSeverity logSeverity)
+        private void OnLog(string message, DebugStackTrace? stackTrace, LogSeverity logSeverity)
         {
             _logMessages.Add(new LogMessage(message, stackTrace, logSeverity));
 
@@ -125,13 +125,14 @@ namespace Prowl.Editor
                 if (_selectedMessage == null)
                     return;
 
-                using (gui.Node("Selected").ExpandHeight().Layout(LayoutType.Column).Enter())
+                using (gui.Node("Selected").ExpandHeight().Layout(LayoutType.Column).Spacing(5).Scroll().Clip().Enter())
                 {
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
 
-                    using (gui.Node("Header").ExpandWidth().Height(50).Enter())
+
+                    using (gui.Node("Header").Width(_selectedMessage.message.Length * 10).Height(30).Enter())
                     {
-                        GetSeverityStyles(_selectedMessage.severity, out string icon, out string prefix, out Color color);
+                        GetSeverityStyles(_selectedMessage.severity, out string icon, out Color color);
 
                         Rect rect = gui.CurrentNode.LayoutData.Rect;
 
@@ -147,63 +148,56 @@ namespace Prowl.Editor
                         Vector2 textPos = textRect.Position;
                         textPos.y += (rect.height / 2) - 9;
 
-                        gui.Draw2D.DrawText(Font.DefaultFont, prefix + _selectedMessage.message, 25, textPos, color, textRect.width, textRect);
-
-
-                        using (gui.Node("CloseBtn").Scale(30).Top(10).Enter())
-                        {
-                            gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 10));
-
-                            Interactable interact = gui.GetInteractable();
-
-                            Rect closeRect = gui.CurrentNode.LayoutData.Rect;
-
-                            if (interact.TakeFocus())
-                            {
-                                gui.Draw2D.DrawRectFilled(closeRect, EditorStylePrefs.Instance.Highlighted, 5, CornerRounding.All);
-                                _selectedMessage = null;
-                                return;
-                            }
-                            else if (interact.IsHovered())
-                                gui.Draw2D.DrawRectFilled(closeRect, EditorStylePrefs.Instance.Hovering, 5, CornerRounding.All);
-
-                            closeRect.y += 1;
-                            gui.Draw2D.DrawText(FontAwesome6.Xmark, 30, closeRect);
-                        }
+                        gui.Draw2D.DrawText(Font.DefaultFont, _selectedMessage.message, 23, textPos, color, textRect.width, textRect);
                     }
 
-                    if (_selectedMessage.trace != null && _selectedMessage.trace.FrameCount != 0)
+                    if (_selectedMessage.trace != null && _selectedMessage.trace.stackFrames.Length != 0)
                     {
-                        using (gui.Node("StackTrace").ExpandWidth().ExpandHeight().Layout(LayoutType.Column).Padding(10).Spacing(5).Scroll(true, false).Clip().Enter())
+                        for (int i = 0; i < _selectedMessage.trace.stackFrames.Length; i++)
                         {
-                            for (int i = 0; i < _selectedMessage.trace.FrameCount; i++)
+                            DebugStackFrame frame = _selectedMessage.trace.stackFrames[i];
+                            string frameText = frame.ToString();
+
+                            using (gui.Node("StackFrame", i).Margin(0, 0, 0, 5).Width(frameText.Length * 8).Height(15).Enter())
                             {
-                                StackFrame frame = _selectedMessage.trace.GetFrame(i);
-                                System.Reflection.MethodBase methodBase = frame.GetMethod();
-                                string frameText = $"At {methodBase.DeclaringType.Name} in {methodBase.Name} ({frame.GetFileLineNumber()}:{frame.GetFileColumnNumber()}:{frame.GetFileName()})";
+                                Interactable interact = gui.GetInteractable();
+                                Color col = Color.white * 0.65f;
 
-                                using (gui.Node("StackFrame", i).ExpandWidth().Height(15).Enter())
+                                if (interact.IsHovered())
                                 {
-                                    Interactable interact = gui.GetInteractable();
+                                    col = EditorStylePrefs.Instance.Highlighted * 0.7f;
 
-                                    Color col = Color.white * 0.65f;
-
-                                    if (interact.IsHovered())
-                                    {
-                                        col = EditorStylePrefs.Instance.Highlighted * 0.7f;
-
-                                        if (gui.IsPointerDoubleClick())
-                                        {
-                                            AssetDatabase.OpenPath(new FileInfo(frame.GetFileName()), frame.GetFileLineNumber(), frame.GetFileColumnNumber());
-                                        }
-                                    }
-
-                                    Rect rect = gui.CurrentNode.LayoutData.Rect;
-                                    gui.Draw2D.DrawText(Font.DefaultFont, frameText, 19, rect.Position, col, rect.width, rect);
+                                    if (gui.IsPointerDoubleClick())
+                                        OpenStackFrame(frame);
                                 }
+
+                                Rect rect = gui.CurrentNode.LayoutData.Rect;
+                                gui.Draw2D.DrawText(Font.DefaultFont, frameText, 19, rect.Position, col, 0, rect);
                             }
                         }
                     }
+
+                    using (gui.Node("CloseBtn").IgnoreLayout().Scale(30).Top(10).Enter())
+                    {
+                        gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 10));
+
+                        Interactable interact = gui.GetInteractable();
+
+                        Rect closeRect = gui.CurrentNode.LayoutData.Rect;
+
+                        if (interact.TakeFocus())
+                        {
+                            gui.Draw2D.DrawRectFilled(closeRect, EditorStylePrefs.Instance.Highlighted, 5, CornerRounding.All);
+                            _selectedMessage = null;
+                            return;
+                        }
+                        else if (interact.IsHovered())
+                            gui.Draw2D.DrawRectFilled(closeRect, EditorStylePrefs.Instance.Hovering, 5, CornerRounding.All);
+
+                        closeRect.y += 1;
+                        gui.Draw2D.DrawText(FontAwesome6.Xmark, 30, closeRect);
+                    }
+
                 }
             }
         }
@@ -231,7 +225,7 @@ namespace Prowl.Editor
 
                 gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, bgColor, (float)EditorStylePrefs.Instance.ButtonRoundness);
 
-                GetSeverityStyles(message.severity, out string icon, out string prefix, out Color color);
+                GetSeverityStyles(message.severity, out string icon, out Color color);
 
                 Rect rect = gui.CurrentNode.LayoutData.Rect;
 
@@ -244,22 +238,25 @@ namespace Prowl.Editor
                 textRect.x += iconRect.width;
                 textRect.width -= iconRect.width;
 
-                bool hasTrace = message.trace != null && message.trace.FrameCount > 0;
+                bool hasTrace = message.trace != null && message.trace.stackFrames.Length > 0;
 
                 Vector2 textPos = textRect.Position;
                 textPos.y += (rect.height / 2) - (7.5 + (hasTrace ? 5 : 0));
 
-                gui.Draw2D.DrawText(Font.DefaultFont, prefix + message.message, 20, textPos, color, textRect.width, textRect);
+                gui.Draw2D.DrawText(Font.DefaultFont, message.message, 20, textPos, color, 0, textRect);
 
                 if (hasTrace)
                 {
                     textPos.y += 15;
 
-                    StackFrame frame0 = message.trace.GetFrame(0);
+                    DebugStackFrame frame = message.trace.stackFrames[message.trace.stackFrames.Length - 1];
 
-                    string frameText = $"At: {frame0.GetFileName()}";
+                    string frameText = frame.ToString();
 
-                    gui.Draw2D.DrawText(Font.DefaultFont, frameText, 17.5, textPos, Color.gray, textRect.width, textRect);
+                    gui.Draw2D.DrawText(Font.DefaultFont, frameText, 17.5, textPos, Color.gray, 0, textRect);
+
+                    if (interact.IsHovered() && gui.IsPointerDoubleClick())
+                        OpenStackFrame(frame);
                 }
 
                 Vector2 left = rect.Position;
@@ -276,34 +273,38 @@ namespace Prowl.Editor
         }
 
 
-        static void GetSeverityStyles(LogSeverity severity, out string icon, out string prefix, out Color color)
+        private static void OpenStackFrame(DebugStackFrame frame)
+        {
+            if (frame.fileName == null)
+                return;
+
+            AssetDatabase.OpenPath(new FileInfo(frame.fileName), frame.line, frame.column);
+        }
+
+
+        private static void GetSeverityStyles(LogSeverity severity, out string icon, out Color color)
         {
             color = Color.white;
             icon = FontAwesome6.Terminal;
-            prefix = "Log: ";
 
             switch (severity)
             {
                 case LogSeverity.Success:
                     color = Color.green;
                     icon = FontAwesome6.CircleCheck;
-                    prefix = "Success: ";
                     break;
 
                 case LogSeverity.Warning:
                     color = Color.yellow;
                     icon = FontAwesome6.TriangleExclamation;
-                    prefix = "Warning: ";
                     break;
 
                 case LogSeverity.Error:
-                    prefix = "Error: ";
                     color = Color.red;
                     icon = FontAwesome6.CircleExclamation;
                     break;
 
                 case LogSeverity.Exception:
-                    prefix = "Uncaught exception: ";
                     color = Color.red;
                     icon = FontAwesome6.TriangleExclamation; // Triangles are a bit more 'danger'y than circles, so use them for exceptions too.
                     break;
