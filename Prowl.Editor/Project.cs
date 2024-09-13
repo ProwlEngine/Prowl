@@ -135,8 +135,6 @@ public class Project
     {
         Project project = new Project(projectPath);
 
-        ProjectCache.Instance.AddProject(project);
-
         if (project.Exists)
         {
             Runtime.Debug.LogError($"Project at path {project.ProjectPath} already exists.");

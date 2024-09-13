@@ -210,7 +210,8 @@ namespace Prowl.Editor
                     {
                         if (_createTabOpen)
                         {
-                            Project.CreateNew(new DirectoryInfo(Path.Join(ProjectCache.Instance.SavedProjectsFolder, _createName)));
+                            Project project = Project.CreateNew(new DirectoryInfo(Path.Join(ProjectCache.Instance.SavedProjectsFolder, _createName)));
+                            ProjectCache.Instance.AddProject(project);
                             _createTabOpen = false;
                         }
                         else if (Project.Open(SelectedProject))
