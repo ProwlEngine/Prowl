@@ -147,7 +147,7 @@ namespace Prowl.Editor
                     using (g.Node("Fields").ExpandWidth().FitContentHeight().Layout(LayoutType.Column).Padding(5).Enter())
                     {
                         // Draw Fields
-                        List<MemberInfo> members = new();
+                        List<MemberInfo> members = [];
                         foreach (var field in node.GetSerializableFields())
                         {
                             if (field.GetCustomAttribute<InputAttribute>(true) != null) continue;
@@ -574,7 +574,7 @@ namespace Prowl.Editor
         private RenderTexture RenderTarget;
 
         internal NodePort? draggingPort;
-        internal List<Vector2> reroutePoints = new();
+        internal List<Vector2> reroutePoints = [];
 
         internal Vector2? dragSelectionStart;
         internal Rect dragSelection;
@@ -750,7 +750,7 @@ namespace Prowl.Editor
         {
             int index = 0;
             var safeNodes = graph.nodes.ToArray();
-            List<int> unusedKeys = new(customEditors.Keys);
+            List<int> unusedKeys = [..customEditors.Keys];
             foreach (var node in safeNodes)
             {
                 var key = node.GetHashCode();
@@ -1234,7 +1234,7 @@ namespace Prowl.Editor
             public string Name;
             public Type Type;
             public MethodInfo Method;
-            public List<NodeMenuItemInfo> Children = new();
+            public List<NodeMenuItemInfo> Children = [];
 
             public NodeMenuItemInfo() { }
 

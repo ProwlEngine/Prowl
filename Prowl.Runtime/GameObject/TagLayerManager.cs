@@ -13,16 +13,15 @@ namespace Prowl.Runtime;
 public class TagLayerManager : ScriptableSingleton<TagLayerManager>
 {
     public List<string> tags =
-        new List<string>
-        {
-            "Untagged",
-            "Main Camera",
-            "Player",
-            "Editor Only",
-            "Re-spawn",
-            "Finish",
-            "Game Controller",
-        };
+    [
+        "Untagged",
+        "Main Camera",
+        "Player",
+        "Editor Only",
+        "Re-spawn",
+        "Finish",
+        "Game Controller"
+    ];
 
     public string[] layers =
         [

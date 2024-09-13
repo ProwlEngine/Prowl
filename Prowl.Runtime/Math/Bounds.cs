@@ -264,7 +264,8 @@ namespace Prowl.Runtime
 
         public Vector3[] GetCorners()
         {
-            return new Vector3[] {
+            return
+            [
                 new Vector3(this.min.x, this.max.y, this.max.z),
                 new Vector3(this.max.x, this.max.y, this.max.z),
                 new Vector3(this.max.x, this.min.y, this.max.z),
@@ -273,7 +274,7 @@ namespace Prowl.Runtime
                 new Vector3(this.max.x, this.max.y, this.min.z),
                 new Vector3(this.max.x, this.min.y, this.min.z),
                 new Vector3(this.min.x, this.min.y, this.min.z)
-            };
+            ];
         }
 
         public void GetCorners(Vector3[] corners)

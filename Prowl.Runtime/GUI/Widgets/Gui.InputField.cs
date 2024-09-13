@@ -190,7 +190,7 @@ namespace Prowl.Runtime.GUI
                 searches_input_ptr[0] = text_begin + stb.CursorIndex;
                 searches_input_ptr[1] = -1;
                 int searches_remaining = 1;
-                int[] searches_result_line_number = { -1, -999 };
+                int[] searches_result_line_number = [-1, -999];
                 if (stb.SelectStart != stb.SelectEnd)
                 {
                     searches_input_ptr[1] = text_begin + MathD.Min(stb.SelectStart, stb.SelectEnd);

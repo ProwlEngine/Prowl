@@ -152,12 +152,11 @@ namespace Prowl.Runtime.GUI
                         (startAngle2, endAngle2) = (endAngle2, startAngle2);
                     }
 
-                    _gizmo._gui.Draw3D.Polyline(new[]
-                    {
-                    new Vector3(Math.Cos(startAngle) * radius, 0, Math.Sin(startAngle) * radius),
+                    _gizmo._gui.Draw3D.Polyline([
+                        new Vector3(Math.Cos(startAngle) * radius, 0, Math.Sin(startAngle) * radius),
                     Vector3.zero,
                     new Vector3(Math.Cos(endAngle) * radius, 0, Math.Sin(endAngle) * radius)
-                }, stroke);
+                    ], stroke);
 
                     var w = stroke;
                     if (fullCircles > 0)

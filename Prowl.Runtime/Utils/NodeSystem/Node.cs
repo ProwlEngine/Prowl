@@ -167,7 +167,7 @@ namespace Prowl.Runtime.NodeSystem
         //[ContextMenu("Clear Dynamic Ports")]
         public void ClearDynamicPorts()
         {
-            List<NodePort> dynamicPorts = new List<NodePort>(DynamicPorts);
+            List<NodePort> dynamicPorts = [..DynamicPorts];
             foreach (NodePort port in dynamicPorts)
             {
                 RemoveDynamicPort(port);
@@ -350,8 +350,8 @@ namespace Prowl.Runtime.NodeSystem
         [Serializable]
         public class NodePortDictionary : ISerializationCallbackReceiver
         {
-            [SerializeField] private List<string> keys = new List<string>();
-            [SerializeField] private List<NodePort> values = new List<NodePort>();
+            [SerializeField] private List<string> keys = [];
+            [SerializeField] private List<NodePort> values = [];
             private Dictionary<string, NodePort> dictionary = new Dictionary<string, NodePort>();
 
             /// <summary>

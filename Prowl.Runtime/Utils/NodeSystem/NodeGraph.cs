@@ -41,10 +41,10 @@ namespace Prowl.Runtime.NodeSystem
 
         /// <summary> All nodes in the graph. <para/>
         /// See: <see cref="AddNode{T}"/> </summary>
-        public List<Node> nodes = new List<Node>();
+        public List<Node> nodes = [];
 
-        public virtual (string, Type)[] NodeTypes { get; } = Array.Empty<(string, Type)>();
-        public virtual (string, Type)[] NodeReflectionTypes { get; } = Array.Empty<(string, Type)>();
+        public virtual (string, Type)[] NodeTypes { get; } = [];
+        public virtual (string, Type)[] NodeReflectionTypes { get; } = [];
         public abstract string[] NodeCategories { get; }
 
         public List<GraphParameter> parameters = [];

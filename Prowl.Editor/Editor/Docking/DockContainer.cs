@@ -49,7 +49,7 @@ namespace Prowl.Editor.Docking
             Rect right = new Rect(cen + new Vector2(size.x + 5, 0), size);
             Rect top = new Rect(cen - new Vector2(0, size.y + 5), size);
             Rect bottom = new Rect(cen + new Vector2(0, size.y + 5), size);
-            possibleAreas = new List<Rect> { main, left, right, top, bottom };
+            possibleAreas = [main, left, right, top, bottom];
 
             DockPlacement placement = new DockPlacement();
             placement.Leaf = leaf;
@@ -345,7 +345,7 @@ namespace Prowl.Editor.Docking
 
         public List<EditorWindow> GetWindows()
         {
-            List<EditorWindow> windowList = new List<EditorWindow>();
+            List<EditorWindow> windowList = [];
             Root.GetWindows(windowList);
             return windowList;
         }

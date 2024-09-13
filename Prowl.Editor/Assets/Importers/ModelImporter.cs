@@ -21,7 +21,7 @@ namespace Prowl.Editor.Assets
     [Importer("ModelIcon.png", typeof(GameObject), ".obj", ".blend", ".dae", ".fbx", ".gltf", ".ply", ".pmx", ".stl")]
     public class ModelImporter : ScriptedImporter
     {
-        public static readonly string[] Supported = { ".obj", ".blend", ".dae", ".fbx", ".gltf", ".ply", ".pmx", ".stl" };
+        public static readonly string[] Supported = [".obj", ".blend", ".dae", ".fbx", ".gltf", ".ply", ".pmx", ".stl"];
 
         public bool GenerateColliders;
         public bool GenerateNormals = true;
@@ -133,7 +133,7 @@ namespace Prowl.Editor.Assets
                 //    }
                 //}
 
-                List<AssetRef<Material>> mats = new();
+                List<AssetRef<Material>> mats = [];
                 if (scene.HasMaterials)
                     LoadMaterials(ctx, scene, parentDir, mats);
 
@@ -142,7 +142,7 @@ namespace Prowl.Editor.Assets
                 if (scene.HasAnimations)
                     anims = LoadAnimations(ctx, scene, scale);
 
-                List<MeshMaterialBinding> meshMats = new List<MeshMaterialBinding>();
+                List<MeshMaterialBinding> meshMats = [];
                 if (scene.HasMeshes)
                     LoadMeshes(ctx, assetPath, scene, scale, mats, meshMats);
 

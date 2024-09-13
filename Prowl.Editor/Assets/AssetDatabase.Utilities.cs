@@ -163,7 +163,7 @@ namespace Prowl.Editor.Assets
 
         public static HashSet<Guid> AllThatDependOn(Guid dependsOn)
         {
-            HashSet<Guid> result = new();
+            HashSet<Guid> result = [];
             // Go over all stored meta files and return any that depend on the specified GUID
             foreach (var meta in assetGuidToMeta.Values)
             {
@@ -217,7 +217,7 @@ namespace Prowl.Editor.Assets
         public static List<(string name, Guid assetID, ushort fileID)> GetAllAssetsOfType(Type type)
         {
             // Go over all loaded meta files and check the Importers type
-            List<(string, Guid, ushort)> result = new();
+            List<(string, Guid, ushort)> result = [];
             foreach (var meta in assetGuidToMeta.Values)
             {
                 var names = meta.assetNames;
@@ -268,7 +268,7 @@ namespace Prowl.Editor.Assets
                 }
                 return result;
             }
-            return Array.Empty<SubAssetCache>();
+            return [];
         }
 
         #endregion
