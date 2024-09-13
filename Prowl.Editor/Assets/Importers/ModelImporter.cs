@@ -634,10 +634,10 @@ namespace Prowl.Editor.Assets
 
         class MeshMaterialBinding
         {
-            private string meshName;
-            private AssetRef<Mesh> mesh;
-            private Assimp.Mesh aMesh;
-            private AssetRef<Material> material;
+            private readonly string meshName;
+            private readonly AssetRef<Mesh> mesh;
+            private readonly Assimp.Mesh aMesh;
+            private readonly AssetRef<Material> material;
 
             private MeshMaterialBinding() { }
             public MeshMaterialBinding(string meshName, Assimp.Mesh aMesh, AssetRef<Mesh> mesh, AssetRef<Material> material)

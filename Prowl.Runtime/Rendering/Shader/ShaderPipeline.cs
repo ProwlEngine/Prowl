@@ -48,17 +48,17 @@ namespace Prowl.Runtime
         public readonly ShaderSetDescription shaderSet;
         public readonly ResourceLayout resourceLayout;
 
-        private Dictionary<string, uint> semanticLookup;
-        private Dictionary<string, uint> bufferLookup;
+        private readonly Dictionary<string, uint> semanticLookup;
+        private readonly Dictionary<string, uint> bufferLookup;
 
-        private byte bufferCount;
+        private readonly byte bufferCount;
 
         public ShaderUniform[] Uniforms => shader.Uniforms;
 
         private Veldrid.GraphicsPipelineDescription description;
 
         private static readonly int pipelineCount = 20; // 20 possible combinations (5 topologies, 2 fill modes, 2 scissor modes)
-        private Pipeline[] pipelines;
+        private readonly Pipeline[] pipelines;
 
 
         public Pipeline GetPipeline(PolygonFillMode fill, PrimitiveTopology topology, bool scissor)

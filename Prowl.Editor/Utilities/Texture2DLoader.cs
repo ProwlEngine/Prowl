@@ -16,7 +16,7 @@ namespace Prowl.Editor
         #region ImageMagick integration
 
 
-        private static Dictionary<Type, PixelFormat> formatLookup = new()
+        private static readonly Dictionary<Type, PixelFormat> formatLookup = new()
         {
             { typeof(A8),               PixelFormat.R8_UNorm                },
             { typeof(Bgra32),           PixelFormat.B8_G8_R8_A8_UNorm       },

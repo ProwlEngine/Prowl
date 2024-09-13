@@ -38,7 +38,7 @@ namespace Prowl.Editor
         List<(string, string)> package_Dependencies;
         IPackageSearchMetadata? _metadata;
 
-        List<(IPackageSearchMetadata, Texture2D?)> PackageEntries = [];
+        readonly List<(IPackageSearchMetadata, Texture2D?)> PackageEntries = [];
 
         string _searchText;
 

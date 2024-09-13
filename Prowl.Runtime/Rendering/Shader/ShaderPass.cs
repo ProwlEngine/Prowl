@@ -40,22 +40,22 @@ namespace Prowl.Runtime
     public sealed class ShaderPass : ISerializationCallbackReceiver
     {
         [SerializeField, HideInInspector]
-        private string _name;
+        private readonly string _name;
 
         [SerializeField, HideInInspector]
-        private Dictionary<string, string> _tags;
+        private readonly Dictionary<string, string> _tags;
 
         [SerializeField, HideInInspector]
-        private BlendStateDescription _blend;
+        private readonly BlendStateDescription _blend;
 
         [SerializeField, HideInInspector]
-        private DepthStencilStateDescription _depthStencilState;
+        private readonly DepthStencilStateDescription _depthStencilState;
 
         [SerializeField, HideInInspector]
-        private FaceCullMode _cullMode = FaceCullMode.Back;
+        private readonly FaceCullMode _cullMode = FaceCullMode.Back;
 
         [SerializeField, HideInInspector]
-        private bool _depthClipEnabled = true;
+        private readonly bool _depthClipEnabled = true;
 
         [NonSerialized]
         private Dictionary<string, HashSet<string>> _keywords;

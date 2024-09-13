@@ -562,9 +562,9 @@ namespace Prowl.Editor
         public bool IsDragging => draggingPort != null || dragSelectionStart != null;
         public bool IsDraggingPort => draggingPort != null;
 
-        private NodeGraph graph;
-        private NodeEditorInputHandler inputHandler;
-        private Gui gui;
+        private readonly NodeGraph graph;
+        private readonly NodeEditorInputHandler inputHandler;
+        private readonly Gui gui;
 
         private Vector2 topleft;
         private double zoom = 1.0f;
@@ -582,7 +582,7 @@ namespace Prowl.Editor
         private string _searchText = string.Empty;
         private static NodeMenuItemInfo rootMenuItem;
 
-        private SelectHandler<WeakReference> SelectHandler = new((item) => !item.IsAlive, (a, b) => ReferenceEquals(a.Target, b.Target));
+        private readonly SelectHandler<WeakReference> SelectHandler = new((item) => !item.IsAlive, (a, b) => ReferenceEquals(a.Target, b.Target));
 
         private readonly Dictionary<int, ScriptedNodeEditor> customEditors = [];
 
@@ -1233,8 +1233,8 @@ namespace Prowl.Editor
         {
             public string Name;
             public Type Type;
-            public MethodInfo Method;
-            public List<NodeMenuItemInfo> Children = [];
+            public readonly MethodInfo Method;
+            public readonly List<NodeMenuItemInfo> Children = [];
 
             public NodeMenuItemInfo() { }
 

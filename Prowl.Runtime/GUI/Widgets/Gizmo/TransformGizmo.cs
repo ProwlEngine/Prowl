@@ -110,7 +110,7 @@ namespace Prowl.Runtime.GUI
         internal Matrix4x4 ModelViewProjection;
         internal Matrix4x4 InverseModelViewProjection;
 
-        private List<ISubGizmo> _subGizmos = [];
+        private readonly List<ISubGizmo> _subGizmos = [];
         internal Gui _gui;
         internal TransformGizmoMode mode;
 

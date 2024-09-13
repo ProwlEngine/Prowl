@@ -8,7 +8,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
     public class ViewManipulatorGizmo
     {
 
-        private Gui _gui;
+        private readonly Gui _gui;
         private Rect _gizmoRect;
 
         private Matrix4x4 _view;

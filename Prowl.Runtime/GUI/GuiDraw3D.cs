@@ -31,10 +31,10 @@ namespace Prowl.Runtime.GUI
 
         private readonly Gui _gui = gui;
 
-        private Stack<Rect> _viewports = new Stack<Rect>();
+        private readonly Stack<Rect> _viewports = new Stack<Rect>();
         private Rect _viewport => _viewports.Peek();
 
-        private Stack<Matrix4x4> _mvps = new Stack<Matrix4x4>();
+        private readonly Stack<Matrix4x4> _mvps = new Stack<Matrix4x4>();
         private Matrix4x4 _mvp => _mvps.Peek();
 
         private bool hasViewport => _viewports.Count > 0;
@@ -258,7 +258,7 @@ namespace Prowl.Runtime.GUI
         ];
 
         // Define the cube edges
-        int[] cubeEdges =
+        readonly int[] cubeEdges =
         [
             0, 1, 1, 2, 2, 3, 3, 0, // Bottom face
                 4, 5, 5, 6, 6, 7, 7, 4, // Top face

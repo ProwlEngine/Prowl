@@ -17,10 +17,10 @@ namespace Prowl.Runtime
         public bool PlayAutomatically = true;
         public double Speed = 1.0;
 
-        private List<AnimationState> _states = new List<AnimationState>();
-        private Dictionary<string, AnimationState> _stateDictionary = new Dictionary<string, AnimationState>();
+        private readonly List<AnimationState> _states = new List<AnimationState>();
+        private readonly Dictionary<string, AnimationState> _stateDictionary = new Dictionary<string, AnimationState>();
 
-        private List<Transform> transforms = [];
+        private readonly List<Transform> transforms = [];
 
         public override void OnEnable()
         {

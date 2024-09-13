@@ -16,7 +16,7 @@ public class SceneViewWindow : EditorWindow
     public static Camera LastFocusedCamera;
     private static bool LastFocusedCameraChanged;
 
-    Camera Cam;
+    readonly Camera Cam;
     Material gridMat;
     Mesh gridMesh;
     RenderTexture RenderTarget;
@@ -29,8 +29,8 @@ public class SceneViewWindow : EditorWindow
     bool hasStarted = false;
     double camX, camY;
 
-    TransformGizmo gizmo;
-    ViewManipulatorGizmo viewManipulator;
+    readonly TransformGizmo gizmo;
+    readonly ViewManipulatorGizmo viewManipulator;
 
     public enum GridType { None, XZ, XY, YZ }
 

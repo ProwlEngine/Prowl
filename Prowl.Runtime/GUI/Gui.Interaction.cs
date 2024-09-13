@@ -18,9 +18,9 @@ namespace Prowl.Runtime.GUI
 
         private Dictionary<ulong, Interactable> _oldinteractables = [];
         private List<(double, Rect)> _oldblockers = [];
-        private Dictionary<ulong, Interactable> _interactables = [];
-        private List<(double, Rect)> _blockers = [];
-        private Dictionary<int, int> _zInteractableCounter = [];
+        private readonly Dictionary<ulong, Interactable> _interactables = [];
+        private readonly List<(double, Rect)> _blockers = [];
+        private readonly Dictionary<int, int> _zInteractableCounter = [];
 
 
         private void StartInteractionFrame()
@@ -266,7 +266,7 @@ namespace Prowl.Runtime.GUI
         public Rect Rect => _rect;
         public double ZIndex => zIndex;
 
-        private Gui _gui;
+        private readonly Gui _gui;
         internal ulong _id;
         internal Rect _rect;
         internal double zIndex;

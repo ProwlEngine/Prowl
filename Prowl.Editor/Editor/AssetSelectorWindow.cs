@@ -12,8 +12,8 @@ namespace Prowl.Editor
     public class AssetSelectorWindow : EditorWindow
     {
         private string _searchText = "";
-        private Type type;
-        private Action<Guid, ushort> _onAssetSelected;
+        private readonly Type type;
+        private readonly Action<Guid, ushort> _onAssetSelected;
 
         protected override bool Center { get; } = true;
         protected override double Width { get; } = 512;

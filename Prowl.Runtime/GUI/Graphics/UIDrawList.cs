@@ -73,12 +73,12 @@ namespace Prowl.Runtime.GUI.Graphics
         private uint _currentVertexIndex; // == _vertices.Count
         private int _vertexWritePos; // point within _vertices after each add command (to avoid using the ImVector<> operators too much)
         private int _indexWritePos; // point within _indices after each add command (to avoid using the ImVector<> operators too much)
-        private List<Vector4> _clipRectStack;
-        private List<Texture2D> _textureStack;
-        private List<Vector2> _buildingPath; // current path building
-        private int _currentChannel; // current channel number (0)
-        private int _activeChannels; // number of active channels (1+)
-        private List<UIDrawChannel> _channels; // draw channels for columns API (not resized down so _channelsCount may be smaller than _channels.Count)
+        private readonly List<Vector4> _clipRectStack;
+        private readonly List<Texture2D> _textureStack;
+        private readonly List<Vector2> _buildingPath;   // current path building
+        private int _currentChannel;                    // current channel number (0)
+        private int _activeChannels;                    // number of active channels (1+)
+        private readonly List<UIDrawChannel> _channels; // draw channels for columns API (not resized down so _channelsCount may be smaller than _channels.Count)
         private int _primitiveCount = -10000;
 
         private bool _antiAliasing;
