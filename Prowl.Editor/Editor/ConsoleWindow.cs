@@ -130,12 +130,12 @@ namespace Prowl.Editor
                 _messagesToRender.Add(message);
             }
 
-            using (gui.Node("LogContent").ExpandHeight().ExpandWidth().Layout(LayoutType.Row).ScaleChildren().Padding(0, 5, 5, 5).Enter())
+            using (gui.Node("LogContent").ExpandHeight().ExpandWidth().Layout(LayoutType.Row).ScaleChildren().Spacing(10).Padding(0, 5, 5, 5).Enter())
             {
-                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
-
                 using (gui.Node("List").ExpandHeight().Layout(LayoutType.Column).Scroll(true, false).Clip().Enter())
                 {
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
+
                     double viewHeight = gui.CurrentNode.LayoutData.Rect.height;
 
                     int messageBottom = Math.Max(0, (int)Math.Floor(gui.CurrentNode.LayoutData.VScroll / MessageHeight));
@@ -154,12 +154,9 @@ namespace Prowl.Editor
 
                 using (gui.Node("Selected").ExpandHeight().Layout(LayoutType.Column).Spacing(5).Scroll().Clip().Enter())
                 {
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
+
                     Rect rect = gui.CurrentNode.LayoutData.Rect;
-
-                    Vector2 top = new(rect.x, rect.y);
-                    Vector2 bottom = new(rect.x, rect.y + rect.height);
-
-                    gui.Draw2D.DrawLine(top, bottom, EditorStylePrefs.Instance.WindowBGOne, 3);
 
                     GetSeverityStyles(_selectedMessage.severity, out string icon, out Color color);
                     string selMsg = icon + " " + _selectedMessage.message;
@@ -172,9 +169,9 @@ namespace Prowl.Editor
 
                         Rect textRect = headerRect;
                         textRect.y += 5;
-                        textRect.x += 5;
+                        textRect.x += 10;
                         textRect.height -= 5;
-                        textRect.width -= 5;
+                        textRect.width -= 10;
 
                         Vector2 textPos = textRect.Position;
                         textPos.y += (headerRect.height / 2) - 9;
@@ -190,7 +187,7 @@ namespace Prowl.Editor
                             string frameText = frame.ToString();
                             Vector2 frameSize = Font.DefaultFont.CalcTextSize(frameText, font_size: 21, 0);
 
-                            using (gui.Node("StackFrame", i).Margin(0, 0, 0, 5).Width(frameSize.x).Height(15).Enter())
+                            using (gui.Node("StackFrame", i).Margin(0, 0, 0, 10).Width(frameSize.x).Height(15).Enter())
                             {
                                 Interactable interact = gui.GetInteractable();
                                 Color col = Color.white * 0.65f;
