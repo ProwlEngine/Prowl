@@ -310,7 +310,7 @@ namespace Prowl.Editor
 
                 if (subAssets.Length > 1)
                 {
-                    expanded = gui.GetNodeStorage<bool>(gui.CurrentNode.Parent, entry.File.FullName, false);
+                    expanded = gui.GetNodeStorage(gui.CurrentNode.Parent, entry.File.FullName, false);
 
                     using (gui.Node("ExpandBtn").TopLeft(Offset.Percentage(1f, -(itemHeight * 0.5)), 2).Scale(itemHeight * 0.5).Enter())
                     {
