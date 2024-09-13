@@ -33,8 +33,7 @@ namespace Prowl.Editor
         protected override bool LockSize => true;
         protected override double Padding => 0;
 
-
-        public ProjectsWindow() : base()
+        public ProjectsWindow()
         {
             Title = FontAwesome6.Book + " Project Window";
 
@@ -43,7 +42,6 @@ namespace Prowl.Editor
                 (FontAwesome6.BookOpen + "  Learn", () => {})
             ];
         }
-
 
         protected override void Draw()
         {

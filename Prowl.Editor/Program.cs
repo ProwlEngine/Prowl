@@ -1,7 +1,10 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using CommandLine;
+
 using Prowl.Editor.Assets;
+using Prowl.Editor.Editor.CLI;
 using Prowl.Editor.Preferences;
 using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
@@ -11,14 +14,37 @@ namespace Prowl.Editor;
 
 public static class Program
 {
-    public static event Action? OnDrawEditor;
-    public static event Action? OnUpdateEditor;
-
-    public static bool IsReloadingExternalAssemblies { get; private set; }
+    private static bool IsReloadingExternalAssemblies { get; set; }
     public static void RegisterReloadOfExternalAssemblies() => IsReloadingExternalAssemblies = true;
+    private static bool s_createdDefaultWindows;
+    private static bool s_opened;
 
-    private static bool CreatedDefaultWindows;
     public static int Main(string[] args)
+    {
+        return Parser.Default.ParseArguments<CliOpenOptions, CliCreateOptions>(args)
+                     .MapResult(
+                         (CliOpenOptions options) => Run(options),
+                         (CliCreateOptions options) => CreateCommand(options),
+                         errs => 1); // error
+    }
+
+    private static int CreateCommand(CliCreateOptions options)
+    {
+        Console.WriteLine("Creating a new project");
+
+        if (options?.ProjectPath is not null && !options.ProjectPath.Exists)
+        {
+            Project.CreateNew(options.ProjectPath);
+        }
+        else
+        {
+            Console.WriteLine("Path is not valid or already exists");
+        }
+
+        return 0;
+    }
+
+    private static int Run(CliOpenOptions options)
     {
         // set global Culture to invariant
         Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
@@ -34,6 +60,12 @@ public static class Program
 
         Application.Update += () =>
         {
+
+            if (!s_opened && options?.ProjectPath is not null && options.ProjectPath.Exists)
+            {
+                Project.Open(new Project(options.ProjectPath));
+                s_opened = true;
+            }
             //EditorGui.SetupDock();
 
             AssetDatabase.InternalUpdate();
@@ -46,9 +78,9 @@ public static class Program
             {
                 Physics.Initialize();
 
-                if (!CreatedDefaultWindows)
+                if (!s_createdDefaultWindows)
                 {
-                    CreatedDefaultWindows = true;
+                    s_createdDefaultWindows = true;
                     //new EditorMainMenubar();
                     var console = EditorGuiManager.DockWindowTo(new ConsoleWindow(), null, Docking.DockZone.Center);
                     var assetbrowser = EditorGuiManager.DockWindowTo(new AssetsBrowserWindow(), console, Docking.DockZone.Center);
@@ -121,7 +153,6 @@ public static class Program
         {
 
         };
-
 
         Application.Run("Prowl Editor", 1920, 1080, new EditorAssetProvider(), true);
 

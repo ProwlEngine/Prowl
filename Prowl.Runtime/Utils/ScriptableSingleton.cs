@@ -78,7 +78,8 @@ namespace Prowl.Runtime.Utils
                         break;
                     case FilePathAttribute.Location.EditorPreference:
                         // Persistent across all projects
-                        if (Application.isEditor == false)
+                        // TODO: !Application.isRunning is just a hack to allow CLI operations that do not depend on the editor
+                        if (!Application.isRunning || Application.isEditor == false)
                             throw new InvalidOperationException("Preferences are only available in the editor");
                         directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Prowl", "Editor");
                         break;
