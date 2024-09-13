@@ -60,8 +60,4 @@
         <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid\Veldrid.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Folder Include="Editor\PackageManager\" />
-    </ItemGroup>
-
 </Project>
