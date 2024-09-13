@@ -64,6 +64,9 @@ namespace Prowl.Runtime
         public static void EndFrame()
         {
             Device.SwapBuffers();
+
+            Device.WaitForIdle();
+
             RenderTexture.UpdatePool();
             RenderPipelines.RenderPipeline.ClearRenderables();
         }
@@ -101,12 +104,7 @@ namespace Prowl.Runtime
             }
         }
 
-        public static Task SubmitCommandBufferAsync(CommandBuffer commandBuffer)
-        {
-            return new Task(() => SubmitCommandBuffer(commandBuffer, true));
-        }
-
-        public static void SubmitCommandList(CommandList list, bool awaitComplete, ulong timeout = ulong.MaxValue)
+        public static void SubmitCommandList(CommandList list, bool awaitComplete = false, ulong timeout = ulong.MaxValue)
         {
             list.End();
 
@@ -121,11 +119,6 @@ namespace Prowl.Runtime
             }
 
             Device.SubmitCommands(list);
-        }
-
-        internal static Task SubmitCommandListAsync(CommandList list, ulong timeout)
-        {
-            return new Task(() => SubmitCommandList(list, true, timeout));
         }
 
         internal static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, uint mipLevel, uint arrayLayer, bool awaitComplete = false)
