@@ -11,7 +11,7 @@ namespace Prowl.Runtime
     public sealed class ShaderVariant : ISerializationCallbackReceiver
     {
         [SerializeField, HideInInspector]
-        private KeywordState variantKeywords;
+        private readonly KeywordState variantKeywords;
 
 
         [HideInInspector]

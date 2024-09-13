@@ -27,7 +27,7 @@ public class GameObject : EngineObject, ISerializable
 
     private List<MonoBehaviour> _components = new();
 
-    private MultiValueDictionary<Type, MonoBehaviour> _componentCache = new();
+    private readonly MultiValueDictionary<Type, MonoBehaviour> _componentCache = new();
 
     private bool _enabled = true;
     private bool _enabledInHierarchy = true;

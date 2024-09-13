@@ -19,9 +19,9 @@ namespace Prowl.Runtime.GUI
             public double StartAxisAngle, StartRotationAngle, LastRotationAngle, CurrentDelta;
         }
 
-        private RotationParams _params;
+        private readonly RotationParams _params;
         private RotationState _state;
-        private TransformGizmo _gizmo;
+        private readonly TransformGizmo _gizmo;
         internal bool focused;
 
         public RotationSubGizmo(TransformGizmo gizmo, RotationParams parameters)
@@ -323,9 +323,9 @@ namespace Prowl.Runtime.GUI
             public Vector3 ScaleDelta;
         }
 
-        private ScaleParams _params;
+        private readonly ScaleParams _params;
         private ScaleState _state;
-        private TransformGizmo _gizmo;
+        private readonly TransformGizmo _gizmo;
         internal bool focused;
 
         public ScaleSubGizmo(TransformGizmo gizmo, ScaleParams parameters)
@@ -473,9 +473,9 @@ namespace Prowl.Runtime.GUI
             public Vector3 StartPoint, LastPoint, CurrentDelta;
         }
 
-        private TranslationParams _params;
+        private readonly TranslationParams _params;
         private TranslationState _state;
-        private TransformGizmo _gizmo;
+        private readonly TransformGizmo _gizmo;
         internal bool focused;
 
         public TranslationSubGizmo(TransformGizmo gizmo, TranslationParams parameters)

@@ -40,7 +40,7 @@ namespace Prowl.Editor.Assets
 
 
         private DirNode _rootNode;
-        private DirectoryInfo _rootDir = root;
+        private readonly DirectoryInfo _rootDir = root;
 
         public bool PathToNode(string path, out DirNode node)
         {

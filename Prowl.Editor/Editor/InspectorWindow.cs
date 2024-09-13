@@ -14,8 +14,8 @@ namespace Prowl.Editor
     public class InspectorWindow : EditorWindow
     {
 
-        private Stack<object> _BackStack = new();
-        private Stack<object> _ForwardStack = new();
+        private readonly Stack<object> _BackStack = new();
+        private readonly Stack<object> _ForwardStack = new();
 
         private object? Selected;
         private bool lockSelection;

@@ -22,11 +22,11 @@ public class DefaultInputHandler : IInputHandler, IDisposable
         Unset
     }
 
-    private Dictionary<Key, InputState> keyState = new();
-    private Dictionary<Key, InputState> newKeyState = new();
+    private readonly Dictionary<Key, InputState> keyState = new();
+    private readonly Dictionary<Key, InputState> newKeyState = new();
 
-    private Dictionary<MouseButton, InputState> buttonState = new();
-    private Dictionary<MouseButton, InputState> newButtonState = new();
+    private readonly Dictionary<MouseButton, InputState> buttonState = new();
+    private readonly Dictionary<MouseButton, InputState> newButtonState = new();
 
     private Vector2Int _currentMousePos;
     private Vector2Int _prevMousePos;

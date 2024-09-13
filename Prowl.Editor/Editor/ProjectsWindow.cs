@@ -16,7 +16,7 @@ namespace Prowl.Editor
 
         private string _createName = "";
 
-        private (string, Action)[] _tabs;
+        private readonly (string, Action)[] _tabs;
         private int _currentTab;
         private bool _createTabOpen;
 

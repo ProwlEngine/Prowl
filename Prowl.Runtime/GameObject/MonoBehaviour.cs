@@ -140,7 +140,7 @@ public abstract class MonoBehaviour : EngineObject
         Start();
     }
 
-    private static Dictionary<Type, bool> CachedExecuteAlways = new();
+    private static readonly Dictionary<Type, bool> CachedExecuteAlways = new();
     internal void Do(Action action)
     {
         bool always;

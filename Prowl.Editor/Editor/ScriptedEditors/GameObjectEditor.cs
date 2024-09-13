@@ -25,7 +25,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
     {
         private string _searchText = string.Empty;
         private static MenuItemInfo rootMenuItem;
-        private Dictionary<int, ScriptedEditor> compEditors = new();
+        private readonly Dictionary<int, ScriptedEditor> compEditors = new();
 
         [OnAssemblyUnload]
         public static void ClearCache() => rootMenuItem = null;
@@ -523,7 +523,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
         {
             public string Name;
             public Type Type;
-            public List<MenuItemInfo> Children = new();
+            public readonly List<MenuItemInfo> Children = new();
 
             public MenuItemInfo() { }
 

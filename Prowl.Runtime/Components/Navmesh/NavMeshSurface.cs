@@ -416,8 +416,8 @@ namespace Prowl.Runtime
                 public List<int> indices;
             }
 
-            public List<Mesh> shapeData = new();
-            public List<Transform> transformsOut = new();
+            public readonly List<Mesh> shapeData = new();
+            public readonly List<Transform> transformsOut = new();
 
             public void Append(Collider collider)
             {

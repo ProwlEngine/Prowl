@@ -11,7 +11,7 @@ namespace Prowl.Runtime
     public class PropertyBlock
     {
         [SerializeField, HideInInspector]
-        private PropertyState _internalState;
+        private readonly PropertyState _internalState;
 
         public PropertyBlock()
         {

@@ -17,9 +17,9 @@ namespace Prowl.Editor.PropertyDrawers
     {
         public Type TargetType { get; private set; } = type;
 
-        private static Dictionary<Type, PropertyDrawer> knownDrawers = [];
+        private static readonly Dictionary<Type, PropertyDrawer> knownDrawers = [];
 
-        private static Dictionary<Type, PropertyDrawer?> cachedDrawers = [];
+        private static readonly Dictionary<Type, PropertyDrawer?> cachedDrawers = [];
 
         private static List<Type> implementationTypes = [];
 

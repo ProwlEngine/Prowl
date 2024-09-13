@@ -291,7 +291,7 @@ namespace Prowl.Runtime
 
         #region Pool
 
-        private static Dictionary<RenderTextureDescription, List<(RenderTexture, long frameCreated)>> pool = [];
+        private static readonly Dictionary<RenderTextureDescription, List<(RenderTexture, long frameCreated)>> pool = [];
 
         private const int MaxUnusedFrames = 10;
 

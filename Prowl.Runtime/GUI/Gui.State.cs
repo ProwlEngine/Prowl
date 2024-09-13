@@ -12,7 +12,7 @@ namespace Prowl.Runtime.GUI
     {
         public int CurrentZIndex => CurrentNode.ZIndex;
 
-        private static Dictionary<ulong, Hashtable> _storage = [];
+        private static readonly Dictionary<ulong, Hashtable> _storage = [];
 
         /// <summary>
         /// Set the ZIndex for the current node

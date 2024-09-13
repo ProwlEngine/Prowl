@@ -29,7 +29,7 @@ public static class EditorGuiManager
 
     public static List<EditorWindow> Windows = [];
 
-    static List<EditorWindow> WindowsToRemove = [];
+    static readonly List<EditorWindow> WindowsToRemove = [];
 
     public static void Initialize()
     {
