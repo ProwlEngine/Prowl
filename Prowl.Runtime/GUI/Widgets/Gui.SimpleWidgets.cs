@@ -24,7 +24,7 @@ namespace Prowl.Runtime.GUI
             ItemIndex = Math.Clamp(ItemIndex, 0, Items.Length - 1);
 
             var style = inputstyle ?? new(30);
-            var g = Gui.ActiveGUI;
+            var g = ActiveGUI;
             using (g.Node(ID).Left(x).Top(y).Width(width).Height(height).Padding(2).Enter())
             {
                 Interactable interact = g.GetInteractable();

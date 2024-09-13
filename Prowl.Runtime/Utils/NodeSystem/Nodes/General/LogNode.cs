@@ -21,7 +21,7 @@ namespace Prowl.Runtime.NodeSystem
 
         public override void Execute(NodePort input)
         {
-            var message = GetInputValue<string>("Message", Message);
+            var message = GetInputValue("Message", Message);
 
             switch (Type)
             {

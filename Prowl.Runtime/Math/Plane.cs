@@ -88,22 +88,22 @@ namespace Prowl.Runtime
         #region Public Methods
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double Dot(Vector4 value) => ((((this.normal.x * value.x) + (this.normal.y * value.y)) + (this.normal.z * value.z)) + (this.distance * value.w));
+        public double Dot(Vector4 value) => ((((normal.x * value.x) + (normal.y * value.y)) + (normal.z * value.z)) + (distance * value.w));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void Dot(ref Vector4 value, out double result) => result = (((this.normal.x * value.x) + (this.normal.y * value.y)) + (this.normal.z * value.z)) + (this.distance * value.w);
+        public void Dot(ref Vector4 value, out double result) => result = (((normal.x * value.x) + (normal.y * value.y)) + (normal.z * value.z)) + (distance * value.w);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double DotCoordinate(Vector3 value) => ((((this.normal.x * value.x) + (this.normal.y * value.y)) + (this.normal.z * value.z)) + this.distance);
+        public double DotCoordinate(Vector3 value) => ((((normal.x * value.x) + (normal.y * value.y)) + (normal.z * value.z)) + distance);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DotCoordinate(ref Vector3 value, out double result) => result = (((this.normal.x * value.x) + (this.normal.y * value.y)) + (this.normal.z * value.z)) + this.distance;
+        public void DotCoordinate(ref Vector3 value, out double result) => result = (((normal.x * value.x) + (normal.y * value.y)) + (normal.z * value.z)) + distance;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public double DotNormal(Vector3 value) => (((this.normal.x * value.x) + (this.normal.y * value.y)) + (this.normal.z * value.z));
+        public double DotNormal(Vector3 value) => (((normal.x * value.x) + (normal.y * value.y)) + (normal.z * value.z));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DotNormal(ref Vector3 value, out double result) => result = ((this.normal.x * value.x) + (this.normal.y * value.y)) + (this.normal.z * value.z);
+        public void DotNormal(ref Vector3 value, out double result) => result = ((normal.x * value.x) + (normal.y * value.y)) + (normal.z * value.z);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool GetSide(Vector3 inPt) => Vector3.Dot(normal, inPt) + distance > 0.0;
@@ -122,8 +122,8 @@ namespace Prowl.Runtime
             double factor;
             Vector3 normal = this.normal;
             this.normal = Vector3.Normalize(this.normal);
-            factor = (double)Math.Sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z) /
-                    (double)Math.Sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+            factor = Math.Sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z) /
+                    Math.Sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
             distance = distance * factor;
         }
 
@@ -144,8 +144,8 @@ namespace Prowl.Runtime
         {
             double factor;
             result.normal = Vector3.Normalize(value.normal);
-            factor = (double)Math.Sqrt(result.normal.x * result.normal.x + result.normal.y * result.normal.y + result.normal.z * result.normal.z) /
-                    (double)Math.Sqrt(value.normal.x * value.normal.x + value.normal.y * value.normal.y + value.normal.z * value.normal.z);
+            factor = Math.Sqrt(result.normal.x * result.normal.x + result.normal.y * result.normal.y + result.normal.z * result.normal.z) /
+                    Math.Sqrt(value.normal.x * value.normal.x + value.normal.y * value.normal.y + value.normal.z * value.normal.z);
             result.distance = value.distance * factor;
         }
 
@@ -153,7 +153,7 @@ namespace Prowl.Runtime
 
         public static bool operator ==(Plane plane1, Plane plane2) => plane1.Equals(plane2);
 
-        public override bool Equals(object? other) => (other is Plane plane) ? this.Equals(plane) : false;
+        public override bool Equals(object? other) => (other is Plane plane) ? Equals(plane) : false;
 
         public bool Equals(Plane other) => ((normal == other.normal) && (distance == other.distance));
 
@@ -189,7 +189,7 @@ namespace Prowl.Runtime
 
             double dist = (Vector3.Dot(normal, lineStart) - distance) / den;
 
-            if (dist < (double)-MathD.Small || dist > (1.0f + (double)MathD.Small))
+            if (dist < -MathD.Small || dist > (1.0f + MathD.Small))
                 return false;
 
             dist = -dist;
@@ -198,7 +198,7 @@ namespace Prowl.Runtime
             return true;
         }
 
-        internal string DebugDisplayString => string.Concat(this.normal.ToString(), "  ", this.distance.ToString());
+        internal string DebugDisplayString => string.Concat(normal.ToString(), "  ", distance.ToString());
 
         public override string ToString() => "{Normal:" + normal + " Distance:" + distance + "}";
 

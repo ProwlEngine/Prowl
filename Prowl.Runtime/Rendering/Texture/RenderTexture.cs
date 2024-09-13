@@ -28,26 +28,26 @@ namespace Prowl.Runtime
             PixelFormat? depthFormat,
             PixelFormat[] colorFormats,
             bool sampled = true, bool randomWrite = false,
-            TextureSampleCount sampleCount = Veldrid.TextureSampleCount.Count1)
+            TextureSampleCount sampleCount = TextureSampleCount.Count1)
         {
             this.width = width;
             this.height = height;
-            this.depthBufferFormat = depthFormat;
-            this.colorBufferFormats = colorFormats;
+            depthBufferFormat = depthFormat;
+            colorBufferFormats = colorFormats;
             this.sampled = sampled;
-            this.enableRandomWrite = randomWrite;
+            enableRandomWrite = randomWrite;
             this.sampleCount = sampleCount;
         }
 
         public RenderTextureDescription(RenderTexture texture)
         {
-            this.width = texture.Width;
-            this.height = texture.Height;
-            this.depthBufferFormat = texture.DepthBuffer?.Format;
-            this.colorBufferFormats = texture.ColorBuffers.Select(x => x.Format).ToArray();
-            this.sampled = texture.Sampled;
-            this.enableRandomWrite = texture.RandomWriteEnabled;
-            this.sampleCount = texture.SampleCount;
+            width = texture.Width;
+            height = texture.Height;
+            depthBufferFormat = texture.DepthBuffer?.Format;
+            colorBufferFormats = texture.ColorBuffers.Select(x => x.Format).ToArray();
+            sampled = texture.Sampled;
+            enableRandomWrite = texture.RandomWriteEnabled;
+            sampleCount = texture.SampleCount;
         }
 
         public override bool Equals([NotNullWhen(true)] object? obj)
@@ -156,11 +156,11 @@ namespace Prowl.Runtime
             if (colorFormats != null && colorFormats.Length > colorAttachmentLimit)
                 throw new Exception($"Invalid number of color buffers! [0-{colorAttachmentLimit}]");
 
-            this.Width = width;
-            this.Height = height;
-            this.Sampled = sampled;
-            this.RandomWriteEnabled = enableRandomWrite;
-            this.SampleCount = sampleCount;
+            Width = width;
+            Height = height;
+            Sampled = sampled;
+            RandomWriteEnabled = enableRandomWrite;
+            SampleCount = sampleCount;
 
             if (depthFormat != null)
             {
@@ -184,7 +184,7 @@ namespace Prowl.Runtime
 
             FramebufferDescription description = new FramebufferDescription(DepthBuffer?.InternalTexture, ColorBuffers.Select(x => x.InternalTexture).ToArray());
 
-            this.Framebuffer = Graphics.Factory.CreateFramebuffer(description);
+            Framebuffer = Graphics.Factory.CreateFramebuffer(description);
         }
 
         public override void OnDispose()
@@ -291,7 +291,7 @@ namespace Prowl.Runtime
 
         #region Pool
 
-        private static Dictionary<RenderTextureDescription, List<(RenderTexture, long frameCreated)>> pool = [];
+        private static readonly Dictionary<RenderTextureDescription, List<(RenderTexture, long frameCreated)>> pool = [];
 
         private const int MaxUnusedFrames = 10;
 

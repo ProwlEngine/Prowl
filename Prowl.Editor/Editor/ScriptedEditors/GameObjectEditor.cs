@@ -25,7 +25,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
     {
         private string _searchText = string.Empty;
         private static MenuItemInfo rootMenuItem;
-        private Dictionary<int, ScriptedEditor> compEditors = new();
+        private readonly Dictionary<int, ScriptedEditor> compEditors = new();
 
         [OnAssemblyUnload]
         public static void ClearCache() => rootMenuItem = null;
@@ -45,18 +45,18 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 gui.Draw2D.DrawText("This GameObject is not editable", gui.CurrentNode.LayoutData.InnerRect);
 
             bool isEnabled = go.enabled;
-            if (gui.Checkbox("IsEnabledChk", ref isEnabled, 0, 0, out _, EditorGUI.GetInputStyle()))
+            if (gui.Checkbox("IsEnabledChk", ref isEnabled, 0, 0, out _, GetInputStyle()))
                 go.enabled = isEnabled;
             gui.Tooltip("Is Enabled");
 
-            Gui.WidgetStyle style = EditorGUI.GetInputStyle();
+            WidgetStyle style = GetInputStyle();
             style.Roundness = 8f;
             style.BorderThickness = 1f;
             string name = go.Name;
             if (gui.InputField("NameInput", ref name, 32, InputFieldFlags.None, ItemSize, 0, Size.Percentage(1f, -(ItemSize * 3)), ItemSize, style))
                 go.Name = name.Trim();
 
-            var invisStyle = EditorGUI.GetInputStyle() with { BGColor = new Color(0, 0, 0, 0), BorderColor = new Color(0, 0, 0, 0) };
+            var invisStyle = GetInputStyle() with { BGColor = new Color(0, 0, 0, 0), BorderColor = new Color(0, 0, 0, 0) };
             int tagIndex = go.tagIndex;
             gui.Combo("#_TagID", "#_TagPopupID", ref tagIndex, TagLayerManager.Instance.tags.ToArray(), Offset.Percentage(1f, -(ItemSize * 2)), 0, ItemSize, ItemSize, invisStyle, FontAwesome6.Tag);
             go.tagIndex = (byte)tagIndex;
@@ -155,21 +155,21 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         using (ActiveGUI.Node("PosParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
                             var tpos = t.localPosition;
-                            if (EditorGUI.DrawProperty(0, "Position", ref tpos))
+                            if (DrawProperty(0, "Position", ref tpos))
                                 t.localPosition = tpos;
                         }
 
                         using (ActiveGUI.Node("RotParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
                             var tpos = t.localEulerAngles;
-                            if (EditorGUI.DrawProperty(1, "Rotation", ref tpos))
+                            if (DrawProperty(1, "Rotation", ref tpos))
                                 t.localEulerAngles = tpos;
                         }
 
                         using (ActiveGUI.Node("ScaleParent", 0).ExpandWidth().Height(ItemSize).Layout(LayoutType.Row).ScaleChildren().Enter())
                         {
                             var tpos = t.localScale;
-                            if (EditorGUI.DrawProperty(2, "Scale", ref tpos))
+                            if (DrawProperty(2, "Scale", ref tpos))
                                 t.localScale = tpos;
                         }
                     }
@@ -216,7 +216,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         gui.Draw2D.DrawText(cname, 23, gui.CurrentNode.LayoutData.GlobalContentPosition + new Vector2(28, centerY + 2));
 
                         isEnabled = comp.Enabled;
-                        if (gui.Checkbox("IsEnabledChk", ref isEnabled, Offset.Percentage(1f, -30), 0, out var chkNode, EditorGUI.GetInputStyle()))
+                        if (gui.Checkbox("IsEnabledChk", ref isEnabled, Offset.Percentage(1f, -30), 0, out var chkNode, GetInputStyle()))
                             comp.Enabled = isEnabled;
                         gui.Tooltip("Is Component Enabled?");
 
@@ -272,7 +272,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
 
                             // No Editor, Fallback to default Inspector
                             object compRef = comp;
-                            if (EditorGUI.PropertyGrid("CompPropertyGrid", ref compRef, TargetFields.Serializable | EditorGUI.TargetFields.Properties, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground))
+                            if (PropertyGrid("CompPropertyGrid", ref compRef, TargetFields.Serializable | TargetFields.Properties, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground))
                                 comp.OnValidate();
 
                             // Draw any Buttons - these should be in PropertyGrid probably
@@ -309,7 +309,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                         {
                             gui.Search("##searchBox", ref _searchText, 0, 0, Size.Percentage(1f));
 
-                            EditorGUI.Separator();
+                            Separator();
 
                             rootMenuItem ??= GetAddComponentMenuItems();
                             DrawMenuItems(rootMenuItem, go);
@@ -354,7 +354,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
         private static void HandleComponentContextMenu(GameObject? go, MonoBehaviour comp, LayoutNode popupHolder, ref List<MonoBehaviour> toDelete)
         {
             bool closePopup = false;
-            if (EditorGUI.StyledButton("Duplicate"))
+            if (StyledButton("Duplicate"))
             {
                 var serialized = Serializer.Serialize(comp);
                 var copy = Serializer.Deserialize<MonoBehaviour>(serialized);
@@ -363,14 +363,14 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 closePopup = true;
             }
 
-            if (EditorGUI.StyledButton("Delete"))
+            if (StyledButton("Delete"))
             {
                 toDelete.Add(comp);
                 closePopup = true;
             }
 
             if (closePopup)
-                Gui.ActiveGUI.ClosePopup(popupHolder);
+                ActiveGUI.ClosePopup(popupHolder);
         }
 
         private void DrawMenuItems(MenuItemInfo menuItem, GameObject go)
@@ -390,27 +390,27 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
                 if (item.Type != null)
                 {
 
-                    if (EditorGUI.StyledButton(item.Name))
+                    if (StyledButton(item.Name))
                         go.AddComponent(item.Type).OnValidate();
 
                 }
                 else
                 {
 
-                    if (EditorGUI.StyledButton(item.Name))
-                        Gui.ActiveGUI.OpenPopup(item.Name + "Popup", Gui.ActiveGUI.PreviousNode.LayoutData.Rect.TopRight);
+                    if (StyledButton(item.Name))
+                        ActiveGUI.OpenPopup(item.Name + "Popup", ActiveGUI.PreviousNode.LayoutData.Rect.TopRight);
 
                     // Enter the Button's Node
-                    using (Gui.ActiveGUI.PreviousNode.Enter())
+                    using (ActiveGUI.PreviousNode.Enter())
                     {
                         // Draw a > to indicate a popup
-                        Rect rect = Gui.ActiveGUI.CurrentNode.LayoutData.Rect;
+                        Rect rect = ActiveGUI.CurrentNode.LayoutData.Rect;
                         rect.x = rect.x + rect.width - 25;
                         rect.width = 20;
-                        Gui.ActiveGUI.Draw2D.DrawText(FontAwesome6.ChevronRight, rect, Color.white);
+                        ActiveGUI.Draw2D.DrawText(FontAwesome6.ChevronRight, rect, Color.white);
                     }
 
-                    if (Gui.ActiveGUI.BeginPopup(item.Name + "Popup", out var node))
+                    if (ActiveGUI.BeginPopup(item.Name + "Popup", out var node))
                     {
                         double largestWidth = 0;
                         foreach (var child in item.Children)
@@ -433,7 +433,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
             // is first and found no component and were searching, lets create a new script
             if (hasSearch && !foundName && menuItem == rootMenuItem)
             {
-                if (EditorGUI.StyledButton("Create Script " + _searchText))
+                if (StyledButton("Create Script " + _searchText))
                 {
                     FileInfo file = new FileInfo(Path.Combine(Project.Active!.AssetDirectory.FullName, $"/{_searchText}.cs"));
                     if (File.Exists(file.FullName))
@@ -523,7 +523,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors
         {
             public string Name;
             public Type Type;
-            public List<MenuItemInfo> Children = new();
+            public readonly List<MenuItemInfo> Children = new();
 
             public MenuItemInfo() { }
 

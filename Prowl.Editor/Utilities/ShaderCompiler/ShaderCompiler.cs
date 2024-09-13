@@ -115,8 +115,8 @@ namespace Prowl.Editor.Utilities
 
         public static ShaderVariant[] GenerateVariants(ShaderCreationArgs args, FileIncluder includer, List<CompilationMessage> messages)
         {
-            List<KeyValuePair<string, HashSet<string>>> combinations = new(args.combinations);
-            List<ShaderVariant> variantList = new();
+            List<KeyValuePair<string, HashSet<string>>> combinations = [..args.combinations];
+            List<ShaderVariant> variantList = [];
             List<KeyValuePair<string, string>> combination = new(combinations.Count);
 
             using Context ctx = new Context();

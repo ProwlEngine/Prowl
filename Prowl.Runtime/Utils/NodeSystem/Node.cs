@@ -112,7 +112,7 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> Convenience function. </summary>
         /// <seealso cref="AddInstancePort"/>
         /// <seealso cref="AddInstanceOutput"/>
-        public NodePort AddDynamicInput(Type type, Node.ConnectionType connectionType = Node.ConnectionType.Override, Node.TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null, bool onHeader = false)
+        public NodePort AddDynamicInput(Type type, ConnectionType connectionType = ConnectionType.Override, TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null, bool onHeader = false)
         {
             return AddDynamicPort(type, NodePort.IO.Input, connectionType, typeConstraint, fieldName);
         }
@@ -120,7 +120,7 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> Convenience function. </summary>
         /// <seealso cref="AddInstancePort"/>
         /// <seealso cref="AddInstanceInput"/>
-        public NodePort AddDynamicOutput(Type type, Node.ConnectionType connectionType = Node.ConnectionType.Override, Node.TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null, bool onHeader = false)
+        public NodePort AddDynamicOutput(Type type, ConnectionType connectionType = ConnectionType.Override, TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null, bool onHeader = false)
         {
             return AddDynamicPort(type, NodePort.IO.Output, connectionType, typeConstraint, fieldName);
         }
@@ -128,7 +128,7 @@ namespace Prowl.Runtime.NodeSystem
         /// <summary> Add a dynamic, serialized port to this node. </summary>
         /// <seealso cref="AddDynamicInput"/>
         /// <seealso cref="AddDynamicOutput"/>
-        private NodePort AddDynamicPort(Type type, NodePort.IO direction, Node.ConnectionType connectionType = Node.ConnectionType.Override, Node.TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null, bool onHeader = false)
+        private NodePort AddDynamicPort(Type type, NodePort.IO direction, ConnectionType connectionType = ConnectionType.Override, TypeConstraint typeConstraint = TypeConstraint.None, string fieldName = null, bool onHeader = false)
         {
             if (fieldName == null)
             {
@@ -155,10 +155,10 @@ namespace Prowl.Runtime.NodeSystem
         }
 
         /// <summary> Remove an dynamic port from the node </summary>
+        /// <exception cref="ArgumentNullException"></exception>
         public void RemoveDynamicPort(NodePort port)
         {
-            if (port == null) throw new ArgumentNullException("port");
-            else if (port.IsStatic) throw new ArgumentException("cannot remove static port");
+            if (port.IsStatic) throw new ArgumentException("cannot remove static port");
             port.ClearConnections();
             ports.Remove(port.fieldName);
         }
@@ -167,7 +167,7 @@ namespace Prowl.Runtime.NodeSystem
         //[ContextMenu("Clear Dynamic Ports")]
         public void ClearDynamicPorts()
         {
-            List<NodePort> dynamicPorts = new List<NodePort>(DynamicPorts);
+            List<NodePort> dynamicPorts = [..DynamicPorts];
             foreach (NodePort port in dynamicPorts)
             {
                 RemoveDynamicPort(port);
@@ -350,8 +350,8 @@ namespace Prowl.Runtime.NodeSystem
         [Serializable]
         public class NodePortDictionary : ISerializationCallbackReceiver
         {
-            [SerializeField] private List<string> keys = new List<string>();
-            [SerializeField] private List<NodePort> values = new List<NodePort>();
+            [SerializeField] private List<string> keys = [];
+            [SerializeField] private List<NodePort> values = [];
             private Dictionary<string, NodePort> dictionary = new Dictionary<string, NodePort>();
 
             /// <summary>
@@ -447,7 +447,7 @@ namespace Prowl.Runtime.NodeSystem
                 dictionary.Clear();
 
                 if (keys.Count != values.Count)
-                    throw new System.Exception("there are " + keys.Count + " keys and " + values.Count + " values after deserialization. Make sure that both key and value types are serializable.");
+                    throw new Exception("there are " + keys.Count + " keys and " + values.Count + " values after deserialization. Make sure that both key and value types are serializable.");
 
                 for (int i = 0; i < keys.Count; i++)
                     dictionary.Add(keys[i], values[i]);

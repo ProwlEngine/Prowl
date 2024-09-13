@@ -38,7 +38,7 @@ internal class ContactEventsManager : IDisposable
         public int FeatureId3;
     }
 
-    IThreadDispatcher? threadDispatcher;
+    readonly IThreadDispatcher? threadDispatcher;
     BufferPool? pool;
 
     //We'll use a handle->index mapping in a CollidableProperty to point at our contiguously stored listeners (in the later listeners array).

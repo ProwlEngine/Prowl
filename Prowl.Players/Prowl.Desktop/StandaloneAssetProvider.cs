@@ -5,22 +5,22 @@ using Prowl.Runtime.Utils;
 
 public class StandaloneAssetProvider : IAssetProvider
 {
-    AssetBundle[] packages;
+    readonly AssetBundle[] packages;
 
     public StandaloneAssetProvider()
     {
         int packageIndex = 0;
         FileInfo firstPackage = new FileInfo(Path.Combine(Program.Data.FullName, $"Data{packageIndex++}.prowl"));
-        List<AssetBundle> packages = new();
+        List<AssetBundle> assetBundles = [];
         while (File.Exists(firstPackage.FullName))
         {
-            packages.Add(new AssetBundle(firstPackage.OpenRead(), ZipArchiveMode.Read));
+            assetBundles.Add(new AssetBundle(firstPackage.OpenRead(), ZipArchiveMode.Read));
             firstPackage = new FileInfo(Path.Combine(Program.Data.FullName, $"Data{packageIndex++}.prowl"));
         }
-        this.packages = packages.ToArray();
+        packages = assetBundles.ToArray();
     }
 
-    Dictionary<Guid, SerializedAsset> _loaded = [];
+    readonly Dictionary<Guid, SerializedAsset> _loaded = [];
 
     public bool HasAsset(Guid assetID) => _loaded.ContainsKey(assetID);
 

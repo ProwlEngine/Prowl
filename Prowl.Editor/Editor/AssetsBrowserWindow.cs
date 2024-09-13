@@ -15,7 +15,7 @@ namespace Prowl.Editor
     public class AssetsBrowserWindow : EditorWindow
     {
         public AssetDirectoryCache.DirNode CurDirectoryNode;
-        public bool Locked = false;
+        public bool Locked;
 
         double itemHeight => EditorStylePrefs.Instance.ItemSize;
         double itemPadding => 4;
@@ -24,11 +24,11 @@ namespace Prowl.Editor
         private readonly List<FileInfo> _found = new();
         private readonly Dictionary<string, AssetRef<Texture2D>> _cachedThumbnails = new();
         private static (long, bool) _lastGenerated = (-1, false);
-        internal static string? RenamingEntry = null;
-        private static bool justStartedRename = false;
+        internal static string? RenamingEntry;
+        private static bool justStartedRename;
 
         private const float PingDuration = 3f;
-        private float _pingTimer = 0;
+        private float _pingTimer;
         private FileInfo _pingedFile;
 
         private float EntrySize => (1.0f + AssetPipelinePreferences.Instance.ThumbnailSize) * 90f;
@@ -310,7 +310,7 @@ namespace Prowl.Editor
 
                 if (subAssets.Length > 1)
                 {
-                    expanded = gui.GetNodeStorage<bool>(gui.CurrentNode.Parent, entry.File.FullName, false);
+                    expanded = gui.GetNodeStorage(gui.CurrentNode.Parent, entry.File.FullName, false);
 
                     using (gui.Node("ExpandBtn").TopLeft(Offset.Percentage(1f, -(itemHeight * 0.5)), 2).Scale(itemHeight * 0.5).Enter())
                     {

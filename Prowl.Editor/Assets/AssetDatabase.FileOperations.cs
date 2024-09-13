@@ -77,7 +77,7 @@ namespace Prowl.Editor.Assets
         public static bool Rename(FileInfo file, string newName)
         {
             ArgumentNullException.ThrowIfNull(file);
-            ArgumentNullException.ThrowIfNullOrEmpty(newName);
+            ArgumentException.ThrowIfNullOrEmpty(newName);
             if (!File.Exists(file.FullName)) return false;
 
             if (file.Extension.Equals(".meta", StringComparison.OrdinalIgnoreCase)) return false;
@@ -106,7 +106,7 @@ namespace Prowl.Editor.Assets
         public static bool Rename(DirectoryInfo source, string newName)
         {
             ArgumentNullException.ThrowIfNull(source);
-            ArgumentNullException.ThrowIfNullOrEmpty(newName);
+            ArgumentException.ThrowIfNullOrEmpty(newName);
             if (!Directory.Exists(source.FullName)) return false;
 
             var newFile = new FileInfo(Path.Combine(source.Parent!.FullName, newName));

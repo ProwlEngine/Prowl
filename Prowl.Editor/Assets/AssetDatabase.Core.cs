@@ -34,8 +34,8 @@ namespace Prowl.Editor.Assets
         #region Private Fields
 
         static readonly List<(DirectoryInfo, AssetDirectoryCache)> rootFolders = [];
-        static double RefreshTimer = 0f;
-        static bool lastFocused = false;
+        static double RefreshTimer;
+        static bool lastFocused;
         static readonly Dictionary<string, MetaFile> assetPathToMeta = new(StringComparer.OrdinalIgnoreCase);
         static readonly Dictionary<Guid, MetaFile> assetGuidToMeta = [];
         static readonly Dictionary<Guid, SerializedAsset> guidToAssetData = [];
@@ -79,7 +79,7 @@ namespace Prowl.Editor.Assets
         /// <param name="rootFolder">The path to the root folder.</param>
         public static void AddRootFolder(string rootFolder)
         {
-            ArgumentNullException.ThrowIfNullOrEmpty(rootFolder);
+            ArgumentException.ThrowIfNullOrEmpty(rootFolder);
 
             var rootPath = Path.Combine(Project.Active.ProjectPath, rootFolder);
             var info = new DirectoryInfo(rootPath);
@@ -212,7 +212,7 @@ namespace Prowl.Editor.Assets
         /// <returns>True if a reimport is needed</returns>
         static bool ProcessFile(string file, out bool metaOutdated)
         {
-            ArgumentNullException.ThrowIfNullOrEmpty(file);
+            ArgumentException.ThrowIfNullOrEmpty(file);
             var fileInfo = new FileInfo(file);
             metaOutdated = false;
 
@@ -443,7 +443,7 @@ namespace Prowl.Editor.Assets
                     asset = (T)serialized.SubAssets[fileID - 1];
                 }
                 asset.AssetID = assetGuid;
-                asset.FileID = (ushort)fileID;
+                asset.FileID = fileID;
                 return asset;
             }
             catch (Exception e)

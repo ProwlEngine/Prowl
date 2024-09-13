@@ -44,7 +44,7 @@ namespace Prowl.Runtime.GUI
 
     public partial class Gui
     {
-        private Dictionary<ulong, BoolAnimation> _boolAnimations = [];
+        private readonly Dictionary<ulong, BoolAnimation> _boolAnimations = [];
 
         /// <inheritdoc cref="AnimateBool(ulong, bool, float, EaseType)"/>
         public float AnimateBool(bool state, float durationIn, float durationOut, EaseType easeIn, EaseType easeOut)

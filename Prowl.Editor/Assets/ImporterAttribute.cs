@@ -11,7 +11,7 @@ namespace Prowl.Editor.Assets
     public class ImporterAttribute : Attribute
     {
         public string[] Extensions { get; private set; }
-        public string FileIcon { get; private set; } = "FileIcon.png";
+        public string FileIcon { get; private set; }
         public Type GeneralType { get; private set; }
         public ImporterAttribute(string fileIcon, Type generalType, params string[] extensions)
         {

@@ -10,10 +10,10 @@ public class FileIncluder
     public string SourceFile;
     public string SourceFilePath => Path.Join(_searchDirectories[0].FullName, SourceFile);
 
-    private string _relativeDirectory;
-    private int _qualifiedPrefixLength;
+    private readonly string _relativeDirectory;
+    private readonly int _qualifiedPrefixLength;
 
-    private DirectoryInfo[] _searchDirectories;
+    private readonly DirectoryInfo[] _searchDirectories;
 
 
     public FileIncluder(string sourceFile, DirectoryInfo[] searchDirectories)

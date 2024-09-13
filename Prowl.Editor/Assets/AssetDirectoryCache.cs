@@ -24,7 +24,7 @@ namespace Prowl.Editor.Assets
                 File = file;
 
                 AssetID = Guid.Empty;
-                SubAssets = Array.Empty<AssetDatabase.SubAssetCache>();
+                SubAssets = [];
                 if (AssetDatabase.TryGetGuid(file, out var guid))
                 {
                     AssetID = guid;
@@ -40,7 +40,7 @@ namespace Prowl.Editor.Assets
 
 
         private DirNode _rootNode;
-        private DirectoryInfo _rootDir = root;
+        private readonly DirectoryInfo _rootDir = root;
 
         public bool PathToNode(string path, out DirNode node)
         {
@@ -56,23 +56,23 @@ namespace Prowl.Editor.Assets
                 if (string.IsNullOrEmpty(part))
                     continue;
 
-                DirNode nextNode = node.SubDirectories.Find(n => n.Directory.Name.Equals(part, StringComparison.OrdinalIgnoreCase));
+                DirNode nextNode = node.SubDirectories.Find(n =>
+                    n.Directory.Name.Equals(part, StringComparison.OrdinalIgnoreCase));
                 if (nextNode is null)
                     return false;
 
                 node = nextNode;
             }
+
             return true;
         }
 
         static bool IsPathInsideDirectory(string path, DirectoryInfo directoryInfo, out string relativePath)
         {
             relativePath = string.Empty;
-            if (string.IsNullOrEmpty(path))
-                throw new ArgumentNullException(nameof(path), "Path cannot be null or empty.");
+            ArgumentException.ThrowIfNullOrEmpty(path, "Path cannot be null or empty.");
 
-            if (directoryInfo == null)
-                throw new ArgumentNullException(nameof(directoryInfo), "DirectoryInfo cannot be null.");
+            ArgumentNullException.ThrowIfNull(nameof(directoryInfo), "DirectoryInfo cannot be null.");
 
             // Get the absolute paths
             string directoryFullPath = Path.GetFullPath(directoryInfo.FullName);

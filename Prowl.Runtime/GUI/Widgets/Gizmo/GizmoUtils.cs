@@ -259,12 +259,12 @@ namespace Prowl.Runtime.GUI
 
             using (_gizmo._gui.Draw3D.Matrix(transform * _gizmo.ViewProjection))
             {
-                var color3 = GizmoUtils.GizmoColor(_gizmo, focused, direction);
+                var color3 = GizmoColor(_gizmo, focused, direction);
 
-                var scale = GizmoUtils.PlaneSize(_gizmo) * 0.5f;
-                var bitangent = GizmoUtils.PlaneBitangent(direction) * scale;
-                var tangent = GizmoUtils.PlaneTangent(direction) * scale;
-                var origin3 = GizmoUtils.PlaneLocalOrigin(_gizmo, direction);
+                var scale = PlaneSize(_gizmo) * 0.5f;
+                var bitangent = PlaneBitangent(direction) * scale;
+                var tangent = PlaneTangent(direction) * scale;
+                var origin3 = PlaneLocalOrigin(_gizmo, direction);
 
                 var v1 = origin3 - bitangent - tangent;
                 var v2 = origin3 + bitangent - tangent;
@@ -297,8 +297,8 @@ namespace Prowl.Runtime.GUI
 
             using (_gizmo._gui.Draw3D.Matrix(transform * _gizmo.ViewProjection))
             {
-                var color2 = GizmoUtils.GizmoColor(_gizmo, focused, GizmoDirection.View);
-                _gizmo._gui.Draw3D.Circle(GizmoUtils.InnerCircleRadius(_gizmo), new Stroke3D { Color = color2, Thickness = _gizmo.StrokeWidth });
+                var color2 = GizmoColor(_gizmo, focused, GizmoDirection.View);
+                _gizmo._gui.Draw3D.Circle(InnerCircleRadius(_gizmo), new Stroke3D { Color = color2, Thickness = _gizmo.StrokeWidth });
                 return transform;
             }
         }
@@ -322,8 +322,8 @@ namespace Prowl.Runtime.GUI
 
             using (_gizmo._gui.Draw3D.Matrix(transform * _gizmo.ViewProjection))
             {
-                var color2 = GizmoUtils.GizmoColor(_gizmo, focused, GizmoDirection.View);
-                _gizmo._gui.Draw3D.Quad(GizmoUtils.InnerCircleRadius(_gizmo), new Stroke3D { Color = color2, Thickness = _gizmo.StrokeWidth });
+                var color2 = GizmoColor(_gizmo, focused, GizmoDirection.View);
+                _gizmo._gui.Draw3D.Quad(InnerCircleRadius(_gizmo), new Stroke3D { Color = color2, Thickness = _gizmo.StrokeWidth });
                 return transform;
             }
         }
@@ -335,8 +335,8 @@ namespace Prowl.Runtime.GUI
 
             using (_gizmo._gui.Draw3D.Matrix(transform * _gizmo.ViewProjection))
             {
-                var color = GizmoUtils.GizmoColor(_gizmo, focused, direction);
-                var normal = GizmoUtils.GizmoLocalNormal(_gizmo, direction);
+                var color = GizmoColor(_gizmo, focused, direction);
+                var normal = GizmoLocalNormal(_gizmo, direction);
 
                 (Vector3 start, Vector3 end, double length) = ArrowParams(_gizmo, normal, mode);
 
@@ -376,7 +376,7 @@ namespace Prowl.Runtime.GUI
             double length;
             if (isTranslate && overlapping)
             {
-                start = direction * (width * 0.5f + GizmoUtils.InnerCircleRadius(_gizmo));
+                start = direction * (width * 0.5f + InnerCircleRadius(_gizmo));
                 length = gizmoSize - start.magnitude;
                 length -= width * 2.0;
                 //if config.modes.len() > 1 {

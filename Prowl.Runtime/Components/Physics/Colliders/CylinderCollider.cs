@@ -43,14 +43,14 @@ public sealed class CylinderCollider : Collider
     {
         get
         {
-            var scale = this.Transform.lossyScale;
+            var scale = Transform.lossyScale;
             return _length * (float)MathD.Max(scale.x, scale.z);
         }
     }
 
     public float WorldLength
     {
-        get => _length * (float)this.Transform.lossyScale.y;
+        get => _length * (float)Transform.lossyScale.y;
     }
 
     internal override void AddToCompoundBuilder(BufferPool pool, ref CompoundBuilder builder, NRigidPose localPose)

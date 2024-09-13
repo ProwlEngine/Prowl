@@ -30,8 +30,8 @@ namespace Prowl.Runtime.NodeSystem
                 return;
             }
 
-            var index = GetInputValue<int>("FirstIndex", FirstIndex);
-            var lastIndex = GetInputValue<int>("LastIndex", LastIndex);
+            var index = GetInputValue("FirstIndex", FirstIndex);
+            var lastIndex = GetInputValue("LastIndex", LastIndex);
 
             for (int i = index; i < lastIndex; i++)
             {

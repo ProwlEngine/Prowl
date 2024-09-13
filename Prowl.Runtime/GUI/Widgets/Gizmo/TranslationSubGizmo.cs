@@ -19,9 +19,9 @@ namespace Prowl.Runtime.GUI
             public double StartAxisAngle, StartRotationAngle, LastRotationAngle, CurrentDelta;
         }
 
-        private RotationParams _params;
+        private readonly RotationParams _params;
         private RotationState _state;
-        private TransformGizmo _gizmo;
+        private readonly TransformGizmo _gizmo;
         internal bool focused;
 
         public RotationSubGizmo(TransformGizmo gizmo, RotationParams parameters)
@@ -152,12 +152,11 @@ namespace Prowl.Runtime.GUI
                         (startAngle2, endAngle2) = (endAngle2, startAngle2);
                     }
 
-                    _gizmo._gui.Draw3D.Polyline(new[]
-                    {
-                    new Vector3(Math.Cos(startAngle) * radius, 0, Math.Sin(startAngle) * radius),
+                    _gizmo._gui.Draw3D.Polyline([
+                        new Vector3(Math.Cos(startAngle) * radius, 0, Math.Sin(startAngle) * radius),
                     Vector3.zero,
                     new Vector3(Math.Cos(endAngle) * radius, 0, Math.Sin(endAngle) * radius)
-                }, stroke);
+                    ], stroke);
 
                     var w = stroke;
                     if (fullCircles > 0)
@@ -324,9 +323,9 @@ namespace Prowl.Runtime.GUI
             public Vector3 ScaleDelta;
         }
 
-        private ScaleParams _params;
+        private readonly ScaleParams _params;
         private ScaleState _state;
-        private TransformGizmo _gizmo;
+        private readonly TransformGizmo _gizmo;
         internal bool focused;
 
         public ScaleSubGizmo(TransformGizmo gizmo, ScaleParams parameters)
@@ -474,9 +473,9 @@ namespace Prowl.Runtime.GUI
             public Vector3 StartPoint, LastPoint, CurrentDelta;
         }
 
-        private TranslationParams _params;
+        private readonly TranslationParams _params;
         private TranslationState _state;
-        private TransformGizmo _gizmo;
+        private readonly TransformGizmo _gizmo;
         internal bool focused;
 
         public TranslationSubGizmo(TransformGizmo gizmo, TranslationParams parameters)
@@ -557,7 +556,7 @@ namespace Prowl.Runtime.GUI
             var translationDelta = newPoint - _state.LastPoint;
             var totalTranslation = newPoint - _state.StartPoint;
 
-            if (_gizmo.Orientation == TransformGizmo.GizmoOrientation.Local)
+            if (_gizmo.Orientation == GizmoOrientation.Local)
             {
                 //var inverseRotation = Quaternion.Inverse(_gizmo.Rotation);
                 //translationDelta = Vector4.Transform(new Vector4(translationDelta, 0), inverseRotation).xyz;

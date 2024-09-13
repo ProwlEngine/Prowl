@@ -118,15 +118,15 @@ namespace Prowl.Runtime
 
                     for (int j = 0; j < shape.Indices16.Length; j += 3)
                     {
-                        indices.Add(verts.Count + (int)shape.Indices16[j + 0]);
-                        indices.Add(verts.Count + (int)shape.Indices16[j + 1]);
-                        indices.Add(verts.Count + (int)shape.Indices16[j + 2]);
+                        indices.Add(verts.Count + shape.Indices16[j + 0]);
+                        indices.Add(verts.Count + shape.Indices16[j + 1]);
+                        indices.Add(verts.Count + shape.Indices16[j + 2]);
                     }
 
                     var transform = input.transformsOut[i];
                     for (int l = 0; l < shape.Vertices.Length; l++)
                     {
-                        verts.Add(this.Transform.InverseTransformPoint(transform.TransformPoint(shape.Vertices[l])));
+                        verts.Add(Transform.InverseTransformPoint(transform.TransformPoint(shape.Vertices[l])));
                     }
                 }
 
@@ -229,7 +229,7 @@ namespace Prowl.Runtime
             if (useStaticGeometry)
             {
                 staticGeometry.Clear();
-                foreach (var sBody in EngineObject.FindObjectsOfType<Staticbody>())
+                foreach (var sBody in FindObjectsOfType<Staticbody>())
                 {
                     if (SceneManagement.SceneManager.Has(sBody.GameObject))
                         staticGeometry.Add(sBody);
@@ -238,7 +238,7 @@ namespace Prowl.Runtime
             else
             {
                 meshGeometry.Clear();
-                foreach (var mRend in EngineObject.FindObjectsOfType<MeshRenderer>())
+                foreach (var mRend in FindObjectsOfType<MeshRenderer>())
                 {
                     if (SceneManagement.SceneManager.Has(mRend.GameObject))
                         meshGeometry.Add(mRend);
@@ -416,8 +416,8 @@ namespace Prowl.Runtime
                 public List<int> indices;
             }
 
-            public List<Mesh> shapeData = new();
-            public List<Transform> transformsOut = new();
+            public readonly List<Mesh> shapeData = new();
+            public readonly List<Transform> transformsOut = new();
 
             public void Append(Collider collider)
             {
@@ -511,7 +511,7 @@ namespace Prowl.Runtime
                     agentMaxSpeed = agentMaxSpeed,
                     minRegionSize = minRegionSize,
                     mergedRegionSize = mergedRegionSize,
-                    partitioning = DotRecast.Recast.RcPartitionType.WATERSHED.Value,
+                    partitioning = RcPartitionType.WATERSHED.Value,
                     filterLowHangingObstacles = filterLowHangingObstacles,
                     filterLedgeSpans = filterLedgeSpans,
                     filterWalkableLowHeightSpans = filterWalkableLowHeightSpans,

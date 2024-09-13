@@ -32,10 +32,10 @@ namespace Prowl.Editor.Assets
             if (importerType == null)
                 return;
 
-            this.AssetPath = assetFile;
-            this.guid = Guid.NewGuid();
-            this.lastModified = assetFile.LastWriteTimeUtc;
-            this.importer = Activator.CreateInstance(importerType) as ScriptedImporter;
+            AssetPath = assetFile;
+            guid = Guid.NewGuid();
+            lastModified = assetFile.LastWriteTimeUtc;
+            importer = Activator.CreateInstance(importerType) as ScriptedImporter;
         }
 
         /// <summary>Save the MetaFile to a specified file or default to the associated asset file with a ".meta" extension.</summary>

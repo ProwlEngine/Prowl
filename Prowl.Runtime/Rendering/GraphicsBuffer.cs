@@ -21,8 +21,8 @@ namespace Prowl.Runtime
 
         public GraphicsBuffer(uint count, uint stride, bool writable)
         {
-            this.Count = count;
-            this.Stride = stride;
+            Count = count;
+            Stride = stride;
             Buffer = Graphics.Factory.CreateBuffer(new BufferDescription(count * stride,
                 writable ? BufferUsage.StructuredBufferReadWrite : BufferUsage.StructuredBufferReadOnly));
         }

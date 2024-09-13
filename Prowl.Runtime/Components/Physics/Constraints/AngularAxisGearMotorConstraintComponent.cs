@@ -5,7 +5,7 @@ using BepuPhysics.Constraints;
 
 namespace Prowl.Runtime;
 
-[AddComponentMenu($"{Prowl.Icons.FontAwesome6.HillRockslide}  Physics/{Prowl.Icons.FontAwesome6.Joint}  Constraints/{Prowl.Icons.FontAwesome6.Rotate}  Angular Axis Gear Motor Constraint")]
+[AddComponentMenu($"{Icons.FontAwesome6.HillRockslide}  Physics/{Icons.FontAwesome6.Joint}  Constraints/{Icons.FontAwesome6.Rotate}  Angular Axis Gear Motor Constraint")]
 public sealed class AngularAxisGearMotorConstraintComponent : TwoBodyConstraintComponent<AngularAxisGearMotor>
 {
     [SerializeField, HideInInspector] private Vector3 _localAxisA;

@@ -15,7 +15,7 @@ namespace Prowl.Runtime
         private Framebuffer _activeFramebuffer;
         private KeywordState _keywordState;
 
-        private PropertyState _bufferProperties;
+        private readonly PropertyState _bufferProperties;
         private IGeometryDrawData _activeDrawData;
 
         private ShaderPipelineDescription _pipelineDescription;

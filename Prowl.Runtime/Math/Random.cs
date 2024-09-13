@@ -30,7 +30,7 @@ namespace Prowl.Runtime
         {
             get
             {
-                double angle = (double)(Value * 6.283185307179586476925286766559);
+                double angle = Value * 6.283185307179586476925286766559;
                 return Vector2.Normalize(new Vector2(Math.Cos(angle), Math.Sin(angle)));
             }
         }
@@ -46,8 +46,8 @@ namespace Prowl.Runtime
         {
             get
             {
-                double a = (double)(Value * 6.283185307179586476925286766559);
-                double b = (double)(Value * Math.PI);
+                double a = Value * 6.283185307179586476925286766559;
+                double b = Value * Math.PI;
                 double sinB = Math.Sin(b);
                 return Vector3.Normalize(new Vector3(sinB * Math.Cos(a), sinB * Math.Sin(a), Math.Cos(b)));
             }

@@ -143,10 +143,10 @@ namespace Prowl.Runtime
             {
                 Width = width,
                 Height = height,
-                MipLevels = this.MipLevels,
-                Format = this.Format,
-                Usage = this.Usage,
-                Type = this.Type,
+                MipLevels = MipLevels,
+                Format = Format,
+                Usage = Usage,
+                Type = Type,
             });
         }
 
@@ -176,7 +176,7 @@ namespace Prowl.Runtime
 
             uint width = (uint)value["Width"].IntValue;
             uint height = (uint)value["Height"].IntValue;
-            uint mips = (uint)value["MipLevels"].UIntValue;
+            uint mips = value["MipLevels"].UIntValue;
             bool isMipMapped = value["IsMipMapped"].BoolValue;
             PixelFormat imageFormat = (PixelFormat)value["ImageFormat"].IntValue;
             TextureUsage usage = (TextureUsage)value["Usage"].IntValue;

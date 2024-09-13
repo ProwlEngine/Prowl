@@ -352,8 +352,7 @@ namespace Prowl.Runtime
 
         public void RecalculateBounds()
         {
-            if (vertices == null)
-                throw new ArgumentNullException();
+             ArgumentNullException.ThrowIfNull(vertices);
 
             if (vertices.Length < 1)
                 throw new ArgumentException();
@@ -502,9 +501,9 @@ namespace Prowl.Runtime
         {
             Mesh mesh = new Mesh();
 
-            List<Vector3F> vertices = new List<Vector3F>();
-            List<Vector2F> uvs = new List<Vector2F>();
-            List<ushort> indices = new List<ushort>();
+            List<Vector3F> vertices = [];
+            List<Vector2F> uvs = [];
+            List<ushort> indices = [];
 
             for (int i = 0; i <= rings; i++)
             {
@@ -562,7 +561,7 @@ namespace Prowl.Runtime
             float z = (float)size.z / 2f;
 
             Vector3F[] vertices =
-            {
+            [
                 // Front face
                 new(-x, -y, z), new(x, -y, z), new(x, y, z), new(-x, y, z),
 
@@ -580,10 +579,10 @@ namespace Prowl.Runtime
 
                 // Bottom face
                 new(-x, -y, -z), new(x, -y, -z), new(x, -y, z), new(-x, -y, z)
-            };
+            ];
 
             Vector2F[] uvs =
-            {
+            [
                 // Front face
                 new(0, 0), new(1, 0), new(1, 1), new(0, 1),
                 // Back face
@@ -596,17 +595,17 @@ namespace Prowl.Runtime
                 new(0, 1), new(1, 1), new(1, 0), new(0, 0),
                 // Bottom face
                 new(0, 0), new(1, 0), new(1, 1), new(0, 1)
-            };
+            ];
 
             ushort[] indices =
-            {
+            [
                 1, 2, 0, 0, 2, 3,       // Front face
                 5, 4, 6, 6, 4, 7,       // Back face
                 9, 8, 10, 10, 8, 11,    // Left face
                 13, 12, 14, 14, 12, 15, // Right face
                 17, 18, 16, 16, 18, 19, // Top face
                 21, 22, 20, 20, 22, 23  // Bottom face
-            };
+            ];
 
             mesh.Vertices = vertices;
             mesh.UV = uvs;
@@ -625,9 +624,9 @@ namespace Prowl.Runtime
 #warning TODO: Test, This hasent been tested like at all just assumed it will work
             Mesh mesh = new Mesh();
 
-            List<Vector3F> vertices = new List<Vector3F>();
-            List<Vector2F> uvs = new List<Vector2F>();
-            List<ushort> indices = new List<ushort>();
+            List<Vector3F> vertices = [];
+            List<Vector2F> uvs = [];
+            List<ushort> indices = [];
 
             float halfLength = length / 2.0f;
 

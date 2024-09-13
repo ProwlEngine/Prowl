@@ -8,7 +8,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
     public class ViewManipulatorGizmo
     {
 
-        private Gui _gui;
+        private readonly Gui _gui;
         private Rect _gizmoRect;
 
         private Matrix4x4 _view;
@@ -181,7 +181,7 @@ namespace Prowl.Runtime.GUI.Widgets.Gizmo
                         {
                             var hovCol = Color.white;
                             hovCol.a = 0.25f;
-                            _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, (Color32)hovCol);
+                            _gui.Draw2D.DrawList.AddConvexPolyFilled(screenPoints, screenPoints.Count, hovCol);
                             //_gui.DrawList.AddPolyline(screenPoints, screenPoints.Count, hovCol, true, 1, true);
                             hovering = true;
                             axis = faceNormal;

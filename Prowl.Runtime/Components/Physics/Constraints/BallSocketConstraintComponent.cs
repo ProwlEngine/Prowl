@@ -6,7 +6,7 @@ using BepuPhysics.Constraints;
 namespace Prowl.Runtime;
 
 
-[AddComponentMenu($"{Prowl.Icons.FontAwesome6.HillRockslide}  Physics/{Prowl.Icons.FontAwesome6.Joint}  Constraints/{Prowl.Icons.FontAwesome6.Circle}  Ball Socket")]
+[AddComponentMenu($"{Icons.FontAwesome6.HillRockslide}  Physics/{Icons.FontAwesome6.Joint}  Constraints/{Icons.FontAwesome6.Circle}  Ball Socket")]
 public sealed class BallSocketConstraintComponent : TwoBodyConstraintComponent<BallSocket>
 {
     [SerializeField, HideInInspector] private Vector3 _localOffsetA;

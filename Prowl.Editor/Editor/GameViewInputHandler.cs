@@ -9,7 +9,7 @@ namespace Prowl.Runtime;
 
 public class GameViewInputHandler : DefaultInputHandler
 {
-    private GameWindow _window;
+    private readonly GameWindow _window;
     public bool HasFocus => GameWindow.LastFocused.Target == _window;
 
 

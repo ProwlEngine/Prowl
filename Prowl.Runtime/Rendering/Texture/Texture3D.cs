@@ -107,10 +107,10 @@ namespace Prowl.Runtime
                 Width = width,
                 Height = height,
                 Depth = depth,
-                MipLevels = this.MipLevels,
-                Format = this.Format,
-                Usage = this.Usage,
-                Type = this.Type,
+                MipLevels = MipLevels,
+                Format = Format,
+                Usage = Usage,
+                Type = Type,
             });
         }
 

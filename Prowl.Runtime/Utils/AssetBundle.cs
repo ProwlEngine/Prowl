@@ -168,7 +168,7 @@ namespace Prowl.Runtime.Utils
         {
             folderPath = NormalizePath(folderPath);
 
-            List<string> assets = new();
+            List<string> assets = [];
             foreach (var path in _pathToEntry.Keys)
             {
                 // Check if the path is within the specified folder (or subdirectory)
@@ -196,7 +196,7 @@ namespace Prowl.Runtime.Utils
 
         public List<string> GetRootFolders()
         {
-            HashSet<string> folders = new();
+            HashSet<string> folders = [];
 
             foreach (var path in _pathToEntry.Keys)
             {
@@ -208,14 +208,14 @@ namespace Prowl.Runtime.Utils
                 }
             }
 
-            return new List<string>(folders);
+            return [..folders];
         }
 
         public List<string> GetFolders(string folderPath)
         {
             folderPath = NormalizePath(folderPath);
 
-            List<string> folders = new();
+            List<string> folders = [];
 
             foreach (var path in _pathToEntry.Keys)
             {

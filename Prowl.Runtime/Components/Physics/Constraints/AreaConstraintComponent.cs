@@ -6,7 +6,7 @@ using BepuPhysics.Constraints;
 namespace Prowl.Runtime;
 
 
-[AddComponentMenu($"{Prowl.Icons.FontAwesome6.HillRockslide}  Physics/{Prowl.Icons.FontAwesome6.Joint}  Constraints/{Prowl.Icons.FontAwesome6.Square}  Area Constraint")]
+[AddComponentMenu($"{Icons.FontAwesome6.HillRockslide}  Physics/{Icons.FontAwesome6.Joint}  Constraints/{Icons.FontAwesome6.Square}  Area Constraint")]
 public sealed class AreaConstraintComponent : ThreeBodyConstraintComponent<AreaConstraint>
 {
     [SerializeField, HideInInspector] private float _targetScaledArea;

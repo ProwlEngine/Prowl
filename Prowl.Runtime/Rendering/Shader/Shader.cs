@@ -32,12 +32,12 @@ namespace Prowl.Runtime
     public sealed class Shader : EngineObject, ISerializationCallbackReceiver
     {
         [SerializeField, HideInInspector]
-        private ShaderProperty[] properties;
+        private readonly ShaderProperty[] properties;
         public IEnumerable<ShaderProperty> Properties => properties;
 
 
         [SerializeField, HideInInspector]
-        private ShaderPass[] passes;
+        private readonly ShaderPass[] passes;
         public IEnumerable<ShaderPass> Passes => passes;
 
 

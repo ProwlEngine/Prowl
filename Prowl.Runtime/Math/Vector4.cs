@@ -118,7 +118,7 @@ namespace Prowl.Runtime
         public void Normalize()
         {
             double ls = x * x + y * y + z * z + w * w;
-            double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
+            double invNorm = 1.0 / Math.Sqrt(ls);
             x *= invNorm;
             y *= invNorm;
             z *= invNorm;
@@ -131,10 +131,10 @@ namespace Prowl.Runtime
         /// <returns>The hash code.</returns>
         public override int GetHashCode()
         {
-            int hash = this.x.GetHashCode();
-            hash = HashCode.Combine(hash, this.y.GetHashCode());
-            hash = HashCode.Combine(hash, this.z.GetHashCode());
-            hash = HashCode.Combine(hash, this.w.GetHashCode());
+            int hash = x.GetHashCode();
+            hash = HashCode.Combine(hash, y.GetHashCode());
+            hash = HashCode.Combine(hash, z.GetHashCode());
+            hash = HashCode.Combine(hash, w.GetHashCode());
             return hash;
         }
 
@@ -158,10 +158,10 @@ namespace Prowl.Runtime
         /// <returns>True if the other Vector4 is equal to this instance; False otherwise.</returns>
         public bool Equals(Vector4 other)
         {
-            return this.x == other.x
-                && this.y == other.y
-                && this.z == other.z
-                && this.w == other.w;
+            return x == other.x
+                && y == other.y
+                && z == other.z
+                && w == other.w;
         }
 
         /// <summary>
@@ -195,16 +195,16 @@ namespace Prowl.Runtime
             StringBuilder sb = new StringBuilder();
             string separator = NumberFormatInfo.GetInstance(formatProvider).NumberGroupSeparator;
             sb.Append('<');
-            sb.Append(this.x.ToString(format, formatProvider));
+            sb.Append(x.ToString(format, formatProvider));
             sb.Append(separator);
             sb.Append(' ');
-            sb.Append(this.y.ToString(format, formatProvider));
+            sb.Append(y.ToString(format, formatProvider));
             sb.Append(separator);
             sb.Append(' ');
-            sb.Append(this.z.ToString(format, formatProvider));
+            sb.Append(z.ToString(format, formatProvider));
             sb.Append(separator);
             sb.Append(' ');
-            sb.Append(this.w.ToString(format, formatProvider));
+            sb.Append(w.ToString(format, formatProvider));
             sb.Append('>');
             return sb.ToString();
         }
@@ -239,7 +239,7 @@ namespace Prowl.Runtime
 
             double ls = dx * dx + dy * dy + dz * dz + dw * dw;
 
-            return (double)Math.Sqrt((double)ls);
+            return Math.Sqrt(ls);
         }
 
         /// <summary>
@@ -268,7 +268,7 @@ namespace Prowl.Runtime
         public static Vector4 Normalize(Vector4 vector)
         {
             double ls = vector.x * vector.x + vector.y * vector.y + vector.z * vector.z + vector.w * vector.w;
-            double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
+            double invNorm = 1.0 / Math.Sqrt(ls);
 
             return new Vector4(
                 vector.x * invNorm,
@@ -530,7 +530,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector4 SquareRoot(Vector4 value)
         {
-            return new Vector4((Double)Math.Sqrt(value.x), (Double)Math.Sqrt(value.y), (Double)Math.Sqrt(value.z), (Double)Math.Sqrt(value.w));
+            return new Vector4(Math.Sqrt(value.x), Math.Sqrt(value.y), Math.Sqrt(value.z), Math.Sqrt(value.w));
         }
         #endregion Public Static Methods
 

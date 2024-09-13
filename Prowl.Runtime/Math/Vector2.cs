@@ -71,7 +71,7 @@ namespace Prowl.Runtime
         public void Normalize()
         {
             double ls = x * x + y * y;
-            double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
+            double invNorm = 1.0 / Math.Sqrt(ls);
             x *= invNorm;
             y *= invNorm;
         }
@@ -83,8 +83,8 @@ namespace Prowl.Runtime
         /// <returns>The hash code.</returns>
         public override int GetHashCode()
         {
-            int hash = this.x.GetHashCode();
-            hash = HashCode.Combine(hash, this.y.GetHashCode());
+            int hash = x.GetHashCode();
+            hash = HashCode.Combine(hash, y.GetHashCode());
             return hash;
         }
 
@@ -108,7 +108,7 @@ namespace Prowl.Runtime
         /// <returns>True if the other Vector2 is equal to this instance; False otherwise.</returns>
         public bool Equals(Vector2 other)
         {
-            return this.x == other.x && this.y == other.y;
+            return x == other.x && y == other.y;
         }
 
 
@@ -143,10 +143,10 @@ namespace Prowl.Runtime
             StringBuilder sb = new StringBuilder();
             string separator = NumberFormatInfo.GetInstance(formatProvider).NumberGroupSeparator;
             sb.Append('<');
-            sb.Append(this.x.ToString(format, formatProvider));
+            sb.Append(x.ToString(format, formatProvider));
             sb.Append(separator);
             sb.Append(' ');
-            sb.Append(this.y.ToString(format, formatProvider));
+            sb.Append(y.ToString(format, formatProvider));
             sb.Append('>');
             return sb.ToString();
         }
@@ -185,7 +185,7 @@ namespace Prowl.Runtime
 
             double ls = dx * dx + dy * dy;
 
-            return (double)Math.Sqrt((double)ls);
+            return Math.Sqrt(ls);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -206,7 +206,7 @@ namespace Prowl.Runtime
         public static Vector2 Normalize(Vector2 value)
         {
             double ls = value.x * value.x + value.y * value.y;
-            double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
+            double invNorm = 1.0 / Math.Sqrt(ls);
 
             return new Vector2(
                 value.x * invNorm,
@@ -389,7 +389,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector2 SquareRoot(Vector2 value)
         {
-            return new Vector2((Double)Math.Sqrt(value.x), (Double)Math.Sqrt(value.y));
+            return new Vector2(Math.Sqrt(value.x), Math.Sqrt(value.y));
         }
         #endregion Public Static Methods
 

@@ -59,10 +59,12 @@ namespace Prowl.Runtime
         /// </summary>
         public AnimationCurve()
         {
-            this.Keys = [];
+            Keys =
+            [
+                new KeyFrame(0, 0),
+                new KeyFrame(1, 1)
+            ];
             // Add Default keys
-            this.Keys.Add(new KeyFrame(0, 0));
-            this.Keys.Add(new KeyFrame(1, 1));
             SmoothTangents(CurveTangent.Smooth);
         }
 
@@ -92,7 +94,7 @@ namespace Prowl.Runtime
 
             if (position < first.Position)
             {
-                switch (this.PreLoop)
+                switch (PreLoop)
                 {
                     case CurveLoopType.Constant:
                         //constant
@@ -128,7 +130,7 @@ namespace Prowl.Runtime
             else if (position > last.Position)
             {
                 int cycle;
-                switch (this.PostLoop)
+                switch (PostLoop)
                 {
                     case CurveLoopType.Constant:
                         //constant
@@ -276,11 +278,11 @@ namespace Prowl.Runtime
         private double GetCurvePosition(double position)
         {
             //only for position in curve
-            KeyFrame prev = this.Keys[0];
+            KeyFrame prev = Keys[0];
             KeyFrame next;
-            for (int i = 1; i < this.Keys.Count; ++i)
+            for (int i = 1; i < Keys.Count; ++i)
             {
-                next = this.Keys[i];
+                next = Keys[i];
                 if (next.Position >= position)
                 {
                     if (prev.Continuity == CurveContinuity.Step)
@@ -309,11 +311,11 @@ namespace Prowl.Runtime
         public SerializedProperty Serialize(Serializer.SerializationContext ctx)
         {
             var value = SerializedProperty.NewCompound();
-            value.Add("PreLoop", new SerializedProperty((int)this.PreLoop));
-            value.Add("PostLoop", new SerializedProperty((int)this.PostLoop));
+            value.Add("PreLoop", new SerializedProperty((int)PreLoop));
+            value.Add("PostLoop", new SerializedProperty((int)PostLoop));
 
             var keyList = SerializedProperty.NewList();
-            foreach (var key in this.Keys)
+            foreach (var key in Keys)
             {
                 var keyProp = SerializedProperty.NewCompound();
                 keyProp.Add("Position", new SerializedProperty(key.Position));
@@ -330,15 +332,15 @@ namespace Prowl.Runtime
 
         public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
         {
-            this.PreLoop = (CurveLoopType)value.Get("PreLoop").IntValue;
-            this.PostLoop = (CurveLoopType)value.Get("PostLoop").IntValue;
+            PreLoop = (CurveLoopType)value.Get("PreLoop").IntValue;
+            PostLoop = (CurveLoopType)value.Get("PostLoop").IntValue;
 
             var keyList = value.Get("Keys").List;
             foreach (var key in keyList)
             {
                 var position = key.Get("Position").DoubleValue;
                 var curveKey = new KeyFrame(position, key.Get("Value").DoubleValue, key.Get("TangentIn").DoubleValue, key.Get("TangentOut").DoubleValue, (CurveContinuity)key.Get("Continuity").IntValue);
-                this.Keys.Add(curveKey);
+                Keys.Add(curveKey);
             }
         }
 
@@ -388,11 +390,11 @@ namespace Prowl.Runtime
         /// <summary> Creates a new instance of <see cref="KeyFrame"/> class. </summary>
         public KeyFrame(double position, double value, double tangentIn = 0, double tangentOut = 0, CurveContinuity continuity = CurveContinuity.Smooth)
         {
-            this.Position = position;
-            this.Value = value;
-            this.TangentIn = tangentIn;
-            this.TangentOut = tangentOut;
-            this.Continuity = continuity;
+            Position = position;
+            Value = value;
+            TangentIn = tangentIn;
+            TangentOut = tangentOut;
+            Continuity = continuity;
         }
 
         #endregion
@@ -404,11 +406,11 @@ namespace Prowl.Runtime
 
         public static bool operator ==(KeyFrame value1, KeyFrame value2)
         {
-            if (object.Equals(value1, null))
-                return object.Equals(value2, null);
+            if (Equals(value1, null))
+                return Equals(value2, null);
 
-            if (object.Equals(value2, null))
-                return object.Equals(value1, null);
+            if (Equals(value2, null))
+                return Equals(value1, null);
 
             return (value1.Position == value2.Position)
                 && (value1.Value == value2.Value)
@@ -419,12 +421,12 @@ namespace Prowl.Runtime
 
         #region Inherited Methods
 
-        public int CompareTo(KeyFrame other) => this.Position.CompareTo(other.Position);
+        public int CompareTo(KeyFrame other) => Position.CompareTo(other.Position);
         public bool Equals(KeyFrame other) => (this == other);
         public override bool Equals(object obj) => (obj as KeyFrame) != null && Equals((KeyFrame)obj);
         public override int GetHashCode() =>
-                this.Position.GetHashCode() ^ this.Value.GetHashCode() ^ this.TangentIn.GetHashCode() ^
-                this.TangentOut.GetHashCode() ^ this.Continuity.GetHashCode();
+                Position.GetHashCode() ^ Value.GetHashCode() ^ TangentIn.GetHashCode() ^
+                TangentOut.GetHashCode() ^ Continuity.GetHashCode();
 
         #endregion
     }
@@ -447,8 +449,7 @@ namespace Prowl.Runtime
             get { return _keys[index]; }
             set
             {
-                if (value == null)
-                    throw new ArgumentNullException();
+                ArgumentNullException.ThrowIfNull(value);
 
                 if (index >= _keys.Count)
                     throw new IndexOutOfRangeException();
@@ -474,7 +475,7 @@ namespace Prowl.Runtime
         #region Constructors
 
         /// <summary> Creates a new instance of <see cref="CurveKeyCollection"/> class. </summary>
-        public CurveKeyCollection() => _keys = new List<KeyFrame>();
+        public CurveKeyCollection() => _keys = [];
 
         #endregion
 
@@ -486,25 +487,24 @@ namespace Prowl.Runtime
         /// <remarks>The new key would be added respectively to a position of that key and the position of other keys.</remarks>
         public void Add(KeyFrame item)
         {
-            if (item == null)
-                throw new ArgumentNullException("item");
+            ArgumentNullException.ThrowIfNull(item);
 
             if (_keys.Count == 0)
             {
-                this._keys.Add(item);
+                _keys.Add(item);
                 return;
             }
 
-            for (int i = 0; i < this._keys.Count; i++)
+            for (int i = 0; i < _keys.Count; i++)
             {
-                if (item.Position < this._keys[i].Position)
+                if (item.Position < _keys[i].Position)
                 {
-                    this._keys.Insert(i, item);
+                    _keys.Insert(i, item);
                     return;
                 }
             }
 
-            this._keys.Add(item);
+            _keys.Add(item);
         }
 
         /// <summary> Removes all keys from this collection. </summary>

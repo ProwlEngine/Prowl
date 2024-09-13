@@ -50,7 +50,7 @@ namespace Prowl.Runtime
         internal Veldrid.Texture InternalTexture { get; private set; }
 
         /// <inheritdoc cref="Veldrid.TextureView"/>
-        internal Veldrid.TextureView TextureView { get; private set; }
+        internal TextureView TextureView { get; private set; }
 
 
         private Veldrid.Texture stagingTexture = null;

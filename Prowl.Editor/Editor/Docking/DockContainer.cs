@@ -49,7 +49,7 @@ namespace Prowl.Editor.Docking
             Rect right = new Rect(cen + new Vector2(size.x + 5, 0), size);
             Rect top = new Rect(cen - new Vector2(0, size.y + 5), size);
             Rect bottom = new Rect(cen + new Vector2(0, size.y + 5), size);
-            possibleAreas = new List<Rect> { main, left, right, top, bottom };
+            possibleAreas = [main, left, right, top, bottom];
 
             DockPlacement placement = new DockPlacement();
             placement.Leaf = leaf;
@@ -232,7 +232,7 @@ namespace Prowl.Editor.Docking
             return inside;
         }
 
-        public DockNode AttachWindow(EditorWindow window, DockNode leaf, DockZone zone, double splitDistance = 0.5f)
+        public DockNode? AttachWindow(EditorWindow window, DockNode leaf, DockZone zone, double splitDistance = 0.5f)
         {
             if (window == null)
                 return null;
@@ -303,7 +303,7 @@ namespace Prowl.Editor.Docking
             return DetachWindow(window.Leaf, index) != null;
         }
 
-        public EditorWindow DetachWindow(DockNode leaf, int index)
+        public EditorWindow? DetachWindow(DockNode leaf, int index)
         {
             // Expect leaf node
             if (leaf.Type != DockNode.NodeType.Leaf)
@@ -345,12 +345,12 @@ namespace Prowl.Editor.Docking
 
         public List<EditorWindow> GetWindows()
         {
-            List<EditorWindow> windowList = new List<EditorWindow>();
+            List<EditorWindow> windowList = [];
             Root.GetWindows(windowList);
             return windowList;
         }
 
-        public DockNode FindParent(DockNode node)
+        public DockNode? FindParent(DockNode node)
         {
             if (node == Root)
                 return null;

@@ -102,15 +102,15 @@ namespace Prowl.Runtime
 
         public void Copy(TextureSampler other)
         {
-            this.WrapModeU = other.WrapModeU;
-            this.WrapModeV = other.WrapModeV;
-            this.WrapModeW = other.WrapModeW;
-            this.BorderColor = other.BorderColor;
-            this.Filter = other.Filter;
-            this.LodBias = other.LodBias;
-            this.MaximumAnisotropy = other.MaximumAnisotropy;
-            this.MaximumLod = other.MaximumLod;
-            this.MinimumLod = other.MinimumLod;
+            WrapModeU = other.WrapModeU;
+            WrapModeV = other.WrapModeV;
+            WrapModeW = other.WrapModeW;
+            BorderColor = other.BorderColor;
+            Filter = other.Filter;
+            LodBias = other.LodBias;
+            MaximumAnisotropy = other.MaximumAnisotropy;
+            MaximumLod = other.MaximumLod;
+            MinimumLod = other.MinimumLod;
         }
 
         public void SetWrapMode(SamplerAxis axis, TextureWrapMode mode)

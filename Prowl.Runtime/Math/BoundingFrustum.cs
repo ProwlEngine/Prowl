@@ -56,9 +56,9 @@ namespace Prowl.Runtime
 
         public BoundingFrustum(Matrix4x4 value)
         {
-            this.matrix = value;
-            this.CreatePlanes();
-            this.CreateCorners();
+            matrix = value;
+            CreatePlanes();
+            CreateCorners();
         }
 
         #endregion Public Constructors
@@ -68,43 +68,43 @@ namespace Prowl.Runtime
 
         public Matrix4x4 Matrix
         {
-            get { return this.matrix; }
+            get { return matrix; }
             set
             {
-                this.matrix = value;
-                this.CreatePlanes();    // FIXME: The odds are the planes will be used a lot more often than the matrix
-                this.CreateCorners();   // is updated, so this should help performance. I hope ;)
+                matrix = value;
+                CreatePlanes();    // FIXME: The odds are the planes will be used a lot more often than the matrix
+                CreateCorners();   // is updated, so this should help performance. I hope ;)
             }
         }
 
         public Plane Near
         {
-            get { return this.planes[0]; }
+            get { return planes[0]; }
         }
 
         public Plane Far
         {
-            get { return this.planes[1]; }
+            get { return planes[1]; }
         }
 
         public Plane Left
         {
-            get { return this.planes[2]; }
+            get { return planes[2]; }
         }
 
         public Plane Right
         {
-            get { return this.planes[3]; }
+            get { return planes[3]; }
         }
 
         public Plane Top
         {
-            get { return this.planes[4]; }
+            get { return planes[4]; }
         }
 
         public Plane Bottom
         {
-            get { return this.planes[5]; }
+            get { return planes[5]; }
         }
 
         #endregion Public Properties
@@ -114,11 +114,11 @@ namespace Prowl.Runtime
 
         public static bool operator ==(BoundingFrustum a, BoundingFrustum b)
         {
-            if (object.Equals(a, null))
-                return (object.Equals(b, null));
+            if (Equals(a, null))
+                return (Equals(b, null));
 
-            if (object.Equals(b, null))
-                return (object.Equals(a, null));
+            if (Equals(b, null))
+                return (Equals(a, null));
 
             return a.matrix == (b.matrix);
         }
@@ -131,7 +131,7 @@ namespace Prowl.Runtime
         public ContainmentType Contains(Bounds box)
         {
             var result = default(ContainmentType);
-            this.Contains(ref box, out result);
+            Contains(ref box, out result);
             return result;
         }
 
@@ -141,7 +141,7 @@ namespace Prowl.Runtime
             for (var i = 0; i < PlaneCount; ++i)
             {
                 var planeIntersectionType = default(PlaneIntersectionType);
-                box.Intersects(ref this.planes[i], out planeIntersectionType);
+                box.Intersects(ref planes[i], out planeIntersectionType);
                 switch (planeIntersectionType)
                 {
                     case PlaneIntersectionType.Front:
@@ -180,7 +180,7 @@ namespace Prowl.Runtime
         public ContainmentType Contains(Vector3 point)
         {
             var result = default(ContainmentType);
-            this.Contains(ref point, out result);
+            Contains(ref point, out result);
             return result;
         }
 
@@ -189,7 +189,7 @@ namespace Prowl.Runtime
             for (var i = 0; i < PlaneCount; ++i)
             {
                 // TODO: we might want to inline this for performance reasons
-                if (this.planes[i].GetSide(point))
+                if (planes[i].GetSide(point))
                 {
                     result = ContainmentType.Disjoint;
                     return;
@@ -206,38 +206,38 @@ namespace Prowl.Runtime
         public override bool Equals(object? obj)
         {
             BoundingFrustum f = obj as BoundingFrustum;
-            return (object.Equals(f, null)) ? false : (this == f);
+            return (Equals(f, null)) ? false : (this == f);
         }
 
         public Vector3[] GetCorners()
         {
-            return (Vector3[])this.corners.Clone();
+            return (Vector3[])corners.Clone();
         }
 
         public void GetCorners(Vector3[] corners)
         {
-            if (corners == null) throw new ArgumentNullException("corners");
-            if (corners.Length < CornerCount) throw new ArgumentOutOfRangeException("corners");
+            ArgumentNullException.ThrowIfNull(corners);
+            if (corners.Length < CornerCount) throw new ArgumentOutOfRangeException(nameof(corners));
 
             this.corners.CopyTo(corners, 0);
         }
 
         public override int GetHashCode()
         {
-            return this.matrix.GetHashCode();
+            return matrix.GetHashCode();
         }
 
         public bool Intersects(Bounds box)
         {
             var result = false;
-            this.Intersects(ref box, out result);
+            Intersects(ref box, out result);
             return result;
         }
 
         public void Intersects(ref Bounds box, out bool result)
         {
             var containment = default(ContainmentType);
-            this.Contains(ref box, out containment);
+            Contains(ref box, out containment);
             result = containment != ContainmentType.Disjoint;
         }
 
@@ -278,12 +278,12 @@ namespace Prowl.Runtime
             get
             {
                 return string.Concat(
-                    "Near( ", this.planes[0].DebugDisplayString, " )  \r\n",
-                    "Far( ", this.planes[1].DebugDisplayString, " )  \r\n",
-                    "Left( ", this.planes[2].DebugDisplayString, " )  \r\n",
-                    "Right( ", this.planes[3].DebugDisplayString, " )  \r\n",
-                    "Top( ", this.planes[4].DebugDisplayString, " )  \r\n",
-                    "Bottom( ", this.planes[5].DebugDisplayString, " )  "
+                    "Near( ", planes[0].DebugDisplayString, " )  \r\n",
+                    "Far( ", planes[1].DebugDisplayString, " )  \r\n",
+                    "Left( ", planes[2].DebugDisplayString, " )  \r\n",
+                    "Right( ", planes[3].DebugDisplayString, " )  \r\n",
+                    "Top( ", planes[4].DebugDisplayString, " )  \r\n",
+                    "Bottom( ", planes[5].DebugDisplayString, " )  "
                     );
             }
         }
@@ -292,17 +292,17 @@ namespace Prowl.Runtime
         {
             StringBuilder sb = new StringBuilder(256);
             sb.Append("{Near:");
-            sb.Append(this.planes[0].ToString());
+            sb.Append(planes[0].ToString());
             sb.Append(" Far:");
-            sb.Append(this.planes[1].ToString());
+            sb.Append(planes[1].ToString());
             sb.Append(" Left:");
-            sb.Append(this.planes[2].ToString());
+            sb.Append(planes[2].ToString());
             sb.Append(" Right:");
-            sb.Append(this.planes[3].ToString());
+            sb.Append(planes[3].ToString());
             sb.Append(" Top:");
-            sb.Append(this.planes[4].ToString());
+            sb.Append(planes[4].ToString());
             sb.Append(" Bottom:");
-            sb.Append(this.planes[5].ToString());
+            sb.Append(planes[5].ToString());
             sb.Append("}");
             return sb.ToString();
         }
@@ -314,31 +314,31 @@ namespace Prowl.Runtime
 
         private void CreateCorners()
         {
-            IntersectionPoint(ref this.planes[0], ref this.planes[2], ref this.planes[4], out this.corners[0]);
-            IntersectionPoint(ref this.planes[0], ref this.planes[3], ref this.planes[4], out this.corners[1]);
-            IntersectionPoint(ref this.planes[0], ref this.planes[3], ref this.planes[5], out this.corners[2]);
-            IntersectionPoint(ref this.planes[0], ref this.planes[2], ref this.planes[5], out this.corners[3]);
-            IntersectionPoint(ref this.planes[1], ref this.planes[2], ref this.planes[4], out this.corners[4]);
-            IntersectionPoint(ref this.planes[1], ref this.planes[3], ref this.planes[4], out this.corners[5]);
-            IntersectionPoint(ref this.planes[1], ref this.planes[3], ref this.planes[5], out this.corners[6]);
-            IntersectionPoint(ref this.planes[1], ref this.planes[2], ref this.planes[5], out this.corners[7]);
+            IntersectionPoint(ref planes[0], ref planes[2], ref planes[4], out corners[0]);
+            IntersectionPoint(ref planes[0], ref planes[3], ref planes[4], out corners[1]);
+            IntersectionPoint(ref planes[0], ref planes[3], ref planes[5], out corners[2]);
+            IntersectionPoint(ref planes[0], ref planes[2], ref planes[5], out corners[3]);
+            IntersectionPoint(ref planes[1], ref planes[2], ref planes[4], out corners[4]);
+            IntersectionPoint(ref planes[1], ref planes[3], ref planes[4], out corners[5]);
+            IntersectionPoint(ref planes[1], ref planes[3], ref planes[5], out corners[6]);
+            IntersectionPoint(ref planes[1], ref planes[2], ref planes[5], out corners[7]);
         }
 
         private void CreatePlanes()
         {
-            this.planes[0] = new Plane(-this.matrix.M13, -this.matrix.M23, -this.matrix.M33, -this.matrix.M43);
-            this.planes[1] = new Plane(this.matrix.M13 - this.matrix.M14, this.matrix.M23 - this.matrix.M24, this.matrix.M33 - this.matrix.M34, this.matrix.M43 - this.matrix.M44);
-            this.planes[2] = new Plane(-this.matrix.M14 - this.matrix.M11, -this.matrix.M24 - this.matrix.M21, -this.matrix.M34 - this.matrix.M31, -this.matrix.M44 - this.matrix.M41);
-            this.planes[3] = new Plane(this.matrix.M11 - this.matrix.M14, this.matrix.M21 - this.matrix.M24, this.matrix.M31 - this.matrix.M34, this.matrix.M41 - this.matrix.M44);
-            this.planes[4] = new Plane(this.matrix.M12 - this.matrix.M14, this.matrix.M22 - this.matrix.M24, this.matrix.M32 - this.matrix.M34, this.matrix.M42 - this.matrix.M44);
-            this.planes[5] = new Plane(-this.matrix.M14 - this.matrix.M12, -this.matrix.M24 - this.matrix.M22, -this.matrix.M34 - this.matrix.M32, -this.matrix.M44 - this.matrix.M42);
+            planes[0] = new Plane(-matrix.M13, -matrix.M23, -matrix.M33, -matrix.M43);
+            planes[1] = new Plane(matrix.M13 - matrix.M14, matrix.M23 - matrix.M24, matrix.M33 - matrix.M34, matrix.M43 - matrix.M44);
+            planes[2] = new Plane(-matrix.M14 - matrix.M11, -matrix.M24 - matrix.M21, -matrix.M34 - matrix.M31, -matrix.M44 - matrix.M41);
+            planes[3] = new Plane(matrix.M11 - matrix.M14, matrix.M21 - matrix.M24, matrix.M31 - matrix.M34, matrix.M41 - matrix.M44);
+            planes[4] = new Plane(matrix.M12 - matrix.M14, matrix.M22 - matrix.M24, matrix.M32 - matrix.M34, matrix.M42 - matrix.M44);
+            planes[5] = new Plane(-matrix.M14 - matrix.M12, -matrix.M24 - matrix.M22, -matrix.M34 - matrix.M32, -matrix.M44 - matrix.M42);
 
-            this.NormalizePlane(ref this.planes[0]);
-            this.NormalizePlane(ref this.planes[1]);
-            this.NormalizePlane(ref this.planes[2]);
-            this.NormalizePlane(ref this.planes[3]);
-            this.NormalizePlane(ref this.planes[4]);
-            this.NormalizePlane(ref this.planes[5]);
+            NormalizePlane(ref planes[0]);
+            NormalizePlane(ref planes[1]);
+            NormalizePlane(ref planes[2]);
+            NormalizePlane(ref planes[3]);
+            NormalizePlane(ref planes[4]);
+            NormalizePlane(ref planes[5]);
         }
 
         private static void IntersectionPoint(ref Plane a, ref Plane b, ref Plane c, out Vector3 result)

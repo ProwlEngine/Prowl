@@ -22,8 +22,8 @@ namespace Prowl.Editor
         protected override bool LockSize => true;
         protected override double Padding => 0;
 
-        private List<ProjectBuilder> builders = new List<ProjectBuilder>();
-        private int selectedBuilder = 0;
+        private readonly List<ProjectBuilder> builders = new List<ProjectBuilder>();
+        private int selectedBuilder;
         private string buildName = "";
 
         public BuildWindow() : base()

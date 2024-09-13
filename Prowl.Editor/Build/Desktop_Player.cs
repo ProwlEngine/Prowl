@@ -64,7 +64,7 @@ namespace Prowl.Editor.Build
             }
             else
             {
-                HashSet<Guid> assets = new();
+                HashSet<Guid> assets = [];
                 foreach (var scene in scenes)
                     AssetDatabase.GetDependenciesDeep(scene.AssetID, ref assets);
 
@@ -96,13 +96,13 @@ namespace Prowl.Editor.Build
                         MethodInfo copyTo = type.BaseType.GetMethod("CopyTo", BindingFlags.Static | BindingFlags.NonPublic);
                         if (copyTo is null)
                         {
-                            Runtime.Debug.LogError($"Failed to find CopyTo method for {type.Name}");
+                            Debug.LogError($"Failed to find CopyTo method for {type.Name}");
                             continue;
                         }
 
                         // Invoke the CopyTo method
                         string? test = BuildDataPath;
-                        copyTo.Invoke(null, new object[] { test });
+                        copyTo.Invoke(null, [test]);
                     }
 
 
@@ -128,8 +128,8 @@ namespace Prowl.Editor.Build
             if (target != Target.Universal)
                 CleanupRuntimes(output);
 
-            Runtime.Debug.Log("**********************************************************************************************************************");
-            Runtime.Debug.Log($"Successfully built project!");
+            Debug.Log("**********************************************************************************************************************");
+            Debug.Log($"Successfully built project!");
 
             // Open the Build folder
             AssetDatabase.OpenPath(output);

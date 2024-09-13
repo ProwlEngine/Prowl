@@ -18,16 +18,16 @@ namespace Prowl.Runtime
         public ResourceSetDescription description;
         private ResourceSet resources;
 
-        private DeviceBuffer[] uniformBuffers;
-        private byte[][] intermediateBuffers;
+        private readonly DeviceBuffer[] uniformBuffers;
+        private readonly byte[][] intermediateBuffers;
 
 
         public BindableResourceSet(ShaderPipeline pipeline, ResourceSetDescription description, DeviceBuffer[] buffers, byte[][] intermediate)
         {
-            this.Pipeline = pipeline;
+            Pipeline = pipeline;
             this.description = description;
-            this.uniformBuffers = buffers;
-            this.intermediateBuffers = buffers.Select(x => new byte[x.SizeInBytes]).ToArray();
+            uniformBuffers = buffers;
+            intermediateBuffers = buffers.Select(x => new byte[x.SizeInBytes]).ToArray();
         }
 
 

@@ -1,7 +1,6 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using System;
 using System.Linq;
 using System.Text;
 
@@ -53,16 +52,16 @@ namespace Prowl.Runtime
         public ShaderUniform(string rawName, uint binding, ResourceKind kind)
         {
             this.kind = kind;
-            this.name = CleanseName(rawName);
+            name = CleanseName(rawName);
             this.binding = binding;
-            this.members = [];
+            members = [];
         }
 
 
         public ShaderUniform(string rawName, uint binding, uint size, ShaderUniformMember[] members)
         {
-            this.kind = ResourceKind.UniformBuffer;
-            this.name = CleanseName(rawName);
+            kind = ResourceKind.UniformBuffer;
+            name = CleanseName(rawName);
             this.binding = binding;
             this.size = size;
             this.members = members;
