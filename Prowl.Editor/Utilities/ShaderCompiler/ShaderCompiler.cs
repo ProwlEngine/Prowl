@@ -123,8 +123,6 @@ namespace Prowl.Editor.Utilities
 
             void GenerateRecursive(int depth)
             {
-                messages = null;
-
                 if (depth == combinations.Count) // Reached the end for this permutation, add a result.
                 {
                     variantList.Add(GenerateVariant(ctx, args, new(combination), includer, messages));
