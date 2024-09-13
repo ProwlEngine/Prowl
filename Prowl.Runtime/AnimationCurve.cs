@@ -449,8 +449,7 @@ namespace Prowl.Runtime
             get { return _keys[index]; }
             set
             {
-                if (value == null)
-                    throw new ArgumentNullException();
+                ArgumentNullException.ThrowIfNull(value);
 
                 if (index >= _keys.Count)
                     throw new IndexOutOfRangeException();
@@ -488,8 +487,7 @@ namespace Prowl.Runtime
         /// <remarks>The new key would be added respectively to a position of that key and the position of other keys.</remarks>
         public void Add(KeyFrame item)
         {
-            if (item == null)
-                throw new ArgumentNullException(nameof(item));
+            ArgumentNullException.ThrowIfNull(item);
 
             if (_keys.Count == 0)
             {

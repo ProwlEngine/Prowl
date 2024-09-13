@@ -133,8 +133,7 @@ namespace Prowl.Runtime
         /// <remarks>If <paramref name="comparer"/> is set to null, then the default <see cref="IEqualityComparer" /> for <typeparamref name="TKey"/> is used.</remarks>
         public MultiValueDictionary(IEnumerable<KeyValuePair<TKey, IReadOnlyCollection<TValue>>> enumerable, IEqualityComparer<TKey> comparer)
         {
-            if (enumerable == null)
-                throw new ArgumentNullException(nameof(enumerable));
+            ArgumentNullException.ThrowIfNull(enumerable);
 
             _dictionary = new Dictionary<TKey, InnerCollectionView>(comparer);
             foreach (var pair in enumerable)
@@ -631,8 +630,8 @@ namespace Prowl.Runtime
         /// </remarks>
         public void Add(TKey key, TValue value)
         {
-            if (key == null)
-                throw new ArgumentNullException(nameof(key));
+            ArgumentNullException.ThrowIfNull(key);
+
             if (!_dictionary.TryGetValue(key, out InnerCollectionView collection))
             {
                 collection = new InnerCollectionView(key, NewCollectionFactory());

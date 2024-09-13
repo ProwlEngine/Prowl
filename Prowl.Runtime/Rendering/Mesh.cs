@@ -352,8 +352,7 @@ namespace Prowl.Runtime
 
         public void RecalculateBounds()
         {
-            if (vertices == null)
-                throw new ArgumentNullException();
+             ArgumentNullException.ThrowIfNull(vertices);
 
             if (vertices.Length < 1)
                 throw new ArgumentException();

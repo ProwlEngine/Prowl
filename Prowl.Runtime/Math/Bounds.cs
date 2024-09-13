@@ -188,8 +188,7 @@ namespace Prowl.Runtime
         /// <exception cref="System.ArgumentException">Thrown if the given list has no points.</exception>
         public static Bounds CreateFromPoints(IEnumerable<Vector3> points)
         {
-            if (points == null)
-                throw new ArgumentNullException();
+            ArgumentNullException.ThrowIfNull(points);
 
             var empty = true;
             var minVec = MaxVector3;
@@ -279,10 +278,7 @@ namespace Prowl.Runtime
 
         public void GetCorners(Vector3[] corners)
         {
-            if (corners == null)
-            {
-                throw new ArgumentNullException(nameof(corners));
-            }
+            ArgumentNullException.ThrowIfNull(corners);
             if (corners.Length < 8)
             {
                 throw new ArgumentOutOfRangeException(nameof(corners), "Not Enought Corners");
