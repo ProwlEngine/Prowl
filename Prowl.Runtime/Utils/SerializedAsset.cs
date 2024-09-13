@@ -86,7 +86,7 @@ namespace Prowl.Runtime.Utils
                 SceneManager.AllowGameObjectConstruction = prev; // Restore state
                 return obj;
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 SceneManager.AllowGameObjectConstruction = prev; // Restore state
                 throw;

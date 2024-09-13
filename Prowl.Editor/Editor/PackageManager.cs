@@ -324,7 +324,7 @@ namespace Prowl.Editor
                 MemoryStream ms = new MemoryStream(bytes);
                 return Texture2DLoader.FromStream(ms);
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 return null;
             }
