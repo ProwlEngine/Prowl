@@ -29,7 +29,7 @@ namespace Prowl.Editor
 
         private double _width, _height;
         public double _x, _y;
-        private bool _wasDragged = false;
+        private bool _wasDragged;
 
 
         public bool bAllowTabs = true;
@@ -260,7 +260,7 @@ namespace Prowl.Editor
             MaxZ = gui.GetCurrentInteractableZLayer();
         }
 
-        private bool _wasResizing = false;
+        private bool _wasResizing;
         private void HandleResize()
         {
             using (gui.Node("ResizeTab").TopLeft(Offset.Percentage(1f, -15)).Scale(15).IgnoreLayout().Enter())

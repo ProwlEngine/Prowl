@@ -478,8 +478,8 @@ namespace Prowl.Editor
     [NodeEditor(typeof(CommentNode))]
     public class CommentNodeEditor : DefaultNodeEditor
     {
-        private bool isRenamingHeader = false;
-        private bool isRenamingDesc = false;
+        private bool isRenamingHeader;
+        private bool isRenamingDesc;
 
         public override bool DrawNode(int index, Gui g, Node node)
         {
@@ -569,14 +569,14 @@ namespace Prowl.Editor
         private Vector2 topleft;
         private double zoom = 1.0f;
         private double targetzoom = 1.0f;
-        private bool hasChanged = false;
+        private bool hasChanged;
 
         private RenderTexture RenderTarget;
 
-        internal NodePort? draggingPort = null;
+        internal NodePort? draggingPort;
         internal List<Vector2> reroutePoints = new();
 
-        internal Vector2? dragSelectionStart = null;
+        internal Vector2? dragSelectionStart;
         internal Rect dragSelection;
 
         private string _searchText = string.Empty;

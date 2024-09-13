@@ -17,7 +17,7 @@ namespace Prowl.Editor.PropertyDrawers
         public override double MinWidth => 125;
         public static Guid assignedGUID;
         public static ushort assignedFileID;
-        public static ulong guidAssignedToID = 0;
+        public static ulong guidAssignedToID;
 
         public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? targetValue)
         {

@@ -19,10 +19,10 @@ namespace Prowl.Editor
         private readonly List<FileInfo> _found = new();
 
         public readonly static SelectHandler<FileSystemInfo> SelectHandler = new((item) => !item.Exists, (a, b) => a.FullName.Equals(b.FullName, StringComparison.OrdinalIgnoreCase));
-        internal static string? RenamingEntry = null;
+        internal static string? RenamingEntry;
 
-        private int _treeCounter = 0;
-        private static bool justStartedRename = false;
+        private int _treeCounter;
+        private static bool justStartedRename;
 
         public AssetsTreeWindow() : base()
         {

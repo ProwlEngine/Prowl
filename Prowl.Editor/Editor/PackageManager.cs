@@ -26,13 +26,13 @@ namespace Prowl.Editor
         private (string, string) _currentSource;
 
         // Selected Package
-        bool _showProjectDetails = false;
+        bool _showProjectDetails;
         string[] _projectVersions = [];
-        int _selectedVersionIndex = 0;
+        int _selectedVersionIndex;
         List<IPackageSearchMetadata> _selectedPackageMetaData = [];
 
-        byte loadingPackageEntries = 0;
-        bool loadingDetails = false;
+        byte loadingPackageEntries;
+        bool loadingDetails;
         string package_Title, package_Authors, package_Description, package_Downloads, package_Version, package_PublishDate, package_ProjectURL, package_LicenseURL;
         Texture2D? package_Icon;
         List<(string, string)> package_Dependencies;

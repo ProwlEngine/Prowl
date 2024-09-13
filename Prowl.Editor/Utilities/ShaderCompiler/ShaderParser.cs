@@ -799,7 +799,7 @@ namespace Prowl.Editor.Utilities
         public ShaderPassDescription Description;
 
         public int ProgramStartLine;
-        public string? Program = null;
+        public string? Program;
     }
 
     public struct EntryPoint(ShaderStages stages, string name)

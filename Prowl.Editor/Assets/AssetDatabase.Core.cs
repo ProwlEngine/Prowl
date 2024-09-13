@@ -34,8 +34,8 @@ namespace Prowl.Editor.Assets
         #region Private Fields
 
         static readonly List<(DirectoryInfo, AssetDirectoryCache)> rootFolders = [];
-        static double RefreshTimer = 0f;
-        static bool lastFocused = false;
+        static double RefreshTimer;
+        static bool lastFocused;
         static readonly Dictionary<string, MetaFile> assetPathToMeta = new(StringComparer.OrdinalIgnoreCase);
         static readonly Dictionary<Guid, MetaFile> assetGuidToMeta = [];
         static readonly Dictionary<Guid, SerializedAsset> guidToAssetData = [];

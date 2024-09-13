@@ -43,7 +43,7 @@ namespace Prowl.Editor.Docking
         public Vector2 Maxs { get; set; }
         public double SplitDistance { get; set; } = 0.5f;
 
-        public DockNode TraceLeaf(double x, double y)
+        public DockNode? TraceLeaf(double x, double y)
         {
             if (Rect.CreateFromMinMax(Mins, Maxs).Contains(new Vector2(x, y)))
             {
@@ -61,7 +61,7 @@ namespace Prowl.Editor.Docking
             return null;
         }
 
-        public DockNode TraceSeparator(double x, double y)
+        public DockNode? TraceSeparator(double x, double y)
         {
             if (Type == NodeType.Leaf)
             {

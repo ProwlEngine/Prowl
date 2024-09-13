@@ -17,13 +17,13 @@ namespace Prowl.Editor
         const double entryPadding = 4;
 
         private string _searchText = "";
-        private GameObject? m_RenamingGO = null;
+        private GameObject? m_RenamingGO;
         public static SelectHandler<WeakReference> SelectHandler { get; private set; } = new((item) => !item.IsAlive || (item.Target is EngineObject eObj && eObj.IsDestroyed), (a, b) => ReferenceEquals(a.Target, b.Target));
 
         private const float PingDuration = 3f;
-        private static float pingTimer = 0;
+        private static float pingTimer;
         private static WeakReference pingedGO;
-        private bool justStartedRename = false;
+        private bool justStartedRename;
 
         public HierarchyWindow() : base()
         {

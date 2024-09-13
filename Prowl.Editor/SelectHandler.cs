@@ -21,7 +21,7 @@ public static class GlobalSelectHandler
 /// <typeparam name="T">The Type you want to select, Must be of type 'Class'</typeparam>
 public class SelectHandler<T> where T : class
 {
-    bool selectedThisFrame = false;
+    bool selectedThisFrame;
     List<T> selected = new();
     SortedList<int, T> previousFrameSelectables;
     SortedList<int, T> selectables = new();
