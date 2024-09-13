@@ -126,7 +126,7 @@ namespace Prowl.Runtime
 
         [MethodImpl(IN)] public static int CeilToInt(double value) => (int)Math.Ceiling(value);
 
-        [MethodImpl(IN)] public static double Round(double value, MidpointRounding midpointRounding = MidpointRounding.ToEven) => (double)Math.Round(value, midpointRounding);
+        [MethodImpl(IN)] public static double Round(double value, MidpointRounding midpointRounding = MidpointRounding.ToEven) => Math.Round(value, midpointRounding);
 
         [MethodImpl(IN)] public static double Round(double value, double snapInterval, MidpointRounding midpointRounding = MidpointRounding.ToEven) => Math.Round(value / snapInterval, midpointRounding) * snapInterval;
 
@@ -419,13 +419,13 @@ namespace Prowl.Runtime
             return new Vector3(pitch, yaw, roll);
         }
 
-        [MethodImpl(IN)] public static Vector3 ToDeg(this Vector3 v) => new((double)(v.x * Rad2Deg), (double)(v.y * Rad2Deg), (double)(v.z * Rad2Deg));
+        [MethodImpl(IN)] public static Vector3 ToDeg(this Vector3 v) => new(v.x * Rad2Deg, v.y * Rad2Deg, v.z * Rad2Deg);
 
-        [MethodImpl(IN)] public static Vector3 ToRad(this Vector3 v) => new((double)(v.x * Deg2Rad), (double)(v.y * Deg2Rad), (double)(v.z * Deg2Rad));
+        [MethodImpl(IN)] public static Vector3 ToRad(this Vector3 v) => new(v.x * Deg2Rad, v.y * Deg2Rad, v.z * Deg2Rad);
 
-        [MethodImpl(IN)] public static double ToDeg(this double v) => (double)(v * Rad2Deg);
+        [MethodImpl(IN)] public static double ToDeg(this double v) => v * Rad2Deg;
 
-        [MethodImpl(IN)] public static double ToRad(this double v) => (double)(v * Deg2Rad);
+        [MethodImpl(IN)] public static double ToRad(this double v) => v * Deg2Rad;
 
         [MethodImpl(IN)] public static float ToDeg(this float v) => (float)(v * Rad2Deg);
 

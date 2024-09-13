@@ -122,8 +122,8 @@ namespace Prowl.Runtime
             double factor;
             Vector3 normal = this.normal;
             this.normal = Vector3.Normalize(this.normal);
-            factor = (double)Math.Sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z) /
-                    (double)Math.Sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
+            factor = Math.Sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z) /
+                    Math.Sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z);
             distance = distance * factor;
         }
 
@@ -144,8 +144,8 @@ namespace Prowl.Runtime
         {
             double factor;
             result.normal = Vector3.Normalize(value.normal);
-            factor = (double)Math.Sqrt(result.normal.x * result.normal.x + result.normal.y * result.normal.y + result.normal.z * result.normal.z) /
-                    (double)Math.Sqrt(value.normal.x * value.normal.x + value.normal.y * value.normal.y + value.normal.z * value.normal.z);
+            factor = Math.Sqrt(result.normal.x * result.normal.x + result.normal.y * result.normal.y + result.normal.z * result.normal.z) /
+                    Math.Sqrt(value.normal.x * value.normal.x + value.normal.y * value.normal.y + value.normal.z * value.normal.z);
             result.distance = value.distance * factor;
         }
 
@@ -189,7 +189,7 @@ namespace Prowl.Runtime
 
             double dist = (Vector3.Dot(normal, lineStart) - distance) / den;
 
-            if (dist < (double)-MathD.Small || dist > (1.0f + (double)MathD.Small))
+            if (dist < -MathD.Small || dist > (1.0f + MathD.Small))
                 return false;
 
             dist = -dist;

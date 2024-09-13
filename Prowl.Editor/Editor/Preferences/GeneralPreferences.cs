@@ -107,7 +107,7 @@ namespace Prowl.Editor.Preferences
         public static Color RandomPastel(Type type, float alpha = 1f, float pastelStrength = 0.5f)
         {
             System.Random random = new System.Random(type.GetHashCode());
-            Color pastel = Color.FromHSV((float)random.Next(0, 360), pastelStrength, 0.75f, alpha);
+            Color pastel = Color.FromHSV(random.Next(0, 360), pastelStrength, 0.75f, alpha);
             return pastel;
             // var inverted = 1.0f - pastelStrength;
             // float r = (float)(random.NextDouble() * inverted + pastelStrength);

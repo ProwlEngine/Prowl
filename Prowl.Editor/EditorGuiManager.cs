@@ -19,13 +19,13 @@ public static class EditorGuiManager
     public static System.Numerics.Vector4 SelectedColor => new System.Numerics.Vector4(0.06f, 0.53f, 0.98f, 1.00f);
 
     public static Gui Gui;
-    public static DockContainer Container;
+    public static DockContainer? Container;
     public static EditorWindow DraggingWindow;
     public static DockNode DragSplitter;
     private static Vector2 m_DragPos;
     private static double m_StartSplitPos;
 
-    public static WeakReference FocusedWindow;
+    public static WeakReference? FocusedWindow;
 
     public static List<EditorWindow> Windows = [];
 
@@ -59,7 +59,7 @@ public static class EditorGuiManager
             WindowsToRemove.Add(editorWindow);
     }
 
-    public static DockNode DockWindowTo(EditorWindow window, DockNode? node, DockZone zone, double split = 0.5f)
+    public static DockNode? DockWindowTo(EditorWindow window, DockNode? node, DockZone zone, double split = 0.5f)
     {
         if (node != null)
             return Container.AttachWindow(window, node, zone, split);
@@ -77,7 +77,7 @@ public static class EditorGuiManager
 
         Rect screenRect = new Rect(0, 0, Graphics.TargetResolution.x, Graphics.TargetResolution.y);
 
-        Vector2 framebufferAndInputScale = new((float)Graphics.TargetResolution.x / Screen.Size.x, (float)Graphics.TargetResolution.y / (float)Screen.Size.y);
+        Vector2 framebufferAndInputScale = new((float)Graphics.TargetResolution.x / Screen.Size.x, Graphics.TargetResolution.y / (float)Screen.Size.y);
 
         Gui.PointerWheel = Input.MouseWheelDelta;
         double scale = EditorStylePrefs.Instance.Scale;
@@ -239,7 +239,7 @@ public static class EditorGuiManager
                         double w = DragSplitter.Maxs.x - DragSplitter.Mins.x;
                         double split = m_StartSplitPos + dragDelta.x;
                         split -= DragSplitter.Mins.x;
-                        split = (double)Math.Floor(split);
+                        split = Math.Floor(split);
                         split = Math.Clamp(split, minSize, w - minSize);
                         split /= w;
 
@@ -250,7 +250,7 @@ public static class EditorGuiManager
                         double h = DragSplitter.Maxs.y - DragSplitter.Mins.y;
                         double split = m_StartSplitPos + dragDelta.y;
                         split -= DragSplitter.Mins.y;
-                        split = (double)Math.Floor(split);
+                        split = Math.Floor(split);
                         split = Math.Clamp(split, minSize, h - minSize);
                         split /= h;
 

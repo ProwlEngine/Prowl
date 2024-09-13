@@ -125,7 +125,7 @@ namespace Prowl.Runtime.GUI
         {
             if (zIndex == -1)
             {
-                if (!_zInteractableCounter.TryGetValue((int)CurrentZIndex, out int count))
+                if (!_zInteractableCounter.TryGetValue(CurrentZIndex, out int count))
                     count = 0;
 
                 // ZIndex.count - supports up to 1k interactables per Z Index

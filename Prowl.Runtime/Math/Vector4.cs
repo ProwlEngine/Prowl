@@ -118,7 +118,7 @@ namespace Prowl.Runtime
         public void Normalize()
         {
             double ls = x * x + y * y + z * z + w * w;
-            double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
+            double invNorm = 1.0 / Math.Sqrt(ls);
             x *= invNorm;
             y *= invNorm;
             z *= invNorm;
@@ -239,7 +239,7 @@ namespace Prowl.Runtime
 
             double ls = dx * dx + dy * dy + dz * dz + dw * dw;
 
-            return (double)Math.Sqrt((double)ls);
+            return Math.Sqrt(ls);
         }
 
         /// <summary>
@@ -268,7 +268,7 @@ namespace Prowl.Runtime
         public static Vector4 Normalize(Vector4 vector)
         {
             double ls = vector.x * vector.x + vector.y * vector.y + vector.z * vector.z + vector.w * vector.w;
-            double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
+            double invNorm = 1.0 / Math.Sqrt(ls);
 
             return new Vector4(
                 vector.x * invNorm,
@@ -530,7 +530,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector4 SquareRoot(Vector4 value)
         {
-            return new Vector4((Double)Math.Sqrt(value.x), (Double)Math.Sqrt(value.y), (Double)Math.Sqrt(value.z), (Double)Math.Sqrt(value.w));
+            return new Vector4(Math.Sqrt(value.x), Math.Sqrt(value.y), Math.Sqrt(value.z), Math.Sqrt(value.w));
         }
         #endregion Public Static Methods
 

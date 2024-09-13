@@ -82,7 +82,7 @@ namespace Prowl.Runtime
         public void Normalize()
         {
             double ls = x * x + y * y + z * z;
-            double invNorm = 1.0 / (double)Math.Sqrt((double)ls);
+            double invNorm = 1.0 / Math.Sqrt(ls);
             x *= invNorm;
             y *= invNorm;
             z *= invNorm;
@@ -157,13 +157,13 @@ namespace Prowl.Runtime
             StringBuilder sb = new StringBuilder();
             string separator = NumberFormatInfo.GetInstance(formatProvider).NumberGroupSeparator;
             sb.Append('<');
-            sb.Append(((IFormattable)x).ToString(format, formatProvider));
+            sb.Append(x.ToString(format, formatProvider));
             sb.Append(separator);
             sb.Append(' ');
-            sb.Append(((IFormattable)y).ToString(format, formatProvider));
+            sb.Append(y.ToString(format, formatProvider));
             sb.Append(separator);
             sb.Append(' ');
-            sb.Append(((IFormattable)z).ToString(format, formatProvider));
+            sb.Append(z.ToString(format, formatProvider));
             sb.Append('>');
             return sb.ToString();
         }
@@ -201,7 +201,7 @@ namespace Prowl.Runtime
 
             double ls = dx * dx + dy * dy + dz * dz;
 
-            return (double)Math.Sqrt((double)ls);
+            return Math.Sqrt(ls);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -248,7 +248,7 @@ namespace Prowl.Runtime
         public static Vector3 Normalize(Vector3 value)
         {
             double ls = value.x * value.x + value.y * value.y + value.z * value.z;
-            double length = (double)Math.Sqrt(ls);
+            double length = Math.Sqrt(ls);
             return new Vector3(value.x / length, value.y / length, value.z / length);
         }
 
@@ -456,7 +456,7 @@ namespace Prowl.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 SquareRoot(Vector3 value)
         {
-            return new Vector3((Double)Math.Sqrt(value.x), (Double)Math.Sqrt(value.y), (Double)Math.Sqrt(value.z));
+            return new Vector3(Math.Sqrt(value.x), Math.Sqrt(value.y), Math.Sqrt(value.z));
         }
 
         public static Vector3 ProjectOnPlane(Vector3 vector, Vector3 planeNormal)
