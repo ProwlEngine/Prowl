@@ -37,7 +37,7 @@ public class Project
     public static event Action OnProjectChanged;
 
     public static Project? Active { get; private set; }
-    public static bool HasProject => Active != null;
+    public static bool HasProject => Active is not null;
 
     #endregion
 
@@ -130,7 +130,7 @@ public class Project
     /// <summary>
     /// Will create a new Project file and its main Folders in a Dedicated folder
     /// </summary>
-    /// <param name="ProjectName">Name of project</param>
+    /// <param name="projectPath">Path for the new project</param>
     public static Project CreateNew(DirectoryInfo projectPath)
     {
         Project project = new Project(projectPath);
