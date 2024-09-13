@@ -101,7 +101,7 @@ namespace Prowl.Runtime
             }
         }
 
-        public static void SubmitCommandList(CommandList list, bool awaitComplete, ulong timeout = ulong.MaxValue)
+        public static void SubmitCommandList(CommandList list, bool awaitComplete = false, ulong timeout = ulong.MaxValue)
         {
             list.End();
 
