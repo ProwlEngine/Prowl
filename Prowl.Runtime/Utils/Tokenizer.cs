@@ -14,7 +14,7 @@ namespace Prowl.Runtime.Utils
         public ReadOnlyMemory<char> Input { get; }
         public ReadOnlySpan<char> Token => TokenMemory.Span;
         public int TokenPosition { get; set; }
-        public int InputPosition { get; set; }
+        public int InputPosition { get; private set; }
         public int CurrentLine { get; set; } = 1;
         public int CurrentColumn { get; set; }
 
@@ -28,15 +28,18 @@ namespace Prowl.Runtime.Utils
             IsQuote = isQuote ?? DefaultQuoteHandler;
         }
 
-        public virtual void IncrementInputPosition()
+        public virtual void IncrementInputPosition(int count = 1)
         {
-            InputPosition++;
-            CurrentColumn++;
-
-            if (InputPosition < Input.Length && Input.Span[InputPosition] == '\n')
+            for (int i = 0; i < count; i++)
             {
-                CurrentLine++;
-                CurrentColumn = 0;
+                if (InputPosition < Input.Length && Input.Span[InputPosition] == '\n')
+                {
+                    CurrentLine++;
+                    CurrentColumn = 0;
+                }
+
+                InputPosition++;
+                CurrentColumn++;
             }
         }
 
@@ -227,9 +230,9 @@ namespace Prowl.Runtime.Utils
             }
 
             TokenPosition = InputPosition;
-            var firstChar = Input.Span[InputPosition];
+            char firstChar = Input.Span[InputPosition];
 
-            if (_symbolHandlers.TryGetValue(firstChar, out var handler))
+            if (_symbolHandlers.TryGetValue(firstChar, out Func<Tokenizer, TTokenType>? handler))
             {
                 TokenType = handler(this);
                 return true;

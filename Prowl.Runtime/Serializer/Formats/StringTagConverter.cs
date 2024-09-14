@@ -428,7 +428,7 @@ namespace Prowl.Runtime
             private TextTokenType HandleSingleCharToken(TextTokenType tokenType)
             {
                 _tokenizer.TokenMemory = _tokenizer.Input.Slice(_tokenizer.TokenPosition, 1);
-                _tokenizer.InputPosition++;
+                _tokenizer.IncrementInputPosition();
                 return tokenType;
             }
 
@@ -439,7 +439,7 @@ namespace Prowl.Runtime
                     _tokenizer.Input.Span[_tokenizer.InputPosition + 2] == ']')
                 {
                     _tokenizer.TokenMemory = _tokenizer.Input.Slice(_tokenizer.TokenPosition, 3);
-                    _tokenizer.InputPosition += 3;
+                    _tokenizer.IncrementInputPosition(3);
                     return TextTokenType.BeginArray;
                 }
 
