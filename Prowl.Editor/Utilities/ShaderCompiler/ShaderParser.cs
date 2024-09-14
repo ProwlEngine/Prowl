@@ -15,12 +15,6 @@ namespace Prowl.Editor.Utilities
 {
     public static partial class ShaderParser
     {
-        [GeneratedRegex(@"//.*")]
-        private static partial Regex CommentRegex();
-
-        [GeneratedRegex(@"/\*.*?\*/", RegexOptions.Singleline)]
-        private static partial Regex MultilineCommentRegex();
-
         public enum ShaderToken
         {
             None,
@@ -33,16 +27,10 @@ namespace Prowl.Editor.Utilities
             CloseParen,
             Equals,
             Comma,
-            Quote,
+            Quote
         }
 
-
-        private static Tokenizer<ShaderToken> CreateTokenizer(string input)
-        {
-            string noComments = CommentRegex().Replace(input, "");
-            string noMultilineComments = MultilineCommentRegex().Replace(noComments, "");
-
-            Dictionary<char, Func<Tokenizer, ShaderToken>> symbolHandlers = new()
+        static Dictionary<char, Func<Tokenizer, ShaderToken>> symbolHandlers = new()
             {
                 {'{', (ctx) => HandleSingleCharToken(ctx, ShaderToken.OpenCurlBrace)},
                 {'}', (ctx) => HandleSingleCharToken(ctx, ShaderToken.CloseCurlBrace)},
@@ -52,10 +40,14 @@ namespace Prowl.Editor.Utilities
                 {')', (ctx) => HandleSingleCharToken(ctx, ShaderToken.CloseParen)},
                 {'=', (ctx) => HandleSingleCharToken(ctx, ShaderToken.Equals)},
                 {',', (ctx) => HandleSingleCharToken(ctx, ShaderToken.Comma)},
+                {'/', HandlePotentialComment}
             };
 
+        private static Tokenizer<ShaderToken> CreateTokenizer(string input)
+        {
+
             return new(
-                noMultilineComments.AsMemory(),
+                input.AsMemory(),
                 symbolHandlers,
                 "{}()=,".Contains,
                 ShaderToken.Identifier,
@@ -81,10 +73,12 @@ namespace Prowl.Editor.Utilities
             try
             {
                 tokenizer.MoveNext();
+
                 if (tokenizer.Token.ToString() != "Shader")
                     throw new ParseException($"Expected top-level 'Shader' declaration, found '{tokenizer.Token}'");
 
                 tokenizer.MoveNext(); // Move to string
+
                 name = tokenizer.ParseQuotedStringValue();
 
                 while (tokenizer.MoveNext())
@@ -122,9 +116,6 @@ namespace Prowl.Editor.Utilities
             }
 
             ShaderPass[] passes = new ShaderPass[parsedPasses.Count];
-
-            int globalLen = globalDefaults != null && globalDefaults.Program != null ? globalDefaults.Program.Length : 0;
-            int globalPos = globalDefaults != null && globalDefaults.Program != null ? globalDefaults.ProgramStartLine : 0;
 
             for (int i = 0; i < passes.Length; i++)
             {
@@ -171,7 +162,7 @@ namespace Prowl.Editor.Utilities
 
                 ShaderVariant[] variants = ShaderCompiler.GenerateVariants(args, includer, compilerMessages);
 
-                if (LogCompilationMessages(compilerMessages, includer, parsedPass.ProgramStartLine, globalLen, globalPos))
+                if (LogCompilationMessages(name, compilerMessages, includer, parsedPass.ProgramStartLine, globalDefaults))
                     return false;
 
                 passes[i] = new ShaderPass(parsedPass.Name, passDesc, variants);
@@ -192,7 +183,7 @@ namespace Prowl.Editor.Utilities
         }
 
 
-        private static bool LogCompilationMessages(List<CompilationMessage> messages, FileIncluder includer, int programStartLine, int globalOffset, int globalStartLine)
+        private static bool LogCompilationMessages(string shaderName, List<CompilationMessage> messages, FileIncluder includer, int programStartLine, ParsedPass? global)
         {
             bool hasErrors = false;
 
@@ -201,16 +192,26 @@ namespace Prowl.Editor.Utilities
                 if (message.severity == LogSeverity.Error || message.severity == LogSeverity.Exception)
                     hasErrors = true;
 
-                bool isGlobal = message.line - globalOffset < 0;
+                int msgLine = message.line - 1;
 
-                int line = isGlobal ? globalStartLine + message.line : programStartLine + (message.line - globalOffset);
+                int line = programStartLine + msgLine;
+
+                if (global != null && global.Program != null)
+                {
+                    if (msgLine - global.ProgramStartLine < 0)
+                        line = global!.ProgramStartLine + msgLine;
+                    else
+                        line -= global.ProgramLines;
+                }
 
                 (ConsoleColor col, string prefix) = message.severity switch
                 {
-                    LogSeverity.Normal => (ConsoleColor.White, "Info: "),
-                    LogSeverity.Warning => (ConsoleColor.Yellow, "Warning while compiling shader: "),
-                    _ => (ConsoleColor.Red, "Error compiling shader: "),
+                    LogSeverity.Normal => (ConsoleColor.White, "Info"),
+                    LogSeverity.Warning => (ConsoleColor.Yellow, "Warning"),
+                    _ => (ConsoleColor.Red, "Error"),
                 };
+
+                prefix += $" compiling {shaderName}: ";
 
                 DebugStackFrame frame = new(line, message.column, includer.SourceFilePath);
                 DebugStackTrace trace = new(frame);
@@ -222,10 +223,45 @@ namespace Prowl.Editor.Utilities
         }
 
 
+        private static ShaderToken HandlePotentialComment(Tokenizer tokenizer)
+        {
+            if (tokenizer.InputPosition + 1 >= tokenizer.Input.Length)
+                return ShaderToken.None;
+
+            // Look ahead
+            char next = tokenizer.Input.Span[tokenizer.TokenPosition + 1];
+
+            if (next == '/')
+            {
+                int line = tokenizer.CurrentLine;
+
+                while (tokenizer.CurrentLine == line)
+                    tokenizer.IncrementInputPosition();
+            }
+            else if (next == '*')
+            {
+                while (tokenizer.InputPosition + 2 < tokenizer.Input.Length)
+                {
+                    if (tokenizer.Input.Slice(tokenizer.InputPosition, 2).ToString() == "*/")
+                        break;
+
+                    tokenizer.IncrementInputPosition();
+                }
+
+                tokenizer.IncrementInputPosition();
+                tokenizer.IncrementInputPosition();
+            }
+
+            tokenizer.MoveNext();
+
+            return ((Tokenizer<ShaderToken>)tokenizer).TokenType;
+        }
+
+
         private static ShaderToken HandleSingleCharToken(Tokenizer tokenizer, ShaderToken tokenType)
         {
             tokenizer.TokenMemory = tokenizer.Input.Slice(tokenizer.TokenPosition, 1);
-            tokenizer.InputPosition++;
+            tokenizer.IncrementInputPosition();
 
             return tokenType;
         }
@@ -296,9 +332,9 @@ namespace Prowl.Editor.Utilities
                     case "HLSLINCLUDE":
                         parsedGlobal.ProgramStartLine = tokenizer.CurrentLine;
                         EnsureUndef(parsedGlobal.Program, "'HLSLINCLUDE' in Global block");
-
                         SliceTo(tokenizer, "ENDHLSL");
                         parsedGlobal.Program = tokenizer.Token.ToString();
+                        parsedGlobal.ProgramLines = (tokenizer.CurrentLine - parsedGlobal.ProgramStartLine) + 1;
                         break;
 
                     default:
@@ -361,6 +397,7 @@ namespace Prowl.Editor.Utilities
                         EnsureUndef(pass.Program, "'HLSLPROGRAM' in pass");
                         SliceTo(tokenizer, "ENDHLSL");
                         pass.Program = tokenizer.Token.ToString();
+                        pass.ProgramLines = (tokenizer.CurrentLine - pass.ProgramStartLine) + 1;
                         break;
 
                     default:
@@ -731,7 +768,7 @@ namespace Prowl.Editor.Utilities
         }
 
 
-        public static bool SliceTo(Tokenizer<ShaderToken> tokenizer, string token)
+        public static bool SliceTo(Tokenizer tokenizer, string token)
         {
             int startPos = tokenizer.InputPosition;
 
@@ -796,6 +833,7 @@ namespace Prowl.Editor.Utilities
         public ShaderPassDescription Description;
 
         public int ProgramStartLine;
+        public int ProgramLines;
         public string? Program;
     }
 
