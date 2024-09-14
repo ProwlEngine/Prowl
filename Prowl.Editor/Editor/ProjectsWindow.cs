@@ -78,13 +78,8 @@ namespace Prowl.Editor
             Rect rect = gui.CurrentNode.LayoutData.Rect;
             gui.Draw2D.DrawRectFilled(rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
 
-            Vector2 shadowA = new(rect.x, rect.y + 30);
-            Vector2 shadowB = new(rect.x + rect.width, rect.y + 30);
-
-            gui.Draw2D.DrawHorizontalBlackGradient(shadowA, shadowB, -30, 0.25f);
-
-            shadowA = new(rect.x, rect.y);
-            shadowB = new(rect.x, rect.y + (rect.height - 60));
+            Vector2 shadowA = new(rect.x, rect.y);
+            Vector2 shadowB = new(rect.x, rect.y + (rect.height - 60));
 
             gui.Draw2D.DrawVerticalBlackGradient(shadowA, shadowB, 30, 0.25f);
 
@@ -95,103 +90,106 @@ namespace Prowl.Editor
             shadowB = new(rect.x, rect.y + rect.height);
             gui.Draw2D.DrawVerticalBlackGradient(shadowA, shadowB, 20, 0.25f);
 
+            shadowA = rect.TopRight;
+            shadowB = rect.BottomRight;
 
-            using (gui.Node("TopBar").Top(50).ExpandWidth().MaxHeight(40).Enter())
+            gui.Draw2D.DrawVerticalBlackGradient(shadowA, shadowB, 30, 0.25f);
+
+            if (_createTabOpen)
             {
-                gui.Search("SearchInput", ref _searchText, 30, 10, 150, null, EditorGUI.GetInputStyle());
+                shadowA = new(rect.x + rect.width - 250, rect.y);
+                shadowB = new(rect.x + rect.width - 250, rect.y + (rect.height - 60));
 
-                if (!_createTabOpen)
+                gui.Draw2D.DrawVerticalBlackGradient(shadowA, shadowB, -30, 0.15f);
+            }
+
+            using (gui.Node("ProjectsContent").Top(50).ExpandWidth(_createTabOpen ? -250 : 0).ExpandHeight(-60).Layout(LayoutType.Column).Enter())
+            {
+                using (gui.Node("TopBar").ExpandWidth().MaxHeight(40).Enter())
                 {
-                    using (gui.Node("Add").Top(7.5).Scale(75, 30).Enter())
+                    gui.Search("SearchInput", ref _searchText, 30, 10, 150, null, EditorGUI.GetInputStyle());
+
+                    if (!_createTabOpen)
                     {
-                        gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 110));
-
-                        Interactable interact = gui.GetInteractable();
-
-                        Color openCol = Color.white * 0.4f;
-
-                        if (interact.TakeFocus())
+                        using (gui.Node("Add").Top(7.5).Scale(75, 30).Enter())
                         {
-                            openCol = EditorStylePrefs.Instance.Highlighted;
-                            OpenDialog("Add Existing Project", (x) => ProjectCache.Instance.AddProject(new Project(new DirectoryInfo(x))));
+                            gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 87.5));
+
+                            Interactable interact = gui.GetInteractable();
+
+                            Color openCol = Color.white * 0.4f;
+
+                            if (interact.TakeFocus())
+                            {
+                                openCol = EditorStylePrefs.Instance.Highlighted;
+                                OpenDialog("Add Existing Project", (x) => ProjectCache.Instance.AddProject(new Project(new DirectoryInfo(x))));
+                            }
+                            else if (interact.IsHovered())
+                                openCol = EditorStylePrefs.Instance.Hovering;
+
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, openCol, (float)EditorStylePrefs.Instance.ButtonRoundness, CornerRounding.All);
+
+                            gui.Draw2D.DrawText("Add", 20, gui.CurrentNode.LayoutData.Rect);
                         }
-                        else if (interact.IsHovered())
-                            openCol = EditorStylePrefs.Instance.Hovering;
 
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, openCol, (float)EditorStylePrefs.Instance.ButtonRoundness, CornerRounding.All);
 
-                        gui.Draw2D.DrawText("Add", 20, gui.CurrentNode.LayoutData.Rect);
+                        using (gui.Node("Create").Top(7.5).Scale(75, 30).Enter())
+                        {
+                            gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 7.5));
+
+                            Interactable interact = gui.GetInteractable();
+
+                            Color createCol = EditorStylePrefs.Instance.Highlighted;
+
+                            if (interact.TakeFocus())
+                                _createTabOpen = true;
+                            else if (interact.IsHovered())
+                                createCol = EditorStylePrefs.Instance.Hovering;
+
+                            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, createCol, (float)EditorStylePrefs.Instance.ButtonRoundness, CornerRounding.All);
+
+                            gui.Draw2D.DrawText("Create", 20, gui.CurrentNode.LayoutData.Rect);
+                        }
                     }
+                }
 
-
-                    using (gui.Node("Create").Top(7.5).Scale(75, 30).Enter())
+                using (gui.Node("Projects").ExpandWidth(-7.5).ExpandHeight().Enter())
+                {
+                    using (gui.Node("List").TopLeft(25, 45).ExpandWidth(-7.5).ExpandHeight(-45).Layout(LayoutType.Column).Spacing(5).Clip().Scroll().Enter())
                     {
-                        gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x - 30));
+                        for (int i = 0; i < ProjectCache.Instance.ProjectsCount; i++)
+                        {
+                            Project? project = ProjectCache.Instance.GetProject(i);
 
-                        Interactable interact = gui.GetInteractable();
+                            if (project == null)
+                                continue;
 
-                        Color createCol = EditorStylePrefs.Instance.Highlighted;
-
-                        if (interact.TakeFocus())
-                            _createTabOpen = true;
-                        else if (interact.IsHovered())
-                            createCol = EditorStylePrefs.Instance.Hovering;
-
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, createCol, (float)EditorStylePrefs.Instance.ButtonRoundness, CornerRounding.All);
-
-                        gui.Draw2D.DrawText("Create", 20, gui.CurrentNode.LayoutData.Rect);
+                            if (string.IsNullOrEmpty(_searchText) || project.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+                                DisplayProject(project);
+                        }
                     }
                 }
             }
 
-            double height = gui.CurrentNode.LayoutData.Rect.height;
-
-            using (gui.Node("Projects").Top(50).ExpandWidth(-7.5).Height(height - 60).Enter())
+            if (_createTabOpen)
             {
-                double width = gui.CurrentNode.LayoutData.Rect.width;
-
-                if (_createTabOpen)
+                using (gui.Node("Sidebar").Width(250).ExpandHeight(-60).Enter())
                 {
-                    width -= 250;
+                    gui.CurrentNode.Left(Offset.Percentage(1.0f, -gui.CurrentNode.LayoutData.Scale.x));
 
-                    shadowA = new(rect.x + width, rect.y);
-                    shadowB = new(rect.x + width, rect.y + (rect.height - 60));
+                    rect = gui.CurrentNode.LayoutData.Rect;
 
-                    gui.Draw2D.DrawVerticalBlackGradient(shadowA, shadowB, -30, 0.25f);
-                }
+                    shadowA = new(rect.x, rect.y + 20);
+                    shadowB = new(rect.x + rect.width, rect.y + 20);
 
-                using (gui.Node("List").TopLeft(25, 45).Width(width - 25).ExpandHeight(-45).Layout(LayoutType.Column).Spacing(5).Clip().Scroll().Enter())
-                {
-                    for (int i = 0; i < ProjectCache.Instance.ProjectsCount; i++)
-                    {
-                        Project? project = ProjectCache.Instance.GetProject(i);
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne);
+                    gui.Draw2D.DrawHorizontalBlackGradient(shadowA, shadowB, -20, 0.25f);
 
-                        if (project == null)
-                            continue;
+                    shadowA = new(rect.x, rect.y + rect.height - 20);
+                    shadowB = new(rect.x + rect.width, rect.y + rect.height - 20);
+                    gui.Draw2D.DrawHorizontalBlackGradient(shadowA, shadowB, 20, 0.25f);
 
-                        if (string.IsNullOrEmpty(_searchText) || project.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
-                            DisplayProject(project);
-                    }
-                }
-
-                if (_createTabOpen)
-                {
-                    using (gui.Node("Sidebar").Left(width).Width(250).ExpandHeight().Enter())
-                    {
-                        rect = gui.CurrentNode.LayoutData.Rect;
-
-                        shadowA = new(rect.x, rect.y + 20);
-                        shadowB = new(rect.x + rect.width, rect.y + 20);
-
-                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGOne);
-                        gui.Draw2D.DrawHorizontalBlackGradient(shadowA, shadowB, -20, 0.25f);
-
-                        shadowA = new(rect.x, rect.y + rect.height - 20);
-                        shadowB = new(rect.x + rect.width, rect.y + rect.height - 20);
-                        gui.Draw2D.DrawHorizontalBlackGradient(shadowA, shadowB, 20, 0.25f);
-
-                        DrawCreateProject();
-                    }
+                    DrawCreateProject();
                 }
             }
 
@@ -312,7 +310,7 @@ namespace Prowl.Editor
 
                 string path = ProjectCache.Instance.SavedProjectsFolder;
 
-                if (path.Length > 48)
+                if (path.Length > 36)
                     path = string.Concat("...", path.AsSpan(path.Length - 48));
 
                 gui.Draw2D.DrawText(path, pos);
@@ -351,7 +349,7 @@ namespace Prowl.Editor
 
         private void DisplayProject(Project project)
         {
-            using (gui.Node(project.Name).Height(48).Width(Size.Percentage(1f, -17)).Margin(5).Layout(LayoutType.Row).Enter())
+            using (gui.Node(project.Name).Height(40).Width(Size.Percentage(1f, -17)).Layout(LayoutType.Row).Enter())
             {
                 Interactable interact = gui.GetInteractable();
 
