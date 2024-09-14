@@ -115,7 +115,7 @@ namespace Prowl.Editor.Utilities
 
         public static ShaderVariant[] GenerateVariants(ShaderCreationArgs args, FileIncluder includer, List<CompilationMessage> messages)
         {
-            List<KeyValuePair<string, HashSet<string>>> combinations = [..args.combinations];
+            List<KeyValuePair<string, HashSet<string>>> combinations = [.. args.combinations];
             List<ShaderVariant> variantList = [];
             List<KeyValuePair<string, string>> combination = new(combinations.Count);
 
@@ -151,7 +151,7 @@ namespace Prowl.Editor.Utilities
             ShaderDescription[] compiledSPIRV = Compile(args, state, includer, messages);
 
             foreach (ShaderDescription desc in compiledSPIRV)
-                if (desc.ShaderBytes == null)
+                if (desc.ShaderBytes == null || desc.ShaderBytes.Length == 0)
                     return null;
 
             ReflectedResourceInfo info = Reflect(ctx, compiledSPIRV);
