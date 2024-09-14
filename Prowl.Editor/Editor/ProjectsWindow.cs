@@ -310,8 +310,8 @@ namespace Prowl.Editor
 
                 string path = ProjectCache.Instance.SavedProjectsFolder;
 
-                if (path.Length > 36)
-                    path = string.Concat("...", path.AsSpan(path.Length - 48));
+                if (path.Length > 32)
+                    path = string.Concat("...", path.AsSpan(path.Length - 32));
 
                 gui.Draw2D.DrawText(path, pos);
 
