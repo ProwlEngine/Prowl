@@ -5,104 +5,103 @@ using System;
 
 using Veldrid;
 
-namespace Prowl.Runtime
+namespace Prowl.Runtime;
+
+public static class ShadowAtlas
 {
-    public static class ShadowAtlas
+    private static int size, freeTiles, tileSize, tileCount;
+    private static int maxShadowSize;
+    private static int?[,] tiles;
+
+    private static RenderTexture? atlas;
+
+    public static void TryInitialize()
     {
-        private static int size, freeTiles, tileSize, tileCount;
-        private static int maxShadowSize;
-        private static int?[,] tiles;
+        tileSize = 32;
+        maxShadowSize = 256;
+        if (atlas != null) return;
 
-        private static RenderTexture? atlas;
+        size = 4096;
+        tileSize = 32;
+        maxShadowSize = 1024;
 
-        public static void TryInitialize()
-        {
-            tileSize = 32;
-            maxShadowSize = 256;
-            if (atlas != null) return;
+        if (size % tileSize != 0)
+            throw new ArgumentException("Size must be divisible by tileSize");
 
-            size = 4096;
-            tileSize = 32;
-            maxShadowSize = 1024;
+        tileCount = size / tileSize;
+        freeTiles = tileCount * tileCount;
+        tiles = new int?[tileCount, tileCount];
 
-            if (size % tileSize != 0)
-                throw new ArgumentException("Size must be divisible by tileSize");
+        atlas ??= new RenderTexture((uint)size, (uint)size, [], PixelFormat.D32_Float, true);
+    }
 
-            tileCount = size / tileSize;
-            freeTiles = tileCount * tileCount;
-            tiles = new int?[tileCount, tileCount];
+    public static int GetAtlasWidth() => tileCount;
 
-            atlas ??= new RenderTexture((uint)size, (uint)size, [], PixelFormat.D32_Float, true);
-        }
+    public static int GetTileSize() => tileSize;
+    public static int GetMaxShadowSize() => maxShadowSize;
+    public static int GetSize() => size;
 
-        public static int GetAtlasWidth() => tileCount;
+    public static RenderTexture? GetAtlas() => atlas;
 
-        public static int GetTileSize() => tileSize;
-        public static int GetMaxShadowSize() => maxShadowSize;
-        public static int GetSize() => size;
+    public static Vector2Int? ReserveTiles(int width, int height, int lightID)
+    {
+        int tileWidth = width / tileSize;
+        int tileHeight = height / tileSize;
 
-        public static RenderTexture? GetAtlas() => atlas;
+        for (int i = 0; i <= tileCount - tileWidth; i++)
+        for (int j = 0; j <= tileCount - tileHeight; j++)
+            if (tiles[i, j] == null)
+            {
+                bool found = true;
+                for (int x = i; x < i + tileWidth && found; x++)
+                for (int y = j; y < j + tileHeight && found; y++)
+                    if (tiles[x, y] != null)
+                        found = false;
 
-        public static Vector2Int? ReserveTiles(int width, int height, int lightID)
-        {
-            int tileWidth = width / tileSize;
-            int tileHeight = height / tileSize;
-
-            for (int i = 0; i <= tileCount - tileWidth; i++)
-                for (int j = 0; j <= tileCount - tileHeight; j++)
-                    if (tiles[i, j] == null)
-                    {
-                        bool found = true;
-                        for (int x = i; x < i + tileWidth && found; x++)
-                            for (int y = j; y < j + tileHeight && found; y++)
-                                if (tiles[x, y] != null)
-                                    found = false;
-
-                        if (found)
-                        {
-                            ReserveTile(i, j, tileWidth, tileHeight, lightID);
-                            return new Vector2Int(i * tileSize, j * tileSize);
-                        }
-                    }
-
-            return null;
-        }
-
-        private static void ReserveTile(int x, int y, int width, int height, int lightID)
-        {
-            if (x < 0 || y < 0 || x + width > tileCount || y + height > tileCount)
-                throw new ArgumentException("Tile is out of bounds");
-
-            for (int i = x; i < x + width; i++)
-                for (int j = y; j < y + height; j++)
+                if (found)
                 {
-                    if (tiles[i, j].HasValue)
-                        throw new ArgumentException("Tile is already reserved");
-                    tiles[i, j] = lightID;
+                    ReserveTile(i, j, tileWidth, tileHeight, lightID);
+                    return new Vector2Int(i * tileSize, j * tileSize);
                 }
+            }
 
-            freeTiles -= width * height;
-        }
+        return null;
+    }
 
+    private static void ReserveTile(int x, int y, int width, int height, int lightID)
+    {
+        if (x < 0 || y < 0 || x + width > tileCount || y + height > tileCount)
+            throw new ArgumentException("Tile is out of bounds");
 
-        public static void FreeTiles(int lightID)
+        for (int i = x; i < x + width; i++)
+        for (int j = y; j < y + height; j++)
         {
-            for (int i = 0; i < tileCount; i++)
-                for (int j = 0; j < tileCount; j++)
-                    if (tiles[i, j] == lightID)
-                    {
-                        tiles[i, j] = null;
-                        freeTiles++;
-                    }
+            if (tiles[i, j].HasValue)
+                throw new ArgumentException("Tile is already reserved");
+            tiles[i, j] = lightID;
         }
 
-        public static void Clear()
-        {
-            for (int i = 0; i < tileCount; i++)
-                for (int j = 0; j < tileCount; j++)
-                    tiles[i, j] = null;
+        freeTiles -= width * height;
+    }
 
-            freeTiles = tileCount * tileCount;
-        }
+
+    public static void FreeTiles(int lightID)
+    {
+        for (int i = 0; i < tileCount; i++)
+        for (int j = 0; j < tileCount; j++)
+            if (tiles[i, j] == lightID)
+            {
+                tiles[i, j] = null;
+                freeTiles++;
+            }
+    }
+
+    public static void Clear()
+    {
+        for (int i = 0; i < tileCount; i++)
+        for (int j = 0; j < tileCount; j++)
+            tiles[i, j] = null;
+
+        freeTiles = tileCount * tileCount;
     }
 }

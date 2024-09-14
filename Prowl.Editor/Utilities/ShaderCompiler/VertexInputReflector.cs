@@ -11,59 +11,58 @@ using Veldrid;
 
 #pragma warning disable
 
-namespace Prowl.Editor.Utilities
+namespace Prowl.Editor.Utilities;
+
+public static partial class VertexInputReflector
 {
-    public static partial class VertexInputReflector
+
+    public delegate bool SemanticFormatter(string semantic, out VertexElementFormat format);
+
+    public static VertexInput[] GetStageInputs(Reflector reflector, Resources resources, SemanticFormatter formatter)
     {
+        VertexInput[] inputLocations = new VertexInput[resources.StageInputs.Length];
 
-        public delegate bool SemanticFormatter(string semantic, out VertexElementFormat format);
-
-        public static VertexInput[] GetStageInputs(Reflector reflector, Resources resources, SemanticFormatter formatter)
+        for (int i = 0; i < resources.StageInputs.Length; i++)
         {
-            VertexInput[] inputLocations = new VertexInput[resources.StageInputs.Length];
+            ReflectedResource resource = resources.StageInputs[i];
 
-            for (int i = 0; i < resources.StageInputs.Length; i++)
-            {
-                ReflectedResource resource = resources.StageInputs[i];
+            var typeInfo = reflector.GetTypeHandle(resource.type_id);
 
-                var typeInfo = reflector.GetTypeHandle(resource.type_id);
+            if (!ParseSemantic(resource.name, formatter, out VertexInput input))
+                throw new Exception($"Unknown semantic: {input.semantic}");
 
-                if (!ParseSemantic(resource.name, formatter, out VertexInput input))
-                    throw new Exception($"Unknown semantic: {input.semantic}");
+            if (!reflector.HasDecoration(resource.id, Decoration.Location))
+                throw new Exception("Stage input does not contain location decoration.");
 
-                if (!reflector.HasDecoration(resource.id, Decoration.Location))
-                    throw new Exception("Stage input does not contain location decoration.");
+            uint location = reflector.GetDecoration(resource.id, Decoration.Location);
 
-                uint location = reflector.GetDecoration(resource.id, Decoration.Location);
+            if (location >= inputLocations.Length)
+                throw new Exception($"Invalid input location: {location}. Is the location being manually defined?");
 
-                if (location >= inputLocations.Length)
-                    throw new Exception($"Invalid input location: {location}. Is the location being manually defined?");
-
-                inputLocations[location] = input;
-            }
-
-            return inputLocations;
+            inputLocations[location] = input;
         }
 
-        [GeneratedRegex(@"\d+$")]
-        private static partial Regex TrailingInteger();
+        return inputLocations;
+    }
 
-        private static bool ParseSemantic(string name, SemanticFormatter formatter, out VertexInput input)
-        {
-            string semantic = name.Substring(name.LastIndexOf('.') + 1);
+    [GeneratedRegex(@"\d+$")]
+    private static partial Regex TrailingInteger();
 
-            // If the uniform has no trailing index, force its index to 0.
-            if (!TrailingInteger().IsMatch(semantic))
-                semantic += "0";
+    private static bool ParseSemantic(string name, SemanticFormatter formatter, out VertexInput input)
+    {
+        string semantic = name.Substring(name.LastIndexOf('.') + 1);
 
-            input = new VertexInput(semantic, VertexElementFormat.Float1);
+        // If the uniform has no trailing index, force its index to 0.
+        if (!TrailingInteger().IsMatch(semantic))
+            semantic += "0";
 
-            if (!formatter.Invoke(semantic, out VertexElementFormat format))
-                return false;
+        input = new VertexInput(semantic, VertexElementFormat.Float1);
 
-            input = new VertexInput(semantic, format);
+        if (!formatter.Invoke(semantic, out VertexElementFormat format))
+            return false;
 
-            return true;
-        }
+        input = new VertexInput(semantic, format);
+
+        return true;
     }
 }

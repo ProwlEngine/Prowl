@@ -9,190 +9,189 @@ using Veldrid;
 
 #pragma warning disable
 
-namespace Prowl.Runtime
+namespace Prowl.Runtime;
+
+public class BindableResourceSet : IDisposable
 {
-    public class BindableResourceSet : IDisposable
+    public ShaderPipeline Pipeline { get; private set; }
+
+    public ResourceSetDescription description;
+    private ResourceSet resources;
+
+    private readonly DeviceBuffer[] uniformBuffers;
+    private readonly byte[][] intermediateBuffers;
+
+
+    public BindableResourceSet(ShaderPipeline pipeline, ResourceSetDescription description, DeviceBuffer[] buffers, byte[][] intermediate)
     {
-        public ShaderPipeline Pipeline { get; private set; }
-
-        public ResourceSetDescription description;
-        private ResourceSet resources;
-
-        private readonly DeviceBuffer[] uniformBuffers;
-        private readonly byte[][] intermediateBuffers;
+        Pipeline = pipeline;
+        this.description = description;
+        uniformBuffers = buffers;
+        intermediateBuffers = buffers.Select(x => new byte[x.SizeInBytes]).ToArray();
+    }
 
 
-        public BindableResourceSet(ShaderPipeline pipeline, ResourceSetDescription description, DeviceBuffer[] buffers, byte[][] intermediate)
+    public void Bind(CommandList list, PropertyState state)
+    {
+        bool recreateResourceSet = false | (resources == null);
+
+        for (int i = 0; i < Pipeline.Uniforms.Length; i++)
         {
-            Pipeline = pipeline;
-            this.description = description;
-            uniformBuffers = buffers;
-            intermediateBuffers = buffers.Select(x => new byte[x.SizeInBytes]).ToArray();
+            ShaderUniform uniform = Pipeline.Uniforms[i];
+
+            switch (uniform.kind)
+            {
+                case ResourceKind.UniformBuffer:
+                    UpdateBuffer(list, uniform.name, state);
+                    break;
+
+                case ResourceKind.StructuredBufferReadOnly:
+                    GraphicsBuffer buffer = state._buffers.GetValueOrDefault(uniform.name, null) ?? GraphicsBuffer.Empty;
+
+                    if (!buffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadOnly))
+                        buffer = GraphicsBuffer.EmptyRW;
+
+                    UpdateResource(buffer.Buffer, uniform.binding, ref recreateResourceSet);
+                    break;
+
+                case ResourceKind.StructuredBufferReadWrite:
+                    GraphicsBuffer rwbuffer = state._buffers.GetValueOrDefault(uniform.name, null) ?? GraphicsBuffer.EmptyRW;
+
+                    if (!rwbuffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadWrite))
+                        rwbuffer = GraphicsBuffer.EmptyRW;
+
+                    UpdateResource(rwbuffer.Buffer, uniform.binding, ref recreateResourceSet);
+                    break;
+
+                case ResourceKind.TextureReadOnly:
+                    Veldrid.Texture texture = GetTexture(uniform.name, state, TextureUsage.Sampled, Texture2D.EmptyWhite, out _);
+
+                    UpdateResource(texture, uniform.binding, ref recreateResourceSet);
+
+                    break;
+
+                case ResourceKind.TextureReadWrite:
+                    Veldrid.Texture rwtexture = GetTexture(uniform.name, state, TextureUsage.Storage, Texture2D.EmptyRW, out _);
+
+                    UpdateResource(rwtexture, uniform.binding, ref recreateResourceSet);
+
+                    break;
+
+                case ResourceKind.Sampler:
+                    GetTexture(SliceSampler((uniform.name)), state, TextureUsage.Sampled, Texture2D.EmptyWhite, out Sampler sampler);
+
+                    UpdateResource(sampler, uniform.binding, ref recreateResourceSet);
+
+                    break;
+            }
         }
 
-
-        public void Bind(CommandList list, PropertyState state)
+        if (recreateResourceSet)
         {
-            bool recreateResourceSet = false | (resources == null);
-
-            for (int i = 0; i < Pipeline.Uniforms.Length; i++)
-            {
-                ShaderUniform uniform = Pipeline.Uniforms[i];
-
-                switch (uniform.kind)
-                {
-                    case ResourceKind.UniformBuffer:
-                        UpdateBuffer(list, uniform.name, state);
-                        break;
-
-                    case ResourceKind.StructuredBufferReadOnly:
-                        GraphicsBuffer buffer = state._buffers.GetValueOrDefault(uniform.name, null) ?? GraphicsBuffer.Empty;
-
-                        if (!buffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadOnly))
-                            buffer = GraphicsBuffer.EmptyRW;
-
-                        UpdateResource(buffer.Buffer, uniform.binding, ref recreateResourceSet);
-                        break;
-
-                    case ResourceKind.StructuredBufferReadWrite:
-                        GraphicsBuffer rwbuffer = state._buffers.GetValueOrDefault(uniform.name, null) ?? GraphicsBuffer.EmptyRW;
-
-                        if (!rwbuffer.Buffer.Usage.HasFlag(BufferUsage.StructuredBufferReadWrite))
-                            rwbuffer = GraphicsBuffer.EmptyRW;
-
-                        UpdateResource(rwbuffer.Buffer, uniform.binding, ref recreateResourceSet);
-                        break;
-
-                    case ResourceKind.TextureReadOnly:
-                        Veldrid.Texture texture = GetTexture(uniform.name, state, TextureUsage.Sampled, Texture2D.EmptyWhite, out _);
-
-                        UpdateResource(texture, uniform.binding, ref recreateResourceSet);
-
-                        break;
-
-                    case ResourceKind.TextureReadWrite:
-                        Veldrid.Texture rwtexture = GetTexture(uniform.name, state, TextureUsage.Storage, Texture2D.EmptyRW, out _);
-
-                        UpdateResource(rwtexture, uniform.binding, ref recreateResourceSet);
-
-                        break;
-
-                    case ResourceKind.Sampler:
-                        GetTexture(SliceSampler((uniform.name)), state, TextureUsage.Sampled, Texture2D.EmptyWhite, out Sampler sampler);
-
-                        UpdateResource(sampler, uniform.binding, ref recreateResourceSet);
-
-                        break;
-                }
-            }
-
-            if (recreateResourceSet)
-            {
-                resources?.Dispose();
-                resources = Graphics.Factory.CreateResourceSet(description);
-            }
-
-            list.SetGraphicsResourceSet(0, resources);
+            resources?.Dispose();
+            resources = Graphics.Factory.CreateResourceSet(description);
         }
 
+        list.SetGraphicsResourceSet(0, resources);
+    }
 
-        private Veldrid.Texture GetTexture(string name, PropertyState state, TextureUsage usage, Texture defaultTex, out Sampler sampler)
+
+    private Veldrid.Texture GetTexture(string name, PropertyState state, TextureUsage usage, Texture defaultTex, out Sampler sampler)
+    {
+        Veldrid.Texture texture;
+
+        if (!state._rawTextures.TryGetValue(name, out texture))
         {
-            Veldrid.Texture texture;
-
-            if (!state._rawTextures.TryGetValue(name, out texture))
+            if (!state._values.TryGetValue(name, out Property prop))
             {
-                if (!state._values.TryGetValue(name, out Property prop))
-                {
-                    texture = defaultTex.InternalTexture;
-                    sampler = defaultTex.Sampler.InternalSampler;
-                }
-
-                Texture tex = (prop.texture ?? defaultTex).Res ?? defaultTex;
-
-                texture = tex.InternalTexture;
-                sampler = tex.Sampler.InternalSampler;
-            }
-            else
-            {
+                texture = defaultTex.InternalTexture;
                 sampler = defaultTex.Sampler.InternalSampler;
             }
 
-            if (!texture.Usage.HasFlag(usage))
-                return defaultTex.InternalTexture;
+            Texture tex = (prop.texture ?? defaultTex).Res ?? defaultTex;
 
-            return texture;
+            texture = tex.InternalTexture;
+            sampler = tex.Sampler.InternalSampler;
+        }
+        else
+        {
+            sampler = defaultTex.Sampler.InternalSampler;
         }
 
+        if (!texture.Usage.HasFlag(usage))
+            return defaultTex.InternalTexture;
 
-        private void UpdateResource(BindableResource newResource, uint binding, ref bool wasChanged)
+        return texture;
+    }
+
+
+    private void UpdateResource(BindableResource newResource, uint binding, ref bool wasChanged)
+    {
+        if (description.BoundResources[binding].Resource != newResource.Resource)
         {
-            if (description.BoundResources[binding].Resource != newResource.Resource)
-            {
-                wasChanged |= true;
-                description.BoundResources[binding] = newResource;
-            }
+            wasChanged |= true;
+            description.BoundResources[binding] = newResource;
         }
+    }
 
 
-        public bool UpdateBuffer(CommandList list, string ID, PropertyState state)
+    public bool UpdateBuffer(CommandList list, string ID, PropertyState state)
+    {
+        if (!Pipeline.GetBuffer(ID, out ushort uniformIndex, out ushort bufferIndex))
+            return false;
+
+        ShaderUniform uniform = Pipeline.Uniforms[uniformIndex];
+        DeviceBuffer buffer = uniformBuffers[bufferIndex];
+        byte[] tempBuffer = intermediateBuffers[bufferIndex];
+
+        for (int i = 0; i < uniform.members.Length; i++)
         {
-            if (!Pipeline.GetBuffer(ID, out ushort uniformIndex, out ushort bufferIndex))
-                return false;
+            ShaderUniformMember member = uniform.members[i];
 
-            ShaderUniform uniform = Pipeline.Uniforms[uniformIndex];
-            DeviceBuffer buffer = uniformBuffers[bufferIndex];
-            byte[] tempBuffer = intermediateBuffers[bufferIndex];
-
-            for (int i = 0; i < uniform.members.Length; i++)
+            if (state._values.TryGetValue(member.name, out Property value))
             {
-                ShaderUniformMember member = uniform.members[i];
+                if (value.type != member.type || value.texture != null)
+                    continue;
 
-                if (state._values.TryGetValue(member.name, out Property value))
+                if (member.arrayStride <= 0)
                 {
-                    if (value.type != member.type || value.texture != null)
-                        continue;
+                    Buffer.BlockCopy(value.data, 0, tempBuffer, (int)member.bufferOffsetInBytes, Math.Min((int)member.size, value.data.Length));
+                    continue;
+                }
 
-                    if (member.arrayStride <= 0)
-                    {
-                        Buffer.BlockCopy(value.data, 0, tempBuffer, (int)member.bufferOffsetInBytes, Math.Min((int)member.size, value.data.Length));
-                        continue;
-                    }
+                uint destStride = member.arrayStride;
+                uint srcStride = Math.Min(destStride, (uint)value.width * value.height);
+                uint destLength = member.size / member.arrayStride;
 
-                    uint destStride = member.arrayStride;
-                    uint srcStride = Math.Min(destStride, (uint)value.width * value.height);
-                    uint destLength = member.size / member.arrayStride;
-
-                    for (int j = 0; j < Math.Min(destLength, value.arraySize); i++)
-                    {
-                        Buffer.BlockCopy(value.data, (int)(j * srcStride), tempBuffer, (int)(member.bufferOffsetInBytes + (j * destStride)), (int)srcStride);
-                    }
+                for (int j = 0; j < Math.Min(destLength, value.arraySize); i++)
+                {
+                    Buffer.BlockCopy(value.data, (int)(j * srcStride), tempBuffer, (int)(member.bufferOffsetInBytes + (j * destStride)), (int)srcStride);
                 }
             }
-
-            list.UpdateBuffer(buffer, 0, tempBuffer);
-
-            return true;
         }
 
+        list.UpdateBuffer(buffer, 0, tempBuffer);
 
-        private static string SliceSampler(string name)
-        {
-            const string prefix = "sampler";
-
-            if (name.StartsWith(prefix, StringComparison.Ordinal))
-                return name.Substring(prefix.Length);
-
-            return name;
-        }
+        return true;
+    }
 
 
-        public void Dispose()
-        {
-            resources.Dispose();
+    private static string SliceSampler(string name)
+    {
+        const string prefix = "sampler";
 
-            for (int i = 0; i < uniformBuffers.Length; i++)
-                uniformBuffers[i].Dispose();
-        }
+        if (name.StartsWith(prefix, StringComparison.Ordinal))
+            return name.Substring(prefix.Length);
+
+        return name;
+    }
+
+
+    public void Dispose()
+    {
+        resources.Dispose();
+
+        for (int i = 0; i < uniformBuffers.Length; i++)
+            uniformBuffers[i].Dispose();
     }
 }
