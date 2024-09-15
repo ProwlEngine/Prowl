@@ -13,163 +13,162 @@ using DXCSeverity = DirectXShaderCompiler.NET.CompilationMessage.MessageSeverity
 
 #pragma warning disable
 
-namespace Prowl.Editor.Utilities
+namespace Prowl.Editor.Utilities;
+
+public struct ShaderCreationArgs
 {
-    public struct ShaderCreationArgs
+    public string sourceCode;
+    public EntryPoint[] entryPoints;
+    public (int, int) shaderModel;
+    public Dictionary<string, HashSet<string>> combinations;
+}
+
+
+public struct CompilationMessage
+{
+    public LogSeverity severity;
+    public string filename;
+
+    public string entrypoint;
+    public KeywordState? keywords;
+
+    public int line;
+    public int column;
+    public string message;
+
+    public static CompilationMessage FromDXC(DirectXShaderCompiler.NET.CompilationMessage dxcMessage)
     {
-        public string sourceCode;
-        public EntryPoint[] entryPoints;
-        public (int, int) shaderModel;
-        public Dictionary<string, HashSet<string>> combinations;
+        CompilationMessage message = new();
+
+        message.severity = dxcMessage.severity switch
+        {
+            DXCSeverity.Info    => LogSeverity.Normal,
+            DXCSeverity.Warning => LogSeverity.Warning,
+            DXCSeverity.Error   => LogSeverity.Error,
+        };
+
+        message.filename = dxcMessage.filename;
+        message.line = dxcMessage.line;
+        message.column = dxcMessage.column;
+        message.message = dxcMessage.message;
+
+        return message;
+    }
+}
+
+
+public static partial class ShaderCompiler
+{
+    private static ShaderType StageToType(ShaderStages stages)
+    {
+        return stages switch
+        {
+            ShaderStages.Vertex                 => ShaderType.Vertex,
+            ShaderStages.Geometry               => ShaderType.Geometry,
+            ShaderStages.TessellationControl    => ShaderType.Hull,
+            ShaderStages.TessellationEvaluation => ShaderType.Domain,
+            ShaderStages.Fragment               => ShaderType.Fragment
+        };
     }
 
 
-    public struct CompilationMessage
+    public static ShaderDescription[] Compile(ShaderCreationArgs args, KeywordState keywords, FileIncluder includer, List<CompilationMessage> messages)
     {
-        public LogSeverity severity;
-        public string filename;
+        byte[][] compiledSPIRV = new byte[args.entryPoints.Length][];
 
-        public string entrypoint;
-        public KeywordState? keywords;
-
-        public int line;
-        public int column;
-        public string message;
-
-        public static CompilationMessage FromDXC(DirectXShaderCompiler.NET.CompilationMessage dxcMessage)
+        for (int i = 0; i < args.entryPoints.Length; i++)
         {
-            CompilationMessage message = new();
+            DirectXShaderCompiler.NET.CompilerOptions options = new(StageToType(args.entryPoints[i].Stage).ToProfile(args.shaderModel.Item1, args.shaderModel.Item2));
 
-            message.severity = dxcMessage.severity switch
+            options.generateAsSpirV = true;
+            options.useOpenGLMemoryLayout = true;
+            options.entryPoint = args.entryPoints[i].Name;
+            options.entrypointName = "main"; // Ensure 'main' entrypoint for OpenGL compatibility.
+
+            foreach (var keyword in keywords.KeyValuePairs)
             {
-                DXCSeverity.Info => LogSeverity.Normal,
-                DXCSeverity.Warning => LogSeverity.Warning,
-                DXCSeverity.Error => LogSeverity.Error,
-            };
+                if (!string.IsNullOrWhiteSpace(keyword.Key) && !string.IsNullOrWhiteSpace(keyword.Value))
+                    options.SetMacro(keyword.Key, keyword.Value);
+            }
 
-            message.filename = dxcMessage.filename;
-            message.line = dxcMessage.line;
-            message.column = dxcMessage.column;
-            message.message = dxcMessage.message;
+            CompilationResult result = DirectXShaderCompiler.NET.ShaderCompiler.Compile(args.sourceCode, options, includer.Include);
 
-            return message;
+            for (int j = 0; j < result.messages.Length; j++)
+            {
+                if (result.messages[j].filename.Contains("hlsl.hlsl"))
+                    result.messages[j].filename = includer.SourceFile;
+
+                CompilationMessage msg = CompilationMessage.FromDXC(result.messages[j]);
+
+                msg.entrypoint = args.entryPoints[i].Name;
+                msg.keywords = keywords;
+
+                messages.Add(msg);
+            }
+
+            compiledSPIRV[i] = result.objectBytes;
         }
+
+        return compiledSPIRV.Zip(args.entryPoints, (x, y) => new ShaderDescription(y.Stage, x, "main")).ToArray();
     }
 
 
-    public static partial class ShaderCompiler
+    public static ShaderVariant[] GenerateVariants(ShaderCreationArgs args, FileIncluder includer, List<CompilationMessage> messages)
     {
-        private static ShaderType StageToType(ShaderStages stages)
+        List<KeyValuePair<string, HashSet<string>>> combinations = [.. args.combinations];
+        List<ShaderVariant> variantList = [];
+        List<KeyValuePair<string, string>> combination = new(combinations.Count);
+
+        using Context ctx = new Context();
+
+        void GenerateRecursive(int depth)
         {
-            return stages switch
+            if (depth == combinations.Count) // Reached the end for this permutation, add a result.
             {
-                ShaderStages.Vertex => ShaderType.Vertex,
-                ShaderStages.Geometry => ShaderType.Geometry,
-                ShaderStages.TessellationControl => ShaderType.Hull,
-                ShaderStages.TessellationEvaluation => ShaderType.Domain,
-                ShaderStages.Fragment => ShaderType.Fragment
-            };
-        }
-
-
-        public static ShaderDescription[] Compile(ShaderCreationArgs args, KeywordState keywords, FileIncluder includer, List<CompilationMessage> messages)
-        {
-            byte[][] compiledSPIRV = new byte[args.entryPoints.Length][];
-
-            for (int i = 0; i < args.entryPoints.Length; i++)
-            {
-                DirectXShaderCompiler.NET.CompilerOptions options = new(StageToType(args.entryPoints[i].Stage).ToProfile(args.shaderModel.Item1, args.shaderModel.Item2));
-
-                options.generateAsSpirV = true;
-                options.useOpenGLMemoryLayout = true;
-                options.entryPoint = args.entryPoints[i].Name;
-                options.entrypointName = "main"; // Ensure 'main' entrypoint for OpenGL compatibility.
-
-                foreach (var keyword in keywords.KeyValuePairs)
-                {
-                    if (!string.IsNullOrWhiteSpace(keyword.Key) && !string.IsNullOrWhiteSpace(keyword.Value))
-                        options.SetMacro(keyword.Key, keyword.Value);
-                }
-
-                CompilationResult result = DirectXShaderCompiler.NET.ShaderCompiler.Compile(args.sourceCode, options, includer.Include);
-
-                for (int j = 0; j < result.messages.Length; j++)
-                {
-                    if (result.messages[j].filename.Contains("hlsl.hlsl"))
-                        result.messages[j].filename = includer.SourceFile;
-
-                    CompilationMessage msg = CompilationMessage.FromDXC(result.messages[j]);
-
-                    msg.entrypoint = args.entryPoints[i].Name;
-                    msg.keywords = keywords;
-
-                    messages.Add(msg);
-                }
-
-                compiledSPIRV[i] = result.objectBytes;
+                variantList.Add(GenerateVariant(ctx, args, new(combination), includer, messages));
+                return;
             }
 
-            return compiledSPIRV.Zip(args.entryPoints, (x, y) => new ShaderDescription(y.Stage, x, "main")).ToArray();
-        }
-
-
-        public static ShaderVariant[] GenerateVariants(ShaderCreationArgs args, FileIncluder includer, List<CompilationMessage> messages)
-        {
-            List<KeyValuePair<string, HashSet<string>>> combinations = [.. args.combinations];
-            List<ShaderVariant> variantList = [];
-            List<KeyValuePair<string, string>> combination = new(combinations.Count);
-
-            using Context ctx = new Context();
-
-            void GenerateRecursive(int depth)
+            var pair = combinations[depth];
+            foreach (var value in pair.Value) // Go down a level for every value
             {
-                if (depth == combinations.Count) // Reached the end for this permutation, add a result.
-                {
-                    variantList.Add(GenerateVariant(ctx, args, new(combination), includer, messages));
-                    return;
-                }
+                combination.Add(new(pair.Key, value));
 
-                var pair = combinations[depth];
-                foreach (var value in pair.Value) // Go down a level for every value
-                {
-                    combination.Add(new(pair.Key, value));
+                GenerateRecursive(depth + 1);
 
-                    GenerateRecursive(depth + 1);
-
-                    combination.RemoveAt(combination.Count - 1); // Go up once we're done
-                }
+                combination.RemoveAt(combination.Count - 1); // Go up once we're done
             }
-
-            GenerateRecursive(0);
-
-            return variantList.ToArray();
         }
 
+        GenerateRecursive(0);
 
-        public static ShaderVariant GenerateVariant(Context ctx, ShaderCreationArgs args, KeywordState state, FileIncluder includer, List<CompilationMessage> messages)
-        {
-            ShaderDescription[] compiledSPIRV = Compile(args, state, includer, messages);
+        return variantList.ToArray();
+    }
 
-            foreach (ShaderDescription desc in compiledSPIRV)
-                if (desc.ShaderBytes == null || desc.ShaderBytes.Length == 0)
-                    return null;
 
-            ReflectedResourceInfo info = Reflect(ctx, compiledSPIRV);
+    public static ShaderVariant GenerateVariant(Context ctx, ShaderCreationArgs args, KeywordState state, FileIncluder includer, List<CompilationMessage> messages)
+    {
+        ShaderDescription[] compiledSPIRV = Compile(args, state, includer, messages);
 
-            ShaderVariant variant = new ShaderVariant(state);
+        foreach (ShaderDescription desc in compiledSPIRV)
+            if (desc.ShaderBytes == null || desc.ShaderBytes.Length == 0)
+                return null;
 
-            variant.Uniforms = info.uniforms;
-            variant.UniformStages = info.stages;
-            variant.VertexInputs = info.vertexInputs;
+        ReflectedResourceInfo info = Reflect(ctx, compiledSPIRV);
 
-            variant.Direct3D11Shaders = CrossCompile(ctx, GraphicsBackend.Direct3D11, compiledSPIRV);
-            variant.OpenGLShaders = CrossCompile(ctx, GraphicsBackend.OpenGL, compiledSPIRV);
-            variant.OpenGLESShaders = CrossCompile(ctx, GraphicsBackend.OpenGLES, compiledSPIRV);
-            variant.MetalShaders = CrossCompile(ctx, GraphicsBackend.Metal, compiledSPIRV);
+        ShaderVariant variant = new ShaderVariant(state);
 
-            variant.VulkanShaders = compiledSPIRV;
+        variant.Uniforms = info.uniforms;
+        variant.UniformStages = info.stages;
+        variant.VertexInputs = info.vertexInputs;
 
-            return variant;
-        }
+        variant.Direct3D11Shaders = CrossCompile(ctx, GraphicsBackend.Direct3D11, compiledSPIRV);
+        variant.OpenGLShaders = CrossCompile(ctx, GraphicsBackend.OpenGL, compiledSPIRV);
+        variant.OpenGLESShaders = CrossCompile(ctx, GraphicsBackend.OpenGLES, compiledSPIRV);
+        variant.MetalShaders = CrossCompile(ctx, GraphicsBackend.Metal, compiledSPIRV);
+
+        variant.VulkanShaders = compiledSPIRV;
+
+        return variant;
     }
 }
