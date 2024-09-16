@@ -56,14 +56,14 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
     }
 
     /// <summary> The mesh's primitive type </summary>
-    public PrimitiveTopology MeshTopology
+    public PrimitiveTopology Topology
     {
-        get => meshTopology;
+        get => topology;
         set
         {
             if (isWritable == false) return;
             changed = true;
-            meshTopology = value;
+            topology = value;
         }
     }
 
@@ -180,7 +180,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
     Vector4F[]? boneWeights;
 
     IndexFormat indexFormat = IndexFormat.UInt16;
-    PrimitiveTopology meshTopology = PrimitiveTopology.TriangleList;
+    PrimitiveTopology topology = PrimitiveTopology.TriangleList;
 
 
     DeviceBuffer vertexBuffer;
@@ -251,7 +251,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         }
 
         int indexLength = indexFormat == IndexFormat.UInt16 ? indices16.Length : indices32.Length;
-        switch (meshTopology)
+        switch (topology)
         {
             case PrimitiveTopology.TriangleList:
                 if (indexLength % 3 != 0)
@@ -729,7 +729,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         using (BinaryWriter writer = new BinaryWriter(memoryStream))
         {
             writer.Write((byte)indexFormat);
-            writer.Write((byte)meshTopology);
+            writer.Write((byte)topology);
 
             writer.Write(vertices.Length);
             foreach (var vertex in vertices)
@@ -868,7 +868,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         using (BinaryReader reader = new BinaryReader(memoryStream))
         {
             indexFormat = (IndexFormat)reader.ReadByte();
-            meshTopology = (PrimitiveTopology)reader.ReadByte();
+            topology = (PrimitiveTopology)reader.ReadByte();
 
             var vertexCount = reader.ReadInt32();
             vertices = new Vector3F[vertexCount];
