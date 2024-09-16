@@ -121,7 +121,7 @@ It aims to provide a seamless transition for developers familiar with _Unity_ by
 
 Getting Prowl up and running is super easy!
 
-## Build from source
+## Releases
 
 > **Note**: There are no official releases yet so you need to download this repository to use Prowl!
 
