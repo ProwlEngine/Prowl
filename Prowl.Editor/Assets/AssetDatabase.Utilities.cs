@@ -12,7 +12,7 @@ public static partial class AssetDatabase
 
     #region Public Methods
 
-    public static bool PathToCachedNode(string path, out AssetDirectoryCache.DirNode node)
+    public static bool PathToCachedNode(string path, out AssetDirectoryCache.DirNode? node)
     {
         node = null;
         foreach (var tuple in rootFolders)

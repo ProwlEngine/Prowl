@@ -582,7 +582,7 @@ public class NodeEditor
     internal Rect dragSelection;
 
     private string _searchText = string.Empty;
-    private static NodeMenuItemInfo rootMenuItem;
+    private static NodeMenuItemInfo? rootMenuItem;
 
     private readonly SelectHandler<WeakReference> SelectHandler = new((item) => !item.IsAlive, (a, b) => ReferenceEquals(a.Target, b.Target));
 
@@ -1234,12 +1234,12 @@ public class NodeEditor
     {
         public string Name;
         public Type Type;
-        public readonly MethodInfo Method;
+        public readonly MethodInfo? Method;
         public readonly List<NodeMenuItemInfo> Children = [];
 
         public NodeMenuItemInfo() { }
 
-        public NodeMenuItemInfo(Type type, MethodInfo method = null)
+        public NodeMenuItemInfo(Type type, MethodInfo? method = null)
         {
             Type = type;
             Method = method;
@@ -1249,7 +1249,7 @@ public class NodeEditor
                 Name = addToMenuAttribute.catagory;
         }
 
-        public void AddChild(string path, Type type, MethodInfo method = null)
+        public void AddChild(string path, Type type, MethodInfo? method = null)
         {
             string[] parts = path.Split('/');
             NodeMenuItemInfo currentNode = this;

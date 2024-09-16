@@ -24,7 +24,7 @@ namespace Prowl.Editor.EditorWindows.CustomEditors;
 public class GameObjectEditor : ScriptedEditor
 {
     private string _searchText = string.Empty;
-    private static MenuItemInfo rootMenuItem;
+    private static MenuItemInfo? rootMenuItem;
     private readonly Dictionary<int, ScriptedEditor> compEditors = new();
 
     [OnAssemblyUnload]

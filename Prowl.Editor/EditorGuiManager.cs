@@ -20,7 +20,7 @@ public static class EditorGuiManager
 
     public static Gui Gui;
     public static DockContainer Container;
-    public static EditorWindow DraggingWindow;
+    public static EditorWindow? DraggingWindow;
     public static DockNode? DragSplitter;
     private static Vector2 m_DragPos;
     private static double m_StartSplitPos;

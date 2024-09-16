@@ -55,7 +55,7 @@ public class StandaloneAssetProvider : IAssetProvider
 
     public AssetRef<T> LoadAsset<T>(IAssetRef? assetID) where T : EngineObject
     {
-        if (assetID == null) return null;
+        ArgumentNullException.ThrowIfNull(assetID);
         return LoadAsset<T>(assetID.AssetID, assetID.FileID);
     }
 
