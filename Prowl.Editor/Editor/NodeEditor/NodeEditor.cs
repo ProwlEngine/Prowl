@@ -1086,15 +1086,16 @@ public class NodeEditor
 
     private void DrawMenuItems(NodeMenuItemInfo menuItem, Gui g)
     {
-        bool foundName = false;
+        // bool foundName = false;
         bool hasSearch = string.IsNullOrEmpty(_searchText) == false;
         foreach (var item in menuItem.Children)
         {
             if (hasSearch && (item.Name.Contains(_searchText, StringComparison.CurrentCultureIgnoreCase) == false || item.Type == null))
             {
                 DrawMenuItems(item, g);
-                if (hasSearch && item.Name.Equals(_searchText, StringComparison.CurrentCultureIgnoreCase))
-                    foundName = true;
+                // TODO: `foundName` is not used anywhere
+                // if (hasSearch && item.Name.Equals(_searchText, StringComparison.CurrentCultureIgnoreCase))
+                    // foundName = true;
                 continue;
             }
 
