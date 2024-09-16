@@ -189,10 +189,8 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
     public int UVStart { get; private set; }
     public int UV2Start { get; private set; }
     public int NormalsStart { get; private set; }
-    public int ColorsStart { get; private set; }
     public int TangentsStart { get; private set; }
-    public int BoneIndexStart { get; private set; }
-    public int BoneWeightStart { get; private set; }
+    public int ColorsStart { get; private set; }
     public int BufferLength { get; private set; }
 
 
@@ -203,9 +201,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         { "TEXCOORD1", VertexElementFormat.Float2 },
         { "NORMAL0", VertexElementFormat.Float3 },
         { "TANGENT0", VertexElementFormat.Float3 },
-        { "COLOR0", VertexElementFormat.Byte4_Norm },
-        { "BLENDINDICES0", VertexElementFormat.Float4 },
-        { "BLENDWEIGHT0", VertexElementFormat.Float4 },
+        { "COLOR0", VertexElementFormat.Byte4_Norm }
     };
 
     public Mesh() { }
@@ -297,12 +293,6 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         if (HasTangents)
             list.UpdateBuffer(vertexBuffer, (uint)TangentsStart, tangents);
 
-        if (HasBoneIndices)
-            list.UpdateBuffer(vertexBuffer, (uint)BoneIndexStart, boneIndices);
-
-        if (HasBoneWeights)
-            list.UpdateBuffer(vertexBuffer, (uint)BoneWeightStart, boneWeights);
-
         if (indexFormat == IndexFormat.UInt16)
         {
             indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)indices16.Length * sizeof(ushort), BufferUsage.IndexBuffer));
@@ -329,8 +319,6 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         pipeline.BindVertexBuffer(commandList, "NORMAL0", VertexBuffer, (uint)NormalsStart);
         pipeline.BindVertexBuffer(commandList, "TANGENT0", VertexBuffer, (uint)TangentsStart);
         pipeline.BindVertexBuffer(commandList, "COLOR0", VertexBuffer, (uint)ColorsStart);
-        pipeline.BindVertexBuffer(commandList, "BLENDINDICES0", VertexBuffer, (uint)BoneIndexStart);
-        pipeline.BindVertexBuffer(commandList, "BLENDWEIGHT0", VertexBuffer, (uint)BoneWeightStart);
     }
 
     private T ReadVertexData<T>(T value)
@@ -446,7 +434,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
 
         const int vec2Size = floatSize * 2;
         const int vec3Size = floatSize * 3;
-        const int vec4Size = floatSize * 4;
+        const int byte4Size = 4;
 
         int vertLen = vertices.Length;
 
@@ -455,9 +443,7 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         NormalsStart = UV2Start + (HasUV2 ? vertLen * vec2Size : 0);                  // Where UV1 ends
         TangentsStart = NormalsStart + (HasNormals ? vertLen * vec3Size : 0);         // Where Normals end
         ColorsStart = TangentsStart + (HasTangents ? vertLen * vec3Size : 0);         // Where Tangents end
-        BoneIndexStart = ColorsStart + (HasColors ? vertLen * vec4Size : 0);          // Where Colors end
-        BoneWeightStart = BoneIndexStart + (HasBoneIndices ? vertLen * vec4Size : 0); // Where bone indices end
-        BufferLength = BoneWeightStart + (HasBoneWeights ? vertLen * vec4Size : 0);   // Where bone weights end
+        BufferLength = ColorsStart + (HasColors ? vertLen * byte4Size : 0);   // Where bone weights end
     }
 
     public override void OnDispose() => DeleteGPUBuffers();
