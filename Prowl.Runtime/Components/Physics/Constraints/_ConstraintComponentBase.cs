@@ -95,7 +95,7 @@ internal sealed class ConstraintData<T> : ConstraintDataBase where T : unmanaged
         int count = 0;
 
         foreach (var component in _constraintComponent.Bodies)
-            bodies[count++] = component.BodyReference.Value.Handle;
+            bodies[count++] = component.BodyReference!.Value.Handle;
 
         Span<BodyHandle> validBodies = bodies[..count];
 

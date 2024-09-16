@@ -293,7 +293,7 @@ public partial class Gui
                 {
                     var temp = (int?)p;
                     Vector2? out_offset = null;
-                    Vector2 rect_size = font.InputTextCalcTextSizeW(Text, p, text_selected_end, ref temp, ref out_offset, true); p = temp.Value;
+                    Vector2 rect_size = font.InputTextCalcTextSizeW(Text, p, text_selected_end, ref temp, ref out_offset, true); p = temp!.Value;
                     if (rect_size.x <= 0.0f) rect_size.x = (int)(font.GetCharAdvance(' ') * 0.50f); // So we can see selected empty lines
                     Rect rect = new Rect(rect_pos + new Vector2(0.0f, bg_offy_up - fontsize), new Vector2(rect_size.x, bg_offy_dn + fontsize));
                     rect.Clip(clip_rect);

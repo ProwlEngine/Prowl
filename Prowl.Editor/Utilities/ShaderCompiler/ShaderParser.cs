@@ -133,9 +133,10 @@ public static partial class ShaderParser
 
             string sourceCode = sourceBuilder.ToString();
 
-            if (!ParseProgramInfo(sourceCode, out EntryPoint[]? entrypoints, out (int, int)? shaderModel, out CompilationMessage? message))
+            if (!ParseProgramInfo(sourceCode, out EntryPoint[] entrypoints, out (int, int)? shaderModel, out CompilationMessage? message))
             {
-                LogCompilationError(message.Value.message, includer, message.Value.line, message.Value.column);
+                if (message is not null)
+                    LogCompilationError(message.Value.message, includer, message.Value.line, message.Value.column);
                 return false;
             }
 
@@ -670,10 +671,10 @@ public static partial class ShaderParser
     }
 
 
-    private static bool ParseProgramInfo(string program, out EntryPoint[]? entrypoints, out (int, int)? shaderModel, out CompilationMessage? message)
+    private static bool ParseProgramInfo(string program, out EntryPoint[] entrypoints, out (int, int)? shaderModel, out CompilationMessage? message)
     {
         List<EntryPoint> entrypointsList = [];
-        entrypoints = null;
+        entrypoints = [];
         shaderModel = null;
         message = null;
 
