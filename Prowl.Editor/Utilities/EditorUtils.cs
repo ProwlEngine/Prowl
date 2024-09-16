@@ -3,73 +3,74 @@
 
 using System.Reflection;
 
-namespace Prowl.Editor.Utilities;
-
-public static class EditorUtils
+namespace Prowl.Editor.Utilities
 {
-    public static string FilterAlpha(string input) => new string(input.Where(char.IsLetter).ToArray());
-
-    public static List<Type> GetDerivedTypes(Type baseType, Assembly assembly)
+    public static class EditorUtils
     {
-        // Get all types from the given assembly
-        Type[] types = assembly.GetTypes();
-        List<Type> derivedTypes = new List<Type>();
+        public static string FilterAlpha(string input) => new string(input.Where(char.IsLetter).ToArray());
 
-        for (int i = 0, count = types.Length; i < count; i++)
+        public static List<Type> GetDerivedTypes(Type baseType, Assembly assembly)
         {
-            Type type = types[i];
-            if (IsSubclassOf(type, baseType))
+            // Get all types from the given assembly
+            Type[] types = assembly.GetTypes();
+            List<Type> derivedTypes = new List<Type>();
+
+            for (int i = 0, count = types.Length; i < count; i++)
             {
-                // The current type is derived from the base type,
-                // so add it to the list
-                derivedTypes.Add(type);
+                Type type = types[i];
+                if (IsSubclassOf(type, baseType))
+                {
+                    // The current type is derived from the base type,
+                    // so add it to the list
+                    derivedTypes.Add(type);
+                }
             }
+
+            return derivedTypes;
         }
 
-        return derivedTypes;
-    }
-
-    public static bool IsSubclassOf(Type type, Type baseType)
-    {
-        if (type == null || baseType == null || type == baseType)
-            return false;
-
-        if (baseType.IsGenericType == false)
+        public static bool IsSubclassOf(Type type, Type baseType)
         {
-            if (type.IsGenericType == false)
-                return type.IsSubclassOf(baseType);
-        }
-        else
-        {
-            baseType = baseType.GetGenericTypeDefinition();
-        }
+            if (type == null || baseType == null || type == baseType)
+                return false;
 
-        type = type.BaseType;
-        Type objectType = typeof(object);
-
-        while (type != objectType && type != null)
-        {
-            Type curentType = type.IsGenericType ?
-                type.GetGenericTypeDefinition() : type;
-            if (curentType == baseType)
-                return true;
+            if (baseType.IsGenericType == false)
+            {
+                if (type.IsGenericType == false)
+                    return type.IsSubclassOf(baseType);
+            }
+            else
+            {
+                baseType = baseType.GetGenericTypeDefinition();
+            }
 
             type = type.BaseType;
-        }
-        return false;
-    }
+            Type objectType = typeof(object);
 
-    /// <summary>Calculate a unique file path for the given directory, file name and extension with period '.mat'</summary>
-    /// <returns>
-    /// Path.Combine(dir.FullName, $"{fileName}.{ext}") If that path exists,
-    /// we add an incrementing number to the end of the file name and try again.
-    /// </returns>
-    public static FileInfo GetUniqueFilePath(DirectoryInfo dir, string fileName, string ext)
-    {
-        FileInfo file = new(Path.Combine(dir.FullName, $"{fileName}.{ext}"));
-        int matAttempt = 0;
-        while (File.Exists(file.FullName))
-            file = new(Path.Combine(dir.FullName, $"{fileName}-{matAttempt++}.ext"));
-        return file;
+            while (type != objectType && type != null)
+            {
+                Type curentType = type.IsGenericType ?
+                    type.GetGenericTypeDefinition() : type;
+                if (curentType == baseType)
+                    return true;
+
+                type = type.BaseType;
+            }
+            return false;
+        }
+
+        /// <summary>Calculate a unique file path for the given directory, file name and extension with period '.mat'</summary>
+        /// <returns>
+        /// Path.Combine(dir.FullName, $"{fileName}.{ext}") If that path exists,
+        /// we add an incrementing number to the end of the file name and try again.
+        /// </returns>
+        public static FileInfo GetUniqueFilePath(DirectoryInfo dir, string fileName, string ext)
+        {
+            FileInfo file = new(Path.Combine(dir.FullName, $"{fileName}.{ext}"));
+            int matAttempt = 0;
+            while (File.Exists(file.FullName))
+                file = new(Path.Combine(dir.FullName, $"{fileName}-{matAttempt++}.ext"));
+            return file;
+        }
     }
 }

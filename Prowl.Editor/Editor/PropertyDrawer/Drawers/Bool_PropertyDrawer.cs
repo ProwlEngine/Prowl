@@ -4,18 +4,20 @@
 using Prowl.Editor.Preferences;
 using Prowl.Runtime.GUI;
 
-namespace Prowl.Editor.PropertyDrawers;
-
-[Drawer(typeof(bool))]
-public class Bool_PropertyDrawer : PropertyDrawer
+namespace Prowl.Editor.PropertyDrawers
 {
-    public override double MinWidth => EditorStylePrefs.Instance.ItemSize;
-
-    public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value)
+    [Drawer(typeof(bool))]
+    public class Bool_PropertyDrawer : PropertyDrawer
     {
-        bool val = (bool)value;
-        bool changed = Gui.ActiveGUI.Checkbox(ID + "Val", ref val, 0, 0, out _, EditorGUI.GetInputStyle());
-        value = val;
-        return changed;
+        public override double MinWidth => EditorStylePrefs.Instance.ItemSize;
+
+        public override bool OnValueGUI(Gui gui, string ID, Type targetType, ref object? value)
+        {
+            bool val = (bool)value;
+            bool changed = Gui.ActiveGUI.Checkbox(ID + "Val", ref val, 0, 0, out _, EditorGUI.GetInputStyle());
+            value = val;
+            return changed;
+        }
     }
+
 }

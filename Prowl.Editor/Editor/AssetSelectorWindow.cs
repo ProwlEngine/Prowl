@@ -7,89 +7,90 @@ using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
 
-namespace Prowl.Editor;
-
-public class AssetSelectorWindow : EditorWindow
+namespace Prowl.Editor
 {
-    private string _searchText = "";
-    private readonly Type type;
-    private readonly Action<Guid, ushort> _onAssetSelected;
-
-    protected override bool Center { get; } = true;
-    protected override double Width { get; } = 512;
-    protected override double Height { get; } = 512;
-    protected override bool BackgroundFade { get; } = true;
-    protected override bool IsDockable => false;
-    protected override bool LockSize => true;
-
-    public AssetSelectorWindow(Type type, Action<Guid, ushort> onAssetSelected) : base()
+    public class AssetSelectorWindow : EditorWindow
     {
-        Title = FontAwesome6.Book + " Asset Selector";
-        this.type = type;
-        _onAssetSelected = onAssetSelected;
-    }
+        private string _searchText = "";
+        private readonly Type type;
+        private readonly Action<Guid, ushort> _onAssetSelected;
 
-    protected override void Draw()
-    {
-        double ItemSize = EditorStylePrefs.Instance.ItemSize;
+        protected override bool Center { get; } = true;
+        protected override double Width { get; } = 512;
+        protected override double Height { get; } = 512;
+        protected override bool BackgroundFade { get; } = true;
+        protected override bool IsDockable => false;
+        protected override bool LockSize => true;
 
-        gui.CurrentNode.Layout(LayoutType.Column);
-        gui.CurrentNode.ScaleChildren();
-        gui.CurrentNode.Padding(0, 10, 10, 10);
-
-        using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(ItemSize).Clip().Enter())
+        public AssetSelectorWindow(Type type, Action<Guid, ushort> onAssetSelected) : base()
         {
-            gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f), ItemSize);
+            Title = FontAwesome6.Book + " Asset Selector";
+            this.type = type;
+            _onAssetSelected = onAssetSelected;
         }
 
-        using (gui.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column).Clip().Scroll().Enter())
+        protected override void Draw()
         {
-            double xPos = gui.CurrentNode.LayoutData.InnerRect.x + 3;
-            using (gui.Node("None", -1).Width(Size.Percentage(1f)).Height(ItemSize).Enter())
+            double ItemSize = EditorStylePrefs.Instance.ItemSize;
+
+            gui.CurrentNode.Layout(LayoutType.Column);
+            gui.CurrentNode.ScaleChildren();
+            gui.CurrentNode.Padding(0, 10, 10, 10);
+
+            using (gui.Node("Search").Width(Size.Percentage(1f)).MaxHeight(ItemSize).Clip().Enter())
             {
-                var interact = gui.GetInteractable();
-                if (interact.TakeFocus())
-                {
-                    _onAssetSelected(Guid.Empty, 0);
-                    isOpened = false;
-                }
-
-                if (interact.IsHovered())
-                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
-
-                gui.Draw2D.DrawText(Font.DefaultFont, "None", 20, new Vector2(xPos, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white);
+                gui.Search("SearchInput", ref _searchText, 0, 0, Size.Percentage(1f), ItemSize);
             }
 
-            var assets = AssetDatabase.GetAllAssetsOfType(type);
-            int i = 0; // Used to help the ID's of the nodes, Ensures every node has a unique ID
-            foreach (var asset in assets)
+            using (gui.Node("Body").Width(Size.Percentage(1f)).MarginTop(5).Layout(LayoutType.Column).Clip().Scroll().Enter())
             {
-                if (AssetDatabase.TryGetFile(asset.Item2, out var file))
+                double xPos = gui.CurrentNode.LayoutData.InnerRect.x + 3;
+                using (gui.Node("None", -1).Width(Size.Percentage(1f)).Height(ItemSize).Enter())
                 {
-                    if (string.IsNullOrEmpty(_searchText) || file.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
+                    var interact = gui.GetInteractable();
+                    if (interact.TakeFocus())
                     {
-                        // just using the index as an id, unique we don't need both string and int id
-                        using (gui.Node("", i++).Width(Size.Percentage(1f)).Height(ItemSize).Enter())
+                        _onAssetSelected(Guid.Empty, 0);
+                        isOpened = false;
+                    }
+
+                    if (interact.IsHovered())
+                        gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering);
+
+                    gui.Draw2D.DrawText(Font.DefaultFont, "None", 20, new Vector2(xPos, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white);
+                }
+
+                var assets = AssetDatabase.GetAllAssetsOfType(type);
+                int i = 0; // Used to help the ID's of the nodes, Ensures every node has a unique ID
+                foreach (var asset in assets)
+                {
+                    if (AssetDatabase.TryGetFile(asset.Item2, out var file))
+                    {
+                        if (string.IsNullOrEmpty(_searchText) || file.Name.Contains(_searchText, StringComparison.OrdinalIgnoreCase))
                         {
-                            var interact = gui.GetInteractable();
-                            if (interact.TakeFocus())
+                            // just using the index as an id, unique we don't need both string and int id
+                            using (gui.Node("", i++).Width(Size.Percentage(1f)).Height(ItemSize).Enter())
                             {
-                                _onAssetSelected(asset.Item2, asset.Item3);
-                                isOpened = false;
+                                var interact = gui.GetInteractable();
+                                if (interact.TakeFocus())
+                                {
+                                    _onAssetSelected(asset.Item2, asset.Item3);
+                                    isOpened = false;
+                                }
+
+                                if (interact.IsHovered())
+                                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.AssetRoundness);
+
+                                gui.Draw2D.DrawText(Font.DefaultFont, AssetDatabase.GetRelativePath(file.FullName) + "." + asset.Item1, 20, new Vector2(xPos, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white);
                             }
-
-                            if (interact.IsHovered())
-                                gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering, (float)EditorStylePrefs.Instance.AssetRoundness);
-
-                            gui.Draw2D.DrawText(Font.DefaultFont, AssetDatabase.GetRelativePath(file.FullName) + "." + asset.Item1, 20, new Vector2(xPos, gui.CurrentNode.LayoutData.Rect.y + 7), Color.white);
                         }
                     }
                 }
             }
-        }
 
-        // Clicked outside Window
-        if (gui.IsPointerClick(MouseButton.Left) && !gui.IsPointerHovering())
-            isOpened = false;
+            // Clicked outside Window
+            if (gui.IsPointerClick(MouseButton.Left) && !gui.IsPointerHovering())
+                isOpened = false;
+        }
     }
 }

@@ -4,28 +4,29 @@
 using System.Collections.Generic;
 
 
-namespace Prowl.Runtime;
-
-public static class ShaderPipelineCache
+namespace Prowl.Runtime
 {
-    private static readonly Dictionary<ShaderPipelineDescription, ShaderPipeline> pipelineCache = new();
-
-
-    internal static ShaderPipeline GetPipeline(in ShaderPipelineDescription description)
+    public static class ShaderPipelineCache
     {
-        if (pipelineCache.TryGetValue(description, out ShaderPipeline pipeline))
+        private static readonly Dictionary<ShaderPipelineDescription, ShaderPipeline> pipelineCache = new();
+
+
+        internal static ShaderPipeline GetPipeline(in ShaderPipelineDescription description)
+        {
+            if (pipelineCache.TryGetValue(description, out ShaderPipeline pipeline))
+                return pipeline;
+
+            pipeline = new ShaderPipeline(description);
+
+            pipelineCache.Add(description, pipeline);
+
             return pipeline;
+        }
 
-        pipeline = new ShaderPipeline(description);
-
-        pipelineCache.Add(description, pipeline);
-
-        return pipeline;
-    }
-
-    internal static void Dispose()
-    {
-        foreach (var pipeline in pipelineCache.Values)
-            pipeline.Dispose();
+        internal static void Dispose()
+        {
+            foreach (var pipeline in pipelineCache.Values)
+                pipeline.Dispose();
+        }
     }
 }

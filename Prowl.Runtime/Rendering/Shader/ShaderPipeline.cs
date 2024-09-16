@@ -8,238 +8,239 @@ using System.Diagnostics.CodeAnalysis;
 using Veldrid;
 
 
-namespace Prowl.Runtime;
-
-public struct ShaderPipelineDescription : IEquatable<ShaderPipelineDescription>
+namespace Prowl.Runtime
 {
-    public ShaderPass pass;
-    public ShaderVariant variant;
-
-    public OutputDescription? output;
-
-    public override readonly int GetHashCode()
+    public struct ShaderPipelineDescription : IEquatable<ShaderPipelineDescription>
     {
-        return HashCode.Combine(pass, variant, output);
-    }
+        public ShaderPass pass;
+        public ShaderVariant variant;
 
-    public override bool Equals([NotNullWhen(true)] object? obj)
-    {
-        if (obj is not ShaderPipelineDescription other)
-            return false;
+        public OutputDescription? output;
 
-        return Equals(other);
-    }
-
-    public bool Equals(ShaderPipelineDescription other)
-    {
-        return
-            pass == other.pass &&
-            variant == other.variant &&
-            output.Equals(other.output);
-    }
-}
-
-public sealed partial class ShaderPipeline : IDisposable
-{
-    public static readonly FrontFace FrontFace = FrontFace.Clockwise;
-
-    public readonly ShaderVariant shader;
-
-    public readonly ShaderSetDescription shaderSet;
-    public readonly ResourceLayout resourceLayout;
-
-    private readonly Dictionary<string, uint> semanticLookup;
-    private readonly Dictionary<string, uint> bufferLookup;
-
-    private readonly byte bufferCount;
-
-    public ShaderUniform[] Uniforms => shader.Uniforms;
-
-    private GraphicsPipelineDescription description;
-
-    private static readonly int pipelineCount = 20; // 20 possible combinations (5 topologies, 2 fill modes, 2 scissor modes)
-    private readonly Pipeline[] pipelines;
-
-
-    public Pipeline GetPipeline(PolygonFillMode fill, PrimitiveTopology topology, bool scissor)
-    {
-        int index = (int)topology * 4 + (int)fill * 2 + (scissor ? 0 : 1);
-
-        if (pipelines[index] == null)
+        public override readonly int GetHashCode()
         {
-            description.RasterizerState.ScissorTestEnabled = scissor;
-            description.RasterizerState.FillMode = fill;
-            description.PrimitiveTopology = topology;
-
-            pipelines[index] = Graphics.Factory.CreateGraphicsPipeline(description);
+            return HashCode.Combine(pass, variant, output);
         }
 
-        return pipelines[index];
-    }
-
-
-    public ShaderPipeline(ShaderPipelineDescription description)
-    {
-        shader = description.variant;
-
-        ShaderDescription[] shaderDescriptions = shader.GetProgramsForBackend();
-
-        // Create shader set description
-        Veldrid.Shader[] shaders = new Veldrid.Shader[shaderDescriptions.Length];
-
-        semanticLookup = new();
-
-        for (int shaderIndex = 0; shaderIndex < shaders.Length; shaderIndex++)
-            shaders[shaderIndex] = Graphics.Factory.CreateShader(shaderDescriptions[shaderIndex]);
-
-        VertexLayoutDescription[] vertexLayouts = new VertexLayoutDescription[shader.VertexInputs.Length];
-
-        for (int inputIndex = 0; inputIndex < vertexLayouts.Length; inputIndex++)
+        public override bool Equals([NotNullWhen(true)] object? obj)
         {
-            VertexInput input = shader.VertexInputs[inputIndex];
+            if (obj is not ShaderPipelineDescription other)
+                return false;
 
-            // Add in_var_ to match reflected name in SPIRV-Cross generated GLSL.
-            vertexLayouts[inputIndex] = new VertexLayoutDescription(
-                new VertexElementDescription("in_var_" + input.semantic, input.format, VertexElementSemantic.TextureCoordinate));
-
-            semanticLookup[input.semantic] = (uint)inputIndex;
+            return Equals(other);
         }
 
-        shaderSet = new ShaderSetDescription(vertexLayouts, shaders);
-
-        // Create resource layout and uniform lookups
-        bufferLookup = new();
-
-        ResourceLayoutDescription layoutDescription = new ResourceLayoutDescription(
-            new ResourceLayoutElementDescription[Uniforms.Length]);
-
-        for (ushort uniformIndex = 0; uniformIndex < Uniforms.Length; uniformIndex++)
+        public bool Equals(ShaderPipelineDescription other)
         {
-            ShaderUniform uniform = Uniforms[uniformIndex];
-            ShaderStages stages = shader.UniformStages[uniformIndex];
-
-            layoutDescription.Elements[uniform.binding] =
-                new ResourceLayoutElementDescription(uniform.name, uniform.kind, stages);
-
-            if (uniform.kind != ResourceKind.UniformBuffer)
-                continue;
-
-            bufferLookup[uniform.name] = Pack(uniformIndex, bufferCount);
-            bufferCount++;
+            return
+                pass == other.pass &&
+                variant == other.variant &&
+                output.Equals(other.output);
         }
-
-        resourceLayout = Graphics.Factory.CreateResourceLayout(layoutDescription);
-
-        pipelines = new Pipeline[pipelineCount];
-
-        RasterizerStateDescription rasterizerState = new(
-            description.pass.CullMode,
-            PolygonFillMode.Solid,
-            FrontFace,
-            description.pass.DepthClipEnabled,
-            false
-        );
-
-        this.description = new(
-            description.pass.Blend,
-            description.pass.DepthStencilState,
-            rasterizerState,
-            PrimitiveTopology.LineList,
-            shaderSet,
-            [resourceLayout],
-            description.output ?? Graphics.ScreenTarget.OutputDescription);
     }
 
-
-    private static BindableResource GetBindableResource(ShaderUniform uniform, out DeviceBuffer? buffer)
+    public sealed partial class ShaderPipeline : IDisposable
     {
-        buffer = null;
+        public static readonly FrontFace FrontFace = FrontFace.Clockwise;
 
-        if (uniform.kind == ResourceKind.TextureReadOnly)
-            return Texture2D.Empty.TextureView;
+        public readonly ShaderVariant shader;
 
-        if (uniform.kind == ResourceKind.TextureReadWrite)
-            return Texture2D.EmptyRW.TextureView;
+        public readonly ShaderSetDescription shaderSet;
+        public readonly ResourceLayout resourceLayout;
 
-        if (uniform.kind == ResourceKind.Sampler)
-            return Graphics.Device.PointSampler;
+        private readonly Dictionary<string, uint> semanticLookup;
+        private readonly Dictionary<string, uint> bufferLookup;
 
-        if (uniform.kind == ResourceKind.StructuredBufferReadOnly)
-            return GraphicsBuffer.Empty.Buffer;
+        private readonly byte bufferCount;
 
-        if (uniform.kind == ResourceKind.StructuredBufferReadWrite)
-            return GraphicsBuffer.EmptyRW.Buffer;
+        public ShaderUniform[] Uniforms => shader.Uniforms;
 
-        uint bufferSize = (uint)Math.Ceiling(uniform.size / (double)16) * 16;
-        buffer = Graphics.Factory.CreateBuffer(new BufferDescription(bufferSize, BufferUsage.UniformBuffer | BufferUsage.DynamicWrite));
+        private GraphicsPipelineDescription description;
 
-        return buffer;
-    }
+        private static readonly int pipelineCount = 20; // 20 possible combinations (5 topologies, 2 fill modes, 2 scissor modes)
+        private readonly Pipeline[] pipelines;
 
 
-    public BindableResourceSet CreateResources()
-    {
-        DeviceBuffer[] boundBuffers = new DeviceBuffer[bufferCount];
-        BindableResource[] boundResources = new BindableResource[Uniforms.Length];
-        byte[][] intermediateBuffers = new byte[bufferCount][];
-
-        for (int i = 0, b = 0; i < Uniforms.Length; i++)
+        public Pipeline GetPipeline(PolygonFillMode fill, PrimitiveTopology topology, bool scissor)
         {
-            boundResources[Uniforms[i].binding] = GetBindableResource(Uniforms[i], out DeviceBuffer? buffer);
+            int index = (int)topology * 4 + (int)fill * 2 + (scissor ? 0 : 1);
 
-            if (buffer != null)
+            if (pipelines[index] == null)
             {
-                boundBuffers[b] = buffer;
-                intermediateBuffers[b] = new byte[buffer.SizeInBytes];
+                description.RasterizerState.ScissorTestEnabled = scissor;
+                description.RasterizerState.FillMode = fill;
+                description.PrimitiveTopology = topology;
 
-                b++;
+                pipelines[index] = Graphics.Factory.CreateGraphicsPipeline(description);
             }
+
+            return pipelines[index];
         }
 
-        ResourceSetDescription setDescription = new ResourceSetDescription(resourceLayout, boundResources);
-        BindableResourceSet resources = new BindableResourceSet(this, setDescription, boundBuffers, intermediateBuffers);
 
-        return resources;
-    }
-
-
-    public bool GetBuffer(string name, out ushort uniform, out ushort buffer)
-    {
-        uniform = 0;
-        buffer = 0;
-
-        if (bufferLookup.TryGetValue(name, out uint packed))
+        public ShaderPipeline(ShaderPipelineDescription description)
         {
-            Unpack(packed, out uniform, out buffer);
-            return true;
+            shader = description.variant;
+
+            ShaderDescription[] shaderDescriptions = shader.GetProgramsForBackend();
+
+            // Create shader set description
+            Veldrid.Shader[] shaders = new Veldrid.Shader[shaderDescriptions.Length];
+
+            semanticLookup = new();
+
+            for (int shaderIndex = 0; shaderIndex < shaders.Length; shaderIndex++)
+                shaders[shaderIndex] = Graphics.Factory.CreateShader(shaderDescriptions[shaderIndex]);
+
+            VertexLayoutDescription[] vertexLayouts = new VertexLayoutDescription[shader.VertexInputs.Length];
+
+            for (int inputIndex = 0; inputIndex < vertexLayouts.Length; inputIndex++)
+            {
+                VertexInput input = shader.VertexInputs[inputIndex];
+
+                // Add in_var_ to match reflected name in SPIRV-Cross generated GLSL.
+                vertexLayouts[inputIndex] = new VertexLayoutDescription(
+                    new VertexElementDescription("in_var_" + input.semantic, input.format, VertexElementSemantic.TextureCoordinate));
+
+                semanticLookup[input.semantic] = (uint)inputIndex;
+            }
+
+            shaderSet = new ShaderSetDescription(vertexLayouts, shaders);
+
+            // Create resource layout and uniform lookups
+            bufferLookup = new();
+
+            ResourceLayoutDescription layoutDescription = new ResourceLayoutDescription(
+                new ResourceLayoutElementDescription[Uniforms.Length]);
+
+            for (ushort uniformIndex = 0; uniformIndex < Uniforms.Length; uniformIndex++)
+            {
+                ShaderUniform uniform = Uniforms[uniformIndex];
+                ShaderStages stages = shader.UniformStages[uniformIndex];
+
+                layoutDescription.Elements[uniform.binding] =
+                    new ResourceLayoutElementDescription(uniform.name, uniform.kind, stages);
+
+                if (uniform.kind != ResourceKind.UniformBuffer)
+                    continue;
+
+                bufferLookup[uniform.name] = Pack(uniformIndex, bufferCount);
+                bufferCount++;
+            }
+
+            resourceLayout = Graphics.Factory.CreateResourceLayout(layoutDescription);
+
+            pipelines = new Pipeline[pipelineCount];
+
+            RasterizerStateDescription rasterizerState = new(
+                description.pass.CullMode,
+                PolygonFillMode.Solid,
+                FrontFace,
+                description.pass.DepthClipEnabled,
+                false
+            );
+
+            this.description = new(
+                description.pass.Blend,
+                description.pass.DepthStencilState,
+                rasterizerState,
+                PrimitiveTopology.LineList,
+                shaderSet,
+                [resourceLayout],
+                description.output ?? Graphics.ScreenTarget.OutputDescription);
         }
 
-        return false;
-    }
+
+        private static BindableResource GetBindableResource(ShaderUniform uniform, out DeviceBuffer? buffer)
+        {
+            buffer = null;
+
+            if (uniform.kind == ResourceKind.TextureReadOnly)
+                return Texture2D.Empty.TextureView;
+
+            if (uniform.kind == ResourceKind.TextureReadWrite)
+                return Texture2D.EmptyRW.TextureView;
+
+            if (uniform.kind == ResourceKind.Sampler)
+                return Graphics.Device.PointSampler;
+
+            if (uniform.kind == ResourceKind.StructuredBufferReadOnly)
+                return GraphicsBuffer.Empty.Buffer;
+
+            if (uniform.kind == ResourceKind.StructuredBufferReadWrite)
+                return GraphicsBuffer.EmptyRW.Buffer;
+
+            uint bufferSize = (uint)Math.Ceiling(uniform.size / (double)16) * 16;
+            buffer = Graphics.Factory.CreateBuffer(new BufferDescription(bufferSize, BufferUsage.UniformBuffer | BufferUsage.DynamicWrite));
+
+            return buffer;
+        }
 
 
-    private static uint Pack(ushort a, ushort b)
-        => ((uint)a << 16) | b;
+        public BindableResourceSet CreateResources()
+        {
+            DeviceBuffer[] boundBuffers = new DeviceBuffer[bufferCount];
+            BindableResource[] boundResources = new BindableResource[Uniforms.Length];
+            byte[][] intermediateBuffers = new byte[bufferCount][];
 
-    private static void Unpack(uint packed, out ushort a, out ushort b)
-        => (a, b) = ((ushort)(packed >> 16), (ushort)(packed & ushort.MaxValue));
+            for (int i = 0, b = 0; i < Uniforms.Length; i++)
+            {
+                boundResources[Uniforms[i].binding] = GetBindableResource(Uniforms[i], out DeviceBuffer? buffer);
+
+                if (buffer != null)
+                {
+                    boundBuffers[b] = buffer;
+                    intermediateBuffers[b] = new byte[buffer.SizeInBytes];
+
+                    b++;
+                }
+            }
+
+            ResourceSetDescription setDescription = new ResourceSetDescription(resourceLayout, boundResources);
+            BindableResourceSet resources = new BindableResourceSet(this, setDescription, boundBuffers, intermediateBuffers);
+
+            return resources;
+        }
 
 
-    public void BindVertexBuffer(CommandList list, string semantic, DeviceBuffer buffer, uint offset = 0)
-    {
-        if (semanticLookup.TryGetValue(semantic, out uint location))
-            list.SetVertexBuffer(location, buffer, offset);
-    }
+        public bool GetBuffer(string name, out ushort uniform, out ushort buffer)
+        {
+            uniform = 0;
+            buffer = 0;
+
+            if (bufferLookup.TryGetValue(name, out uint packed))
+            {
+                Unpack(packed, out uniform, out buffer);
+                return true;
+            }
+
+            return false;
+        }
 
 
-    public void Dispose()
-    {
-        for (int i = 0; i < shaderSet.Shaders.Length; i++)
-            shaderSet.Shaders[i]?.Dispose();
+        private static uint Pack(ushort a, ushort b)
+            => ((uint)a << 16) | b;
 
-        for (int i = 0; i < pipelines.Length; i++)
-            pipelines[i]?.Dispose();
+        private static void Unpack(uint packed, out ushort a, out ushort b)
+            => (a, b) = ((ushort)(packed >> 16), (ushort)(packed & ushort.MaxValue));
 
-        resourceLayout?.Dispose();
+
+        public void BindVertexBuffer(CommandList list, string semantic, DeviceBuffer buffer, uint offset = 0)
+        {
+            if (semanticLookup.TryGetValue(semantic, out uint location))
+                list.SetVertexBuffer(location, buffer, offset);
+        }
+
+
+        public void Dispose()
+        {
+            for (int i = 0; i < shaderSet.Shaders.Length; i++)
+                shaderSet.Shaders[i]?.Dispose();
+
+            for (int i = 0; i < pipelines.Length; i++)
+                pipelines[i]?.Dispose();
+
+            resourceLayout?.Dispose();
+        }
     }
 }

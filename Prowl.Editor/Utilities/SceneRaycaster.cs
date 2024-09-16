@@ -3,18 +3,19 @@
 
 using Prowl.Runtime;
 
-namespace Prowl.Editor;
-
-public static class SceneRaycaster
+namespace Prowl.Editor
 {
-    public struct MeshHitInfo
+    public static class SceneRaycaster
     {
-        public GameObject gameObject;
-        public Vector3 worldPosition;
-    }
+        public struct MeshHitInfo
+        {
+            public GameObject gameObject;
+            public Vector3 worldPosition;
+        }
 
-    public static MeshHitInfo Raycast(Ray ray)
-    {
-        return default;
+        public static MeshHitInfo Raycast(Ray ray)
+        {
+            return default;
+        }
     }
 }

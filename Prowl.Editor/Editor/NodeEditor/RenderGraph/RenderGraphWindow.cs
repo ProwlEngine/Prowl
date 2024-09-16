@@ -1,87 +1,88 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-namespace Prowl.Editor;
-
-/*
-public class RenderGraphWindow : EditorWindow
+namespace Prowl.Editor
 {
-    NodeEditor editor;
-    NodeGraph graph;
-    double saveTimer = 0;
-    bool doSave = false;
-
-    protected override double Width => 800;
-    protected override double Height => 600;
-
-    public RenderGraphWindow() : base()
+    /*
+    public class RenderGraphWindow : EditorWindow
     {
-        Title = FontAwesome6.FolderTree + " Render Graph";
-    }
+        NodeEditor editor;
+        NodeGraph graph;
+        double saveTimer = 0;
+        bool doSave = false;
 
-    protected override void Draw()
-    {
-        using (gui.Node("Root").Expand().Margin(5).Enter())
+        protected override double Width => 800;
+        protected override double Height => 600;
+
+        public RenderGraphWindow() : base()
         {
-            //bool isFocused = gui.IsNodeHovered() && (gui.IsNodePressed() || gui.IsNodeFocused());
-            bool isFocused = gui.IsNodeHovered();
+            Title = FontAwesome6.FolderTree + " Render Graph";
+        }
 
-            var innerRect = gui.CurrentNode.LayoutData.InnerRect;
-            if (editor == null)
+        protected override void Draw()
+        {
+            using (gui.Node("Root").Expand().Margin(5).Enter())
             {
-                gui.Draw2D.DrawRect(innerRect, Color.red, 2);
-                gui.Draw2D.DrawText(Font.DefaultFont, "No Graph Assigned", 40f, innerRect, Color.red);
-            }
-            else
-            {
-                var tex = editor.Update(gui, isFocused, innerRect.Position, (uint)innerRect.width, (uint)innerRect.height, out var changed);
+                //bool isFocused = gui.IsNodeHovered() && (gui.IsNodePressed() || gui.IsNodeFocused());
+                bool isFocused = gui.IsNodeHovered();
 
-                if (Graphics.Device.IsClipSpaceYInverted)
+                var innerRect = gui.CurrentNode.LayoutData.InnerRect;
+                if (editor == null)
                 {
-                    gui.Draw2D.DrawImage(tex, innerRect.Position, innerRect.Size, new(0, 0), new(1, 1), Color.white);
+                    gui.Draw2D.DrawRect(innerRect, Color.red, 2);
+                    gui.Draw2D.DrawText(Font.DefaultFont, "No Graph Assigned", 40f, innerRect, Color.red);
                 }
                 else
                 {
-                    gui.Draw2D.DrawImage(tex, innerRect.Position, innerRect.Size, new(0, 1), new(1, 0), Color.white);
-                }
+                    var tex = editor.Update(gui, isFocused, innerRect.Position, (uint)innerRect.width, (uint)innerRect.height, out var changed);
 
-                changed |= editor.DrawBlackBoard(gui);
-
-                if (!editor.IsDragging)
-                {
-                    editor.DrawContextMenu(gui);
-                }
-
-                if (changed)
-                {
-                    graph.Validate();
-                    saveTimer = 0.25;
-                    doSave = true;
-                }
-
-                if (doSave)
-                {
-                    saveTimer -= Time.deltaTime;
-                    if (saveTimer <= 0)
+                    if (Graphics.Device.IsClipSpaceYInverted)
                     {
-                        doSave = false;
-                        if (AssetDatabase.TryGetFile(graph.AssetID, out var assetFile))
+                        gui.Draw2D.DrawImage(tex, innerRect.Position, innerRect.Size, new(0, 0), new(1, 1), Color.white);
+                    }
+                    else
+                    {
+                        gui.Draw2D.DrawImage(tex, innerRect.Position, innerRect.Size, new(0, 1), new(1, 0), Color.white);
+                    }
+
+                    changed |= editor.DrawBlackBoard(gui);
+
+                    if (!editor.IsDragging)
+                    {
+                        editor.DrawContextMenu(gui);
+                    }
+
+                    if (changed)
+                    {
+                        graph.Validate();
+                        saveTimer = 0.25;
+                        doSave = true;
+                    }
+
+                    if (doSave)
+                    {
+                        saveTimer -= Time.deltaTime;
+                        if (saveTimer <= 0)
                         {
-                            StringTagConverter.WriteToFile(Serializer.Serialize(graph), assetFile);
-                            AssetDatabase.Reimport(assetFile, false);
+                            doSave = false;
+                            if (AssetDatabase.TryGetFile(graph.AssetID, out var assetFile))
+                            {
+                                StringTagConverter.WriteToFile(Serializer.Serialize(graph), assetFile);
+                                AssetDatabase.Reimport(assetFile, false);
+                            }
                         }
                     }
                 }
             }
+
+            if (DragnDrop.Drop<RenderPipeline>(out var rp))
+            {
+                editor?.Release();
+                editor = new(rp);
+                graph = rp;
+            }
         }
 
-        if (DragnDrop.Drop<RenderPipeline>(out var rp))
-        {
-            editor?.Release();
-            editor = new(rp);
-            graph = rp;
-        }
     }
-
+    */
 }
-*/

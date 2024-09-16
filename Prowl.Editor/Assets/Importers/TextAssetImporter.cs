@@ -4,16 +4,18 @@
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
-namespace Prowl.Editor.Assets;
-
-[Importer("FileIcon.png", typeof(TextAsset), ".txt", ".md")]
-public class TextAssetImporter : ScriptedImporter
+namespace Prowl.Editor.Assets
 {
-    public override void Import(SerializedAsset ctx, FileInfo assetPath)
+    [Importer("FileIcon.png", typeof(TextAsset), ".txt", ".md")]
+    public class TextAssetImporter : ScriptedImporter
     {
-        TextAsset textAsset = new();
-        textAsset.Text = File.ReadAllText(assetPath.FullName);
+        public override void Import(SerializedAsset ctx, FileInfo assetPath)
+        {
+            TextAsset textAsset = new();
+            textAsset.Text = File.ReadAllText(assetPath.FullName);
 
-        ctx.SetMainObject(textAsset);
+            ctx.SetMainObject(textAsset);
+        }
     }
+
 }

@@ -6,287 +6,288 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace Prowl.Runtime.Utils;
-
-public class Tokenizer
+namespace Prowl.Runtime.Utils
 {
-    public ReadOnlyMemory<char> TokenMemory { get; set; }
-    public ReadOnlyMemory<char> Input { get; }
-    public ReadOnlySpan<char> Token => TokenMemory.Span;
-    public int TokenPosition { get; set; }
-    public int InputPosition { get; private set; }
-    public int CurrentLine { get; set; } = 1;
-    public int CurrentColumn { get; set; }
-
-    public Func<char, bool> IsWhitespace;
-    public Func<char, bool> IsQuote;
-
-    public Tokenizer(ReadOnlyMemory<char> input, Func<char, bool>? isWhitespace = null, Func<char, bool>? isQuote = null)
+    public class Tokenizer
     {
-        Input = input;
-        IsWhitespace = isWhitespace ?? DefaultWhitespaceHandler;
-        IsQuote = isQuote ?? DefaultQuoteHandler;
-    }
+        public ReadOnlyMemory<char> TokenMemory { get; set; }
+        public ReadOnlyMemory<char> Input { get; }
+        public ReadOnlySpan<char> Token => TokenMemory.Span;
+        public int TokenPosition { get; set; }
+        public int InputPosition { get; private set; }
+        public int CurrentLine { get; set; } = 1;
+        public int CurrentColumn { get; set; }
 
-    public virtual void IncrementInputPosition(int count = 1)
-    {
-        for (int i = 0; i < count; i++)
+        public Func<char, bool> IsWhitespace;
+        public Func<char, bool> IsQuote;
+
+        public Tokenizer(ReadOnlyMemory<char> input, Func<char, bool>? isWhitespace = null, Func<char, bool>? isQuote = null)
         {
-            if (InputPosition < Input.Length && Input.Span[InputPosition] == '\n')
-            {
-                CurrentLine++;
-                CurrentColumn = 0;
-            }
-
-            InputPosition++;
-            CurrentColumn++;
-        }
-    }
-
-    public virtual bool MoveNext()
-    {
-        while (InputPosition < Input.Length && IsWhitespace.Invoke(Input.Span[InputPosition]))
-            IncrementInputPosition();
-
-        if (InputPosition >= Input.Length)
-        {
-            TokenPosition = Input.Length;
-            TokenMemory = ReadOnlyMemory<char>.Empty;
-            return false;
+            Input = input;
+            IsWhitespace = isWhitespace ?? DefaultWhitespaceHandler;
+            IsQuote = isQuote ?? DefaultQuoteHandler;
         }
 
-        TokenPosition = InputPosition;
-        var firstChar = Input.Span[InputPosition];
-
-        // TODO: Should make this an option to allow for quoted strings or not and to specify the quote characters
-        if (IsQuote.Invoke(firstChar))
-            return HandleQuotedString(firstChar);
-
-        return HandleToken();
-    }
-
-    private bool HandleQuotedString(char quoteChar)
-    {
-        IncrementInputPosition();
-
-        while (InputPosition < Input.Length)
+        public virtual void IncrementInputPosition(int count = 1)
         {
-            if (Input.Span[InputPosition] == quoteChar)
+            for (int i = 0; i < count; i++)
             {
-                IncrementInputPosition();
-                TokenMemory = Input.Slice(TokenPosition, InputPosition - TokenPosition);
-                return true;
-            }
-
-            if (Input.Span[InputPosition] == '\\')
-            {
-                if (InputPosition + 1 >= Input.Length)
-                    throw new InvalidDataException($"Reached end of input while reading an escape sequence in a quoted string starting at position {TokenPosition}.");
-
-                IncrementInputPosition();
-            }
-
-            IncrementInputPosition();
-        }
-
-        throw new InvalidDataException($"Reached end of input while reading a quoted string starting at position {TokenPosition}.");
-    }
-
-    private bool HandleToken()
-    {
-        IncrementInputPosition();
-        while (InputPosition < Input.Length
-               && !IsWhitespace.Invoke(Input.Span[InputPosition])
-               && !IsQuote.Invoke(Input.Span[InputPosition]))
-            IncrementInputPosition();
-
-        TokenMemory = Input.Slice(TokenPosition, InputPosition - TokenPosition);
-        return true;
-    }
-
-    public string ParseQuotedStringValue()
-    {
-        var token = Token;
-
-        var s = new char[token.Length];
-        var len = 0;
-
-        var quote = Token[0];
-        if (token[^1] != quote)
-            throw new InvalidDataException($"Missing ending quote from string \"{token}\" at position {TokenPosition}");
-
-        var original = token;
-        token = token[1..^1];
-
-        while (!token.IsEmpty)
-        {
-            if (token[0] == quote)
-                throw new InvalidDataException($"Unescaped quote character in string \"{original}\" at position {TokenPosition}");
-
-            if (token[0] == '\\')
-            {
-                if (token.Length < 2)
-                    throw new EndOfStreamException();
-
-                switch (token[1])
+                if (InputPosition < Input.Length && Input.Span[InputPosition] == '\n')
                 {
-                    case '\\':
-                        s[len++] = '\\';
-                        break;
-
-                    case 't':
-                        s[len++] = '\t';
-                        break;
-
-                    case 'n':
-                        s[len++] = '\n';
-                        break;
-
-                    case 'r':
-                        s[len++] = '\r';
-                        break;
-
-                    default:
-                        if (token[1] == quote)
-                            s[len++] = quote;
-                        else
-                            throw new InvalidDataException($"Invalid escape sequence in string \"{original}\" at position {TokenPosition}");
-                        break;
+                    CurrentLine++;
+                    CurrentColumn = 0;
                 }
 
-                token = token[2..];
-                continue;
+                InputPosition++;
+                CurrentColumn++;
+            }
+        }
+
+        public virtual bool MoveNext()
+        {
+            while (InputPosition < Input.Length && IsWhitespace.Invoke(Input.Span[InputPosition]))
+                IncrementInputPosition();
+
+            if (InputPosition >= Input.Length)
+            {
+                TokenPosition = Input.Length;
+                TokenMemory = ReadOnlyMemory<char>.Empty;
+                return false;
             }
 
-            s[len++] = token[0];
-            token = token[1..];
+            TokenPosition = InputPosition;
+            var firstChar = Input.Span[InputPosition];
+
+            // TODO: Should make this an option to allow for quoted strings or not and to specify the quote characters
+            if (IsQuote.Invoke(firstChar))
+                return HandleQuotedString(firstChar);
+
+            return HandleToken();
         }
 
-        var result = new string(s[..len]);
-        return result;
-    }
-
-    static bool DefaultWhitespaceHandler(char c)
-    {
-        return char.IsWhiteSpace(c);
-    }
-
-    static bool DefaultQuoteHandler(char c)
-    {
-        return c is '"' or '\'';
-    }
-}
-
-public class Tokenizer<TTokenType> : Tokenizer
-{
-    public TTokenType TokenType { get; private set; }
-
-    private readonly Dictionary<char, Func<Tokenizer, TTokenType>> _symbolHandlers;
-    private readonly Func<char, bool> _isSymbol;
-    private readonly TTokenType _defaultTokenType;
-    private readonly TTokenType _noneTokenType;
-
-    public Tokenizer(ReadOnlyMemory<char> input,
-        Dictionary<char, Func<Tokenizer, TTokenType>> symbolHandlers,
-        Func<char, bool> isSymbol,
-        TTokenType defaultTokenType,
-        TTokenType noneTokenType,
-        Func<char, bool>? isWhitespace = null,
-        Func<char, bool>? isQuote = null) :
-        base(input, isWhitespace, isQuote)
-    {
-        _symbolHandlers = symbolHandlers;
-        _isSymbol = isSymbol;
-        _defaultTokenType = defaultTokenType;
-        _noneTokenType = noneTokenType;
-    }
-
-    public Tokenizer(ReadOnlyMemory<char> input,
-        Dictionary<char, Func<TTokenType>> symbolHandlers,
-        Func<char, bool> isSymbol,
-        TTokenType defaultTokenType,
-        TTokenType noneTokenType,
-        Func<char, bool>? isWhitespace = null,
-        Func<char, bool>? isQuote = null) :
-        base(input, isWhitespace, isQuote)
-    {
-        _symbolHandlers = new(symbolHandlers.Select((x) => new KeyValuePair<char, Func<Tokenizer, TTokenType>>(x.Key, (y) => x.Value())));
-        _isSymbol = isSymbol;
-        _defaultTokenType = defaultTokenType;
-        _noneTokenType = noneTokenType;
-    }
-
-    public override bool MoveNext()
-    {
-        while (InputPosition < Input.Length && IsWhitespace.Invoke(Input.Span[InputPosition]))
+        private bool HandleQuotedString(char quoteChar)
+        {
             IncrementInputPosition();
 
-        if (InputPosition >= Input.Length)
-        {
-            TokenPosition = Input.Length;
-            TokenType = _noneTokenType;
-            TokenMemory = ReadOnlyMemory<char>.Empty;
-            return false;
+            while (InputPosition < Input.Length)
+            {
+                if (Input.Span[InputPosition] == quoteChar)
+                {
+                    IncrementInputPosition();
+                    TokenMemory = Input.Slice(TokenPosition, InputPosition - TokenPosition);
+                    return true;
+                }
+
+                if (Input.Span[InputPosition] == '\\')
+                {
+                    if (InputPosition + 1 >= Input.Length)
+                        throw new InvalidDataException($"Reached end of input while reading an escape sequence in a quoted string starting at position {TokenPosition}.");
+
+                    IncrementInputPosition();
+                }
+
+                IncrementInputPosition();
+            }
+
+            throw new InvalidDataException($"Reached end of input while reading a quoted string starting at position {TokenPosition}.");
         }
 
-        TokenPosition = InputPosition;
-        char firstChar = Input.Span[InputPosition];
-
-        if (_symbolHandlers.TryGetValue(firstChar, out Func<Tokenizer, TTokenType>? handler))
+        private bool HandleToken()
         {
-            TokenType = handler(this);
+            IncrementInputPosition();
+            while (InputPosition < Input.Length
+                   && !IsWhitespace.Invoke(Input.Span[InputPosition])
+                   && !IsQuote.Invoke(Input.Span[InputPosition]))
+                IncrementInputPosition();
+
+            TokenMemory = Input.Slice(TokenPosition, InputPosition - TokenPosition);
             return true;
         }
 
-        // TODO: Should make this an option to allow for quoted strings or not and to specify the quote characters
-        if (firstChar is '"' or '\'')
+        public string ParseQuotedStringValue()
         {
-            return HandleQuotedString(firstChar);
+            var token = Token;
+
+            var s = new char[token.Length];
+            var len = 0;
+
+            var quote = Token[0];
+            if (token[^1] != quote)
+                throw new InvalidDataException($"Missing ending quote from string \"{token}\" at position {TokenPosition}");
+
+            var original = token;
+            token = token[1..^1];
+
+            while (!token.IsEmpty)
+            {
+                if (token[0] == quote)
+                    throw new InvalidDataException($"Unescaped quote character in string \"{original}\" at position {TokenPosition}");
+
+                if (token[0] == '\\')
+                {
+                    if (token.Length < 2)
+                        throw new EndOfStreamException();
+
+                    switch (token[1])
+                    {
+                        case '\\':
+                            s[len++] = '\\';
+                            break;
+
+                        case 't':
+                            s[len++] = '\t';
+                            break;
+
+                        case 'n':
+                            s[len++] = '\n';
+                            break;
+
+                        case 'r':
+                            s[len++] = '\r';
+                            break;
+
+                        default:
+                            if (token[1] == quote)
+                                s[len++] = quote;
+                            else
+                                throw new InvalidDataException($"Invalid escape sequence in string \"{original}\" at position {TokenPosition}");
+                            break;
+                    }
+
+                    token = token[2..];
+                    continue;
+                }
+
+                s[len++] = token[0];
+                token = token[1..];
+            }
+
+            var result = new string(s[..len]);
+            return result;
         }
 
-        return HandleDefaultToken();
+        static bool DefaultWhitespaceHandler(char c)
+        {
+            return char.IsWhiteSpace(c);
+        }
+
+        static bool DefaultQuoteHandler(char c)
+        {
+            return c is '"' or '\'';
+        }
     }
 
-    private bool HandleQuotedString(char quoteChar)
+    public class Tokenizer<TTokenType> : Tokenizer
     {
-        TokenType = _defaultTokenType;
-        IncrementInputPosition();
+        public TTokenType TokenType { get; private set; }
 
-        while (InputPosition < Input.Length)
+        private readonly Dictionary<char, Func<Tokenizer, TTokenType>> _symbolHandlers;
+        private readonly Func<char, bool> _isSymbol;
+        private readonly TTokenType _defaultTokenType;
+        private readonly TTokenType _noneTokenType;
+
+        public Tokenizer(ReadOnlyMemory<char> input,
+                        Dictionary<char, Func<Tokenizer, TTokenType>> symbolHandlers,
+                        Func<char, bool> isSymbol,
+                        TTokenType defaultTokenType,
+                        TTokenType noneTokenType,
+                        Func<char, bool>? isWhitespace = null,
+                        Func<char, bool>? isQuote = null) :
+        base(input, isWhitespace, isQuote)
         {
-            if (Input.Span[InputPosition] == quoteChar)
-            {
+            _symbolHandlers = symbolHandlers;
+            _isSymbol = isSymbol;
+            _defaultTokenType = defaultTokenType;
+            _noneTokenType = noneTokenType;
+        }
+
+        public Tokenizer(ReadOnlyMemory<char> input,
+                        Dictionary<char, Func<TTokenType>> symbolHandlers,
+                        Func<char, bool> isSymbol,
+                        TTokenType defaultTokenType,
+                        TTokenType noneTokenType,
+                        Func<char, bool>? isWhitespace = null,
+                        Func<char, bool>? isQuote = null) :
+        base(input, isWhitespace, isQuote)
+        {
+            _symbolHandlers = new(symbolHandlers.Select((x) => new KeyValuePair<char, Func<Tokenizer, TTokenType>>(x.Key, (y) => x.Value())));
+            _isSymbol = isSymbol;
+            _defaultTokenType = defaultTokenType;
+            _noneTokenType = noneTokenType;
+        }
+
+        public override bool MoveNext()
+        {
+            while (InputPosition < Input.Length && IsWhitespace.Invoke(Input.Span[InputPosition]))
                 IncrementInputPosition();
-                TokenMemory = Input.Slice(TokenPosition, InputPosition - TokenPosition);
+
+            if (InputPosition >= Input.Length)
+            {
+                TokenPosition = Input.Length;
+                TokenType = _noneTokenType;
+                TokenMemory = ReadOnlyMemory<char>.Empty;
+                return false;
+            }
+
+            TokenPosition = InputPosition;
+            char firstChar = Input.Span[InputPosition];
+
+            if (_symbolHandlers.TryGetValue(firstChar, out Func<Tokenizer, TTokenType>? handler))
+            {
+                TokenType = handler(this);
                 return true;
             }
 
-            if (Input.Span[InputPosition] == '\\')
+            // TODO: Should make this an option to allow for quoted strings or not and to specify the quote characters
+            if (firstChar is '"' or '\'')
             {
-                if (InputPosition + 1 >= Input.Length)
-                    throw new InvalidDataException($"Reached end of input while reading an escape sequence in a quoted string starting at position {TokenPosition}.");
+                return HandleQuotedString(firstChar);
+            }
+
+            return HandleDefaultToken();
+        }
+
+        private bool HandleQuotedString(char quoteChar)
+        {
+            TokenType = _defaultTokenType;
+            IncrementInputPosition();
+
+            while (InputPosition < Input.Length)
+            {
+                if (Input.Span[InputPosition] == quoteChar)
+                {
+                    IncrementInputPosition();
+                    TokenMemory = Input.Slice(TokenPosition, InputPosition - TokenPosition);
+                    return true;
+                }
+
+                if (Input.Span[InputPosition] == '\\')
+                {
+                    if (InputPosition + 1 >= Input.Length)
+                        throw new InvalidDataException($"Reached end of input while reading an escape sequence in a quoted string starting at position {TokenPosition}.");
+
+                    IncrementInputPosition();
+                }
 
                 IncrementInputPosition();
             }
 
-            IncrementInputPosition();
+            throw new InvalidDataException($"Reached end of input while reading a quoted string starting at position {TokenPosition}.");
         }
 
-        throw new InvalidDataException($"Reached end of input while reading a quoted string starting at position {TokenPosition}.");
-    }
-
-    private bool HandleDefaultToken()
-    {
-        TokenType = _defaultTokenType;
-        IncrementInputPosition();
-
-        while (InputPosition < Input.Length
-               && !_isSymbol(Input.Span[InputPosition])
-               && !IsWhitespace.Invoke(Input.Span[InputPosition])
-               && !IsQuote.Invoke(Input.Span[InputPosition]))
+        private bool HandleDefaultToken()
+        {
+            TokenType = _defaultTokenType;
             IncrementInputPosition();
 
-        TokenMemory = Input.Slice(TokenPosition, InputPosition - TokenPosition);
-        return true;
+            while (InputPosition < Input.Length
+                   && !_isSymbol(Input.Span[InputPosition])
+                   && !IsWhitespace.Invoke(Input.Span[InputPosition])
+                   && !IsQuote.Invoke(Input.Span[InputPosition]))
+                IncrementInputPosition();
+
+            TokenMemory = Input.Slice(TokenPosition, InputPosition - TokenPosition);
+            return true;
+        }
     }
 }

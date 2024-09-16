@@ -3,9 +3,10 @@
 
 using Prowl.Runtime.Utils;
 
-namespace Prowl.Editor.Assets;
-
-public class ScriptedImporter
+namespace Prowl.Editor.Assets
 {
-    public virtual void Import(SerializedAsset ctx, FileInfo assetPath) { }
+    public class ScriptedImporter
+    {
+        public virtual void Import(SerializedAsset ctx, FileInfo assetPath) { }
+    }
 }

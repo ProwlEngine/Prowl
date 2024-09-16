@@ -3,20 +3,21 @@
 
 using BepuPhysics.Constraints;
 
-namespace Prowl.Runtime;
-
-public struct PhysicsMaterial
+namespace Prowl.Runtime
 {
-    //__Narrow__Settings__
-    public SpringSettings SpringSettings;
-    public float FrictionCoefficient;
-    public float MaximumRecoveryVelocity;
-    public bool IsTrigger;
-
-
-    public static bool AllowContactGeneration(PhysicsMaterial a, PhysicsMaterial b)
+    public struct PhysicsMaterial
     {
-        return true;
-    }
+        //__Narrow__Settings__
+        public SpringSettings SpringSettings;
+        public float FrictionCoefficient;
+        public float MaximumRecoveryVelocity;
+        public bool IsTrigger;
 
+
+        public static bool AllowContactGeneration(PhysicsMaterial a, PhysicsMaterial b)
+        {
+            return true;
+        }
+
+    }
 }

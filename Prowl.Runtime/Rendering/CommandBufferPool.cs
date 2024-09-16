@@ -1,33 +1,34 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-namespace Prowl.Runtime;
-
-public static class CommandBufferPool
+namespace Prowl.Runtime
 {
-    private static readonly Utils.ObjectPool<CommandBuffer> bufferPool = new();
-
-    /// <summary>Get a clean Command Buffer.</summary>
-    public static CommandBuffer Get()
+    public static class CommandBufferPool
     {
-        return Get("New Command Buffer");
-    }
+        private static readonly Utils.ObjectPool<CommandBuffer> bufferPool = new();
 
-    /// <summary>Get a clean, named Command Buffer.</summary>
-    public static CommandBuffer Get(string name)
-    {
-        CommandBuffer cmd = bufferPool.Get();
-        cmd.Name = name;
+        /// <summary>Get a clean Command Buffer.</summary>
+        public static CommandBuffer Get()
+        {
+            return Get("New Command Buffer");
+        }
 
-        cmd.BeginRecording();
+        /// <summary>Get a clean, named Command Buffer.</summary>
+        public static CommandBuffer Get(string name)
+        {
+            CommandBuffer cmd = bufferPool.Get();
+            cmd.Name = name;
 
-        return cmd;
-    }
+            cmd.BeginRecording();
 
-    /// <summary>Release a Command Buffer.</summary>
-    public static void Release(CommandBuffer buffer)
-    {
-        buffer.Clear();
-        bufferPool.Release(buffer);
+            return cmd;
+        }
+
+        /// <summary>Release a Command Buffer.</summary>
+        public static void Release(CommandBuffer buffer)
+        {
+            buffer.Clear();
+            bufferPool.Release(buffer);
+        }
     }
 }

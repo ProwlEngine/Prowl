@@ -3,14 +3,15 @@
 
 using System;
 
-namespace Prowl.Runtime.Utils;
-
-[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
-public class CreateAssetMenu : Attribute
+namespace Prowl.Runtime.Utils
 {
-    public string Name { get; }
-    public CreateAssetMenu(string path)
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+    public class CreateAssetMenu : Attribute
     {
-        Name = path;
+        public string Name { get; }
+        public CreateAssetMenu(string path)
+        {
+            Name = path;
+        }
     }
 }

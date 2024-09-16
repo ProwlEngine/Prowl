@@ -3,38 +3,39 @@
 
 using System.Collections.Generic;
 
-namespace Prowl.Runtime;
-
-public sealed partial class SerializedProperty
+namespace Prowl.Runtime
 {
-    public List<SerializedProperty> List => (Value as List<SerializedProperty>)!;
-
-    public SerializedProperty this[int tagIdx]
+    public sealed partial class SerializedProperty
     {
-        get { return Get(tagIdx); }
-        set { List[tagIdx] = value; }
-    }
+        public List<SerializedProperty> List => (Value as List<SerializedProperty>)!;
 
-    public SerializedProperty Get(int tagIdx)
-    {
-        if (TagType != PropertyType.List)
-            throw new System.InvalidOperationException("Cannot get tag from non-list tag");
-        return List[tagIdx];
-    }
+        public SerializedProperty this[int tagIdx]
+        {
+            get { return Get(tagIdx); }
+            set { List[tagIdx] = value; }
+        }
 
-    public void ListAdd(SerializedProperty tag)
-    {
-        if (TagType != PropertyType.List)
-            throw new System.InvalidOperationException("Cannot add tag to non-list tag");
-        List.Add(tag);
-        tag.Parent = this;
-    }
+        public SerializedProperty Get(int tagIdx)
+        {
+            if (TagType != PropertyType.List)
+                throw new System.InvalidOperationException("Cannot get tag from non-list tag");
+            return List[tagIdx];
+        }
 
-    public void ListRemove(SerializedProperty tag)
-    {
-        if (TagType != PropertyType.List)
-            throw new System.InvalidOperationException("Cannot remove tag from non-list tag");
-        List.Remove(tag);
-        tag.Parent = null;
+        public void ListAdd(SerializedProperty tag)
+        {
+            if (TagType != PropertyType.List)
+                throw new System.InvalidOperationException("Cannot add tag to non-list tag");
+            List.Add(tag);
+            tag.Parent = this;
+        }
+
+        public void ListRemove(SerializedProperty tag)
+        {
+            if (TagType != PropertyType.List)
+                throw new System.InvalidOperationException("Cannot remove tag from non-list tag");
+            List.Remove(tag);
+            tag.Parent = null;
+        }
     }
 }

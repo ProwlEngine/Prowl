@@ -3,19 +3,20 @@
 
 using System;
 
-namespace Prowl.Runtime;
-
-public interface IAssetRef
+namespace Prowl.Runtime
 {
-    Guid AssetID { get; set; }
-    ushort FileID { get; set; }
-    string Name { get; }
-    bool IsAvailable { get; }
-    bool IsRuntimeResource { get; }
-    bool IsLoaded { get; }
-    bool IsExplicitNull { get; }
-    Type InstanceType { get; }
+    public interface IAssetRef
+    {
+        Guid AssetID { get; set; }
+        ushort FileID { get; set; }
+        string Name { get; }
+        bool IsAvailable { get; }
+        bool IsRuntimeResource { get; }
+        bool IsLoaded { get; }
+        bool IsExplicitNull { get; }
+        Type InstanceType { get; }
 
-    object? GetInstance();
-    void SetInstance(object? obj);
+        object? GetInstance();
+        void SetInstance(object? obj);
+    }
 }

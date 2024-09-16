@@ -10,133 +10,134 @@ using Veldrid.StartupUtilities;
 
 
 
-namespace Prowl.Runtime;
-
-public static partial class Graphics
+namespace Prowl.Runtime
 {
-    public static GraphicsDevice Device { get; internal set; }
-    public static ResourceFactory Factory => Device.ResourceFactory;
-
-    public static Framebuffer ScreenTarget => Device.SwapchainFramebuffer;
-
-    public static Vector2Int TargetResolution => new Vector2(ScreenTarget.Width, ScreenTarget.Height);
-
-    public static bool VSync
+    public static partial class Graphics
     {
-        get { return Device.SyncToVerticalBlank; }
-        set { Device.SyncToVerticalBlank = value; }
-    }
+        public static GraphicsDevice Device { get; internal set; }
+        public static ResourceFactory Factory => Device.ResourceFactory;
 
-    [LibraryImport("Shcore.dll")]
-    internal static partial int SetProcessDpiAwareness(int value);
+        public static Framebuffer ScreenTarget => Device.SwapchainFramebuffer;
 
-    public static void Initialize(bool VSync = true, GraphicsBackend preferredBackend = GraphicsBackend.OpenGL)
-    {
-        GraphicsDeviceOptions deviceOptions = new()
+        public static Vector2Int TargetResolution => new Vector2(ScreenTarget.Width, ScreenTarget.Height);
+
+        public static bool VSync
         {
-            SyncToVerticalBlank = VSync,
-            ResourceBindingModel = ResourceBindingModel.Default,
-            HasMainSwapchain = true,
-            SwapchainDepthFormat = PixelFormat.D24_UNorm_S8_UInt,
-            SwapchainSrgbFormat = false,
-        };
-
-        Device = VeldridStartup.CreateGraphicsDevice(Screen.InternalWindow, deviceOptions, preferredBackend);
-
-        if (RuntimeUtils.IsWindows())
-        {
-            Exception? exception = Marshal.GetExceptionForHR(SetProcessDpiAwareness(1));
-
-            if (exception != null)
-                Debug.LogException(new Exception("Failed to set DPI awareness", exception));
+            get { return Device.SyncToVerticalBlank; }
+            set { Device.SyncToVerticalBlank = value; }
         }
 
-        Screen.Resize += ResizeGraphicsResources;
+        [LibraryImport("Shcore.dll")]
+        internal static partial int SetProcessDpiAwareness(int value);
 
-        GUI.Graphics.UIDrawListRenderer.Initialize(Device.SwapchainFramebuffer.OutputDescription, GUI.Graphics.ColorSpaceHandling.Direct);
-    }
-
-    private static void ResizeGraphicsResources(Vector2Int newSize)
-    {
-        Device.ResizeMainWindow((uint)newSize.x, (uint)newSize.y);
-    }
-
-    public static void EndFrame()
-    {
-        Device.SwapBuffers();
-
-        Device.WaitForIdle();
-
-        RenderTexture.UpdatePool();
-        RenderPipelines.RenderPipeline.ClearRenderables();
-    }
-
-    public static CommandList GetCommandList()
-    {
-        CommandList list = Factory.CreateCommandList();
-
-        list.Begin();
-
-        return list;
-    }
-
-    public static void SubmitCommandBuffer(CommandBuffer commandBuffer, bool awaitComplete = false, ulong timeout = ulong.MaxValue)
-    {
-        commandBuffer.Clear();
-
-        try
+        public static void Initialize(bool VSync = true, GraphicsBackend preferredBackend = GraphicsBackend.OpenGL)
         {
+            GraphicsDeviceOptions deviceOptions = new()
+            {
+                SyncToVerticalBlank = VSync,
+                ResourceBindingModel = ResourceBindingModel.Default,
+                HasMainSwapchain = true,
+                SwapchainDepthFormat = PixelFormat.D24_UNorm_S8_UInt,
+                SwapchainSrgbFormat = false,
+            };
+
+            Device = VeldridStartup.CreateGraphicsDevice(Screen.InternalWindow, deviceOptions, preferredBackend);
+
+            if (RuntimeUtils.IsWindows())
+            {
+                Exception? exception = Marshal.GetExceptionForHR(SetProcessDpiAwareness(1));
+
+                if (exception != null)
+                    Debug.LogException(new Exception("Failed to set DPI awareness", exception));
+            }
+
+            Screen.Resize += ResizeGraphicsResources;
+
+            GUI.Graphics.UIDrawListRenderer.Initialize(Device.SwapchainFramebuffer.OutputDescription, GUI.Graphics.ColorSpaceHandling.Direct);
+        }
+
+        private static void ResizeGraphicsResources(Vector2Int newSize)
+        {
+            Device.ResizeMainWindow((uint)newSize.x, (uint)newSize.y);
+        }
+
+        public static void EndFrame()
+        {
+            Device.SwapBuffers();
+
+            Device.WaitForIdle();
+
+            RenderTexture.UpdatePool();
+            RenderPipelines.RenderPipeline.ClearRenderables();
+        }
+
+        public static CommandList GetCommandList()
+        {
+            CommandList list = Factory.CreateCommandList();
+
+            list.Begin();
+
+            return list;
+        }
+
+        public static void SubmitCommandBuffer(CommandBuffer commandBuffer, bool awaitComplete = false, ulong timeout = ulong.MaxValue)
+        {
+            commandBuffer.Clear();
+
+            try
+            {
+                if (awaitComplete)
+                {
+                    Fence fence = Factory.CreateFence(false);
+                    Device.SubmitCommands(commandBuffer._commandList, fence);
+                    Device.WaitForFence(fence, timeout);
+                    fence.Dispose();
+
+                    return;
+                }
+
+                Device.SubmitCommands(commandBuffer._commandList);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogException(new Exception("Failed to execute command list", ex));
+            }
+        }
+
+        public static void SubmitCommandList(CommandList list, bool awaitComplete = false, ulong timeout = ulong.MaxValue)
+        {
+            list.End();
+
             if (awaitComplete)
             {
                 Fence fence = Factory.CreateFence(false);
-                Device.SubmitCommands(commandBuffer._commandList, fence);
+                Device.SubmitCommands(list, fence);
                 Device.WaitForFence(fence, timeout);
                 fence.Dispose();
 
                 return;
             }
 
-            Device.SubmitCommands(commandBuffer._commandList);
+            Device.SubmitCommands(list);
         }
-        catch (Exception ex)
+
+        internal static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, uint mipLevel, uint arrayLayer, bool awaitComplete = false)
         {
-            Debug.LogException(new Exception("Failed to execute command list", ex));
+            CommandList commandList = GetCommandList();
+
+            commandList.CopyTexture(source, destination, mipLevel, arrayLayer);
+
+            SubmitCommandList(commandList, awaitComplete);
+
+            commandList.Dispose();
         }
-    }
 
-    public static void SubmitCommandList(CommandList list, bool awaitComplete = false, ulong timeout = ulong.MaxValue)
-    {
-        list.End();
-
-        if (awaitComplete)
+        internal static void Dispose()
         {
-            Fence fence = Factory.CreateFence(false);
-            Device.SubmitCommands(list, fence);
-            Device.WaitForFence(fence, timeout);
-            fence.Dispose();
+            ShaderPipelineCache.Dispose();
+            GUI.Graphics.UIDrawListRenderer.Dispose();
 
-            return;
+            Device.Dispose();
         }
-
-        Device.SubmitCommands(list);
-    }
-
-    internal static void InternalCopyTexture(Veldrid.Texture source, Veldrid.Texture destination, uint mipLevel, uint arrayLayer, bool awaitComplete = false)
-    {
-        CommandList commandList = GetCommandList();
-
-        commandList.CopyTexture(source, destination, mipLevel, arrayLayer);
-
-        SubmitCommandList(commandList, awaitComplete);
-
-        commandList.Dispose();
-    }
-
-    internal static void Dispose()
-    {
-        ShaderPipelineCache.Dispose();
-        GUI.Graphics.UIDrawListRenderer.Dispose();
-
-        Device.Dispose();
     }
 }

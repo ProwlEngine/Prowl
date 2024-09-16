@@ -4,27 +4,29 @@
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
-namespace Prowl.Editor.Assets;
-
-[Importer("ModelIcon.png", typeof(Mesh), ".mesh")]
-public class MeshImporter : ScriptedImporter
+namespace Prowl.Editor.Assets
 {
-    public override void Import(SerializedAsset ctx, FileInfo assetPath)
+    [Importer("ModelIcon.png", typeof(Mesh), ".mesh")]
+    public class MeshImporter : ScriptedImporter
     {
-        // Load the Texture into a TextureData Object and serialize to Asset Folder
-        Mesh? mesh;
-        try
+        public override void Import(SerializedAsset ctx, FileInfo assetPath)
         {
-            string json = File.ReadAllText(assetPath.FullName);
-            var tag = StringTagConverter.Read(json);
-            mesh = Serializer.Deserialize<Mesh>(tag);
-        }
-        catch
-        {
-            Debug.LogError("Failed to deserialize mesh.");
-            return;
-        }
+            // Load the Texture into a TextureData Object and serialize to Asset Folder
+            Mesh? mesh;
+            try
+            {
+                string json = File.ReadAllText(assetPath.FullName);
+                var tag = StringTagConverter.Read(json);
+                mesh = Serializer.Deserialize<Mesh>(tag);
+            }
+            catch
+            {
+                Debug.LogError("Failed to deserialize mesh.");
+                return;
+            }
 
-        ctx.SetMainObject(mesh);
+            ctx.SetMainObject(mesh);
+        }
     }
+
 }

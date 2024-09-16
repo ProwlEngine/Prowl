@@ -4,16 +4,17 @@
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
 
-namespace Prowl.Editor.ProjectSettings;
-
-[FilePath("BuildSettings.projsetting", FilePathAttribute.Location.EditorSetting)]
-public class BuildProjectSetting : ScriptableSingleton<BuildProjectSetting>
+namespace Prowl.Editor.ProjectSettings
 {
-    public AssetRef<Scene>[] Scenes = [];
-
-    public override void OnValidate()
+    [FilePath("BuildSettings.projsetting", FilePathAttribute.Location.EditorSetting)]
+    public class BuildProjectSetting : ScriptableSingleton<BuildProjectSetting>
     {
-        Scenes ??= []; // Ensure scenes are never null
-    }
+        public AssetRef<Scene>[] Scenes = [];
 
+        public override void OnValidate()
+        {
+            Scenes ??= []; // Ensure scenes are never null
+        }
+
+    }
 }

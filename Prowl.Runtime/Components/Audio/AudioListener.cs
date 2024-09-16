@@ -4,27 +4,28 @@
 using Prowl.Icons;
 using Prowl.Runtime.Audio;
 
-namespace Prowl.Runtime;
-
-[AddComponentMenu($"{FontAwesome6.Music}  Audio/{FontAwesome6.Microphone}  Audio Listener")]
-public class AudioListener : MonoBehaviour
+namespace Prowl.Runtime
 {
-    private uint _lastVersion;
-    private Vector3 lastPos;
+    [AddComponentMenu($"{FontAwesome6.Music}  Audio/{FontAwesome6.Microphone}  Audio Listener")]
+    public class AudioListener : MonoBehaviour
+    {
+        private uint _lastVersion;
+        private Vector3 lastPos;
 
-    public override void OnEnable()
-    {
-        lastPos = GameObject.Transform.position;
-        AudioSystem.RegisterListener(this);
-    }
-    public override void OnDisable() => AudioSystem.UnregisterListener(this);
-    public override void Update()
-    {
-        if (_lastVersion != GameObject.Transform.version)
+        public override void OnEnable()
         {
-            AudioSystem.ListenerTransformChanged(GameObject.Transform, lastPos);
             lastPos = GameObject.Transform.position;
-            _lastVersion = GameObject.Transform.version;
+            AudioSystem.RegisterListener(this);
+        }
+        public override void OnDisable() => AudioSystem.UnregisterListener(this);
+        public override void Update()
+        {
+            if (_lastVersion != GameObject.Transform.version)
+            {
+                AudioSystem.ListenerTransformChanged(GameObject.Transform, lastPos);
+                lastPos = GameObject.Transform.position;
+                _lastVersion = GameObject.Transform.version;
+            }
         }
     }
 }

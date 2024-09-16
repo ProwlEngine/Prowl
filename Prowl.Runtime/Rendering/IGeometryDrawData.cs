@@ -3,15 +3,16 @@
 
 using Veldrid;
 
-namespace Prowl.Runtime;
-
-public interface IGeometryDrawData
+namespace Prowl.Runtime
 {
-    public void SetDrawData(CommandList commandList, ShaderPipeline pipeline);
+    public interface IGeometryDrawData
+    {
+        public void SetDrawData(CommandList commandList, ShaderPipeline pipeline);
 
-    public int IndexCount { get; }
+        public int IndexCount { get; }
 
-    public IndexFormat IndexFormat { get; }
+        public IndexFormat IndexFormat { get; }
 
-    public PrimitiveTopology Topology { get; }
+        public PrimitiveTopology Topology { get; }
+    }
 }

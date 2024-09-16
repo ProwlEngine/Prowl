@@ -5,106 +5,107 @@ using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
-namespace Prowl.Runtime.Utils;
-
-/// <summary>
-/// A simple math parser that can evaluate basic arithmetic expressions.
-/// Supports addition, subtraction, multiplication, division, and exponentiation.
-/// Also supports parentheses and variables, and applies the C operator precedence.
-///
-/// Notes:
-/// Ignores whitespace characters.
-/// Variables are case-sensitive.
-/// Variables must be defined in the Variables dictionary before parsing.
-/// </summary>
-public static class TinyMathParser
+namespace Prowl.Runtime.Utils
 {
-    public static readonly Dictionary<string, double> Variables = new();
-
-    public static double Parse(string expression) => EvaluatePostfix(ShuntingYard(Tokenize(Regex.Replace(expression, @"\s+", ""))));
-
-    private static List<string> Tokenize(string expression)
+    /// <summary>
+    /// A simple math parser that can evaluate basic arithmetic expressions.
+    /// Supports addition, subtraction, multiplication, division, and exponentiation.
+    /// Also supports parentheses and variables, and applies the C operator precedence.
+    ///
+    /// Notes:
+    /// Ignores whitespace characters.
+    /// Variables are case-sensitive.
+    /// Variables must be defined in the Variables dictionary before parsing.
+    /// </summary>
+    public static class TinyMathParser
     {
-        List<string> tokens = new();
-        var matches = Regex.Matches(expression, @"(\+|-|\*|/|\^|\(|\))|(\d+(\.\d+)?)|([a-zA-Z]+)");
-        for (int i = 0; i < matches.Count; i++)
+        public static readonly Dictionary<string, double> Variables = new();
+
+        public static double Parse(string expression) => EvaluatePostfix(ShuntingYard(Tokenize(Regex.Replace(expression, @"\s+", ""))));
+
+        private static List<string> Tokenize(string expression)
         {
-            if (matches[i].Value == "-" && (i == 0 || "^*/(-+".Contains(matches[i - 1].Value)))
+            List<string> tokens = new();
+            var matches = Regex.Matches(expression, @"(\+|-|\*|/|\^|\(|\))|(\d+(\.\d+)?)|([a-zA-Z]+)");
+            for (int i = 0; i < matches.Count; i++)
             {
-                if (double.TryParse("-" + matches[i + 1].Value, out _)) tokens.Add("-" + matches[i++ + 1].Value);
+                if (matches[i].Value == "-" && (i == 0 || "^*/(-+".Contains(matches[i - 1].Value)))
+                {
+                    if (double.TryParse("-" + matches[i + 1].Value, out _)) tokens.Add("-" + matches[i++ + 1].Value);
+                }
+                else tokens.Add(matches[i].Value);
             }
-            else tokens.Add(matches[i].Value);
+            return tokens;
         }
-        return tokens;
-    }
 
-    private static List<string> ShuntingYard(List<string> tokens)
-    {
-        List<string> output = new();
-        Stack<string> operatorStack = new();
-        foreach (var token in tokens)
+        private static List<string> ShuntingYard(List<string> tokens)
         {
-            if (double.TryParse(token, out _) || Variables.ContainsKey(token))
-                output.Add(token);
-            else if (token == "(")
-                operatorStack.Push(token);
-            else if (token == ")")
+            List<string> output = new();
+            Stack<string> operatorStack = new();
+            foreach (var token in tokens)
             {
-                while (operatorStack.Count > 0 && operatorStack.Peek() != "(")
-                    output.Add(operatorStack.Pop());
-                if (operatorStack.Count == 0)
+                if (double.TryParse(token, out _) || Variables.ContainsKey(token))
+                    output.Add(token);
+                else if (token == "(")
+                    operatorStack.Push(token);
+                else if (token == ")")
+                {
+                    while (operatorStack.Count > 0 && operatorStack.Peek() != "(")
+                        output.Add(operatorStack.Pop());
+                    if (operatorStack.Count == 0)
+                        throw new ArgumentException("Mismatched parentheses");
+                    operatorStack.Pop();
+                }
+                else
+                {
+                    while (operatorStack.Count > 0 && GetPrecedence(token) <= GetPrecedence(operatorStack.Peek()))
+                        output.Add(operatorStack.Pop());
+                    operatorStack.Push(token);
+                }
+            }
+            while (operatorStack.Count > 0)
+            {
+                if (operatorStack.Peek() == "(")
                     throw new ArgumentException("Mismatched parentheses");
-                operatorStack.Pop();
+                output.Add(operatorStack.Pop());
             }
-            else
-            {
-                while (operatorStack.Count > 0 && GetPrecedence(token) <= GetPrecedence(operatorStack.Peek()))
-                    output.Add(operatorStack.Pop());
-                operatorStack.Push(token);
-            }
+            return output;
         }
-        while (operatorStack.Count > 0)
+
+        private static double EvaluatePostfix(List<string> postfix)
         {
-            if (operatorStack.Peek() == "(")
-                throw new ArgumentException("Mismatched parentheses");
-            output.Add(operatorStack.Pop());
-        }
-        return output;
-    }
-
-    private static double EvaluatePostfix(List<string> postfix)
-    {
-        Stack<double> stack = new();
-        foreach (var token in postfix)
-        {
-            if (double.TryParse(token, out double number))
-                stack.Push(number);
-            else if (Variables.TryGetValue(token, out double variableValue))
-                stack.Push(variableValue);
-            else
+            Stack<double> stack = new();
+            foreach (var token in postfix)
             {
-                if (stack.Count < 2)
-                    throw new ArgumentException("Invalid expression");
-                var operand2 = stack.Pop();
-                var operand1 = stack.Pop();
-                var result = ApplyOperator(token, operand1, operand2);
-                stack.Push(result);
+                if (double.TryParse(token, out double number))
+                    stack.Push(number);
+                else if (Variables.TryGetValue(token, out double variableValue))
+                    stack.Push(variableValue);
+                else
+                {
+                    if (stack.Count < 2)
+                        throw new ArgumentException("Invalid expression");
+                    var operand2 = stack.Pop();
+                    var operand1 = stack.Pop();
+                    var result = ApplyOperator(token, operand1, operand2);
+                    stack.Push(result);
+                }
             }
+            if (stack.Count != 1)
+                throw new ArgumentException("Invalid expression");
+            return stack.Pop();
         }
-        if (stack.Count != 1)
-            throw new ArgumentException("Invalid expression");
-        return stack.Pop();
+
+        private static int GetPrecedence(string op) => op switch { "+" or "-" => 1, "*" or "/" => 2, "^" => 3, _ => 0 };
+
+        private static double ApplyOperator(string op, double l, double r) => op switch
+        {
+            "+" => l + r,
+            "-" => l - r,
+            "*" => l * r,
+            "/" => l / r,
+            "^" => Math.Pow(l, r),
+            _ => throw new ArgumentException($"Invalid operator: {op}"),
+        };
     }
-
-    private static int GetPrecedence(string op) => op switch { "+" or "-" => 1, "*" or "/" => 2, "^" => 3, _ => 0 };
-
-    private static double ApplyOperator(string op, double l, double r) => op switch
-    {
-        "+" => l + r,
-        "-" => l - r,
-        "*" => l * r,
-        "/" => l / r,
-        "^" => Math.Pow(l, r),
-        _   => throw new ArgumentException($"Invalid operator: {op}"),
-    };
 }

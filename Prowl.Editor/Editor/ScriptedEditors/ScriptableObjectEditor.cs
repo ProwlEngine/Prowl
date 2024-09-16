@@ -7,42 +7,43 @@ using Prowl.Runtime;
 
 using static Prowl.Editor.EditorGUI;
 
-namespace Prowl.Editor.ScriptedEditors;
-
-[CustomEditor(typeof(ScriptableObjectImporter))]
-public class ScriptableObjectEditor : ScriptedEditor
+namespace Prowl.Editor.ScriptedEditors
 {
-    ScriptableObject? scriptObject;
-
-    public override void OnInspectorGUI()
+    [CustomEditor(typeof(ScriptableObjectImporter))]
+    public class ScriptableObjectEditor : ScriptedEditor
     {
-        var importer = (ScriptableObjectImporter)(target as MetaFile).importer;
+        ScriptableObject? scriptObject;
 
-        try
+        public override void OnInspectorGUI()
         {
-            bool changed = false;
+            var importer = (ScriptableObjectImporter)(target as MetaFile).importer;
 
-            scriptObject ??= Serializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile((target as MetaFile).AssetPath));
-
-            object t = scriptObject;
-            changed |= PropertyGrid("CompPropertyGrid", ref t, TargetFields.Serializable | TargetFields.Properties, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground);
-
-            // Draw any Buttons
-            //changed |= EditorGui.HandleAttributeButtons(scriptObject);
-
-            if (changed)
+            try
             {
-                scriptObject.OnValidate();
-                StringTagConverter.WriteToFile(Serializer.Serialize(scriptObject), (target as MetaFile).AssetPath);
-                AssetDatabase.Reimport((target as MetaFile).AssetPath);
+                bool changed = false;
+
+                scriptObject ??= Serializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile((target as MetaFile).AssetPath));
+
+                object t = scriptObject;
+                changed |= PropertyGrid("CompPropertyGrid", ref t, TargetFields.Serializable | TargetFields.Properties, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground);
+
+                // Draw any Buttons
+                //changed |= EditorGui.HandleAttributeButtons(scriptObject);
+
+                if (changed)
+                {
+                    scriptObject.OnValidate();
+                    StringTagConverter.WriteToFile(Serializer.Serialize(scriptObject), (target as MetaFile).AssetPath);
+                    AssetDatabase.Reimport((target as MetaFile).AssetPath);
+                }
+            }
+            catch (Exception e)
+            {
+                double ItemSize = EditorStylePrefs.Instance.ItemSize;
+                gui.Node("DummyForText").ExpandWidth().Height(ItemSize * 10);
+                gui.Draw2D.DrawText("Failed to Deserialize ScriptableObject, The ScriptableObject file is invalid. Error: " + e.ToString(), gui.CurrentNode.LayoutData.Rect);
             }
         }
-        catch (Exception e)
-        {
-            double ItemSize = EditorStylePrefs.Instance.ItemSize;
-            gui.Node("DummyForText").ExpandWidth().Height(ItemSize * 10);
-            gui.Draw2D.DrawText("Failed to Deserialize ScriptableObject, The ScriptableObject file is invalid. Error: " + e.ToString(), gui.CurrentNode.LayoutData.Rect);
-        }
-    }
 
+    }
 }

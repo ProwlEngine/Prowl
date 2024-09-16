@@ -5,30 +5,31 @@ using System;
 
 using Veldrid;
 
-namespace Prowl.Runtime;
-
-public readonly struct VertexInput : IEquatable<VertexInput>
+namespace Prowl.Runtime
 {
-    public readonly string semantic;
-    public readonly VertexElementFormat format;
-
-    public VertexInput(string semantic, VertexElementFormat format)
+    public readonly struct VertexInput : IEquatable<VertexInput>
     {
-        this.semantic = semantic;
-        this.format = format;
+        public readonly string semantic;
+        public readonly VertexElementFormat format;
+
+        public VertexInput(string semantic, VertexElementFormat format)
+        {
+            this.semantic = semantic;
+            this.format = format;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            if (obj is not VertexInput other)
+                return false;
+
+            return Equals(other);
+        }
+
+        public bool Equals(VertexInput other)
+            => semantic == other.semantic;
+
+        public override int GetHashCode()
+            => semantic.GetHashCode();
     }
-
-    public override bool Equals(object? obj)
-    {
-        if (obj is not VertexInput other)
-            return false;
-
-        return Equals(other);
-    }
-
-    public bool Equals(VertexInput other)
-        => semantic == other.semantic;
-
-    public override int GetHashCode()
-        => semantic.GetHashCode();
 }
