@@ -57,7 +57,7 @@ public class EngineObject : IDisposable
         return null;
     }
 
-    public static T?[] FindObjectsOfType<T>() where T : EngineObject
+    public static T[] FindObjectsOfType<T>() where T : EngineObject
     {
         List<T> objects = new();
         foreach (var obj in allObjects)
