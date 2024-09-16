@@ -3,16 +3,15 @@
 
 using System;
 
-namespace Prowl.Runtime
+namespace Prowl.Runtime;
+
+[Flags]
+public enum HideFlags
 {
-    [Flags]
-    public enum HideFlags
-    {
-        None = 0,
-        Hide = 1 << 0,
-        NotEditable = 1 << 1,
-        DontSave = 1 << 2,
-        HideAndDontSave = 1 << 3,
-        NoGizmos = 1 << 4
-    }
+    None = 0,
+    Hide = 1 << 0,
+    NotEditable = 1 << 1,
+    DontSave = 1 << 2,
+    HideAndDontSave = 1 << 3,
+    NoGizmos = 1 << 4
 }
