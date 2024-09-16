@@ -27,7 +27,7 @@ public class FontImporter : ScriptedImporter
 [CustomEditor(typeof(FontImporter))]
 public class FontEditor : ScriptedEditor
 {
-    static int start, end;
+    // static int start, end;
     private readonly int numberOfProperties = 0;
     public void InputFloat(string name, ref float val)
     {

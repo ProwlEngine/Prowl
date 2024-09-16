@@ -17,8 +17,8 @@ public class SceneViewWindow : EditorWindow
     private static bool LastFocusedCameraChanged;
 
     readonly Camera Cam;
-    Material gridMat;
-    Mesh gridMesh;
+    // Material gridMat;
+    // Mesh gridMesh;
     RenderTexture RenderTarget;
     Vector2 WindowCenter;
     Vector2 mouseUV;

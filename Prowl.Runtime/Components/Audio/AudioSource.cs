@@ -19,7 +19,7 @@ public sealed class AudioSource : MonoBehaviour
 
     private ActiveAudio _source;
     private AudioBuffer _buffer;
-    private uint _lastVersion;
+    // private uint _lastVersion;
     private bool _looping = false;
     private float _gain = 1f;
     private float _maxDistance = 32f;

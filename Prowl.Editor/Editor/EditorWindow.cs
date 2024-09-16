@@ -42,7 +42,7 @@ public class EditorWindow
 
     public bool IsDocked => m_Leaf != null;
     private DockNode m_Leaf;
-    private Vector2 m_DockPosition;
+    // private Vector2 m_DockPosition;
 
     public DockNode Leaf
     {
