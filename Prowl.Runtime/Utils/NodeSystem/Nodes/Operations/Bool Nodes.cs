@@ -1,46 +1,45 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-namespace Prowl.Runtime.NodeSystem
+namespace Prowl.Runtime.NodeSystem;
+
+[Node("Operations/Boolean/AND")]
+public class BoolANDNode : Node
 {
-    [Node("Operations/Boolean/AND")]
-    public class BoolANDNode : Node
-    {
-        public override string Title => "A && B";
-        public override float Width => 75;
+    public override string Title => "A && B";
+    public override float Width => 75;
 
-        [Input] public bool A;
-        [Input] public bool B;
+    [Input] public bool A;
+    [Input] public bool B;
 
-        [Output, SerializeIgnore] public bool And;
+    [Output, SerializeIgnore] public bool And;
 
-        public override object GetValue(NodePort port) => GetInputValue("A", A) && GetInputValue("B", B);
-    }
+    public override object GetValue(NodePort port) => GetInputValue("A", A) && GetInputValue("B", B);
+}
 
-    [Node("Operations/Boolean/OR")]
-    public class BoolORNode : Node
-    {
-        public override string Title => "A || B";
-        public override float Width => 75;
+[Node("Operations/Boolean/OR")]
+public class BoolORNode : Node
+{
+    public override string Title => "A || B";
+    public override float Width => 75;
 
-        [Input] public bool A;
-        [Input] public bool B;
+    [Input] public bool A;
+    [Input] public bool B;
 
-        [Output, SerializeIgnore] public bool Or;
+    [Output, SerializeIgnore] public bool Or;
 
-        public override object GetValue(NodePort port) => GetInputValue("A", A) || GetInputValue("B", B);
-    }
+    public override object GetValue(NodePort port) => GetInputValue("A", A) || GetInputValue("B", B);
+}
 
-    [Node("Operations/Boolean/Invert")]
-    public class BoolInvertNode : Node
-    {
-        public override string Title => "!A";
-        public override float Width => 75;
+[Node("Operations/Boolean/Invert")]
+public class BoolInvertNode : Node
+{
+    public override string Title => "!A";
+    public override float Width => 75;
 
-        [Input] public bool A;
+    [Input] public bool A;
 
-        [Output, SerializeIgnore] public bool Inverted;
+    [Output, SerializeIgnore] public bool Inverted;
 
-        public override object GetValue(NodePort port) => !GetInputValue("A", A);
-    }
+    public override object GetValue(NodePort port) => !GetInputValue("A", A);
 }
