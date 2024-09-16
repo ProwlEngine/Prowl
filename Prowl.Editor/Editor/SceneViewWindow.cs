@@ -55,7 +55,7 @@ public class SceneViewWindow : EditorWindow
 
     public void RefreshRenderTexture(int width, int height)
     {
-        RenderTarget?.Dispose();
+        RenderTarget?.Destroy();
 
         RenderTarget = new RenderTexture(
             (uint)width, (uint)height,
