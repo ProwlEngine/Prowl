@@ -12,7 +12,7 @@ namespace Prowl.Runtime;
 
 public static class Application
 {
-    public static readonly float FloatEqualThreshold = 0.001f;
+    public static readonly float FloatEqualThreshold = 0.0001f;
     public static bool IsRunning;
     public static bool IsPlaying = false;
     public static bool IsEditor { get; private set; }
