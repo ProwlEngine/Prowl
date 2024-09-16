@@ -334,20 +334,20 @@ public class AssetsBrowserWindow : EditorWindow
                     var interact = gui.GetInteractable();
                     AssetsTreeWindow.HandleFileClick(-1, interact, entry, i, true);
 
-                    DrawFileEntry(index++, entry.File, interact, true, subAssets[i]);
+                    DrawFileEntry(index++, entry.File, interact, subAssets[i]);
                 }
             }
         }
     }
 
-    private void DrawFileEntry(int index, FileSystemInfo entry, Interactable interact, bool hasSubAsset = false, AssetDatabase.SubAssetCache? subAsset = null)
+    private void DrawFileEntry(int index, FileSystemInfo entry, Interactable interact, AssetDatabase.SubAssetCache? subAsset = null)
     {
         var rect = gui.CurrentNode.LayoutData.Rect;
         //if (hasSubAsset)
         //    rect.Expand(-10);
         var entrySize = rect.width;
 
-        gui.Tooltip(hasSubAsset ? subAsset.Value.name : entry.FullName);
+        gui.Tooltip(subAsset is not null ? subAsset.Value.name : entry.FullName);
 
         var color = EditorStylePrefs.Instance.Borders;
         if (entry is FileInfo f)
