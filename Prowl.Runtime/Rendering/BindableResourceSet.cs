@@ -118,6 +118,9 @@ public class BindableResourceSet : IDisposable
             sampler = defaultTex.Sampler.InternalSampler;
         }
 
+        if (texture.IsDisposed)
+            return defaultTex.InternalTexture;
+
         if (!texture.Usage.HasFlag(usage))
             return defaultTex.InternalTexture;
 
