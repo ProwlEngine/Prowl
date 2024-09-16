@@ -170,7 +170,7 @@ public class DefaultRenderPipeline : RenderPipeline
             if (icons != null)
             {
                 buffer.SetMaterial(s_gizmo);
-            
+
                 foreach (GizmoBuilder.IconDrawCall icon in icons)
                 {
                     Vector3 center = icon.center;
@@ -179,25 +179,25 @@ public class DefaultRenderPipeline : RenderPipeline
                     Matrix4x4 billboard = Matrix4x4.CreateBillboard(center, Vector3.zero, camera.Transform.up, camera.Transform.forward);
 
                     buffer.SetMatrix("_Matrix_VP", (billboard * vp).ToFloat());
-            
                     buffer.SetTexture("_MainTexture", icon.texture);
+
                     buffer.DrawSingle(s_quadMesh);
                 }
             }
         }
 
+        /*
         if (target.ColorTargets != null && target.ColorTargets.Length > 0)
         {
-            RenderTexture _temporaryRT = RenderTexture.GetTemporaryRT(target.Width, target.Height, null, [target.ColorTargets[0].Target.Format]);
+            RenderTexture temporaryRT = RenderTexture.GetTemporaryRT(target.Width, target.Height, null, [target.ColorTargets[0].Target.Format]);
 
-            buffer.SetRenderTarget(_temporaryRT);
+            buffer.SetRenderTarget(temporaryRT);
 
             buffer.SetTexture("_MainTexture", target.ColorTargets[0].Target);
 
-            RenderTexture.ReleaseTemporaryRT(_temporaryRT);
-
-
+            RenderTexture.ReleaseTemporaryRT(temporaryRT);
         }
+        */
 
         Graphics.SubmitCommandBuffer(buffer);
 
