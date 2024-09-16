@@ -125,6 +125,7 @@ public abstract class Texture : EngineObject, ISerializable
             throw exception;
 
         InternalTexture = Graphics.Factory.CreateTexture(description);
+        InternalTexture.Name = Name;
 
         TextureViewDescription viewDescription = new()
         {
