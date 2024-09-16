@@ -178,7 +178,7 @@ namespace Prowl.Editor
                 _messagesToRender.Add(message);
             }
 
-            using (gui.Node("LogContent").ExpandHeight().ExpandWidth().Layout(LayoutType.Row).ScaleChildren().Spacing(10).Padding(0, 5, 5, 5).Enter())
+            using (gui.Node("LogContent").ExpandWidth().Layout(LayoutType.Row).ScaleChildren().Padding(0, 5, 5, 5).Enter())
             {
                 using (gui.Node("List").ExpandHeight().Layout(LayoutType.Column).Scroll(true, false).Clip().Enter())
                 {
@@ -205,8 +205,10 @@ namespace Prowl.Editor
                 if (_selectedMessage == null)
                     return;
 
-                using (gui.Node("Expanded").ExpandHeight().Layout(LayoutType.Column).Spacing(5).Scroll().Clip().Enter())
+                using (gui.Node("Expanded").ExpandHeight().Layout(LayoutType.Column).Spacing(5).MarginLeft(10).Scroll().Clip().Enter())
                 {
+                    gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
+
                     if (DrawExpandedMessage(_selectedMessage))
                         _selectedMessage = null;
                 }
@@ -296,8 +298,6 @@ namespace Prowl.Editor
 
         private bool DrawExpandedMessage(LogMessage message)
         {
-            gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.WindowBGTwo, (float)EditorStylePrefs.Instance.WindowRoundness);
-
             GetSeverityStyles(message.severity, out string icon, out Color color);
             string selMsg = icon + " " + message.message;
 
