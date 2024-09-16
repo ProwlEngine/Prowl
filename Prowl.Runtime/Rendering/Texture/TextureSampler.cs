@@ -96,7 +96,7 @@ public sealed class TextureSampler : EngineObject, ISerializable
         {
             OnDispose();
             _internalDescription = description;
-            _internalSampler = Graphics.Factory.CreateSampler(ref _internalDescription);
+            _internalSampler = Graphics.Factory.CreateSampler(in _internalDescription);
         }
     }
 

@@ -83,7 +83,7 @@ public class OpenALActiveAudio : ActiveAudio
         set
         {
             System.Numerics.Vector3 vec3 = value;
-            OpenALEngine.al.SetSourceProperty(ID, SourceVector3.Position, ref vec3);
+            OpenALEngine.al.SetSourceProperty(ID, SourceVector3.Position, in vec3);
         }
     }
 
@@ -97,7 +97,7 @@ public class OpenALActiveAudio : ActiveAudio
         set
         {
             System.Numerics.Vector3 vec3 = value;
-            OpenALEngine.al.SetSourceProperty(ID, SourceVector3.Direction, ref vec3);
+            OpenALEngine.al.SetSourceProperty(ID, SourceVector3.Direction, in vec3);
         }
     }
 
