@@ -8,6 +8,7 @@ using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
 using Prowl.Runtime.GUI;
+using EditorCustom = (object parent, Prowl.Editor.Assets.ScriptedEditor? editor);
 
 namespace Prowl.Editor;
 
@@ -20,7 +21,7 @@ public class InspectorWindow : EditorWindow
     private object? Selected;
     private bool lockSelection;
 
-    (object, ScriptedEditor)? customEditor;
+    (object parent, ScriptedEditor scriptedEditor)? customEditor;
 
     public InspectorWindow() : base()
     {
@@ -114,9 +115,7 @@ public class InspectorWindow : EditorWindow
                                 Type? editorType = CustomEditorAttribute.GetEditor(meta.importer.GetType());
                                 if (editorType != null)
                                 {
-                                    customEditor = (path, (ScriptedEditor)Activator.CreateInstance(editorType));
-                                    customEditor.Value.Item2.target = meta;
-                                    customEditor.Value.Item2.OnEnable();
+                                    CreateInstanceCustomEditor(path, editorType, meta);
                                     destroyCustomEditor = false;
                                 }
                                 else
@@ -143,7 +142,7 @@ public class InspectorWindow : EditorWindow
                 else if (customEditor.Value.Item1.Equals(path))
                 {
                     // We are still editing the same asset path
-                    customEditor.Value.Item2.OnInspectorGUI();
+                    customEditor.Value.scriptedEditor?.OnInspectorGUI();
                     destroyCustomEditor = false;
                 }
             }
@@ -155,9 +154,7 @@ public class InspectorWindow : EditorWindow
                     Type? editorType = CustomEditorAttribute.GetEditor(Selected.GetType());
                     if (editorType != null)
                     {
-                        customEditor = (Selected, (ScriptedEditor)Activator.CreateInstance(editorType));
-                        customEditor.Value.Item2.target = Selected;
-                        customEditor.Value.Item2.OnEnable();
+                        customEditor = CreateInstanceCustomEditor(Selected, editorType, Selected);
                         destroyCustomEditor = false;
                     }
                     else
@@ -177,17 +174,29 @@ public class InspectorWindow : EditorWindow
                 else if (customEditor.Value.Item1 == Selected)
                 {
                     // We are still editing the same object
-                    customEditor.Value.Item2.OnInspectorGUI();
+                    customEditor.Value.scriptedEditor?.OnInspectorGUI();
                     destroyCustomEditor = false;
                 }
             }
 
             if (destroyCustomEditor)
             {
-                customEditor?.Item2.OnDisable();
+                customEditor?.scriptedEditor?.OnDisable();
                 customEditor = null;
             }
         }
+    }
+
+    private (object parent, ScriptedEditor scriptedEditor)? CreateInstanceCustomEditor(object path, Type editorType, object meta)
+    {
+        var scriptedEditor = Activator.CreateInstance(editorType) as ScriptedEditor;
+        customEditor = (path, scriptedEditor);
+        if (customEditor.Value.scriptedEditor is not  null)
+        {
+            customEditor.Value.scriptedEditor.target = meta;
+            customEditor.Value.scriptedEditor.OnEnable();
+        }
+        return customEditor;
     }
 
     private void DrawInspectorLabel(string message)
