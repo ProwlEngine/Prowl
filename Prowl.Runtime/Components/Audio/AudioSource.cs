@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+
 using Prowl.Icons;
 using Prowl.Runtime.Audio;
 
@@ -72,13 +74,13 @@ public sealed class AudioSource : MonoBehaviour
             _looping = Looping;
         }
 
-        if (_gain != Volume)
+        if (Math.Abs(_gain - Volume) > Application.FloatEqualThreshold)
         {
             _source.Gain = Volume;
             _gain = Volume;
         }
 
-        if (_maxDistance != MaxDistance)
+        if (Math.Abs(_maxDistance - MaxDistance) > Application.FloatEqualThreshold)
         {
             _source.MaxDistance = MaxDistance;
             _maxDistance = MaxDistance;

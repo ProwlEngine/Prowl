@@ -166,12 +166,12 @@ public struct Bounds : IEquatable<Bounds>
         {
             result = ContainmentType.Disjoint;
         }//or if point is on box because coordonate of point is lesser or equal
-        else if (point.x == min.x
-                 || point.x == max.x
-                 || point.y == min.y
-                 || point.y == max.y
-                 || point.z == min.z
-                 || point.z == max.z)
+        else if (Math.Abs(point.x - min.x) < Application.FloatEqualThreshold
+                 || Math.Abs(point.x - max.x) < Application.FloatEqualThreshold
+                 || Math.Abs(point.y - min.y) < Application.FloatEqualThreshold
+                 || Math.Abs(point.y - max.y) < Application.FloatEqualThreshold
+                 || Math.Abs(point.z - min.z) < Application.FloatEqualThreshold
+                 || Math.Abs(point.z - max.z) < Application.FloatEqualThreshold)
             result = ContainmentType.Intersects;
         else
             result = ContainmentType.Contains;

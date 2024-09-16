@@ -113,7 +113,7 @@ public static class SceneManager
             if (_gameObjects[i].enabledInHierarchy)
                 _gameObjects[i].PreUpdate();
 
-        if (Application.isPlaying)
+        if (Application.IsPlaying)
             Physics.Update();
 
         ForeachComponent((x) =>

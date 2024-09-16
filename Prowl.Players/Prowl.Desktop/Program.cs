@@ -12,7 +12,7 @@ internal class Program
     public static int Main(string[] args)
     {
 
-        Application.isPlaying = true;
+        Application.IsPlaying = true;
         Application.DataPath = Data.FullName;
 
 

@@ -48,7 +48,7 @@ public class Rigidbody : PhysicsBody
         get => _sleepThreshold;
         set
         {
-            if (_sleepThreshold == value)
+            if (Math.Abs(_sleepThreshold - value) < Application.FloatEqualThreshold)
                 return;
 
             _sleepThreshold = value;

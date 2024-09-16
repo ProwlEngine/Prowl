@@ -71,7 +71,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <summary>
     /// Returns whether the matrix is the identity matrix.
     /// </summary>
-    public bool IsIdentity => M11 == 1 && M22 == 1 && M33 == 1 && M44 == 1 && // Check diagonal element first for early out.
+    public bool IsIdentity => Math.Abs(M11 - 1) < Application.FloatEqualThreshold && Math.Abs(M22 - 1) < Application.FloatEqualThreshold && Math.Abs(M33 - 1) < Application.FloatEqualThreshold && Math.Abs(M44 - 1) < Application.FloatEqualThreshold && // Check diagonal element first for early out.
                               M12 == 0 && M13 == 0 && M14 == 0 &&
                               M21 == 0 && M23 == 0 && M24 == 0 &&
                               M31 == 0 && M32 == 0 && M34 == 0 &&
@@ -1814,11 +1814,11 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <returns>True if the given matrices are equal; False otherwise.</returns>
     public static bool operator ==(Matrix4x4 value1, Matrix4x4 value2)
     {
-        return (value1.M11 == value2.M11 && value1.M22 == value2.M22 && value1.M33 == value2.M33 && value1.M44 == value2.M44 && // Check diagonal element first for early out.
-                value1.M12 == value2.M12 && value1.M13 == value2.M13 && value1.M14 == value2.M14 &&
-                value1.M21 == value2.M21 && value1.M23 == value2.M23 && value1.M24 == value2.M24 &&
-                value1.M31 == value2.M31 && value1.M32 == value2.M32 && value1.M34 == value2.M34 &&
-                value1.M41 == value2.M41 && value1.M42 == value2.M42 && value1.M43 == value2.M43);
+        return (Math.Abs(value1.M11 - value2.M11) < Application.FloatEqualThreshold && Math.Abs(value1.M22 - value2.M22) < Application.FloatEqualThreshold && Math.Abs(value1.M33 - value2.M33) < Application.FloatEqualThreshold && Math.Abs(value1.M44 - value2.M44) < Application.FloatEqualThreshold && // Check diagonal element first for early out.
+                Math.Abs(value1.M12 - value2.M12) < Application.FloatEqualThreshold && Math.Abs(value1.M13 - value2.M13) < Application.FloatEqualThreshold && Math.Abs(value1.M14 - value2.M14) < Application.FloatEqualThreshold &&
+                Math.Abs(value1.M21 - value2.M21) < Application.FloatEqualThreshold && Math.Abs(value1.M23 - value2.M23) < Application.FloatEqualThreshold && Math.Abs(value1.M24 - value2.M24) < Application.FloatEqualThreshold &&
+                Math.Abs(value1.M31 - value2.M31) < Application.FloatEqualThreshold && Math.Abs(value1.M32 - value2.M32) < Application.FloatEqualThreshold && Math.Abs(value1.M34 - value2.M34) < Application.FloatEqualThreshold &&
+                Math.Abs(value1.M41 - value2.M41) < Application.FloatEqualThreshold && Math.Abs(value1.M42 - value2.M42) < Application.FloatEqualThreshold && Math.Abs(value1.M43 - value2.M43) < Application.FloatEqualThreshold);
     }
 
     /// <summary>
@@ -1829,10 +1829,10 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <returns>True if the given matrices are not equal; False if they are equal.</returns>
     public static bool operator !=(Matrix4x4 value1, Matrix4x4 value2)
     {
-        return (value1.M11 != value2.M11 || value1.M12 != value2.M12 || value1.M13 != value2.M13 || value1.M14 != value2.M14 ||
-                value1.M21 != value2.M21 || value1.M22 != value2.M22 || value1.M23 != value2.M23 || value1.M24 != value2.M24 ||
-                value1.M31 != value2.M31 || value1.M32 != value2.M32 || value1.M33 != value2.M33 || value1.M34 != value2.M34 ||
-                value1.M41 != value2.M41 || value1.M42 != value2.M42 || value1.M43 != value2.M43 || value1.M44 != value2.M44);
+        return (Math.Abs(value1.M11 - value2.M11) > Application.FloatEqualThreshold || Math.Abs(value1.M12 - value2.M12) > Application.FloatEqualThreshold || Math.Abs(value1.M13 - value2.M13) > Application.FloatEqualThreshold || Math.Abs(value1.M14 - value2.M14) > Application.FloatEqualThreshold ||
+                Math.Abs(value1.M21 - value2.M21) > Application.FloatEqualThreshold || Math.Abs(value1.M22 - value2.M22) > Application.FloatEqualThreshold || Math.Abs(value1.M23 - value2.M23) > Application.FloatEqualThreshold || Math.Abs(value1.M24 - value2.M24) > Application.FloatEqualThreshold ||
+                Math.Abs(value1.M31 - value2.M31) > Application.FloatEqualThreshold || Math.Abs(value1.M32 - value2.M32) > Application.FloatEqualThreshold || Math.Abs(value1.M33 - value2.M33) > Application.FloatEqualThreshold || Math.Abs(value1.M34 - value2.M34) > Application.FloatEqualThreshold ||
+                Math.Abs(value1.M41 - value2.M41) > Application.FloatEqualThreshold || Math.Abs(value1.M42 - value2.M42) > Application.FloatEqualThreshold || Math.Abs(value1.M43 - value2.M43) > Application.FloatEqualThreshold || Math.Abs(value1.M44 - value2.M44) > Application.FloatEqualThreshold);
     }
 
     /// <summary>
@@ -1842,11 +1842,11 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <returns>True if the matrices are equal; False otherwise.</returns>
     public bool Equals(Matrix4x4 other)
     {
-        return (M11 == other.M11 && M22 == other.M22 && M33 == other.M33 && M44 == other.M44 && // Check diagonal element first for early out.
-                M12 == other.M12 && M13 == other.M13 && M14 == other.M14 &&
-                M21 == other.M21 && M23 == other.M23 && M24 == other.M24 &&
-                M31 == other.M31 && M32 == other.M32 && M34 == other.M34 &&
-                M41 == other.M41 && M42 == other.M42 && M43 == other.M43);
+        return (Math.Abs(M11 - other.M11) < Application.FloatEqualThreshold && Math.Abs(M22 - other.M22) < Application.FloatEqualThreshold && Math.Abs(M33 - other.M33) < Application.FloatEqualThreshold && Math.Abs(M44 - other.M44) < Application.FloatEqualThreshold && // Check diagonal element first for early out.
+                Math.Abs(M12 - other.M12) < Application.FloatEqualThreshold && Math.Abs(M13 - other.M13) < Application.FloatEqualThreshold && Math.Abs(M14 - other.M14) < Application.FloatEqualThreshold &&
+                Math.Abs(M21 - other.M21) < Application.FloatEqualThreshold && Math.Abs(M23 - other.M23) < Application.FloatEqualThreshold && Math.Abs(M24 - other.M24) < Application.FloatEqualThreshold &&
+                Math.Abs(M31 - other.M31) < Application.FloatEqualThreshold && Math.Abs(M32 - other.M32) < Application.FloatEqualThreshold && Math.Abs(M34 - other.M34) < Application.FloatEqualThreshold &&
+                Math.Abs(M41 - other.M41) < Application.FloatEqualThreshold && Math.Abs(M42 - other.M42) < Application.FloatEqualThreshold && Math.Abs(M43 - other.M43) < Application.FloatEqualThreshold);
     }
 
     /// <summary>

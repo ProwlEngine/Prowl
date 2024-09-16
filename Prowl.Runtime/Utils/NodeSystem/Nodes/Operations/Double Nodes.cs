@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+
 namespace Prowl.Runtime.NodeSystem;
 
 [Node("Operations/Double/Add")]
@@ -99,9 +101,9 @@ public class DoubleCompareNode : InFlowNode
         var a = GetInputValue("A", A);
         var b = GetInputValue("B", B);
 
-        if (a == b)
+        if (Math.Abs(a - b) < Application.FloatEqualThreshold)
             ExecuteNext("OnEquals");
-        else if (a != b)
+        else if (Math.Abs(a - b) > Application.FloatEqualThreshold)
             ExecuteNext("OnNotEquals");
         else if (a > b)
             ExecuteNext("OnGreaterThan");

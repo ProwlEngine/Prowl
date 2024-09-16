@@ -158,10 +158,10 @@ public struct Vector4 : IEquatable<Vector4>, IFormattable
     /// <returns>True if the other Vector4 is equal to this instance; False otherwise.</returns>
     public bool Equals(Vector4 other)
     {
-        return x == other.x
-               && y == other.y
-               && z == other.z
-               && w == other.w;
+        return Math.Abs(x - other.x) < Application.FloatEqualThreshold
+               && Math.Abs(y - other.y) < Application.FloatEqualThreshold
+               && Math.Abs(z - other.z) < Application.FloatEqualThreshold
+               && Math.Abs(w - other.w) < Application.FloatEqualThreshold;
     }
 
     /// <summary>

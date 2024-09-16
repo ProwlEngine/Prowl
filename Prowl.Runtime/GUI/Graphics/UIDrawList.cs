@@ -686,7 +686,7 @@ namespace Prowl.Runtime.GUI.Graphics
 
         public void PathLineToMergeDuplicate(Vector2 pos)
         {
-            if (_buildingPath.Count == 0 || _buildingPath[_buildingPath.Count - 1].x != pos.x || _buildingPath[_buildingPath.Count - 1].y != pos.y)
+            if (_buildingPath.Count == 0 || Math.Abs(_buildingPath[_buildingPath.Count - 1].x - pos.x) > Application.FloatEqualThreshold || Math.Abs(_buildingPath[_buildingPath.Count - 1].y - pos.y) > Application.FloatEqualThreshold)
                 _buildingPath.Add(pos);
         }
 

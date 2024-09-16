@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
+
 namespace Prowl.Runtime.GUI;
 
 public struct Spacing
@@ -29,18 +31,18 @@ public struct Spacing
 
     public static bool operator ==(Spacing s1, Spacing s2)
     {
-        return s1.Left == s2.Left &&
-               s1.Right == s2.Right &&
-               s1.Top == s2.Top &&
-               s1.Bottom == s2.Bottom;
+        return Math.Abs(s1.Left - s2.Left) < Application.FloatEqualThreshold &&
+               Math.Abs(s1.Right - s2.Right) < Application.FloatEqualThreshold &&
+               Math.Abs(s1.Top - s2.Top) < Application.FloatEqualThreshold &&
+               Math.Abs(s1.Bottom - s2.Bottom) < Application.FloatEqualThreshold;
     }
 
     public static bool operator !=(Spacing s1, Spacing s2)
     {
-        return s1.Left != s2.Left ||
-               s1.Right != s2.Right ||
-               s1.Top != s2.Top ||
-               s1.Bottom != s2.Bottom;
+        return Math.Abs(s1.Left - s2.Left) > Application.FloatEqualThreshold ||
+               Math.Abs(s1.Right - s2.Right) > Application.FloatEqualThreshold ||
+               Math.Abs(s1.Top - s2.Top) > Application.FloatEqualThreshold ||
+               Math.Abs(s1.Bottom - s2.Bottom) > Application.FloatEqualThreshold;
     }
 
     public override bool Equals(object obj)

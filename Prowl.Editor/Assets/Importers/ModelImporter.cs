@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Net.Mime;
+
 using Assimp;
 
 using Prowl.Editor.Preferences;
@@ -174,7 +176,7 @@ public class ModelImporter : ScriptedImporter
             }
 
             GameObject rootNode = GOs[0].Item1;
-            if (UnitScale != 1f)
+            if (Math.Abs(UnitScale - 1f) > Application.FloatEqualThreshold)
                 rootNode.Transform.localScale = Vector3.one * UnitScale;
 
             // Add Animation Component with all the animations assigned

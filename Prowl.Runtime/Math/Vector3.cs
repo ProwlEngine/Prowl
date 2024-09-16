@@ -121,9 +121,9 @@ public struct Vector3 : IEquatable<Vector3>, IFormattable
     /// <returns>True if the other Vector3 is equal to this instance; False otherwise.</returns>
     public bool Equals(Vector3 other)
     {
-        return x == other.x &&
-               y == other.y &&
-               z == other.z;
+        return Math.Abs(x - other.x) < Application.FloatEqualThreshold &&
+               Math.Abs(y - other.y) < Application.FloatEqualThreshold &&
+               Math.Abs(z - other.z) < Application.FloatEqualThreshold;
     }
 
     /// <summary>
@@ -585,9 +585,9 @@ public struct Vector3 : IEquatable<Vector3>, IFormattable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator ==(Vector3 left, Vector3 right)
     {
-        return (left.x == right.x &&
-                left.y == right.y &&
-                left.z == right.z);
+        return (Math.Abs(left.x - right.x) < Application.FloatEqualThreshold &&
+                Math.Abs(left.y - right.y) < Application.FloatEqualThreshold &&
+                Math.Abs(left.z - right.z) < Application.FloatEqualThreshold);
     }
 
     /// <summary>
@@ -599,9 +599,9 @@ public struct Vector3 : IEquatable<Vector3>, IFormattable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator !=(Vector3 left, Vector3 right)
     {
-        return (left.x != right.x ||
-                left.y != right.y ||
-                left.z != right.z);
+        return (Math.Abs(left.x - right.x) > Application.FloatEqualThreshold ||
+                Math.Abs(left.y - right.y) > Application.FloatEqualThreshold ||
+                Math.Abs(left.z - right.z) > Application.FloatEqualThreshold);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

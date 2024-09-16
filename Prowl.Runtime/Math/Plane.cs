@@ -155,7 +155,7 @@ public struct Plane : IEquatable<Plane>
 
     public override bool Equals(object? other) => (other is Plane plane) ? Equals(plane) : false;
 
-    public bool Equals(Plane other) => ((normal == other.normal) && (distance == other.distance));
+    public bool Equals(Plane other) => ((normal == other.normal) && (Math.Abs(distance - other.distance) < Application.FloatEqualThreshold));
 
     public override int GetHashCode() => normal.GetHashCode() ^ distance.GetHashCode();
 

@@ -1,6 +1,7 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
 
 using Prowl.Runtime.GUI.Layout;
@@ -123,7 +124,7 @@ public partial class Gui
     /// </summary>
     public bool IsBlockedByInteractable(Vector2 pos, double zIndex = -1, ulong ignoreID = 0)
     {
-        if (zIndex == -1)
+        if (Math.Abs(zIndex - (-1)) < Application.FloatEqualThreshold)
         {
             if (!_zInteractableCounter.TryGetValue(CurrentZIndex, out int count))
                 count = 0;

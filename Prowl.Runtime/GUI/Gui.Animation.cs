@@ -1,6 +1,7 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
 
 using Prowl.Runtime.Utils;
@@ -184,8 +185,8 @@ public partial class Gui
     static double QuintInOut(double time) => time < 0.5 ? 16 * time * time * time * time * time : 1 - MathD.Pow(-2 * time + 2, 5) / 2;
 
     static double ExpoIn(double time) => time == 0 ? 0 : MathD.Pow(2, 10 * time - 10);
-    static double ExpoOut(double time) => time == 1 ? 1 : 1 - MathD.Pow(2, -10 * time);
-    static double ExpoInOut(double time) => time == 0 ? 0 : time == 1 ? 1 : time < 0.5 ? MathD.Pow(2, 20 * time - 10) / 2 : (2 - MathD.Pow(2, -20 * time + 10)) / 2;
+    static double ExpoOut(double time) => Math.Abs(time - 1) < Application.FloatEqualThreshold ? 1 : 1 - MathD.Pow(2, -10 * time);
+    static double ExpoInOut(double time) => time == 0 ? 0 : Math.Abs(time - 1) < Application.FloatEqualThreshold ? 1 : time < 0.5 ? MathD.Pow(2, 20 * time - 10) / 2 : (2 - MathD.Pow(2, -20 * time + 10)) / 2;
 
     static double CircIn(double time) => 1 - MathD.Sqrt(1 - MathD.Pow(time, 2));
     static double CircOut(double time) => MathD.Sqrt(1 - MathD.Pow(time - 1, 2));
@@ -197,9 +198,9 @@ public partial class Gui
         MathD.Pow(2 * time, 2) * ((ConstantB + 1) * 2 * time - ConstantB) / 2 :
         (MathD.Pow(2 * time - 2, 2) * ((ConstantB + 1) * (time * 2 - 2) + ConstantB) + 2) / 2;
 
-    static double ElasticIn(double time) => time == 0 ? 0 : time == 1 ? 1 : -MathD.Pow(2, 10 * time - 10) * MathD.Sin((time * 10.0 - 10.75) * ConstantD);
-    static double ElasticOut(double time) => time == 0 ? 0 : time == 1 ? 1 : MathD.Pow(2, -10 * time) * MathD.Sin((time * 10 - 0.75) * ConstantD) + 1;
-    static double ElasticInOut(double time) => time == 0 ? 0 : time == 1 ? 1 : time < 0.5 ? -(MathD.Pow(2, 20 * time - 10) * MathD.Sin((20 * time - 11.125) * ConstantE)) / 2 : MathD.Pow(2, -20 * time + 10) * MathD.Sin((20 * time - 11.125) * ConstantE) / 2 + 1;
+    static double ElasticIn(double time) => time == 0 ? 0 : Math.Abs(time - 1) < Application.FloatEqualThreshold ? 1 : -MathD.Pow(2, 10 * time - 10) * MathD.Sin((time * 10.0 - 10.75) * ConstantD);
+    static double ElasticOut(double time) => time == 0 ? 0 : Math.Abs(time - 1) < Application.FloatEqualThreshold ? 1 : MathD.Pow(2, -10 * time) * MathD.Sin((time * 10 - 0.75) * ConstantD) + 1;
+    static double ElasticInOut(double time) => time == 0 ? 0 : Math.Abs(time - 1) < Application.FloatEqualThreshold ? 1 : time < 0.5 ? -(MathD.Pow(2, 20 * time - 10) * MathD.Sin((20 * time - 11.125) * ConstantE)) / 2 : MathD.Pow(2, -20 * time + 10) * MathD.Sin((20 * time - 11.125) * ConstantE) / 2 + 1;
 
     static double BounceIn(double t) => 1 - BounceOut(1 - t);
     static double BounceOut(double t)

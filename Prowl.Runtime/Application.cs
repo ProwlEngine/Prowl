@@ -12,9 +12,10 @@ namespace Prowl.Runtime;
 
 public static class Application
 {
-    public static bool isRunning;
-    public static bool isPlaying = false;
-    public static bool isEditor { get; private set; }
+    public static readonly float FloatEqualThreshold = 0.001f;
+    public static bool IsRunning;
+    public static bool IsPlaying = false;
+    public static bool IsEditor { get; private set; }
 
     public static string? DataPath = null;
 
@@ -25,9 +26,9 @@ public static class Application
     public static event Action Render;
     public static event Action Quitting;
 
-    private static readonly TimeData AppTime = new();
+    private static readonly TimeData s_appTime = new();
 
-    private static readonly GraphicsBackend[] preferredWindowsBackends = // Covers Windows/UWP
+    private static readonly GraphicsBackend[] s_preferredWindowsBackends = // Covers Windows/UWP
     [
         GraphicsBackend.Vulkan,
         GraphicsBackend.OpenGL,
@@ -35,14 +36,14 @@ public static class Application
         GraphicsBackend.OpenGLES,
     ];
 
-    private static readonly GraphicsBackend[] preferredUnixBackends = // Cover Unix-like (Linux, FreeBSD, OpenBSD)
+    private static readonly GraphicsBackend[] s_preferredUnixBackends = // Cover Unix-like (Linux, FreeBSD, OpenBSD)
     [
         GraphicsBackend.Vulkan,
         GraphicsBackend.OpenGL,
         GraphicsBackend.OpenGLES,
     ];
 
-    private static readonly GraphicsBackend[] preferredMacBackends = // Covers MacOS/Apple
+    private static readonly GraphicsBackend[] s_preferredMacBackends = // Covers MacOS/Apple
     [
         GraphicsBackend.Metal,
         GraphicsBackend.OpenGL,
@@ -53,20 +54,20 @@ public static class Application
     {
         if (RuntimeUtils.IsWindows())
         {
-            return preferredWindowsBackends[0];
+            return s_preferredWindowsBackends[0];
         }
         else if (RuntimeUtils.IsMac())
         {
-            return preferredMacBackends[0];
+            return s_preferredMacBackends[0];
         }
 
-        return preferredUnixBackends[0];
+        return s_preferredUnixBackends[0];
     }
 
     public static void Run(string title, int width, int height, IAssetProvider assetProvider, bool editor)
     {
         AssetProvider = assetProvider;
-        isEditor = editor;
+        IsEditor = editor;
 
         Debug.Log("Initializing...");
 
@@ -76,8 +77,8 @@ public static class Application
 
         Screen.Closing += AppClose;
 
-        isRunning = true;
-        isPlaying = true; // Base application is not the editor, isplaying is always true
+        IsRunning = true;
+        IsPlaying = true; // Base application is not the editor, isplaying is always true
 
         Screen.Start($"{title} - {GetBackend()}", new Vector2Int(width, height), new Vector2Int(100, 100), WindowState.Normal);
     }
@@ -103,9 +104,9 @@ public static class Application
         {
             AudioSystem.UpdatePool();
 
-            AppTime.Update();
+            s_appTime.Update();
 
-            Time.TimeStack.Push(AppTime);
+            Time.TimeStack.Push(s_appTime);
 
             Update?.Invoke();
             Render?.Invoke();
@@ -120,7 +121,7 @@ public static class Application
 
     static void AppClose()
     {
-        isRunning = false;
+        IsRunning = false;
         Quitting?.Invoke();
         Graphics.Dispose();
         Physics.Dispose();

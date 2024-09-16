@@ -119,7 +119,7 @@ public static class Program
                 else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Key.S, Ctrl = true }))
                     EditorGuiManager.SaveScene();
 
-                Application.isPlaying = PlayMode.Current == PlayMode.Mode.Playing;
+                Application.IsPlaying = PlayMode.Current == PlayMode.Mode.Playing;
 
 
                 try

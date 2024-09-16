@@ -792,10 +792,10 @@ public struct Quaternion : IEquatable<Quaternion>
     /// <returns>True if the Quaternions are equal; False otherwise.</returns>
     public static bool operator ==(Quaternion value1, Quaternion value2)
     {
-        return (value1.x == value2.x &&
-                value1.y == value2.y &&
-                value1.z == value2.z &&
-                value1.w == value2.w);
+        return (Math.Abs(value1.x - value2.x) < Application.FloatEqualThreshold &&
+                Math.Abs(value1.y - value2.y) < Application.FloatEqualThreshold &&
+                Math.Abs(value1.z - value2.z) < Application.FloatEqualThreshold &&
+                Math.Abs(value1.w - value2.w) < Application.FloatEqualThreshold);
     }
 
     /// <summary>
@@ -806,10 +806,10 @@ public struct Quaternion : IEquatable<Quaternion>
     /// <returns>True if the Quaternions are not equal; False if they are equal.</returns>
     public static bool operator !=(Quaternion value1, Quaternion value2)
     {
-        return (value1.x != value2.x ||
-                value1.y != value2.y ||
-                value1.z != value2.z ||
-                value1.w != value2.w);
+        return (Math.Abs(value1.x - value2.x) > Application.FloatEqualThreshold ||
+                Math.Abs(value1.y - value2.y) > Application.FloatEqualThreshold ||
+                Math.Abs(value1.z - value2.z) > Application.FloatEqualThreshold ||
+                Math.Abs(value1.w - value2.w) > Application.FloatEqualThreshold);
     }
 
     public static implicit operator System.Numerics.Quaternion(Quaternion value)
@@ -828,10 +828,10 @@ public struct Quaternion : IEquatable<Quaternion>
     /// <returns>True if the other Quaternion is equal to this instance; False otherwise.</returns>
     public bool Equals(Quaternion other)
     {
-        return (x == other.x &&
-                y == other.y &&
-                z == other.z &&
-                w == other.w);
+        return (Math.Abs(x - other.x) < Application.FloatEqualThreshold &&
+                Math.Abs(y - other.y) < Application.FloatEqualThreshold &&
+                Math.Abs(z - other.z) < Application.FloatEqualThreshold &&
+                Math.Abs(w - other.w) < Application.FloatEqualThreshold);
     }
 
     /// <summary>

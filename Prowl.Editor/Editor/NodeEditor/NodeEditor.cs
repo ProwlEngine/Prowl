@@ -635,7 +635,7 @@ public class NodeEditor
 
             gui.PointerWheel = Input.MouseWheelDelta;
 
-            if ((RenderTarget == null) || (MathD.Max(width, 1) != RenderTarget.Width || MathD.Max(height, 1) != RenderTarget.Height))
+            if ((RenderTarget == null) || (Math.Abs(MathD.Max(width, 1) - RenderTarget.Width) > Application.FloatEqualThreshold || Math.Abs(MathD.Max(height, 1) - RenderTarget.Height) > Application.FloatEqualThreshold))
                 RefreshRenderTexture(new(MathD.Max(width, 1), MathD.Max(height, 1)));
 
             Veldrid.CommandList commandList = Graphics.GetCommandList();

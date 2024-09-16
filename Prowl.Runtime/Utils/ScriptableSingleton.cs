@@ -72,14 +72,14 @@ public abstract class ScriptableSingleton<T> where T : ScriptableSingleton<T>, n
                     ArgumentNullException.ThrowIfNull(dataPath);
 
                     // Persistent across sessions for a single project
-                    if (Application.isEditor == false)
+                    if (Application.IsEditor == false)
                         throw new InvalidOperationException("Editor Settings are only available in the editor");
                     directory = Path.Combine(dataPath, "ProjectSettings", "Editor");
                     break;
                 case FilePathAttribute.Location.EditorPreference:
                     // Persistent across all projects
                     // TODO: !Application.isRunning is just a hack to allow CLI operations that do not depend on the editor
-                    if (!Application.isRunning || Application.isEditor == false)
+                    if (!Application.IsRunning || Application.IsEditor == false)
                         throw new InvalidOperationException("Preferences are only available in the editor");
                     directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Prowl", "Editor");
                     break;

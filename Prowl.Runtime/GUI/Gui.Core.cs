@@ -91,7 +91,7 @@ public partial class Gui
             layoutDirty = true;
         _computedNodeHashes = newNodeHashes;
 
-        if (lastUIScale == uiScale)
+        if (Math.Abs(lastUIScale - uiScale) < Application.FloatEqualThreshold)
             layoutDirty = true;
 
         // Now that we have the nodes we can properly process their LayoutNode

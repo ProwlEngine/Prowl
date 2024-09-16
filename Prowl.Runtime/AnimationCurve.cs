@@ -411,10 +411,10 @@ public class KeyFrame : IEquatable<KeyFrame>, IComparable<KeyFrame>
         if (Equals(value2, null))
             return Equals(value1, null);
 
-        return (value1.Position == value2.Position)
-               && (value1.Value == value2.Value)
-               && (value1.TangentIn == value2.TangentIn)
-               && (value1.TangentOut == value2.TangentOut)
+        return (Math.Abs(value1.Position - value2.Position) < Application.FloatEqualThreshold)
+               && (Math.Abs(value1.Value - value2.Value) < Application.FloatEqualThreshold)
+               && (Math.Abs(value1.TangentIn - value2.TangentIn) < Application.FloatEqualThreshold)
+               && (Math.Abs(value1.TangentOut - value2.TangentOut) < Application.FloatEqualThreshold)
                && (value1.Continuity == value2.Continuity);
     }
 
@@ -453,7 +453,7 @@ public class CurveKeyCollection : ICollection<KeyFrame>
             if (index >= _keys.Count)
                 throw new IndexOutOfRangeException();
 
-            if (_keys[index].Position == value.Position)
+            if (Math.Abs(_keys[index].Position - value.Position) < Application.FloatEqualThreshold)
                 _keys[index] = value;
             else
             {
