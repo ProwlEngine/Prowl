@@ -80,6 +80,7 @@ public static partial class AssetDatabase
     public static void AddRootFolder(string rootFolder)
     {
         ArgumentException.ThrowIfNullOrEmpty(rootFolder);
+        ArgumentNullException.ThrowIfNull(Project.Active);
 
         var rootPath = Path.Combine(Project.Active.ProjectPath, rootFolder);
         var info = new DirectoryInfo(rootPath);

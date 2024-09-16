@@ -4,6 +4,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Prowl.Runtime;
 
@@ -420,9 +421,9 @@ public class KeyFrame : IEquatable<KeyFrame>, IComparable<KeyFrame>
 
     #region Inherited Methods
 
-    public int CompareTo(KeyFrame other) => Position.CompareTo(other.Position);
-    public bool Equals(KeyFrame other) => (this == other);
-    public override bool Equals(object obj) => (obj as KeyFrame) != null && Equals((KeyFrame)obj);
+    public int CompareTo([AllowNull] KeyFrame other) => Position.CompareTo(other.Position);
+    public bool Equals([AllowNull] KeyFrame other) => this == other;
+    public override bool Equals([AllowNull] object obj) => (obj as KeyFrame) != null && Equals((KeyFrame)obj);
     public override int GetHashCode() =>
         Position.GetHashCode() ^ Value.GetHashCode() ^ TangentIn.GetHashCode() ^
         TangentOut.GetHashCode() ^ Continuity.GetHashCode();
