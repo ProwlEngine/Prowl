@@ -73,7 +73,7 @@ public class StandaloneAssetProvider : IAssetProvider
         throw new FileNotFoundException($"Asset with GUID {guid} not found.");
     }
 
-    public string GetPathFromGUID(Guid guid)
+    public string? GetPathFromGUID(Guid guid)
     {
         foreach (AssetBundle package in packages)
             if (package.TryGetPath(guid, out var path))

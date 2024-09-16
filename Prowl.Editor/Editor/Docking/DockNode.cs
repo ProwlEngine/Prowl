@@ -52,7 +52,7 @@ public class DockNode
 
             for (int i = 0; i < 2; ++i)
             {
-                DockNode leaf = Child[i].TraceLeaf(x, y);
+                DockNode? leaf = Child[i].TraceLeaf(x, y);
                 if (leaf != null)
                     return leaf;
             }
@@ -82,7 +82,7 @@ public class DockNode
             return this;
         }
 
-        DockNode node = Child[0].TraceSeparator(x, y);
+        DockNode? node = Child[0].TraceSeparator(x, y);
         if (node != null)
             return node;
 
@@ -138,7 +138,7 @@ public class DockNode
         }
     }
 
-    public DockNode FindParent(DockNode node)
+    public DockNode? FindParent(DockNode node)
     {
         if (Type == NodeType.Leaf)
             return null;
@@ -147,7 +147,7 @@ public class DockNode
             if (Child[i] == node)
                 return this;
 
-        DockNode n = Child[0].FindParent(node);
+        DockNode? n = Child[0].FindParent(node);
         if (n != null)
             return n;
 

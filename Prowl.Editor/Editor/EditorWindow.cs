@@ -41,10 +41,10 @@ public class EditorWindow
     public double MaxZ = double.MinValue;
 
     public bool IsDocked => m_Leaf != null;
-    private DockNode m_Leaf;
+    private DockNode? m_Leaf;
     // private Vector2 m_DockPosition;
 
-    public DockNode Leaf
+    public DockNode? Leaf
     {
         get => m_Leaf;
         internal set => m_Leaf = value;
@@ -128,7 +128,7 @@ public class EditorWindow
                     {
                         HandleTitleBarInteraction();
 
-                        if (IsDocked && Leaf.LeafWindows.Count > 0)
+                        if (IsDocked && Leaf?.LeafWindows.Count > 0)
                         {
                             double[] tabWidths = new double[Leaf.LeafWindows.Count];
                             double total = 0;
@@ -310,7 +310,7 @@ public class EditorWindow
 
                     if (gui.IsPointerMoving && IsDocked)
                     {
-                        EditorGuiManager.Container.DetachWindow(this);
+                        EditorGuiManager.Container?.DetachWindow(this);
                         // Position the window so the mouse is over the title bar
                         _x = gui.PointerPos.x - (_width / 2);
                         _y = gui.PointerPos.y - 10;

@@ -444,9 +444,13 @@ public class DefaultNodeEditor : ScriptedNodeEditor
 
         bool changed = false;
         var fieldInfo = GetFieldInfo(port.node.GetType(), port.fieldName);
-        InputAttribute field = fieldInfo.GetCustomAttributes<InputAttribute>(true).FirstOrDefault();
+        if (fieldInfo is null)
+        {
+            return changed;
+        }
+        InputAttribute? field = fieldInfo.GetCustomAttributes<InputAttribute>(true).FirstOrDefault();
         bool showBacking = false;
-        if (field.backingValue != ShowBackingValue.Never)
+        if (field is not null && field.backingValue != ShowBackingValue.Never)
             showBacking = field.backingValue == ShowBackingValue.Always || (field.backingValue == ShowBackingValue.Unconnected && !port.IsConnected);
 
         if (showBacking)
@@ -462,12 +466,12 @@ public class DefaultNodeEditor : ScriptedNodeEditor
         return changed;
     }
 
-    protected static FieldInfo GetFieldInfo(Type type, string fieldName)
+    protected static FieldInfo? GetFieldInfo(Type type, string fieldName)
     {
         // If we can't find field in the first run, it's probably a private field in a base class.
-        FieldInfo field = type.GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        FieldInfo? field = type.GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
         // Search base classes for private fields only. Public fields are found above
-        while (field == null && (type = type.BaseType) != typeof(Node)) field = type.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
+        while (field is not null && type.BaseType is not null && (type = type.BaseType) != typeof(Node)) field = type.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
         return field;
     }
 

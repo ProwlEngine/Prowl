@@ -19,9 +19,9 @@ public static class EditorGuiManager
     public static System.Numerics.Vector4 SelectedColor => new System.Numerics.Vector4(0.06f, 0.53f, 0.98f, 1.00f);
 
     public static Gui Gui;
-    public static DockContainer? Container;
+    public static DockContainer Container;
     public static EditorWindow DraggingWindow;
-    public static DockNode DragSplitter;
+    public static DockNode? DragSplitter;
     private static Vector2 m_DragPos;
     private static double m_StartSplitPos;
 
@@ -49,7 +49,7 @@ public static class EditorGuiManager
         Windows.Add(editorWindow);
         FocusedWindow = new WeakReference(editorWindow);
 
-        if (editorWindow.IsDocked)
+        if (editorWindow.IsDocked && editorWindow.Leaf is not null)
             editorWindow.Leaf.WindowNum = editorWindow.Leaf.LeafWindows.IndexOf(editorWindow);
     }
 
@@ -69,8 +69,8 @@ public static class EditorGuiManager
 
     public static void Update()
     {
-        if (FocusedWindow != null && FocusedWindow.Target != null)
-            FocusWindow(FocusedWindow.Target as EditorWindow); // Ensure focused window is always on top (But below floating windows if docked)
+        if (FocusedWindow != null && FocusedWindow.Target != null && FocusedWindow.Target is EditorWindow editorWindow)
+            FocusWindow(editorWindow); // Ensure focused window is always on top (But below floating windows if docked)
 
         // Sort by docking as well, Docked windows are guranteed to come first
         Windows.Sort((a, b) => b.IsDocked.CompareTo(a.IsDocked));
@@ -208,7 +208,7 @@ public static class EditorGuiManager
                 {
                     if (!Gui.IsBlockedByInteractable(cursorPos))
                     {
-                        DockNode node = Container.Root.TraceSeparator(cursorPos.x, cursorPos.y);
+                        DockNode? node = Container.Root.TraceSeparator(cursorPos.x, cursorPos.y);
                         if (node != null)
                         {
                             node.GetSplitterBounds(out var bmins, out var bmaxs, 4);
@@ -273,7 +273,7 @@ public static class EditorGuiManager
             for (int i = 0; i < windowList.Count; i++)
             {
                 EditorWindow window = windowList[i];
-                if (!window.IsDocked || window.Leaf.LeafWindows[window.Leaf.WindowNum] == window)
+                if (!window.IsDocked || window.Leaf?.LeafWindows[window.Leaf.WindowNum] == window)
                 {
                     g.SetZIndex(i * 100);
                     g.PushID((ulong)window._id);
@@ -308,7 +308,7 @@ public static class EditorGuiManager
             return;
         }
 
-        if (AssetDatabase.TryGetFile(scene.AssetID, out var file))
+        if (AssetDatabase.TryGetFile(scene.AssetID, out var file) && file is not null)
         {
             AssetDatabase.Delete(file);
 
@@ -464,7 +464,7 @@ public static class EditorGuiManager
         FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New Script.cs"));
         AssetDatabase.GenerateUniqueAssetPath(ref file);
 
-        using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
+        using Stream? stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt") ?? throw new Exception();
         using StreamReader reader = new StreamReader(stream);
         string script = reader.ReadToEnd();
         script = script.Replace("%SCRIPTNAME%", EditorUtils.FilterAlpha(Path.GetFileNameWithoutExtension(file.Name)));

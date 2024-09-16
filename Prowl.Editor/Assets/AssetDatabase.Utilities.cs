@@ -239,7 +239,7 @@ public static partial class AssetDatabase
         return result;
     }
 
-    public static Type GetTypeOfAsset(Guid guid, ushort fileID)
+    public static Type? GetTypeOfAsset(Guid guid, ushort fileID)
     {
         if (assetGuidToMeta.TryGetValue(guid, out var meta))
             if (meta.assetTypes.Length > fileID)

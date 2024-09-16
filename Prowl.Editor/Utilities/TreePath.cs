@@ -41,10 +41,10 @@ public class TreePath<T>
         currentNode.Children.Add(leafNode);
     }
 
-    public TreePath<T> FindNode(string path)
+    public TreePath<T>? FindNode(string path)
     {
         string[] parts = path.Split('/');
-        TreePath<T> currentNode = this;
+        TreePath<T>? currentNode = this;
 
         foreach (string part in parts)
         {
