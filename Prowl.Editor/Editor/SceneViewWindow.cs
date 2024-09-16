@@ -146,7 +146,7 @@ public class SceneViewWindow : EditorWindow
 
         RenderPipeline pipeline = Cam.Pipeline.Res ?? DefaultRenderPipeline.Default;
 
-        pipeline.Render(RenderTarget, Cam, data);
+        pipeline.Render(RenderTarget.Framebuffer, Cam, data);
 
         Vector2 imagePos = gui.CurrentNode.LayoutData.Rect.Position;
         Vector2 imageSize = gui.CurrentNode.LayoutData.Rect.Size;

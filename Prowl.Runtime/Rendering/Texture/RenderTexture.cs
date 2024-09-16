@@ -130,12 +130,6 @@ public sealed class RenderTexture : EngineObject, ISerializable
     )
     { }
 
-
-    public static implicit operator Framebuffer(RenderTexture texture)
-    {
-        return texture.Framebuffer;
-    }
-
     /// <summary>
     /// Creates a new RenderTexture object
     /// </summary>
@@ -165,8 +159,10 @@ public sealed class RenderTexture : EngineObject, ISerializable
         if (depthFormat != null)
         {
             TextureUsage depthUsage = sampled ? TextureUsage.Sampled | TextureUsage.DepthStencil : TextureUsage.DepthStencil;
-            DepthBuffer = new Texture2D(Width, Height, 1, depthFormat.Value, depthUsage);
-            DepthBuffer.Name = $"RT Depth Buffer";
+            DepthBuffer = new Texture2D(Width, Height, 1, depthFormat.Value, depthUsage)
+            {
+                Name = $"RT Depth Buffer"
+            };
         }
 
         ColorBuffers = new Texture2D[colorFormats.Length];
@@ -177,8 +173,10 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
             for (int i = 0; i < ColorBuffers.Length; i++)
             {
-                ColorBuffers[i] = new Texture2D(Width, Height, 1, colorFormats[i], colorUsage, sampleCount);
-                ColorBuffers[i].Name = $"RT Color Buffer {i}";
+                ColorBuffers[i] = new Texture2D(Width, Height, 1, colorFormats[i], colorUsage, sampleCount)
+                {
+                    Name = $"RT Color Buffer {i}"
+                };
             }
         }
 
