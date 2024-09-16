@@ -63,7 +63,7 @@ public class NavMeshSurface : MonoBehaviour
     private Bounds debug_bounds;
     private Vector3[][][] debug_polygons;
 
-    private float timer = 0;
+    // private float timer = 0;
 
     #endregion
 

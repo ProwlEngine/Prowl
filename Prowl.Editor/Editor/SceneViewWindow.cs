@@ -26,7 +26,7 @@ public class SceneViewWindow : EditorWindow
     double fpsTimer;
     double fps;
     double moveSpeed = 1;
-    bool hasStarted = false;
+    // bool hasStarted = false;
     double camX, camY;
 
     readonly TransformGizmo gizmo;
