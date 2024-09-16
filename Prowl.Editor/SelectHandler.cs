@@ -23,7 +23,7 @@ public class SelectHandler<T> where T : class
 {
     bool selectedThisFrame;
     readonly List<T> selected = new();
-    SortedList<int, T> previousFrameSelectables;
+    SortedList<int, T> previousFrameSelectables = [];
     SortedList<int, T> selectables = new();
     int lastSelectedIndex = -1;
 
@@ -35,12 +35,12 @@ public class SelectHandler<T> where T : class
     public event Action<T>? OnDeselectObject;
 
     private readonly Func<T, bool> CheckIsDestroyed;
-    private readonly Func<T, T, bool> Equals;
+    private readonly Func<T, T, bool> EqualsFunc;
 
     public SelectHandler(Func<T, bool> checkIsDestroyed, Func<T, T, bool> equals)
     {
         CheckIsDestroyed = checkIsDestroyed;
-        Equals = equals;
+        EqualsFunc = equals;
     }
 
     public void StartFrame()
@@ -94,7 +94,7 @@ public class SelectHandler<T> where T : class
     {
         for (int i = 0; i < selected.Count; i++)
         {
-            if (Equals.Invoke(selected[i], obj))
+            if (EqualsFunc.Invoke(selected[i], obj))
                 return true;
         }
         return false;
@@ -155,7 +155,7 @@ public class SelectHandler<T> where T : class
             {
                 for (int i = 0; i < selected.Count; i++)
                 {
-                    if (Equals.Invoke(selected[i], obj))
+                    if (EqualsFunc.Invoke(selected[i], obj))
                     {
                         selected.RemoveAt(i);
                         break;
@@ -178,11 +178,10 @@ public class SelectHandler<T> where T : class
 
     private void SetSelectedIndex(T entity)
     {
-        if (previousFrameSelectables == null) return;
         // if sorted has this value using reference equals, set lastSelectedIndex to the index of it
         for (int i = 0; i < previousFrameSelectables.Count; i++)
         {
-            if (Equals.Invoke(previousFrameSelectables.Values[i], entity))
+            if (EqualsFunc.Invoke(previousFrameSelectables.Values[i], entity))
             {
                 lastSelectedIndex = previousFrameSelectables.Keys[i];
                 break;
