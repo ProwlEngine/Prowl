@@ -170,7 +170,7 @@ public class PackageManagerWindow : EditorWindow
         }
     }
 
-    private void DrawPackageDetails()
+    private async void DrawPackageDetails()
     {
         if (loadingDetails)
         {
@@ -211,7 +211,7 @@ public class PackageManagerWindow : EditorWindow
                     if (canUpdate && EditorGUI.StyledButton("Update", installWidth / 2, itemSize))
                     {
                         AssetDatabase.UninstallPackage(_metadata.Identity.Id, installedPackage.Identity.Version.ToString());
-                        AssetDatabase.InstallPackage(_metadata.Identity.Id, _projectVersions[_selectedVersionIndex]);
+                        await AssetDatabase.InstallPackage(_metadata.Identity.Id, _projectVersions[_selectedVersionIndex]);
                     }
 
                     if (EditorGUI.StyledButton("Uninstall", canUpdate ? installWidth / 2 : installWidth, itemSize))
@@ -226,7 +226,7 @@ public class PackageManagerWindow : EditorWindow
                     if (gui.Combo("Version", "VersionPopup", ref _selectedVersionIndex, _projectVersions, 0, 0, 75, itemSize))
                         PopulateDetails(_projectVersions[_selectedVersionIndex]);
                     if (EditorGUI.StyledButton("Install", installWidth, itemSize))
-                        AssetDatabase.InstallPackage(_metadata.Identity.Id, _projectVersions[_selectedVersionIndex]);
+                        await AssetDatabase.InstallPackage(_metadata.Identity.Id, _projectVersions[_selectedVersionIndex]);
                 }
             }
 
