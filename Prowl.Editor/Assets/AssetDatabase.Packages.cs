@@ -325,7 +325,7 @@ public static partial class AssetDatabase
         Update();
     }
 
-    public static async Task UninstallPackage(string packageId, string version)
+    public static void UninstallPackage(string packageId, string version)
     {
         ArgumentNullException.ThrowIfNull(packageId, nameof(packageId));
         ArgumentNullException.ThrowIfNull(version, nameof(version));
