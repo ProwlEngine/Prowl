@@ -16,6 +16,7 @@ public struct RenderingData
 
     public bool IsSceneViewCamera;
     public bool DisplayGrid;
+    public bool DisplayGizmo;
     public Matrix4x4 GridMatrix;
     public Color GridColor;
     public Vector3 GridSizes;

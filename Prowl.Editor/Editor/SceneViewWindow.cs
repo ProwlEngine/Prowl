@@ -100,6 +100,7 @@ public class SceneViewWindow : EditorWindow
         {
             TargetResolution = new Vector2(RenderTarget.Width, RenderTarget.Height),
             IsSceneViewCamera = true,
+            DisplayGizmo = true,
         };
 
         if (SceneViewPreferences.Instance.GridType != GridType.None)
@@ -127,14 +128,7 @@ public class SceneViewWindow : EditorWindow
             };
         }
 
-        RenderPipeline pipeline = Cam.Pipeline.Res ?? DefaultRenderPipeline.Default;
-
-        pipeline.Render(RenderTarget, Cam, data);
-
-        Vector2 imagePos = gui.CurrentNode.LayoutData.Rect.Position;
-        Vector2 imageSize = gui.CurrentNode.LayoutData.Rect.Size;
-        gui.Draw2D.DrawImage(RenderTarget!.ColorBuffers[0], imagePos, imageSize, Color.white);
-
+        Debug.ClearGizmos();
         foreach (GameObject activeGO in SceneManager.AllGameObjects)
         {
             if (activeGO.enabledInHierarchy)
@@ -149,6 +143,14 @@ public class SceneViewWindow : EditorWindow
                 }
             }
         }
+
+        RenderPipeline pipeline = Cam.Pipeline.Res ?? DefaultRenderPipeline.Default;
+
+        pipeline.Render(RenderTarget, Cam, data);
+
+        Vector2 imagePos = gui.CurrentNode.LayoutData.Rect.Position;
+        Vector2 imageSize = gui.CurrentNode.LayoutData.Rect.Size;
+        gui.Draw2D.DrawImage(RenderTarget!.ColorBuffers[0], imagePos, imageSize, Color.white);
 
         List<WeakReference> selectedWeaks = HierarchyWindow.SelectHandler.Selected;
         var selectedGOs = new List<GameObject>();

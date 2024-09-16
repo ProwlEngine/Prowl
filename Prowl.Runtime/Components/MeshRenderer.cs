@@ -14,6 +14,8 @@ public class MeshRenderer : MonoBehaviour, ISerializable, IRenderable
     public Color MainColor = Color.white;
     public PropertyBlock Properties;
 
+    public AssetRef<Texture2D> IconTest;
+
     public override void Update()
     {
         if (!Mesh.IsAvailable) return;
@@ -25,6 +27,26 @@ public class MeshRenderer : MonoBehaviour, ISerializable, IRenderable
         Properties.SetInt("_ObjectID", InstanceID);
 
         RenderPipelines.RenderPipeline.AddRenderable(this);
+    }
+
+    public override void DrawGizmos()
+    {
+        Debug.DrawLine(new Vector3(0, 2, 1), new Vector3(0, 2, 3), Color.red);
+        Debug.DrawTriangle(new Vector3(0, 0, -0.5), new Vector3(0, 1, 0), new Vector3(0, 0, 0.5), Color.green);
+
+        Debug.DrawWireCube(new Vector3(0, 5, 0), Vector3.one / 2f, Color.blue);
+        Debug.DrawCube(new Vector3(0, 5, -5), Vector3.one / 2f, Color.yellow);
+
+        Debug.DrawWireSphere(new Vector3(0, 10, -5), 1, Color.cyan);
+        Debug.DrawSphere(new Vector3(0, 10, 0), 1, Color.magenta);
+
+        Debug.DrawWireCone(new Vector3(0, 15, 0), Vector3.up, 1, Color.red);
+
+        Debug.DrawArrow(new Vector3(0, 15, 5), new Vector3(0, 0, 1), Color.green);
+
+        if (IconTest.IsAvailable)
+            Debug.DrawIcon(IconTest.Res, new Vector3(0, 20, 0), 1f, Color.white);
+
     }
 
     public SerializedProperty Serialize(Serializer.SerializationContext ctx)

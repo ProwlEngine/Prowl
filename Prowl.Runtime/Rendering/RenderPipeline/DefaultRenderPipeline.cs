@@ -11,19 +11,24 @@ public class DefaultRenderPipeline : RenderPipeline
 {
     const bool cameraRelative = true;
 
-    private static Mesh s_gridMesh;
+    private static Mesh s_quadMesh;
     private static Material s_gridMaterial;
     private static Material s_defaultMaterial;
     private static Material s_skybox;
+    private static Material s_gizmo;
     private static Mesh s_skyDome;
+    private static Texture2D s_whiteTexture;
 
 
     private static void ValidateDefaults()
     {
-        s_gridMesh ??= Mesh.CreateQuad(Vector2.one);
+        s_quadMesh ??= Mesh.CreateQuad(Vector2.one);
         s_gridMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Grid.shader"));
         s_defaultMaterial ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/DefaultUnlit.shader"));
         s_skybox ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/ProceduralSky.shader"));
+        s_gizmo ??= new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Gizmo.shader"));
+
+        s_whiteTexture ??= Texture2D.EmptyWhite;
 
         if (s_skyDome == null)
         {
@@ -141,7 +146,44 @@ public class DefaultRenderPipeline : RenderPipeline
             buffer.SetFloat("_MaxDist", System.Math.Min(camera.FarClip, gridScale));
 
             buffer.SetMaterial(s_gridMaterial, 0);
-            buffer.DrawSingle(s_gridMesh);
+            buffer.DrawSingle(s_quadMesh);
+        }
+
+        // Since for the time being rendering is guranteed to be executed after Update() and all other mono-behaviour methods
+        // we can safely assume that all gizmos have been added to Debug and we can draw them here
+        if (data.DisplayGizmo)
+        {
+            (Mesh? wire, Mesh? solid) = Debug.GetGizmoDrawData(cameraRelative, cameraPosition);
+
+            if (wire != null || solid != null)
+            {
+                // The vertices have already been transformed by the gizmo system to be camera relative (if needed) so we just need to draw them
+                buffer.SetMatrix("_Matrix_VP", vp.ToFloat());
+
+                buffer.SetTexture("_MainTexture", s_whiteTexture);
+                buffer.SetMaterial(s_gizmo);
+                if (wire != null) buffer.DrawSingle(wire);
+                if (solid != null) buffer.DrawSingle(solid);
+            }
+
+            List<GizmoBuilder.IconDrawCall> icons = Debug.GetGizmoIcons();
+            if (icons != null)
+            {
+                buffer.SetMaterial(s_gizmo);
+            
+                foreach (GizmoBuilder.IconDrawCall icon in icons)
+                {
+                    Vector3 center = icon.center;
+                    if (cameraRelative)
+                        center -= cameraPosition;
+                    Matrix4x4 billboard = Matrix4x4.CreateBillboard(center, Vector3.zero, camera.Transform.up, camera.Transform.forward);
+
+                    buffer.SetMatrix("_Matrix_VP", (billboard * vp).ToFloat());
+            
+                    buffer.SetTexture("_MainTexture", icon.texture);
+                    buffer.DrawSingle(s_quadMesh);
+                }
+            }
         }
 
         if (target.ColorTargets != null && target.ColorTargets.Length > 0)

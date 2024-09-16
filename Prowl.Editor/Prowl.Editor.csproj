@@ -60,4 +60,10 @@
         <ProjectReference Include="..\External\Prowl.Veldrid\src\Veldrid\Veldrid.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <EmbeddedResource Update="EmbeddedResources\DefaultAssets\Gizmo.shader">
+        <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      </EmbeddedResource>
+    </ItemGroup>
+
 </Project>
