@@ -12,7 +12,5 @@ namespace Prowl.Runtime
         public int IndexCount { get; }
 
         public IndexFormat IndexFormat { get; }
-
-        public PrimitiveTopology Topology { get; }
     }
 }

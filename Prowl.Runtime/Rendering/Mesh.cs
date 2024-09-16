@@ -56,14 +56,14 @@ namespace Prowl.Runtime
         }
 
         /// <summary> The mesh's primitive type </summary>
-        public PrimitiveTopology Topology
+        public PrimitiveTopology MeshTopology
         {
-            get => _topology;
+            get => meshTopology;
             set
             {
                 if (isWritable == false) return;
                 changed = true;
-                _topology = value;
+                meshTopology = value;
             }
         }
 
@@ -180,7 +180,7 @@ namespace Prowl.Runtime
         Vector4F[]? boneWeights;
 
         IndexFormat indexFormat = IndexFormat.UInt16;
-        PrimitiveTopology _topology = PrimitiveTopology.TriangleList;
+        PrimitiveTopology meshTopology = PrimitiveTopology.TriangleList;
 
 
         DeviceBuffer vertexBuffer;
@@ -251,7 +251,7 @@ namespace Prowl.Runtime
             }
 
             int indexLength = indexFormat == IndexFormat.UInt16 ? indices16.Length : indices32.Length;
-            switch (_topology)
+            switch (meshTopology)
             {
                 case PrimitiveTopology.TriangleList:
                     if (indexLength % 3 != 0)
@@ -352,7 +352,7 @@ namespace Prowl.Runtime
 
         public void RecalculateBounds()
         {
-            ArgumentNullException.ThrowIfNull(vertices);
+             ArgumentNullException.ThrowIfNull(vertices);
 
             if (vertices.Length < 1)
                 throw new ArgumentException();
@@ -729,7 +729,7 @@ namespace Prowl.Runtime
             using (BinaryWriter writer = new BinaryWriter(memoryStream))
             {
                 writer.Write((byte)indexFormat);
-                writer.Write((byte)_topology);
+                writer.Write((byte)meshTopology);
 
                 writer.Write(vertices.Length);
                 foreach (var vertex in vertices)
@@ -868,7 +868,7 @@ namespace Prowl.Runtime
             using (BinaryReader reader = new BinaryReader(memoryStream))
             {
                 indexFormat = (IndexFormat)reader.ReadByte();
-                _topology = (PrimitiveTopology)reader.ReadByte();
+                meshTopology = (PrimitiveTopology)reader.ReadByte();
 
                 var vertexCount = reader.ReadInt32();
                 vertices = new Vector3F[vertexCount];

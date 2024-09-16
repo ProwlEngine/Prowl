@@ -120,7 +120,6 @@ namespace Prowl.Runtime
 
         public void SetDrawData(IGeometryDrawData drawData)
         {
-            _topology = drawData.Topology;
             _activeDrawData = drawData;
             _activeDrawData.SetDrawData(_commandList, _graphicsPipeline);
         }
