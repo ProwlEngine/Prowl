@@ -165,6 +165,8 @@ internal class MenuItem : Attribute
 
             if (Gui.ActiveGUI.BeginPopup(menu.Path + "Popup", out var node))
             {
+                ArgumentNullException.ThrowIfNull(node);
+
                 using (node.Width(150).Layout(LayoutType.Column).Padding(5).Spacing(5).FitContentHeight().Enter())
                 {
                     bool changed = false;
