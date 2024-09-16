@@ -175,9 +175,9 @@ public abstract class NodeGraph : ScriptableObject, ISerializationCallbackReceiv
         Clear();
     }
 
-    public void OnBeforeSerialize() { }
+    public override void OnBeforeSerialize() { }
 
-    public void OnAfterDeserialize()
+    public override void OnAfterDeserialize()
     {
         // Clear null nodes
         nodes.RemoveAll(n => n == null);

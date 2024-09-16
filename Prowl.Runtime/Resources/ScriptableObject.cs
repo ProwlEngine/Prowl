@@ -9,8 +9,8 @@ public abstract class ScriptableObject : EngineObject, ISerializationCallbackRec
     private ScriptableObject(string name) : base(name) { }
 
     // ScriptableObjects can only be created via the AssetDatabase loading them, so their guranteed to always Deserialize
-    public void OnAfterDeserialize() => OnEnable();
-    public void OnBeforeSerialize() { }
+    public virtual void OnAfterDeserialize() => OnEnable();
+    public virtual void OnBeforeSerialize() { }
 
     public virtual void OnEnable() { }
 

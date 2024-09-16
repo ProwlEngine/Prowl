@@ -104,7 +104,7 @@ public class Rigidbody : PhysicsBody
         }
     }
 
-    public bool Awake
+    public new bool Awake
     {
         get => BodyReference?.Awake ?? false;
         set
