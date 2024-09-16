@@ -15,7 +15,7 @@ public class Vector2_PropertyDrawer : PropertyDrawer
     {
         gui.CurrentNode.Layout(LayoutType.Row).ScaleChildren();
 
-        Vector2 val = (Vector2)value;
+        Vector2 val = value is Vector2 v ? v : throw new Exception();
         bool changed = EditorGUI.InputDouble(ID + "X", ref val.x, 0, 0, 0, EditorGUI.VectorXStyle);
         changed |= EditorGUI.InputDouble(ID + "Y", ref val.y, 0, 0, 0, EditorGUI.VectorYStyle);
         value = val;

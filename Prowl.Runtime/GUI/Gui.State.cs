@@ -12,7 +12,7 @@ public partial class Gui
 {
     public int CurrentZIndex => CurrentNode.ZIndex;
 
-    private static readonly Dictionary<ulong, Hashtable> _storage = [];
+    private static readonly Dictionary<ulong, Hashtable> s_storage = [];
 
     /// <summary>
     /// Set the ZIndex for the current node
@@ -37,11 +37,11 @@ public partial class Gui
     /// <summary> Get a value from the current node's storage </summary>
     public T GetNodeStorage<T>(LayoutNode node, string key, T defaultValue = default) where T : unmanaged
     {
-        if (!_storage.TryGetValue(node.ID, out var storage))
+        if (!s_storage.TryGetValue(node.ID, out var storage))
             return defaultValue;
 
-        if (storage.ContainsKey(key))
-            return (T)storage[key];
+        if (storage.ContainsKey(key) && storage[key] is T value)
+            return value;
 
         return defaultValue;
     }
@@ -51,8 +51,8 @@ public partial class Gui
     /// <summary> Set a value in the current node's storage </summary>
     public void SetNodeStorage<T>(LayoutNode node, string key, T value) where T : unmanaged
     {
-        if (!_storage.TryGetValue(node.ID, out var storage))
-            _storage[node.ID] = storage = [];
+        if (!s_storage.TryGetValue(node.ID, out var storage))
+            s_storage[node.ID] = storage = [];
 
         storage[key] = value;
     }
@@ -60,7 +60,7 @@ public partial class Gui
     /// <summary>
     /// <para>Push an ID onto the ID stack.</para>
     /// <para>Useful for when you want to use the same string ID for multiple nodes that would otherwise conflict.</para>
-    /// Or maybe you dont have control like a List of User-Created Nodes, you PushID(Index) and PopID() when done
+    /// Or maybe you don't have control like a List of User-Created Nodes, you PushID(Index) and PopID() when done
     /// </summary>
     /// <param name="id"></param>
     public void PushID(ulong id) => IDStack.Push(id);

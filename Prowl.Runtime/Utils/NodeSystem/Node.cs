@@ -408,7 +408,7 @@ public abstract class Node
         public bool TryGetValue(string key, out NodePort value)
         {
             var result = dictionary.TryGetValue(key, out NodePort dictionaryValue);
-            value = dictionaryValue;
+            value = dictionaryValue ?? throw new KeyNotFoundException();
             return result;
         }
 

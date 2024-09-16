@@ -662,7 +662,7 @@ public class GameObject : EngineObject, ISerializable
         layerIndex = value["LayerIndex"].ByteValue;
         hideFlags = (HideFlags)value["HideFlags"].IntValue;
 
-        _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx);
+        _transform = Serializer.Deserialize<Transform>(value["Transform"], ctx) ?? new Transform();
         _transform.gameObject = this;
 
         if (value.TryGet("AssetID", out var guid))
@@ -670,9 +670,9 @@ public class GameObject : EngineObject, ISerializable
         if (value.TryGet("FileID", out var fileID))
             FileID = fileID.UShortValue;
 
-        var children = value["Children"];
+        var children2 = value["Children"];
         this.children = new();
-        foreach (var childTag in children.List)
+        foreach (var childTag in children2.List)
         {
             GameObject? child = Serializer.Deserialize<GameObject>(childTag, ctx);
             if (child == null) continue;

@@ -47,7 +47,7 @@ public class ReflectedNode : FlowNode, ISerializationCallbackReceiver
         cached_method = method_info;
         node_title = GetNodeName(method_info);
 
-        type_Name = method_info.ReflectedType.FullName;
+        type_Name = method_info.ReflectedType.FullName ?? throw new InvalidOperationException();
         method_Name = method_info.Name;
 
         AddDynamicInput(typeof(FlowNode), ConnectionType.Override, TypeConstraint.Strict, "From", true);
