@@ -101,7 +101,7 @@ public class FontEditor : ScriptedEditor
     {
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
-        var importer = (FontImporter)(target as MetaFile).importer;
+        var importer = (FontImporter)(target as MetaFile).Importer;
 
         gui.CurrentNode.Layout(LayoutType.Column);
 

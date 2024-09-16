@@ -3,22 +3,22 @@
 
 namespace Prowl.Editor;
 
-public class TreePath<T>
+public class TreePath<T> where T : notnull
 {
-    public TreePath<T> Parent { get; set; }
+    public TreePath<T>? Parent { get; set; }
     public string Name { get; set; }
     public T Data { get; set; }
-    public List<TreePath<T>> Children { get; } = new List<TreePath<T>>();
+    public List<TreePath<T>> Children { get; } = [];
 
     public TreePath() { }
 
-    public TreePath(string name, T data = default)
+    public TreePath(string name, T data)
     {
         Name = name;
         Data = data;
     }
 
-    public void AddChild(string path, T data = default)
+    public void AddChild(string path, T data)
     {
         string[] parts = path.Split('/');
         TreePath<T> currentNode = this;
@@ -26,7 +26,7 @@ public class TreePath<T>
         for (int i = 0; i < parts.Length - 1; i++)
         {
             string part = parts[i];
-            TreePath<T> childNode = currentNode.Children.Find(c => c.Name == part);
+            TreePath<T>? childNode = currentNode.Children.Find(c => c.Name == part);
             if (childNode == null)
             {
                 childNode = new TreePath<T> { Name = part };

@@ -112,7 +112,7 @@ public class InspectorWindow : EditorWindow
                             var meta = MetaFile.Load(path);
                             if (meta != null)
                             {
-                                Type? editorType = CustomEditorAttribute.GetEditor(meta.importer.GetType());
+                                Type? editorType = CustomEditorAttribute.GetEditor(meta.Importer.GetType());
                                 if (editorType != null)
                                 {
                                     CreateInstanceCustomEditor(path, editorType, meta);

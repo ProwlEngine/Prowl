@@ -1038,7 +1038,7 @@ public class NodeEditor
         {
             object? obj = graph;
             // Get graph.parameters field
-            FieldInfo props = graph.GetType().GetField("parameters", BindingFlags.Instance | BindingFlags.Public);
+            FieldInfo props = graph.GetType().GetField("parameters", BindingFlags.Instance | BindingFlags.Public) ?? throw new Exception();
             return EditorGUI.PropertyGrid("BlackBoard", ref obj, [props], EditorGUI.PropertyGridConfig.NoHeader);
         }
     }

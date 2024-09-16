@@ -12,19 +12,20 @@ namespace Prowl.Editor.ScriptedEditors;
 [CustomEditor(typeof(ScriptableObjectImporter))]
 public class ScriptableObjectEditor : ScriptedEditor
 {
-    ScriptableObject? scriptObject;
+    ScriptableObject? _scriptObject;
 
     public override void OnInspectorGUI()
     {
-        var importer = (ScriptableObjectImporter)(target as MetaFile).importer;
+        var metaFile = target as MetaFile ?? throw new Exception();
+        // var importer = (ScriptableObjectImporter)metaFile.importer;
 
         try
         {
             bool changed = false;
 
-            scriptObject ??= Serializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile((target as MetaFile).AssetPath));
+            _scriptObject ??= Serializer.Deserialize<ScriptableObject>(StringTagConverter.ReadFromFile(metaFile.AssetPath));
 
-            object t = scriptObject;
+            object t = _scriptObject ?? throw new Exception();
             changed |= PropertyGrid("CompPropertyGrid", ref t, TargetFields.Serializable | TargetFields.Properties, PropertyGridConfig.NoHeader | PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground);
 
             // Draw any Buttons
@@ -32,15 +33,15 @@ public class ScriptableObjectEditor : ScriptedEditor
 
             if (changed)
             {
-                scriptObject.OnValidate();
-                StringTagConverter.WriteToFile(Serializer.Serialize(scriptObject), (target as MetaFile).AssetPath);
-                AssetDatabase.Reimport((target as MetaFile).AssetPath);
+                _scriptObject.OnValidate();
+                StringTagConverter.WriteToFile(Serializer.Serialize(_scriptObject), metaFile.AssetPath);
+                AssetDatabase.Reimport(metaFile.AssetPath);
             }
         }
         catch (Exception e)
         {
-            double ItemSize = EditorStylePrefs.Instance.ItemSize;
-            gui.Node("DummyForText").ExpandWidth().Height(ItemSize * 10);
+            double itemSize = EditorStylePrefs.Instance.ItemSize;
+            gui.Node("DummyForText").ExpandWidth().Height(itemSize * 10);
             gui.Draw2D.DrawText("Failed to Deserialize ScriptableObject, The ScriptableObject file is invalid. Error: " + e.ToString(), gui.CurrentNode.LayoutData.Rect);
         }
     }

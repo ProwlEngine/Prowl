@@ -148,7 +148,7 @@ public class MultiValueDictionary<TKey, TValue> :
     ======================================================================*/
 
     /// <summary>
-    /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
+    /// Creates a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
     /// class that is empty, has the default initial capacity, and uses the default
     /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The
     /// internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
@@ -180,7 +180,7 @@ public class MultiValueDictionary<TKey, TValue> :
     }
 
     /// <summary>
-    /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
+    /// Creates a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
     /// class that is empty, has the specified initial capacity, and uses the default
     /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The
     /// internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
@@ -216,7 +216,7 @@ public class MultiValueDictionary<TKey, TValue> :
     }
 
     /// <summary>
-    /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
+    /// Creates a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
     /// class that is empty, has the default initial capacity, and uses the specified
     /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The
     /// internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
@@ -250,7 +250,7 @@ public class MultiValueDictionary<TKey, TValue> :
     }
 
     /// <summary>
-    /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
+    /// Creates a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
     /// class that is empty, has the specified initial capacity, and uses the specified
     /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The
     /// internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
@@ -375,7 +375,7 @@ public class MultiValueDictionary<TKey, TValue> :
     ======================================================================*/
 
     /// <summary>
-    /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
+    /// Creates a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
     /// class that is empty, has the default initial capacity, and uses the default
     /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The
     /// internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
@@ -409,7 +409,7 @@ public class MultiValueDictionary<TKey, TValue> :
     }
 
     /// <summary>
-    /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
+    /// Creates a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
     /// class that is empty, has the specified initial capacity, and uses the default
     /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The
     /// internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
@@ -447,7 +447,7 @@ public class MultiValueDictionary<TKey, TValue> :
     }
 
     /// <summary>
-    /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
+    /// Creates a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
     /// class that is empty, has the default initial capacity, and uses the specified
     /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The
     /// internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
@@ -483,7 +483,7 @@ public class MultiValueDictionary<TKey, TValue> :
     }
 
     /// <summary>
-    /// Creates a new new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
+    /// Creates a new instance of the <see cref="MultiValueDictionary{TKey, TValue}" />
     /// class that is empty, has the specified initial capacity, and uses the specified
     /// <see cref="IEqualityComparer{TKey}" /> for <typeparamref name="TKey"/>. The
     /// internal dictionary will use instances of the <typeparamref name="TValueCollection"/>
@@ -816,7 +816,7 @@ public class MultiValueDictionary<TKey, TValue> :
             throw new ArgumentNullException(nameof(key));
 
         var success = _dictionary.TryGetValue(key, out InnerCollectionView collection);
-        value = collection;
+        value = collection is null ? new List<TValue>() : collection;
         return success;
     }
 

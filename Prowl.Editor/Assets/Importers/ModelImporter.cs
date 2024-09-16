@@ -667,7 +667,7 @@ public class ModelEditor : ScriptedEditor
     {
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
-        var importer = (ModelImporter)(target as MetaFile).importer;
+        var importer = (ModelImporter)(target as MetaFile).Importer;
         var serialized = AssetDatabase.LoadAsset((target as MetaFile).AssetPath);
 
         gui.CurrentNode.Layout(LayoutType.Column);

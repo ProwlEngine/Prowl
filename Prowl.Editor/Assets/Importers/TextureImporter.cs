@@ -53,7 +53,7 @@ public class TextureEditor : ScriptedEditor
 {
     public override void OnInspectorGUI()
     {
-        var importer = (TextureImporter)(target as MetaFile).importer;
+        var importer = (TextureImporter)(target as MetaFile).Importer;
 
         gui.CurrentNode.Layout(LayoutType.Column);
 

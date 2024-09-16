@@ -130,50 +130,52 @@ public partial class Gui
 
     private static StbTextEditState stb;
 
-    internal static bool OnProcess(WidgetStyle style, Interactable interact, ref string Text, uint MaxLength, InputFieldFlags Flags)
+    internal static bool OnProcess(WidgetStyle style, Interactable interact, ref string text, uint maxLength, InputFieldFlags Flags)
     {
         var g = ActiveGUI;
-        var font = style.Font.IsAvailable ? style.Font.Res : Font.DefaultFont;
+        var font = style.Font is { IsAvailable: true, Res: not null } ? style.Font.Res : Font.DefaultFont;
         var fontsize = style.FontSize;
-        var render_pos = new Vector2(g.CurrentNode.LayoutData.InnerRect.x, g.CurrentNode.LayoutData.InnerRect.y);
+        var renderPos = new Vector2(g.CurrentNode.LayoutData.InnerRect.x, g.CurrentNode.LayoutData.InnerRect.y);
         // Center text vertically
         //render_pos.y += (g.CurrentNode.LayoutData.InnerRect.height - fontsize) / 2;
-        render_pos.y += 3;
-        render_pos.x += 5;
+        renderPos.y += 3;
+        renderPos.x += 5;
 
         bool justSelected = false;
-        if (stb == null || stb.ID != interact.ID)
+        if (stb.ID != interact.ID)
         {
             justSelected = true;
-            stb = new();
-            stb.ID = interact.ID;
-            stb.SingleLine = !((Flags & InputFieldFlags.Multiline) == InputFieldFlags.Multiline);
-            stb.font = font;
-            stb.Text = Text;
+            stb = new StbTextEditState
+            {
+                ID = interact.ID,
+                SingleLine = (Flags & InputFieldFlags.Multiline) != InputFieldFlags.Multiline,
+                font = font,
+                Text = text
+            };
         }
 
-        HandleKeyEvent(stb, MaxLength, Flags);
+        HandleKeyEvent(stb, maxLength, Flags);
         HandleMouseEvent(stb);
 
         if (justSelected && (Flags & InputFieldFlags.AutoSelectAll) == InputFieldFlags.AutoSelectAll)
         {
             stb.SelectStart = 0;
-            stb.SelectEnd = Text.Length;
+            stb.SelectEnd = text.Length;
         }
 
         if (g.IsNodeHovered() && g.IsPointerDoubleClick(MouseButton.Left))
         {
             stb.SelectStart = 0;
-            stb.SelectEnd = Text.Length;
+            stb.SelectEnd = text.Length;
         }
 
         //g.DrawText(font, Text, fontsize, render_pos, Color.black);
 
         // Render
-        Rect clip_rect = g.CurrentNode.LayoutData.InnerRect;
-        Vector2 text_size = new Vector2(0f, 0f);
+        Rect clipRect = g.CurrentNode.LayoutData.InnerRect;
+        // Vector2 textSize = new Vector2(0f, 0f);
         stb.cursorAnim += Time.deltaTimeF;
-        bool is_multiline = !stb.SingleLine;
+        bool isMultiline = !stb.SingleLine;
         Vector2 size = new Vector2(g.CurrentNode.LayoutData.InnerRect.width, g.CurrentNode.LayoutData.InnerRect.height);
 
         // We need to:
@@ -181,33 +183,33 @@ public partial class Gui
         // - Handle scrolling, highlight selection, display cursor (those all requires some form of 1d.2d cursor position calculation)
         // - Measure text height (for scrollbar)
         // We are attempting to do most of that in **one main pass** to minimize the computation cost (non-negligible for large amount of text) + 2nd pass for selection rendering (we could merge them by an extra refactoring effort)
-        int text_begin = 0;
-        Vector2 cursor_offset = Vector2.zero, select_start_offset = Vector2.zero;
+        int textBegin = 0;
+        Vector2 cursorOffset = Vector2.zero, select_start_offset = Vector2.zero;
 
         {
             // Count lines + find lines numbers straddling 'cursor' and 'select_start' position.
-            int[] searches_input_ptr = new int[2];
-            searches_input_ptr[0] = text_begin + stb.CursorIndex;
-            searches_input_ptr[1] = -1;
+            int[] searchesInputPtr = new int[2];
+            searchesInputPtr[0] = textBegin + stb.CursorIndex;
+            searchesInputPtr[1] = -1;
             int searches_remaining = 1;
             int[] searches_result_line_number = [-1, -999];
             if (stb.SelectStart != stb.SelectEnd)
             {
-                searches_input_ptr[1] = text_begin + MathD.Min(stb.SelectStart, stb.SelectEnd);
+                searchesInputPtr[1] = textBegin + MathD.Min(stb.SelectStart, stb.SelectEnd);
                 searches_result_line_number[1] = -1;
                 searches_remaining++;
             }
 
             // Iterate all lines to find our line numbers
             // In multi-line mode, we never exit the loop until all lines are counted, so add one extra to the searches_remaining counter.
-            searches_remaining += is_multiline ? 1 : 0;
+            searches_remaining += isMultiline ? 1 : 0;
             int line_count = 0;
-            for (int s = text_begin; s < stb.Text.Length && stb.Text[s] != 0; s++)
+            for (int s = textBegin; s < stb.Text.Length && stb.Text[s] != 0; s++)
                 if (stb.Text[s] == '\n')
                 {
                     line_count++;
-                    if (searches_result_line_number[0] == -1 && s >= searches_input_ptr[0]) { searches_result_line_number[0] = line_count; if (--searches_remaining <= 0) break; }
-                    if (searches_result_line_number[1] == -1 && s >= searches_input_ptr[1]) { searches_result_line_number[1] = line_count; if (--searches_remaining <= 0) break; }
+                    if (searches_result_line_number[0] == -1 && s >= searchesInputPtr[0]) { searches_result_line_number[0] = line_count; if (--searches_remaining <= 0) break; }
+                    if (searches_result_line_number[1] == -1 && s >= searchesInputPtr[1]) { searches_result_line_number[1] = line_count; if (--searches_remaining <= 0) break; }
                 }
             line_count++;
             if (searches_result_line_number[0] == -1) searches_result_line_number[0] = line_count;
@@ -216,17 +218,18 @@ public partial class Gui
             int? remaining = null;
             Vector2? out_offset = null;
             // Calculate 2d position by finding the beginning of the line and measuring distance
-            cursor_offset.x = font.InputTextCalcTextSizeW(stb.Text, ImStrbolW(stb.Text, searches_input_ptr[0], text_begin), searches_input_ptr[0], ref remaining, ref out_offset).x;
-            cursor_offset.y = searches_result_line_number[0] * fontsize;
+            cursorOffset.x = font.InputTextCalcTextSizeW(stb.Text, ImStrbolW(stb.Text, searchesInputPtr[0], textBegin), searchesInputPtr[0], ref remaining, ref out_offset).x;
+            cursorOffset.y = searches_result_line_number[0] * fontsize;
             if (searches_result_line_number[1] >= 0)
             {
-                select_start_offset.x = font.InputTextCalcTextSizeW(stb.Text, ImStrbolW(stb.Text, searches_input_ptr[1], text_begin), searches_input_ptr[1], ref remaining, ref out_offset).x;
+                select_start_offset.x = font.InputTextCalcTextSizeW(stb.Text, ImStrbolW(stb.Text, searchesInputPtr[1], textBegin), searchesInputPtr[1], ref remaining, ref out_offset).x;
                 select_start_offset.y = searches_result_line_number[1] * fontsize;
             }
 
+            // TODO: commented textSize because its' never used
             // Calculate text height
-            if (is_multiline)
-                text_size = new Vector2(size.x, line_count * fontsize);
+            // if (isMultiline)
+                // textSize = new Vector2(size.x, line_count * fontsize);
         }
 
         // Scroll
@@ -236,10 +239,10 @@ public partial class Gui
             if ((Flags & InputFieldFlags.NoHorizontalScroll) == 0)
             {
                 double scroll_increment_x = size.x * 0.25f;
-                if (cursor_offset.x < stb.ScrollX)
-                    stb.ScrollX = (int)MathD.Max(0.0f, cursor_offset.x - scroll_increment_x);
-                else if (cursor_offset.x - size.x >= stb.ScrollX)
-                    stb.ScrollX = (int)(cursor_offset.x - size.x + scroll_increment_x);
+                if (cursorOffset.x < stb.ScrollX)
+                    stb.ScrollX = (int)MathD.Max(0.0f, cursorOffset.x - scroll_increment_x);
+                else if (cursorOffset.x - size.x >= stb.ScrollX)
+                    stb.ScrollX = (int)(cursorOffset.x - size.x + scroll_increment_x);
             }
             else
             {
@@ -247,71 +250,71 @@ public partial class Gui
             }
 
             // Vertical scroll
-            if (is_multiline)
+            if (isMultiline)
             {
                 double scroll_y = g.CurrentNode.VScroll;
-                if (cursor_offset.y - fontsize < scroll_y)
-                    scroll_y = MathD.Max(0.0f, cursor_offset.y - fontsize);
-                else if (cursor_offset.y - size.y >= scroll_y)
-                    scroll_y = cursor_offset.y - size.y;
+                if (cursorOffset.y - fontsize < scroll_y)
+                    scroll_y = MathD.Max(0.0f, cursorOffset.y - fontsize);
+                else if (cursorOffset.y - size.y >= scroll_y)
+                    scroll_y = cursorOffset.y - size.y;
                 g.SetNodeStorage("VScroll", scroll_y);
             }
         }
         stb.CursorFollow = false;
-        if (is_multiline)
-            render_pos.y -= g.CurrentNode.VScroll;
+        if (isMultiline)
+            renderPos.y -= g.CurrentNode.VScroll;
         Vector2 render_scroll = new Vector2(stb.ScrollX, 0.0f);
 
         if ((Flags & InputFieldFlags.OnlyDisplay) == InputFieldFlags.OnlyDisplay)
         {
             Color32 colb = style.TextColor;
-            g.Draw2D.DrawList.AddText(font, fontsize, render_pos - render_scroll, colb, stb.Text, 0, stb.Text.Length, 0.0f, (is_multiline ? null : (Vector4?)clip_rect));
+            g.Draw2D.DrawList.AddText(font, fontsize, renderPos - render_scroll, colb, stb.Text, 0, stb.Text.Length, 0.0f, (isMultiline ? null : (Vector4?)clipRect));
             return false;
         }
 
         // Draw selection
         if (stb.SelectStart != stb.SelectEnd)
         {
-            int text_selected_begin = text_begin + MathD.Min(stb.SelectStart, stb.SelectEnd);
-            int text_selected_end = text_begin + MathD.Max(stb.SelectStart, stb.SelectEnd);
+            int text_selected_begin = textBegin + MathD.Min(stb.SelectStart, stb.SelectEnd);
+            int text_selected_end = textBegin + MathD.Max(stb.SelectStart, stb.SelectEnd);
 
-            float bg_offy_up = is_multiline ? 0.0f : -1.0f;    // FIXME: those offsets should be part of the style? they don't play so well with multi-line selection.
-            float bg_offy_dn = is_multiline ? 0.0f : 2.0f;
+            float bg_offy_up = isMultiline ? 0.0f : -1.0f;    // FIXME: those offsets should be part of the style? they don't play so well with multi-line selection.
+            float bg_offy_dn = isMultiline ? 0.0f : 2.0f;
             Color32 bg_color = style.ActiveColor;
-            Vector2 rect_pos = render_pos + select_start_offset - render_scroll;
+            Vector2 rect_pos = renderPos + select_start_offset - render_scroll;
             for (int p = text_selected_begin; p < text_selected_end;)
             {
-                if (rect_pos.y > clip_rect.y + clip_rect.height + fontsize)
+                if (rect_pos.y > clipRect.y + clipRect.height + fontsize)
                     break;
-                if (rect_pos.y < clip_rect.y)
+                if (rect_pos.y < clipRect.y)
                 {
                     while (p < text_selected_end)
-                        if (Text[p++] == '\n') //TODO: what should we access here?
+                        if (text[p++] == '\n') //TODO: what should we access here?
                             break;
                 }
                 else
                 {
                     var temp = (int?)p;
                     Vector2? out_offset = null;
-                    Vector2 rect_size = font.InputTextCalcTextSizeW(Text, p, text_selected_end, ref temp, ref out_offset, true); p = temp!.Value;
+                    Vector2 rect_size = font.InputTextCalcTextSizeW(text, p, text_selected_end, ref temp, ref out_offset, true); p = temp!.Value;
                     if (rect_size.x <= 0.0f) rect_size.x = (int)(font.GetCharAdvance(' ') * 0.50f); // So we can see selected empty lines
                     Rect rect = new Rect(rect_pos + new Vector2(0.0f, bg_offy_up - fontsize), new Vector2(rect_size.x, bg_offy_dn + fontsize));
-                    rect.Clip(clip_rect);
-                    if (rect.Overlaps(clip_rect))
+                    rect.Clip(clipRect);
+                    if (rect.Overlaps(clipRect))
                         g.Draw2D.DrawList.AddRectFilled(rect.Min, rect.Max, bg_color);
                 }
-                rect_pos.x = render_pos.x - render_scroll.x;
+                rect_pos.x = renderPos.x - render_scroll.x;
                 rect_pos.y += fontsize;
             }
         }
 
 
         Color32 col = style.TextColor;
-        g.Draw2D.DrawList.AddText(font, fontsize, render_pos - render_scroll, col, stb.Text, 0, stb.Text.Length, 0.0f, (is_multiline ? null : (Vector4?)clip_rect));
+        g.Draw2D.DrawList.AddText(font, fontsize, renderPos - render_scroll, col, stb.Text, 0, stb.Text.Length, 0.0f, (isMultiline ? null : (Vector4?)clipRect));
         //g.DrawText(font, fontsize, Text, render_pos - render_scroll, Color.black, 0, stb.CurLenA, 0.0f, (is_multiline ? null : (ImVec4?)clip_rect));
 
         // Draw blinking cursor
-        Vector2 cursor_screen_pos = render_pos + cursor_offset - render_scroll;
+        Vector2 cursor_screen_pos = renderPos + cursorOffset - render_scroll;
         bool cursor_is_visible = (stb.cursorAnim <= 0.0f) || (stb.cursorAnim % 1.20f) <= 0.80f;
         if (cursor_is_visible)
             g.Draw2D.DrawList.AddLine(cursor_screen_pos + new Vector2(0.0f, -fontsize - 4f), cursor_screen_pos + new Vector2(0.0f, -5f), col);
@@ -319,7 +322,7 @@ public partial class Gui
 
         if ((Flags & InputFieldFlags.EnterReturnsTrue) == InputFieldFlags.EnterReturnsTrue)
         {
-            Text = stb.Text;
+            text = stb.Text;
             if (g.IsKeyPressed(Key.Return))
             {
                 g.FocusID = 0;
@@ -329,12 +332,12 @@ public partial class Gui
         }
         else
         {
-            if (!is_multiline && g.IsKeyPressed(Key.Return))
+            if (!isMultiline && g.IsKeyPressed(Key.Return))
                 g.FocusID = 0;
 
-            var oldText = Text;
-            Text = stb.Text;
-            return oldText != Text;
+            var oldText = text;
+            text = stb.Text;
+            return oldText != text;
         }
     }
 

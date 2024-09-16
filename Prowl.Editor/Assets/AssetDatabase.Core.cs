@@ -249,7 +249,7 @@ public static partial class AssetDatabase
         {
             // No meta file, create and import
             var newMeta = new MetaFile(fileInfo);
-            if (newMeta.importer == null)
+            if (newMeta.Importer == null)
             {
                 Debug.LogError($"No importer found for file:\n{fileInfo.FullName}");
                 return false;
@@ -352,7 +352,7 @@ public static partial class AssetDatabase
             Debug.LogError($"No valid meta file found for asset: {ToRelativePath(assetFile)}");
             return false;
         }
-        if (meta.importer == null)
+        if (meta.Importer == null)
         {
             Debug.LogError($"No valid importer found for asset: {ToRelativePath(assetFile)}");
             return false;
@@ -362,7 +362,7 @@ public static partial class AssetDatabase
         SerializedAsset ctx = new(meta.guid);
         try
         {
-            meta.importer.Import(ctx, assetFile);
+            meta.Importer.Import(ctx, assetFile);
         }
         catch (Exception e)
         {

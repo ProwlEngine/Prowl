@@ -74,7 +74,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable, IRenderable
 
     public void GetRenderingData(out PropertyBlock properties, out IGeometryDrawData drawData, out Matrix4x4 model)
     {
-        drawData = Mesh.Res;
+        drawData = Mesh.Res ?? throw new System.ArgumentNullException(nameof(Mesh));
         properties = Properties;
         model = Transform.localToWorldMatrix;
     }

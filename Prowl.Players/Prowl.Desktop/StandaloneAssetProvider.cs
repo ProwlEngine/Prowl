@@ -31,7 +31,7 @@ public class StandaloneAssetProvider : IAssetProvider
             return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID - 1]);
 
         foreach (AssetBundle package in packages)
-            if (package.TryGetAsset(relativeAssetPath, out var asset))
+            if (package.TryGetAsset(relativeAssetPath, out var asset) && asset is not null)
             {
                 _loaded[guid] = asset;
                 return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID - 1]);
@@ -45,7 +45,7 @@ public class StandaloneAssetProvider : IAssetProvider
             return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID - 1]);
 
         foreach (AssetBundle package in packages)
-            if (package.TryGetAsset(guid, out var asset))
+            if (package.TryGetAsset(guid, out var asset) && asset is not null)
             {
                 _loaded[guid] = asset;
                 return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID - 1]);
@@ -53,7 +53,7 @@ public class StandaloneAssetProvider : IAssetProvider
         throw new FileNotFoundException($"Asset with GUID {guid} not found.");
     }
 
-    public AssetRef<T> LoadAsset<T>(IAssetRef assetID) where T : EngineObject
+    public AssetRef<T> LoadAsset<T>(IAssetRef? assetID) where T : EngineObject
     {
         if (assetID == null) return null;
         return LoadAsset<T>(assetID.AssetID, assetID.FileID);
@@ -61,11 +61,11 @@ public class StandaloneAssetProvider : IAssetProvider
 
     public SerializedAsset? LoadAsset(Guid guid)
     {
-        if (_loaded.ContainsKey(guid))
-            return _loaded[guid];
+        if (_loaded.TryGetValue(guid, out SerializedAsset? loadAsset))
+            return loadAsset;
 
         foreach (AssetBundle package in packages)
-            if (package.TryGetAsset(guid, out var asset))
+            if (package.TryGetAsset(guid, out var asset) && asset is not null)
             {
                 _loaded[guid] = asset;
                 return asset;

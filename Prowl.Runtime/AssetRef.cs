@@ -85,7 +85,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     {
         get
         {
-            if (instance != null && !instance.IsDestroyed) return true;
+            if (instance is { IsDestroyed: false }) return true;
             RetrieveInstance();
             return instance != null;
         }
