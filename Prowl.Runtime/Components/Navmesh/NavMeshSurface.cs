@@ -410,11 +410,11 @@ public class NavMeshSurface : MonoBehaviour
 
     class SceneMeshData
     {
-        public class MeshData
-        {
-            public List<System.Numerics.Vector3> vertices;
-            public List<int> indices;
-        }
+        // public class MeshData
+        // {
+        //     public List<System.Numerics.Vector3> vertices;
+        //     public List<int> indices;
+        // }
 
         public readonly List<Mesh> shapeData = new();
         public readonly List<Transform> transformsOut = new();

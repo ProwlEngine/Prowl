@@ -423,7 +423,7 @@ public class KeyFrame : IEquatable<KeyFrame>, IComparable<KeyFrame>
 
     public int CompareTo([AllowNull] KeyFrame other) => Position.CompareTo(other.Position);
     public bool Equals([AllowNull] KeyFrame other) => this == other;
-    public override bool Equals([AllowNull] object obj) => (obj as KeyFrame) != null && Equals((KeyFrame)obj);
+    public override bool Equals([AllowNull] object obj) => obj is KeyFrame keyFrame && Equals(keyFrame);
     public override int GetHashCode() =>
         Position.GetHashCode() ^ Value.GetHashCode() ^ TangentIn.GetHashCode() ^
         TangentOut.GetHashCode() ^ Continuity.GetHashCode();
