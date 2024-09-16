@@ -9,8 +9,6 @@ using SPIRVCross.NET;
 
 using Veldrid;
 
-using DXCSeverity = DirectXShaderCompiler.NET.CompilationMessage.MessageSeverity;
-
 #pragma warning disable
 
 namespace Prowl.Editor.Utilities;
@@ -42,9 +40,9 @@ public struct CompilationMessage
 
         message.severity = dxcMessage.severity switch
         {
-            DXCSeverity.Info    => LogSeverity.Normal,
-            DXCSeverity.Warning => LogSeverity.Warning,
-            DXCSeverity.Error   => LogSeverity.Error,
+            MessageSeverity.Info => LogSeverity.Normal,
+            MessageSeverity.Warning => LogSeverity.Warning,
+            MessageSeverity.Error => LogSeverity.Error,
         };
 
         message.filename = dxcMessage.filename;
@@ -63,11 +61,11 @@ public static partial class ShaderCompiler
     {
         return stages switch
         {
-            ShaderStages.Vertex                 => ShaderType.Vertex,
-            ShaderStages.Geometry               => ShaderType.Geometry,
-            ShaderStages.TessellationControl    => ShaderType.Hull,
+            ShaderStages.Vertex => ShaderType.Vertex,
+            ShaderStages.Geometry => ShaderType.Geometry,
+            ShaderStages.TessellationControl => ShaderType.Hull,
             ShaderStages.TessellationEvaluation => ShaderType.Domain,
-            ShaderStages.Fragment               => ShaderType.Fragment
+            ShaderStages.Fragment => ShaderType.Fragment
         };
     }
 
