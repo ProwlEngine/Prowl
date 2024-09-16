@@ -123,6 +123,7 @@ public class SceneViewWindow : EditorWindow
                     Matrix4x4.CreateTranslation(new Vector3(gX, gY, 0)),
                 GridType.YZ => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Vector3.up, Vector3.right) *
                     Matrix4x4.CreateTranslation(new Vector3(0, gY, gZ)),
+                _ => throw new NotImplementedException(),
             };
         }
 
