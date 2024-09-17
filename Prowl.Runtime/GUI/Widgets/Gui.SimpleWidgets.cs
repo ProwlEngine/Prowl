@@ -30,7 +30,7 @@ public partial class Gui
             Interactable interact = g.GetInteractable();
 
             var col = g.ActiveID == interact.ID ? style.ActiveColor :
-                g.HoveredID == interact.ID      ? style.HoveredColor : style.BGColor;
+                g.HoveredID == interact.ID ? style.HoveredColor : style.BGColor;
 
             g.Draw2D.DrawRectFilled(g.CurrentNode.LayoutData.Rect, col, style.Roundness);
             g.Draw2D.DrawRect(g.CurrentNode.LayoutData.Rect, style.BorderColor, style.BorderThickness, style.Roundness);
@@ -47,7 +47,7 @@ public partial class Gui
             y.PixelOffset = 1;
             var NewIndex = ItemIndex;
             var popupHolder = g.CurrentNode;
-            if (g.BeginPopup(popupName, out var popupNode))
+            if (g.BeginPopup(popupName, out var popupNode, inputstyle: style))
             {
                 int longestText = 0;
                 for (var Index = 0; Index < Items.Length; ++Index)
@@ -100,7 +100,7 @@ public partial class Gui
             Interactable interact = GetInteractable();
 
             var col = ActiveID == interact.ID ? style.ActiveColor :
-                HoveredID == interact.ID      ? style.HoveredColor : style.BGColor;
+                HoveredID == interact.ID ? style.HoveredColor : style.BGColor;
 
             Draw2D.DrawRectFilled(CurrentNode.LayoutData.Rect, col, style.Roundness);
             Draw2D.DrawRect(CurrentNode.LayoutData.Rect, style.BorderColor, style.BorderThickness, style.Roundness);
@@ -264,7 +264,7 @@ public partial class Gui
                     if ((IsPointerClick(MouseButton.Left) || IsPointerClick(MouseButton.Middle) || IsPointerClick(MouseButton.Right)) &&
                         !IsPointerMoving &&
                         !node.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Popup
-                        //!parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
+                                                                      //!parentNode.LayoutData.Rect.Contains(PointerPos) && // Mouse not in Parent
                         !IsBlockedByInteractable(PointerPos, 50000 + nextPopupIndex)) // Not blocked by any interactables above this popup
                     {
                         ClosePopup(parentNode);
@@ -275,8 +275,8 @@ public partial class Gui
                 if (!invisible)
                 {
                     Draw2D.PushClip(ScreenRect, true);
-                    Draw2D.DrawRectFilled(CurrentNode.LayoutData.Rect, style.BGColor, 10);
-                    Draw2D.DrawRect(CurrentNode.LayoutData.Rect, style.BorderColor, 2, 10);
+                    Draw2D.DrawRectFilled(CurrentNode.LayoutData.Rect, style.BGColor, style.Roundness);
+                    Draw2D.DrawRect(CurrentNode.LayoutData.Rect, style.BorderColor, 2, style.Roundness);
                     Draw2D.PopClip();
                 }
 
