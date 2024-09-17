@@ -14,18 +14,22 @@ namespace Prowl.Editor;
 
 public static class Program
 {
-    private static bool IsReloadingExternalAssemblies { get; set; }
     public static void RegisterReloadOfExternalAssemblies() => IsReloadingExternalAssemblies = true;
+    private static bool IsReloadingExternalAssemblies { get; set; }
     private static bool s_createdDefaultWindows;
     private static bool s_opened;
 
     public static int Main(string[] args)
     {
-        return Parser.Default.ParseArguments<CliOpenOptions, CliCreateOptions>(args)
+        // CommandLineParser what command line arguments where used. `open` is the default option,
+        // so there is not need to call "prowl.exe open", only "prowl.exe".
+        return Parser.Default.ParseArguments<CliOpenOptions, CliCreateOptions, CliBuildOptions>(args)
                      .MapResult(
+                         // the default option, so there is not need to call "prowl.exe open", only "prowl.exe"
                          (CliOpenOptions options) => Run(options),
                          (CliCreateOptions options) => CreateCommand(options),
-                         errs => 1); // error
+                         (CliBuildOptions options) => BuildCommand(options),
+                         errs => 1); // the command do not exist, finish the program as an error
     }
 
     private static int CreateCommand(CliCreateOptions options)
@@ -60,7 +64,6 @@ public static class Program
 
         Application.Update += () =>
         {
-
             if (!s_opened && options?.ProjectPath is not null && options.ProjectPath.Exists)
             {
                 Project.Open(new Project(options.ProjectPath));
@@ -83,18 +86,23 @@ public static class Program
                     s_createdDefaultWindows = true;
                     //new EditorMainMenubar();
                     var console = EditorGuiManager.DockWindowTo(new ConsoleWindow(), null, Docking.DockZone.Center);
-                    var assetbrowser = EditorGuiManager.DockWindowTo(new AssetsBrowserWindow(), console, Docking.DockZone.Center);
+                    var assetbrowser =
+                        EditorGuiManager.DockWindowTo(new AssetsBrowserWindow(), console, Docking.DockZone.Center);
                     // Add Asset Tree, When we do this AssetBrowser node will subdivide into two children
-                    var assettree = EditorGuiManager.DockWindowTo(new AssetsTreeWindow(), assetbrowser, Docking.DockZone.Left, 0.2f);
+                    var assettree = EditorGuiManager.DockWindowTo(new AssetsTreeWindow(), assetbrowser,
+                        Docking.DockZone.Left, 0.2f);
                     // So for the Inspector we need to use the Child to dock now
-                    var inspector = EditorGuiManager.DockWindowTo(new InspectorWindow(), assetbrowser.Child[1], Docking.DockZone.Right, 0.75f);
+                    var inspector = EditorGuiManager.DockWindowTo(new InspectorWindow(), assetbrowser.Child[1],
+                        Docking.DockZone.Right, 0.75f);
                     // Now Asset Browser is Subdivided twice,
                     assetbrowser = assetbrowser.Child[1].Child[0];
-                    var game = EditorGuiManager.DockWindowTo(new GameWindow(), assetbrowser, Docking.DockZone.Top, 0.65f);
+                    var game = EditorGuiManager.DockWindowTo(new GameWindow(), assetbrowser, Docking.DockZone.Top,
+                        0.65f);
                     var scene = EditorGuiManager.DockWindowTo(new SceneViewWindow(), game, Docking.DockZone.Center);
 
                     // and finally hierarchy on top of asset tree
-                    var hierarchy = EditorGuiManager.DockWindowTo(new HierarchyWindow(), assettree, Docking.DockZone.Top, 0.65f);
+                    var hierarchy = EditorGuiManager.DockWindowTo(new HierarchyWindow(), assettree,
+                        Docking.DockZone.Top, 0.65f);
 
                     // new ProjectSettingsWindow();
                     // new PreferencesWindow();
@@ -149,17 +157,19 @@ public static class Program
             Graphics.EndFrame();
         };
 
-        Application.Quitting += () =>
-        {
-
-        };
+        Application.Quitting += () => { };
 
         Application.Run("Prowl Editor", 1920, 1080, new EditorAssetProvider(), true);
 
         return 0;
     }
 
-    public static void CheckReloadingAssemblies()
+    private static int BuildCommand(CliBuildOptions options)
+    {
+        throw new NotImplementedException();
+    }
+
+    private static void CheckReloadingAssemblies()
     {
         if (IsReloadingExternalAssemblies)
         {
