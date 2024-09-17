@@ -173,13 +173,13 @@ public class DefaultRenderPipeline : RenderPipeline
 
                 foreach (GizmoBuilder.IconDrawCall icon in icons)
                 {
-                    Vector3 center = icon.Center;
+                    Vector3 center = icon.center;
                     if (cameraRelative)
                         center -= cameraPosition;
                     Matrix4x4 billboard = Matrix4x4.CreateBillboard(center, Vector3.zero, camera.Transform.up, camera.Transform.forward);
 
                     buffer.SetMatrix("_Matrix_VP", (billboard * vp).ToFloat());
-                    buffer.SetTexture("_MainTexture", icon.Texture);
+                    buffer.SetTexture("_MainTexture", icon.texture);
 
                     buffer.DrawSingle(s_quadMesh);
                 }
