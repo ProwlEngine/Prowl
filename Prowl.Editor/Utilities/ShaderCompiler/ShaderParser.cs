@@ -40,18 +40,17 @@ public static partial class ShaderParser
         {')', (ctx) => HandleSingleCharToken(ctx, ShaderToken.CloseParen)},
         {'=', (ctx) => HandleSingleCharToken(ctx, ShaderToken.Equals)},
         {',', (ctx) => HandleSingleCharToken(ctx, ShaderToken.Comma)},
-        {'/', HandlePotentialComment}
     };
 
     private static Tokenizer<ShaderToken> CreateTokenizer(string input)
     {
-
         return new(
             input.AsMemory(),
             symbolHandlers,
             "{}()=,".Contains,
             ShaderToken.Identifier,
-            ShaderToken.None
+            ShaderToken.None,
+            HandleCommentWhitespace
         );
     }
 
@@ -206,9 +205,9 @@ public static partial class ShaderParser
 
             (ConsoleColor col, string prefix) = message.severity switch
             {
-                LogSeverity.Normal  => (ConsoleColor.White, "Info"),
+                LogSeverity.Normal => (ConsoleColor.White, "Info"),
                 LogSeverity.Warning => (ConsoleColor.Yellow, "Warning"),
-                _                   => (ConsoleColor.Red, "Error"),
+                _ => (ConsoleColor.Red, "Error"),
             };
 
             prefix += $" compiling {shaderName}: ";
@@ -223,22 +222,31 @@ public static partial class ShaderParser
     }
 
 
-    private static ShaderToken HandlePotentialComment(Tokenizer tokenizer)
+    private static bool HandleCommentWhitespace(char c, Tokenizer tokenizer)
     {
+        if (char.IsWhiteSpace(c))
+            return true;
+
+        if (c != '/')
+            return false;
+
         if (tokenizer.InputPosition + 1 >= tokenizer.Input.Length)
-            return ShaderToken.None;
+            return false;
 
         // Look ahead
-        char next = tokenizer.Input.Span[tokenizer.TokenPosition + 1];
+        char next = tokenizer.Input.Span[tokenizer.InputPosition + 1];
 
         if (next == '/')
         {
             int line = tokenizer.CurrentLine;
 
-            while (tokenizer.CurrentLine == line)
+            while (line == tokenizer.CurrentLine)
                 tokenizer.IncrementInputPosition();
+
+            return true;
         }
-        else if (next == '*')
+
+        if (next == '*')
         {
             while (tokenizer.InputPosition + 2 < tokenizer.Input.Length)
             {
@@ -248,13 +256,14 @@ public static partial class ShaderParser
                 tokenizer.IncrementInputPosition();
             }
 
+            // Skip the last '*/'
             tokenizer.IncrementInputPosition();
             tokenizer.IncrementInputPosition();
+
+            return true;
         }
 
-        tokenizer.MoveNext();
-
-        return ((Tokenizer<ShaderToken>)tokenizer).TokenType;
+        return false;
     }
 
 
@@ -541,11 +550,11 @@ public static partial class ShaderParser
         {
             return tokenizer.Token switch
             {
-                "DepthGreaterEqual"     => DepthStencilStateDescription.DepthOnlyGreaterEqual,
-                "DepthLessEqual"        => DepthStencilStateDescription.DepthOnlyLessEqual,
+                "DepthGreaterEqual" => DepthStencilStateDescription.DepthOnlyGreaterEqual,
+                "DepthLessEqual" => DepthStencilStateDescription.DepthOnlyLessEqual,
                 "DepthGreaterEqualRead" => DepthStencilStateDescription.DepthOnlyGreaterEqualRead,
-                "DepthLessEqualRead"    => DepthStencilStateDescription.DepthOnlyLessEqualRead,
-                _                       => throw new ParseException($"Unknown blend preset: {tokenizer.Token}"),
+                "DepthLessEqualRead" => DepthStencilStateDescription.DepthOnlyLessEqualRead,
+                _ => throw new ParseException($"Unknown blend preset: {tokenizer.Token}"),
             };
         }
 

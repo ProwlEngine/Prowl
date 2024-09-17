@@ -18,10 +18,10 @@ public class Tokenizer
     public int CurrentLine { get; set; } = 1;
     public int CurrentColumn { get; set; }
 
-    public Func<char, bool> IsWhitespace;
-    public Func<char, bool> IsQuote;
+    public Func<char, Tokenizer, bool> IsWhitespace;
+    public Func<char, Tokenizer, bool> IsQuote;
 
-    public Tokenizer(ReadOnlyMemory<char> input, Func<char, bool>? isWhitespace = null, Func<char, bool>? isQuote = null)
+    public Tokenizer(ReadOnlyMemory<char> input, Func<char, Tokenizer, bool>? isWhitespace = null, Func<char, Tokenizer, bool>? isQuote = null)
     {
         Input = input;
         IsWhitespace = isWhitespace ?? DefaultWhitespaceHandler;
@@ -45,7 +45,7 @@ public class Tokenizer
 
     public virtual bool MoveNext()
     {
-        while (InputPosition < Input.Length && IsWhitespace.Invoke(Input.Span[InputPosition]))
+        while (InputPosition < Input.Length && IsWhitespace.Invoke(Input.Span[InputPosition], this))
             IncrementInputPosition();
 
         if (InputPosition >= Input.Length)
@@ -59,7 +59,7 @@ public class Tokenizer
         var firstChar = Input.Span[InputPosition];
 
         // TODO: Should make this an option to allow for quoted strings or not and to specify the quote characters
-        if (IsQuote.Invoke(firstChar))
+        if (IsQuote.Invoke(firstChar, this))
             return HandleQuotedString(firstChar);
 
         return HandleToken();
@@ -96,8 +96,8 @@ public class Tokenizer
     {
         IncrementInputPosition();
         while (InputPosition < Input.Length
-               && !IsWhitespace.Invoke(Input.Span[InputPosition])
-               && !IsQuote.Invoke(Input.Span[InputPosition]))
+               && !IsWhitespace.Invoke(Input.Span[InputPosition], this)
+               && !IsQuote.Invoke(Input.Span[InputPosition], this))
             IncrementInputPosition();
 
         TokenMemory = Input.Slice(TokenPosition, InputPosition - TokenPosition);
@@ -166,12 +166,12 @@ public class Tokenizer
         return result;
     }
 
-    static bool DefaultWhitespaceHandler(char c)
+    static bool DefaultWhitespaceHandler(char c, Tokenizer t)
     {
         return char.IsWhiteSpace(c);
     }
 
-    static bool DefaultQuoteHandler(char c)
+    static bool DefaultQuoteHandler(char c, Tokenizer t)
     {
         return c is '"' or '\'';
     }
@@ -191,8 +191,8 @@ public class Tokenizer<TTokenType> : Tokenizer
         Func<char, bool> isSymbol,
         TTokenType defaultTokenType,
         TTokenType noneTokenType,
-        Func<char, bool>? isWhitespace = null,
-        Func<char, bool>? isQuote = null) :
+        Func<char, Tokenizer, bool>? isWhitespace = null,
+        Func<char, Tokenizer, bool>? isQuote = null) :
         base(input, isWhitespace, isQuote)
     {
         _symbolHandlers = symbolHandlers;
@@ -206,8 +206,8 @@ public class Tokenizer<TTokenType> : Tokenizer
         Func<char, bool> isSymbol,
         TTokenType defaultTokenType,
         TTokenType noneTokenType,
-        Func<char, bool>? isWhitespace = null,
-        Func<char, bool>? isQuote = null) :
+        Func<char, Tokenizer, bool>? isWhitespace = null,
+        Func<char, Tokenizer, bool>? isQuote = null) :
         base(input, isWhitespace, isQuote)
     {
         _symbolHandlers = new(symbolHandlers.Select((x) => new KeyValuePair<char, Func<Tokenizer, TTokenType>>(x.Key, (y) => x.Value())));
@@ -218,7 +218,7 @@ public class Tokenizer<TTokenType> : Tokenizer
 
     public override bool MoveNext()
     {
-        while (InputPosition < Input.Length && IsWhitespace.Invoke(Input.Span[InputPosition]))
+        while (InputPosition < Input.Length && IsWhitespace.Invoke(Input.Span[InputPosition], this))
             IncrementInputPosition();
 
         if (InputPosition >= Input.Length)
@@ -282,8 +282,8 @@ public class Tokenizer<TTokenType> : Tokenizer
 
         while (InputPosition < Input.Length
                && !_isSymbol(Input.Span[InputPosition])
-               && !IsWhitespace.Invoke(Input.Span[InputPosition])
-               && !IsQuote.Invoke(Input.Span[InputPosition]))
+               && !IsWhitespace.Invoke(Input.Span[InputPosition], this)
+               && !IsQuote.Invoke(Input.Span[InputPosition], this))
             IncrementInputPosition();
 
         TokenMemory = Input.Slice(TokenPosition, InputPosition - TokenPosition);

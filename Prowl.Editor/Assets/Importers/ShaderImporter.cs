@@ -18,10 +18,25 @@ public class ShaderImporter : ScriptedImporter
     {
         string shaderScript = File.ReadAllText(assetPath.FullName);
 
-        string relPath = AssetDatabase.GetRelativePath(assetPath.FullName);
+        string? relPath = AssetDatabase.GetRelativePath(assetPath.FullName);
+
+        if (relPath == null)
+            Debug.LogError("Could not find relative shader path.");
+
+        DirectoryInfo[] dirs = [];
+
+        if (relPath.StartsWith(Project.Active.AssetDirectory.Name))
+            dirs = [Project.Active.AssetDirectory, Project.Active.DefaultsDirectory, Project.Active.PackagesDirectory];
+        else if (relPath.StartsWith(Project.Active.DefaultsDirectory.Name))
+            dirs = [Project.Active.DefaultsDirectory, Project.Active.AssetDirectory, Project.Active.PackagesDirectory];
+        else if (relPath.StartsWith(Project.Active.PackagesDirectory.Name))
+            dirs = [Project.Active.PackagesDirectory, Project.Active.AssetDirectory, Project.Active.DefaultsDirectory];
+        else
+            return;
+
         relPath = relPath.Substring(relPath.IndexOf(Path.DirectorySeparatorChar));
 
-        FileIncluder includer = new FileIncluder(relPath, [Project.Active.AssetDirectory, Project.Active.DefaultsDirectory, Project.Active.PackagesDirectory]);
+        FileIncluder includer = new FileIncluder(relPath, dirs);
 
         if (!ShaderParser.ParseShader(shaderScript, includer, out Shader? shader))
         {
