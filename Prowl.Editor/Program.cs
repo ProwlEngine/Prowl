@@ -1,11 +1,15 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Globalization;
+
 using CommandLine;
 
 using Prowl.Editor.Assets;
+using Prowl.Editor.Build;
 using Prowl.Editor.Editor.CLI;
 using Prowl.Editor.Preferences;
+using Prowl.Editor.ProjectSettings;
 using Prowl.Runtime;
 using Prowl.Runtime.SceneManagement;
 using Prowl.Runtime.Utils;
@@ -36,14 +40,13 @@ public static class Program
     {
         Console.WriteLine("Creating a new project");
 
-        if (options.ProjectPath is not null && !options.ProjectPath.Exists)
-        {
-            Project.CreateNew(options.ProjectPath);
-        }
-        else
+        if (options.ProjectPath is null || options.ProjectPath.Exists)
         {
             Console.WriteLine("Path is not valid or already exists");
+            return 1;
         }
+
+        Project.CreateNew(options.ProjectPath);
 
         return 0;
     }
@@ -162,16 +165,30 @@ public static class Program
 
     private static int BuildCommand(CliBuildOptions options)
     {
-        Console.WriteLine($"Building project at {options.ProjectPath}");
-        if (options.ProjectPath is not null && !options.ProjectPath.Exists)
-        {
-            _ = new Project(options.ProjectPath);
-        }
-        else
+        Console.WriteLine($"Building project from\t'{options.ProjectPath}'");
+        if (options.ProjectPath is null || !options.ProjectPath.Exists)
         {
             Console.WriteLine("Path is not valid or already exists");
+            return 1;
         }
 
+        var pathBuild = new DirectoryInfo(Path.Combine(options.ProjectPath.ToString(), "Builds",
+            DateTime.UtcNow.ToString("yyyyMMddHHmmss")));
+
+        Console.WriteLine($"Building path\t\t'{pathBuild}'");
+        if (pathBuild.Exists)
+        {
+            Console.WriteLine("Build path is not valid or already exists");
+            return 1;
+        }
+
+        var project = new Project(options.ProjectPath);
+        Project.Open(project);
+        Application.DataPath = options.ProjectPath.ToString();
+        pathBuild.Create();
+        var builders = ProjectBuilder.GetAll().ToList();
+        Application.AssetProvider = new EditorAssetProvider();
+        builders[0]?.StartBuild(BuildProjectSetting.Instance.Scenes, pathBuild);
         return 0;
     }
 

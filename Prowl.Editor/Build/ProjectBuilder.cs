@@ -1,6 +1,9 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Reflection;
+
+using Prowl.Editor.Utilities;
 using Prowl.Runtime;
 
 namespace Prowl.Editor.Build;
@@ -34,6 +37,21 @@ public abstract class ProjectBuilder
         catch (Exception e)
         {
             Debug.LogError($"Failed to build project: {e.Message}");
+        }
+
+        public static IEnumerable<ProjectBuilder> GetAll()
+        {
+            foreach (Assembly editorAssembly in AssemblyManager.ExternalAssemblies.Append(typeof(Program).Assembly))
+            {
+                List<Type> derivedTypes = EditorUtils.GetDerivedTypes(typeof(ProjectBuilder), editorAssembly);
+                foreach (Type type in derivedTypes)
+                {
+                    if (type.IsAbstract)
+                        continue;
+
+                    yield return (ProjectBuilder)Activator.CreateInstance(type);
+                }
+            }
         }
     }
 
