@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace Prowl.Runtime;
@@ -28,7 +27,7 @@ public class KeywordState : ISerializationCallbackReceiver, IEquatable<KeywordSt
         public readonly bool Equals(KeyValuePair<string, string> x, KeyValuePair<string, string> y) =>
             x.Key.Equals(y.Key) && x.Value.Equals(y.Value);
 
-        public readonly int GetHashCode([DisallowNull] KeyValuePair<string, string> obj) =>
+        public readonly int GetHashCode(KeyValuePair<string, string> obj) =>
             HashCode.Combine(obj.Key.GetHashCode(), obj.Value.GetHashCode());
     }
 
