@@ -140,7 +140,7 @@ public static partial class AssetDatabase
                         if (ProcessFile(file, out _))
                             toReimport.Add(file);
                     }
-                    else if (!assetPathToMeta.TryGetValue(file, out var meta))
+                    else if (!assetPathToMeta.TryGetValue(file, out _))
                     {
                         // File hasent changed but we dont have it in the cache, process it but dont reimport
                         Debug.Log("Asset Found: " + file);
@@ -169,7 +169,7 @@ public static partial class AssetDatabase
                 cacheModified = true;
                 bool hasMeta = assetPathToMeta.TryGetValue(file, out var meta);
 
-                if (hasMeta)
+                if (hasMeta && meta is not null)
                 {
                     assetPathToMeta.Remove(file);
 
@@ -352,11 +352,12 @@ public static partial class AssetDatabase
             Debug.LogError($"No valid meta file found for asset: {ToRelativePath(assetFile)}");
             return false;
         }
-        if (meta.Importer == null)
-        {
-            Debug.LogError($"No valid importer found for asset: {ToRelativePath(assetFile)}");
-            return false;
-        }
+        // TODO: FIXME: its always not null
+        // if (meta.Importer == null)
+        // {
+            // Debug.LogError($"No valid importer found for asset: {ToRelativePath(assetFile)}");
+            // return false;
+        // }
 
         // Import the asset
         SerializedAsset ctx = new(meta.guid);
@@ -495,8 +496,11 @@ public static partial class AssetDatabase
         {
             var serializedAsset = SerializedAsset.FromSerializedAsset(serializedAssetPath.FullName);
             serializedAsset.Guid = assetGuid;
-            serializedAsset.Main.AssetID = assetGuid;
-            serializedAsset.Main.FileID = 0;
+            if (serializedAsset.Main is not null)
+            {
+                serializedAsset.Main.AssetID = assetGuid;
+                serializedAsset.Main.FileID = 0;
+            }
             for (int i = 0; i < serializedAsset.SubAssets.Count; i++)
             {
                 serializedAsset.SubAssets[i].AssetID = assetGuid;

@@ -84,7 +84,6 @@ public static class EditorGuiManager
 
         Veldrid.CommandList commandList = Graphics.GetCommandList();
         commandList.Name = "GUI Command Buffer";
-
         commandList.SetFramebuffer(Graphics.ScreenTarget);
         commandList.ClearColorTarget(0, Veldrid.RgbaFloat.Black);
         commandList.ClearDepthStencil(1.0f, 0);

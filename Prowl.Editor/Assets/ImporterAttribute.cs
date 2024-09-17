@@ -31,26 +31,25 @@ public class ImporterAttribute : Attribute
         extToIcon.Clear();
         foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
         foreach (var type in assembly.GetTypes())
-            if (type != null)
+        {
+            var attribute = type.GetCustomAttribute<ImporterAttribute>();
+            if (attribute == null) continue;
+
+            foreach (var extRW in attribute.Extensions)
             {
-                var attribute = type.GetCustomAttribute<ImporterAttribute>();
-                if (attribute == null) continue;
+                var ext = extRW.ToLower();
+                // Make sure the Extension is formatted correctly '.png' 1 dot at start
+                if (ext[0] != '.') ext = '.' + ext;
+                // Check if has more then 1 '.'
+                if (ext.Count(x => x == '.') > 1) throw new Exception($"Extension {ext} is formatted incorrectly on importer: {type.Name}");
 
-                foreach (var extRW in attribute.Extensions)
-                {
-                    var ext = extRW.ToLower();
-                    // Make sure the Extension is formatted correctly '.png' 1 dot at start
-                    if (ext[0] != '.') ext = '.' + ext;
-                    // Check if has more then 1 '.'
-                    if (ext.Count(x => x == '.') > 1) throw new Exception($"Extension {ext} is formatted incorrectly on importer: {type.Name}");
-
-                    if (extToImporter.TryGetValue(ext, out var oldType))
-                        Debug.LogError($"Asset Importer Overwritten. {ext} extension already in use by: {oldType.Name}, being overwritten by: {type.Name}");
-                    extToImporter[ext] = type;
-                    extToIcon[ext] = attribute.FileIcon;
-                    extToGeneralType[ext] = attribute.GeneralType;
-                }
+                if (extToImporter.TryGetValue(ext, out var oldType))
+                    Debug.LogError($"Asset Importer Overwritten. {ext} extension already in use by: {oldType.Name}, being overwritten by: {type.Name}");
+                extToImporter[ext] = type;
+                extToIcon[ext] = attribute.FileIcon;
+                extToGeneralType[ext] = attribute.GeneralType;
             }
+        }
     }
 
     [OnAssemblyUnload]
@@ -104,15 +103,14 @@ public class CustomEditorAttribute : Attribute
     {
         foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
         foreach (var type in assembly.GetTypes())
-            if (type != null)
-            {
-                var attribute = type.GetCustomAttribute<CustomEditorAttribute>();
-                if (attribute == null) continue;
+        {
+            var attribute = type.GetCustomAttribute<CustomEditorAttribute>();
+            if (attribute == null) continue;
 
-                if (typeToEditor.TryGetValue(attribute.Type, out var oldType))
-                    Debug.LogError($"Custom Editor Overwritten. {attribute.Type.Name} already has a custom Editor: {oldType.Name}, being overwritten by: {type.Name}");
-                typeToEditor[attribute.Type] = type;
-            }
+            if (typeToEditor.TryGetValue(attribute.Type, out var oldType))
+                Debug.LogError($"Custom Editor Overwritten. {attribute.Type.Name} already has a custom Editor: {oldType.Name}, being overwritten by: {type.Name}");
+            typeToEditor[attribute.Type] = type;
+        }
     }
 
     [OnAssemblyUnload]
