@@ -140,7 +140,7 @@ public class GameWindow : EditorWindow
                 var renderSize = innerRect.Size;
                 renderSize.x = MathD.Max(renderSize.x, 1);
                 renderSize.y = MathD.Max(renderSize.y, 1);
-                if (Math.Abs(renderSize.x - RenderTarget.Width) > Application.FloatEqualThreshold || Math.Abs(renderSize.y - RenderTarget.Height) > Application.FloatEqualThreshold)
+                if (MathD.ApproximatelyEquals(renderSize.x, RenderTarget.Width) || MathD.ApproximatelyEquals(renderSize.y, RenderTarget.Height))
                 {
                     GeneralPreferences.Instance.CurrentWidth = (int)renderSize.x;
                     GeneralPreferences.Instance.CurrentHeight = (int)renderSize.y;

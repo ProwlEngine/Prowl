@@ -49,7 +49,7 @@ public unsafe struct BepuNarrowPhaseCallbacks : INarrowPhaseCallbacks
         var b = CollidableMaterials[pair.B];
         pairMaterial.FrictionCoefficient = a.FrictionCoefficient * b.FrictionCoefficient;
         pairMaterial.MaximumRecoveryVelocity = (float)MathD.Max(a.MaximumRecoveryVelocity, b.MaximumRecoveryVelocity);
-        pairMaterial.SpringSettings = Math.Abs(pairMaterial.MaximumRecoveryVelocity - a.MaximumRecoveryVelocity) < Application.FloatEqualThreshold ? a.SpringSettings : b.SpringSettings;
+        pairMaterial.SpringSettings = MathD.ApproximatelyEquals(pairMaterial.MaximumRecoveryVelocity, a.MaximumRecoveryVelocity) ? a.SpringSettings : b.SpringSettings;
         //For the purposes of the demo, contact constraints are always generated.
         ContactEvents.HandleManifold(workerIndex, pair, ref manifold);
         Physics.Characters.TryReportContacts(pair, ref manifold, workerIndex, ref pairMaterial);

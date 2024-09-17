@@ -124,7 +124,7 @@ public partial class Gui
     /// </summary>
     public bool IsBlockedByInteractable(Vector2 pos, double zIndex = -1, ulong ignoreID = 0)
     {
-        if (Math.Abs(zIndex - (-1)) < Application.FloatEqualThreshold)
+        if (Math.Abs(zIndex - (-1)) < Mathf.Epsilon)
         {
             if (!_zInteractableCounter.TryGetValue(CurrentZIndex, out int count))
                 count = 0;

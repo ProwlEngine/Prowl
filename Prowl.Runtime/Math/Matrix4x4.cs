@@ -71,7 +71,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <summary>
     /// Returns whether the matrix is the identity matrix.
     /// </summary>
-    public bool IsIdentity => Math.Abs(M11 - 1) < Application.FloatEqualThreshold && Math.Abs(M22 - 1) < Application.FloatEqualThreshold && Math.Abs(M33 - 1) < Application.FloatEqualThreshold && Math.Abs(M44 - 1) < Application.FloatEqualThreshold && // Check diagonal element first for early out.
+    public bool IsIdentity => MathD.ApproximatelyEquals(M11, 1) && MathD.ApproximatelyEquals(M22, 1) && MathD.ApproximatelyEquals(M33, 1) && MathD.ApproximatelyEquals(M44, 1) && // Check diagonal element first for early out.
                               M12 == 0 && M13 == 0 && M14 == 0 &&
                               M21 == 0 && M23 == 0 && M24 == 0 &&
                               M31 == 0 && M32 == 0 && M34 == 0 &&
@@ -1812,14 +1812,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <param name="value1">The first matrix to compare.</param>
     /// <param name="value2">The second matrix to compare.</param>
     /// <returns>True if the given matrices are equal; False otherwise.</returns>
-    public static bool operator ==(Matrix4x4 value1, Matrix4x4 value2)
-    {
-        return (Math.Abs(value1.M11 - value2.M11) < Application.FloatEqualThreshold && Math.Abs(value1.M22 - value2.M22) < Application.FloatEqualThreshold && Math.Abs(value1.M33 - value2.M33) < Application.FloatEqualThreshold && Math.Abs(value1.M44 - value2.M44) < Application.FloatEqualThreshold && // Check diagonal element first for early out.
-                Math.Abs(value1.M12 - value2.M12) < Application.FloatEqualThreshold && Math.Abs(value1.M13 - value2.M13) < Application.FloatEqualThreshold && Math.Abs(value1.M14 - value2.M14) < Application.FloatEqualThreshold &&
-                Math.Abs(value1.M21 - value2.M21) < Application.FloatEqualThreshold && Math.Abs(value1.M23 - value2.M23) < Application.FloatEqualThreshold && Math.Abs(value1.M24 - value2.M24) < Application.FloatEqualThreshold &&
-                Math.Abs(value1.M31 - value2.M31) < Application.FloatEqualThreshold && Math.Abs(value1.M32 - value2.M32) < Application.FloatEqualThreshold && Math.Abs(value1.M34 - value2.M34) < Application.FloatEqualThreshold &&
-                Math.Abs(value1.M41 - value2.M41) < Application.FloatEqualThreshold && Math.Abs(value1.M42 - value2.M42) < Application.FloatEqualThreshold && Math.Abs(value1.M43 - value2.M43) < Application.FloatEqualThreshold);
-    }
+    public static bool operator ==(Matrix4x4 value1, Matrix4x4 value2) => value1.Equals(value2);
 
     /// <summary>
     /// Returns a boolean indicating whether the given two matrices are not equal.
@@ -1827,42 +1820,26 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <param name="value1">The first matrix to compare.</param>
     /// <param name="value2">The second matrix to compare.</param>
     /// <returns>True if the given matrices are not equal; False if they are equal.</returns>
-    public static bool operator !=(Matrix4x4 value1, Matrix4x4 value2)
-    {
-        return (Math.Abs(value1.M11 - value2.M11) > Application.FloatEqualThreshold || Math.Abs(value1.M12 - value2.M12) > Application.FloatEqualThreshold || Math.Abs(value1.M13 - value2.M13) > Application.FloatEqualThreshold || Math.Abs(value1.M14 - value2.M14) > Application.FloatEqualThreshold ||
-                Math.Abs(value1.M21 - value2.M21) > Application.FloatEqualThreshold || Math.Abs(value1.M22 - value2.M22) > Application.FloatEqualThreshold || Math.Abs(value1.M23 - value2.M23) > Application.FloatEqualThreshold || Math.Abs(value1.M24 - value2.M24) > Application.FloatEqualThreshold ||
-                Math.Abs(value1.M31 - value2.M31) > Application.FloatEqualThreshold || Math.Abs(value1.M32 - value2.M32) > Application.FloatEqualThreshold || Math.Abs(value1.M33 - value2.M33) > Application.FloatEqualThreshold || Math.Abs(value1.M34 - value2.M34) > Application.FloatEqualThreshold ||
-                Math.Abs(value1.M41 - value2.M41) > Application.FloatEqualThreshold || Math.Abs(value1.M42 - value2.M42) > Application.FloatEqualThreshold || Math.Abs(value1.M43 - value2.M43) > Application.FloatEqualThreshold || Math.Abs(value1.M44 - value2.M44) > Application.FloatEqualThreshold);
-    }
+    public static bool operator !=(Matrix4x4 value1, Matrix4x4 value2) => !value1.Equals(value2);
 
     /// <summary>
     /// Returns a boolean indicating whether this matrix instance is equal to the other given matrix.
     /// </summary>
     /// <param name="other">The matrix to compare this instance to.</param>
     /// <returns>True if the matrices are equal; False otherwise.</returns>
-    public bool Equals(Matrix4x4 other)
-    {
-        return (Math.Abs(M11 - other.M11) < Application.FloatEqualThreshold && Math.Abs(M22 - other.M22) < Application.FloatEqualThreshold && Math.Abs(M33 - other.M33) < Application.FloatEqualThreshold && Math.Abs(M44 - other.M44) < Application.FloatEqualThreshold && // Check diagonal element first for early out.
-                Math.Abs(M12 - other.M12) < Application.FloatEqualThreshold && Math.Abs(M13 - other.M13) < Application.FloatEqualThreshold && Math.Abs(M14 - other.M14) < Application.FloatEqualThreshold &&
-                Math.Abs(M21 - other.M21) < Application.FloatEqualThreshold && Math.Abs(M23 - other.M23) < Application.FloatEqualThreshold && Math.Abs(M24 - other.M24) < Application.FloatEqualThreshold &&
-                Math.Abs(M31 - other.M31) < Application.FloatEqualThreshold && Math.Abs(M32 - other.M32) < Application.FloatEqualThreshold && Math.Abs(M34 - other.M34) < Application.FloatEqualThreshold &&
-                Math.Abs(M41 - other.M41) < Application.FloatEqualThreshold && Math.Abs(M42 - other.M42) < Application.FloatEqualThreshold && Math.Abs(M43 - other.M43) < Application.FloatEqualThreshold);
-    }
+    public bool Equals(Matrix4x4 other) =>
+        (MathD.ApproximatelyEquals(M11, other.M11) && MathD.ApproximatelyEquals(M22, other.M22) && MathD.ApproximatelyEquals(M33, other.M33) && MathD.ApproximatelyEquals(M44, other.M44) && // Check diagonal element first for early out.
+         MathD.ApproximatelyEquals(M12, other.M12) && MathD.ApproximatelyEquals(M13, other.M13) && MathD.ApproximatelyEquals(M14, other.M14) &&
+         MathD.ApproximatelyEquals(M21, other.M21) && MathD.ApproximatelyEquals(M23, other.M23) && MathD.ApproximatelyEquals(M24, other.M24) &&
+         MathD.ApproximatelyEquals(M31, other.M31) && MathD.ApproximatelyEquals(M32, other.M32) && MathD.ApproximatelyEquals(M34, other.M34) &&
+         MathD.ApproximatelyEquals(M41, other.M41) && MathD.ApproximatelyEquals(M42, other.M42) && MathD.ApproximatelyEquals(M43, other.M43));
 
     /// <summary>
     /// Returns a boolean indicating whether the given Object is equal to this matrix instance.
     /// </summary>
     /// <param name="obj">The Object to compare against.</param>
     /// <returns>True if the Object is equal to this matrix; False otherwise.</returns>
-    public override bool Equals(object? obj)
-    {
-        if (obj is Matrix4x4 x)
-        {
-            return Equals(x);
-        }
-
-        return false;
-    }
+    public override bool Equals(object? obj) => obj is Matrix4x4 x && Equals(x);
 
     /// <summary>
     /// Returns a String representing this matrix instance.
@@ -1895,11 +1872,9 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// Returns the hash code for this instance.
     /// </summary>
     /// <returns>The hash code.</returns>
-    public override int GetHashCode()
-    {
-        return M11.GetHashCode() + M12.GetHashCode() + M13.GetHashCode() + M14.GetHashCode() +
-               M21.GetHashCode() + M22.GetHashCode() + M23.GetHashCode() + M24.GetHashCode() +
-               M31.GetHashCode() + M32.GetHashCode() + M33.GetHashCode() + M34.GetHashCode() +
-               M41.GetHashCode() + M42.GetHashCode() + M43.GetHashCode() + M44.GetHashCode();
-    }
+    public override int GetHashCode() =>
+        M11.GetHashCode() + M12.GetHashCode() + M13.GetHashCode() + M14.GetHashCode() +
+        M21.GetHashCode() + M22.GetHashCode() + M23.GetHashCode() + M24.GetHashCode() +
+        M31.GetHashCode() + M32.GetHashCode() + M33.GetHashCode() + M34.GetHashCode() +
+        M41.GetHashCode() + M42.GetHashCode() + M43.GetHashCode() + M44.GetHashCode();
 }

@@ -31,18 +31,18 @@ public struct Spacing
 
     public static bool operator ==(Spacing s1, Spacing s2)
     {
-        return Math.Abs(s1.Left - s2.Left) < Application.FloatEqualThreshold &&
-               Math.Abs(s1.Right - s2.Right) < Application.FloatEqualThreshold &&
-               Math.Abs(s1.Top - s2.Top) < Application.FloatEqualThreshold &&
-               Math.Abs(s1.Bottom - s2.Bottom) < Application.FloatEqualThreshold;
+        return MathD.ApproximatelyEquals(s1.Left, s2.Left) &&
+               MathD.ApproximatelyEquals(s1.Right, s2.Right) &&
+               MathD.ApproximatelyEquals(s1.Top, s2.Top) &&
+               MathD.ApproximatelyEquals(s1.Bottom, s2.Bottom);
     }
 
     public static bool operator !=(Spacing s1, Spacing s2)
     {
-        return Math.Abs(s1.Left - s2.Left) > Application.FloatEqualThreshold ||
-               Math.Abs(s1.Right - s2.Right) > Application.FloatEqualThreshold ||
-               Math.Abs(s1.Top - s2.Top) > Application.FloatEqualThreshold ||
-               Math.Abs(s1.Bottom - s2.Bottom) > Application.FloatEqualThreshold;
+        return MathD.ApproximatelyEquals(s1.Left , s2.Left) ||
+               MathD.ApproximatelyEquals(s1.Right , s2.Right) ||
+               MathD.ApproximatelyEquals(s1.Top , s2.Top) ||
+               MathD.ApproximatelyEquals(s1.Bottom , s2.Bottom);
     }
 
     public override bool Equals(object obj)

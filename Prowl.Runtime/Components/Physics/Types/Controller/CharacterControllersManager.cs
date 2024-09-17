@@ -515,7 +515,7 @@ public unsafe class CharacterControllersManager : IDisposable
                 //2) The character was previously supported by a body, and is now supported by a different body.
                 //3) The character was previously supported by a static, and is now supported by a body.
                 //4) The character was previously supported by a body, and is now supported by a static.
-                var shouldRemove = character.Supported && (character.TryJump || Math.Abs(supportCandidate.Depth - float.MinValue) < Application.FloatEqualThreshold || character.Support.Packed != supportCandidate.Support.Packed);
+                var shouldRemove = character.Supported && (character.TryJump || MathD.ApproximatelyEquals(supportCandidate.Depth, float.MinValue) || character.Support.Packed != supportCandidate.Support.Packed);
                 if (shouldRemove)
                 {
                     //Mark the constraint for removal.

@@ -194,7 +194,7 @@ public static class MathD
 
     [MethodImpl(IN)] public static int ComputeMipLevels(int width, int height) => (int)Math.Log2(Math.Max(width, height));
 
-    [MethodImpl(IN)] public static bool ApproximatelyEquals(double a, double b) => Abs(a - b) < 0.00001f;
+    [MethodImpl(IN)] public static bool ApproximatelyEquals(double a, double b) => Abs(a - b) < Epsilon;
     [MethodImpl(IN)] public static bool ApproximatelyEquals(Vector2 a, Vector2 b) => ApproximatelyEquals(a.x, b.x) && ApproximatelyEquals(a.y, b.y);
     [MethodImpl(IN)] public static bool ApproximatelyEquals(Vector3 a, Vector3 b) => ApproximatelyEquals(a.x, b.x) && ApproximatelyEquals(a.y, b.y) && ApproximatelyEquals(a.z, b.z);
     [MethodImpl(IN)] public static bool ApproximatelyEquals(Vector4 a, Vector4 b) => ApproximatelyEquals(a.x, b.x) && ApproximatelyEquals(a.y, b.y) && ApproximatelyEquals(a.z, b.z) && ApproximatelyEquals(a.w, b.w);

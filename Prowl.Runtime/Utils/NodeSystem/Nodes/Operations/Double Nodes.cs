@@ -101,9 +101,9 @@ public class DoubleCompareNode : InFlowNode
         var a = GetInputValue("A", A);
         var b = GetInputValue("B", B);
 
-        if (Math.Abs(a - b) < Application.FloatEqualThreshold)
+        if (MathD.ApproximatelyEquals(a, b))
             ExecuteNext("OnEquals");
-        else if (Math.Abs(a - b) > Application.FloatEqualThreshold)
+        else if (MathD.ApproximatelyEquals(a , b))
             ExecuteNext("OnNotEquals");
         else if (a > b)
             ExecuteNext("OnGreaterThan");
