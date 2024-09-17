@@ -83,7 +83,7 @@ public abstract class Texture : EngineObject, ISerializable
         TextureView = null;
         stagingTexture = null;
 
-        Sampler?.Destroy();
+        Sampler?.Dispose();
     }
 
     public void GenerateMipmaps(bool waitForCompletion = false)

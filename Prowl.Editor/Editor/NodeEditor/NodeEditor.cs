@@ -613,7 +613,7 @@ public class NodeEditor
 
     public void RefreshRenderTexture(Vector2 renderSize)
     {
-        RenderTarget?.Destroy();
+        RenderTarget?.Dispose();
 
         RenderTarget = new RenderTexture(
             (uint)renderSize.x,

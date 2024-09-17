@@ -61,7 +61,7 @@ public class GameWindow : EditorWindow
 
     public void RefreshRenderTexture()
     {
-        RenderTarget?.Destroy();
+        RenderTarget?.Dispose();
 
         RenderTarget = new RenderTexture(
             (uint)GeneralPreferences.Instance.CurrentWidth,

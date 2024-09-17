@@ -88,7 +88,7 @@ public static class Texture2DLoader
         }
         catch
         {
-            texture.Destroy();
+            texture.Dispose();
             throw;
         }
     }

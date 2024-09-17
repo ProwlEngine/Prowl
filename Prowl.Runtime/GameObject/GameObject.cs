@@ -560,13 +560,13 @@ public class GameObject : EngineObject, ISerializable
         // Internal_DestroyCommitted removes the child from the parent
         // Hense why we do a while loop on the first element instead of a foreach/for
         while (children.Count > 0)
-            children[0].Destroy();
+            children[0].Dispose();
 
         foreach (var component in _components)
         {
             if (component.EnabledInHierarchy) component.Do(component.OnDisable);
             if (component.HasStarted) component.Do(component.OnDestroy); // OnDestroy is only called if the component has previously been active
-            component.Destroy();
+            component.Dispose();
         }
         _components.Clear();
         _componentCache.Clear();

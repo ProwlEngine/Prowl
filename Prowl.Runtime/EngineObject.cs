@@ -98,7 +98,7 @@ public class EngineObject : IDisposable
     {
         if (obj.IsDestroyed) throw new Exception(obj.Name + " is already destroyed.");
         obj.IsDestroyed = true;
-        obj.Destroy();
+        obj.Dispose();
     }
 
     public static void HandleDestroyed()
@@ -106,7 +106,7 @@ public class EngineObject : IDisposable
         while (destroyed.TryPop(out var obj))
         {
             if (!obj.IsDestroyed) continue;
-            obj.Destroy();
+            obj.Dispose();
         }
 
         CleanupAllObjects();
