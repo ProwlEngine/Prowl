@@ -163,32 +163,46 @@ public static class Program
         return 0;
     }
 
+    /// <summary>
+    /// Build the final version of the game via command line `prowl build --project PATH`
+    /// </summary>
+    /// <param name="options">Command Line options for build command</param>
+    /// <returns></returns>
     private static int BuildCommand(CliBuildOptions options)
     {
-        Console.WriteLine($"Building project from\t'{options.ProjectPath}'");
+        Debug.Log($"Building project from\t'{options.ProjectPath}'");
         if (options.ProjectPath is null || !options.ProjectPath.Exists)
         {
-            Console.WriteLine("Path is not valid or already exists");
+            Debug.LogError("Path is not valid or already exists");
             return 1;
         }
 
         var pathBuild = new DirectoryInfo(Path.Combine(options.ProjectPath.ToString(), "Builds",
             DateTime.UtcNow.ToString("yyyyMMddHHmmss")));
 
-        Console.WriteLine($"Building path\t\t'{pathBuild}'");
+        Debug.Log($"Building output path\t'{pathBuild}'");
         if (pathBuild.Exists)
         {
-            Console.WriteLine("Build path is not valid or already exists");
+            Debug.LogError("Build path is not valid or already exists");
             return 1;
         }
 
+        // Open the project, and if it's ok, load it
         var project = new Project(options.ProjectPath);
         Project.Open(project);
+
+        // Set up the app
         Application.DataPath = options.ProjectPath.ToString();
+        Application.AssetProvider = new EditorAssetProvider();
+
+        AssetDatabase.Update();
+
+        // TODO: instead calling the builders[0], use a command line argument
         pathBuild.Create();
         var builders = ProjectBuilder.GetAll().ToList();
-        Application.AssetProvider = new EditorAssetProvider();
         builders[0].StartBuild(BuildProjectSetting.Instance.Scenes, pathBuild);
+
+        // TODO: since StartBuild return void, we cannot say if the code executed fine
         return 0;
     }
 

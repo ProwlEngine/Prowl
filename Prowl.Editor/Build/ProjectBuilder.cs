@@ -3,6 +3,7 @@
 
 using System.Reflection;
 
+using Prowl.Editor.Assets;
 using Prowl.Editor.Utilities;
 using Prowl.Runtime;
 
@@ -18,6 +19,7 @@ namespace Prowl.Editor.Build
                 return;
             }
 
+            AssetDatabase.Update();
             if (!AreScenesValid(scenes))
                 return;
 
