@@ -131,6 +131,36 @@ public sealed class RenderTexture : EngineObject, ISerializable
     { }
 
     /// <summary>
+    /// Creates a new RenderTexture object with the best supported depth format and a full-channel 8-bit unsigned normalized color format
+    /// </summary>
+    /// <param name="width">The width of the <see cref="RenderTexture"/> and its internal buffers.</param>
+    /// <param name="height">The height of the <see cref="RenderTexture"/> and its internal buffers.</param>
+    /// <param name="enableRandomWrite">Enable random reads/writes to the <see cref="RenderTexture"/> internal buffers. This is useful within compute shaders which draw to the texture.</param>
+    public RenderTexture(
+        uint width, uint height,
+        bool sampled = false,
+        bool enableRandomWrite = false,
+        TextureSampleCount sampleCount = TextureSampleCount.Count1
+    ) : this(width, height, [PixelFormat.R8_G8_B8_A8_UNorm], TextureUtility.GetBestSupportedDepthFormat(), sampled, enableRandomWrite, sampleCount)
+    { }
+
+    /// <summary>
+    /// Creates a new RenderTexture object with the best supported depth format
+    /// </summary>
+    /// <param name="width">The width of the <see cref="RenderTexture"/> and its internal buffers.</param>
+    /// <param name="height">The height of the <see cref="RenderTexture"/> and its internal buffers.</param>
+    /// <param name="colorFormats">The format of the color buffer(s) in the <see cref="RenderTexture"/>. Passing null or empty will omit the creation of a color buffer.</param>
+    /// <param name="enableRandomWrite">Enable random reads/writes to the <see cref="RenderTexture"/> internal buffers. This is useful within compute shaders which draw to the texture.</param>
+    public RenderTexture(
+        uint width, uint height,
+        PixelFormat[] colorFormats = null,
+        bool sampled = false,
+        bool enableRandomWrite = false,
+        TextureSampleCount sampleCount = TextureSampleCount.Count1
+    ) : this(width, height, colorFormats, TextureUtility.GetBestSupportedDepthFormat(), sampled, enableRandomWrite, sampleCount)
+    { }
+
+    /// <summary>
     /// Creates a new RenderTexture object
     /// </summary>
     /// <param name="width">The width of the <see cref="RenderTexture"/> and its internal buffers.</param>
@@ -158,7 +188,8 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
         if (depthFormat != null)
         {
-            DepthBuffer = new Texture2D(Width, Height, 1, depthFormat.Value, TextureUsage.DepthStencil)
+            TextureUsage depthUsage = sampled ? TextureUsage.Sampled | TextureUsage.DepthStencil : TextureUsage.DepthStencil;
+            DepthBuffer = new Texture2D(Width, Height, 1, depthFormat.Value, depthUsage)
             {
                 Name = $"RT Depth Buffer"
             };

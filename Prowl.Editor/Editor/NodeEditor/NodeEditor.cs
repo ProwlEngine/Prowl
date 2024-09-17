@@ -26,15 +26,15 @@ public class NodeEditorAttribute(Type type) : Attribute
     public static void GenerateLookUp()
     {
         foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-        foreach (var type in assembly.GetTypes())
-            if (type != null)
-            {
-                var attribute = type.GetCustomAttribute<NodeEditorAttribute>();
-                if (attribute == null) continue;
-                if (nodeEditors.TryGetValue(attribute.Type, out var oldType))
-                    Debug.LogError($"Custom Node Editor Overwritten. {attribute.Type.Name} already has a Custom Node Editor: {oldType.Name}, being overwritten by: {type.Name}");
-                nodeEditors[attribute.Type] = type;
-            }
+            foreach (var type in assembly.GetTypes())
+                if (type != null)
+                {
+                    var attribute = type.GetCustomAttribute<NodeEditorAttribute>();
+                    if (attribute == null) continue;
+                    if (nodeEditors.TryGetValue(attribute.Type, out var oldType))
+                        Debug.LogError($"Custom Node Editor Overwritten. {attribute.Type.Name} already has a Custom Node Editor: {oldType.Name}, being overwritten by: {type.Name}");
+                    nodeEditors[attribute.Type] = type;
+                }
     }
 
     [OnAssemblyUnload]
@@ -614,8 +614,6 @@ public class NodeEditor
         RenderTarget = new RenderTexture(
             (uint)renderSize.x,
             (uint)renderSize.y,
-            [Veldrid.PixelFormat.R8_G8_B8_A8_UNorm],
-            Veldrid.PixelFormat.D24_UNorm_S8_UInt,
             true);
     }
 
@@ -748,7 +746,7 @@ public class NodeEditor
     {
         int index = 0;
         var safeNodes = graph.nodes.ToArray();
-        List<int> unusedKeys = [..customEditors.Keys];
+        List<int> unusedKeys = [.. customEditors.Keys];
         foreach (var node in safeNodes)
         {
             var key = node.GetHashCode();
@@ -1210,9 +1208,9 @@ public class NodeEditor
         if (reflectionTypes != null)
         {
             foreach (var type in reflectionTypes)
-            foreach (var method in type.Item2.GetMethods(BindingFlags.DeclaredOnly | BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public).Where(m => m.IsSpecialName == false && m.DeclaringType == type.Item2))
-                if (ReflectedNode.IsSupported(method))
-                    root.AddChild(type.Item1 + "/" + ReflectedNode.GetNodeName(method), type.Item2, method);
+                foreach (var method in type.Item2.GetMethods(BindingFlags.DeclaredOnly | BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public).Where(m => m.IsSpecialName == false && m.DeclaringType == type.Item2))
+                    if (ReflectedNode.IsSupported(method))
+                        root.AddChild(type.Item1 + "/" + ReflectedNode.GetNodeName(method), type.Item2, method);
         }
 
         SortChildren(root);
