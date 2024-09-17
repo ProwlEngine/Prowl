@@ -43,7 +43,6 @@ public class Project
 
     #region Public Methods
 
-
     internal void Refresh()
     {
         ProjectDirectory.Refresh();
@@ -96,7 +95,8 @@ public class Project
     {
         if (!project.IsValid())
         {
-            Runtime.Debug.LogError($"Invalid project '{project.Name}' at path '{project.ProjectPath}'. Validate that all core project directories are intact.");
+            Runtime.Debug.LogError(
+                $"Invalid project '{project.Name}' at path '{project.ProjectPath}'. Validate that all core project directories are intact.");
             return false;
         }
 
@@ -115,7 +115,8 @@ public class Project
         AssetDatabase.Update(false, true); // Ensure packages are all loaded in
 
         AssetDatabase.AddRootFolder("Assets");
-        AssetDatabase.Update(true, true); // Not that all folders are in we can unload anything thats not in the project anymore since last session
+        AssetDatabase.Update(true,
+            true); // Not that all folders are in we can unload anything thats not in the project anymore since last session
 
 #warning TODO: Record last opened scene and try to open it
         SceneManager.InstantiateNewScene();
@@ -162,7 +163,7 @@ public class Project
         AssetDirectory.Refresh();
 
         return ProjectDirectory.Exists &&
-            AssetDirectory.Exists;
+               AssetDirectory.Exists;
     }
 
 
@@ -182,7 +183,8 @@ public class Project
 #warning TODO: Only copy if the file doesn't exist, or if somehow if the engine version is different or something...
 
         // Copy embedded defaults to rootFolder, this is just actual Files, so Image.png, not the asset variants
-        foreach (string file in Assembly.GetExecutingAssembly().GetManifestResourceNames().Where(x => x.StartsWith("Prowl.Editor.EmbeddedResources.DefaultAssets.")))
+        foreach (string file in Assembly.GetExecutingAssembly().GetManifestResourceNames()
+                                        .Where(x => x.StartsWith("Prowl.Editor.EmbeddedResources.DefaultAssets.")))
         {
             string[] nodes = file.Split('.');
             string fileName = nodes[^2];
@@ -233,12 +235,14 @@ public class Project
 
         // Default -> Windows
         processInfo.FileName = "cmd.exe";
-        processInfo.Arguments = $"/c dotnet build \"{Path.GetFileName(csprojPath)}\"" + (isRelease ? " --configuration Release" : "");
+        processInfo.Arguments = $"/c dotnet build \"{Path.GetFileName(csprojPath)}\"" +
+                                (isRelease ? " --configuration Release" : "");
 
         if (RuntimeUtils.IsMac() || RuntimeUtils.IsLinux())
         {
             processInfo.FileName = "/bin/bash";
-            processInfo.Arguments = $"-c \"dotnet build '{Path.GetFileName(csprojPath)}'\"" + (isRelease ? " --configuration Release" : "");
+            processInfo.Arguments = $"-c \"dotnet build '{Path.GetFileName(csprojPath)}'\"" +
+                                    (isRelease ? " --configuration Release" : "");
         }
 
         Process process = Process.Start(processInfo) ?? throw new Exception();
@@ -270,9 +274,11 @@ public class Project
         int exitCode = process.ExitCode;
         process.Close();
 
-        BoundedLog($"Exit Code: '{exitCode}'");
-
-        BoundedLog($"{(exitCode == 0 ? "Successfully" : "Failed to")} compile external assembly!");
+        BoundedLog(
+            $"""
+             Exit Code: '{exitCode}'
+             {(exitCode == 0 ? "Successfully" : "Failed to")} compile external assembly!
+             """, exitCode == 0 ? LogSeverity.Success: LogSeverity.Error);
         return exitCode == 0;
     }
 
@@ -280,7 +286,6 @@ public class Project
 
 
     #region Private Methods
-
 
     private static string GetIncludesFrom(IEnumerable<FileInfo> filePaths)
     {
@@ -297,9 +302,11 @@ public class Project
         if (!HasProject) throw new Exception("No Project Loaded, Cannot generate CS Project Files!");
 
         Assembly[] loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-        Assembly gameEngineAssembly = loadedAssemblies.FirstOrDefault(assembly => assembly.GetName().Name == "Prowl.Runtime")
+        Assembly gameEngineAssembly =
+            loadedAssemblies.FirstOrDefault(assembly => assembly.GetName().Name == "Prowl.Runtime")
             ?? throw new Exception("Failed to find Prowl.Runtime Assembly!");
-        Assembly gameEditorAssembly = loadedAssemblies.FirstOrDefault(assembly => assembly.GetName().Name == "Prowl.Editor")
+        Assembly gameEditorAssembly =
+            loadedAssemblies.FirstOrDefault(assembly => assembly.GetName().Name == "Prowl.Editor")
             ?? throw new Exception("Failed to find Prowl.Editor Assembly!");
 
         // Get all references by Prowl.Runtime
@@ -339,10 +346,10 @@ public class Project
             </PropertyGroup>";
 
         string referencesXML = string.Join("\n", references.Select(assembly =>
-                $"<Reference Include=\"{assembly.GetName().Name}\">" +
-                    $"<HintPath>{assembly.Location}</HintPath>" +
-                    "<Private>false</Private>" +
-                "</Reference>"));
+            $"<Reference Include=\"{assembly.GetName().Name}\">" +
+            $"<HintPath>{assembly.Location}</HintPath>" +
+            "<Private>false</Private>" +
+            "</Reference>"));
 
         string gameproj =
             @$"<Project Sdk=""Microsoft.NET.Sdk"">
@@ -390,11 +397,17 @@ public class Project
         Runtime.Debug.Log("Finished Updating Build Information");
     }
 
-    private static void BoundedLog(string message)
+    public static void BoundedLog(string message, LogSeverity severity = LogSeverity.Normal)
     {
-        Runtime.Debug.Log("**********************************************************************************************************************");
-        Runtime.Debug.Log(message);
-        Runtime.Debug.Log("**********************************************************************************************************************");
+        Action<string> logFunc = severity switch
+        {
+            LogSeverity.Success => Runtime.Debug.LogSuccess,
+            LogSeverity.Error   => Runtime.Debug.LogError,
+            _                   => Runtime.Debug.Log
+        };
+        logFunc(
+            "**********************************************************************************************************************");
+        logFunc(message);
     }
 
     #endregion

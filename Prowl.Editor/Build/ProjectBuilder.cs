@@ -6,37 +6,65 @@ using System.Reflection;
 using Prowl.Editor.Utilities;
 using Prowl.Runtime;
 
-namespace Prowl.Editor.Build;
-
-public abstract class ProjectBuilder
+namespace Prowl.Editor.Build
 {
-    public void StartBuild(AssetRef<Scene>[] scenes, DirectoryInfo output)
+    public abstract class ProjectBuilder
     {
-        if (!Project.HasProject)
+        public void StartBuild(AssetRef<Scene>[] scenes, DirectoryInfo output)
         {
-            Debug.LogError($"No Project Loaded...");
-            return;
+            if (!Project.HasProject)
+            {
+                Debug.LogError($"No Project Loaded...");
+                return;
+            }
+
+            if (!AreScenesValid(scenes))
+                return;
+
+            Debug.Log($"Starting Project Build...");
+            Project.BoundedLog($"Creating Directories...");
+
+            if (output.Exists)
+            {
+                Project.BoundedLog($"Deleting existing build directory...");
+                output.Delete(true);
+            }
+
+            try
+            {
+                Build(scenes, output);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Failed to build project: {e.Message}");
+            }
         }
 
-        if (!AreScenesValid(scenes))
-            return;
+        protected abstract void Build(AssetRef<Scene>[] scenes, DirectoryInfo output);
 
-        Debug.Log($"Starting Project Build...");
-        BoundedLog($"Creating Directories...");
+        private bool AreScenesValid(AssetRef<Scene>[] scenes)
+        {
+            if (scenes == null)
+            {
+                Debug.LogError($"At least 1 Scene must be assigned in the Build Project Settings Window");
+                return false;
+            }
 
-        if (output.Exists)
-        {
-            BoundedLog($"Deleting existing build directory...");
-            output.Delete(true);
-        }
+            if (scenes.Length <= 0)
+            {
+                Debug.LogError($"At least 1 Scene must be assigned in the Build Project Settings Window");
+                return false;
+            }
 
-        try
-        {
-            Build(scenes, output);
-        }
-        catch (Exception e)
-        {
-            Debug.LogError($"Failed to build project: {e.Message}");
+            // Make sure all scenes are valid
+            foreach (var scene in scenes)
+                if (!scene.IsAvailable)
+                {
+                    Debug.LogError($"Scene {scene.Name} is not available, please assign a valid available scene");
+                    return false;
+                }
+
+            return true;
         }
 
         public static IEnumerable<ProjectBuilder> GetAll()
@@ -53,39 +81,5 @@ public abstract class ProjectBuilder
                 }
             }
         }
-    }
-
-    protected abstract void Build(AssetRef<Scene>[] scenes, DirectoryInfo output);
-
-    private bool AreScenesValid(AssetRef<Scene>[] scenes)
-    {
-        if (scenes == null)
-        {
-            Debug.LogError($"Atleast 1 Scene must be assigned in the Build Project Settings Window");
-            return false;
-        }
-
-        if (scenes.Length <= 0)
-        {
-            Debug.LogError($"Atleast 1 Scene must be assigned in the Build Project Settings Window");
-            return false;
-        }
-
-        // Make sure all scenes are valid
-        foreach (var scene in scenes)
-            if (!scene.IsAvailable)
-            {
-                Debug.LogError($"Scene {scene.Name} is not available, please assign a valid available scene");
-                return false;
-            }
-
-        return true;
-    }
-
-    protected void BoundedLog(string message)
-    {
-        Debug.Log("**********************************************************************************************************************");
-        Debug.Log(message);
-        Debug.Log("**********************************************************************************************************************");
     }
 }
