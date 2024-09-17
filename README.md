@@ -83,28 +83,27 @@ It aims to provide a seamless transition for developers familiar with _Unity_ by
 -   **Graphics Rendering:**
     - Modular Graphics Backend
         - OpenGL
+        - OpenGL ES
+        - Vulkan
+        - Metal
+    - Powerful Customizable Node-Graph based Render Pipeline
     -  PBR (Physically Based Rendering) using Cook-Torrance BRDF
         - Albedo Map
         - Normal Map
         - Roughness Map
         - Metallic Map
-        - Ambient Occlusion Map
+        - Ambient Occclusion Map
         - Emission Map
-    - Deferred Renderer
+    - Forward Renderer
+    - Multiple Shader Passes
     - Point, Spot, and Directional Lights
-    - Shadow Mapping + Contact Hardening (Variable Penumbra)
+        - Spot & Directional Light Shadows - Point shadows is not implemented
+        - Shadow Atlas
+        - Dynamic Shadow Resolutions
     - Post Processing
         - HDR with Tonemapping (Melon, Aces, Reinhard, Uncharted, Filmic)
-        - Bokeh Depth of Field
-        - Screen Space Reflections
-        - Kawase Multi-Pass Bloom
-        - Temporal Anti-Aliasing
-    - Stochastic Transparency
-    - Adjustable Render Resolutions per camera
-    - Dedicated Shadow Pass for Shaders
-    - Procedural Skybox with Skybox-Blended Fog
-    - GPU Skinned Mesh Rendering
-    - Skeletal Animations
+    - Transparency
+    - Procedural Super Performant Skybox
 
 -   **Asset Pipeline:**
     - A Powerful Asset Pipeline with a very similar structure to unity
@@ -142,11 +141,12 @@ Getting Prowl up and running is super easy!
 # <span align="center">🗺️ Roadmap 🗺️</span>
 
 ### Engine
+
 - 🛠️ Cross Platform
     - ✔️ Windows
     - ✔️ MacOS
     - ✔️ Linux
-    - ❌ Android
+    - ❌ Andriod
     - ❌ iOS
     - ❌ Web
 - ✔️ UI Engine
