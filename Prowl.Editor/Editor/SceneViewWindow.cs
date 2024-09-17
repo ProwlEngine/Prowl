@@ -175,14 +175,14 @@ public class SceneViewWindow : EditorWindow
             if (newForward != Vector3.zero)
             {
                 if (newForward == Vector3.up)
-                    Cam.GameObject.Transform.LookAt(Cam.GameObject.Transform.position + newForward, Vector3.forward);
+                    Cam.Transform.LookAt(Cam.Transform.position + newForward, Vector3.forward);
                 else if (newForward == Vector3.down)
-                    Cam.GameObject.Transform.LookAt(Cam.GameObject.Transform.position + newForward, -Vector3.forward);
+                    Cam.Transform.LookAt(Cam.Transform.position + newForward, -Vector3.forward);
                 else
-                    Cam.GameObject.Transform.LookAt(Cam.GameObject.Transform.position + newForward, Vector3.up);
+                    Cam.Transform.LookAt(Cam.Transform.position + newForward, Vector3.up);
 
-                camX = Cam.GameObject.Transform.eulerAngles.x;
-                camY = Cam.GameObject.Transform.eulerAngles.y;
+                camX = Cam.Transform.eulerAngles.x;
+                camY = Cam.Transform.eulerAngles.y;
             }
             Cam.projectionType = isOrtho ? Camera.ProjectionType.Orthographic : Camera.ProjectionType.Perspective;
         }
@@ -233,19 +233,19 @@ public class SceneViewWindow : EditorWindow
             {
                 gui.SetCursorVisibility(false);
                 Vector3 moveDir = Vector3.zero;
-                if (gui.IsKeyDown(Key.W)) moveDir += Cam.GameObject.Transform.forward;
-                if (gui.IsKeyDown(Key.S)) moveDir -= Cam.GameObject.Transform.forward;
-                if (gui.IsKeyDown(Key.A)) moveDir -= Cam.GameObject.Transform.right;
-                if (gui.IsKeyDown(Key.D)) moveDir += Cam.GameObject.Transform.right;
-                if (gui.IsKeyDown(Key.E)) moveDir += Cam.GameObject.Transform.up;
-                if (gui.IsKeyDown(Key.Q)) moveDir -= Cam.GameObject.Transform.up;
+                if (gui.IsKeyDown(Key.W)) moveDir += Cam.Transform.forward;
+                if (gui.IsKeyDown(Key.S)) moveDir -= Cam.Transform.forward;
+                if (gui.IsKeyDown(Key.A)) moveDir -= Cam.Transform.right;
+                if (gui.IsKeyDown(Key.D)) moveDir += Cam.Transform.right;
+                if (gui.IsKeyDown(Key.E)) moveDir += Cam.Transform.up;
+                if (gui.IsKeyDown(Key.Q)) moveDir -= Cam.Transform.up;
 
                 if (moveDir != Vector3.zero)
                 {
                     moveDir = Vector3.Normalize(moveDir);
                     if (gui.IsKeyDown(Key.LeftShift))
                         moveDir *= 2.0f;
-                    Cam.GameObject.Transform.position += moveDir * (Time.deltaTimeF * 10f) * moveSpeed;
+                    Cam.Transform.position += moveDir * (Time.deltaTimeF * 10f) * moveSpeed;
 
                     // Get Exponentially faster
                     moveSpeed += Time.deltaTimeF * 0.0001;
@@ -261,8 +261,8 @@ public class SceneViewWindow : EditorWindow
                 {
                     if (LastFocusedCameraChanged)
                     {
-                        camX = Cam.GameObject.Transform.eulerAngles.x;
-                        camY = Cam.GameObject.Transform.eulerAngles.y;
+                        camX = Cam.Transform.eulerAngles.x;
+                        camY = Cam.Transform.eulerAngles.y;
                         LastFocusedCameraChanged = false;
                     }
 
@@ -272,7 +272,7 @@ public class SceneViewWindow : EditorWindow
                     camY += mouseDelta.x * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
                     camX += mouseDelta.y * (Time.deltaTimeF * 5f * SceneViewPreferences.Instance.LookSensitivity);
                     camX = MathD.Clamp(camX, -89.9f, 89.9f);
-                    Cam.GameObject.Transform.eulerAngles = new Vector3(camX, camY, 0);
+                    Cam.Transform.eulerAngles = new Vector3(camX, camY, 0);
 
                     gui.PointerPos = WindowCenter;
                     // Input.MousePosition = WindowCenter;
@@ -285,10 +285,10 @@ public class SceneViewWindow : EditorWindow
                 {
                     gui.SetCursorVisibility(false);
                     Vector2 mouseDelta = gui.PointerDelta;
-                    Vector3 pos = Cam.GameObject.Transform.position;
-                    pos -= Cam.GameObject.Transform.right * mouseDelta.x * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
-                    pos += Cam.GameObject.Transform.up * mouseDelta.y * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
-                    Cam.GameObject.Transform.position = pos;
+                    Vector3 pos = Cam.Transform.position;
+                    pos -= Cam.Transform.right * mouseDelta.x * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
+                    pos += Cam.Transform.up * mouseDelta.y * (Time.deltaTimeF * 1f * SceneViewPreferences.Instance.PanSensitivity);
+                    Cam.Transform.position = pos;
                     gui.PointerPos = WindowCenter;
 
                 }
@@ -304,8 +304,8 @@ public class SceneViewWindow : EditorWindow
                         // If only one object is selected, set the camera position to the center of that object
                         if (HierarchyWindow.SelectHandler.Selected.First().Target is GameObject singleObject)
                         {
-                            Cam.GameObject.Transform.position = singleObject.Transform.position -
-                                                                (Cam.GameObject.Transform.forward * defaultZoomFactor);
+                            Cam.Transform.position = singleObject.Transform.position -
+                                                                (Cam.Transform.forward * defaultZoomFactor);
                             return;
                         }
                     }
@@ -326,8 +326,8 @@ public class SceneViewWindow : EditorWindow
                     float zoomFactor = boundingBoxSize * defaultZoomFactor;
 
                     Vector3 averagePosition = combinedBounds.center;
-                    Cam.GameObject.Transform.position =
-                        averagePosition - (Cam.GameObject.Transform.forward * zoomFactor);
+                    Cam.Transform.position =
+                        averagePosition - (Cam.Transform.forward * zoomFactor);
                 }
             }
 
@@ -335,7 +335,7 @@ public class SceneViewWindow : EditorWindow
             {
                 // Larger distance more zoom, but clamped
                 double amount = 1f * SceneViewPreferences.Instance.ZoomSensitivity;
-                Cam.GameObject.Transform.position += mouseRay.direction * amount * gui.PointerWheel;
+                Cam.Transform.position += mouseRay.direction * amount * gui.PointerWheel;
 
             }
         }
@@ -351,7 +351,7 @@ public class SceneViewWindow : EditorWindow
 
     private void HandleGizmos(List<GameObject> selectedGOs, Ray mouseRay, Matrix4x4 view, Matrix4x4 projection, bool blockPicking)
     {
-        gizmo.UpdateCamera(gui.CurrentNode.LayoutData.Rect, view, projection, Cam.GameObject.Transform.up, Cam.GameObject.Transform.forward, Cam.GameObject.Transform.right);
+        gizmo.UpdateCamera(gui.CurrentNode.LayoutData.Rect, view, projection, Cam.Transform.up, Cam.Transform.forward, Cam.Transform.right);
 
         gizmo.Snapping = Input.GetKey(Key.LeftControl);
         gizmo.SnapDistance = SceneViewPreferences.Instance.SnapDistance;
@@ -416,7 +416,7 @@ public class SceneViewWindow : EditorWindow
                 SceneRaycaster.MeshHitInfo hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
 
                 if (hit.worldPosition == Vector3.zero)
-                    go.Transform.position = Cam.GameObject.Transform.position + Cam.GameObject.Transform.forward * 10;
+                    go.Transform.position = Cam.Transform.position + Cam.Transform.forward * 10;
                 else
                     go.Transform.position = hit.worldPosition;
             }
@@ -431,7 +431,7 @@ public class SceneViewWindow : EditorWindow
                 SceneRaycaster.MeshHitInfo hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
 
                 if (hit.worldPosition == Vector3.zero)
-                    t.Transform.position = Cam.GameObject.Transform.position + Cam.GameObject.Transform.forward * 10;
+                    t.Transform.position = Cam.Transform.position + Cam.Transform.forward * 10;
                 else
                     go.Transform.position = hit.worldPosition;
             }
