@@ -240,8 +240,6 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <returns>The created billboard matrix</returns>
     public static Matrix4x4 CreateBillboard(Vector3 objectPosition, Vector3 cameraPosition, Vector3 cameraUpVector, Vector3 cameraForwardVector)
     {
-        const double epsilon = 1e-4;
-
         Vector3 zaxis = new Vector3(
             objectPosition.x - cameraPosition.x,
             objectPosition.y - cameraPosition.y,
@@ -249,7 +247,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
 
         double norm = zaxis.sqrMagnitude;
 
-        if (norm < epsilon)
+        if (norm < MathD.Epsilon)
         {
             zaxis = -cameraForwardVector;
         }
@@ -280,7 +278,6 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <returns>The created billboard matrix.</returns>
     public static Matrix4x4 CreateConstrainedBillboard(Vector3 objectPosition, Vector3 cameraPosition, Vector3 rotateAxis, Vector3 cameraForwardVector, Vector3 objectForwardVector)
     {
-        const double epsilon = 1e-4;
         const double minAngle = 1.0 - (0.1 * (Math.PI / 180.0)); // 0.1 degrees
 
         // Treat the case when object and camera positions are too close.
@@ -291,7 +288,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
 
         double norm = faceDir.sqrMagnitude;
 
-        if (norm < epsilon)
+        if (norm < MathD.Epsilon)
         {
             faceDir = -cameraForwardVector;
         }
@@ -1340,7 +1337,6 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
             fixed (Vector3* scaleBase = &scale)
             {
                 double* pfScales = (double*)scaleBase;
-                const double EPSILON = 0.0001;
                 double det;
 
                 VectorBasis vectorBasis;
@@ -1424,14 +1420,14 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
                 }
                 #endregion
 
-                if (pfScales[a] < EPSILON)
+                if (pfScales[a] < MathD.Epsilon)
                 {
                     *(pVectorBasis[a]) = pCanonicalBasis[a];
                 }
 
                 *pVectorBasis[a] = Vector3.Normalize(*pVectorBasis[a]);
 
-                if (pfScales[b] < EPSILON)
+                if (pfScales[b] < MathD.Epsilon)
                 {
                     uint cc;
                     double fAbsX, fAbsY, fAbsZ;
@@ -1484,7 +1480,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
 
                 *pVectorBasis[b] = Vector3.Normalize(*pVectorBasis[b]);
 
-                if (pfScales[c] < EPSILON)
+                if (pfScales[c] < MathD.Epsilon)
                 {
                     *pVectorBasis[c] = Vector3.Cross(*pVectorBasis[a], *pVectorBasis[b]);
                 }
@@ -1506,7 +1502,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
                 det -= 1.0;
                 det *= det;
 
-                if ((EPSILON < det))
+                if ((det > MathD.Epsilon))
                 {
                     // Non-SRT matrix encountered
                     rotation = Quaternion.identity;

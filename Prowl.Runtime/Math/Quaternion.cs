@@ -319,8 +319,6 @@ public struct Quaternion : IEquatable<Quaternion>
     /// <returns>The interpolated Quaternion.</returns>
     public static Quaternion Slerp(Quaternion quaternion1, Quaternion quaternion2, double amount)
     {
-        const double epsilon = 1e-6;
-
         double t = amount;
 
         double cosOmega = quaternion1.x * quaternion2.x + quaternion1.y * quaternion2.y +
@@ -336,7 +334,7 @@ public struct Quaternion : IEquatable<Quaternion>
 
         double s1, s2;
 
-        if (cosOmega > (1.0 - epsilon))
+        if (cosOmega > (1.0 - MathD.Epsilon))
         {
             // Too close, do straight linear interpolation.
             s1 = 1.0 - t;
