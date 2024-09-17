@@ -22,6 +22,9 @@ public static partial class Graphics
 
     public static Vector2Int TargetResolution => new Vector2(ScreenTarget.Width, ScreenTarget.Height);
 
+    public static bool IsOpenGL => Device.BackendType == GraphicsBackend.OpenGL || Device.BackendType == GraphicsBackend.OpenGLES;
+    public static bool IsVulkan => Device.BackendType == GraphicsBackend.Vulkan;
+
     private static readonly List<IDisposable> s_disposables = new();
 
     public static bool VSync
@@ -54,14 +57,7 @@ public static partial class Graphics
                 Debug.LogException(new Exception("Failed to set DPI awareness", exception));
         }
 
-        Screen.Resize += ResizeGraphicsResources;
-
         GUI.Graphics.UIDrawListRenderer.Initialize(Device.SwapchainFramebuffer.OutputDescription, GUI.Graphics.ColorSpaceHandling.Direct);
-    }
-
-    private static void ResizeGraphicsResources(Vector2Int newSize)
-    {
-        Device.ResizeMainWindow((uint)newSize.x, (uint)newSize.y);
     }
 
     public static void EndFrame()
@@ -77,6 +73,9 @@ public static partial class Graphics
             disposable.Dispose();
 
         s_disposables.Clear();
+
+        if (Device.SwapchainFramebuffer.Width != Screen.Width || Device.SwapchainFramebuffer.Height != Screen.Height)
+            Device.ResizeMainWindow((uint)Screen.Width, (uint)Screen.Height);
     }
 
     public static CommandList GetCommandList()
@@ -151,5 +150,31 @@ public static partial class Graphics
         GUI.Graphics.UIDrawListRenderer.Dispose();
 
         Device.Dispose();
+    }
+
+    public static Matrix4x4 GetGPUProjectionMatrix(Matrix4x4 projection)
+    {
+        // On DX11, flip Y - not sure if this works on Metal.
+        if (!IsOpenGL && !IsVulkan)
+            projection.M22 = -projection.M22;
+
+        return projection;
+    }
+
+    public static Matrix4x4 GetGPUModelMatrix(Matrix4x4 projectionMatrix)
+    {
+        if (!IsOpenGL)
+            return projectionMatrix;
+
+        // Create a scaling matrix to flip the Y axis
+        Matrix4x4 flipYMatrix = new Matrix4x4(
+            -1, 0, 0, 0,
+            0, 1, 0, 0,  // Flipping Y axis
+            0, 0, 1, 0,
+            0, 0, 0, 1
+        );
+
+        // Apply the Y flip to the projection matrix
+        return flipYMatrix * projectionMatrix;
     }
 }
