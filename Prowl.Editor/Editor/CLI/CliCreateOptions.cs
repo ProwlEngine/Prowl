@@ -9,11 +9,6 @@ namespace Prowl.Editor.Editor.CLI;
 /// Command line options for the `create` command.
 /// </summary>
 [Verb("create", false, HelpText = "create a project")]
-internal class CliCreateOptions
+internal class CliCreateOptions : CliOptionsBase
 {
-    /// <summary>
-    /// The path of the project to be created.
-    /// </summary>
-    [Option('p', "project", Required = false, HelpText = "Project path", Default = "./")]
-    public required DirectoryInfo ProjectPath { get; set; }
 }

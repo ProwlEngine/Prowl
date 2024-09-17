@@ -9,14 +9,8 @@ namespace Prowl.Editor.Editor.CLI;
 /// Command line options for the `build` command.
 /// </summary>
 [Verb("build", false, HelpText = "build a given project")]
-internal class CliBuildOptions
+internal class CliBuildOptions : CliOptionsBase
 {
-    /// <summary>
-    /// The path of the project to be open.
-    /// </summary>
-    [Option('p', "project", Required = false, HelpText = "Project path")]
-    public required DirectoryInfo ProjectPath { get; set; }
-
     /// <summary>
     /// The path of the output files.
     /// </summary>

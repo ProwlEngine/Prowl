@@ -36,7 +36,7 @@ public static class Program
     {
         Console.WriteLine("Creating a new project");
 
-        if (!options.ProjectPath.Exists)
+        if (options.ProjectPath is not null && !options.ProjectPath.Exists)
         {
             Project.CreateNew(options.ProjectPath);
         }
@@ -64,12 +64,6 @@ public static class Program
 
         Application.Update += () =>
         {
-            if (!s_opened && options.ProjectPath.Exists)
-            {
-                Project.Open(new Project(options.ProjectPath));
-                s_opened = true;
-            }
-
             AssetDatabase.InternalUpdate();
 
             if (PlayMode.Current == PlayMode.Mode.Editing) // Don't recompile scripts unless were in editor mode
@@ -127,7 +121,6 @@ public static class Program
 
             Application.isPlaying = PlayMode.Current == PlayMode.Mode.Playing;
 
-
             try
             {
                 bool hasGameWindow = GameWindow.LastFocused.IsAlive;
@@ -151,6 +144,12 @@ public static class Program
         {
             EditorGuiManager.Update();
 
+            if (!s_opened && options.ProjectPath is not null && options.ProjectPath.Exists)
+            {
+                Project.Open(new Project(options.ProjectPath));
+                s_opened = true;
+            }
+
             Graphics.EndFrame();
         };
 
@@ -164,7 +163,7 @@ public static class Program
     private static int BuildCommand(CliBuildOptions options)
     {
         Console.WriteLine($"Building project at {options.ProjectPath}");
-        if (!options.ProjectPath.Exists)
+        if (options.ProjectPath is not null && !options.ProjectPath.Exists)
         {
             _ = new Project(options.ProjectPath);
         }
