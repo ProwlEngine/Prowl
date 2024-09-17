@@ -81,7 +81,7 @@ public struct Ray : IEquatable<Ray>
     {
         double? tMin = null, tMax = null;
 
-        if (Math.Abs(direction.x) < MathD.Epsilon)
+        if (Math.Abs(direction.x) < double.Epsilon)
         {
             if (origin.x < box.min.x || origin.x > box.max.x)
                 return null;
@@ -99,7 +99,7 @@ public struct Ray : IEquatable<Ray>
             }
         }
 
-        if (Math.Abs(direction.y) < MathD.Epsilon)
+        if (Math.Abs(direction.y) < double.Epsilon)
         {
             if (origin.y < box.min.y || origin.y > box.max.y)
                 return null;
@@ -123,7 +123,7 @@ public struct Ray : IEquatable<Ray>
             if (!tMax.HasValue || tMaxY < tMax) tMax = tMaxY;
         }
 
-        if (Math.Abs(direction.z) < MathD.Epsilon)
+        if (Math.Abs(direction.z) < double.Epsilon)
         {
             if (origin.z < box.min.z || origin.z > box.max.z)
                 return null;

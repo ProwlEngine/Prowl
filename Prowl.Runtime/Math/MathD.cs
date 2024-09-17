@@ -10,7 +10,7 @@ namespace Prowl.Runtime;
 
 public static class MathD
 {
-    private const MethodImplOptions IN = MethodImplOptions.AggressiveInlining;
+    public const MethodImplOptions IN = MethodImplOptions.AggressiveInlining;
 
     #region Constants
 
@@ -37,9 +37,6 @@ public static class MathD
 
     /// A small but not tiny value, Used in places like ApproximatelyEquals, where there is some tolerance (0.00001)
     public static readonly double Small = 0.000001;
-
-    /// <inheritdoc cref="double.MinValue"/>
-    public static readonly double Epsilon = double.MinValue;
 
     /// <inheritdoc cref="double.PositiveInfinity"/>
     public const double Infinity = double.PositiveInfinity;
@@ -194,7 +191,7 @@ public static class MathD
 
     [MethodImpl(IN)] public static int ComputeMipLevels(int width, int height) => (int)Math.Log2(Math.Max(width, height));
 
-    [MethodImpl(IN)] public static bool ApproximatelyEquals(double a, double b) => Abs(a - b) < Epsilon;
+    [MethodImpl(IN)] public static bool ApproximatelyEquals(double a, double b) => Abs(a - b) < double.Epsilon;
     [MethodImpl(IN)] public static bool ApproximatelyEquals(Vector2 a, Vector2 b) => ApproximatelyEquals(a.x, b.x) && ApproximatelyEquals(a.y, b.y);
     [MethodImpl(IN)] public static bool ApproximatelyEquals(Vector3 a, Vector3 b) => ApproximatelyEquals(a.x, b.x) && ApproximatelyEquals(a.y, b.y) && ApproximatelyEquals(a.z, b.z);
     [MethodImpl(IN)] public static bool ApproximatelyEquals(Vector4 a, Vector4 b) => ApproximatelyEquals(a.x, b.x) && ApproximatelyEquals(a.y, b.y) && ApproximatelyEquals(a.z, b.z) && ApproximatelyEquals(a.w, b.w);

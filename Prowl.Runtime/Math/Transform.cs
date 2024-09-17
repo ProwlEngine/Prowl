@@ -276,7 +276,7 @@ public class Transform
     internal void RotateAroundInternal(Vector3 worldAxis, double rad)
     {
         Vector3 localAxis = InverseTransformDirection(worldAxis);
-        if (localAxis.sqrMagnitude > MathD.Epsilon)
+        if (localAxis.sqrMagnitude > double.Epsilon)
         {
             localAxis.Normalize();
             Quaternion q = Quaternion.AngleAxis(rad, localAxis);
@@ -356,6 +356,6 @@ public class Transform
         return ret;
     }
 
-    static double InverseSafe(double f) => MathD.Abs(f) > MathD.Epsilon ? 1.0F / f : 0.0F;
+    static double InverseSafe(double f) => MathD.Abs(f) > double.Epsilon ? 1.0F / f : 0.0F;
     static Vector3 InverseSafe(Vector3 v) => new Vector3(InverseSafe(v.x), InverseSafe(v.y), InverseSafe(v.z));
 }

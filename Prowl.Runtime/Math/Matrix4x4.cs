@@ -247,7 +247,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
 
         double norm = zaxis.sqrMagnitude;
 
-        if (norm < MathD.Epsilon)
+        if (norm < double.Epsilon)
         {
             zaxis = -cameraForwardVector;
         }
@@ -288,7 +288,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
 
         double norm = faceDir.sqrMagnitude;
 
-        if (norm < MathD.Epsilon)
+        if (norm < double.Epsilon)
         {
             faceDir = -cameraForwardVector;
         }
@@ -1420,14 +1420,14 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
                 }
                 #endregion
 
-                if (pfScales[a] < MathD.Epsilon)
+                if (pfScales[a] < double.Epsilon)
                 {
                     *(pVectorBasis[a]) = pCanonicalBasis[a];
                 }
 
                 *pVectorBasis[a] = Vector3.Normalize(*pVectorBasis[a]);
 
-                if (pfScales[b] < MathD.Epsilon)
+                if (pfScales[b] < double.Epsilon)
                 {
                     uint cc;
                     double fAbsX, fAbsY, fAbsZ;
@@ -1480,7 +1480,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
 
                 *pVectorBasis[b] = Vector3.Normalize(*pVectorBasis[b]);
 
-                if (pfScales[c] < MathD.Epsilon)
+                if (pfScales[c] < double.Epsilon)
                 {
                     *pVectorBasis[c] = Vector3.Cross(*pVectorBasis[a], *pVectorBasis[b]);
                 }
@@ -1502,7 +1502,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
                 det -= 1.0;
                 det *= det;
 
-                if ((det > MathD.Epsilon))
+                if ((det > double.Epsilon))
                 {
                     // Non-SRT matrix encountered
                     rotation = Quaternion.identity;

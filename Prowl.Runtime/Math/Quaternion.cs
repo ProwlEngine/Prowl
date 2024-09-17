@@ -114,7 +114,7 @@ public struct Quaternion : IEquatable<Quaternion>
     public static Quaternion NormalizeSafe(Quaternion q)
     {
         double mag = q.Magnitude();
-        if (mag < MathD.Epsilon)
+        if (mag < double.Epsilon)
             return identity;
         else
             return q / mag;
@@ -334,7 +334,7 @@ public struct Quaternion : IEquatable<Quaternion>
 
         double s1, s2;
 
-        if (cosOmega > (1.0 - MathD.Epsilon))
+        if (cosOmega > (1.0 - double.Epsilon))
         {
             // Too close, do straight linear interpolation.
             s1 = 1.0 - t;
