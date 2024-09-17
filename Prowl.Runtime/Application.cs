@@ -42,7 +42,7 @@ public static class Application
         GraphicsBackend.OpenGLES,
     ];
 
-    private static readonly GraphicsBackend[] s_preferredMacBackends = // Covers MacOS/Apple
+    private static readonly GraphicsBackend[] s_preferredMacBackends = // Covers macOS/Apple
     [
         GraphicsBackend.Metal,
         GraphicsBackend.OpenGL,
@@ -77,9 +77,9 @@ public static class Application
         Screen.Closing += AppClose;
 
         IsRunning = true;
-        IsPlaying = true; // Base application is not the editor, isplaying is always true
+        IsPlaying = true; // Base application is not the editor, IsPlaying is always true
 
-        Screen.Start($"{title} - {GetBackend()}", new Vector2Int(width, height), new Vector2Int(100, 100), WindowState.Normal);
+        Screen.Start($"{title} - {GetBackend()}", new Vector2Int(width, height), new Vector2Int(100, 100));
     }
 
     static void AppInitialize()
@@ -88,7 +88,7 @@ public static class Application
         SceneManager.Initialize();
         AudioSystem.Initialize();
 
-        AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
+        AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
 
         AssemblyManager.Initialize();
 
@@ -120,8 +120,8 @@ public static class Application
 
     static void AppClose()
     {
-        isRunning = false;
-        Quitting?.Invoke();
+        IsRunning = false;
+        Quitting.Invoke();
         Graphics.Dispose();
         Physics.Dispose();
         AudioSystem.Dispose();
