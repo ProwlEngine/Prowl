@@ -36,7 +36,7 @@ public class PhysicsSetting : ScriptableSingleton<PhysicsSetting>
 
 public static class Physics
 {
-    public static bool IsReady => isInitialized && Application.isPlaying;
+    public static bool IsReady => isInitialized && Application.IsPlaying;
 
     public static Simulation? Sim { get; private set; }
     public static BufferPool? Pool { get; private set; }

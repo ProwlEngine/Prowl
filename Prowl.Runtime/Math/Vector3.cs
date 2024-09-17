@@ -107,12 +107,7 @@ public struct Vector3 : IEquatable<Vector3>, IFormattable
     /// <param name="obj">The Object to compare against.</param>
     /// <returns>True if the Object is equal to this Vector3; False otherwise.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public override bool Equals(object? obj)
-    {
-        if (obj is not Vector3)
-            return false;
-        return Equals((Vector3)obj);
-    }
+    public override bool Equals(object? obj) => obj is Vector3 vector3 && Equals(vector3);
 
     /// <summary>
     /// Returns a boolean indicating whether the given Vector3 is equal to this Vector3 instance.
@@ -121,9 +116,9 @@ public struct Vector3 : IEquatable<Vector3>, IFormattable
     /// <returns>True if the other Vector3 is equal to this instance; False otherwise.</returns>
     public bool Equals(Vector3 other)
     {
-        return x == other.x &&
-               y == other.y &&
-               z == other.z;
+        return MathD.ApproximatelyEquals(x, other.x) &&
+               MathD.ApproximatelyEquals(y, other.y) &&
+               MathD.ApproximatelyEquals(z, other.z);
     }
 
     /// <summary>
@@ -585,9 +580,7 @@ public struct Vector3 : IEquatable<Vector3>, IFormattable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator ==(Vector3 left, Vector3 right)
     {
-        return (left.x == right.x &&
-                left.y == right.y &&
-                left.z == right.z);
+        return left.Equals(right);
     }
 
     /// <summary>
@@ -599,9 +592,7 @@ public struct Vector3 : IEquatable<Vector3>, IFormattable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool operator !=(Vector3 left, Vector3 right)
     {
-        return (left.x != right.x ||
-                left.y != right.y ||
-                left.z != right.z);
+        return !left.Equals(right);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
