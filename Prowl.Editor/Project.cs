@@ -17,22 +17,22 @@ public class Project
 {
     #region Public Properties
 
-    public DirectoryInfo ProjectDirectory;
+    public readonly DirectoryInfo ProjectDirectory;
     public bool Exists => ProjectDirectory.Exists;
     public string Name => ProjectDirectory.Name;
     public string ProjectPath => ProjectDirectory.FullName;
 
-    public DirectoryInfo AssetDirectory;
-    public DirectoryInfo LibraryDirectory;
-    public DirectoryInfo DefaultsDirectory;
-    public DirectoryInfo PackagesDirectory;
-    public DirectoryInfo TempDirectory;
+    public readonly DirectoryInfo AssetDirectory;
+    public readonly DirectoryInfo LibraryDirectory;
+    public readonly DirectoryInfo DefaultsDirectory;
+    public readonly DirectoryInfo PackagesDirectory;
+    public readonly DirectoryInfo TempDirectory;
 
-    public FileInfo Assembly_Proj;
-    public FileInfo Assembly_DLL;
+    public readonly FileInfo Assembly_Proj;
+    public readonly FileInfo Assembly_DLL;
 
-    public FileInfo Editor_Assembly_Proj;
-    public FileInfo Editor_Assembly_DLL;
+    public readonly FileInfo Editor_Assembly_Proj;
+    public readonly FileInfo Editor_Assembly_DLL;
 
     public static event Action OnProjectChanged;
 

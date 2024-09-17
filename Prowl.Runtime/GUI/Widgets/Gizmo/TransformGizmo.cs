@@ -83,8 +83,8 @@ public class TransformGizmo
     public bool IsOver => hoveredGizmo != null || focusedGizmo != null;
 
     public Rect Viewport;
-    public double GizmoSize = 75.0;
-    public double StrokeWidth = 4.0;
+    public readonly double GizmoSize = 75.0;
+    public readonly double StrokeWidth = 4.0;
 
     public Vector3 ViewForward;
     public Vector3 ViewUp;
@@ -110,7 +110,7 @@ public class TransformGizmo
     // internal Matrix4x4 InverseModelViewProjection;
 
     private readonly List<ISubGizmo> _subGizmos = [];
-    internal Gui _gui;
+    internal readonly Gui _gui;
     internal TransformGizmoMode mode;
 
     private ISubGizmo? hoveredGizmo;

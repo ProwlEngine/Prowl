@@ -28,9 +28,9 @@ public static partial class AssetDatabase
     /// Key: Package ID
     /// Value: Package Version
     /// </summary>
-    public static Dictionary<string, string> DesiredPackages = [];
+    public static readonly Dictionary<string, string> DesiredPackages = [];
 
-    public static List<IPackageSearchMetadata> Packages = [];
+    public static readonly List<IPackageSearchMetadata> Packages = [];
 
     #region Public Methods
 

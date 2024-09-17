@@ -12,16 +12,16 @@ namespace Prowl.Runtime;
 
 public struct RenderTextureDescription
 {
-    public uint width;
-    public uint height;
+    public readonly uint width;
+    public readonly uint height;
 
-    public PixelFormat[] colorBufferFormats;
+    public readonly PixelFormat[] colorBufferFormats;
     public PixelFormat? depthBufferFormat;
 
-    public bool sampled;
-    public bool enableRandomWrite;
+    public readonly bool sampled;
+    public readonly bool enableRandomWrite;
 
-    public TextureSampleCount sampleCount;
+    public readonly TextureSampleCount sampleCount;
 
     public RenderTextureDescription(
         uint width, uint height,

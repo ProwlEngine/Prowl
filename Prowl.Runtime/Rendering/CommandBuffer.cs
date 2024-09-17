@@ -12,7 +12,7 @@ public class CommandBuffer : IDisposable
 {
     private static Material s_blit;
 
-    internal CommandList _commandList;
+    internal readonly CommandList _commandList;
     private bool _isRecording = false;
 
     private Framebuffer _activeFramebuffer;

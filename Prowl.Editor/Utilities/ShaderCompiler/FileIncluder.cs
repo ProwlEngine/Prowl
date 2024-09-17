@@ -7,7 +7,7 @@ namespace Prowl.Editor.Utilities;
 
 public class FileIncluder
 {
-    public string SourceFile;
+    public readonly string SourceFile;
     public string SourceFilePath => Path.Join(_searchDirectories[0].FullName, SourceFile);
 
     private readonly string _relativeDirectory;

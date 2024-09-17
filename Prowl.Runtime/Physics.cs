@@ -24,12 +24,12 @@ namespace Prowl.Runtime;
 public class PhysicsSetting : ScriptableSingleton<PhysicsSetting>
 {
     public Vector3 Gravity = new Vector3(0, -9.81f, 0);
-    public int Iterations = 8;
-    public int Substep = 1;
-    public int TargetFrameRate = 50;
-    public bool UseMultithreading = true;
-    public bool EnhancedDeterminism = false;
-    public bool AutoSyncTransforms = true;
+    public readonly int Iterations = 8;
+    public readonly int Substep = 1;
+    public readonly int TargetFrameRate = 50;
+    public readonly bool UseMultithreading = true;
+    public readonly bool EnhancedDeterminism = false;
+    public readonly bool AutoSyncTransforms = true;
 
 }
 

@@ -12,7 +12,7 @@ namespace Prowl.Runtime.Utils;
 public class SerializedAsset
 {
     public EngineObject? Main;
-    public List<EngineObject> SubAssets = new();
+    public readonly List<EngineObject> SubAssets = new();
 
     [SerializeIgnore]
     public Guid Guid;

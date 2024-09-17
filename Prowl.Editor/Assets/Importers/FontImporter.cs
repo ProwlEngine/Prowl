@@ -12,7 +12,7 @@ namespace Prowl.Editor.Assets;
 [Importer("FileIcon.png", typeof(Font), ".ttf")]
 public class FontImporter : ScriptedImporter
 {
-    public List<Font.CharacterRange> characterRanges = [Font.CharacterRange.BasicLatin];
+    public readonly List<Font.CharacterRange> characterRanges = [Font.CharacterRange.BasicLatin];
     public float fontSize = 20;
     public int width = 1024;
     public int height = 1024;

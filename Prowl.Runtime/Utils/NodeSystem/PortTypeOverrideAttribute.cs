@@ -10,7 +10,7 @@ namespace Prowl.Runtime.NodeSystem;
 [AttributeUsage(AttributeTargets.Field)]
 public class PortTypeOverrideAttribute : Attribute
 {
-    public Type type;
+    public readonly Type type;
     /// <summary> Overrides the ValueType of the Port </summary>
     /// <param name="type">ValueType of the Port</param>
     public PortTypeOverrideAttribute(Type type)

@@ -20,9 +20,9 @@ public class ImporterAttribute : Attribute
         GeneralType = generalType;
     }
 
-    public static Dictionary<string, Type> extToGeneralType = new(StringComparer.OrdinalIgnoreCase);
-    public static Dictionary<string, Type> extToImporter = new(StringComparer.OrdinalIgnoreCase);
-    public static Dictionary<string, string> extToIcon = new(StringComparer.OrdinalIgnoreCase);
+    public static readonly Dictionary<string, Type> extToGeneralType = new(StringComparer.OrdinalIgnoreCase);
+    public static readonly Dictionary<string, Type> extToImporter = new(StringComparer.OrdinalIgnoreCase);
+    public static readonly Dictionary<string, string> extToIcon = new(StringComparer.OrdinalIgnoreCase);
 
     [OnAssemblyLoad]
     public static void GenerateLookUp()
@@ -96,7 +96,7 @@ public class CustomEditorAttribute : Attribute
         Type = type;
     }
 
-    public static Dictionary<Type, Type> typeToEditor = new();
+    public static readonly Dictionary<Type, Type> typeToEditor = new();
 
     [OnAssemblyLoad]
     public static void GenerateLookUp()

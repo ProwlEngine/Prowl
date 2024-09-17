@@ -10,12 +10,12 @@ public class PackageManagerPreferences : ScriptableSingleton<PackageManagerPrefe
 {
     public struct PackageSource(string name, string source, bool isEnabled)
     {
-        public string Name = name;
-        public string Source = source;
-        public bool IsEnabled = isEnabled;
+        public readonly string Name = name;
+        public readonly string Source = source;
+        public readonly bool IsEnabled = isEnabled;
     }
 
-    public List<PackageSource> Sources = [new("Nuget", "https://api.nuget.org/v3/index.json", true)];
+    public readonly List<PackageSource> Sources = [new("Nuget", "https://api.nuget.org/v3/index.json", true)];
 
     public bool IncludePrerelease = true; // True for the time being untill we have a stable 1.0 release
 }

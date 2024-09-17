@@ -11,7 +11,7 @@ namespace Prowl.Runtime.GUI;
 
 public partial class Gui
 {
-    public static Stack<Gui> ActiveGUIStack = [];
+    public static readonly Stack<Gui> ActiveGUIStack = [];
     public static Gui ActiveGUI => ActiveGUIStack.Count > 0 ? ActiveGUIStack.Peek() : null;
 
     public Rect ScreenRect { get; private set; }
@@ -24,8 +24,8 @@ public partial class Gui
     public readonly GuiDraw2D Draw2D;
     public readonly GuiDraw3D Draw3D;
 
-    internal LinkedList<LayoutNodeScope> layoutNodeScopes = new();
-    internal Stack<ulong> IDStack = new();
+    internal readonly LinkedList<LayoutNodeScope> layoutNodeScopes = new();
+    internal readonly Stack<ulong> IDStack = new();
     internal bool layoutDirty = false;
     internal ulong frameCount = 0;
     internal readonly List<LayoutNode> ScollableNodes = new();
@@ -214,7 +214,7 @@ public enum ClipType { None, Inner, Outer }
 
 public class LayoutNodeScope : IDisposable
 {
-    public LayoutNode _node;
+    public readonly LayoutNode _node;
 
     public LayoutNodeScope(LayoutNode node)
     {

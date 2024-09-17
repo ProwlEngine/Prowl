@@ -27,7 +27,7 @@ public static class EditorGuiManager
 
     public static WeakReference? FocusedWindow;
 
-    public static List<EditorWindow> Windows = [];
+    public static readonly List<EditorWindow> Windows = [];
 
     static readonly List<EditorWindow> WindowsToRemove = [];
 

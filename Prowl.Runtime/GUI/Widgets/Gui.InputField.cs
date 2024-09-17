@@ -37,8 +37,8 @@ public partial class Gui
         public float BorderThickness;
         public float Roundness;
         public AssetRef<Font> Font;
-        public float FontSize;
-        public float ItemSize;
+        public readonly float FontSize;
+        public readonly float ItemSize;
 
         public WidgetStyle(float itemSize)
         {

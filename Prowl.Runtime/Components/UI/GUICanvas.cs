@@ -14,7 +14,7 @@ public class GUICanvas : MonoBehaviour
     public enum Space { Screen }
     public Space space = Space.Screen;
     public Camera TargetCamera;
-    public bool DoAntiAliasing = true;
+    public readonly bool DoAntiAliasing = true;
 
     private Gui gui;
 

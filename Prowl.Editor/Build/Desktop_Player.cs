@@ -26,21 +26,21 @@ public class Desktop_Player : ProjectBuilder
 
         Universal
     }
-    public Target target = Target.win_x64;
+    public readonly Target target = Target.win_x64;
 
     public enum Configuration
     {
         Debug,
         Release
     }
-    public Configuration configuration = Configuration.Release;
+    public readonly Configuration configuration = Configuration.Release;
 
     public enum AssetPacking
     {
         [Text("All Assets")] All,
         [Text("Used Assets")] Used
     }
-    public AssetPacking assetPacking = AssetPacking.Used;
+    public readonly AssetPacking assetPacking = AssetPacking.Used;
 
 
     protected override void Build(AssetRef<Scene>[] scenes, DirectoryInfo output)

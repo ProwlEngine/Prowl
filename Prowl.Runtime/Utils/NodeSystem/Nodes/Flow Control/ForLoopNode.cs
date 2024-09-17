@@ -17,8 +17,8 @@ public class ForLoopNode : InOutFlowNode
 
     [Output, SerializeIgnore] public int Index;
 
-    [Input] public int FirstIndex = 0;
-    [Input] public int LastIndex = 10;
+    [Input] public readonly int FirstIndex = 0;
+    [Input] public readonly int LastIndex = 10;
 
     private int currentIndex;
 

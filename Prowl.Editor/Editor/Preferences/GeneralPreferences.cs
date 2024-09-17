@@ -10,11 +10,11 @@ namespace Prowl.Editor.Preferences;
 public class GeneralPreferences : ScriptableSingleton<GeneralPreferences>
 {
     [Text("General:")]
-    public bool LockFPS = false;
+    public readonly bool LockFPS = false;
     [ShowIf("LockFPS")]
-    public int TargetFPS = 0;
+    public readonly int TargetFPS = 0;
     [ShowIf("LockFPS", true)]
-    public bool VSync = true;
+    public readonly bool VSync = true;
 
     [Text("Debugging:")]
     public bool ShowDebugLogs = true;
@@ -23,8 +23,8 @@ public class GeneralPreferences : ScriptableSingleton<GeneralPreferences>
     public bool ShowDebugSuccess = true;
 
     [Text("Game View:")]
-    public bool AutoFocusGameView = true;
-    public bool AutoRefreshGameView = true;
+    public readonly bool AutoFocusGameView = true;
+    public readonly bool AutoRefreshGameView = true;
     public GameWindow.Resolutions Resolution = GameWindow.Resolutions.fit;
     [HideInInspector]
     public int CurrentWidth = 1280;
@@ -37,18 +37,18 @@ public class GeneralPreferences : ScriptableSingleton<GeneralPreferences>
 public class EditorPreferences : ScriptableSingleton<EditorPreferences>
 {
     [Text("UI:")]
-    public bool AntiAliasing = true;
+    public readonly bool AntiAliasing = true;
 
     [Text("File Editor:")]
-    public string fileEditor = "";     // code
-    public string fileEditorArgs = ""; // "${ProjectDirectory}" -g "${File}":${Line}:${Character}
+    public readonly string fileEditor = "";     // code
+    public readonly string fileEditorArgs = ""; // "${ProjectDirectory}" -g "${File}":${Line}:${Character}
 }
 
 [FilePath("EditorStyle.pref", FilePathAttribute.Location.EditorPreference)]
 public class EditorStylePrefs : ScriptableSingleton<EditorStylePrefs>
 {
     [Text("Colors:")]
-    public double Disabled = 0.7;
+    public readonly double Disabled = 0.7;
     public Color LesserText = new(110, 110, 120);
     public Color Background = new(15, 15, 18);
     public Color WindowBGOne = new(31, 33, 40);
@@ -68,17 +68,17 @@ public class EditorStylePrefs : ScriptableSingleton<EditorStylePrefs>
     public double DockSpacing = 4;
 
     [Text("Rounding:")]
-    public double WindowRoundness = 4;
-    public double TabRoundness = 4;
-    public double AssetRoundness = 4;
-    public double ButtonRoundness = 4;
+    public readonly double WindowRoundness = 4;
+    public readonly double TabRoundness = 4;
+    public readonly double AssetRoundness = 4;
+    public readonly double ButtonRoundness = 4;
 
     public enum NoodlePath { Straight, Curvy, Angled, ShaderLab }
     public enum NoodleStroke { Basic, Dashed }
     [Text("Node Editor:")]
-    public NoodlePath NoodlePathType = NoodlePath.Curvy;
-    public NoodleStroke NoodleStrokeType = NoodleStroke.Basic;
-    public double NoodleStrokeWidth = 4;
+    public readonly NoodlePath NoodlePathType = NoodlePath.Curvy;
+    public readonly NoodleStroke NoodleStrokeType = NoodleStroke.Basic;
+    public readonly double NoodleStrokeWidth = 4;
 
     // Base Colors
     public static Color Black => new(0, 0, 0, 255);

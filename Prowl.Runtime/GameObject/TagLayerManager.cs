@@ -12,7 +12,7 @@ namespace Prowl.Runtime;
 [FilePath("TagAndLayers.setting", FilePathAttribute.Location.Setting)]
 public class TagLayerManager : ScriptableSingleton<TagLayerManager>
 {
-    public List<string> tags =
+    public readonly List<string> tags =
     [
         "Untagged",
         "Main Camera",
@@ -23,7 +23,7 @@ public class TagLayerManager : ScriptableSingleton<TagLayerManager>
         "Game Controller"
     ];
 
-    public string[] layers =
+    public readonly string[] layers =
         [
             "Default",
             "TransparentFX",

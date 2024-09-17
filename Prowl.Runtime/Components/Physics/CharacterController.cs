@@ -14,12 +14,12 @@ namespace Prowl.Runtime;
 public sealed class CharacterController : Rigidbody
 {
     public float speed = 4f;
-    public float jumpVelocity = 6f;
-    public float maxSlope = (MathF.PI * 0.25f).ToDeg();
-    public float maxVerticalForce = 100;
-    public float maxHoriztonalForce = 20;
-    public float supportDepth = -0.05f;
-    public float supportContinuationDepth = -0.1f;
+    public readonly float jumpVelocity = 6f;
+    public readonly float maxSlope = (MathF.PI * 0.25f).ToDeg();
+    public readonly float maxVerticalForce = 100;
+    public readonly float maxHoriztonalForce = 20;
+    public readonly float supportDepth = -0.05f;
+    public readonly float supportContinuationDepth = -0.1f;
 
     [ShowInInspector]
     public Vector2 TargetVelocity { get; set; } = Vector2.zero;

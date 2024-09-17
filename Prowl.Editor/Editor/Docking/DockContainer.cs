@@ -9,7 +9,7 @@ namespace Prowl.Editor.Docking;
 
 public class DockContainer
 {
-    public DockNode Root = new();
+    public readonly DockNode Root = new();
     private Vector2 PaddedMins => new(0, 0);
 
     public void Update(Rect root)

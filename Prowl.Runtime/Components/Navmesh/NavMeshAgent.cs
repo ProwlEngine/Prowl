@@ -25,14 +25,14 @@ public class NavMeshAgent : MonoBehaviour
     [SerializeField, HideInInspector] private NavMeshSurface surface;
 
 
-    public float radius = 0.5f;
-    public float height = 1f;
-    public float maxAcceleration = 8.0f;
-    public float maxSpeed = 3.5f;
-    public float collisionQueryRange = 5f;
-    public float pathOptimizationRange = 15f;
+    public readonly float radius = 0.5f;
+    public readonly float height = 1f;
+    public readonly float maxAcceleration = 8.0f;
+    public readonly float maxSpeed = 3.5f;
+    public readonly float collisionQueryRange = 5f;
+    public readonly float pathOptimizationRange = 15f;
 
-    public DtCrowdAgentConfig crowdConfig = new();
+    public readonly DtCrowdAgentConfig crowdConfig = new();
 
     public DtCrowdAgent? InternalAgent { get; internal set; } = null;
 

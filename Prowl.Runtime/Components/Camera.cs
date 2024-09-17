@@ -21,10 +21,10 @@ public class Camera : MonoBehaviour
 {
     public LayerMask LayerMask = LayerMask.Everything;
 
-    public CameraClearMode ClearMode = CameraClearMode.Skybox;
+    public readonly CameraClearMode ClearMode = CameraClearMode.Skybox;
     public Color ClearColor = new Color(0f, 0f, 0f, 1f);
-    public float FieldOfView = 60f;
-    public float OrthographicSize = 0.5f;
+    public readonly float FieldOfView = 60f;
+    public readonly float OrthographicSize = 0.5f;
     public int DrawOrder = 0;
     public Rect Viewrect = new Rect(0, 0, 1, 1);
     public float NearClip = 0.01f;

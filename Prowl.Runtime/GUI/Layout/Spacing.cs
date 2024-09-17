@@ -8,10 +8,10 @@ namespace Prowl.Runtime.GUI;
 
 public struct Spacing
 {
-    public double Left;
-    public double Right;
-    public double Top;
-    public double Bottom;
+    public readonly double Left;
+    public readonly double Right;
+    public readonly double Top;
+    public readonly double Bottom;
 
     public readonly double Horizontal => Left + Right;
     public readonly double Vertical => Top + Bottom;

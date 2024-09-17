@@ -20,7 +20,7 @@ public class DefaultRenderPipeline : RenderPipeline
     private static Mesh s_skyDome;
     private static Texture2D s_whiteTexture;
 
-    public static DefaultRenderPipeline Default = new();
+    public static readonly DefaultRenderPipeline Default = new();
 
 
     private static void ValidateDefaults()

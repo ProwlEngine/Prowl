@@ -13,17 +13,17 @@ public partial class Gui
     public event Action<Vector2> OnPointerPosSet;
     public event Action<bool> OnCursorVisibilitySet;
 
-    internal bool[] KeyCurState = new bool[KeyValues.Length];
-    internal bool[] KeyPreState = new bool[KeyValues.Length];
+    internal readonly bool[] KeyCurState = new bool[KeyValues.Length];
+    internal readonly bool[] KeyPreState = new bool[KeyValues.Length];
 
-    internal double[] KeyPressedTime = new double[KeyValues.Length];
+    internal readonly double[] KeyPressedTime = new double[KeyValues.Length];
     internal Key KeyCode = Key.Unknown;
 
-    internal bool[] PointerCurState = new bool[MouseValues.Length];
-    internal bool[] PointerPreState = new bool[MouseValues.Length];
+    internal readonly bool[] PointerCurState = new bool[MouseValues.Length];
+    internal readonly bool[] PointerPreState = new bool[MouseValues.Length];
 
-    internal double[] PointerPressedTime = new double[MouseValues.Length];
-    internal Vector2[] PointerClickPos = new Vector2[MouseValues.Length];
+    internal readonly double[] PointerPressedTime = new double[MouseValues.Length];
+    internal readonly Vector2[] PointerClickPos = new Vector2[MouseValues.Length];
     internal MouseButton PointerButton = (MouseButton)(-1);
     public Vector2 PreviousPointerPos = Vector2.zero;
 
@@ -42,8 +42,8 @@ public partial class Gui
     public Vector2 PointerDelta => PointerPos - PreviousPointerPos;
     public bool IsPointerMoving => PointerDelta.sqrMagnitude > 0;
 
-    public double[] PointerLastClickTime = new double[MouseValues.Length];
-    public Vector2[] PointerLastClickPos = new Vector2[MouseValues.Length];
+    public readonly double[] PointerLastClickTime = new double[MouseValues.Length];
+    public readonly Vector2[] PointerLastClickPos = new Vector2[MouseValues.Length];
     public const double MaxDoubleClickTime = 0.25;
 
     private Vector2 frameBufferScale;

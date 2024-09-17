@@ -18,10 +18,10 @@ public sealed class Texture2D : Texture
     /// <summary>The height of this <see cref="Texture2D"/>.</summary>
     public uint Height => InternalTexture.Height;
 
-    public static Texture2D EmptyWhite = CreateDefaultTex(1, 1, [Color.white]);
+    public static readonly Texture2D EmptyWhite = CreateDefaultTex(1, 1, [Color.white]);
 
-    public static Texture2D Empty = CreateDefaultTex(1, 1, [Color.clear]);
-    public static Texture2D EmptyRW = CreateDefaultTex(1, 1, [Color.black], TextureUsage.Storage);
+    public static readonly Texture2D Empty = CreateDefaultTex(1, 1, [Color.clear]);
+    public static readonly Texture2D EmptyRW = CreateDefaultTex(1, 1, [Color.black], TextureUsage.Storage);
 
     public static Texture2D Checker => CreateDefaultTex(4, 4, [
         Color.white,

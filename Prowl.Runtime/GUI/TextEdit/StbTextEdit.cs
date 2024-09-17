@@ -55,7 +55,7 @@ public class StbTextEditState
     public int SelectEnd;
     public int SelectStart;
     public bool SingleLine;
-    public UndoState UndoData = new();
+    public readonly UndoState UndoData = new();
 }
 
 public static class StbTextEdit
@@ -849,10 +849,10 @@ public static class StbTextEdit
     {
         public int redo_char_point;
         public short redo_point;
-        public int[] undo_char = new int[999];
+        public readonly int[] undo_char = new int[999];
         public int undo_char_point;
         public short undo_point;
-        public UndoRecord[] undo_rec = new UndoRecord[99];
+        public readonly UndoRecord[] undo_rec = new UndoRecord[99];
 
         public void FlushRedo()
         {

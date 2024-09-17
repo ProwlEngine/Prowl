@@ -20,7 +20,7 @@ public class NodeEditorAttribute(Type type) : Attribute
 {
     public Type Type { get; private set; } = type;
 
-    public static Dictionary<Type, Type> nodeEditors = [];
+    public static readonly Dictionary<Type, Type> nodeEditors = [];
 
     [OnAssemblyLoad]
     public static void GenerateLookUp()
@@ -576,7 +576,7 @@ public class NodeEditor
     private RenderTexture RenderTarget;
 
     internal NodePort? draggingPort;
-    internal List<Vector2> reroutePoints = [];
+    internal readonly List<Vector2> reroutePoints = [];
 
     internal Vector2? dragSelectionStart;
     internal Rect dragSelection;

@@ -7,17 +7,17 @@ public class AssetDirectoryCache(DirectoryInfo root)
 {
     public class DirNode(DirectoryInfo directory, DirNode? parent)
     {
-        public DirectoryInfo Directory = directory;
-        public DirNode? Parent = parent;
-        public List<DirNode> SubDirectories = [];
-        public List<FileNode> Files = [];
+        public readonly DirectoryInfo Directory = directory;
+        public readonly DirNode? Parent = parent;
+        public readonly List<DirNode> SubDirectories = [];
+        public readonly List<FileNode> Files = [];
     }
 
     public class FileNode
     {
-        public FileInfo File;
+        public readonly FileInfo File;
         public Guid AssetID;
-        public AssetDatabase.SubAssetCache[] SubAssets;
+        public readonly AssetDatabase.SubAssetCache[] SubAssets;
 
         public FileNode(FileInfo file)
         {

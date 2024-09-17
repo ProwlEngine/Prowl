@@ -10,27 +10,27 @@ namespace Prowl.Editor.Preferences;
 public class SceneViewPreferences : ScriptableSingleton<SceneViewPreferences>
 {
     [Text("Controls:")]
-    public float LookSensitivity = 1f;
-    public float PanSensitivity = 1f;
-    public float ZoomSensitivity = 1f;
+    public readonly float LookSensitivity = 1f;
+    public readonly float PanSensitivity = 1f;
+    public readonly float ZoomSensitivity = 1f;
 
-    public bool InvertLook = false;
+    public readonly bool InvertLook = false;
 
-    public double SnapDistance = 0.5f;
-    public double SnapAngle = 10f;
+    public readonly double SnapDistance = 0.5f;
+    public readonly double SnapAngle = 10f;
 
     [Space, Text("Rendering:")]
     public SceneViewWindow.GridType GridType = SceneViewWindow.GridType.XZ;
-    public bool ShowFPS = true;
+    public readonly bool ShowFPS = true;
 
     [Space]
-    public float NearClip = 0.02f;
-    public float FarClip = 10000f;
+    public readonly float NearClip = 0.02f;
+    public readonly float FarClip = 10000f;
     public float RenderResolution = 1f;
 
     [Text("Grid:")]
-    public float LineWidth = 0.02f;
-    public float PrimaryGridSize = 1f;
-    public float SecondaryGridSize = 5f;
+    public readonly float LineWidth = 0.02f;
+    public readonly float PrimaryGridSize = 1f;
+    public readonly float SecondaryGridSize = 5f;
     public Color GridColor = new Color(1.0f, 1.0f, 1.0f, 0.5f);
 }

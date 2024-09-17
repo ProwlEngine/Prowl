@@ -15,7 +15,7 @@ public class EngineObject : IDisposable
 
     static int NextID = 1;
 
-    protected int _instanceID;
+    protected readonly int _instanceID;
     public int InstanceID => _instanceID;
 
     // Asset path if we have one

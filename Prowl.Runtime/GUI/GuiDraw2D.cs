@@ -12,7 +12,7 @@ public class GuiDraw2D
 {
     public UIDrawList DrawList => _drawList[currentZIndex];
 
-    internal Dictionary<int, UIDrawList> _drawList = new();
+    internal readonly Dictionary<int, UIDrawList> _drawList = new();
 
     private int currentZIndex => _gui.CurrentZIndex;
 

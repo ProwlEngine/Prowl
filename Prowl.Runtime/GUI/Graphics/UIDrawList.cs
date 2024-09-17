@@ -67,8 +67,8 @@ namespace Prowl.Runtime.GUI.Graphics
         // This is what you have to render
         internal List<UIDrawCmd> _commandList; // Commands. Typically 1 command = 1 gpu draw call.
 
-        internal List<uint> _indices; // Index buffer. Each command consume ImDrawCmd::ElemCount of those
-        internal List<UIVertex> _vertices; // Vertex buffer.
+        internal List<uint> _indices;               // Index buffer. Each command consume ImDrawCmd::ElemCount of those
+        internal readonly List<UIVertex> _vertices; // Vertex buffer.
 
         private uint _currentVertexIndex; // == _vertices.Count
         private int _vertexWritePos; // point within _vertices after each add command (to avoid using the ImVector<> operators too much)

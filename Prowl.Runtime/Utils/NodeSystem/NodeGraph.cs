@@ -41,13 +41,13 @@ public abstract class NodeGraph : ScriptableObject, ISerializationCallbackReceiv
 
     /// <summary> All nodes in the graph. <para/>
     /// See: <see cref="AddNode{T}"/> </summary>
-    public List<Node> nodes = [];
+    public readonly List<Node> nodes = [];
 
     public virtual (string, Type)[] NodeTypes { get; } = [];
     public virtual (string, Type)[] NodeReflectionTypes { get; } = [];
     public abstract string[] NodeCategories { get; }
 
-    public List<GraphParameter> parameters = [];
+    public readonly List<GraphParameter> parameters = [];
 
     public void Validate()
     {
@@ -196,7 +196,7 @@ public abstract class NodeGraph : ScriptableObject, ISerializationCallbackReceiv
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
     public class RequireNodeAttribute(params Type[] type) : Attribute
     {
-        public Type[] types = type;
+        public readonly Type[] types = type;
 
         public bool Requires(Type type)
         {

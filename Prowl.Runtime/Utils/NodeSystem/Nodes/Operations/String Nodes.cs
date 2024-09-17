@@ -43,7 +43,7 @@ public class String_Contains_Node : Node
 
     [Output, SerializeIgnore] public bool Contains;
 
-    public System.StringComparison Mode = System.StringComparison.Ordinal;
+    public readonly System.StringComparison Mode = System.StringComparison.Ordinal;
 
     public override object GetValue(NodePort port) => GetInputValue("In", In).Contains(GetInputValue("Has", Has), Mode);
 }
@@ -59,7 +59,7 @@ public class String_StartsWith_Node : Node
 
     [Output, SerializeIgnore] public string Result;
 
-    public System.StringComparison Mode = System.StringComparison.Ordinal;
+    public readonly System.StringComparison Mode = System.StringComparison.Ordinal;
 
     public override object GetValue(NodePort port) => GetInputValue("In", In).StartsWith(GetInputValue("StartsWith", StartsWith), Mode);
 }
@@ -75,7 +75,7 @@ public class String_EndsWith_Node : Node
 
     [Output, SerializeIgnore] public string Result;
 
-    public System.StringComparison Mode = System.StringComparison.Ordinal;
+    public readonly System.StringComparison Mode = System.StringComparison.Ordinal;
 
     public override object GetValue(NodePort port) => GetInputValue("In", In).EndsWith(GetInputValue("EndsWith", EndsWith), Mode);
 }
@@ -199,7 +199,7 @@ public class String_IsEqual_Node : Node
 
     [Output, SerializeIgnore] public bool IsEqual;
 
-    public System.StringComparison Mode = System.StringComparison.Ordinal;
+    public readonly System.StringComparison Mode = System.StringComparison.Ordinal;
 
     public override object GetValue(NodePort port) => GetInputValue("A", A).Equals(GetInputValue("B", B), Mode);
 }

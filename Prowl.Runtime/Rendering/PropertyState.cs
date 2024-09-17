@@ -51,10 +51,10 @@ public class PropertyState
 
     public bool IsEmpty => _values.Count == 0 && _buffers.Count == 0;
 
-    [SerializeField] internal Dictionary<string, Property> _values;
+    [SerializeField] internal readonly Dictionary<string, Property> _values;
 
-    internal Dictionary<string, Veldrid.Texture?> _rawTextures;
-    internal Dictionary<string, GraphicsBuffer?> _buffers;
+    internal readonly Dictionary<string, Veldrid.Texture?> _rawTextures;
+    internal readonly Dictionary<string, GraphicsBuffer?> _buffers;
 
 
 

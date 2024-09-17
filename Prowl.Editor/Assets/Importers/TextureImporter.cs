@@ -19,7 +19,7 @@ public class TextureImporter : ScriptedImporter
 
     public FilterType textureMinFilter = FilterType.Linear;
     public FilterType textureMagFilter = FilterType.Linear;
-    public FilterType textureMipFilter = FilterType.Linear;
+    public readonly FilterType textureMipFilter = FilterType.Linear;
 
     public override void Import(SerializedAsset ctx, FileInfo assetPath)
     {

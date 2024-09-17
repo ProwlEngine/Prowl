@@ -37,7 +37,7 @@ public abstract class Texture : EngineObject, ISerializable
     public bool IsMipmappable => Usage.HasFlag(TextureUsage.GenerateMipmaps);
 
     /// <summary>The sampler for this <see cref="Texture"/></summary>
-    public TextureSampler Sampler = TextureSampler.CreateLinear();
+    public readonly TextureSampler Sampler = TextureSampler.CreateLinear();
 
     /// <summary>The multisample count of this <see cref="Texture"/></summary>
     public TextureSampleCount SampleCount => InternalTexture.SampleCount;

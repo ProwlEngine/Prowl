@@ -21,14 +21,14 @@ public class NavMeshSurface : MonoBehaviour
 {
     #region Public - Inspector
 
-    public bool useStaticGeometry = true;
+    public readonly bool useStaticGeometry = true;
     public LayerMask GeometryLayers;
 
     [ShowIf("useStaticGeometry")]
-    public List<Staticbody> staticGeometry = new();
+    public readonly List<Staticbody> staticGeometry = new();
 
     [ShowIf("useStaticGeometry", true)]
-    public List<MeshRenderer> meshGeometry = new();
+    public readonly List<MeshRenderer> meshGeometry = new();
 
     public BuildSettings navSettings = new();
 
@@ -454,25 +454,25 @@ public class NavMeshSurface : MonoBehaviour
 
     public struct BuildSettings
     {
-        public float cellSize = 0.3f;
-        public float cellHeight = 0.2f;
+        public readonly float cellSize = 0.3f;
+        public readonly float cellHeight = 0.2f;
 
-        public float agentHeight = 1f;
-        public float agentRadius = 0.5f;
-        public float agentMaxClimb = 0.9f;
-        public float agentMaxSlope = 45f;
-        public float agentMaxAcceleration = 8f;
-        public float agentMaxSpeed = 3.5f;
+        public readonly float agentHeight = 1f;
+        public readonly float agentRadius = 0.5f;
+        public readonly float agentMaxClimb = 0.9f;
+        public readonly float agentMaxSlope = 45f;
+        public readonly float agentMaxAcceleration = 8f;
+        public readonly float agentMaxSpeed = 3.5f;
 
-        public int minRegionSize = 8;
-        public int mergedRegionSize = 20;
+        public readonly int minRegionSize = 8;
+        public readonly int mergedRegionSize = 20;
 
-        public bool filterLowHangingObstacles = true;
-        public bool filterLedgeSpans = true;
-        public bool filterWalkableLowHeightSpans = true;
+        public readonly bool filterLowHangingObstacles = true;
+        public readonly bool filterLedgeSpans = true;
+        public readonly bool filterWalkableLowHeightSpans = true;
 
-        public bool tiled;
-        public int tileSize = 32;
+        public readonly bool tiled;
+        public readonly int tileSize = 32;
 
         public BuildSettings()
         {

@@ -12,7 +12,7 @@ namespace Prowl.Runtime.SceneManagement;
 public static class SceneManager
 {
     private static readonly List<GameObject> _gameObjects = new();
-    internal static HashSet<int> _dontDestroyOnLoad = new();
+    internal static readonly HashSet<int> _dontDestroyOnLoad = new();
 
     public static Scene MainScene { get; private set; } = new();
 

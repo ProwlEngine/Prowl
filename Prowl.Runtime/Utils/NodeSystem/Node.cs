@@ -260,11 +260,11 @@ public abstract class Node
     [AttributeUsage(AttributeTargets.Field)]
     public class InputAttribute : Attribute
     {
-        public ShowBackingValue backingValue;
-        public ConnectionType connectionType;
-        public bool dynamicPortList;
-        public TypeConstraint typeConstraint;
-        public bool onHeader;
+        public readonly ShowBackingValue backingValue;
+        public readonly ConnectionType connectionType;
+        public readonly bool dynamicPortList;
+        public readonly TypeConstraint typeConstraint;
+        public readonly bool onHeader;
 
         /// <summary> Mark a serializable field as an input port. You can access this through <see cref="GetInputPort(string)"/> </summary>
         /// <param name="backingValue">Should we display the backing value for this port as an editor field? </param>
@@ -286,10 +286,10 @@ public abstract class Node
     [AttributeUsage(AttributeTargets.Field)]
     public class OutputAttribute : Attribute
     {
-        public ConnectionType connectionType;
-        public bool dynamicPortList;
-        public TypeConstraint typeConstraint;
-        public bool onHeader;
+        public readonly ConnectionType connectionType;
+        public readonly bool dynamicPortList;
+        public readonly TypeConstraint typeConstraint;
+        public readonly bool onHeader;
 
         /// <summary> Mark a serializable field as an output port. You can access this through <see cref="GetOutputPort(string)"/> </summary>
         /// <param name="connectionType">Should we allow multiple connections? </param>
@@ -308,9 +308,9 @@ public abstract class Node
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
     public class NodeAttribute(string menuName) : Attribute
     {
-        public string catagory = menuName;
+        public readonly string catagory = menuName;
 
-        public static MultiValueDictionary<string, Type> nodeCatagories = new MultiValueDictionary<string, Type>();
+        public static readonly MultiValueDictionary<string, Type> nodeCatagories = new MultiValueDictionary<string, Type>();
 
         [OnAssemblyLoad]
         public static void OnAssemblyLoad()
@@ -337,7 +337,7 @@ public abstract class Node
     [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
     public class DisallowMultipleNodesAttribute : Attribute
     {
-        public int max;
+        public readonly int max;
         /// <summary> Prevents Node of the same type to be added more than once (configurable) to a NodeGraph </summary>
         /// <param name="max"> How many nodes to allow. Defaults to 1. </param>
         public DisallowMultipleNodesAttribute(int max = 1)
