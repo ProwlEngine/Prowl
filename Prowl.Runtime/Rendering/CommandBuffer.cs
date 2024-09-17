@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 
 using Veldrid;
 
@@ -9,13 +10,15 @@ namespace Prowl.Runtime;
 
 public class CommandBuffer : IDisposable
 {
+    private static Material s_blit;
+
     internal CommandList _commandList;
     private bool _isRecording = false;
 
     private Framebuffer _activeFramebuffer;
     private KeywordState _keywordState;
 
-    private readonly PropertyState _bufferProperties;
+    private PropertyState _bufferProperties;
     private IGeometryDrawData _activeDrawData;
 
     private ShaderPipelineDescription _pipelineDescription;
@@ -27,6 +30,8 @@ public class CommandBuffer : IDisposable
     private ShaderPipeline _graphicsPipeline;
     private BindableResourceSet _pipelineResources;
     private Pipeline _actualActivePipeline;
+
+    private List<IDisposable> _resourcesToDispose;
 
 
     public string Name
@@ -42,6 +47,7 @@ public class CommandBuffer : IDisposable
         _keywordState = KeywordState.Default;
 
         _bufferProperties.Clear();
+        _resourcesToDispose.Clear();
         _activeDrawData = null;
 
         _pipelineDescription = default;
@@ -64,6 +70,7 @@ public class CommandBuffer : IDisposable
         _commandList = Graphics.Factory.CreateCommandList();
 
         _bufferProperties = new();
+        _resourcesToDispose = new();
 
         ResetState();
 
@@ -154,7 +161,7 @@ public class CommandBuffer : IDisposable
     public void BindResources()
     {
         UpdatePipeline();
-        _pipelineResources.Bind(_commandList, _bufferProperties);
+        _pipelineResources.Bind(_commandList, _bufferProperties, _resourcesToDispose);
     }
 
     public void ApplyPropertyState(PropertyState state)
@@ -259,6 +266,8 @@ public class CommandBuffer : IDisposable
         if (newPipeline != _graphicsPipeline)
         {
             _graphicsPipeline = newPipeline;
+
+            _pipelineResources?.DisposeResources(_resourcesToDispose);
             _pipelineResources = _graphicsPipeline.CreateResources();
         }
 
@@ -289,6 +298,8 @@ public class CommandBuffer : IDisposable
 
         _isRecording = false;
 
+        Graphics.SubmitResourcesForDisposal(_resourcesToDispose);
+
         ResetState();
     }
 
@@ -296,7 +307,10 @@ public class CommandBuffer : IDisposable
     public void Dispose()
     {
         _commandList.Dispose();
-        _pipelineResources.Dispose();
+        _pipelineResources?.DisposeResources(_resourcesToDispose);
+
+        Graphics.SubmitResourcesForDisposal(_resourcesToDispose);
+
         GC.SuppressFinalize(this);
     }
 

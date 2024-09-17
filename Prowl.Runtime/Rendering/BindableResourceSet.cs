@@ -11,7 +11,7 @@ using Veldrid;
 
 namespace Prowl.Runtime;
 
-public class BindableResourceSet : IDisposable
+public class BindableResourceSet
 {
     public ShaderPipeline Pipeline { get; private set; }
 
@@ -31,7 +31,7 @@ public class BindableResourceSet : IDisposable
     }
 
 
-    public void Bind(CommandList list, PropertyState state)
+    public void Bind(CommandList list, PropertyState state, List<IDisposable> resourcesToDispose)
     {
         bool recreateResourceSet = false | (resources == null);
 
@@ -88,7 +88,9 @@ public class BindableResourceSet : IDisposable
 
         if (recreateResourceSet)
         {
-            resources?.Dispose();
+            if (resources != null)
+                resourcesToDispose.Add(resources);
+
             resources = Graphics.Factory.CreateResourceSet(description);
         }
 
@@ -190,11 +192,9 @@ public class BindableResourceSet : IDisposable
     }
 
 
-    public void Dispose()
+    public void DisposeResources(List<IDisposable> resourcesToDispose)
     {
-        resources.Dispose();
-
-        for (int i = 0; i < uniformBuffers.Length; i++)
-            uniformBuffers[i].Dispose();
+        resourcesToDispose.Add(resources);
+        resourcesToDispose.AddRange(uniformBuffers);
     }
 }

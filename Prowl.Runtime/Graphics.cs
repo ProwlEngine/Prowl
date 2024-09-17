@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
@@ -20,6 +21,8 @@ public static partial class Graphics
     public static Framebuffer ScreenTarget => Device.SwapchainFramebuffer;
 
     public static Vector2Int TargetResolution => new Vector2(ScreenTarget.Width, ScreenTarget.Height);
+
+    private static readonly List<IDisposable> s_disposables = new();
 
     public static bool VSync
     {
@@ -69,6 +72,11 @@ public static partial class Graphics
 
         RenderTexture.UpdatePool();
         RenderPipelines.RenderPipeline.ClearRenderables();
+
+        foreach (IDisposable disposable in s_disposables)
+            disposable.Dispose();
+
+        s_disposables.Clear();
     }
 
     public static CommandList GetCommandList()
@@ -130,6 +138,11 @@ public static partial class Graphics
         SubmitCommandList(commandList, awaitComplete);
 
         commandList.Dispose();
+    }
+
+    internal static void SubmitResourcesForDisposal(IEnumerable<IDisposable> resources)
+    {
+        s_disposables.AddRange(resources);
     }
 
     internal static void Dispose()
