@@ -174,7 +174,7 @@ public class ModelImporter : ScriptedImporter
             }
 
             GameObject rootNode = GOs[0].Item1;
-            if (UnitScale != 1f)
+            if (Mathf.ApproximatelyEquals(UnitScale , 1f))
                 rootNode.Transform.localScale = Vector3.one * UnitScale;
 
             // Add Animation Component with all the animations assigned

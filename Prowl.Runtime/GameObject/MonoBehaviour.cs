@@ -154,7 +154,7 @@ public abstract class MonoBehaviour : EngineObject
 
         try
         {
-            if (Application.isPlaying || always)
+            if (Application.IsPlaying || always)
                 action();
         }
         catch (Exception e)

@@ -79,11 +79,9 @@ public struct Ray : IEquatable<Ray>
     // adapted from http://www.scratchapixel.com/lessons/3d-basic-lessons/lesson-7-intersecting-simple-shapes/ray-box-intersection/
     public double? Intersects(Bounds box)
     {
-        const double Epsilon = 1e-6;
-
         double? tMin = null, tMax = null;
 
-        if (Math.Abs(direction.x) < Epsilon)
+        if (Math.Abs(direction.x) < double.Epsilon)
         {
             if (origin.x < box.min.x || origin.x > box.max.x)
                 return null;
@@ -101,7 +99,7 @@ public struct Ray : IEquatable<Ray>
             }
         }
 
-        if (Math.Abs(direction.y) < Epsilon)
+        if (Math.Abs(direction.y) < double.Epsilon)
         {
             if (origin.y < box.min.y || origin.y > box.max.y)
                 return null;
@@ -125,7 +123,7 @@ public struct Ray : IEquatable<Ray>
             if (!tMax.HasValue || tMaxY < tMax) tMax = tMaxY;
         }
 
-        if (Math.Abs(direction.z) < Epsilon)
+        if (Math.Abs(direction.z) < double.Epsilon)
         {
             if (origin.z < box.min.z || origin.z > box.max.z)
                 return null;

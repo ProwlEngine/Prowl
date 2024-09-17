@@ -71,7 +71,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <summary>
     /// Returns whether the matrix is the identity matrix.
     /// </summary>
-    public bool IsIdentity => M11 == 1 && M22 == 1 && M33 == 1 && M44 == 1 && // Check diagonal element first for early out.
+    public bool IsIdentity => MathD.ApproximatelyEquals(M11, 1) && MathD.ApproximatelyEquals(M22, 1) && MathD.ApproximatelyEquals(M33, 1) && MathD.ApproximatelyEquals(M44, 1) && // Check diagonal element first for early out.
                               M12 == 0 && M13 == 0 && M14 == 0 &&
                               M21 == 0 && M23 == 0 && M24 == 0 &&
                               M31 == 0 && M32 == 0 && M34 == 0 &&
@@ -240,8 +240,6 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <returns>The created billboard matrix</returns>
     public static Matrix4x4 CreateBillboard(Vector3 objectPosition, Vector3 cameraPosition, Vector3 cameraUpVector, Vector3 cameraForwardVector)
     {
-        const double epsilon = 1e-4;
-
         Vector3 zaxis = new Vector3(
             objectPosition.x - cameraPosition.x,
             objectPosition.y - cameraPosition.y,
@@ -249,7 +247,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
 
         double norm = zaxis.sqrMagnitude;
 
-        if (norm < epsilon)
+        if (norm < double.Epsilon)
         {
             zaxis = -cameraForwardVector;
         }
@@ -280,7 +278,6 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <returns>The created billboard matrix.</returns>
     public static Matrix4x4 CreateConstrainedBillboard(Vector3 objectPosition, Vector3 cameraPosition, Vector3 rotateAxis, Vector3 cameraForwardVector, Vector3 objectForwardVector)
     {
-        const double epsilon = 1e-4;
         const double minAngle = 1.0 - (0.1 * (Math.PI / 180.0)); // 0.1 degrees
 
         // Treat the case when object and camera positions are too close.
@@ -291,7 +288,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
 
         double norm = faceDir.sqrMagnitude;
 
-        if (norm < epsilon)
+        if (norm < double.Epsilon)
         {
             faceDir = -cameraForwardVector;
         }
@@ -1340,7 +1337,6 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
             fixed (Vector3* scaleBase = &scale)
             {
                 double* pfScales = (double*)scaleBase;
-                const double EPSILON = 0.0001;
                 double det;
 
                 VectorBasis vectorBasis;
@@ -1424,14 +1420,14 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
                 }
                 #endregion
 
-                if (pfScales[a] < EPSILON)
+                if (pfScales[a] < double.Epsilon)
                 {
                     *(pVectorBasis[a]) = pCanonicalBasis[a];
                 }
 
                 *pVectorBasis[a] = Vector3.Normalize(*pVectorBasis[a]);
 
-                if (pfScales[b] < EPSILON)
+                if (pfScales[b] < double.Epsilon)
                 {
                     uint cc;
                     double fAbsX, fAbsY, fAbsZ;
@@ -1484,7 +1480,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
 
                 *pVectorBasis[b] = Vector3.Normalize(*pVectorBasis[b]);
 
-                if (pfScales[c] < EPSILON)
+                if (pfScales[c] < double.Epsilon)
                 {
                     *pVectorBasis[c] = Vector3.Cross(*pVectorBasis[a], *pVectorBasis[b]);
                 }
@@ -1506,7 +1502,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
                 det -= 1.0;
                 det *= det;
 
-                if ((EPSILON < det))
+                if ((det > double.Epsilon))
                 {
                     // Non-SRT matrix encountered
                     rotation = Quaternion.identity;
@@ -1812,14 +1808,7 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <param name="value1">The first matrix to compare.</param>
     /// <param name="value2">The second matrix to compare.</param>
     /// <returns>True if the given matrices are equal; False otherwise.</returns>
-    public static bool operator ==(Matrix4x4 value1, Matrix4x4 value2)
-    {
-        return (value1.M11 == value2.M11 && value1.M22 == value2.M22 && value1.M33 == value2.M33 && value1.M44 == value2.M44 && // Check diagonal element first for early out.
-                value1.M12 == value2.M12 && value1.M13 == value2.M13 && value1.M14 == value2.M14 &&
-                value1.M21 == value2.M21 && value1.M23 == value2.M23 && value1.M24 == value2.M24 &&
-                value1.M31 == value2.M31 && value1.M32 == value2.M32 && value1.M34 == value2.M34 &&
-                value1.M41 == value2.M41 && value1.M42 == value2.M42 && value1.M43 == value2.M43);
-    }
+    public static bool operator ==(Matrix4x4 value1, Matrix4x4 value2) => value1.Equals(value2);
 
     /// <summary>
     /// Returns a boolean indicating whether the given two matrices are not equal.
@@ -1827,42 +1816,26 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// <param name="value1">The first matrix to compare.</param>
     /// <param name="value2">The second matrix to compare.</param>
     /// <returns>True if the given matrices are not equal; False if they are equal.</returns>
-    public static bool operator !=(Matrix4x4 value1, Matrix4x4 value2)
-    {
-        return (value1.M11 != value2.M11 || value1.M12 != value2.M12 || value1.M13 != value2.M13 || value1.M14 != value2.M14 ||
-                value1.M21 != value2.M21 || value1.M22 != value2.M22 || value1.M23 != value2.M23 || value1.M24 != value2.M24 ||
-                value1.M31 != value2.M31 || value1.M32 != value2.M32 || value1.M33 != value2.M33 || value1.M34 != value2.M34 ||
-                value1.M41 != value2.M41 || value1.M42 != value2.M42 || value1.M43 != value2.M43 || value1.M44 != value2.M44);
-    }
+    public static bool operator !=(Matrix4x4 value1, Matrix4x4 value2) => !value1.Equals(value2);
 
     /// <summary>
     /// Returns a boolean indicating whether this matrix instance is equal to the other given matrix.
     /// </summary>
     /// <param name="other">The matrix to compare this instance to.</param>
     /// <returns>True if the matrices are equal; False otherwise.</returns>
-    public bool Equals(Matrix4x4 other)
-    {
-        return (M11 == other.M11 && M22 == other.M22 && M33 == other.M33 && M44 == other.M44 && // Check diagonal element first for early out.
-                M12 == other.M12 && M13 == other.M13 && M14 == other.M14 &&
-                M21 == other.M21 && M23 == other.M23 && M24 == other.M24 &&
-                M31 == other.M31 && M32 == other.M32 && M34 == other.M34 &&
-                M41 == other.M41 && M42 == other.M42 && M43 == other.M43);
-    }
+    public bool Equals(Matrix4x4 other) =>
+        (MathD.ApproximatelyEquals(M11, other.M11) && MathD.ApproximatelyEquals(M22, other.M22) && MathD.ApproximatelyEquals(M33, other.M33) && MathD.ApproximatelyEquals(M44, other.M44) && // Check diagonal element first for early out.
+         MathD.ApproximatelyEquals(M12, other.M12) && MathD.ApproximatelyEquals(M13, other.M13) && MathD.ApproximatelyEquals(M14, other.M14) &&
+         MathD.ApproximatelyEquals(M21, other.M21) && MathD.ApproximatelyEquals(M23, other.M23) && MathD.ApproximatelyEquals(M24, other.M24) &&
+         MathD.ApproximatelyEquals(M31, other.M31) && MathD.ApproximatelyEquals(M32, other.M32) && MathD.ApproximatelyEquals(M34, other.M34) &&
+         MathD.ApproximatelyEquals(M41, other.M41) && MathD.ApproximatelyEquals(M42, other.M42) && MathD.ApproximatelyEquals(M43, other.M43));
 
     /// <summary>
     /// Returns a boolean indicating whether the given Object is equal to this matrix instance.
     /// </summary>
     /// <param name="obj">The Object to compare against.</param>
     /// <returns>True if the Object is equal to this matrix; False otherwise.</returns>
-    public override bool Equals(object? obj)
-    {
-        if (obj is Matrix4x4 x)
-        {
-            return Equals(x);
-        }
-
-        return false;
-    }
+    public override bool Equals(object? obj) => obj is Matrix4x4 x && Equals(x);
 
     /// <summary>
     /// Returns a String representing this matrix instance.
@@ -1895,11 +1868,9 @@ public struct Matrix4x4 : IEquatable<Matrix4x4>
     /// Returns the hash code for this instance.
     /// </summary>
     /// <returns>The hash code.</returns>
-    public override int GetHashCode()
-    {
-        return M11.GetHashCode() + M12.GetHashCode() + M13.GetHashCode() + M14.GetHashCode() +
-               M21.GetHashCode() + M22.GetHashCode() + M23.GetHashCode() + M24.GetHashCode() +
-               M31.GetHashCode() + M32.GetHashCode() + M33.GetHashCode() + M34.GetHashCode() +
-               M41.GetHashCode() + M42.GetHashCode() + M43.GetHashCode() + M44.GetHashCode();
-    }
+    public override int GetHashCode() =>
+        M11.GetHashCode() + M12.GetHashCode() + M13.GetHashCode() + M14.GetHashCode() +
+        M21.GetHashCode() + M22.GetHashCode() + M23.GetHashCode() + M24.GetHashCode() +
+        M31.GetHashCode() + M32.GetHashCode() + M33.GetHashCode() + M34.GetHashCode() +
+        M41.GetHashCode() + M42.GetHashCode() + M43.GetHashCode() + M44.GetHashCode();
 }

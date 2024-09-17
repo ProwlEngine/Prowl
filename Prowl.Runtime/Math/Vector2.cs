@@ -108,7 +108,7 @@ public struct Vector2 : IEquatable<Vector2>, IFormattable
     /// <returns>True if the other Vector2 is equal to this instance; False otherwise.</returns>
     public bool Equals(Vector2 other)
     {
-        return x == other.x && y == other.y;
+        return MathD.ApproximatelyEquals(x, other.x) && MathD.ApproximatelyEquals(y, other.y);
     }
 
 

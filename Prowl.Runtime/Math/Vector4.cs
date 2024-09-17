@@ -158,10 +158,10 @@ public struct Vector4 : IEquatable<Vector4>, IFormattable
     /// <returns>True if the other Vector4 is equal to this instance; False otherwise.</returns>
     public bool Equals(Vector4 other)
     {
-        return x == other.x
-               && y == other.y
-               && z == other.z
-               && w == other.w;
+        return MathD.ApproximatelyEquals(x, other.x)
+               && MathD.ApproximatelyEquals(y, other.y)
+               && MathD.ApproximatelyEquals(z, other.z)
+               && MathD.ApproximatelyEquals(w, other.w);
     }
 
     /// <summary>

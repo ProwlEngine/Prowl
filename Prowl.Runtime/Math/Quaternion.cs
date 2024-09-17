@@ -114,7 +114,7 @@ public struct Quaternion : IEquatable<Quaternion>
     public static Quaternion NormalizeSafe(Quaternion q)
     {
         double mag = q.Magnitude();
-        if (mag < MathD.Epsilon)
+        if (mag < double.Epsilon)
             return identity;
         else
             return q / mag;
@@ -220,19 +220,17 @@ public struct Quaternion : IEquatable<Quaternion>
     {
         //  Roll first, about axis the object is facing, then
         //  pitch upward, then yaw to face into the new heading
-        double sr, cr, sp, cp, sy, cy;
-
         double halfRoll = roll * 0.5;
-        sr = Math.Sin(halfRoll);
-        cr = Math.Cos(halfRoll);
+        double sr = Math.Sin(halfRoll);
+        double cr = Math.Cos(halfRoll);
 
         double halfPitch = pitch * 0.5;
-        sp = Math.Sin(halfPitch);
-        cp = Math.Cos(halfPitch);
+        double sp = Math.Sin(halfPitch);
+        double cp = Math.Cos(halfPitch);
 
         double halfYaw = yaw * 0.5;
-        sy = Math.Sin(halfYaw);
-        cy = Math.Cos(halfYaw);
+        double sy = Math.Sin(halfYaw);
+        double cy = Math.Cos(halfYaw);
 
         Quaternion result;
 
@@ -321,8 +319,6 @@ public struct Quaternion : IEquatable<Quaternion>
     /// <returns>The interpolated Quaternion.</returns>
     public static Quaternion Slerp(Quaternion quaternion1, Quaternion quaternion2, double amount)
     {
-        const double epsilon = 1e-6;
-
         double t = amount;
 
         double cosOmega = quaternion1.x * quaternion2.x + quaternion1.y * quaternion2.y +
@@ -338,7 +334,7 @@ public struct Quaternion : IEquatable<Quaternion>
 
         double s1, s2;
 
-        if (cosOmega > (1.0 - epsilon))
+        if (cosOmega > (1.0 - double.Epsilon))
         {
             // Too close, do straight linear interpolation.
             s1 = 1.0 - t;
@@ -779,10 +775,7 @@ public struct Quaternion : IEquatable<Quaternion>
         return ans;
     }
 
-    public static Quaternion operator /(Quaternion q, double v)
-    {
-        return new Quaternion(q.x / v, q.y / v, q.z / v, q.w / v);
-    }
+    public static Quaternion operator /(Quaternion q, double v) => new(q.x / v, q.y / v, q.z / v, q.w / v);
 
     /// <summary>
     /// Returns a boolean indicating whether the two given Quaternions are equal.
@@ -790,13 +783,7 @@ public struct Quaternion : IEquatable<Quaternion>
     /// <param name="value1">The first Quaternion to compare.</param>
     /// <param name="value2">The second Quaternion to compare.</param>
     /// <returns>True if the Quaternions are equal; False otherwise.</returns>
-    public static bool operator ==(Quaternion value1, Quaternion value2)
-    {
-        return (value1.x == value2.x &&
-                value1.y == value2.y &&
-                value1.z == value2.z &&
-                value1.w == value2.w);
-    }
+    public static bool operator ==(Quaternion value1, Quaternion value2) => value1.Equals(value2);
 
     /// <summary>
     /// Returns a boolean indicating whether the two given Quaternions are not equal.
@@ -804,50 +791,29 @@ public struct Quaternion : IEquatable<Quaternion>
     /// <param name="value1">The first Quaternion to compare.</param>
     /// <param name="value2">The second Quaternion to compare.</param>
     /// <returns>True if the Quaternions are not equal; False if they are equal.</returns>
-    public static bool operator !=(Quaternion value1, Quaternion value2)
-    {
-        return (value1.x != value2.x ||
-                value1.y != value2.y ||
-                value1.z != value2.z ||
-                value1.w != value2.w);
-    }
+    public static bool operator !=(Quaternion value1, Quaternion value2) => !value1.Equals(value2);
 
-    public static implicit operator System.Numerics.Quaternion(Quaternion value)
-    {
-        return new System.Numerics.Quaternion((float)value.x, (float)value.y, (float)value.z, (float)value.w);
-    }
+    public static implicit operator System.Numerics.Quaternion(Quaternion value) => new((float)value.x, (float)value.y, (float)value.z, (float)value.w);
 
-    public static implicit operator Quaternion(System.Numerics.Quaternion value)
-    {
-        return new Quaternion(value.X, value.Y, value.Z, value.W);
-    }
+    public static implicit operator Quaternion(System.Numerics.Quaternion value) => new(value.X, value.Y, value.Z, value.W);
+
     /// <summary>
     /// Returns a boolean indicating whether the given Quaternion is equal to this Quaternion instance.
     /// </summary>
     /// <param name="other">The Quaternion to compare this instance to.</param>
     /// <returns>True if the other Quaternion is equal to this instance; False otherwise.</returns>
-    public bool Equals(Quaternion other)
-    {
-        return (x == other.x &&
-                y == other.y &&
-                z == other.z &&
-                w == other.w);
-    }
+    public bool Equals(Quaternion other) =>
+        (MathD.ApproximatelyEquals(x, other.x) &&
+         MathD.ApproximatelyEquals(y, other.y) &&
+         MathD.ApproximatelyEquals(z, other.z) &&
+         MathD.ApproximatelyEquals(w, other.w));
 
     /// <summary>
     /// Returns a boolean indicating whether the given Object is equal to this Quaternion instance.
     /// </summary>
     /// <param name="obj">The Object to compare against.</param>
     /// <returns>True if the Object is equal to this Quaternion; False otherwise.</returns>
-    public override bool Equals(object? obj)
-    {
-        if (obj is Quaternion quaternion)
-        {
-            return Equals(quaternion);
-        }
-
-        return false;
-    }
+    public override bool Equals(object? obj) => obj is Quaternion quaternion && Equals(quaternion);
 
     /// <summary>
     /// Returns a String representing this Quaternion instance.
@@ -857,15 +823,12 @@ public struct Quaternion : IEquatable<Quaternion>
     {
         CultureInfo ci = CultureInfo.CurrentCulture;
 
-        return String.Format(ci, "{{X:{0} Y:{1} Z:{2} W:{3}}}", x.ToString(ci), y.ToString(ci), z.ToString(ci), w.ToString(ci));
+        return string.Format(ci, "{{X:{0} Y:{1} Z:{2} W:{3}}}", x.ToString(ci), y.ToString(ci), z.ToString(ci), w.ToString(ci));
     }
 
     /// <summary>
     /// Returns the hash code for this instance.
     /// </summary>
     /// <returns>The hash code.</returns>
-    public override int GetHashCode()
-    {
-        return x.GetHashCode() + y.GetHashCode() + z.GetHashCode() + w.GetHashCode();
-    }
+    public override int GetHashCode() => x.GetHashCode() + y.GetHashCode() + z.GetHashCode() + w.GetHashCode();
 }
