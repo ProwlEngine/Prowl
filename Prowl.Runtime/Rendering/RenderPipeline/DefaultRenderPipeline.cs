@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System;
 using System.Collections.Generic;
 
 using Veldrid;
@@ -18,6 +19,8 @@ public class DefaultRenderPipeline : RenderPipeline
     private static Material s_gizmo;
     private static Mesh s_skyDome;
     private static Texture2D s_whiteTexture;
+
+    public static DefaultRenderPipeline Default = new();
 
 
     private static void ValidateDefaults()
@@ -40,8 +43,6 @@ public class DefaultRenderPipeline : RenderPipeline
     }
 
 
-    public static DefaultRenderPipeline Default = new();
-
     public override void Render(Framebuffer target, Camera camera, in RenderingData data)
     {
         ValidateDefaults();
@@ -58,14 +59,13 @@ public class DefaultRenderPipeline : RenderPipeline
         Matrix4x4 view = camera.GetViewMatrix(!cameraRelative);
         Vector3 cameraPosition = camera.Transform.position;
 
-        Matrix4x4 projection = camera.GetProjectionMatrix(data.TargetResolution);
+        Matrix4x4 projection = camera.GetProjectionMatrix(data.TargetResolution, true);
 
         Matrix4x4 vp = view * projection;
 
         // BoundingFrustum frustum = new BoundingFrustum(vp);
 
         System.Numerics.Matrix4x4 floatVP = vp.ToFloat();
-
 
         List<IRenderableLight> lights = GetLights();
         Vector3 sunDirection = Vector3.up;
@@ -107,6 +107,8 @@ public class DefaultRenderPipeline : RenderPipeline
 
                 if (cameraRelative)
                     model.Translation -= cameraPosition;
+
+                model = Graphics.GetGPUModelMatrix(model);
 
                 buffer.ApplyPropertyState(properties);
 

@@ -71,18 +71,25 @@ public class Camera : MonoBehaviour
         return new Ray(rayOrigin, rayDirection);
     }
 
-
     public Matrix4x4 GetViewMatrix(bool applyPosition = true)
     {
-        return Matrix4x4.CreateLookToLeftHanded(applyPosition ? Transform.position : Vector3.zero, Transform.forward, Transform.up);
+        Vector3 position = applyPosition ? Transform.position : Vector3.zero;
+
+        return Matrix4x4.CreateLookToLeftHanded(position, Transform.forward, Transform.up);
     }
 
-
-    public Matrix4x4 GetProjectionMatrix(Vector2 resolution)
+    public Matrix4x4 GetProjectionMatrix(Vector2 resolution, bool accomodateGPUCoordinateSystem = false)
     {
-        if (projectionType == ProjectionType.Orthographic)
-            return Matrix4x4.CreateOrthographic(OrthographicSize, OrthographicSize, NearClip, FarClip);
+        Matrix4x4 proj;
 
-        return System.Numerics.Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(FieldOfView.ToRad(), (float)(resolution.x / resolution.y), NearClip, FarClip).ToDouble();
+        if (projectionType == ProjectionType.Orthographic)
+            proj = System.Numerics.Matrix4x4.CreateOrthographicLeftHanded(OrthographicSize, OrthographicSize, NearClip, FarClip).ToDouble();
+        else
+            proj = System.Numerics.Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(FieldOfView.ToRad(), (float)(resolution.x / resolution.y), NearClip, FarClip).ToDouble();
+
+        if (accomodateGPUCoordinateSystem)
+            proj = Graphics.GetGPUProjectionMatrix(proj);
+
+        return proj;
     }
 }
