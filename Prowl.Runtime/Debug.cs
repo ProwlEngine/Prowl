@@ -20,21 +20,20 @@ public enum LogSeverity
     Exception = 1 << 4
 }
 
+
 public delegate void OnLog(string message, DebugStackTrace? stackTrace, LogSeverity logSeverity);
 
-/// <summary>
-/// A single registry of Debug Stack, pointing to method, file and line
-/// </summary>
-/// <param name="Line"></param>
-/// <param name="Column"></param>
-/// <param name="FileName"></param>
-/// <param name="MethodBase"></param>
+
 public record DebugStackFrame(int Line, int Column, string? FileName = null, MethodBase? MethodBase = null)
 {
-    public override string ToString() => MethodBase != null
-        ? $"In {MethodBase.DeclaringType.Name}.{MethodBase.Name} at {FileName}:{Line}:{Column}"
-        : $"At {FileName}:{Line}:{Column}";
+    public override string ToString()
+    {
+        return MethodBase != null
+            ? $"In {MethodBase.DeclaringType.Name}.{MethodBase.Name} at {FileName}:{Line}:{Column}"
+            : $"At {FileName}:{Line}:{Column}";
+    }
 }
+
 
 public record DebugStackTrace(params DebugStackFrame[] StackFrames)
 {
@@ -56,8 +55,8 @@ public record DebugStackTrace(params DebugStackFrame[] StackFrames)
     {
         StringBuilder sb = new();
 
-        foreach (var t in StackFrames)
-            sb.AppendLine($"\t{t}");
+        foreach (var stackFrame in StackFrames)
+            sb.AppendLine($"\t{stackFrame}");
 
         return sb.ToString();
     }
@@ -206,12 +205,12 @@ public static class Debug
 
 public class GizmoBuilder
 {
-    private struct MeshData
+    private readonly struct MeshData
     {
-        public List<Vector3> s_vertices = [];
-        public List<System.Numerics.Vector2> s_uvs = [];
-        public List<Color32> s_colors = [];
-        public List<int> s_indices = [];
+        public readonly List<Vector3> Vertices = [];
+        public readonly List<System.Numerics.Vector2> Uvs = [];
+        public readonly List<Color32> Colors = [];
+        public readonly List<int> Indices = [];
 
         public MeshData()
         {
@@ -219,27 +218,27 @@ public class GizmoBuilder
 
         public readonly void Clear()
         {
-            s_vertices.Clear();
-            s_uvs.Clear();
-            s_colors.Clear();
-            s_indices.Clear();
+            Vertices.Clear();
+            Uvs.Clear();
+            Colors.Clear();
+            Indices.Clear();
         }
     }
 
-    private MeshData _wireData = new();
-    private MeshData _solidData = new();
+    private readonly MeshData _wireData = new();
+    private readonly MeshData _solidData = new();
     private Mesh? _wire;
     private Mesh? _solid;
 
     public struct IconDrawCall
     {
-        public Texture2D texture;
-        public Vector3 center;
-        public float scale;
-        public Color color;
+        public Texture2D Texture;
+        public Vector3 Center;
+        public float Scale;
+        public Color Color;
     }
 
-    private List<IconDrawCall> _icons = [];
+    private readonly List<IconDrawCall> _icons = [];
 
 
     public void Clear()
@@ -255,36 +254,36 @@ public class GizmoBuilder
 
     private void AddLine(Vector3 a, Vector3 b, Color color)
     {
-        int index = _wireData.s_vertices.Count;
-        _wireData.s_vertices.Add(a);
-        _wireData.s_vertices.Add(b);
+        int index = _wireData.Vertices.Count;
+        _wireData.Vertices.Add(a);
+        _wireData.Vertices.Add(b);
 
-        _wireData.s_colors.Add(color);
-        _wireData.s_colors.Add(color);
+        _wireData.Colors.Add(color);
+        _wireData.Colors.Add(color);
 
-        _wireData.s_indices.Add(index);
-        _wireData.s_indices.Add(index + 1);
+        _wireData.Indices.Add(index);
+        _wireData.Indices.Add(index + 1);
     }
 
-    private void AddTriangle(Vector3 a, Vector3 b, Vector3 c, Vector2 a_uv, Vector2 b_uv, Vector2 c_uv, Color color)
+    private void AddTriangle(Vector3 a, Vector3 b, Vector3 c, Vector2 aUv, Vector2 bUv, Vector2 cUv, Color color)
     {
-        int index = _solidData.s_vertices.Count;
+        int index = _solidData.Vertices.Count;
 
-        _solidData.s_vertices.Add(a);
-        _solidData.s_vertices.Add(b);
-        _solidData.s_vertices.Add(c);
+        _solidData.Vertices.Add(a);
+        _solidData.Vertices.Add(b);
+        _solidData.Vertices.Add(c);
 
-        _solidData.s_uvs.Add(a_uv);
-        _solidData.s_uvs.Add(b_uv);
-        _solidData.s_uvs.Add(c_uv);
+        _solidData.Uvs.Add(aUv);
+        _solidData.Uvs.Add(bUv);
+        _solidData.Uvs.Add(cUv);
 
-        _solidData.s_colors.Add(color);
-        _solidData.s_colors.Add(color);
-        _solidData.s_colors.Add(color);
+        _solidData.Colors.Add(color);
+        _solidData.Colors.Add(color);
+        _solidData.Colors.Add(color);
 
-        _solidData.s_indices.Add(index);
-        _solidData.s_indices.Add(index + 1);
-        _solidData.s_indices.Add(index + 2);
+        _solidData.Indices.Add(index);
+        _solidData.Indices.Add(index + 1);
+        _solidData.Indices.Add(index + 2);
     }
 
     public void DrawLine(Vector3 start, Vector3 end, Color color) => AddLine(start, end, color);
@@ -489,7 +488,7 @@ public class GizmoBuilder
 
     private Vector3 GetPerpendicularVector(Vector3 v)
     {
-        Vector3 result = Vector3.right;
+        Vector3 result;
         if (Math.Abs(v.x) > 0.1f)
             result = new Vector3(v.y, -v.x, 0);
         else if (Math.Abs(v.y) > 0.1f)
@@ -509,7 +508,7 @@ public class GizmoBuilder
 
     }
 
-    public void DrawIcon(Texture2D icon, Vector3 center, float scale, Color color) => _icons.Add(new IconDrawCall { texture = icon, center = center, scale = scale, color = color });
+    public void DrawIcon(Texture2D icon, Vector3 center, float scale, Color color) => _icons.Add(new IconDrawCall { Texture = icon, Center = center, Scale = scale, Color = color });
 
     public void DrawText(Font font, string text, Vector3 position, Color color) // TODO: Try to share the same code from UI rendering to avoid duplicate Text rendering code
     {
@@ -518,7 +517,7 @@ public class GizmoBuilder
 
     public (Mesh? wire, Mesh? solid) UpdateMesh(bool cameraRelative, Vector3 cameraPosition)
     {
-        bool hasWire = _wireData.s_vertices.Count > 0;
+        bool hasWire = _wireData.Vertices.Count > 0;
         if (hasWire)
         {
             _wire ??= new()
@@ -527,25 +526,25 @@ public class GizmoBuilder
                 IndexFormat = IndexFormat.UInt16,
             };
 
-            _wire.Vertices = [.. _wireData.s_vertices];
-            _wire.Colors = [.. _wireData.s_colors];
-            _wire.Indices16 = _wireData.s_indices.Select(i => (ushort)i).ToArray();
+            _wire.Vertices = [.. _wireData.Vertices];
+            _wire.Colors = [.. _wireData.Colors];
+            _wire.Indices16 = _wireData.Indices.Select(i => (ushort)i).ToArray();
 
             if (cameraRelative)
             {
                 // Convert vertices to be relative to the camera
-                System.Numerics.Vector3[] vertices = new System.Numerics.Vector3[_wireData.s_vertices.Count];
-                for (int i = 0; i < _wireData.s_vertices.Count; i++)
-                    vertices[i] = _wireData.s_vertices[i] - cameraPosition;
+                System.Numerics.Vector3[] vertices = new System.Numerics.Vector3[_wireData.Vertices.Count];
+                for (int i = 0; i < _wireData.Vertices.Count; i++)
+                    vertices[i] = _wireData.Vertices[i] - cameraPosition;
                 _wire.Vertices = vertices;
             }
             else
             {
-                _wire.Vertices = [.. _wireData.s_vertices];
+                _wire.Vertices = [.. _wireData.Vertices];
             }
         }
 
-        bool hasSolid = _solidData.s_vertices.Count > 0;
+        bool hasSolid = _solidData.Vertices.Count > 0;
         if (hasSolid)
         {
             _solid ??= new()
@@ -557,19 +556,19 @@ public class GizmoBuilder
             if (cameraRelative)
             {
                 // Convert vertices to be relative to the camera
-                System.Numerics.Vector3[] vertices2 = new System.Numerics.Vector3[_solidData.s_vertices.Count];
-                for (int i = 0; i < _solidData.s_vertices.Count; i++)
-                    vertices2[i] = _solidData.s_vertices[i] - cameraPosition;
+                System.Numerics.Vector3[] vertices2 = new System.Numerics.Vector3[_solidData.Vertices.Count];
+                for (int i = 0; i < _solidData.Vertices.Count; i++)
+                    vertices2[i] = _solidData.Vertices[i] - cameraPosition;
                 _solid.Vertices = vertices2;
             }
             else
             {
-                _solid.Vertices = [.. _solidData.s_vertices];
+                _solid.Vertices = [.. _solidData.Vertices];
             }
 
-            _solid.Colors = [.. _solidData.s_colors];
-            _solid.UV = [.. _solidData.s_uvs];
-            _solid.Indices16 = _solidData.s_indices.Select(i => (ushort)i).ToArray();
+            _solid.Colors = [.. _solidData.Colors];
+            _solid.UV = [.. _solidData.Uvs];
+            _solid.Indices16 = _solidData.Indices.Select(i => (ushort)i).ToArray();
         }
 
         return (
@@ -577,7 +576,7 @@ public class GizmoBuilder
             hasSolid ? _solid : null
             );
     }
-    
+
     public List<IconDrawCall> GetIcons()
     {
         return _icons;

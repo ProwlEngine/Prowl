@@ -54,7 +54,7 @@ public static class Program
     private static int Run(CliOpenOptions options)
     {
         // set global Culture to invariant
-        Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+        Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
         Application.Initialize += () =>
         {
             // Editor-specific initialization code
@@ -122,7 +122,7 @@ public static class Program
             else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Key.S, Ctrl = true }))
                 EditorGuiManager.SaveScene();
 
-            Application.isPlaying = PlayMode.Current == PlayMode.Mode.Playing;
+            Application.IsPlaying = PlayMode.Current == PlayMode.Mode.Playing;
 
             try
             {
@@ -188,7 +188,7 @@ public static class Program
         pathBuild.Create();
         var builders = ProjectBuilder.GetAll().ToList();
         Application.AssetProvider = new EditorAssetProvider();
-        builders[0]?.StartBuild(BuildProjectSetting.Instance.Scenes, pathBuild);
+        builders[0].StartBuild(BuildProjectSetting.Instance.Scenes, pathBuild);
         return 0;
     }
 

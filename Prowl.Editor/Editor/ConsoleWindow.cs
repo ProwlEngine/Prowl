@@ -53,20 +53,20 @@ public class ConsoleWindow : EditorWindow
         if ((log.trace == null) != (stackTrace == null))
             return false;
 
-        if (log.trace != null && log.trace.stackFrames.Length != stackTrace.stackFrames.Length)
+        if (log.trace != null && log.trace.StackFrames.Length != stackTrace.StackFrames.Length)
             return false;
 
         // Slower checks later
         // Check stack frame 0 earlier since it potentially avoids comparing big messages.
-        if (stackTrace != null && stackTrace.stackFrames.Length > 0)
+        if (stackTrace != null && stackTrace.StackFrames.Length > 0)
         {
-            DebugStackFrame frame = log.trace.stackFrames[0];
-            DebugStackFrame frame2 = stackTrace.stackFrames[0];
+            DebugStackFrame frame = log.trace.StackFrames[0];
+            DebugStackFrame frame2 = stackTrace.StackFrames[0];
 
-            if (frame.line != frame2.line && frame.column != frame2.column)
+            if (frame.Line != frame2.Line && frame.Column != frame2.Column)
                 return false;
 
-            if (frame.fileName != frame2.fileName)
+            if (frame.FileName != frame2.FileName)
                 return false;
         }
 
@@ -76,15 +76,15 @@ public class ConsoleWindow : EditorWindow
         // Potentially slowest check last
         if (log.trace != null)
         {
-            for (int i = 1; i < log.trace.stackFrames.Length; i++)
+            for (int i = 1; i < log.trace.StackFrames.Length; i++)
             {
-                DebugStackFrame frame = log.trace.stackFrames[i];
-                DebugStackFrame frame2 = stackTrace.stackFrames[i];
+                DebugStackFrame frame = log.trace.StackFrames[i];
+                DebugStackFrame frame2 = stackTrace.StackFrames[i];
 
-                if (frame.line != frame2.line && frame.column != frame2.column)
+                if (frame.Line != frame2.Line && frame.Column != frame2.Column)
                     return false;
 
-                if (frame.fileName != frame2.fileName)
+                if (frame.FileName != frame2.FileName)
                     return false;
             }
         }
@@ -242,7 +242,7 @@ public class ConsoleWindow : EditorWindow
 
         textRect.x += 7.5;
 
-        bool hasTrace = message.trace != null && message.trace.stackFrames.Length > 0;
+        bool hasTrace = message.trace != null && message.trace.StackFrames.Length > 0;
 
         Vector2 textPos = textRect.Position;
         textPos.y += (rect.height / 2) - (7.5 + (hasTrace ? 5 : 0));
@@ -271,7 +271,7 @@ public class ConsoleWindow : EditorWindow
         {
             textPos.y += 15;
 
-            DebugStackFrame frame = message.trace!.stackFrames[0];
+            DebugStackFrame frame = message.trace!.StackFrames[0];
 
             string frameText = frame.ToString();
 
@@ -311,11 +311,11 @@ public class ConsoleWindow : EditorWindow
             gui.Draw2D.DrawText(Font.DefaultFont, selMsg, 20, textPos, color);
         }
 
-        if (message.trace != null && message.trace.stackFrames.Length != 0)
+        if (message.trace != null && message.trace.StackFrames.Length != 0)
         {
-            for (int i = 0; i < message.trace.stackFrames.Length; i++)
+            for (int i = 0; i < message.trace.StackFrames.Length; i++)
             {
-                DebugStackFrame frame = message.trace.stackFrames[i];
+                DebugStackFrame frame = message.trace.StackFrames[i];
                 string frameText = frame.ToString();
                 Vector2 frameSize = Font.DefaultFont.CalcTextSize(frameText, font_size: 21, 0);
 
@@ -364,10 +364,10 @@ public class ConsoleWindow : EditorWindow
 
     private static void OpenStackFrame(DebugStackFrame frame)
     {
-        if (frame.fileName == null)
+        if (frame.FileName == null)
             return;
 
-        AssetDatabase.OpenPath(new FileInfo(frame.fileName), frame.line, frame.column);
+        AssetDatabase.OpenPath(new FileInfo(frame.FileName), frame.Line, frame.Column);
     }
 
 
