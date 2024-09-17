@@ -20,23 +20,23 @@ public enum LogSeverity
     Exception = 1 << 4
 }
 
-
 public delegate void OnLog(string message, DebugStackTrace? stackTrace, LogSeverity logSeverity);
 
-
-public record DebugStackFrame(int line, int column, string? fileName = null, MethodBase? methodBase = null)
+/// <summary>
+/// A single registry of Debug Stack, pointing to method, file and line
+/// </summary>
+/// <param name="Line"></param>
+/// <param name="Column"></param>
+/// <param name="FileName"></param>
+/// <param name="MethodBase"></param>
+public record DebugStackFrame(int Line, int Column, string? FileName = null, MethodBase? MethodBase = null)
 {
-    public override string ToString()
-    {
-        if (methodBase != null)
-            return $"In {methodBase.DeclaringType.Name}.{methodBase.Name} at {fileName}:{line}:{column}";
-        else
-            return $"At {fileName}:{line}:{column}";
-    }
+    public override string ToString() => MethodBase != null
+        ? $"In {MethodBase.DeclaringType.Name}.{MethodBase.Name} at {FileName}:{Line}:{Column}"
+        : $"At {FileName}:{Line}:{Column}";
 }
 
-
-public record DebugStackTrace(params DebugStackFrame[] stackFrames)
+public record DebugStackTrace(params DebugStackFrame[] StackFrames)
 {
     public static explicit operator DebugStackTrace(StackTrace stackTrace)
     {
@@ -56,8 +56,8 @@ public record DebugStackTrace(params DebugStackFrame[] stackFrames)
     {
         StringBuilder sb = new();
 
-        for (int i = 0; i < stackFrames.Length; i++)
-            sb.AppendLine($"\t{stackFrames[i]}");
+        foreach (var t in StackFrames)
+            sb.AppendLine($"\t{t}");
 
         return sb.ToString();
     }

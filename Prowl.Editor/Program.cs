@@ -22,21 +22,21 @@ public static class Program
     public static int Main(string[] args)
     {
         // CommandLineParser what command line arguments where used. `open` is the default option,
-        // so there is not need to call "prowl.exe open", only "prowl.exe".
+        // so there is no need to call "prowl.exe open", only "prowl.exe".
         return Parser.Default.ParseArguments<CliOpenOptions, CliCreateOptions, CliBuildOptions>(args)
                      .MapResult(
-                         // the default option, so there is not need to call "prowl.exe open", only "prowl.exe"
+                         // the default option, so there is no need to call "prowl.exe open", only "prowl.exe"
                          (CliOpenOptions options) => Run(options),
                          (CliCreateOptions options) => CreateCommand(options),
                          (CliBuildOptions options) => BuildCommand(options),
-                         errs => 1); // the command do not exist, finish the program as an error
+                         _ => 1); // the command do not exist, finish the program as an error
     }
 
     private static int CreateCommand(CliCreateOptions options)
     {
         Console.WriteLine("Creating a new project");
 
-        if (options?.ProjectPath is not null && !options.ProjectPath.Exists)
+        if (!options.ProjectPath.Exists)
         {
             Project.CreateNew(options.ProjectPath);
         }
@@ -59,94 +59,91 @@ public static class Program
             ImporterAttribute.GenerateLookUp();
 
             // Start with the project window open
-            new ProjectsWindow();
+            _ = new ProjectsWindow();
         };
 
         Application.Update += () =>
         {
-            if (!s_opened && options?.ProjectPath is not null && options.ProjectPath.Exists)
+            if (!s_opened && options.ProjectPath.Exists)
             {
                 Project.Open(new Project(options.ProjectPath));
                 s_opened = true;
             }
-            //EditorGui.SetupDock();
 
             AssetDatabase.InternalUpdate();
 
-            if (PlayMode.Current == PlayMode.Mode.Editing) // Dont recompile scripts unless were in editor mode
+            if (PlayMode.Current == PlayMode.Mode.Editing) // Don't recompile scripts unless were in editor mode
                 CheckReloadingAssemblies();
 
-            // Editor-specific update code
-            if (Project.HasProject)
+            if (!Project.HasProject)
             {
-                Physics.Initialize();
+                return;
+            }
 
-                if (!s_createdDefaultWindows)
-                {
-                    s_createdDefaultWindows = true;
-                    //new EditorMainMenubar();
-                    var console = EditorGuiManager.DockWindowTo(new ConsoleWindow(), null, Docking.DockZone.Center);
-                    var assetbrowser =
-                        EditorGuiManager.DockWindowTo(new AssetsBrowserWindow(), console, Docking.DockZone.Center);
-                    // Add Asset Tree, When we do this AssetBrowser node will subdivide into two children
-                    var assettree = EditorGuiManager.DockWindowTo(new AssetsTreeWindow(), assetbrowser,
-                        Docking.DockZone.Left, 0.2f);
-                    // So for the Inspector we need to use the Child to dock now
-                    var inspector = EditorGuiManager.DockWindowTo(new InspectorWindow(), assetbrowser.Child[1],
-                        Docking.DockZone.Right, 0.75f);
-                    // Now Asset Browser is Subdivided twice,
-                    assetbrowser = assetbrowser.Child[1].Child[0];
-                    var game = EditorGuiManager.DockWindowTo(new GameWindow(), assetbrowser, Docking.DockZone.Top,
-                        0.65f);
-                    var scene = EditorGuiManager.DockWindowTo(new SceneViewWindow(), game, Docking.DockZone.Center);
+            Physics.Initialize();
 
-                    // and finally hierarchy on top of asset tree
-                    var hierarchy = EditorGuiManager.DockWindowTo(new HierarchyWindow(), assettree,
-                        Docking.DockZone.Top, 0.65f);
+            // Editor-specific update code
+            if (!s_createdDefaultWindows)
+            {
+                s_createdDefaultWindows = true;
 
-                    // new ProjectSettingsWindow();
-                    // new PreferencesWindow();
-                    // new AssetSelectorWindow(typeof(Texture2D), (guid, fileid) => {  });
-                }
+                var console = EditorGuiManager.DockWindowTo(new ConsoleWindow(), null, Docking.DockZone.Center);
+                var assetBrowser =
+                    EditorGuiManager.DockWindowTo(new AssetsBrowserWindow(), console, Docking.DockZone.Center);
+                // Add Asset Tree, When we do this AssetBrowser node will subdivide into two children
+                var assetTree = EditorGuiManager.DockWindowTo(new AssetsTreeWindow(), assetBrowser,
+                    Docking.DockZone.Left, 0.2f);
+                // So for the Inspector we need to use the Child to dock now
+                EditorGuiManager.DockWindowTo(new InspectorWindow(), assetBrowser?.Child[1],
+                    Docking.DockZone.Right, 0.75f);
+                // Now Asset Browser is Subdivided twice,
+                assetBrowser = assetBrowser?.Child[1].Child[0];
+                var game = EditorGuiManager.DockWindowTo(new GameWindow(), assetBrowser, Docking.DockZone.Top,
+                    0.65f);
+                EditorGuiManager.DockWindowTo(new SceneViewWindow(), game, Docking.DockZone.Center);
 
-                Application.DataPath = Project.Active.ProjectPath;
+                // and finally hierarchy on top of asset tree
+                EditorGuiManager.DockWindowTo(new HierarchyWindow(), assetTree,
+                    Docking.DockZone.Top, 0.65f);
+            }
 
-                if (GeneralPreferences.Instance.LockFPS)
-                {
-                    Graphics.VSync = false;
-                    Screen.FramesPerSecond = GeneralPreferences.Instance.TargetFPS;
-                }
-                else
-                {
-                    Graphics.VSync = GeneralPreferences.Instance.VSync;
-                    Screen.FramesPerSecond = 0;
-                }
+            Application.DataPath = Project.Active?.ProjectPath;
 
-                if (Hotkeys.IsHotkeyDown("SaveSceneAs", new() { Key = Key.S, Ctrl = true, Shift = true }))
-                    EditorGuiManager.SaveSceneAs();
-                else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Key.S, Ctrl = true }))
-                    EditorGuiManager.SaveScene();
+            if (GeneralPreferences.Instance.LockFPS)
+            {
+                Graphics.VSync = false;
+                Screen.FramesPerSecond = GeneralPreferences.Instance.TargetFPS;
+            }
+            else
+            {
+                Graphics.VSync = GeneralPreferences.Instance.VSync;
+                Screen.FramesPerSecond = 0;
+            }
 
-                Application.IsPlaying = PlayMode.Current == PlayMode.Mode.Playing;
+            if (Hotkeys.IsHotkeyDown("SaveSceneAs", new() { Key = Key.S, Ctrl = true, Shift = true }))
+                EditorGuiManager.SaveSceneAs();
+            else if (Hotkeys.IsHotkeyDown("SaveScene", new() { Key = Key.S, Ctrl = true }))
+                EditorGuiManager.SaveScene();
+
+            Application.isPlaying = PlayMode.Current == PlayMode.Mode.Playing;
 
 
-                try
-                {
-                    bool hasGameWindow = GameWindow.LastFocused != null && GameWindow.LastFocused.IsAlive;
-                    // Push GameWindow's input handler
-                    if (hasGameWindow) Input.PushHandler((GameWindow.LastFocused.Target as GameWindow).InputHandler);
+            try
+            {
+                bool hasGameWindow = GameWindow.LastFocused.IsAlive;
+                // Push GameWindow's input handler
+                if (hasGameWindow) Input.PushHandler((GameWindow.LastFocused.Target as GameWindow)!.InputHandler);
 
-                    PlayMode.GameTime.Update();
-                    Time.TimeStack.Push(PlayMode.GameTime);
-                    SceneManager.Update();
-                    Time.TimeStack.Pop();
+                PlayMode.GameTime.Update();
+                Time.TimeStack.Push(PlayMode.GameTime);
+                SceneManager.Update();
+                Time.TimeStack.Pop();
 
-                    if (hasGameWindow) Input.PopHandler();
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError("Scene Update Error: " + e.ToString());
-                }
+                if (hasGameWindow) Input.PopHandler();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"Scene Update Error: {e}");
             }
         };
 
@@ -166,61 +163,73 @@ public static class Program
 
     private static int BuildCommand(CliBuildOptions options)
     {
-        throw new NotImplementedException();
+        Console.WriteLine($"Building project at {options.ProjectPath}");
+        if (!options.ProjectPath.Exists)
+        {
+            _ = new Project(options.ProjectPath);
+        }
+        else
+        {
+            Console.WriteLine("Path is not valid or already exists");
+        }
+
+        return 0;
     }
 
     private static void CheckReloadingAssemblies()
     {
-        if (IsReloadingExternalAssemblies)
+        if (!IsReloadingExternalAssemblies)
         {
-            IsReloadingExternalAssemblies = false;
+            return;
+        }
 
-            if (Project.HasProject)
+        IsReloadingExternalAssemblies = false;
+
+        if (Project.Active is not null && Project.HasProject)
+        {
+            SceneManager.StoreScene();
+            SceneManager.Clear();
+
+            try
             {
-                SceneManager.StoreScene();
-                SceneManager.Clear();
+                // Unload External Assemblies
+                AssemblyManager.Unload();
 
-                try
-                {
-                    // Unload External Assemblies
-                    AssemblyManager.Unload();
+                var active = Project.Active;
 
-                    Project active = Project.Active;
+                DirectoryInfo temp = active.TempDirectory;
+                DirectoryInfo bin = new DirectoryInfo(Path.Combine(temp.FullName, "bin"));
+                DirectoryInfo debug = new DirectoryInfo(Path.Combine(bin.FullName, "Debug"));
 
-                    DirectoryInfo temp = active.TempDirectory;
-                    DirectoryInfo bin = new DirectoryInfo(Path.Combine(temp.FullName, "bin"));
-                    DirectoryInfo debug = new DirectoryInfo(Path.Combine(bin.FullName, "Debug"));
+                // Delete everything under Temp\Bin
+                if (bin.Exists)
+                    Directory.Delete(bin.FullName, true);
+                bin.Create();
 
-                    // Delete everything under Temp\Bin
-                    if (bin.Exists)
-                        Directory.Delete(bin.FullName, true);
-                    bin.Create();
+                // Compile the Projects
+                Project.Compile(active.Assembly_Proj.FullName, debug);
+                Project.Compile(active.Editor_Assembly_Proj.FullName, debug);
 
-                    // Compile the Projects
-                    Project.Compile(active.Assembly_Proj.FullName, debug);
-                    Project.Compile(active.Editor_Assembly_Proj.FullName, debug);
-
-                    // Reload the External Assemblies
-                    AssemblyManager.LoadExternalAssembly(active.Editor_Assembly_DLL.FullName, true);
-                    AssemblyManager.LoadExternalAssembly(active.Assembly_DLL.FullName, true);
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError($"Error reloading assemblies: {e.Message}");
-                    Debug.LogError(e.StackTrace);
-                }
-                finally
-                {
-                    OnAssemblyLoadAttribute.Invoke();
-
-                    SceneManager.RestoreScene();
-                    SceneManager.ClearStoredScene();
-                }
+                // Reload the External Assemblies
+                AssemblyManager.LoadExternalAssembly(active.Editor_Assembly_DLL.FullName, true);
+                AssemblyManager.LoadExternalAssembly(active.Assembly_DLL.FullName, true);
             }
-            else
+            catch (Exception e)
             {
-                Debug.LogError("Cannot reload assemblies, No project loaded.");
+                Debug.LogError($"Error reloading assemblies: {e.Message}");
+                Debug.LogError($"{e.StackTrace}");
             }
+            finally
+            {
+                OnAssemblyLoadAttribute.Invoke();
+
+                SceneManager.RestoreScene();
+                SceneManager.ClearStoredScene();
+            }
+        }
+        else
+        {
+            Debug.LogError("Cannot reload assemblies, No project loaded.");
         }
     }
 }
