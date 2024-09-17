@@ -61,7 +61,7 @@ public class SelectHandler<T> where T : class
 
         if (lastSelectedIndex == -1 && selected.Count > 0)
         {
-            SetSelectedIndex((T)selected[0]);
+            SetSelectedIndex(Selected[0]);
         }
     }
 
@@ -105,7 +105,7 @@ public class SelectHandler<T> where T : class
         var copy = new List<T>(selected);
         copy.ForEach((weak) =>
         {
-            value?.Invoke((T)weak);
+            value.Invoke((T)weak);
         });
     }
 

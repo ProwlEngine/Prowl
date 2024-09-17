@@ -115,7 +115,7 @@ public static class Texture2DLoader
     {
         if (Path.GetExtension(file).Equals(".dds", StringComparison.OrdinalIgnoreCase))
         {
-            var texture = SixLabors.ImageSharp.Textures.Texture.Load(file, out var format);
+            var texture = SixLabors.ImageSharp.Textures.Texture.Load(file, out _);
             if (texture is SixLabors.ImageSharp.Textures.TextureFormats.FlatTexture flat)
             {
                 var i = flat.MipMaps[0].GetImage();

@@ -46,7 +46,7 @@ public static partial class UniformReflector
     {
         uint binding = GetBinding(reflector, bufferResource.id);
 
-        var decoratedType = reflector.GetTypeHandle(bufferResource.type_id);
+        // var decoratedType = reflector.GetTypeHandle(bufferResource.type_id);
 
         if (reflector.HasDecoration(bufferResource.id, Decoration.NonWritable))
             return new ShaderUniform(bufferResource.name, binding, ResourceKind.StructuredBufferReadOnly);

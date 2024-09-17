@@ -57,20 +57,21 @@ internal class MenuItem : Attribute
         var assemblies = AppDomain.CurrentDomain.GetAssemblies();
         foreach (var assembly in assemblies)
         {
-            Type[] types = null;
             try
             {
-                types = assembly.GetTypes();
+                Type[] types = assembly.GetTypes();
                 foreach (var type in types)
-                    if (type != null)
-                        foreach (MethodInfo method in type.GetMethods())
-                        {
-                            var attribute = method.GetCustomAttribute<MenuItem>();
-                            if (attribute != null)
-                                values.Add(new MenuPath(attribute.Path, () => method.Invoke(null, null)));
-                        }
+                    foreach (MethodInfo method in type.GetMethods())
+                    {
+                        var attribute = method.GetCustomAttribute<MenuItem>();
+                        if (attribute != null)
+                            values.Add(new MenuPath(attribute.Path, () => method.Invoke(null, null)));
+                    }
             }
-            catch { }
+            catch
+            {
+                // ignored
+            }
         }
 
         // values is now a list of all methods with the Menu Paths
@@ -105,16 +106,12 @@ internal class MenuItem : Attribute
 
     public static MenuPath? GetMenuPath(string root)
     {
-        if (Menus == null) return null;
-        if (root == null) return null;
         if (!Menus.ContainsKey(root)) return null;
         return Menus[root];
     }
 
     public static bool DrawMenuRoot(string root, bool simpleRoot = false, Size? rootSize = null)
     {
-        if (Menus == null) return false;
-        if (root == null) return false;
         if (!Menus.ContainsKey(root)) return false;
         var node = Menus[root];
         if (node.Children.Count == 0) return false;
@@ -128,7 +125,6 @@ internal class MenuItem : Attribute
 
     public static bool DrawMenu(MenuPath menu, bool simpleRoot, int depth, Size? rootSize = null)
     {
-        if (menu == null) return false;
         if (menu.Children.Count == 0)
         {
             if (EditorGUI.StyledButton(menu.Path))

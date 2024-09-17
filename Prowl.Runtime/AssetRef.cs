@@ -28,8 +28,8 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
         }
         set
         {
-            assetID = value == null ? Guid.Empty : value.AssetID;
-            fileID = value == null ? (ushort)0 : value.FileID;
+            assetID = value?.AssetID ?? Guid.Empty;
+            fileID = value?.FileID ?? 0;
             instance = value;
         }
     }
@@ -212,7 +212,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
         else
             stateChar = '_';
 
-        return string.Format("[{2}] {0}", resType.Name, stateChar);
+        return string.Format("[{1}] {0}", resType.Name, stateChar);
     }
 
     public override bool Equals(object? obj)

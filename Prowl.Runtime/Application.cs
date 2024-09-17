@@ -120,7 +120,7 @@ public static class Application
 
     static void AppClose()
     {
-        IsRunning = false;
+        isRunning = false;
         Quitting?.Invoke();
         Graphics.Dispose();
         Physics.Dispose();

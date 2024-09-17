@@ -92,7 +92,7 @@ public class ProjectCache : ScriptableSingleton<ProjectCache>, ISerializationCal
     */
 
 
-    public Project? GetProject(int index)
+    public Project GetProject(int index)
     {
         Project project = _projectCache[index];
         project.Refresh();
@@ -115,7 +115,6 @@ public class ProjectCache : ScriptableSingleton<ProjectCache>, ISerializationCal
 
     public void OnAfterDeserialize()
     {
-        _serializedProjects ??= [];
         _projectCache = [];
 
         foreach (string path in _serializedProjects)
