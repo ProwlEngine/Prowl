@@ -66,3 +66,4 @@ jobs:
         with:
           name: ${{ matrix.runtime }}
           path: ./publish/${{ matrix.runtime }}/Prowl
+          retention-days: 30
