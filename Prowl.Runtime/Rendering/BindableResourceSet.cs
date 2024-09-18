@@ -197,4 +197,13 @@ public class BindableResourceSet
         resourcesToDispose.Add(resources);
         resourcesToDispose.AddRange(uniformBuffers);
     }
+
+
+    ~BindableResourceSet()
+    {
+        resources?.Dispose();
+
+        foreach (IDisposable disposable in uniformBuffers)
+            disposable.Dispose();
+    }
 }
