@@ -48,6 +48,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Veldrid.SDL2", "External\Pr
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Veldrid.StartupUtilities", "External\Prowl.Veldrid\src\Veldrid.StartupUtilities\Veldrid.StartupUtilities.csproj", "{254969BF-FADA-4DEA-B6EC-4B0E222BFFE4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Prowl.Runtime.Test", "Prowl.Runtime.Test\Prowl.Runtime.Test.csproj", "{1255E3CE-2675-41C1-89B4-877DCB1EBEA0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -142,6 +144,10 @@ Global
 		{AA2920ED-64FE-4652-B46F-853537791175}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AA2920ED-64FE-4652-B46F-853537791175}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AA2920ED-64FE-4652-B46F-853537791175}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1255E3CE-2675-41C1-89B4-877DCB1EBEA0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1255E3CE-2675-41C1-89B4-877DCB1EBEA0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1255E3CE-2675-41C1-89B4-877DCB1EBEA0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1255E3CE-2675-41C1-89B4-877DCB1EBEA0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -7,33 +7,33 @@ using System.Runtime.InteropServices;
 namespace Prowl.Runtime;
 
 [StructLayout(LayoutKind.Sequential)]
-public struct Color
+public struct Color : IEquatable<Color>
 {
     public float r, g, b, a;
 
     public float grayscale => 0.299f * r + 0.587f * g + 0.114f * b;
 
-    public static Color black => new Color(0f, 0f, 0f, 1f);
+    public static Color black => new(0f, 0f, 0f, 1f);
 
-    public static Color blue => new Color(0f, 0f, 1f, 1f);
+    public static Color blue => new(0f, 0f, 1f, 1f);
 
-    public static Color clear => new Color(0f, 0f, 0f, 0f);
+    public static Color clear => new(0f, 0f, 0f, 0f);
 
-    public static Color cyan => new Color(0f, 1f, 1f, 1f);
+    public static Color cyan => new(0f, 1f, 1f, 1f);
 
-    public static Color gray => new Color(0.5f, 0.5f, 0.5f, 1f);
+    public static Color gray => new(0.5f, 0.5f, 0.5f, 1f);
 
-    public static Color green => new Color(0f, 1f, 0f, 1f);
+    public static Color green => new(0f, 1f, 0f, 1f);
 
-    public static Color grey => new Color(0.5f, 0.5f, 0.5f, 1f);
+    public static Color grey => new(0.5f, 0.5f, 0.5f, 1f);
 
-    public static Color magenta => new Color(1f, 0f, 1f, 1f);
+    public static Color magenta => new(1f, 0f, 1f, 1f);
 
-    public static Color red => new Color(1f, 0f, 0f, 1f);
+    public static Color red => new(1f, 0f, 0f, 1f);
 
-    public static Color white => new Color(1f, 1f, 1f, 1f);
+    public static Color white => new(1f, 1f, 1f, 1f);
 
-    public static Color yellow => new Color(1f, 0.9215f, 0.0156f, 1f);
+    public static Color yellow => new(1f, 0.9215f, 0.0156f, 1f);
 
     public float this[int index]
     {
@@ -121,7 +121,7 @@ public struct Color
         float t = v * (1 - s * (1 - f));
 
         // build our rgb color
-        Color color = new Color(0, 0, 0, a);
+        Color color = new(0, 0, 0, a);
 
         switch (i)
         {
@@ -165,27 +165,27 @@ public struct Color
         return color;
     }
 
-    public static Color operator +(Color a, Color b) => new Color(a.r + b.r, a.g + b.g, a.b + b.b, a.a + b.a);
+    public static Color operator +(Color a, Color b) => new(a.r + b.r, a.g + b.g, a.b + b.b, a.a + b.a);
 
-    public static Color operator /(Color a, float b) => new Color(a.r / b, a.g / b, a.b / b, a.a / b);
+    public static Color operator /(Color a, float b) => new(a.r / b, a.g / b, a.b / b, a.a / b);
 
-    public static bool operator ==(Color lhs, Color rhs) => lhs == rhs;
+    public static bool operator ==(Color lhs, Color rhs) => lhs.Equals(rhs);
 
-    public static implicit operator Vector4(Color c) => new Vector4(c.r, c.g, c.b, c.a);
-    public static implicit operator System.Numerics.Vector4(Color c) => new System.Numerics.Vector4(c.r, c.g, c.b, c.a);
+    public static implicit operator Vector4(Color c) => new(c.r, c.g, c.b, c.a);
+    public static implicit operator System.Numerics.Vector4(Color c) => new(c.r, c.g, c.b, c.a);
 
-    public static implicit operator Color(Vector4 v) => new Color((float)v.x, (float)v.y, (float)v.z, (float)v.w);
-    public static implicit operator Color(System.Numerics.Vector4 v) => new Color(v.X, v.Y, v.Z, v.W);
+    public static implicit operator Color(Vector4 v) => new((float)v.x, (float)v.y, (float)v.z, (float)v.w);
+    public static implicit operator Color(System.Numerics.Vector4 v) => new(v.X, v.Y, v.Z, v.W);
 
-    public static bool operator !=(Color lhs, Color rhs) => lhs != rhs;
+    public static bool operator !=(Color lhs, Color rhs) => !lhs.Equals(rhs);
 
-    public static Color operator *(Color a, Color b) => new Color(a.r * b.r, a.g * b.g, a.b * b.b, a.a * b.a);
+    public static Color operator *(Color a, Color b) => new(a.r * b.r, a.g * b.g, a.b * b.b, a.a * b.a);
 
-    public static Color operator *(Color a, float b) => new Color(a.r * b, a.g * b, a.b * b, a.a * b);
+    public static Color operator *(Color a, float b) => new(a.r * b, a.g * b, a.b * b, a.a * b);
 
-    public static Color operator *(float b, Color a) => new Color(a.r * b, a.g * b, a.b * b, a.a * b);
+    public static Color operator *(float b, Color a) => new(a.r * b, a.g * b, a.b * b, a.a * b);
 
-    public static Color operator -(Color a, Color b) => new Color(a.r - b.r, a.g - b.g, a.b - b.b, a.a - b.a);
+    public static Color operator -(Color a, Color b) => new(a.r - b.r, a.g - b.g, a.b - b.b, a.a - b.a);
 
     public override bool Equals(object? other)
     {
@@ -199,4 +199,6 @@ public struct Color
     {
         throw new NotImplementedException();
     }
+
+    public bool Equals(Color other) => r.Equals(other.r) && g.Equals(other.g) && b.Equals(other.b) && a.Equals(other.a);
 }
