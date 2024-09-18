@@ -58,11 +58,11 @@ jobs:
 
       # Publish
       - name: Publish
-        run: dotnet publish --configuration Release --output ./publish/${{ matrix.runtime }} --runtime ${{ matrix.runtime }} --framework net8.0
+        run: dotnet publish ./Prowl.Editor/Prowl.Editor.csproj --configuration Release --output ./publish/${{ matrix.runtime }}/Prowl --runtime ${{ matrix.runtime }} --framework net8.0
 
       # Save the resulting folder as artifacts
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.runtime }}
-          path: ./publish/${{ matrix.runtime }}
+          path: ./publish/${{ matrix.runtime }}/Prowl
