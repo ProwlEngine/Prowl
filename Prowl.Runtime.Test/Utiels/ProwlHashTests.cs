@@ -16,9 +16,11 @@ public class ProwlHashTests
     [InlineData("", 13569540178974592407)]
     [InlineData("123", 7707378966477012731)]
     [InlineData("test", 9346148116625605736)]
-    public void Combine_Single_Value_Returns_Correct_Hash(string value, ulong expectedHash)
+    public void Combine_Single_Value_Returns_Correct_Hash(string value1, ulong expectedHash)
     {
-        var hash = ProwlHash.Combine(value);
+        var hash = ProwlHash.Combine(value1);
+        var hash2 = ProwlHash.Combine(value1);
+        Assert.Equal(hash2, hash);
         Assert.Equal(expectedHash, hash);
     }
 
@@ -29,6 +31,8 @@ public class ProwlHashTests
     public void Combine_Two_Values_Returns_Correct_Hash(string value1, string value2, ulong expectedHash)
     {
         var hash = ProwlHash.Combine(value1, value2);
+        var hash2 = ProwlHash.Combine(value1, value2);
+        Assert.Equal(hash2, hash);
         Assert.Equal(expectedHash, hash);
     }
 
@@ -39,6 +43,8 @@ public class ProwlHashTests
     public void Combine_Three_Values_Returns_Correct_Hash(string value1, string value2, string value3, ulong expectedHash)
     {
         var hash = ProwlHash.Combine(value1, value2, value3);
+        var hash2 = ProwlHash.Combine(value1, value2, value3);
+        Assert.Equal(hash2, hash);
         Assert.Equal(expectedHash, hash);
     }
 
@@ -49,6 +55,8 @@ public class ProwlHashTests
     public void Combine_Four_Values_Returns_Correct_Hash(string value1, string value2, string value3, string value4, ulong expectedHash)
     {
         var hash = ProwlHash.Combine(value1, value2, value3, value4);
+        var hash2 = ProwlHash.Combine(value1, value2, value3, value4);
+        Assert.Equal(hash2, hash);
         Assert.Equal(expectedHash, hash);
     }
 
@@ -59,6 +67,8 @@ public class ProwlHashTests
     public void Combine_Five_Values_Returns_Correct_Hash(string value1, string value2, string value3, string value4, string value5, ulong expectedHash)
     {
         var hash = ProwlHash.Combine(value1, value2, value3, value4, value5);
+        var hash2 = ProwlHash.Combine(value1, value2, value3, value4, value5);
+        Assert.Equal(hash2, hash);
         Assert.Equal(expectedHash, hash);
     }
 
@@ -69,6 +79,8 @@ public class ProwlHashTests
     public void Combine_Six_Values_Returns_Correct_Hash(string value1, string value2, string value3, string value4, string value5, string value6, ulong expectedHash)
     {
         var hash = ProwlHash.Combine(value1, value2, value3, value4, value5, value6);
+        var hash2 = ProwlHash.Combine(value1, value2, value3, value4, value5, value6);
+        Assert.Equal(hash2, hash);
         Assert.Equal(expectedHash, hash);
     }
 
@@ -79,6 +91,8 @@ public class ProwlHashTests
     public void Combine_Seven_Values_Returns_Correct_Hash(string value1, string value2, string value3, string value4, string value5, string value6, string value7, ulong expectedHash)
     {
         var hash = ProwlHash.Combine(value1, value2, value3, value4, value5, value6, value7);
+        var hash2 = ProwlHash.Combine(value1, value2, value3, value4, value5, value6, value7);
+        Assert.Equal(hash2, hash);
         Assert.Equal(expectedHash, hash);
     }
 
@@ -95,13 +109,13 @@ public class ProwlHashTests
     }
 
     [Theory]
-    [InlineData(new string[] { "test" }, 917506797)]
-    [InlineData(new string[] { "123", "456" }, 4085393)]
-    [InlineData(new string[] { "abc", "def", "ghi" }, 29313636)]
+    [InlineData(new[] { "test" }, 917506797)]
+    [InlineData(new[] { "123", "456" }, 4085393)]
+    [InlineData(new[] { "abc", "def", "ghi" }, 29313636)]
     public void OrderlessHash_Returns_Correct_Hash(string[] values, int expectedHash)
     {
         var hash = ProwlHash.OrderlessHash(values);
-        var hash2 = ProwlHash.OrderlessHash(values);
+        var hash2 = ProwlHash.OrderlessHash(values.Reverse());
         Assert.Equal(hash2, hash);
         Assert.Equal(expectedHash, hash);
     }
