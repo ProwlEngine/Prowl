@@ -56,13 +56,9 @@ jobs:
         with:
           dotnet-version: 8.x
 
-      # For caching purposes, restore dependencies in a dedicated step
-      - name: Restore dependencies
-        run: dotnet restore
-
       # Publish
       - name: Publish
-        run: dotnet publish --no-restore --configuration Release --output ./publish/${{ matrix.runtime }} --runtime ${{ matrix.runtime }} --framework net8.0
+        run: dotnet publish --configuration Release --output ./publish/${{ matrix.runtime }} --runtime ${{ matrix.runtime }} --framework net8.0
 
       # Save the resulting folder as artifacts
       - name: Upload artifact
