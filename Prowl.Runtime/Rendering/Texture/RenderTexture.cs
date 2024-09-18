@@ -220,7 +220,7 @@ public sealed class RenderTexture : EngineObject, ISerializable
         DepthBuffer?.Dispose();
 
         if (ColorBuffers != null)
-            foreach (var tex in ColorBuffers)
+            foreach (Texture2D tex in ColorBuffers)
                 tex?.Dispose();
 
         Framebuffer?.Dispose();
