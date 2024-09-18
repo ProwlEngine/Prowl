@@ -87,7 +87,6 @@ public static class ProwlHash
 
     public static int OrderlessHash<T>(IEnumerable<T> source, IEqualityComparer<T>? comparer = null) where T : notnull
     {
-        Console.WriteLine(Seed);
         Func<T, int> compareFunc = comparer is not null ? comparer.GetHashCode : StableHash;
 
         int hash = 0;
