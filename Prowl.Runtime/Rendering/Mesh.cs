@@ -305,6 +305,8 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         }
 
         Graphics.SubmitCommandList(list, false);
+
+        list.Dispose();
     }
 
     public void SetDrawData(CommandList commandList, ShaderPipeline pipeline)
