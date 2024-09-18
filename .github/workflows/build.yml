@@ -8,7 +8,7 @@ on:
   pull_request:
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -34,3 +34,39 @@ jobs:
       # Test
       - name: Test
         run: dotnet test
+
+  publish:
+    runs-on: ubuntu-latest
+
+    needs: test
+
+    strategy:
+      matrix:
+        runtime: [linux-x64, win-x64, osx-x64]
+
+    steps:
+      # Clone repo and submodules
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      # Install .NET
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.x
+
+      # For caching purposes, restore dependencies in a dedicated step
+      - name: Restore dependencies
+        run: dotnet restore
+
+      # Publish
+      - name: Publish
+        run: dotnet publish --no-restore --configuration Release --output ./publish-${{ matrix.runtime }} --runtime ${{ matrix.runtime }}
+
+      # Save the resulting folder as artifacts
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: publish-${{ matrix.runtime }}
+          path: ./publish-${{ matrix.runtime }}
