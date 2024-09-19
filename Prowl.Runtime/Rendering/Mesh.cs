@@ -274,39 +274,33 @@ public class Mesh : EngineObject, ISerializable, IGeometryDrawData
         // Vertex buffer upload
         vertexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)BufferLength, BufferUsage.VertexBuffer));
 
-        CommandList list = Graphics.GetCommandList();
-
-        list.UpdateBuffer(vertexBuffer, 0, vertices);
+        Graphics.Device.UpdateBuffer(vertexBuffer, 0, vertices);
 
         if (HasUV)
-            list.UpdateBuffer(vertexBuffer, (uint)UVStart, uv);
+            Graphics.Device.UpdateBuffer(vertexBuffer, (uint)UVStart, uv);
 
         if (HasUV2)
-            list.UpdateBuffer(vertexBuffer, (uint)UV2Start, uv2);
+            Graphics.Device.UpdateBuffer(vertexBuffer, (uint)UV2Start, uv2);
 
         if (HasNormals)
-            list.UpdateBuffer(vertexBuffer, (uint)NormalsStart, normals);
+            Graphics.Device.UpdateBuffer(vertexBuffer, (uint)NormalsStart, normals);
 
         if (HasColors)
-            list.UpdateBuffer(vertexBuffer, (uint)ColorsStart, colors);
+            Graphics.Device.UpdateBuffer(vertexBuffer, (uint)ColorsStart, colors);
 
         if (HasTangents)
-            list.UpdateBuffer(vertexBuffer, (uint)TangentsStart, tangents);
+            Graphics.Device.UpdateBuffer(vertexBuffer, (uint)TangentsStart, tangents);
 
         if (indexFormat == IndexFormat.UInt16)
         {
             indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)indices16.Length * sizeof(ushort), BufferUsage.IndexBuffer));
-            list.UpdateBuffer(indexBuffer, 0, indices16);
+            Graphics.Device.UpdateBuffer(indexBuffer, 0, indices16);
         }
         else if (indexFormat == IndexFormat.UInt32)
         {
             indexBuffer = Graphics.Factory.CreateBuffer(new BufferDescription((uint)indices32.Length * sizeof(uint), BufferUsage.IndexBuffer));
-            list.UpdateBuffer(indexBuffer, 0, indices32);
+            Graphics.Device.UpdateBuffer(indexBuffer, 0, indices32);
         }
-
-        Graphics.SubmitCommandList(list, false);
-
-        list.Dispose();
     }
 
     public void SetDrawData(CommandList commandList, ShaderPipeline pipeline)
