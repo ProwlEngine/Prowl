@@ -12,7 +12,7 @@ public static partial class AssetDatabase
 
     #region Public Methods
 
-    public static bool PathToCachedNode(string path, out AssetDirectoryCache.DirNode node)
+    public static bool PathToCachedNode(string path, out AssetDirectoryCache.DirNode? node)
     {
         node = null;
         foreach (var tuple in rootFolders)
@@ -239,7 +239,7 @@ public static partial class AssetDatabase
         return result;
     }
 
-    public static Type GetTypeOfAsset(Guid guid, ushort fileID)
+    public static Type? GetTypeOfAsset(Guid guid, ushort fileID)
     {
         if (assetGuidToMeta.TryGetValue(guid, out var meta))
             if (meta.assetTypes.Length > fileID)

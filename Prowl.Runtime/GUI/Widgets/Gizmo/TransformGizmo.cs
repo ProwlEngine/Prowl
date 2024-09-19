@@ -107,7 +107,7 @@ public class TransformGizmo
     internal Matrix4x4 ViewProjection;
     internal Matrix4x4 Model;
     internal Matrix4x4 ModelViewProjection;
-    internal Matrix4x4 InverseModelViewProjection;
+    // internal Matrix4x4 InverseModelViewProjection;
 
     private readonly List<ISubGizmo> _subGizmos = [];
     internal Gui _gui;

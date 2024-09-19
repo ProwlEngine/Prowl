@@ -2,7 +2,6 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Text;
-using System.Text.RegularExpressions;
 
 using Prowl.Runtime;
 using Prowl.Runtime.Utils;
@@ -30,7 +29,7 @@ public static partial class ShaderParser
         Quote
     }
 
-    static Dictionary<char, Func<Tokenizer, ShaderToken>> symbolHandlers = new()
+    private static readonly Dictionary<char, Func<Tokenizer, ShaderToken>> s_symbolHandlers = new()
     {
         {'{', (ctx) => HandleSingleCharToken(ctx, ShaderToken.OpenCurlBrace)},
         {'}', (ctx) => HandleSingleCharToken(ctx, ShaderToken.CloseCurlBrace)},
@@ -46,7 +45,7 @@ public static partial class ShaderParser
     {
         return new(
             input.AsMemory(),
-            symbolHandlers,
+            s_symbolHandlers,
             "{}()=,".Contains,
             ShaderToken.Identifier,
             ShaderToken.None,
@@ -61,13 +60,13 @@ public static partial class ShaderParser
 
         Tokenizer<ShaderToken> tokenizer = CreateTokenizer(input);
 
-        string name = "";
+        string name;
 
         List<ShaderProperty> properties = [];
         ParsedPass? globalDefaults = null;
         List<ParsedPass> parsedPasses = [];
 
-        string? fallback = null;
+        // string? fallback = null;
 
         try
         {
@@ -100,7 +99,7 @@ public static partial class ShaderParser
 
                     case "Fallback":
                         tokenizer.MoveNext(); // Move to string
-                        fallback = tokenizer.ParseQuotedStringValue();
+                        // fallback = tokenizer.ParseQuotedStringValue();
                         break;
 
                     default:
@@ -133,9 +132,10 @@ public static partial class ShaderParser
 
             string sourceCode = sourceBuilder.ToString();
 
-            if (!ParseProgramInfo(sourceCode, out EntryPoint[]? entrypoints, out (int, int)? shaderModel, out CompilationMessage? message))
+            if (!ParseProgramInfo(sourceCode, out EntryPoint[] entrypoints, out (int, int)? shaderModel, out CompilationMessage? message))
             {
-                LogCompilationError(message.Value.message, includer, message.Value.line, message.Value.column);
+                if (message is not null)
+                    LogCompilationError(message.Value.message, includer, message.Value.line, message.Value.column);
                 return false;
             }
 
@@ -198,7 +198,7 @@ public static partial class ShaderParser
             if (global != null && global.Program != null)
             {
                 if (msgLine - global.ProgramStartLine < 0)
-                    line = global!.ProgramStartLine + msgLine;
+                    line = global.ProgramStartLine + msgLine;
                 else
                     line -= global.ProgramLines;
             }
@@ -670,10 +670,10 @@ public static partial class ShaderParser
     }
 
 
-    private static bool ParseProgramInfo(string program, out EntryPoint[]? entrypoints, out (int, int)? shaderModel, out CompilationMessage? message)
+    private static bool ParseProgramInfo(string program, out EntryPoint[] entrypoints, out (int, int)? shaderModel, out CompilationMessage? message)
     {
         List<EntryPoint> entrypointsList = [];
-        entrypoints = null;
+        entrypoints = [];
         shaderModel = null;
         message = null;
 
@@ -755,7 +755,7 @@ public static partial class ShaderParser
                 {
                     severity = LogSeverity.Error,
                     line = lineNumber,
-                    column = line.IndexOf("#pragma") + 7,
+                    column = line.IndexOf("#pragma", StringComparison.InvariantCulture) + 7,
                     message = ex.Message
                 };
 

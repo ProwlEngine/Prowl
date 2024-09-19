@@ -27,45 +27,45 @@ public class StandaloneAssetProvider : IAssetProvider
     public AssetRef<T> LoadAsset<T>(string relativeAssetPath, ushort fileID = 0) where T : EngineObject
     {
         Guid guid = GetGuidFromPath(relativeAssetPath);
-        if (_loaded.ContainsKey(guid))
-            return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID - 1]);
+        if (_loaded.TryGetValue(guid, out SerializedAsset? value))
+            return (T)(fileID == 0 ? value.Main : value.SubAssets[fileID - 1])!;
 
         foreach (AssetBundle package in packages)
-            if (package.TryGetAsset(relativeAssetPath, out var asset))
+            if (package.TryGetAsset(relativeAssetPath, out var asset) && asset is not null)
             {
                 _loaded[guid] = asset;
-                return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID - 1]);
+                return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID - 1])!;
             }
         throw new FileNotFoundException($"Asset with path {relativeAssetPath} not found.");
     }
 
     public AssetRef<T> LoadAsset<T>(Guid guid, ushort fileID = 0) where T : EngineObject
     {
-        if (_loaded.ContainsKey(guid))
-            return (T)(fileID == 0 ? _loaded[guid].Main : _loaded[guid].SubAssets[fileID - 1]);
+        if (_loaded.TryGetValue(guid, out SerializedAsset? value))
+            return (T)(fileID == 0 ? value.Main : value.SubAssets[fileID - 1])!;
 
         foreach (AssetBundle package in packages)
-            if (package.TryGetAsset(guid, out var asset))
+            if (package.TryGetAsset(guid, out var asset) && asset is not null)
             {
                 _loaded[guid] = asset;
-                return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID - 1]);
+                return (T)(fileID == 0 ? asset.Main : asset.SubAssets[fileID - 1])!;
             }
         throw new FileNotFoundException($"Asset with GUID {guid} not found.");
     }
 
-    public AssetRef<T> LoadAsset<T>(IAssetRef assetID) where T : EngineObject
+    public AssetRef<T> LoadAsset<T>(IAssetRef? assetID) where T : EngineObject
     {
-        if (assetID == null) return null;
+        ArgumentNullException.ThrowIfNull(assetID);
         return LoadAsset<T>(assetID.AssetID, assetID.FileID);
     }
 
-    public SerializedAsset? LoadAsset(Guid guid)
+    public SerializedAsset LoadAsset(Guid guid)
     {
-        if (_loaded.ContainsKey(guid))
-            return _loaded[guid];
+        if (_loaded.TryGetValue(guid, out SerializedAsset? loadAsset))
+            return loadAsset;
 
         foreach (AssetBundle package in packages)
-            if (package.TryGetAsset(guid, out var asset))
+            if (package.TryGetAsset(guid, out var asset) && asset is not null)
             {
                 _loaded[guid] = asset;
                 return asset;
@@ -73,7 +73,7 @@ public class StandaloneAssetProvider : IAssetProvider
         throw new FileNotFoundException($"Asset with GUID {guid} not found.");
     }
 
-    public string GetPathFromGUID(Guid guid)
+    public string? GetPathFromGUID(Guid guid)
     {
         foreach (AssetBundle package in packages)
             if (package.TryGetPath(guid, out var path))

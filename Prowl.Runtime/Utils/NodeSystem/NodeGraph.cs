@@ -145,7 +145,7 @@ public abstract class NodeGraph : ScriptableObject, ISerializationCallbackReceiv
     public virtual NodeGraph Copy()
     {
         SerializedProperty graphTag = Serializer.Serialize(this);
-        NodeGraph graph = Serializer.Deserialize<NodeGraph>(graphTag);
+        NodeGraph graph = Serializer.Deserialize<NodeGraph>(graphTag) ?? throw new NullReferenceException();
         // Instantiate all nodes inside the graph
         for (int i = 0; i < nodes.Count; i++)
         {
@@ -175,9 +175,9 @@ public abstract class NodeGraph : ScriptableObject, ISerializationCallbackReceiv
         Clear();
     }
 
-    public void OnBeforeSerialize() { }
+    public override void OnBeforeSerialize() { }
 
-    public void OnAfterDeserialize()
+    public override void OnAfterDeserialize()
     {
         // Clear null nodes
         nodes.RemoveAll(n => n == null);

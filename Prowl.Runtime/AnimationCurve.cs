@@ -4,6 +4,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Prowl.Runtime;
 
@@ -411,18 +412,18 @@ public class KeyFrame : IEquatable<KeyFrame>, IComparable<KeyFrame>
         if (Equals(value2, null))
             return Equals(value1, null);
 
-        return (MathD.ApproximatelyEquals(value1.Position, value2.Position))
-               && (MathD.ApproximatelyEquals(value1.Value, value2.Value))
-               && (MathD.ApproximatelyEquals(value1.TangentIn, value2.TangentIn))
-               && (MathD.ApproximatelyEquals(value1.TangentOut, value2.TangentOut))
+        return (value1.Position == value2.Position)
+               && (value1.Value == value2.Value)
+               && (value1.TangentIn == value2.TangentIn)
+               && (value1.TangentOut == value2.TangentOut)
                && (value1.Continuity == value2.Continuity);
     }
 
     #region Inherited Methods
 
-    public int CompareTo(KeyFrame other) => Position.CompareTo(other.Position);
-    public bool Equals(KeyFrame other) => (this == other);
-    public override bool Equals(object obj) => (obj as KeyFrame) != null && Equals((KeyFrame)obj);
+    public int CompareTo([AllowNull] KeyFrame other) => Position.CompareTo(other.Position);
+    public bool Equals([AllowNull] KeyFrame other) => this == other;
+    public override bool Equals([AllowNull] object obj) => obj is KeyFrame keyFrame && Equals(keyFrame);
     public override int GetHashCode() =>
         Position.GetHashCode() ^ Value.GetHashCode() ^ TangentIn.GetHashCode() ^
         TangentOut.GetHashCode() ^ Continuity.GetHashCode();

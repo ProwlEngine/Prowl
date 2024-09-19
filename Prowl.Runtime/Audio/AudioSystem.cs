@@ -18,9 +18,9 @@ public static class AudioSystem
 
     private static readonly List<ActiveAudio> _active = [];
     private static readonly List<ActiveAudio> _pool = [];
-    private static AudioListener _listener;
+    private static AudioListener? s_listener;
 
-    public static AudioListener Listener => _listener;
+    public static AudioListener Listener => s_listener;
 
     public static AudioEngine Engine => _engine;
 
@@ -75,17 +75,17 @@ public static class AudioSystem
 
     public static void RegisterListener(AudioListener audioListener)
     {
-        if (_listener != null)
+        if (s_listener != null)
         {
             Debug.LogWarning("Audio listener already registered, only the first in the scene will work as intended! Please destroy that one first before instantiating a new Listener.");
             return;
         }
-        _listener = audioListener;
+        s_listener = audioListener;
     }
 
     public static void UnregisterListener(AudioListener audioListener)
     {
-        _listener = null;
+        s_listener = null;
     }
 
     public static AudioBuffer GetAudioBuffer(AudioClip clip)

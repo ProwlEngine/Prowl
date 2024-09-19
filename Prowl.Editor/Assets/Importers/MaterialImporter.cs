@@ -38,7 +38,7 @@ public class MaterialImporterEditor : ScriptedEditor
 {
     public override void OnInspectorGUI()
     {
-        var importer = (MaterialImporter)(target as MetaFile).importer;
+        var importer = (MaterialImporter)(target as MetaFile).Importer;
 
         try
         {

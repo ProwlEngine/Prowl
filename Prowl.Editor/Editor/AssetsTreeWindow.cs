@@ -129,7 +129,7 @@ public class AssetsTreeWindow : EditorWindow
         }
     }
 
-    public static void DrawContextMenu(FileSystemInfo? fileInfo, DirectoryInfo? directory = null, bool fromAssetBrowser = false, LayoutNode popupHolder = null)
+    public static void DrawContextMenu(FileSystemInfo? fileInfo, DirectoryInfo? directory = null, bool fromAssetBrowser = false, LayoutNode? popupHolder = null)
     {
         bool closePopup = false;
 

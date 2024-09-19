@@ -22,7 +22,8 @@ public class StbTextEditState
         r.baseline_y_delta = (float)size.y;
         r.ymin = 0.0f;
         r.ymax = (float)size.y;
-        r.num_chars = text_remaining.Value - startIndex;
+        if (text_remaining is not null)
+            r.num_chars = text_remaining.Value - startIndex;
         return r;
     }
 

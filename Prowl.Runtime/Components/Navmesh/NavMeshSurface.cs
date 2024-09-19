@@ -63,7 +63,7 @@ public class NavMeshSurface : MonoBehaviour
     private Bounds debug_bounds;
     private Vector3[][][] debug_polygons;
 
-    private float timer = 0;
+    // private float timer = 0;
 
     #endregion
 
@@ -410,11 +410,11 @@ public class NavMeshSurface : MonoBehaviour
 
     class SceneMeshData
     {
-        public class MeshData
-        {
-            public List<System.Numerics.Vector3> vertices;
-            public List<int> indices;
-        }
+        // public class MeshData
+        // {
+        //     public List<System.Numerics.Vector3> vertices;
+        //     public List<int> indices;
+        // }
 
         public readonly List<Mesh> shapeData = new();
         public readonly List<Transform> transformsOut = new();

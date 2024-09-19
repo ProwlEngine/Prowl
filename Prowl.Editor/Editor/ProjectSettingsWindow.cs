@@ -107,8 +107,8 @@ public abstract class SingletonEditorWindow : EditorWindow
         if (currentType == null) return;
 
         // Draw Settings
-        object setting = currentSingleton;
-
+        object? setting = currentSingleton ?? throw new Exception();
+        
         string name = currentType.Name.Replace("Preferences", "");
         if (PropertyGrid(name, ref setting, TargetFields.Serializable | TargetFields.Properties, PropertyGridConfig.NoBorder | PropertyGridConfig.NoBackground))
         {

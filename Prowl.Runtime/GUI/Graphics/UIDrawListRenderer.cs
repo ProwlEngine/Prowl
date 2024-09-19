@@ -19,7 +19,7 @@ public enum ColorSpaceHandling
 
 public static class UIDrawListRenderer
 {
-    private static readonly Assembly s_assembly = Assembly.GetAssembly(typeof(UIDrawListRenderer));
+    private static readonly Assembly s_assembly = Assembly.GetAssembly(typeof(UIDrawListRenderer)) ?? throw new NullReferenceException();
     private static ColorSpaceHandling s_handling;
 
     // Device objects

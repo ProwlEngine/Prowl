@@ -28,8 +28,8 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
         }
         set
         {
-            assetID = value == null ? Guid.Empty : value.AssetID;
-            fileID = value == null ? (ushort)0 : value.FileID;
+            assetID = value?.AssetID ?? Guid.Empty;
+            fileID = value?.FileID ?? 0;
             instance = value;
         }
     }
@@ -85,7 +85,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     {
         get
         {
-            if (instance != null && !instance.IsDestroyed) return true;
+            if (instance is { IsDestroyed: false }) return true;
             RetrieveInstance();
             return instance != null;
         }
@@ -139,6 +139,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     /// the specified alias.
     /// </summary>
     /// <param name="id"></param>
+    /// <param name="fileId"></param>
     public AssetRef(Guid id, ushort fileId)
     {
         instance = null;
@@ -152,8 +153,8 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
     public AssetRef(T? res)
     {
         instance = res;
-        assetID = res != null ? res.AssetID : Guid.Empty;
-        fileID = res != null ? res.FileID : (ushort)0;
+        assetID = res?.AssetID ?? Guid.Empty;
+        fileID = res?.FileID ?? 0;
     }
 
     public object? GetInstance()
@@ -212,7 +213,7 @@ public struct AssetRef<T> : IAssetRef, ISerializable where T : EngineObject
         else
             stateChar = '_';
 
-        return string.Format("[{2}] {0}", resType.Name, stateChar);
+        return string.Format("[{1}] {0}", resType.Name, stateChar);
     }
 
     public override bool Equals(object? obj)

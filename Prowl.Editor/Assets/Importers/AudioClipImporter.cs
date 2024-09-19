@@ -124,7 +124,8 @@ public class AudioClipEditor : ScriptedEditor
 
     public override void OnEnable()
     {
-        serialized = AssetDatabase.LoadAsset((target as MetaFile).AssetPath);
+        var metaFile = target as MetaFile ?? throw new Exception();
+        serialized = AssetDatabase.LoadAsset(metaFile.AssetPath) ?? throw new Exception();
     }
 
     public override void OnDisable()
@@ -140,7 +141,7 @@ public class AudioClipEditor : ScriptedEditor
     {
         double ItemSize = EditorStylePrefs.Instance.ItemSize;
 
-        var importer = (AudioClipImporter)(target as MetaFile).importer;
+        var importer = (AudioClipImporter)(target as MetaFile).Importer;
 
         try
         {

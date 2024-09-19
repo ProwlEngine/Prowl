@@ -20,19 +20,21 @@ public static class CreateAssetMenuHandler
         List<(string, Type)> values = new();
         foreach (var assembly in assemblies)
         {
-            Type[] types = null;
             try
             {
-                types = assembly.GetTypes();
+                Type[] types = assembly.GetTypes();
                 foreach (var type in types)
-                    if (type != null && type.IsAssignableTo(typeof(ScriptableObject)))
+                    if (type.IsAssignableTo(typeof(ScriptableObject)))
                     {
                         var attribute = type.GetCustomAttribute<CreateAssetMenu>();
                         if (attribute != null)
                             values.Add(("Assets/" + attribute.Name, type));
                     }
             }
-            catch { }
+            catch
+            {
+                // ignored
+            }
         }
 
         foreach (var value in values)

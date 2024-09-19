@@ -21,7 +21,7 @@ public class HierarchyWindow : EditorWindow
 
     private const float PingDuration = 3f;
     private static float pingTimer;
-    private static WeakReference pingedGO;
+    private static WeakReference? pingedGO;
     private bool justStartedRename;
 
     public HierarchyWindow() : base()

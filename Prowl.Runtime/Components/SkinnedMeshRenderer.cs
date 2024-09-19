@@ -78,6 +78,6 @@ public class SkinnedMeshRenderer : MonoBehaviour, ISerializable
     {
         Mesh = Serializer.Deserialize<AssetRef<Mesh>>(value["Mesh"], ctx);
         Material = Serializer.Deserialize<AssetRef<Material>>(value["Material"], ctx);
-        Bones = Serializer.Deserialize<Transform[]>(value["Bones"], ctx);
+        Bones = Serializer.Deserialize<Transform[]>(value["Bones"], ctx) ?? [];
     }
 }

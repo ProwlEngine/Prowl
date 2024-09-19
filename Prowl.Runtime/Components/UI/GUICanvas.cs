@@ -22,12 +22,14 @@ public class GUICanvas : MonoBehaviour
 
     public override void Awake()
     {
-        TargetCamera = GetComponent<Camera>();
-        if (TargetCamera == null)
+        var targetCamera = GetComponent<Camera>();
+        if (targetCamera == null)
         {
             Debug.LogError("Target Camera is not set on GUICanvas.");
             return;
         }
+
+        TargetCamera = targetCamera;
 
         gui = new Gui(DoAntiAliasing);
 

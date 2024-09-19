@@ -149,7 +149,7 @@ public static partial class ShaderCompiler
         ShaderDescription[] compiledSPIRV = Compile(args, state, includer, messages);
 
         foreach (ShaderDescription desc in compiledSPIRV)
-            if (desc.ShaderBytes == null || desc.ShaderBytes.Length == 0)
+            if (desc.ShaderBytes.Length == 0)
                 return null;
 
         ReflectedResourceInfo info = Reflect(ctx, compiledSPIRV);

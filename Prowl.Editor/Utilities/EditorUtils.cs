@@ -29,7 +29,7 @@ public static class EditorUtils
         return derivedTypes;
     }
 
-    public static bool IsSubclassOf(Type type, Type baseType)
+    public static bool IsSubclassOf(Type? type, Type? baseType)
     {
         if (type == null || baseType == null || type == baseType)
             return false;

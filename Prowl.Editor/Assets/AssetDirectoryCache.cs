@@ -5,10 +5,10 @@ namespace Prowl.Editor.Assets;
 
 public class AssetDirectoryCache(DirectoryInfo root)
 {
-    public class DirNode(DirectoryInfo directory, DirNode parent)
+    public class DirNode(DirectoryInfo directory, DirNode? parent)
     {
         public DirectoryInfo Directory = directory;
-        public DirNode Parent = parent;
+        public DirNode? Parent = parent;
         public List<DirNode> SubDirectories = [];
         public List<FileNode> Files = [];
     }
@@ -90,7 +90,7 @@ public class AssetDirectoryCache(DirectoryInfo root)
         _rootNode = BuildDirectoryTree(_rootDir, null);
     }
 
-    private DirNode BuildDirectoryTree(DirectoryInfo directory, DirNode parent)
+    private DirNode BuildDirectoryTree(DirectoryInfo directory, DirNode? parent)
     {
         DirNode node = new(directory, parent);
         try

@@ -199,7 +199,7 @@ public sealed partial class SerializedProperty
 
     /// <summary> Returns the value of this tag, cast as a bool. </summary>
     /// <exception cref="InvalidCastException"> When used on a tag other than BoolTag. </exception>
-    public bool BoolValue { get => (bool)Value; set => Set(value); }
+    public bool BoolValue { get => (Value is not null && (bool)Value); set => Set(value); }
 
     /// <summary> Returns the value of this tag, cast as a byte. </summary>
     /// <exception cref="InvalidCastException"> When used on a tag other than ByteTag. </exception>

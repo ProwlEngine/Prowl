@@ -26,7 +26,7 @@ public static partial class VertexInputReflector
         {
             ReflectedResource resource = resources.StageInputs[i];
 
-            var typeInfo = reflector.GetTypeHandle(resource.type_id);
+            // var typeInfo = reflector.GetTypeHandle(resource.type_id);
 
             if (!ParseSemantic(resource.name, formatter, out VertexInput input))
                 throw new Exception($"Unknown semantic: {input.semantic}");

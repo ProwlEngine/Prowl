@@ -13,7 +13,7 @@ public class Color_PropertyDrawer : PropertyDrawer
     {
         gui.CurrentNode.Layout(LayoutType.Row).ScaleChildren();
 
-        Color val = (Color)value;
+        Color val = value is Color v ? v : throw new Exception();
         var style = EditorGUI.InputFieldStyle;
         style.TextColor = val with { a = 1 };
 

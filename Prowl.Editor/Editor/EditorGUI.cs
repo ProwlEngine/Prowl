@@ -357,7 +357,7 @@ public static class EditorGUI
                     var field = target.GetType().GetField(showIf.propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                     if (field != null && field.FieldType == typeof(bool))
                     {
-                        if ((bool)field.GetValue(target) == showIf.inverted)
+                        if (field.GetValue(target) is bool value && value == showIf.inverted)
                             return false;
                     }
                     else
@@ -365,7 +365,7 @@ public static class EditorGUI
                         var prop = target.GetType().GetProperty(showIf.propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
                         if (prop != null && prop.PropertyType == typeof(bool))
                         {
-                            if ((bool)prop.GetValue(target) == showIf.inverted)
+                            if (prop.GetValue(target) is bool value && value == showIf.inverted)
                                 return false;
                         }
                     }

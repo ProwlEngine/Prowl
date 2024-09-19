@@ -204,7 +204,7 @@ public static class ProwlHash
     }
 
     // From https://stackoverflow.com/questions/670063/getting-hash-of-a-list-of-strings-regardless-of-order
-    public static int OrderlessHash<T>(IEnumerable<T> source, IEqualityComparer<T>? comparer = null)
+    public static int OrderlessHash<T>(IEnumerable<T> source, IEqualityComparer<T>? comparer = null) where T : notnull
     {
         comparer ??= EqualityComparer<T>.Default;
 

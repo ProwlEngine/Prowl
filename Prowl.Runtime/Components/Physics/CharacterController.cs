@@ -33,7 +33,7 @@ public sealed class CharacterController : Rigidbody
 
     protected override void RigidbodyAttached()
     {
-        ref var character = ref Physics.Characters.AllocateCharacter(BodyReference.Value.Handle);
+        ref var character = ref Physics.Characters.AllocateCharacter(BodyReference!.Value.Handle);
         character.LocalUp = new Vector3(0, 1, 0);
         character.JumpVelocity = jumpVelocity;
         character.MaximumVerticalForce = maxVerticalForce;
@@ -49,12 +49,12 @@ public sealed class CharacterController : Rigidbody
 
     protected override void RigidbodyDetached()
     {
-        Physics.Characters.RemoveCharacterByBodyHandle(BodyReference.Value.Handle);
+        Physics.Characters.RemoveCharacterByBodyHandle(BodyReference!.Value.Handle);
     }
 
     public override void Update()
     {
-        ref var character = ref Physics.Characters.GetCharacterByBodyHandle(BodyReference.Value.Handle);
+        ref var character = ref Physics.Characters.GetCharacterByBodyHandle(BodyReference!.Value.Handle);
 
         character.CosMaximumSlope = MathF.Cos(maxSlope.ToRad());
         character.JumpVelocity = jumpVelocity;
@@ -75,5 +75,5 @@ public sealed class CharacterController : Rigidbody
             BodyReference.Value.LocalInertia = new BodyInertia { InverseMass = 1f / Mass };
     }
 
-    public void TryJump() => Physics.Characters.GetCharacterByBodyHandle(BodyReference.Value.Handle).TryJump = true;
+    public void TryJump() => Physics.Characters.GetCharacterByBodyHandle(BodyReference!.Value.Handle).TryJump = true;
 }

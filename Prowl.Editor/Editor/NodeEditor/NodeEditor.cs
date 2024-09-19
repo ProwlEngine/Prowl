@@ -444,9 +444,13 @@ public class DefaultNodeEditor : ScriptedNodeEditor
 
         bool changed = false;
         var fieldInfo = GetFieldInfo(port.node.GetType(), port.fieldName);
-        InputAttribute field = fieldInfo.GetCustomAttributes<InputAttribute>(true).FirstOrDefault();
+        if (fieldInfo is null)
+        {
+            return changed;
+        }
+        InputAttribute? field = fieldInfo.GetCustomAttributes<InputAttribute>(true).FirstOrDefault();
         bool showBacking = false;
-        if (field.backingValue != ShowBackingValue.Never)
+        if (field is not null && field.backingValue != ShowBackingValue.Never)
             showBacking = field.backingValue == ShowBackingValue.Always || (field.backingValue == ShowBackingValue.Unconnected && !port.IsConnected);
 
         if (showBacking)
@@ -462,12 +466,12 @@ public class DefaultNodeEditor : ScriptedNodeEditor
         return changed;
     }
 
-    protected static FieldInfo GetFieldInfo(Type type, string fieldName)
+    protected static FieldInfo? GetFieldInfo(Type type, string fieldName)
     {
         // If we can't find field in the first run, it's probably a private field in a base class.
-        FieldInfo field = type.GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        FieldInfo? field = type.GetField(fieldName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
         // Search base classes for private fields only. Public fields are found above
-        while (field == null && (type = type.BaseType) != typeof(Node)) field = type.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
+        while (field is not null && type.BaseType is not null && (type = type.BaseType) != typeof(Node)) field = type.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
         return field;
     }
 
@@ -578,7 +582,7 @@ public class NodeEditor
     internal Rect dragSelection;
 
     private string _searchText = string.Empty;
-    private static NodeMenuItemInfo rootMenuItem;
+    private static NodeMenuItemInfo? rootMenuItem;
 
     private readonly SelectHandler<WeakReference> SelectHandler = new((item) => !item.IsAlive, (a, b) => ReferenceEquals(a.Target, b.Target));
 
@@ -1034,7 +1038,7 @@ public class NodeEditor
         {
             object? obj = graph;
             // Get graph.parameters field
-            FieldInfo props = graph.GetType().GetField("parameters", BindingFlags.Instance | BindingFlags.Public);
+            FieldInfo props = graph.GetType().GetField("parameters", BindingFlags.Instance | BindingFlags.Public) ?? throw new Exception();
             return EditorGUI.PropertyGrid("BlackBoard", ref obj, [props], EditorGUI.PropertyGridConfig.NoHeader);
         }
     }
@@ -1086,15 +1090,16 @@ public class NodeEditor
 
     private void DrawMenuItems(NodeMenuItemInfo menuItem, Gui g)
     {
-        bool foundName = false;
+        // bool foundName = false;
         bool hasSearch = string.IsNullOrEmpty(_searchText) == false;
         foreach (var item in menuItem.Children)
         {
             if (hasSearch && (item.Name.Contains(_searchText, StringComparison.CurrentCultureIgnoreCase) == false || item.Type == null))
             {
                 DrawMenuItems(item, g);
-                if (hasSearch && item.Name.Equals(_searchText, StringComparison.CurrentCultureIgnoreCase))
-                    foundName = true;
+                // TODO: `foundName` is not used anywhere
+                // if (hasSearch && item.Name.Equals(_searchText, StringComparison.CurrentCultureIgnoreCase))
+                    // foundName = true;
                 continue;
             }
 
@@ -1229,12 +1234,12 @@ public class NodeEditor
     {
         public string Name;
         public Type Type;
-        public readonly MethodInfo Method;
+        public readonly MethodInfo? Method;
         public readonly List<NodeMenuItemInfo> Children = [];
 
         public NodeMenuItemInfo() { }
 
-        public NodeMenuItemInfo(Type type, MethodInfo method = null)
+        public NodeMenuItemInfo(Type type, MethodInfo? method = null)
         {
             Type = type;
             Method = method;
@@ -1244,7 +1249,7 @@ public class NodeEditor
                 Name = addToMenuAttribute.catagory;
         }
 
-        public void AddChild(string path, Type type, MethodInfo method = null)
+        public void AddChild(string path, Type type, MethodInfo? method = null)
         {
             string[] parts = path.Split('/');
             NodeMenuItemInfo currentNode = this;

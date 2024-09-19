@@ -1,6 +1,8 @@
 ﻿// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using DotRecast.Core;
+
 using Prowl.Editor.Preferences;
 using Prowl.Icons;
 using Prowl.Runtime;
@@ -104,12 +106,12 @@ public abstract class PropertyDrawerEnumerable<T> : PropertyDrawer where T : cla
 
                             // See if Element has a field called "Name" or "name" and use that as the label
                             var nameField = ElementType(list).GetField("Name") ?? ElementType(list).GetField("name");
-                            string elementName = ((string)nameField?.GetValue(element)) ?? "Element " + i;
+                            string elementName = nameField?.GetValue(element) as string ?? "Element " + i;
 
                             config |= EditorGUI.PropertyGridConfig.NoBackground;
                             changed |= DrawerAttribute.DrawProperty(gui, elementName, i, ElementType(list), ref element, config);
                             if (changed)
-                                SetElement(list, i, element);
+                                SetElement(list, i, element!);
 
 
                             if (drawerID == selectedDrawer && i == selectedElement)
@@ -222,14 +224,14 @@ public abstract class PropertyDrawerEnumerable<T> : PropertyDrawer where T : cla
 [Drawer(typeof(Array))]
 public class PropertyDrawerArray : PropertyDrawerEnumerable<Array>
 {
-    protected override Type ElementType(Array value) => value.GetType().GetElementType();
+    protected override Type ElementType(Array value) => value.GetType().GetElementType()!;
     protected override int GetCount(Array value) => value.Length;
-    protected override object GetElement(Array value, int index) => value.GetValue(index);
+    protected override object GetElement(Array value, int index) => value.GetValue(index)!;
     protected override void SetElement(Array value, int index, object element) => value.SetValue(element, index);
     protected override void RemoveElement(ref Array value, int index)
     {
         var elementType = value.GetType().GetElementType();
-        var newArray = Array.CreateInstance(elementType, value.Length - 1);
+        var newArray = Array.CreateInstance(elementType!, value.Length - 1);
         Array.Copy(value, 0, newArray, 0, index);
         Array.Copy(value, index + 1, newArray, index, value.Length - index - 1);
         value = newArray;
@@ -237,7 +239,7 @@ public class PropertyDrawerArray : PropertyDrawerEnumerable<Array>
     protected override void AddElement(ref Array value)
     {
         var elementType = value.GetType().GetElementType();
-        var newArray = Array.CreateInstance(elementType, value.Length + 1);
+        var newArray = Array.CreateInstance(elementType!, value.Length + 1);
         Array.Copy(value, newArray, value.Length);
         value = newArray;
     }
@@ -248,7 +250,7 @@ public class PropertyDrawerList : PropertyDrawerEnumerable<System.Collections.IL
 {
     protected override Type ElementType(System.Collections.IList value) => value.GetType().GetGenericArguments()[0];
     protected override int GetCount(System.Collections.IList value) => value.Count;
-    protected override object GetElement(System.Collections.IList value, int index) => value[index];
+    protected override object GetElement(System.Collections.IList value, int index) => value[index] ?? throw new Exception();
     protected override void SetElement(System.Collections.IList value, int index, object element) => value[index] = element;
     protected override void RemoveElement(ref System.Collections.IList value, int index) => value.RemoveAt(index);
     protected override void AddElement(ref System.Collections.IList value)

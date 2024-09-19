@@ -137,10 +137,8 @@ public sealed partial class SerializedProperty
                     switch (nameVal.Value.TagType)
                     {
                         case PropertyType.Compound:
-                            mergedTag = Merge(allTags.Select(t => t.Get(nameVal.Key)).ToList());
-                            return mergedTag != null;
                         case PropertyType.List:
-                            mergedTag = Merge(allTags.Select(t => t.Get(nameVal.Key)).ToList());
+                            mergedTag = Merge(allTags.Where(t => t != null).Select(t => t?.Get(nameVal.Key)!).ToList());
                             return mergedTag != null;
                         default:
                             if (nameVal.Value.Value?.Equals(nTag.Value) != false)

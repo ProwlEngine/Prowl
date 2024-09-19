@@ -9,15 +9,15 @@ namespace Prowl.Editor.Docking;
 
 public class DockContainer
 {
-    public DockNode Root = new DockNode();
-    private Vector2 PaddedMins => new Vector2(0, 0);
+    public DockNode Root = new();
+    private Vector2 PaddedMins => new(0, 0);
 
     public void Update(Rect root)
     {
         Root.UpdateRecursive(root.Min, root.Max);
     }
 
-    public DockNode TraceLeaf(double x, double y)
+    public DockNode? TraceLeaf(double x, double y)
     {
         x -= PaddedMins.x;
         y -= PaddedMins.y;
@@ -25,7 +25,7 @@ public class DockContainer
         return Root.TraceLeaf(x, y);
     }
 
-    public DockPlacement GetPlacement(double x, double y, out List<Rect> possibleAreas, out Rect hovered)
+    public DockPlacement GetPlacement(double x, double y, out List<Rect>? possibleAreas, out Rect hovered)
     {
         possibleAreas = null;
         hovered = Rect.Zero;
@@ -38,21 +38,23 @@ public class DockContainer
             return default;
 
         Vector2 cen = (leaf.Mins + leaf.Maxs) * 0.5f;
-        Vector2 size = new Vector2(100, 100);
+        Vector2 size = new(100, 100);
         // TODO: Why do we need to remove half of the size? Shouldn't ((min + max) / 2) be the center already?
         cen.x -= size.x / 2;
         cen.y -= size.y / 2;
-        Rect main = new Rect(cen, size);
+        Rect main = new(cen, size);
 
-        Rect left = new Rect(cen - new Vector2(size.x + 5, 0), size);
-        Rect right = new Rect(cen + new Vector2(size.x + 5, 0), size);
-        Rect top = new Rect(cen - new Vector2(0, size.y + 5), size);
-        Rect bottom = new Rect(cen + new Vector2(0, size.y + 5), size);
+        Rect left = new(cen - new Vector2(size.x + 5, 0), size);
+        Rect right = new(cen + new Vector2(size.x + 5, 0), size);
+        Rect top = new(cen - new Vector2(0, size.y + 5), size);
+        Rect bottom = new(cen + new Vector2(0, size.y + 5), size);
         possibleAreas = [main, left, right, top, bottom];
 
-        DockPlacement placement = new DockPlacement();
-        placement.Leaf = leaf;
-        placement.PolygonVerts = new Vector2[4];
+        DockPlacement placement = new()
+        {
+            Leaf = leaf,
+            PolygonVerts = new Vector2[4]
+        };
 
         while (true)
         {
@@ -318,7 +320,7 @@ public class DockContainer
 
         if (leaf.LeafWindows.Count == 0)
         {
-            DockNode parent = FindParent(leaf);
+            DockNode? parent = FindParent(leaf);
             if (parent != null)
             {
                 DockNode neighborNode;

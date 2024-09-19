@@ -34,7 +34,7 @@ public class GameWindow : EditorWindow
     const int HeaderHeight = 27;
 
     RenderTexture RenderTarget;
-    bool previouslyPlaying = false;
+    // bool previouslyPlaying = false;
     bool hasFrame;
 
     public static WeakReference LastFocused;

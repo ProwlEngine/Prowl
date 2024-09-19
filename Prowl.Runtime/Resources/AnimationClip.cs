@@ -94,21 +94,23 @@ public sealed class AnimationClip : EngineObject, ISerializable
         var boneList = value.Get("Bones");
         foreach (var boneProp in boneList.List)
         {
-            var bone = new AnimBone();
-            bone.BoneName = boneProp.Get("BoneName").StringValue;
+            var bone = new AnimBone
+            {
+                BoneName = boneProp.Get("BoneName").StringValue,
 
-            bone.PosX = Serializer.Deserialize<AnimationCurve>(boneProp.Get("PosX"), ctx);
-            bone.PosY = Serializer.Deserialize<AnimationCurve>(boneProp.Get("PosY"), ctx);
-            bone.PosZ = Serializer.Deserialize<AnimationCurve>(boneProp.Get("PosZ"), ctx);
+                PosX = Serializer.Deserialize<AnimationCurve>(boneProp.Get("PosX"), ctx) ?? new AnimationCurve(),
+                PosY = Serializer.Deserialize<AnimationCurve>(boneProp.Get("PosY"), ctx) ?? new AnimationCurve(),
+                PosZ = Serializer.Deserialize<AnimationCurve>(boneProp.Get("PosZ"), ctx) ?? new AnimationCurve(),
 
-            bone.RotX = Serializer.Deserialize<AnimationCurve>(boneProp.Get("RotX"), ctx);
-            bone.RotY = Serializer.Deserialize<AnimationCurve>(boneProp.Get("RotY"), ctx);
-            bone.RotZ = Serializer.Deserialize<AnimationCurve>(boneProp.Get("RotZ"), ctx);
-            bone.RotW = Serializer.Deserialize<AnimationCurve>(boneProp.Get("RotW"), ctx);
-
-            bone.ScaleX = Serializer.Deserialize<AnimationCurve>(boneProp.Get("ScaleX"), ctx);
-            bone.ScaleY = Serializer.Deserialize<AnimationCurve>(boneProp.Get("ScaleY"), ctx);
-            bone.ScaleZ = Serializer.Deserialize<AnimationCurve>(boneProp.Get("ScaleZ"), ctx);
+                RotX = Serializer.Deserialize<AnimationCurve>(boneProp.Get("RotX"), ctx) ?? new AnimationCurve(),
+                RotY = Serializer.Deserialize<AnimationCurve>(boneProp.Get("RotY"), ctx) ?? new AnimationCurve(),
+                RotZ = Serializer.Deserialize<AnimationCurve>(boneProp.Get("RotZ"), ctx) ?? new AnimationCurve(),
+                RotW = Serializer.Deserialize<AnimationCurve>(boneProp.Get("RotW"), ctx) ?? new AnimationCurve(),
+                
+                ScaleX = Serializer.Deserialize<AnimationCurve>(boneProp.Get("ScaleX"), ctx) ?? new AnimationCurve(),
+                ScaleY = Serializer.Deserialize<AnimationCurve>(boneProp.Get("ScaleY"), ctx) ?? new AnimationCurve(),
+                ScaleZ = Serializer.Deserialize<AnimationCurve>(boneProp.Get("ScaleZ"), ctx) ?? new AnimationCurve()
+            };
 
             Bones.Add(bone);
         }

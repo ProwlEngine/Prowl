@@ -11,7 +11,7 @@ public class ViewManipulatorGizmo
     private readonly Gui _gui;
     private Rect _gizmoRect;
 
-    private Matrix4x4 _view;
+    // private Matrix4x4 _view;
     private Vector3 camForward;
     private Vector3 camUp;
     private bool _orthographic;

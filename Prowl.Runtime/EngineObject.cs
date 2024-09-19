@@ -57,7 +57,7 @@ public class EngineObject : IDisposable
         return null;
     }
 
-    public static T?[] FindObjectsOfType<T>() where T : EngineObject
+    public static T[] FindObjectsOfType<T>() where T : EngineObject
     {
         List<T> objects = new();
         foreach (var obj in allObjects)
@@ -130,6 +130,7 @@ public class EngineObject : IDisposable
     /// Force the object to dispose immediately
     /// You are advised to not use this! Use Destroy() Instead.
     /// </summary>
+    /// TODO: FIXME: replacing GameObject and EngineObject calls crashes the app
     [Obsolete("You are advised to not use this! Use Destroy() Instead.")]
     public void Dispose()
     {

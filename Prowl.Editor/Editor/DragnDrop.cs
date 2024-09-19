@@ -11,7 +11,7 @@ namespace Prowl.Editor;
 
 public static class DragnDrop
 {
-    private static object[] draggedObject;
+    private static object[]? draggedObject;
     private static string payloadTag = "";
 
 

@@ -61,11 +61,7 @@ public static class Physics
         {
             return GetContainer(collidable.StaticHandle);
         }
-        else
-        {
-            return GetContainer(collidable.BodyHandle);
-        }
-        return null;
+        return GetContainer(collidable.BodyHandle);
     }
 
     public static Rigidbody GetContainer(BodyHandle handle)

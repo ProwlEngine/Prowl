@@ -18,7 +18,7 @@ public class MetaFile
     public string[] assetTypes = [];
 
     public DateTime lastModified;
-    public ScriptedImporter importer;
+    public readonly ScriptedImporter Importer;
     public List<Guid> dependencies;
 
     /// <summary>Default constructor for MetaFile.</summary>
@@ -35,7 +35,8 @@ public class MetaFile
         AssetPath = assetFile;
         guid = Guid.NewGuid();
         lastModified = assetFile.LastWriteTimeUtc;
-        importer = Activator.CreateInstance(importerType) as ScriptedImporter;
+        var importer = Activator.CreateInstance(importerType) as ScriptedImporter;
+        Importer = importer ?? throw new Exception();
     }
 
     /// <summary>Save the MetaFile to a specified file or default to the associated asset file with a ".meta" extension.</summary>
