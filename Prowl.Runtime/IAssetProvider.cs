@@ -13,5 +13,6 @@ public interface IAssetProvider
     public AssetRef<T> LoadAsset<T>(string relativeAssetPath, ushort fileID = 0) where T : EngineObject;
     public AssetRef<T> LoadAsset<T>(Guid guid, ushort fileID = 0) where T : EngineObject;
     public AssetRef<T> LoadAsset<T>(IAssetRef assetID) where T : EngineObject;
-    public SerializedAsset? LoadAsset(Guid guid);
+    public SerializedAsset? LoadAssetRaw(string relativeAssetPath);
+    public SerializedAsset? LoadAssetRaw(Guid guid);
 }

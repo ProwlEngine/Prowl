@@ -13,7 +13,7 @@ public class EditorAssetProvider : IAssetProvider
     public AssetRef<T> LoadAsset<T>(string relativeAssetPath, ushort fileID = 0) where T : EngineObject
     {
         // The Editor is a special case, its just a wrapper around the AssetDatabase
-        var fileInfo = AssetDatabase.FromRelativePath(relativeAssetPath);
+        FileInfo fileInfo = AssetDatabase.FromRelativePath(relativeAssetPath);
         return new AssetRef<T>(AssetDatabase.LoadAsset<T>(fileInfo, fileID));
     }
 
@@ -29,7 +29,13 @@ public class EditorAssetProvider : IAssetProvider
         return new AssetRef<T>(AssetDatabase.LoadAsset<T>(assetID.AssetID, assetID.FileID));
     }
 
-    public SerializedAsset? LoadAsset(Guid guid)
+    public SerializedAsset? LoadAssetRaw(string relativeAssetPath)
+    {
+        FileInfo fileInfo = AssetDatabase.FromRelativePath(relativeAssetPath);
+        return AssetDatabase.LoadAsset(fileInfo);
+    }
+
+    public SerializedAsset? LoadAssetRaw(Guid guid)
     {
         return AssetDatabase.LoadAsset(guid);
     }
