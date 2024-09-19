@@ -325,6 +325,23 @@ public sealed class RenderTexture : EngineObject, ISerializable
 
     public static RenderTexture GetTemporaryRT(
         uint width, uint height,
+        bool sampled = true, bool randomWrite = false,
+        TextureSampleCount samples = TextureSampleCount.Count1)
+    {
+        return GetTemporaryRT(new RenderTextureDescription(width, height, TextureUtility.GetBestSupportedDepthFormat(), [PixelFormat.R8_G8_B8_A8_UNorm], sampled, randomWrite, samples));
+    }
+
+    public static RenderTexture GetTemporaryRT(
+        uint width, uint height,
+        PixelFormat[] colorFormats,
+        bool sampled = true, bool randomWrite = false,
+        TextureSampleCount samples = TextureSampleCount.Count1)
+    {
+        return GetTemporaryRT(new RenderTextureDescription(width, height, TextureUtility.GetBestSupportedDepthFormat(), colorFormats, sampled, randomWrite, samples));
+    }
+
+    public static RenderTexture GetTemporaryRT(
+        uint width, uint height,
         PixelFormat? depthFormat,
         PixelFormat[] colorFormats,
         bool sampled = true, bool randomWrite = false,
