@@ -60,9 +60,9 @@ public struct Bounds : IEquatable<Bounds>
     #endregion Public Fields
 
     #region Public Properties
-    public Vector3 center { get { return (min + max) * 0.5f; } set { var s = size * 0.5f; min = value - s; max = value + s; } }
-    public Vector3 extents { get { return (max - min) * 0.5f; } set { var c = center; min = c - value; max = c + value; } }
-    public Vector3 size { get { return max - min; } set { var c = center; var s = value * 0.5f; min = c - s; max = c + s; } }
+    public Vector3 center { readonly get { return (min + max) * 0.5f; } set { var s = size * 0.5f; min = value - s; max = value + s; } }
+    public Vector3 extents { readonly get { return (max - min) * 0.5f; } set { var c = center; min = c - value; max = c + value; } }
+    public Vector3 size { readonly get { return max - min; } set { var c = center; var s = value * 0.5f; min = c - s; max = c + s; } }
     #endregion
 
 
@@ -80,7 +80,7 @@ public struct Bounds : IEquatable<Bounds>
 
     #region Public Methods
 
-    public ContainmentType Contains(Bounds box)
+    public readonly ContainmentType Contains(Bounds box)
     {
         //test if all corner is in the same side of a face by just checking min and max
         if (box.max.x < min.x
@@ -154,7 +154,7 @@ public struct Bounds : IEquatable<Bounds>
         return result;
     }
 
-    public void Contains(ref Vector3 point, out ContainmentType result)
+    public readonly void Contains(ref Vector3 point, out ContainmentType result)
     {
         //first we get if point is out of box
         if (point.x < min.x
@@ -251,7 +251,7 @@ public struct Bounds : IEquatable<Bounds>
         result.max.z = Math.Max(original.max.z, additional.max.z);
     }
 
-    public bool Equals(Bounds other)
+    public readonly bool Equals(Bounds other)
     {
         return (min == other.min) && (max == other.max);
     }
@@ -261,7 +261,7 @@ public struct Bounds : IEquatable<Bounds>
         return (obj is Bounds bounds) ? Equals(bounds) : false;
     }
 
-    public Vector3[] GetCorners()
+    public readonly Vector3[] GetCorners()
     {
         return
         [
@@ -276,7 +276,7 @@ public struct Bounds : IEquatable<Bounds>
         ];
     }
 
-    public void GetCorners(Vector3[] corners)
+    public readonly void GetCorners(Vector3[] corners)
     {
         ArgumentNullException.ThrowIfNull(corners);
         if (corners.Length < 8)
@@ -314,14 +314,14 @@ public struct Bounds : IEquatable<Bounds>
         return min.GetHashCode() + max.GetHashCode();
     }
 
-    public bool Intersects(Bounds box)
+    public readonly bool Intersects(Bounds box)
     {
         bool result;
         Intersects(ref box, out result);
         return result;
     }
 
-    public void Intersects(ref Bounds box, out bool result)
+    public readonly void Intersects(ref Bounds box, out bool result)
     {
         if ((max.x >= box.min.x) && (min.x <= box.max.x))
         {
@@ -339,19 +339,19 @@ public struct Bounds : IEquatable<Bounds>
         return;
     }
 
-    public bool Intersects(BoundingFrustum frustum)
+    public readonly bool Intersects(BoundingFrustum frustum)
     {
         return frustum.Intersects(this);
     }
 
-    public PlaneIntersectionType Intersects(Plane plane)
+    public readonly PlaneIntersectionType Intersects(Plane plane)
     {
         PlaneIntersectionType result;
         Intersects(ref plane, out result);
         return result;
     }
 
-    public void Intersects(ref Plane plane, out PlaneIntersectionType result)
+    public readonly void Intersects(ref Plane plane, out PlaneIntersectionType result)
     {
         // See http://zach.in.tu-clausthal.de/teaching/cg_literatur/lighthouse3d_view_frustum_culling/index.html
 
@@ -410,12 +410,12 @@ public struct Bounds : IEquatable<Bounds>
         result = PlaneIntersectionType.Intersecting;
     }
 
-    public Nullable<double> Intersects(Ray ray)
+    public readonly double? Intersects(Ray ray)
     {
         return ray.Intersects(this);
     }
 
-    public void Intersects(ref Ray ray, out Nullable<double> result)
+    public readonly void Intersects(ref Ray ray, out double? result)
     {
         result = Intersects(ray);
     }
