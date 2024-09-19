@@ -105,6 +105,17 @@ public sealed class Texture2DArray : Texture
         InternalCopyData(data, layer, mipLevel);
 
     /// <summary>
+    /// Gets the pixel at a position in a <see cref="Texture2DArray"/>.
+    /// </summary>
+    /// <typeparam name="T">A struct with the same format as this <see cref="Texture2DArray"/>'s pixels.</typeparam>
+    /// <param name="x">The X coordinate of the pixel to get.</param>
+    /// <param name="y">The Y coordinate of the pixel to get.</param>
+    /// <param name="mipLevel">The mip level to get.</param>
+    /// /// <param name="layer">The array layer to get.</param>
+    public unsafe T GetPixel<T>(uint x, uint y, uint layer, uint mipLevel = 0) where T : unmanaged =>
+        InternalCopyPixel<T>(new Vector3Int((int)x, (int)y, 0), layer, mipLevel);
+
+    /// <summary>
     /// Recreates and resizes the <see cref="Texture2DArray"/>.
     /// </summary>
     public void RecreateTexture(uint width, uint height, uint layers)

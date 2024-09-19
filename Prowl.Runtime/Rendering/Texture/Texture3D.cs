@@ -98,6 +98,17 @@ public sealed class Texture3D : Texture
         InternalCopyData(data, 0, mipLevel);
 
     /// <summary>
+    /// Gets the pixel at a position in a <see cref="Texture2D"/>.
+    /// </summary>
+    /// <typeparam name="T">A struct with the same format as this <see cref="Texture2D"/>'s pixels.</typeparam>
+    /// <param name="x">The X coordinate of the pixel to get.</param>
+    /// <param name="y">The Y coordinate of the pixel to get.</param>
+    /// <param name="z">The Z coordinate of the pixel to get.</param>
+    /// <param name="mipLevel">The mip level to get.</param>
+    public unsafe T GetPixel<T>(uint x, uint y, uint z, uint mipLevel = 0) where T : unmanaged =>
+        InternalCopyPixel<T>(new Vector3Int((int)x, (int)y, (int)z), 0, mipLevel);
+
+    /// <summary>
     /// Recreates and resizes the <see cref="Texture3D"/>.
     /// </summary>
     public void RecreateTexture(uint width, uint height, uint depth)
