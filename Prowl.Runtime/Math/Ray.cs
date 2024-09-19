@@ -194,6 +194,11 @@ public struct Ray : IEquatable<Ray>
         }
     }
 
+    public readonly Vector3 Position(double distance)
+    {
+        return origin + direction * distance;
+    }
+
     public static bool operator !=(Ray a, Ray b)
     {
         return !a.Equals(b);
