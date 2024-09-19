@@ -42,11 +42,11 @@ public static class Serializer
 {
     public class SerializationContext
     {
-        public readonly Dictionary<object, int> objectToId = new(ReferenceEqualityComparer.Instance);
-        public readonly Dictionary<int, object> idToObject = [];
+        public Dictionary<object, int> objectToId = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<int, object> idToObject = [];
         public int nextId = 1;
         private int dependencyCounter = 0;
-        public readonly HashSet<Guid> dependencies = [];
+        public HashSet<Guid> dependencies = [];
 
         public SerializationContext()
         {

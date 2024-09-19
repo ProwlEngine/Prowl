@@ -848,8 +848,8 @@ public class ParsedPass
 
 public struct EntryPoint(ShaderStages stages, string name)
 {
-    public readonly ShaderStages Stage = stages;
-    public readonly string Name = name;
+    public ShaderStages Stage = stages;
+    public string Name = name;
 }
 
 

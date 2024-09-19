@@ -12,10 +12,10 @@ namespace Prowl.Runtime;
 public sealed class AudioSource : MonoBehaviour
 {
     public AssetRef<AudioClip> Clip;
-    public readonly bool PlayOnAwake = true;
-    public readonly bool Looping = false;
-    public readonly float Volume = 1f;
-    public readonly float MaxDistance = 32f;
+    public bool PlayOnAwake = true;
+    public bool Looping = false;
+    public float Volume = 1f;
+    public float MaxDistance = 32f;
 
     private ActiveAudio _source;
     private AudioBuffer _buffer;

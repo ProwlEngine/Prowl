@@ -56,8 +56,8 @@ public partial class LayoutNode
         // Keep the Scrolls cached
         public double VScroll = node.VScroll;
         public double HScroll = node.HScroll;
-        public readonly bool ShowVScroll = node._showVScroll;
-        public readonly bool ShowHScroll = node._showHScroll;
+        public bool ShowVScroll = node._showVScroll;
+        public bool ShowHScroll = node._showHScroll;
     }
 
     public bool HasLayoutData => _data._node == this;
@@ -126,7 +126,7 @@ public partial class LayoutNode
 
     internal int ZIndex = 0;
 
-    internal readonly List<LayoutNode> Children = new List<LayoutNode>();
+    internal List<LayoutNode> Children = new List<LayoutNode>();
 
     public LayoutNode(LayoutNode? parent, Gui gui, ulong storageHash)
     {

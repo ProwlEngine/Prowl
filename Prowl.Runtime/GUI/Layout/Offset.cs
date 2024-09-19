@@ -11,9 +11,9 @@ public struct Offset
 
     private bool isLerp = false;
 
-    public readonly double Value;
+    public double Value;
     public double PixelOffset;
-    public readonly LayoutValueType Type;
+    public LayoutValueType Type;
 
     private double _lerpValue;
     private double _lerpPixelOffset;

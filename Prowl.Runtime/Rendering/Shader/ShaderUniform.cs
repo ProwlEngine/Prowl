@@ -42,9 +42,9 @@ public class ShaderUniform
     public readonly string name;
     public readonly uint binding;
 
-    public readonly uint size;
+    public uint size;
 
-    public readonly ShaderUniformMember[] members;
+    public ShaderUniformMember[] members;
 
 
     private ShaderUniform() { }

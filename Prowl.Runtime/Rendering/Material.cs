@@ -13,10 +13,10 @@ namespace Prowl.Runtime;
 public sealed class Material : EngineObject
 {
     public AssetRef<Shader> Shader;
-    public readonly PropertyState Properties;
+    public PropertyState Properties;
 
     [NonSerialized]
-    public readonly KeywordState LocalKeywords;
+    public KeywordState LocalKeywords;
 
     internal Material() : base("New Material")
     {

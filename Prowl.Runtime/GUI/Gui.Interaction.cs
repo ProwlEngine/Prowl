@@ -268,7 +268,7 @@ public struct Interactable
     public double ZIndex => zIndex;
 
     private readonly Gui _gui;
-    internal readonly ulong _id;
+    internal ulong _id;
     internal Rect _rect;
     internal double zIndex;
 

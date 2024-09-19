@@ -12,10 +12,10 @@ namespace Prowl.Runtime;
 public class Animation : MonoBehaviour
 {
 
-    public readonly List<AssetRef<AnimationClip>> Clips = [];
+    public List<AssetRef<AnimationClip>> Clips = [];
     public AssetRef<AnimationClip> DefaultClip;
-    public readonly bool PlayAutomatically = true;
-    public readonly double Speed = 1.0;
+    public bool PlayAutomatically = true;
+    public double Speed = 1.0;
 
     private readonly List<AnimationState> _states = new List<AnimationState>();
     private readonly Dictionary<string, AnimationState> _stateDictionary = new Dictionary<string, AnimationState>();
@@ -208,8 +208,8 @@ public class Animation : MonoBehaviour
 
 public class AnimationState
 {
-    public readonly string Name;
-    public readonly AnimationClip Clip;
+    public string Name;
+    public AnimationClip Clip;
     public bool Enabled;
     public double Length => Clip.Duration;
     public double NormalizedTime => Time / Length;
@@ -219,9 +219,9 @@ public class AnimationState
     public double MoveWeightSpeed = 1.0;
     public double TargetWeight = 1.0;
 
-    public readonly AnimationWrapMode Wrap = AnimationWrapMode.Loop;
+    public AnimationWrapMode Wrap = AnimationWrapMode.Loop;
 
-    public readonly HashSet<string> MixingTransforms = new HashSet<string>();
+    public HashSet<string> MixingTransforms = new HashSet<string>();
 
     public enum BlendMode
     {
@@ -229,7 +229,7 @@ public class AnimationState
         Additive,
     }
 
-    public readonly BlendMode Blend = BlendMode.Blend;
+    public BlendMode Blend = BlendMode.Blend;
 
     public AnimationState(string name, AnimationClip clip)
     {

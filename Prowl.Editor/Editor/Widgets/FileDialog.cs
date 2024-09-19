@@ -57,7 +57,7 @@ public class FileDialogContext
 
 public class FileDialog : EditorWindow
 {
-    public readonly FileDialogContext Dialog;
+    public FileDialogContext Dialog;
 
     private FileDialogSortBy _sortBy = FileDialogSortBy.None;
 

@@ -23,7 +23,7 @@ public class SpaceAttribute : Attribute, InspectorUIAttribute
 [AttributeUsage(T.Field, AllowMultiple = true)]
 public class TextAttribute(string text) : Attribute, InspectorUIAttribute
 {
-    public readonly string text = text;
+    public string text = text;
     public GuiAttribType AttribType() => GuiAttribType.Text;
 }
 
@@ -36,22 +36,22 @@ public class SeparatorAttribute : Attribute, InspectorUIAttribute
 [AttributeUsage(T.Field, AllowMultiple = false)]
 public class TooltipAttribute(string text) : Attribute, InspectorUIAttribute
 {
-    public readonly string tooltip = text;
+    public string tooltip = text;
     public GuiAttribType AttribType() => GuiAttribType.Tooltip;
 }
 
 [AttributeUsage(T.Field | T.Property, AllowMultiple = false)]
 public class ShowIfAttribute(string propertyName, bool inverted = false) : Attribute, InspectorUIAttribute
 {
-    public readonly string propertyName = propertyName;
-    public readonly bool inverted = inverted;
+    public string propertyName = propertyName;
+    public bool inverted = inverted;
     public GuiAttribType AttribType() => GuiAttribType.ShowIf;
 }
 
 [AttributeUsage(T.Method, AllowMultiple = false)]
 public class GUIButtonAttribute(string text) : Attribute
 {
-    public readonly string buttonText = text;
+    public string buttonText = text;
 }
 
 [AttributeUsage(T.Field, AllowMultiple = false)]
