@@ -252,9 +252,6 @@ public abstract class Texture : EngineObject, ISerializable
 
         MappedResource resource = Graphics.Device.Map(stagingTexture, MapMode.Read, subresource);
 
-        if (sizeof(T) < PixelFormatBytes(InternalTexture.Format))
-            throw new ArgumentException("Insufficient space to store the requested pixel data", nameof(T));
-
         uint width = GetMipDimension(InternalTexture.Width, mipLevel);
         uint height = GetMipDimension(InternalTexture.Height, mipLevel);
         uint depth = GetMipDimension(InternalTexture.Depth, mipLevel);
@@ -271,7 +268,8 @@ public abstract class Texture : EngineObject, ISerializable
 
         T data = default;
 
-        Buffer.MemoryCopy((void*)(resource.Data + (offset * sizeof(T))), Unsafe.AsPointer(ref data), sizeof(T), sizeof(T));
+        long copySize = Math.Min(sizeof(T), PixelFormatBytes(InternalTexture.Format));
+        Buffer.MemoryCopy((void*)(resource.Data + (offset * sizeof(T))), Unsafe.AsPointer(ref data), sizeof(T), copySize);
 
         Graphics.Device.Unmap(stagingTexture, subresource);
 
