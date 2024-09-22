@@ -18,52 +18,34 @@ Pass
 		#pragma vertex Vertex
         #pragma fragment Fragment
 
-		struct Attributes
-		{
-			float3 position : POSITION;
-			float2 uv : TEXCOORD0;
-		};
-
 		struct Varyings
 		{
 			float4 position : SV_POSITION;
-            float3 worldPosition : INTERPOLATOR0;
 		};
-
-        struct Output
-        {
-            float worldPosition : SV_TARGET0;
-            int objectID : SV_TARGET1;
-        };
-
-        float3 _CameraPosition;
 
         cbuffer _PerDraw
         {
-            float4x4 _Matrix_M;
             float4x4 _Matrix_MVP;
             int _ObjectID;
         }
 
-        Varyings Vertex(Attributes input)
+
+        float4 Vertex(float3 position : POSITION) : SV_POSITION
         {
-			Varyings output = (Varyings)0;
-
-            output.worldPosition = mul(_Matrix_M, float4(input.position.xyz, 1.0)).xyz;
-			output.position = mul(_Matrix_MVP, float4(input.position.xyz, 1.0));
-
-            return output;
+            return mul(_Matrix_MVP, float4(position.xyz, 1.0));
         }
 
 
-        Output Fragment(Varyings input)
+        float4 Fragment(Varyings input) : SV_TARGET
         {
-            Output output = (Output)0;
+            float4 packed = (float4)0;
 
-            output.worldPosition = length(_CameraPosition - input.worldPosition);
-            output.objectID = _ObjectID;
+            packed.x = (_ObjectID & 0xFF) / 255.0f;            // Lowest byte
+            packed.y = ((_ObjectID >> 8) & 0xFF) / 255.0f;     // Second byte
+            packed.z = ((_ObjectID >> 16) & 0xFF) / 255.0f;    // Third byte
+            packed.w = ((_ObjectID >> 24) & 0xFF) / 255.0f;    // Highest byte
 
-            return output;
+            return packed;
         }
 	ENDHLSL
 }

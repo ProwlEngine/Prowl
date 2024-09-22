@@ -20,7 +20,7 @@ public static class SceneRaycaster
     public static MeshHitInfo? Raycast(Camera cam, Vector2 rayUV, Vector2 screenScale)
     {
         if (RenderRaycast(cam, rayUV, screenScale, out Vector3 pos, out int id))
-            return new MeshHitInfo(EngineObject.FindObjectByID<GameObject>(id), pos);
+            return new MeshHitInfo(EngineObject.FindObjectByID<MeshRenderer>(id)?.GameObject, pos);
 
         return null;
     }
@@ -29,7 +29,7 @@ public static class SceneRaycaster
     public static GameObject? GetObject(Camera cam, Vector2 rayUV, Vector2 screenScale)
     {
         if (RenderRaycast(cam, rayUV, screenScale, out Vector3 pos, out int id))
-            return EngineObject.FindObjectByID<GameObject>(id);
+            return EngineObject.FindObjectByID<MeshRenderer>(id)?.GameObject;
 
         return null;
     }
@@ -55,7 +55,6 @@ public static class SceneRaycaster
         s_scenePickMaterial ??= new Material(Application.AssetProvider.LoadAsset<Runtime.Shader>("Defaults/ScenePicker.shader"));
 
         Ray ray = camera.ScreenPointToRay(rayUV, screenScale);
-        MeshRenderer.ray = ray;
 
         intersectRenderables.Clear();
 
@@ -69,35 +68,30 @@ public static class SceneRaycaster
             intersectRenderables.Add(renderable);
         }
 
-        RenderTexture temporary = RenderTexture.GetTemporaryRT((uint)screenScale.x, (uint)screenScale.y, [PixelFormat.R32_Float, PixelFormat.R32_Float]);
+        RenderTexture temporary = RenderTexture.GetTemporaryRT((uint)screenScale.x, (uint)screenScale.y, [PixelFormat.R8_G8_B8_A8_UNorm]);
 
         CommandBuffer buffer = CommandBufferPool.Get("Scene Picking Command Buffer");
 
         buffer.SetRenderTarget(temporary);
         buffer.ClearRenderTarget(true, true, Color.clear);
 
-        Matrix4x4 view = camera.GetViewMatrix(true);
+        Matrix4x4 view = camera.GetViewMatrix(false);
         Vector3 cameraPosition = camera.Transform.position;
 
         Matrix4x4 projection = camera.GetProjectionMatrix(screenScale, true);
         Matrix4x4 vp = view * projection;
         System.Numerics.Matrix4x4 floatVP = vp.ToFloat();
 
-        buffer.SetVector("_CameraPosition", camera.Transform.position);
         buffer.SetMaterial(s_scenePickMaterial);
 
-        int a = 0;
         foreach (IRenderable renderable in intersectRenderables)
         {
-            a++;
             renderable.GetRenderingData(out PropertyBlock properties, out IGeometryDrawData drawData, out Matrix4x4 model);
 
-            buffer.SetMatrix("_Matrix_M", model.ToFloat());
-
             model.Translation -= cameraPosition;
-            Matrix4x4 gpuModel = Graphics.GetGPUModelMatrix(model);
+            model = Graphics.GetGPUModelMatrix(model);
 
-            buffer.SetMatrix("_Matrix_MVP", gpuModel.ToFloat() * floatVP);
+            buffer.SetMatrix("_Matrix_MVP", model.ToFloat() * floatVP);
 
             buffer.ApplyPropertyState(properties);
 
@@ -107,20 +101,85 @@ public static class SceneRaycaster
             buffer.DrawIndexed((uint)drawData.IndexCount, 0, 1, 0, 0);
         }
 
-        Graphics.SubmitCommandBuffer(buffer, true, 10000000);
+        Graphics.SubmitCommandBuffer(buffer, true);
 
         CommandBufferPool.Release(buffer);
 
-        float distance = temporary.ColorBuffers[0].GetPixel<float>((uint)rayUV.x, (uint)rayUV.y);
-        float id = temporary.ColorBuffers[1].GetPixel<float>((uint)rayUV.x, (uint)rayUV.y);
+        // ID is packed into 8-bit 4-channel vector
+        Color32 id = temporary.ColorBuffers[0].GetPixel<Color32>((uint)rayUV.x, (uint)screenScale.y - (uint)rayUV.y);
 
-        objectID = (int)id;
-        position = ray.Position(distance);
+        objectID = id.r;
+        objectID |= id.g << 8;
+        objectID |= id.b << 16;
+        objectID |= id.a << 24;
 
-        // Debug.Log($"ID : {objectID}, Pos : {position}");
+        // TODO : Find out how to PROPERLY get the depth texture, since this does not appear to work.
+        // Get depth
+        // float depth = GetDepth(temporary.DepthBuffer, (uint)rayUV.x, (uint)screenScale.y - (uint)rayUV.y, camera.NearClip, camera.FarClip);
+        // position = ray.Position(depth);
 
-        MeshRenderer.pos = position;
+        position = ray.Position(0);
 
         return objectID > 0;
+    }
+
+
+    static float GetDepth(Texture2D texture, uint x, uint y, double near, double far)
+    {
+        float depth = 0;
+
+        switch (texture.Format)
+        {
+            case PixelFormat.D16_UNorm:
+            case PixelFormat.D16_UNorm_S8_UInt:
+                uint depth16 = texture.GetPixel<Int16>(x, y).ToUInt();
+                depth = (float)((double)depth16 / ushort.MaxValue);
+
+                break;
+
+            case PixelFormat.D24_UNorm_S8_UInt:
+                uint depth24 = texture.GetPixel<Int24>(x, y).ToUInt();
+                depth = (float)((double)depth24 / 16777215);
+
+                break;
+
+            case PixelFormat.D32_Float:
+            case PixelFormat.D32_Float_S8_UInt:
+                depth = texture.GetPixel<float>(x, y);
+                break;
+        }
+
+        //depth = (float)((2.0 * near * far) / (far + near - depth * (far - near)));
+
+        return depth;
+    }
+
+
+    private struct Int16
+    {
+        private readonly byte _l1, _l2;
+
+        public readonly uint ToUInt()
+        {
+            uint value = _l1;
+            value |= (uint)_l2 << 8;
+
+            return value;
+        }
+    }
+
+
+    private struct Int24
+    {
+        private readonly byte _l1, _l2, _l3;
+
+        public readonly uint ToUInt()
+        {
+            uint value = _l1;
+            value |= (uint)_l2 << 8;
+            value |= (uint)_l3 << 16;
+
+            return value;
+        }
     }
 }
