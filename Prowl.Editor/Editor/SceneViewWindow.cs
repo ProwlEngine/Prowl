@@ -146,8 +146,6 @@ public class SceneViewWindow : EditorWindow
 
         pipeline.Render(RenderTarget.Framebuffer, Cam, data);
 
-        SceneRaycaster.RenderTest(Cam, new Vector2(RenderTarget.Width, RenderTarget.Height));
-
         Vector2 imagePos = gui.CurrentNode.LayoutData.Rect.Position;
         Vector2 imageSize = gui.CurrentNode.LayoutData.Rect.Size;
         gui.Draw2D.DrawImage(RenderTarget!.ColorBuffers[0], imagePos, imageSize, Color.white);
