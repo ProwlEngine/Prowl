@@ -20,7 +20,7 @@ public class ScriptableObjectImporter : ScriptedImporter
 }
 
 [CustomEditor(typeof(ScriptableObjectImporter))]
-public class ScriptableObjectEditor : ScriptedEditor
+public class ScriptableObjectImporterEditor : ScriptedEditor
 {
     ScriptableObject? scriptObject;
 
