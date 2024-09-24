@@ -1,6 +1,5 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
-
 using Prowl.Runtime;
 using Prowl.Runtime.RenderPipelines;
 
@@ -105,20 +104,17 @@ public static class SceneRaycaster
 
         CommandBufferPool.Release(buffer);
 
+        uint x = (uint)rayUV.x;
+        uint y = (uint)screenScale.y - (uint)rayUV.y;
+
         // ID is packed into 8-bit 4-channel vector
-        Color32 id = temporary.ColorBuffers[0].GetPixel<Color32>((uint)rayUV.x, (uint)screenScale.y - (uint)rayUV.y);
+        Color32 id = temporary.ColorBuffers[0].GetPixel<Color32>(x, y);
+        float depth = GetDepth(temporary.DepthBuffer, x, y, camera.NearClip, camera.FarClip);
 
-        objectID = id.r;
-        objectID |= id.g << 8;
-        objectID |= id.b << 16;
-        objectID |= id.a << 24;
-
-        // TODO : Find out how to PROPERLY get the depth texture, since this does not appear to work.
-        float depth = GetDepth(temporary.DepthBuffer, (uint)rayUV.x, (uint)screenScale.y - (uint)rayUV.y, camera.NearClip, camera.FarClip);
-
-        Debug.Log(depth);
-
+        objectID = id.r | id.g << 8 | id.b << 16 | id.a << 24;
         position = ray.Position(depth);
+
+        Debug.Log(objectID);
 
         return objectID > 0;
     }
@@ -126,43 +122,34 @@ public static class SceneRaycaster
 
     static float GetDepth(Texture2D texture, uint x, uint y, double near, double far)
     {
-        float depth = 0;
+        float depth;
 
         switch (texture.Format)
         {
             case PixelFormat.D16_UNorm:
-                depth = UnpackD16UNorm(texture.GetPixel<uint>(x, y));
+                depth = texture.GetPixel<ushort>(x, y) / 65535.0f; // Untested
                 break;
 
             case PixelFormat.D16_UNorm_S8_UInt:
-                depth = UnpackD16UNormS8UInt(texture.GetPixel<uint>(x, y));
+                depth = texture.GetPixel<(ushort, byte)>(x, y).Item1 / 65535.0f; // Untested
                 break;
 
             case PixelFormat.D24_UNorm_S8_UInt:
-                depth = UnpackD24UNormS8UInt(texture.GetPixel<uint>(x, y));
+                (ushort depth1, byte depth2, byte stencil) = texture.GetPixel<(ushort, byte, byte)>(x, y);
+
+                // This does not seem correct - depth2 should not be after depth1. However, it seems to work fine.
+                depth = ((uint)depth2 << 16 | depth1) / 16777215.0f;
                 break;
 
             case PixelFormat.D32_Float:
             case PixelFormat.D32_Float_S8_UInt:
                 depth = texture.GetPixel<float>(x, y);
                 break;
+
+            default:
+                throw new Exception($"Unsupported depth format: {texture.Format}");
         }
 
-        return (float)((far * near) / (far - (far - near) * depth));
-    }
-
-    private static float UnpackD16UNorm(uint packed)
-    {
-        return (packed & 0xFFFF) / 65535.0f;
-    }
-
-    private static float UnpackD16UNormS8UInt(uint packed)
-    {
-        return (packed & 0xFFFF) / 65535.0f;
-    }
-
-    private static float UnpackD24UNormS8UInt(uint packed)
-    {
-        return (packed >> 8) / 16777215.0f;
+        return (float)(far * near / (far - (far - near) * depth));
     }
 }
