@@ -8,6 +8,7 @@ using Prowl.Runtime.Utils;
 
 namespace Prowl.Editor.Assets;
 
+[AttributeUsage(AttributeTargets.Class)]
 public class ImporterAttribute : Attribute
 {
     public string[] Extensions { get; private set; }
@@ -30,27 +31,27 @@ public class ImporterAttribute : Attribute
         extToImporter.Clear();
         extToIcon.Clear();
         foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-        foreach (var type in assembly.GetTypes())
-            if (type != null)
-            {
-                var attribute = type.GetCustomAttribute<ImporterAttribute>();
-                if (attribute == null) continue;
-
-                foreach (var extRW in attribute.Extensions)
+            foreach (var type in assembly.GetTypes())
+                if (type != null)
                 {
-                    var ext = extRW.ToLower();
-                    // Make sure the Extension is formatted correctly '.png' 1 dot at start
-                    if (ext[0] != '.') ext = '.' + ext;
-                    // Check if has more then 1 '.'
-                    if (ext.Count(x => x == '.') > 1) throw new Exception($"Extension {ext} is formatted incorrectly on importer: {type.Name}");
+                    var attribute = type.GetCustomAttribute<ImporterAttribute>();
+                    if (attribute == null) continue;
 
-                    if (extToImporter.TryGetValue(ext, out var oldType))
-                        Debug.LogError($"Asset Importer Overwritten. {ext} extension already in use by: {oldType.Name}, being overwritten by: {type.Name}");
-                    extToImporter[ext] = type;
-                    extToIcon[ext] = attribute.FileIcon;
-                    extToGeneralType[ext] = attribute.GeneralType;
+                    foreach (var extRW in attribute.Extensions)
+                    {
+                        var ext = extRW.ToLower();
+                        // Make sure the Extension is formatted correctly '.png' 1 dot at start
+                        if (ext[0] != '.') ext = '.' + ext;
+                        // Check if has more then 1 '.'
+                        if (ext.Count(x => x == '.') > 1) throw new Exception($"Extension {ext} is formatted incorrectly on importer: {type.Name}");
+
+                        if (extToImporter.TryGetValue(ext, out var oldType))
+                            Debug.LogError($"Asset Importer Overwritten. {ext} extension already in use by: {oldType.Name}, being overwritten by: {type.Name}");
+                        extToImporter[ext] = type;
+                        extToIcon[ext] = attribute.FileIcon;
+                        extToGeneralType[ext] = attribute.GeneralType;
+                    }
                 }
-            }
     }
 
     [OnAssemblyUnload]
@@ -85,51 +86,5 @@ public class ImporterAttribute : Attribute
         if (extToIcon.TryGetValue(extension, out var fileIcon))
             return fileIcon;
         return "FileIcon.png";
-    }
-}
-
-public class CustomEditorAttribute : Attribute
-{
-    public Type Type { get; private set; }
-
-    public CustomEditorAttribute(Type type)
-    {
-        Type = type;
-    }
-
-    public static Dictionary<Type, Type> typeToEditor = new();
-
-    [OnAssemblyLoad]
-    public static void GenerateLookUp()
-    {
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-        foreach (var type in assembly.GetTypes())
-            if (type != null)
-            {
-                var attribute = type.GetCustomAttribute<CustomEditorAttribute>();
-                if (attribute == null) continue;
-
-                if (typeToEditor.TryGetValue(attribute.Type, out var oldType))
-                    Debug.LogError($"Custom Editor Overwritten. {attribute.Type.Name} already has a custom Editor: {oldType.Name}, being overwritten by: {type.Name}");
-                typeToEditor[attribute.Type] = type;
-            }
-    }
-
-    [OnAssemblyUnload]
-    public static void ClearLookUp()
-    {
-        typeToEditor.Clear();
-    }
-
-    /// <returns>The editor type for that Extension</returns>
-    public static Type? GetEditor(Type type)
-    {
-        if (typeToEditor.TryGetValue(type, out var editorType))
-            return editorType;
-        // If no direct custom editor, look for a base class custom editor
-        foreach (var pair in typeToEditor)
-            if (pair.Key.IsAssignableFrom(type))
-                return pair.Value;
-        return null;
     }
 }
