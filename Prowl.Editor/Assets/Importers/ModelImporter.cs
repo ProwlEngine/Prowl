@@ -174,7 +174,7 @@ public class ModelImporter : ScriptedImporter
             }
 
             GameObject rootNode = GOs[0].Item1;
-            if (Mathf.ApproximatelyEquals(UnitScale , 1f))
+            if (Mathf.ApproximatelyEquals(UnitScale, 1f))
                 rootNode.Transform.localScale = Vector3.one * UnitScale;
 
             // Add Animation Component with all the animations assigned
@@ -236,7 +236,7 @@ public class ModelImporter : ScriptedImporter
     {
         foreach (var m in scene.Materials)
         {
-            Material mat = new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/DefaultUnlit.shader"));
+            Material mat = Material.GetDefaultMaterial();
             string? name = m.HasName ? m.Name : null;
 
             // Albedo
