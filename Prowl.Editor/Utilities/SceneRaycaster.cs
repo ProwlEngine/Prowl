@@ -114,11 +114,11 @@ public static class SceneRaycaster
         objectID |= id.a << 24;
 
         // TODO : Find out how to PROPERLY get the depth texture, since this does not appear to work.
-        // Get depth
-        // float depth = GetDepth(temporary.DepthBuffer, (uint)rayUV.x, (uint)screenScale.y - (uint)rayUV.y, camera.NearClip, camera.FarClip);
-        // position = ray.Position(depth);
+        float depth = GetDepth(temporary.DepthBuffer, (uint)rayUV.x, (uint)screenScale.y - (uint)rayUV.y, camera.NearClip, camera.FarClip);
 
-        position = ray.Position(0);
+        Debug.Log(depth);
+
+        position = ray.Position(depth);
 
         return objectID > 0;
     }
@@ -131,16 +131,15 @@ public static class SceneRaycaster
         switch (texture.Format)
         {
             case PixelFormat.D16_UNorm:
-            case PixelFormat.D16_UNorm_S8_UInt:
-                uint depth16 = texture.GetPixel<Int16>(x, y).ToUInt();
-                depth = (float)((double)depth16 / ushort.MaxValue);
+                depth = UnpackD16UNorm(texture.GetPixel<uint>(x, y));
+                break;
 
+            case PixelFormat.D16_UNorm_S8_UInt:
+                depth = UnpackD16UNormS8UInt(texture.GetPixel<uint>(x, y));
                 break;
 
             case PixelFormat.D24_UNorm_S8_UInt:
-                uint depth24 = texture.GetPixel<Int24>(x, y).ToUInt();
-                depth = (float)((double)depth24 / 16777215);
-
+                depth = UnpackD24UNormS8UInt(texture.GetPixel<uint>(x, y));
                 break;
 
             case PixelFormat.D32_Float:
@@ -149,37 +148,21 @@ public static class SceneRaycaster
                 break;
         }
 
-        //depth = (float)((2.0 * near * far) / (far + near - depth * (far - near)));
-
-        return depth;
+        return (float)((far * near) / (far - (far - near) * depth));
     }
 
-
-    private struct Int16
+    private static float UnpackD16UNorm(uint packed)
     {
-        private readonly byte _l1, _l2;
-
-        public readonly uint ToUInt()
-        {
-            uint value = _l1;
-            value |= (uint)_l2 << 8;
-
-            return value;
-        }
+        return (packed & 0xFFFF) / 65535.0f;
     }
 
-
-    private struct Int24
+    private static float UnpackD16UNormS8UInt(uint packed)
     {
-        private readonly byte _l1, _l2, _l3;
+        return (packed & 0xFFFF) / 65535.0f;
+    }
 
-        public readonly uint ToUInt()
-        {
-            uint value = _l1;
-            value |= (uint)_l2 << 8;
-            value |= (uint)_l3 << 16;
-
-            return value;
-        }
+    private static float UnpackD24UNormS8UInt(uint packed)
+    {
+        return (packed >> 8) / 16777215.0f;
     }
 }
