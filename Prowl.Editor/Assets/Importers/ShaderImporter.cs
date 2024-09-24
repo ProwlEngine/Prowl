@@ -21,7 +21,10 @@ public class ShaderImporter : ScriptedImporter
         string? relPath = AssetDatabase.GetRelativePath(assetPath.FullName);
 
         if (relPath == null)
+        {
             Debug.LogError("Could not find relative shader path.");
+            return;
+        }
 
         DirectoryInfo[] dirs = [];
 
@@ -31,8 +34,6 @@ public class ShaderImporter : ScriptedImporter
             dirs = [Project.Active.DefaultsDirectory, Project.Active.AssetDirectory, Project.Active.PackagesDirectory];
         else if (relPath.StartsWith(Project.Active.PackagesDirectory.Name))
             dirs = [Project.Active.PackagesDirectory, Project.Active.AssetDirectory, Project.Active.DefaultsDirectory];
-        else
-            return;
 
         relPath = relPath.Substring(relPath.IndexOf(Path.DirectorySeparatorChar));
 
