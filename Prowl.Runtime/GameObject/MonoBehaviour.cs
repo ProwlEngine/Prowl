@@ -10,32 +10,64 @@ using Prowl.Runtime.Utils;
 
 namespace Prowl.Runtime;
 
+/// <summary>
+/// Represents the base class for all scripts that attach to GameObjects in the Prowl Game Engine.
+/// MonoBehaviour provides lifecycle methods and coroutine functionality for game object behaviors.
+/// </summary>
 public abstract class MonoBehaviour : EngineObject
 {
-    [SerializeField, HideInInspector]
-    internal protected bool _enabled = true;
-    [SerializeField, HideInInspector]
-    internal protected bool _enabledInHierarchy = true;
+    private static readonly Dictionary<Type, bool> CachedExecuteAlways = new();
 
-    [HideInInspector]
-    public HideFlags hideFlags;
+    [SerializeField, HideInInspector]
+    protected internal bool _enabled = true;
+    [SerializeField, HideInInspector]
+    protected internal bool _enabledInHierarchy = true;
 
     private Dictionary<string, Coroutine> _coroutines = new();
     private Dictionary<string, Coroutine> _endOfFrameCoroutines = new();
     private Dictionary<string, Coroutine> _fixedUpdateCoroutines = new();
 
-
     private GameObject _go;
 
+    /// <summary>
+    /// Gets or sets the hide flags for this MonoBehaviour.
+    /// </summary>
+    [HideInInspector]
+    public HideFlags hideFlags;
+
+    /// <summary>
+    /// Gets the GameObject this MonoBehaviour is attached to.
+    /// </summary>
     public GameObject GameObject => _go;
+
+    /// <summary>
+    /// Gets the Transform component of the GameObject this MonoBehaviour is attached to.
+    /// </summary>
     public Transform Transform => _go.Transform;
 
+    /// <summary>
+    /// Gets or sets whether this MonoBehaviour should execute in edit mode.
+    /// </summary>
     public bool ExecuteAlways { get; internal set; } = false;
+
+    /// <summary>
+    /// Gets whether the Awake method has been called.
+    /// </summary>
     public bool HasAwoken { get; internal set; } = false;
+
+    /// <summary>
+    /// Gets whether the Start method has been called.
+    /// </summary>
     public bool HasStarted { get; internal set; } = false;
 
+    /// <summary>
+    /// Gets the tag of the GameObject this MonoBehaviour is attached to.
+    /// </summary>
     public string Tag => _go.tag;
 
+    /// <summary>
+    /// Gets or sets whether the MonoBehaviour is enabled.
+    /// </summary>
     public bool Enabled
     {
         get { return _enabled; }
@@ -49,10 +81,18 @@ public abstract class MonoBehaviour : EngineObject
         }
     }
 
+    /// <summary>
+    /// Gets whether the MonoBehaviour is enabled in the hierarchy (considering parent objects).
+    /// </summary>
     public bool EnabledInHierarchy => _enabledInHierarchy;
 
     public MonoBehaviour() : base() { }
 
+    /// <summary>
+    /// Compares the tag of the GameObject this MonoBehaviour is attached to with the specified tag.
+    /// </summary>
+    /// <param name="otherTag">The tag to compare against.</param>
+    /// <returns>True if the tags match, false otherwise.</returns>
     public bool CompareTag(string otherTag) => _go.CompareTag(otherTag);
 
     #region Component API
@@ -78,6 +118,10 @@ public abstract class MonoBehaviour : EngineObject
     public IEnumerable<MonoBehaviour> GetComponentsInChildren(Type type, bool includeSelf = true) => GameObject.GetComponentsInChildren(type, includeSelf);
     #endregion
 
+    /// <summary>
+    /// Attaches this MonoBehaviour to the specified GameObject.
+    /// </summary>
+    /// <param name="go">The GameObject to attach to.</param>
     internal void AttachToGameObject(GameObject go)
     {
         _go = go;
@@ -86,6 +130,9 @@ public abstract class MonoBehaviour : EngineObject
         _enabledInHierarchy = isEnabled;
     }
 
+    /// <summary>
+    /// Updates the enabled state based on changes in the hierarchy.
+    /// </summary>
     internal void HierarchyStateChanged()
     {
         bool newState = _enabled && _go.enabledInHierarchy;
@@ -99,6 +146,10 @@ public abstract class MonoBehaviour : EngineObject
         }
     }
 
+    /// <summary>
+    /// Checks if this MonoBehaviour can be destroyed.
+    /// </summary>
+    /// <returns>True if the MonoBehaviour can be destroyed, false otherwise.</returns>
     internal bool CanDestroy()
     {
 #warning "Need to apply this to Component Deletion in Inspector, to make sure not to delete dependant Components"
@@ -111,19 +162,67 @@ public abstract class MonoBehaviour : EngineObject
     }
 
     #region Behaviour
+    
+    // Lifecycle methods
 
+    /// <summary>
+    /// Called when the script instance is being loaded.
+    /// </summary>
     public virtual void Awake() { }
+
+    /// <summary>
+    /// Called when the object becomes enabled and active.
+    /// </summary>
     public virtual void OnEnable() { }
+
+    /// <summary>
+    /// Called when the object becomes disabled or inactive.
+    /// </summary>
     public virtual void OnDisable() { }
+
+    /// <summary>
+    /// Called before the first frame update.
+    /// </summary>
     public virtual void Start() { }
+
+    /// <summary>
+    /// Called at fixed time intervals.
+    /// </summary>
     public virtual void FixedUpdate() { }
+
+    /// <summary>
+    /// Called every frame.
+    /// </summary>
     public virtual void Update() { }
+
+    /// <summary>
+    /// Called every frame after all Update functions have been called.
+    /// </summary>
     public virtual void LateUpdate() { }
+
+    /// <summary>
+    /// Called for rendering and handling GUI events.
+    /// </summary>
     public virtual void DrawGizmos() { }
+
+    /// <summary>
+    /// Called for rendering and handling GUI events when the object is selected.
+    /// </summary>
     public virtual void DrawGizmosSelected() { }
+
+    /// <summary>
+    /// Called when a new level is loaded.
+    /// </summary>
     public virtual void OnLevelWasLoaded() { }
+
+    /// <summary>
+    /// Called when the MonoBehaviour will be destroyed.
+    /// </summary>
     public virtual void OnDestroy() { }
 
+    /// <summary>
+    /// Internal method to handle the Awake lifecycle event.
+    /// </summary>
     internal void InternalAwake()
     {
         if (HasAwoken) return;
@@ -133,6 +232,10 @@ public abstract class MonoBehaviour : EngineObject
         if (EnabledInHierarchy)
             Do(OnEnable);
     }
+
+    /// <summary>
+    /// Internal method to handle the Start lifecycle event.
+    /// </summary>
     internal void InternalStart()
     {
         if (HasStarted) return;
@@ -140,7 +243,10 @@ public abstract class MonoBehaviour : EngineObject
         Start();
     }
 
-    private static readonly Dictionary<Type, bool> CachedExecuteAlways = new();
+    /// <summary>
+    /// Executes the specified action, considering the ExecuteAlways attribute.
+    /// </summary>
+    /// <param name="action">The action to execute.</param>
     internal void Do(Action action)
     {
         bool always;
@@ -163,9 +269,17 @@ public abstract class MonoBehaviour : EngineObject
         }
     }
 
+    /// <summary>
+    /// Clears the cached ExecuteAlways attributes when the assembly is unloaded.
+    /// </summary>
     [OnAssemblyUnload]
     public static void ClearCache() => CachedExecuteAlways.Clear();
 
+    /// <summary>
+    /// Starts a coroutine with the specified method name.
+    /// </summary>
+    /// <param name="methodName">The name of the coroutine method to start.</param>
+    /// <returns>A Coroutine object representing the started coroutine.</returns>
     public Coroutine StartCoroutine(string methodName)
     {
         methodName = methodName.Trim();
@@ -188,6 +302,9 @@ public abstract class MonoBehaviour : EngineObject
         return coroutine;
     }
 
+    /// <summary>
+    /// Stops all running coroutines on this MonoBehaviour.
+    /// </summary>
     public void StopAllCoroutines()
     {
         _coroutines.Clear();
@@ -195,6 +312,10 @@ public abstract class MonoBehaviour : EngineObject
         _fixedUpdateCoroutines.Clear();
     }
 
+    /// <summary>
+    /// Stops the coroutine with the specified method name.
+    /// </summary>
+    /// <param name="methodName">The name of the coroutine method to stop.</param>
     public void StopCoroutine(string methodName)
     {
         methodName = methodName.Trim();
@@ -203,10 +324,16 @@ public abstract class MonoBehaviour : EngineObject
         _fixedUpdateCoroutines.Remove(methodName);
     }
 
+    /// <summary>
+    /// Base class for all yield instructions used in coroutines.
+    /// </summary>
     public class YieldInstruction
     {
     }
 
+    /// <summary>
+    /// Suspends the coroutine execution for the given amount of seconds.
+    /// </summary>
     public class WaitForSeconds : YieldInstruction
     {
         public double Duration { get; private set; }
@@ -216,14 +343,23 @@ public abstract class MonoBehaviour : EngineObject
         }
     }
 
+    /// <summary>
+    /// Waits until the end of the frame after all cameras and GUI is rendered, just before displaying the frame on screen.
+    /// </summary>
     public class WaitForEndOfFrame : YieldInstruction
     {
     }
 
+    /// <summary>
+    /// Waits until the next fixed frame rate update function.
+    /// </summary>
     public class WaitForFixedUpdate : YieldInstruction
     {
     }
 
+    /// <summary>
+    /// Represents a coroutine in the Prowl Game Engine.
+    /// </summary>
     public sealed class Coroutine : YieldInstruction
     {
         internal bool isDone { get; private set; }
@@ -321,10 +457,18 @@ public abstract class MonoBehaviour : EngineObject
         }
     }
 
-    /// <summary> Calls the method named methodName on every MonoBehaviour in this game object or any of its children. </summary>
+    /// <summary>
+    /// Calls the method named methodName on every MonoBehaviour in this game object or any of its children.
+    /// </summary>
+    /// <param name="methodName">The name of the method to call.</param>
+    /// <param name="objs">Optional parameters to pass to the method.</param>
     public void BroadcastMessage(string methodName, params object[] objs) => GameObject.BroadcastMessage(methodName, objs);
 
-    /// <summary> Calls the method named methodName on every MonoBehaviour in this game object. </summary>
+    /// <summary>
+    /// Calls the method named methodName on every MonoBehaviour in this game object.
+    /// </summary>
+    /// <param name="methodName">The name of the method to call.</param>
+    /// <param name="objs">Optional parameters to pass to the method.</param>
     public void SendMessage(string methodName, params object[] objs) => GameObject.SendMessage(methodName, objs);
 
 

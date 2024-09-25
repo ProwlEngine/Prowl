@@ -5,6 +5,9 @@ using System;
 
 namespace Prowl.Runtime;
 
+/// <summary>
+/// Flags that control object destruction, saving, and visibility in the editor.
+/// </summary>
 [Flags]
 public enum HideFlags
 {
