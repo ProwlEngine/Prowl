@@ -20,8 +20,8 @@ public static class EditorGuiManager
 
     public static Gui Gui;
     public static DockContainer? Container;
-    public static EditorWindow DraggingWindow;
-    public static DockNode DragSplitter;
+    public static EditorWindow? DraggingWindow;
+    public static DockNode? DragSplitter;
     private static Vector2 m_DragPos;
     private static double m_StartSplitPos;
 
@@ -208,7 +208,7 @@ public static class EditorGuiManager
                 {
                     if (!Gui.IsBlockedByInteractable(cursorPos))
                     {
-                        DockNode node = Container.Root.TraceSeparator(cursorPos.x, cursorPos.y);
+                        DockNode? node = Container.Root.TraceSeparator(cursorPos.x, cursorPos.y);
                         if (node != null)
                         {
                             node.GetSplitterBounds(out var bmins, out var bmaxs, 4);

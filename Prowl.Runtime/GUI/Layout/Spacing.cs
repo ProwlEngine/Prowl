@@ -39,14 +39,14 @@ public struct Spacing
 
     public static bool operator !=(Spacing s1, Spacing s2)
     {
-        return MathD.ApproximatelyEquals(s1.Left , s2.Left) ||
-               MathD.ApproximatelyEquals(s1.Right , s2.Right) ||
-               MathD.ApproximatelyEquals(s1.Top , s2.Top) ||
-               MathD.ApproximatelyEquals(s1.Bottom , s2.Bottom);
+        return MathD.ApproximatelyEquals(s1.Left, s2.Left) ||
+               MathD.ApproximatelyEquals(s1.Right, s2.Right) ||
+               MathD.ApproximatelyEquals(s1.Top, s2.Top) ||
+               MathD.ApproximatelyEquals(s1.Bottom, s2.Bottom);
     }
 
-    public override bool Equals(object obj)
+    public override bool Equals(object? obj)
     {
-        throw new System.NotImplementedException();
+        throw new NotImplementedException();
     }
 }

@@ -17,8 +17,6 @@ public class SceneViewWindow : EditorWindow
     private static bool LastFocusedCameraChanged;
 
     readonly Camera Cam;
-    Material gridMat;
-    Mesh gridMesh;
     RenderTexture RenderTarget;
     Vector2 WindowCenter;
     Vector2 mouseUV;
@@ -26,7 +24,6 @@ public class SceneViewWindow : EditorWindow
     double fpsTimer;
     double fps;
     double moveSpeed = 1;
-    bool hasStarted = false;
     double camX, camY;
 
     readonly TransformGizmo gizmo;
@@ -121,7 +118,7 @@ public class SceneViewWindow : EditorWindow
                     Matrix4x4.CreateTranslation(new Vector3(gX, 0, gZ)),
                 GridType.XY => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Vector3.forward, Vector3.up) *
                     Matrix4x4.CreateTranslation(new Vector3(gX, gY, 0)),
-                GridType.YZ => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Vector3.up, Vector3.right) *
+                _ => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Vector3.up, Vector3.right) *
                     Matrix4x4.CreateTranslation(new Vector3(0, gY, gZ)),
             };
         }

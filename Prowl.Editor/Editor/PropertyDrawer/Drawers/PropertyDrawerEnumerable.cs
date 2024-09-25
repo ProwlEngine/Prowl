@@ -103,8 +103,8 @@ public abstract class PropertyDrawerEnumerable<T> : PropertyDrawer where T : cla
                             }
 
                             // See if Element has a field called "Name" or "name" and use that as the label
-                            var nameField = ElementType(list).GetField("Name") ?? ElementType(list).GetField("name");
-                            string elementName = ((string)nameField?.GetValue(element)) ?? "Element " + i;
+                            System.Reflection.FieldInfo? nameField = ElementType(list).GetField("Name") ?? ElementType(list).GetField("name");
+                            string? elementName = ((string?)nameField?.GetValue(element)) ?? "Element " + i;
 
                             config |= EditorGUI.PropertyGridConfig.NoBackground;
                             changed |= DrawerAttribute.DrawProperty(gui, elementName, i, ElementType(list), ref element, config);

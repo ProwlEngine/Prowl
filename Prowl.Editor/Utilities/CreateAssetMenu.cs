@@ -20,7 +20,7 @@ public static class CreateAssetMenuHandler
         List<(string, Type)> values = new();
         foreach (var assembly in assemblies)
         {
-            Type[] types = null;
+            Type[]? types = null;
             try
             {
                 types = assembly.GetTypes();

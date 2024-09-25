@@ -639,6 +639,7 @@ public class ModelImporter : ScriptedImporter
         private readonly AssetRef<Material> material;
 
         private MeshMaterialBinding() { }
+
         public MeshMaterialBinding(string meshName, Assimp.Mesh aMesh, AssetRef<Mesh> mesh, AssetRef<Material> material)
         {
             this.meshName = meshName;
