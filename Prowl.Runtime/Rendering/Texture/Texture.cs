@@ -2,6 +2,8 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 using Veldrid;
 
@@ -51,7 +53,6 @@ public abstract class Texture : EngineObject, ISerializable
 
     /// <inheritdoc cref="Veldrid.TextureView"/>
     internal TextureView TextureView { get; private set; }
-
 
     private Veldrid.Texture stagingTexture = null;
 
@@ -170,13 +171,10 @@ public abstract class Texture : EngineObject, ISerializable
             TextureView = null;
     }
 
-    unsafe protected void InternalSetDataPtr(void* data, Vector3Int rectPos, Vector3Int rectSize, uint layer, uint mipLevel)
+    protected unsafe void InternalSetDataPtr(void* data, Vector3Int rectPos, Vector3Int rectSize, uint layer, uint mipLevel)
     {
         if (!OwnsTexture)
             throw new Exception("Cannot modify texture created from external texture object.");
-
-        if (InternalTexture.SampleCount != TextureSampleCount.Count1)
-            throw new Exception("Setting data manually on a multisampled texture is not allowed.");
 
         ValidateRectOperation(rectPos, rectSize, layer, mipLevel);
 
@@ -193,7 +191,7 @@ public abstract class Texture : EngineObject, ISerializable
             Graphics.InternalCopyTexture(stagingTexture, InternalTexture, mipLevel, layer, true);
     }
 
-    unsafe protected void InternalSetData<T>(Span<T> data, Vector3Int rectPos, Vector3Int rectSize, uint layer, uint mipLevel) where T : unmanaged
+    protected unsafe void InternalSetData<T>(Span<T> data, Vector3Int rectPos, Vector3Int rectSize, uint layer, uint mipLevel) where T : unmanaged
     {
         if (data.Length * sizeof(T) < rectSize.x * rectSize.y * rectSize.z)
             throw new ArgumentException("Not enough pixel data", nameof(data));
@@ -202,7 +200,7 @@ public abstract class Texture : EngineObject, ISerializable
             InternalSetDataPtr(ptr, rectPos, rectSize, layer, mipLevel);
     }
 
-    unsafe protected void InternalCopyDataPtr(void* dataPtr, uint dataSize, out uint rowPitch, out uint depthPitch, uint arrayLayer, uint mipLevel)
+    protected unsafe void InternalCopyDataPtr(void* dataPtr, uint dataSize, out uint rowPitch, out uint depthPitch, uint arrayLayer, uint mipLevel)
     {
         EnsureStagingTexture();
 
@@ -221,7 +219,7 @@ public abstract class Texture : EngineObject, ISerializable
         Graphics.Device.Unmap(stagingTexture, subresource);
     }
 
-    unsafe protected void InternalCopyData<T>(Span<T> data, uint arrayLayer, uint mipLevel) where T : unmanaged
+    protected unsafe void InternalCopyData<T>(Span<T> data, uint arrayLayer, uint mipLevel) where T : unmanaged
     {
         EnsureStagingTexture();
 
@@ -232,7 +230,7 @@ public abstract class Texture : EngineObject, ISerializable
 
         MappedResource resource = Graphics.Device.Map(stagingTexture, MapMode.Read, subresource);
 
-        if (data.Length * sizeof(T) < resource.SizeInBytes)
+        if ((data.Length * sizeof(T)) < resource.SizeInBytes)
             throw new ArgumentException("Insufficient space to store the requested pixel data", nameof(data));
 
         fixed (void* ptr = data)
@@ -241,13 +239,52 @@ public abstract class Texture : EngineObject, ISerializable
         Graphics.Device.Unmap(stagingTexture, subresource);
     }
 
+    protected unsafe T InternalCopyPixel<T>(Vector3Int pixelPosition, uint arrayLayer, uint mipLevel) where T : unmanaged
+    {
+        ValidateRectOperation(pixelPosition, new Vector3Int(1, 1, 1), arrayLayer, mipLevel);
+
+        EnsureStagingTexture();
+
+        if (stagingTexture != InternalTexture)
+            Graphics.InternalCopyTexture(InternalTexture, stagingTexture, mipLevel, arrayLayer, true);
+
+        uint subresource = (MipLevels * arrayLayer) + mipLevel;
+
+        MappedResource resource = Graphics.Device.Map(stagingTexture, MapMode.Read, subresource);
+
+        uint width = GetMipDimension(InternalTexture.Width, mipLevel);
+        uint height = GetMipDimension(InternalTexture.Height, mipLevel);
+        uint depth = GetMipDimension(InternalTexture.Depth, mipLevel);
+
+        double pX = (double)pixelPosition.x / InternalTexture.Width;
+        double pY = (double)pixelPosition.y / InternalTexture.Height;
+        double pZ = (double)pixelPosition.z / InternalTexture.Depth;
+
+        uint pixelX = (uint)Math.Floor(pX * width);
+        uint pixelY = (uint)Math.Floor(pY * height);
+        uint pixelZ = (uint)Math.Floor(pZ * depth);
+
+        uint offset = pixelX + (pixelY * width) + (pixelZ * width * height);
+
+        T data = default;
+
+        long copySize = Math.Min(sizeof(T), PixelFormatBytes(InternalTexture.Format));
+        Buffer.MemoryCopy((void*)(resource.Data + (offset * sizeof(T))), Unsafe.AsPointer(ref data), sizeof(T), copySize);
+
+        Graphics.Device.Unmap(stagingTexture, subresource);
+
+        return data;
+    }
+
+    public void Apply()
+    {
+
+    }
+
     // Ensure that a CPU-accessible staging texture matching the internal one exists
     // If the internal texture is already a staging texture, uses itself.
     private void EnsureStagingTexture()
     {
-        if (InternalTexture.SampleCount != TextureSampleCount.Count1)
-            throw new Exception("Cannot modify or read a multisampled texture. Resolve this multisampled texture to another texture to access texture data.");
-
         if (InternalTexture.Usage.HasFlag(TextureUsage.Staging))
         {
             stagingTexture = InternalTexture;

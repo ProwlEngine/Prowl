@@ -319,8 +319,8 @@ public class PackageManagerWindow : EditorWindow
 
         try
         {
-            WebClient wc = new WebClient();
-            byte[] bytes = await wc.DownloadDataTaskAsync(url);
+            HttpClient wc = new HttpClient();
+            byte[] bytes = await wc.GetByteArrayAsync(url);
             MemoryStream ms = new MemoryStream(bytes);
             return Texture2DLoader.FromStream(ms);
         }

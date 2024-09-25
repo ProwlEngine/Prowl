@@ -25,7 +25,7 @@ public class IAssetRef_PropertyDrawer : PropertyDrawer
 
         gui.CurrentNode.Layout(LayoutType.Row).ScaleChildren();
 
-        var value = (IAssetRef)targetValue;
+        IAssetRef value = (IAssetRef)targetValue;
 
         bool changed = false;
         ulong assetDrawerID = ActiveGUI.CurrentNode.ID;

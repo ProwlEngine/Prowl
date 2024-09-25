@@ -17,8 +17,6 @@ public class SceneViewWindow : EditorWindow
     private static bool LastFocusedCameraChanged;
 
     readonly Camera Cam;
-    Material gridMat;
-    Mesh gridMesh;
     RenderTexture RenderTarget;
     Vector2 WindowCenter;
     Vector2 mouseUV;
@@ -26,7 +24,6 @@ public class SceneViewWindow : EditorWindow
     double fpsTimer;
     double fps;
     double moveSpeed = 1;
-    bool hasStarted = false;
     double camX, camY;
 
     readonly TransformGizmo gizmo;
@@ -121,7 +118,7 @@ public class SceneViewWindow : EditorWindow
                     Matrix4x4.CreateTranslation(new Vector3(gX, 0, gZ)),
                 GridType.XY => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Vector3.forward, Vector3.up) *
                     Matrix4x4.CreateTranslation(new Vector3(gX, gY, 0)),
-                GridType.YZ => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Vector3.up, Vector3.right) *
+                _ => Matrix4x4.CreateLookToLeftHanded(Vector3.zero, Vector3.up, Vector3.right) *
                     Matrix4x4.CreateTranslation(new Vector3(0, gY, gZ)),
             };
         }
@@ -187,9 +184,7 @@ public class SceneViewWindow : EditorWindow
             Cam.projectionType = isOrtho ? Camera.ProjectionType.Orthographic : Camera.ProjectionType.Perspective;
         }
 
-        mouseUV = (gui.PointerPos - imagePos) / imageSize;
-        // Flip Y
-        mouseUV.y = 1.0 - mouseUV.y;
+        mouseUV = gui.PointerPos - imagePos;
 
         Interactable viewportInteractable = gui.GetInteractable();
 
@@ -199,20 +194,20 @@ public class SceneViewWindow : EditorWindow
         {
             if (gui.IsPointerClick(MouseButton.Left) && !gizmo.IsOver && !viewManipulator.IsOver)
             {
-                SceneRaycaster.MeshHitInfo hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+                GameObject? hit = SceneRaycaster.GetObject(Cam, mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height));
 
                 // If the Scene Camera has no Render Graph, the gBuffer may not be initialized
-                if (hit.gameObject != null)
+                if (hit != null)
                 {
-                    if (!hit.gameObject.IsPartOfPrefab || gui.IsPointerDoubleClick(MouseButton.Left))
+                    if (!hit.IsPartOfPrefab || gui.IsPointerDoubleClick(MouseButton.Left))
                     {
-                        HierarchyWindow.SelectHandler.Select(new WeakReference(hit.gameObject));
-                        HierarchyWindow.Ping(hit.gameObject);
+                        HierarchyWindow.SelectHandler.Select(new WeakReference(hit));
+                        HierarchyWindow.Ping(hit);
                     }
                     else
                     {
                         // Find Prefab go.IsPrefab
-                        Transform prefab = hit.gameObject.Transform;
+                        Transform prefab = hit.Transform;
                         while (prefab.parent != null)
                         {
                             prefab = prefab.parent;
@@ -413,12 +408,12 @@ public class SceneViewWindow : EditorWindow
             GameObject go = (GameObject)EngineObject.Instantiate(original, true);
             if (go != null)
             {
-                SceneRaycaster.MeshHitInfo hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+                Vector3? hit = SceneRaycaster.GetPosition(Cam, mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height));
 
-                if (hit.worldPosition == Vector3.zero)
+                if (hit == null)
                     go.Transform.position = Cam.Transform.position + Cam.Transform.forward * 10;
                 else
-                    go.Transform.position = hit.worldPosition;
+                    go.Transform.position = hit.Value;
             }
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
         }
@@ -426,14 +421,15 @@ public class SceneViewWindow : EditorWindow
         {
             GameObject go = prefab.Instantiate();
             GameObject t = go;
+
             if (t != null)
             {
-                SceneRaycaster.MeshHitInfo hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+                Vector3? hit = SceneRaycaster.GetPosition(Cam, mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height));
 
-                if (hit.worldPosition == Vector3.zero)
+                if (hit == null)
                     t.Transform.position = Cam.Transform.position + Cam.Transform.forward * 10;
                 else
-                    go.Transform.position = hit.worldPosition;
+                    go.Transform.position = hit.Value;
             }
 
             HierarchyWindow.SelectHandler.SetSelection(new WeakReference(go));
@@ -444,12 +440,12 @@ public class SceneViewWindow : EditorWindow
         }
         else if (DragnDrop.Drop(out Material? material))
         {
-            SceneRaycaster.MeshHitInfo hit = SceneRaycaster.Raycast(Cam.ScreenPointToRay(mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height)));
+            GameObject? hit = SceneRaycaster.GetObject(Cam, mouseUV, new Vector2(RenderTarget.Width, RenderTarget.Height));
 
-            if (hit.gameObject != null)
+            if (hit != null)
             {
                 // Look for a MeshRenderer
-                MeshRenderer? renderer = hit.gameObject.GetComponent<MeshRenderer>();
+                MeshRenderer? renderer = hit.GetComponent<MeshRenderer>();
                 if (renderer != null)
                     renderer.Material = material;
             }

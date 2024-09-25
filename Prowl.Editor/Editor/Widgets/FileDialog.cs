@@ -334,7 +334,7 @@ public class FileDialog : EditorWindow
     }
 
 
-    private static string hoveringPath;
+    private static string s_hoveringPath = "";
 
     private void DrawEntries(bool center, bool ignoreFiles, Func<FileSystemInfo, string> name)
     {
@@ -348,7 +348,7 @@ public class FileDialog : EditorWindow
             {
                 if (gui.IsNodeHovered())
                 {
-                    hoveringPath = directory.FullName;
+                    s_hoveringPath = directory.FullName;
 
                     if (gui.IsPointerClick())
                     {
@@ -370,10 +370,10 @@ public class FileDialog : EditorWindow
 
                 if (Dialog.resultName == directory.FullName)
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
-                else if (hoveringPath == directory.FullName)
+                else if (s_hoveringPath == directory.FullName)
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering * 0.6f);
 
-                bool hovered = gui.IsNodeHovered() || hoveringPath == directory.FullName || Dialog.resultName == directory.FullName;
+                bool hovered = gui.IsNodeHovered() || s_hoveringPath == directory.FullName || Dialog.resultName == directory.FullName;
 
                 if (!center)
                 {
@@ -396,7 +396,7 @@ public class FileDialog : EditorWindow
             using (gui.Node("name", index++).ExpandWidth().Height(ItemSize).Clip().Enter())
             {
                 if (gui.IsNodeHovered())
-                    hoveringPath = file.FullName;
+                    s_hoveringPath = file.FullName;
 
                 if (gui.IsNodePressed())
                 {
@@ -406,10 +406,10 @@ public class FileDialog : EditorWindow
 
                 if (Dialog.resultName == file.FullName)
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Highlighted);
-                else if (hoveringPath == file.FullName)
+                else if (s_hoveringPath == file.FullName)
                     gui.Draw2D.DrawRectFilled(gui.CurrentNode.LayoutData.Rect, EditorStylePrefs.Instance.Hovering * 0.6f);
 
-                bool hovered = gui.IsNodeHovered() || hoveringPath == file.FullName || Dialog.resultName == file.FullName;
+                bool hovered = gui.IsNodeHovered() || s_hoveringPath == file.FullName || Dialog.resultName == file.FullName;
 
                 if (!center)
                 {

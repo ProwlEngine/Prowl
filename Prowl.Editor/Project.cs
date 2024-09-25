@@ -34,7 +34,7 @@ public class Project
     public FileInfo Editor_Assembly_Proj;
     public FileInfo Editor_Assembly_DLL;
 
-    public static event Action OnProjectChanged;
+    public static event Action? OnProjectChanged;
 
     public static Project? Active { get; private set; }
     public static bool HasProject => Active is not null;

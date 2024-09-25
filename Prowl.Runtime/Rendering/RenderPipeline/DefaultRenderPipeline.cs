@@ -98,8 +98,10 @@ public class DefaultRenderPipeline : RenderPipeline
         {
             buffer.SetMaterial(batch.material);
 
-            foreach (IRenderable renderable in batch.renderables)
+            foreach (int renderIndex in batch.renderIndices)
             {
+                IRenderable renderable = GetRenderable(renderIndex);
+
                 //if (CullRenderable(renderable, frustum))
                 //    continue;
 

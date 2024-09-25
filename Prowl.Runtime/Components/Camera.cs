@@ -83,9 +83,9 @@ public class Camera : MonoBehaviour
         Matrix4x4 proj;
 
         if (projectionType == ProjectionType.Orthographic)
-            proj = System.Numerics.Matrix4x4.CreateOrthographicLeftHanded(OrthographicSize, OrthographicSize, NearClip, FarClip).ToDouble();
+            proj = Matrix4x4.CreateOrthographicLeftHanded(OrthographicSize, OrthographicSize, NearClip, FarClip);
         else
-            proj = System.Numerics.Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(FieldOfView.ToRad(), (float)(resolution.x / resolution.y), NearClip, FarClip).ToDouble();
+            proj = Matrix4x4.CreatePerspectiveFieldOfViewLeftHanded(FieldOfView.ToRad(), (float)(resolution.x / resolution.y), NearClip, FarClip);
 
         if (accomodateGPUCoordinateSystem)
             proj = Graphics.GetGPUProjectionMatrix(proj);

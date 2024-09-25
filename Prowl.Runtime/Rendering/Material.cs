@@ -12,6 +12,19 @@ namespace Prowl.Runtime;
 
 public sealed class Material : EngineObject
 {
+    private static Material s_defaultMaterial;
+
+    public static Material GetDefaultMaterial()
+    {
+        if (s_defaultMaterial == null)
+        {
+            s_defaultMaterial = new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/DefaultUnlit.shader"));
+            s_defaultMaterial.SetColor("_MainColor", Color.white);
+        }
+
+        return s_defaultMaterial;
+    }
+
     public AssetRef<Shader> Shader;
     public PropertyState Properties;
 

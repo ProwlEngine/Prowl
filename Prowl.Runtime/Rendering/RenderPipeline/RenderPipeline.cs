@@ -26,28 +26,33 @@ public struct RenderingData
 public struct RenderBatch
 {
     public Material material;
-    public List<IRenderable> renderables;
+    public List<int> renderIndices;
 }
 
 
 public abstract class RenderPipeline : EngineObject
 {
-    private static readonly Dictionary<Material, List<IRenderable>> s_batchedRenderables = [];
+    private static readonly List<IRenderable> s_renderables = [];
+    public static int RenderableCount => s_renderables.Count;
+
+    private static readonly Dictionary<Material, List<int>> s_batchedRenderables = [];
 
     private static readonly List<IRenderableLight> s_lights = [];
 
 
     public static void AddRenderable(IRenderable renderable)
     {
+        s_renderables.Add(renderable);
+
         Material material = renderable.GetMaterial();
 
-        if (!s_batchedRenderables.TryGetValue(material, out List<IRenderable> renderables))
+        if (!s_batchedRenderables.TryGetValue(material, out List<int> renderables))
         {
             renderables = [];
             s_batchedRenderables.Add(material, renderables);
         }
 
-        renderables.Add(renderable);
+        renderables.Add(s_renderables.Count - 1);
     }
 
 
@@ -59,22 +64,31 @@ public abstract class RenderPipeline : EngineObject
 
     public static void ClearRenderables()
     {
-        foreach (List<IRenderable> batch in s_batchedRenderables.Values)
-            batch.Clear();
+        s_renderables.Clear(); // Clear renderables
 
-        s_lights.Clear();
+        foreach (List<int> batch in s_batchedRenderables.Values)
+            batch.Clear(); // Clear batch indices
+
+        s_batchedRenderables.Clear(); // Clear batch lookup
+        s_lights.Clear(); // Clear lights
     }
 
 
     public static IEnumerable<RenderBatch> EnumerateBatches()
     {
-        return s_batchedRenderables.Select(x => Unsafe.As<KeyValuePair<Material, List<IRenderable>>, RenderBatch>(ref x));
+        return s_batchedRenderables.Select(x => Unsafe.As<KeyValuePair<Material, List<int>>, RenderBatch>(ref x));
     }
 
 
-    public static List<IRenderable> GetRenderables(Material material)
+    public static IRenderable GetRenderable(int index)
     {
-        return s_batchedRenderables[material];
+        return s_renderables[index];
+    }
+
+
+    public static IEnumerable<IRenderable> GetRenderables()
+    {
+        return s_renderables;
     }
 
 
