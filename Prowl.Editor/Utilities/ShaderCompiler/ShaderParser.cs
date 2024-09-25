@@ -63,7 +63,7 @@ public static partial class ShaderParser
 
         string name = "";
 
-        List<ShaderProperty> properties = [];
+        List<SerializedShaderProperty>? properties = null;
         ParsedPass? globalDefaults = null;
         List<ParsedPass> parsedPasses = [];
 
@@ -108,7 +108,7 @@ public static partial class ShaderParser
                 }
             }
         }
-        catch (ParseException ex)
+        catch (Exception ex) when (ex is ParseException || ex is InvalidDataException || ex is EndOfStreamException)
         {
             LogCompilationError(ex.Message, includer, tokenizer.CurrentLine, tokenizer.CurrentColumn);
             return false;
@@ -167,7 +167,7 @@ public static partial class ShaderParser
             passes[i] = new ShaderPass(parsedPass.Name, passDesc, variants);
         }
 
-        shader = new Runtime.Shader(name, [.. properties], passes);
+        shader = new Runtime.Shader(name, [.. (properties ?? [])], passes);
 
         return true;
     }
@@ -276,34 +276,95 @@ public static partial class ShaderParser
     }
 
 
-    private static List<ShaderProperty> ParseProperties(Tokenizer<ShaderToken> tokenizer)
+    private static List<SerializedShaderProperty> ParseProperties(Tokenizer<ShaderToken> tokenizer)
     {
-        List<ShaderProperty> properties = [];
+        List<SerializedShaderProperty> properties = [];
 
         ExpectToken(tokenizer, ShaderToken.OpenCurlBrace);
 
         while (tokenizer.MoveNext() && tokenizer.TokenType != ShaderToken.CloseCurlBrace)
         {
-            ShaderProperty property;
+        ParseProperty:
 
-            property.DefaultProperty = "";
-            property.Name = tokenizer.Token.ToString();
+            SerializedShaderProperty property;
+
+            property.name = tokenizer.Token.ToString();
 
             ExpectToken(tokenizer, ShaderToken.OpenParen);
 
             ExpectToken(tokenizer, ShaderToken.Identifier);
-            property.DisplayName = tokenizer.ParseQuotedStringValue();
+            property.displayName = tokenizer.ParseQuotedStringValue();
 
             ExpectToken(tokenizer, ShaderToken.Comma);
             ExpectToken(tokenizer, ShaderToken.Identifier);
-            property.PropertyType = EnumParse<ShaderPropertyType>(tokenizer.Token.ToString(), "property type");
+            property.propertyType = EnumParse<ShaderPropertyType>(tokenizer.Token.ToString(), "property type");
 
             ExpectToken(tokenizer, ShaderToken.CloseParen);
 
+            property.defaultProperty = property.propertyType switch
+            {
+                ShaderPropertyType.Float => 0,
+                ShaderPropertyType.Vector2 => Vector2.zero,
+                ShaderPropertyType.Vector3 => Vector3.zero,
+                ShaderPropertyType.Vector4 => Vector4.zero,
+                ShaderPropertyType.Color => Color.white,
+                ShaderPropertyType.Matrix => Matrix4x4.Identity,
+                ShaderPropertyType.Texture2D => new AssetRef<Texture2D>(Texture2D.EmptyWhite),
+                ShaderPropertyType.Texture3D => new AssetRef<Texture3D>(Texture3D.EmptyWhite),
+                _ => throw new Exception($"Invalid property type: {property.propertyType}")
+            };
+
             properties.Add(property);
+
+            if (tokenizer.MoveNext())
+            {
+                if (tokenizer.TokenType == ShaderToken.Equals)
+                {
+                    property.defaultProperty = ParseDefault(tokenizer, property.propertyType);
+                    properties[^1] = property;
+                }
+                else if (tokenizer.TokenType == ShaderToken.CloseCurlBrace)
+                    break;
+                else
+                    goto ParseProperty;
+            }
         }
 
         return properties;
+    }
+
+
+    private static object? ParseDefault(Tokenizer<ShaderToken> tokenizer, ShaderPropertyType type)
+    {
+        switch (type)
+        {
+            case ShaderPropertyType.Float:
+                ExpectToken(tokenizer, ShaderToken.Identifier);
+                return DoubleParse(tokenizer.Token, "decimal value");
+
+            case ShaderPropertyType.Vector2:
+                double[] v2 = VectorParse(tokenizer, 2);
+                return new Vector2(v2[0], v2[1]);
+
+            case ShaderPropertyType.Vector3:
+                double[] v3 = VectorParse(tokenizer, 3);
+                return new Vector3(v3[0], v3[1], v3[2]);
+
+            case ShaderPropertyType.Color:
+            case ShaderPropertyType.Vector4:
+                double[] v4 = VectorParse(tokenizer, 4);
+                return new Vector4(v4[0], v4[1], v4[2], v4[3]);
+
+            case ShaderPropertyType.Matrix:
+                throw new ParseException("Matrix properties are only assignable programatically and cannot be assigned defaults");
+
+            case ShaderPropertyType.Texture2D:
+            case ShaderPropertyType.Texture3D:
+                ExpectToken(tokenizer, ShaderToken.Identifier);
+                return TextureParse(tokenizer.ParseQuotedStringValue());
+        }
+
+        return null;
     }
 
 
@@ -819,6 +880,54 @@ public static partial class ShaderParser
             return value;
 
         throw new ParseException($"Error parsing {fieldName}.");
+    }
+
+
+    private static double DoubleParse(ReadOnlySpan<char> text, string fieldName)
+    {
+        if (double.TryParse(text, out double value))
+            return value;
+
+        throw new ParseException($"Error parsing {fieldName}.");
+    }
+
+
+    private static double[] VectorParse(Tokenizer<ShaderToken> tokenizer, int dimensions)
+    {
+        ExpectToken(tokenizer, ShaderToken.OpenParen);
+
+        double[] vector = new double[dimensions];
+        int count = 0;
+
+        while (tokenizer.MoveNext() && tokenizer.TokenType != ShaderToken.CloseParen)
+        {
+            vector[count] = DoubleParse(tokenizer.Token, "vector element");
+
+            if (count != dimensions - 1)
+                ExpectToken(tokenizer, ShaderToken.Comma);
+
+            if (count >= dimensions)
+                throw new ParseException($"Error parsing vector: expected {dimensions} dimensions, found {count}+.");
+
+            count++;
+        }
+
+        if (count < dimensions - 1)
+            throw new ParseException($"Error parsing vector: expected {dimensions} dimensions, found {count}.");
+
+        return vector;
+    }
+
+
+    private static Runtime.Texture TextureParse(string texture, bool dim2D = true)
+    {
+        return texture switch
+        {
+            "white" => dim2D ? Texture2D.EmptyWhite : Texture3D.EmptyWhite,
+            "gray" or "grey" => dim2D ? Texture2D.EmptyWhite : Texture3D.EmptyWhite,
+            "clear" => dim2D ? Texture2D.Empty : Texture3D.Empty,
+            _ => throw new ParseException($"Unknown texture default: {texture}")
+        };
     }
 
 

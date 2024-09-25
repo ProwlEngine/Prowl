@@ -241,21 +241,21 @@ public class ModelImporter : ScriptedImporter
 
             // Albedo
             if (m.HasColorDiffuse)
-                mat.SetColor("_MainColor", new Color(m.ColorDiffuse.R, m.ColorDiffuse.G, m.ColorDiffuse.B, m.ColorDiffuse.A));
+                mat.SetProperty("_MainColor", new Color(m.ColorDiffuse.R, m.ColorDiffuse.G, m.ColorDiffuse.B, m.ColorDiffuse.A));
             else
-                mat.SetColor("_MainColor", Color.white);
+                mat.SetProperty("_MainColor", Color.white);
 
             // Emissive Color
             if (m.HasColorEmissive)
             {
-                mat.SetFloat("_EmissionIntensity", 1f);
-                mat.SetColor("_EmissiveColor", new Color(m.ColorEmissive.R, m.ColorEmissive.G, m.ColorEmissive.B, m.ColorEmissive.A));
+                mat.SetProperty("_EmissionIntensity", 1f);
+                mat.SetProperty("_EmissiveColor", new Color(m.ColorEmissive.R, m.ColorEmissive.G, m.ColorEmissive.B, m.ColorEmissive.A));
             }
             else
             {
 
-                mat.SetFloat("_EmissionIntensity", 0f);
-                mat.SetColor("_EmissiveColor", Color.black);
+                mat.SetProperty("_EmissionIntensity", 0f);
+                mat.SetProperty("_EmissiveColor", Color.black);
             }
 
             // Texture
@@ -265,10 +265,10 @@ public class ModelImporter : ScriptedImporter
                 if (FindTextureFromPath(m.TextureDiffuse.FilePath, parentDir, out var file))
                     LoadTextureIntoMesh("_AlbedoTex", ctx, file, mat);
                 else
-                    mat.SetTexture("_AlbedoTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")).Res);
+                    mat.SetProperty("_AlbedoTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")).Res);
             }
             else
-                mat.SetTexture("_AlbedoTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")).Res);
+                mat.SetProperty("_AlbedoTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/grid.png")).Res);
 
             // Normal Texture
             if (m.HasTextureNormal)
@@ -277,10 +277,10 @@ public class ModelImporter : ScriptedImporter
                 if (FindTextureFromPath(m.TextureNormal.FilePath, parentDir, out var file))
                     LoadTextureIntoMesh("_NormalTex", ctx, file, mat);
                 else
-                    mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")).Res);
+                    mat.SetProperty("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")).Res);
             }
             else
-                mat.SetTexture("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")).Res);
+                mat.SetProperty("_NormalTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_normal.png")).Res);
 
             //AO, Roughness, Metallic Texture
             if (m.GetMaterialTexture(TextureType.Unknown, 0, out var surface))
@@ -289,10 +289,10 @@ public class ModelImporter : ScriptedImporter
                 if (FindTextureFromPath(surface.FilePath, parentDir, out var file))
                     LoadTextureIntoMesh("_SurfaceTex", ctx, file, mat);
                 else
-                    mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")).Res);
+                    mat.SetProperty("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")).Res);
             }
             else
-                mat.SetTexture("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")).Res);
+                mat.SetProperty("_SurfaceTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_surface.png")).Res);
 
             // Emissive Texture
             if (m.HasTextureEmissive)
@@ -300,14 +300,14 @@ public class ModelImporter : ScriptedImporter
                 name ??= "Mat_" + Path.GetFileNameWithoutExtension(m.TextureEmissive.FilePath);
                 if (FindTextureFromPath(m.TextureEmissive.FilePath, parentDir, out var file))
                 {
-                    mat.SetFloat("_EmissionIntensity", 1f);
+                    mat.SetProperty("_EmissionIntensity", 1f);
                     LoadTextureIntoMesh("_EmissiveTex", ctx, file, mat);
                 }
                 else
-                    mat.SetTexture("_EmissiveTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")).Res);
+                    mat.SetProperty("_EmissiveTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")).Res);
             }
             else
-                mat.SetTexture("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")).Res);
+                mat.SetProperty("_EmissionTex", new AssetRef<Texture2D>(AssetDatabase.GuidFromRelativePath("Defaults/default_emission.png")).Res);
 
             name ??= "StandardMat";
             mat.Name = name;
@@ -589,7 +589,7 @@ public class ModelImporter : ScriptedImporter
         if (AssetDatabase.TryGetGuid(file, out var guid))
         {
             // We have this texture as an asset, Juse use the asset we dont need to load it
-            mat.SetTexture(name, new AssetRef<Texture2D>(guid).Res);
+            mat.SetProperty(name, new AssetRef<Texture2D>(guid).Res);
         }
         else
         {
@@ -603,7 +603,7 @@ public class ModelImporter : ScriptedImporter
             //// so lets load it in as a sub asset to this object
             //Texture2D tex = new Texture2D(file.FullName);
             //ctx.AddSubObject(tex);
-            //mat.SetTexture(name, new AssetRef<Texture2D>(guid));
+            //mat.SetProperty(name, new AssetRef<Texture2D>(guid));
         }
     }
 

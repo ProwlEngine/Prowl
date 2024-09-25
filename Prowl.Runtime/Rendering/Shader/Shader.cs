@@ -9,6 +9,7 @@ using Veldrid;
 
 namespace Prowl.Runtime;
 
+
 public enum ShaderPropertyType
 {
     Float,
@@ -21,36 +22,38 @@ public enum ShaderPropertyType
     Texture3D
 }
 
-public struct ShaderProperty
+
+public struct SerializedShaderProperty
 {
-    public string Name;
-    public string DisplayName;
-    public ShaderPropertyType PropertyType;
-    public string DefaultProperty;
+    public string name;
+    public string displayName;
+    public ShaderPropertyType propertyType;
+    public object defaultProperty;
 }
+
 
 public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 {
     [SerializeField, HideInInspector]
-    private readonly ShaderProperty[] properties;
-    public IEnumerable<ShaderProperty> Properties => properties;
+    private readonly SerializedShaderProperty[] _properties;
+    public IEnumerable<SerializedShaderProperty> Properties => _properties;
 
 
     [SerializeField, HideInInspector]
-    private readonly ShaderPass[] passes;
-    public IEnumerable<ShaderPass> Passes => passes;
+    private readonly ShaderPass[] _passes;
+    public IEnumerable<ShaderPass> Passes => _passes;
 
 
-    private readonly Dictionary<string, int> nameIndexLookup = new();
-    private readonly Dictionary<string, List<int>> tagIndexLookup = new();
+    private readonly Dictionary<string, int> _nameIndexLookup = new();
+    private readonly Dictionary<string, List<int>> _tagIndexLookup = new();
 
 
     internal Shader() : base("New Shader") { }
 
-    public Shader(string name, ShaderProperty[] properties, ShaderPass[] passes) : base(name)
+    public Shader(string name, SerializedShaderProperty[] properties, ShaderPass[] passes) : base(name)
     {
-        this.properties = properties;
-        this.passes = passes;
+        this._properties = properties;
+        this._passes = passes;
 
         OnAfterDeserialize();
     }
@@ -59,8 +62,8 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
     {
         if (!string.IsNullOrWhiteSpace(pass.Name))
         {
-            if (!nameIndexLookup.TryAdd(pass.Name, index))
-                throw new InvalidOperationException($"Pass with name {pass.Name} conflicts with existing pass at index {nameIndexLookup[pass.Name]}. Ensure no two passes have equal names.");
+            if (!_nameIndexLookup.TryAdd(pass.Name, index))
+                throw new InvalidOperationException($"Pass with name {pass.Name} conflicts with existing pass at index {_nameIndexLookup[pass.Name]}. Ensure no two passes have equal names.");
         }
 
         foreach (var pair in pass.Tags)
@@ -68,21 +71,21 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
             if (string.IsNullOrWhiteSpace(pair.Key))
                 continue;
 
-            if (!tagIndexLookup.TryGetValue(pair.Key, out _))
-                tagIndexLookup.Add(pair.Key, []);
+            if (!_tagIndexLookup.TryGetValue(pair.Key, out _))
+                _tagIndexLookup.Add(pair.Key, []);
 
-            tagIndexLookup[pair.Key].Add(index);
+            _tagIndexLookup[pair.Key].Add(index);
         }
     }
 
     public ShaderPass GetPass(int passIndex)
     {
-        return passes[passIndex];
+        return _passes[passIndex];
     }
 
     public int GetPassIndex(string passName)
     {
-        return nameIndexLookup.GetValueOrDefault(passName, -1);
+        return _nameIndexLookup.GetValueOrDefault(passName, -1);
     }
 
     public int? GetPassWithTag(string tag, string? tagValue = null)
@@ -95,11 +98,11 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
     {
         List<int> passes = [];
 
-        if (tagIndexLookup.TryGetValue(tag, out List<int> passesWithTag))
+        if (_tagIndexLookup.TryGetValue(tag, out List<int> passesWithTag))
         {
             foreach (int index in passesWithTag)
             {
-                ShaderPass pass = this.passes[index];
+                ShaderPass pass = this._passes[index];
 
                 if (pass.HasTag(tag, tagValue))
                     passes.Add(index);
@@ -113,8 +116,8 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 
     public void OnAfterDeserialize()
     {
-        for (int i = 0; i < passes.Length; i++)
-            RegisterPass(passes[i], i);
+        for (int i = 0; i < _passes.Length; i++)
+            RegisterPass(_passes[i], i);
     }
 
     public string GetStringRepresentation()
@@ -125,9 +128,9 @@ public sealed class Shader : EngineObject, ISerializationCallbackReceiver
 
         builder.Append("Properties\n{\n");
 
-        foreach (ShaderProperty property in Properties)
+        foreach (SerializedShaderProperty property in Properties)
         {
-            builder.Append($"\t{property.Name}(\"{property.DisplayName}\", {property.PropertyType})\n");
+            builder.Append($"\t{property.name}(\"{property.displayName}\", {property.propertyType})\n");
         }
 
         builder.Append("}\n\n");

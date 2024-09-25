@@ -1,5 +1,11 @@
 ﻿Shader "Default/TestShader"
 
+Properties
+{
+    _AlbedoTex("Albedo Texture", Texture2D)
+    _MainColor("Main Color", Color)
+}
+
 Pass "TestShader"
 {
     Tags { "RenderOrder" = "Opaque" }

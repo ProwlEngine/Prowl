@@ -12,7 +12,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable, IRenderable
     public AssetRef<Mesh> Mesh;
     public AssetRef<Material> Material;
     public Color MainColor = Color.white;
-    public PropertyBlock Properties;
+    public PropertyState Properties;
 
     public AssetRef<Texture2D> IconTest;
 
@@ -72,7 +72,7 @@ public class MeshRenderer : MonoBehaviour, ISerializable, IRenderable
     }
 
 
-    public void GetRenderingData(out PropertyBlock properties, out IGeometryDrawData drawData, out Matrix4x4 model)
+    public void GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model)
     {
         drawData = Mesh.Res;
         properties = Properties;

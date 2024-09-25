@@ -105,7 +105,7 @@ public class DefaultRenderPipeline : RenderPipeline
                 //if (CullRenderable(renderable, frustum))
                 //    continue;
 
-                renderable.GetRenderingData(out PropertyBlock properties, out IGeometryDrawData drawData, out Matrix4x4 model);
+                renderable.GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model);
 
                 if (cameraRelative)
                     model.Translation -= cameraPosition;

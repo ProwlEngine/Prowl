@@ -50,6 +50,7 @@ public class MaterialImporterEditor : ScriptedEditor
                 StringTagConverter.WriteToFile(Serializer.Serialize(mat), (target as MetaFile).AssetPath);
                 AssetDatabase.Reimport((target as MetaFile).AssetPath);
             });
+
             editor.OnInspectorGUI();
         }
         catch (Exception e)

@@ -85,7 +85,7 @@ public static class SceneRaycaster
 
         foreach (IRenderable renderable in intersectRenderables)
         {
-            renderable.GetRenderingData(out PropertyBlock properties, out IGeometryDrawData drawData, out Matrix4x4 model);
+            renderable.GetRenderingData(out PropertyState properties, out IGeometryDrawData drawData, out Matrix4x4 model);
 
             model.Translation -= cameraPosition;
             model = Graphics.GetGPUModelMatrix(model);

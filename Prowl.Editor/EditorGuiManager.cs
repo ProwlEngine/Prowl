@@ -423,6 +423,7 @@ public static class EditorGuiManager
     public static DirectoryInfo? Directory { get; set; }
     public static bool fromAssetBrowser = false;
 
+
     [MenuItem("Assets/Create/Folder")]
     public static void CreateDir()
     {
@@ -445,8 +446,10 @@ public static class EditorGuiManager
         FileInfo file = new FileInfo(Path.Combine(Directory.FullName, $"New Material.mat"));
         AssetDatabase.GenerateUniqueAssetPath(ref file);
 
-        Material mat = new Material(Application.AssetProvider.LoadAsset<Shader>("Defaults/Standard.shader"));
+        Material mat = Material.CreateDefaultMaterial();
+
         StringTagConverter.WriteToFile(Serializer.Serialize(mat), file);
+
         if (fromAssetBrowser)
             AssetsBrowserWindow.StartRename(file.FullName);
         else
@@ -466,9 +469,12 @@ public static class EditorGuiManager
 
         using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"Prowl.Editor.EmbeddedResources.NewScript.txt");
         using StreamReader reader = new StreamReader(stream);
+
         string script = reader.ReadToEnd();
         script = script.Replace("%SCRIPTNAME%", EditorUtils.FilterAlpha(Path.GetFileNameWithoutExtension(file.Name)));
+
         File.WriteAllText(file.FullName, script);
+
         if (fromAssetBrowser)
             AssetsBrowserWindow.StartRename(file.FullName);
         else

@@ -113,7 +113,7 @@ public class CommandBuffer : IDisposable
 
     public void SetMaterial(Material material, int pass = 0)
     {
-        _bufferProperties.ApplyOverride(material.Properties);
+        _bufferProperties.ApplyOverride(material._properties);
         SetPass(material.Shader.Res.GetPass(pass));
         BindResources();
     }

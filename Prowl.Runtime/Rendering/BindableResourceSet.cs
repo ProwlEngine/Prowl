@@ -102,23 +102,11 @@ public class BindableResourceSet
     {
         Veldrid.Texture texture;
 
-        if (!state._rawTextures.TryGetValue(name, out texture))
-        {
-            if (!state._values.TryGetValue(name, out Property prop))
-            {
-                texture = defaultTex.InternalTexture;
-                sampler = defaultTex.Sampler.InternalSampler;
-            }
+        (Veldrid.Texture?, Veldrid.Sampler?) texturePair =
+            state._textures.GetValueOrDefault(name, (null, null));
 
-            Texture tex = (prop.texture ?? defaultTex).Res ?? defaultTex;
-
-            texture = tex.InternalTexture;
-            sampler = tex.Sampler.InternalSampler;
-        }
-        else
-        {
-            sampler = defaultTex.Sampler.InternalSampler;
-        }
+        texture = texturePair.Item1 ?? defaultTex.InternalTexture;
+        sampler = texturePair.Item2 ?? defaultTex.Sampler.InternalSampler;
 
         if (texture.IsDisposed)
             return defaultTex.InternalTexture;
@@ -153,9 +141,9 @@ public class BindableResourceSet
         {
             ShaderUniformMember member = uniform.members[i];
 
-            if (state._values.TryGetValue(member.name, out Property value))
+            if (state._values.TryGetValue(member.name, out ValueProperty value))
             {
-                if (value.type != member.type || value.texture != null)
+                if (value.type != member.type)
                     continue;
 
                 if (member.arrayStride <= 0)
