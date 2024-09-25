@@ -114,8 +114,6 @@ public static class SceneRaycaster
         objectID = id.r | id.g << 8 | id.b << 16 | id.a << 24;
         position = ray.Position(depth);
 
-        Debug.Log(objectID);
-
         return objectID > 0;
     }
 
@@ -135,7 +133,7 @@ public static class SceneRaycaster
                 break;
 
             case PixelFormat.D24_UNorm_S8_UInt:
-                (ushort depth1, byte depth2, byte stencil) = texture.GetPixel<(ushort, byte, byte)>(x, y);
+                (ushort depth1, byte depth2, _) = texture.GetPixel<(ushort, byte, byte)>(x, y);
 
                 // This does not seem correct - depth2 should not be after depth1. However, it seems to work fine.
                 depth = ((uint)depth2 << 16 | depth1) / 16777215.0f;
