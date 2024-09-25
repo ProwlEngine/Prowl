@@ -21,6 +21,22 @@ public sealed class Texture3D : Texture
     /// <summary>The depth of this <see cref="Texture3D"/>.</summary>
     public uint Depth => InternalTexture.Depth;
 
+    public static readonly Texture3D EmptyWhite = CreateDefaultTex(1, 1, 1, [Color.white]);
+
+    public static readonly Texture3D Empty = CreateDefaultTex(1, 1, 1, [Color.clear]);
+    public static readonly Texture3D EmptyRW = CreateDefaultTex(1, 1, 1, [Color.black], TextureUsage.Storage);
+
+
+    private static Texture3D CreateDefaultTex(uint sizeX, uint sizeY, uint sizeZ, Color32[] colors, TextureUsage usage = TextureUsage.Sampled)
+    {
+        Texture3D texture = new Texture3D(sizeX, sizeY, sizeZ, 0, PixelFormat.R8_G8_B8_A8_UNorm, usage);
+        texture.Name = "Default Created Texture";
+
+        texture.Sampler.SetFilter(FilterType.Point, FilterType.Point, FilterType.Point);
+        texture.SetData(new Span<Color32>(colors));
+        return texture;
+    }
+
     internal Texture3D() : base() { }
 
     /// <summary>
