@@ -96,15 +96,15 @@ public class Rigidbody : PhysicsBody
 
             _continuous = value switch
             {
-                ContinuousDetectionMode.Discrete   => ContinuousDetection.Discrete,
-                ContinuousDetectionMode.Passive    => ContinuousDetection.Passive,
+                ContinuousDetectionMode.Discrete => ContinuousDetection.Discrete,
+                ContinuousDetectionMode.Passive => ContinuousDetection.Passive,
                 ContinuousDetectionMode.Continuous => ContinuousDetection.Continuous(),
-                _                                  => throw new ArgumentOutOfRangeException(nameof(value), value, null)
+                _ => throw new ArgumentOutOfRangeException(nameof(value), value, null)
             };
         }
     }
 
-    public bool Awake
+    public bool IsAwake
     {
         get => BodyReference?.Awake ?? false;
         set
@@ -277,7 +277,7 @@ public class Rigidbody : PhysicsBody
             Orientation = Transform.rotation;
             LinearVelocity = Vector3.zero;
             AngularVelocity = Vector3.zero;
-            Awake = true;
+            IsAwake = true;
             _transformVersion = Transform.version;
         }
     }
