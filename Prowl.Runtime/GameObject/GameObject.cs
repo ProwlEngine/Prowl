@@ -113,7 +113,13 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
-    public bool IsChildOrSameTransform(GameObject transform, GameObject inParent)
+    /// <summary>
+    /// Checks if this GameObject is a child or the same as the given parent transform.
+    /// </summary>
+    /// <param name="transform">The GameObject to check.</param>
+    /// <param name="inParent">The potential parent GameObject.</param>
+    /// <returns>True if this GameObject is a child or the same as the given parent, false otherwise.</returns>
+    public static bool IsChildOrSameTransform(GameObject transform, GameObject inParent)
     {
         GameObject child = transform;
         while (child != null)
@@ -125,6 +131,12 @@ public class GameObject : EngineObject, ISerializable
         return false;
     }
 
+
+    /// <summary>
+    /// Checks if this GameObject is a child of the given parent.
+    /// </summary>
+    /// <param name="parent">The potential parent GameObject.</param>
+    /// <returns>True if this GameObject is a child of the given parent, false otherwise.</returns>
     public bool IsChildOf(GameObject parent)
     {
         if (InstanceID == parent.InstanceID) return false; // Not a child their the same object
@@ -139,6 +151,12 @@ public class GameObject : EngineObject, ISerializable
         return false;
     }
 
+    /// <summary>
+    /// Sets the parent of this GameObject.
+    /// </summary>
+    /// <param name="NewParent">The new parent GameObject.</param>
+    /// <param name="worldPositionStays">If true, the world position of the GameObject is maintained.</param>
+    /// <returns>True if the parent was successfully set, false otherwise.</returns>
     public bool SetParent(GameObject NewParent, bool worldPositionStays = true)
     {
         if (NewParent == _parent)
@@ -201,7 +219,7 @@ public class GameObject : EngineObject, ISerializable
     /// A special method to create a new GameObject without triggering the global Constructed event.
     /// This prevents the gameobject from, for example being loaded into the scene.
     /// </summary>
-    /// <param name="dummy"></param>
+    /// <returns>A new GameObject instance.</returns>
     public static GameObject CreateSilently()
     {
         var go = new GameObject(0);
@@ -243,14 +261,37 @@ public class GameObject : EngineObject, ISerializable
         return false;
     }
 
+    /// <summary>
+    /// Checks if this GameObject's tag matches the given tag.
+    /// </summary>
+    /// <param name="otherTag">The tag to compare against.</param>
+    /// <returns>True if the tags match, false otherwise.</returns>
     public bool CompareTag(string otherTag) => TagLayerManager.GetTag(tagIndex).Equals(otherTag, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Finds a GameObject by name.
+    /// </summary>
+    /// <param name="otherName">The name of the GameObject to find.</param>
+    /// <returns>The first GameObject with the given name, or null if not found.</returns>
     public static GameObject Find(string otherName) => FindObjectsOfType<GameObject>().FirstOrDefault(gameObject => gameObject.Name == otherName);
 
+    /// <summary>
+    /// Finds a GameObject with the specified tag.
+    /// </summary>
+    /// <param name="otherTag">The tag to search for.</param>
+    /// <returns>The first GameObject with the given tag, or null if not found.</returns>
     public static GameObject FindGameObjectWithTag(string otherTag) => FindObjectsOfType<GameObject>().FirstOrDefault(gameObject => gameObject.CompareTag(otherTag));
 
+    /// <summary>
+    /// Finds all GameObjects with the specified tag.
+    /// </summary>
+    /// <param name="otherTag">The tag to search for.</param>
+    /// <returns>An array of GameObjects with the given tag.</returns>
     public static GameObject[] FindGameObjectsWithTag(string otherTag) => FindObjectsOfType<GameObject>().Where(gameObject => gameObject.CompareTag(otherTag)).ToArray();
 
+    /// <summary>
+    /// Performs pre-update operations on the GameObject's components.
+    /// </summary>
     internal void PreUpdate()
     {
         foreach (var component in _components)
@@ -266,8 +307,18 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
+    /// <summary>
+    /// Adds a component of type T to the GameObject.
+    /// </summary>
+    /// <typeparam name="T">The type of component to add.</typeparam>
+    /// <returns>The newly added component of type T.</returns>
     public T AddComponent<T>() where T : MonoBehaviour, new() => AddComponent(typeof(T)) as T;
 
+    /// <summary>
+    /// Adds a component of the specified type to the GameObject.
+    /// </summary>
+    /// <param name="type">The type of component to add.</param>
+    /// <returns>The newly added MonoBehaviour component.</returns>
     public MonoBehaviour AddComponent(Type type)
     {
         if (!typeof(MonoBehaviour).IsAssignableFrom(type)) return null;
@@ -310,6 +361,10 @@ public class GameObject : EngineObject, ISerializable
         return newComponent;
     }
 
+    /// <summary>
+    /// Adds an existing MonoBehaviour component to the GameObject.
+    /// </summary>
+    /// <param name="comp">The MonoBehaviour component to add.</param>
     public void AddComponent(MonoBehaviour comp)
     {
         var type = comp.GetType();
@@ -345,6 +400,10 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
+    /// <summary>
+    /// Removes all components of type T from the GameObject.
+    /// </summary>
+    /// <typeparam name="T">The type of components to remove.</typeparam>
     public void RemoveAll<T>() where T : MonoBehaviour
     {
         IReadOnlyCollection<MonoBehaviour> components;
@@ -364,6 +423,11 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
+    /// <summary>
+    /// Removes a specific component from the GameObject.
+    /// </summary>
+    /// <typeparam name="T">The type of component to remove.</typeparam>
+    /// <param name="component">The component instance to remove.</param>
     public void RemoveComponent<T>(T component) where T : MonoBehaviour
     {
         if (component.CanDestroy() == false) return;
@@ -375,6 +439,10 @@ public class GameObject : EngineObject, ISerializable
         if (component.HasStarted) component.Do(component.OnDestroy); // OnDestroy is only called if the component has previously been active
     }
 
+    /// <summary>
+    /// Removes a specific MonoBehaviour component from the GameObject.
+    /// </summary>
+    /// <param name="component">The MonoBehaviour component to remove.</param>
     public void RemoveComponent(MonoBehaviour component)
     {
         if (component.CanDestroy() == false) return;
@@ -386,8 +454,18 @@ public class GameObject : EngineObject, ISerializable
         if (component.HasStarted) component.Do(component.OnDestroy); // OnDestroy is only called if the component has previously been active
     }
 
+    /// <summary>
+    /// Gets the first component of type T attached to the GameObject.
+    /// </summary>
+    /// <typeparam name="T">The type of component to get.</typeparam>
+    /// <returns>The component of type T, or null if not found.</returns>
     public T? GetComponent<T>() where T : MonoBehaviour => (T?)GetComponent(typeof(T));
 
+    /// <summary>
+    /// Gets the first component of the specified type attached to the GameObject.
+    /// </summary>
+    /// <param name="type">The type of component to get.</param>
+    /// <returns>The MonoBehaviour component of the specified type, or null if not found.</returns>
     public MonoBehaviour? GetComponent(Type type)
     {
         if (type == null) return null;
@@ -400,11 +478,32 @@ public class GameObject : EngineObject, ISerializable
         return null;
     }
 
+    /// <summary>
+    /// Gets all components attached to the GameObject.
+    /// </summary>
+    /// <returns>An IEnumerable of all MonoBehaviour components.</returns>
     public IEnumerable<MonoBehaviour> GetComponents() => _components;
 
+    /// <summary>
+    /// Tries to get the first component of type T attached to the GameObject.
+    /// </summary>
+    /// <typeparam name="T">The type of component to get.</typeparam>
+    /// <param name="component">The output parameter to store the found component.</param>
+    /// <returns>True if a component of type T was found, false otherwise.</returns>
     public bool TryGetComponent<T>(out T? component) where T : MonoBehaviour => (component = GetComponent<T>()) != null;
 
+    /// <summary>
+    /// Gets all components of type T attached to the GameObject.
+    /// </summary>
+    /// <typeparam name="T">The type of components to get.</typeparam>
+    /// <returns>An IEnumerable of components of type T.</returns>
     public IEnumerable<T> GetComponents<T>() where T : MonoBehaviour => GetComponents(typeof(T)).Cast<T>();
+
+    /// <summary>
+    /// Gets all components of the specified type attached to the GameObject.
+    /// </summary>
+    /// <param name="type">The type of components to get.</param>
+    /// <returns>An IEnumerable of MonoBehaviour components of the specified type.</returns>
     public IEnumerable<MonoBehaviour> GetComponents(Type type)
     {
         if (type == typeof(MonoBehaviour))
@@ -431,8 +530,22 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
+    /// <summary>
+    /// Gets the first component of type T in the GameObject or its parents.
+    /// </summary>
+    /// <typeparam name="T">The type of component to get.</typeparam>
+    /// <param name="includeSelf">If true, includes the current GameObject in the search.</param>
+    /// <param name="includeInactive">If true, includes inactive GameObjects in the search.</param>
+    /// <returns>The component of type T, or null if not found.</returns>
     public T? GetComponentInParent<T>(bool includeSelf = true, bool includeInactive = false) where T : MonoBehaviour => (T)GetComponentInParent(typeof(T), includeSelf, includeInactive);
 
+    /// <summary>
+    /// Gets the first component of the specified type in the GameObject or its parents.
+    /// </summary>
+    /// <param name="componentType">The type of component to get.</param>
+    /// <param name="includeSelf">If true, includes the current GameObject in the search.</param>
+    /// <param name="includeInactive">If true, includes inactive GameObjects in the search.</param>
+    /// <returns>The MonoBehaviour component of the specified type, or null if not found.</returns>
     public MonoBehaviour? GetComponentInParent(Type componentType, bool includeSelf = true, bool includeInactive = false)
     {
         if (componentType == null) return null;
@@ -458,7 +571,22 @@ public class GameObject : EngineObject, ISerializable
         return null;
     }
 
+    /// <summary>
+    /// Gets all components of type T in the GameObject and its parents.
+    /// </summary>
+    /// <typeparam name="T">The type of components to get.</typeparam>
+    /// <param name="includeSelf">If true, includes the current GameObject in the search.</param>
+    /// <param name="includeInactive">If true, includes inactive GameObjects in the search.</param>
+    /// <returns>An IEnumerable of components of type T.</returns>
     public IEnumerable<T> GetComponentsInParent<T>(bool includeSelf = true, bool includeInactive = false) where T : MonoBehaviour => GetComponentsInParent(typeof(T), includeSelf, includeInactive).Cast<T>();
+
+    /// <summary>
+    /// Gets all components of the specified type in the GameObject and its parents.
+    /// </summary>
+    /// <param name="type">The type of components to get.</param>
+    /// <param name="includeSelf">If true, includes the current GameObject in the search.</param>
+    /// <param name="includeInactive">If true, includes inactive GameObjects in the search.</param>
+    /// <returns>An IEnumerable of MonoBehaviour components of the specified type.</returns>
     public IEnumerable<MonoBehaviour> GetComponentsInParent(Type type, bool includeSelf = true, bool includeInactive = false)
     {
         // First check the current Object
@@ -475,8 +603,22 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
+    /// <summary>
+    /// Gets the first component of type T in the GameObject or its children.
+    /// </summary>
+    /// <typeparam name="T">The type of component to get.</typeparam>
+    /// <param name="includeSelf">If true, includes the current GameObject in the search.</param>
+    /// <param name="includeInactive">If true, includes inactive GameObjects in the search.</param>
+    /// <returns>The component of type T, or null if not found.</returns>
     public T? GetComponentInChildren<T>(bool includeSelf = true, bool includeInactive = false) where T : MonoBehaviour => (T)GetComponentInChildren(typeof(T), includeSelf, includeInactive);
 
+    /// <summary>
+    /// Gets the first component of the specified type in the GameObject or its children.
+    /// </summary>
+    /// <param name="componentType">The type of component to get.</param>
+    /// <param name="includeSelf">If true, includes the current GameObject in the search.</param>
+    /// <param name="includeInactive">If true, includes inactive GameObjects in the search.</param>
+    /// <returns>The MonoBehaviour component of the specified type, or null if not found.</returns>
     public MonoBehaviour GetComponentInChildren(Type componentType, bool includeSelf = true, bool includeInactive = false)
     {
         if (componentType == null) return null;
@@ -501,8 +643,22 @@ public class GameObject : EngineObject, ISerializable
         return null;
     }
 
-
+    /// <summary>
+    /// Gets all components of type T in the GameObject and its children.
+    /// </summary>
+    /// <typeparam name="T">The type of components to get.</typeparam>
+    /// <param name="includeSelf">If true, includes the current GameObject in the search.</param>
+    /// <param name="includeInactive">If true, includes inactive GameObjects in the search.</param>
+    /// <returns>An IEnumerable of components of type T.</returns>
     public IEnumerable<T> GetComponentsInChildren<T>(bool includeSelf = true, bool includeInactive = false) where T : MonoBehaviour => GetComponentsInChildren(typeof(T), includeSelf, includeInactive).Cast<T>();
+
+    /// <summary>
+    /// Gets all components of the specified type in the GameObject and its children.
+    /// </summary>
+    /// <param name="type">The type of components to get.</param>
+    /// <param name="includeSelf">If true, includes the current GameObject in the search.</param>
+    /// <param name="includeInactive">If true, includes inactive GameObjects in the search.</param>
+    /// <returns>An IEnumerable of MonoBehaviour components of the specified type.</returns>
     public IEnumerable<MonoBehaviour> GetComponentsInChildren(Type type, bool includeSelf = true, bool includeInactive = false)
     {
         // First check the current Object
@@ -518,6 +674,12 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
+    /// <summary>
+    /// Checks if a component is required by other components on the GameObject.
+    /// </summary>
+    /// <param name="requiredComponent">The component to check.</param>
+    /// <param name="dependentType">The output parameter to store the type of the dependent component.</param>
+    /// <returns>True if the component is required, false otherwise.</returns>
     internal bool IsComponentRequired(MonoBehaviour requiredComponent, out Type dependentType)
     {
         var componentType = requiredComponent.GetType();
@@ -538,14 +700,44 @@ public class GameObject : EngineObject, ISerializable
         return false;
     }
 
+    /// <summary>
+    /// Instantiates a new GameObject from the original.
+    /// </summary>
+    /// <param name="original">The original GameObject to clone.</param>
+    /// <returns>A new instance of the GameObject.</returns>
     public static GameObject Instantiate(GameObject original) => Instantiate(original, null);
+
+    /// <summary>
+    /// Instantiates a new GameObject from the original with the specified parent.
+    /// </summary>
+    /// <param name="original">The original GameObject to clone.</param>
+    /// <param name="parent">The parent GameObject for the new instance.</param>
+    /// <returns>A new instance of the GameObject.</returns>
     public static GameObject Instantiate(GameObject original, GameObject? parent)
     {
         GameObject clone = (GameObject)EngineObject.Instantiate(original, false);
         clone.SetParent(parent);
         return clone;
     }
+
+    /// <summary>
+    /// Instantiates a new GameObject from the original with the specified parent, position, and rotation.
+    /// </summary>
+    /// <param name="original">The original GameObject to clone.</param>
+    /// <param name="parent">The parent GameObject for the new instance.</param>
+    /// <param name="position">The position for the new instance.</param>
+    /// <param name="rotation">The rotation for the new instance.</param>
+    /// <returns>A new instance of the GameObject.</returns>
     public static GameObject Instantiate(GameObject original, GameObject? parent, Vector3 position, Quaternion rotation) => Instantiate(original, position, rotation, parent);
+
+    /// <summary>
+    /// Instantiates a new GameObject from the original with the specified position, rotation, and parent.
+    /// </summary>
+    /// <param name="original">The original GameObject to clone.</param>
+    /// <param name="position">The position for the new instance.</param>
+    /// <param name="rotation">The rotation for the new instance.</param>
+    /// <param name="parent">The parent GameObject for the new instance.</param>
+    /// <returns>A new instance of the GameObject.</returns>
     public static GameObject Instantiate(GameObject original, Vector3 position, Quaternion rotation, GameObject? parent)
     {
         GameObject clone = (GameObject)EngineObject.Instantiate(original, false);
@@ -555,6 +747,9 @@ public class GameObject : EngineObject, ISerializable
         return clone;
     }
 
+    /// <summary>
+    /// Disposes of the GameObject and its components.
+    /// </summary>
     public override void OnDispose()
     {
         // Internal_DestroyCommitted removes the child from the parent
@@ -574,12 +769,19 @@ public class GameObject : EngineObject, ISerializable
         Internal_DestroyCommitted?.Invoke(this);
     }
 
+    /// <summary>
+    /// Sets the enabled state of the GameObject.
+    /// </summary>
+    /// <param name="state">The new enabled state.</param>
     private void SetEnabled(bool state)
     {
         _enabled = state;
         HierarchyStateChanged();
     }
 
+    /// <summary>
+    /// Updates the hierarchy state of the GameObject and its children.
+    /// </summary>
     private void HierarchyStateChanged()
     {
         bool newState = _enabled && IsParentEnabled();
@@ -594,11 +796,22 @@ public class GameObject : EngineObject, ISerializable
             child.HierarchyStateChanged();
     }
 
+    /// <summary>
+    /// Checks if the parent of this GameObject is enabled.
+    /// </summary>
+    /// <returns>True if the parent is enabled or if there is no parent, false otherwise.</returns>
     private bool IsParentEnabled() => parent == null || parent.enabledInHierarchy;
 
+    /// <summary>
+    /// Marks the GameObject to not be destroyed when loading a new scene.
+    /// </summary>
     public void DontDestroyOnLoad() => SceneManager._dontDestroyOnLoad.Add(InstanceID);
 
-    /// <summary> Calls the method named methodName on every MonoBehaviour in this game object or any of its children. </summary>
+    /// <summary>
+    /// Calls the specified method on every MonoBehaviour in this GameObject and its children.
+    /// </summary>
+    /// <param name="methodName">The name of the method to call.</param>
+    /// <param name="objs">Optional parameters to pass to the method.</param>
     public void BroadcastMessage(string methodName, params object[] objs)
     {
         foreach (var component in GetComponents<MonoBehaviour>())
@@ -608,7 +821,11 @@ public class GameObject : EngineObject, ISerializable
             child.BroadcastMessage(methodName, objs);
     }
 
-    /// <summary> Calls the method named methodName on every MonoBehaviour in this game object. </summary>
+    /// <summary>
+    /// Calls the specified method on every MonoBehaviour in this GameObject.
+    /// </summary>
+    /// <param name="methodName">The name of the method to call.</param>
+    /// <param name="objs">Optional parameters to pass to the method.</param>
     public void SendMessage(string methodName, params object[] objs)
     {
         foreach (var c in GetComponents<MonoBehaviour>())
@@ -618,6 +835,11 @@ public class GameObject : EngineObject, ISerializable
         }
     }
 
+    /// <summary>
+    /// Serializes the GameObject to a SerializedProperty.
+    /// </summary>
+    /// <param name="ctx">The serialization context.</param>
+    /// <returns>A SerializedProperty containing the GameObject's data.</returns>
     public SerializedProperty Serialize(Serializer.SerializationContext ctx)
     {
         SerializedProperty compoundTag = SerializedProperty.NewCompound();
@@ -653,6 +875,11 @@ public class GameObject : EngineObject, ISerializable
         return compoundTag;
     }
 
+    /// <summary>
+    /// Deserializes the GameObject from a SerializedProperty.
+    /// </summary>
+    /// <param name="value">The SerializedProperty containing the GameObject's data.</param>
+    /// <param name="ctx">The serialization context.</param>
     public void Deserialize(SerializedProperty value, Serializer.SerializationContext ctx)
     {
         Name = value["Name"].StringValue;
@@ -717,6 +944,11 @@ public class GameObject : EngineObject, ISerializable
             comp.AttachToGameObject(this);
     }
 
+    /// <summary>
+    /// Handles a missing component by attempting to recover it.
+    /// </summary>
+    /// <param name="compTag">The SerializedProperty containing the component data.</param>
+    /// <param name="ctx">The serialization context.</param>
     private void HandleMissingComponent(SerializedProperty compTag, Serializer.SerializationContext ctx)
     {
         // Were missing! see if we can recover

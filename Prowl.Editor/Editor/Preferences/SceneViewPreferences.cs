@@ -19,11 +19,10 @@ public class SceneViewPreferences : ScriptableSingleton<SceneViewPreferences>
     public double SnapDistance = 0.5f;
     public double SnapAngle = 10f;
 
-    [Space, Text("Rendering:")]
+    [Text("Rendering:")]
     public SceneViewWindow.GridType GridType = SceneViewWindow.GridType.XZ;
     public bool ShowFPS = true;
 
-    [Space]
     public float NearClip = 0.02f;
     public float FarClip = 10000f;
     public float RenderResolution = 1f;

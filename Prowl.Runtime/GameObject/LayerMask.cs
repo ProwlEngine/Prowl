@@ -3,6 +3,9 @@
 
 namespace Prowl.Runtime;
 
+/// <summary>
+/// A struct that represents a layer mask.
+/// </summary>
 public struct LayerMask
 {
     public readonly static LayerMask Everything = new() { mask = uint.MaxValue };
