@@ -138,8 +138,8 @@ Getting Prowl up and running is super easy!
    - If you already cloned the repo, you must initialize submodules as well.
      Run the command `git submodule update --init --recursive` in the root of the cloned folder
 
-3. Open `.sln` file with [Visual Studio Version 17.8.0+](https://visualstudio.microsoft.com/vs/preview/) or [Rider](https://www.jetbrains.com/rider/)
-4. That's it! 😄 🎉
+2. Open `.sln` file with [Visual Studio Version 17.8.0+](https://visualstudio.microsoft.com/vs/preview/) or [Rider](https://www.jetbrains.com/rider/)
+3. That's it! 😄 🎉
 <p align="right">(<a href="#readme-top">back to top</a>)</p> 
 
 # <p align="center">🗺️ Roadmap 🗺️</p>
